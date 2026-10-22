@@ -3,7 +3,6 @@
  * session's last; `reread` rows cover {@link REREAD_SURFACES} blocks. Counts use {@link estimateTokens} (chars / 4);
  * rows never hold content or query text. Writes are best-effort: a ledger failure must not break recall. */
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import { DAY_MS } from '../../base/util/time.js';
 import {
   countSkipsAfter,
   deleteRereadRows,
@@ -17,31 +16,11 @@ import {
 } from './token-ledger-rows.js';
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import type { TokenSummary, TokenSurface, TokenSurfaceSummary, TokenUse } from '../port/ledger.js';
+import { ledgerCutoff, REREAD_SURFACES, TOKEN_SURFACES } from '../rules/token-ledger.js';
 import type { LastSent } from '../../base/session/skip-unchanged.js';
 import type { ApiCall } from '../../base/session/transcript-calls.js';
 
-/** All surfaces, in report order. */
-const TOKEN_SURFACES: readonly TokenSurface[] = [
-  'hook',
-  'hook_recall',
-  'compact_resume',
-  'context',
-  'recall',
-  'mcp_recall',
-  'mcp_context',
-  'http_recall',
-  'http_context',
-  'http_assemble',
-];
-
-/** Surfaces whose re-reads are counted: only a hook payload tells a sub-agent's block from its parent's, as both carry
- * one session id. */
-const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume'];
-
-/** Rows older than this are pruned on write. */
-const TOKEN_LEDGER_RETENTION_DAYS = 90;
-
-/** Append one ledger row and prune rows past {@link TOKEN_LEDGER_RETENTION_DAYS}. */
+/** Append one ledger row and prune rows past the retention window. */
 export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
   const now = use.now ?? new Date().toISOString();
   insertTokenRow(db, {
@@ -54,8 +33,7 @@ export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
     tokens: Math.max(0, Math.round(use.tokens)),
     blockHash: use.hash ?? null,
   });
-  const cutoff = new Date(Date.parse(now) - TOKEN_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
-  pruneTokenRowsBefore(db, cutoff);
+  pruneTokenRowsBefore(db, ledgerCutoff(now));
 }
 
 /** The last block this session injected on `surface`, or null if none, a `reset` came after it, or there is no session

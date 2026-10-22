@@ -1,5 +1,5 @@
 // hippo.db's key groups: KeyWrites, KeyGrants and KeyAudit.
-import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
+import { assertGrantable, ownedKey } from '../rules/keys.js';
 import { appendAuditEvents } from './audit.js';
 import { grantScope, insertApiKey, listApiKeyRows, listLiveOwnedKeyIds, revokeApiKey, ungrantScope } from './auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
@@ -51,13 +51,8 @@ function changeScopeGrant(db: DatabaseSyncLike, { tenantId, keyId, scope, op, ac
   withWriteScope(db, 'change_scope_grant', () => {
     // Under the write lock, not in the api: a revoke landing between a check there and this grant would leave a grant
     // on a dead key.
-    const row = selectApiKeyOwner(db, keyId);
-    if (!row || row.tenantId !== tenantId) {
-      throw new NotFoundError(`Unknown key_id: ${keyId}`);
-    }
-    if (op === 'auth_grant' && row.revokedAt) {
-      throw new ConflictError(`${keyId} is revoked; a grant on it would never apply`);
-    }
+    const row = ownedKey(selectApiKeyOwner(db, keyId), tenantId, keyId);
+    assertGrantable({ op, keyId }, row.revokedAt);
     if (op === 'auth_grant') grantScope(db, keyId, scope);
     else ungrantScope(db, keyId, scope);
     appendAuditEvents(db, [{ tenantId, actor, op, targetId: keyId, metadata: { scope } }]);
@@ -68,8 +63,7 @@ function changeScopeGrant(db: DatabaseSyncLike, { tenantId, keyId, scope, op, ac
  * error. */
 function revokeKey(db: DatabaseSyncLike, revoke: KeyRevoke): string {
   return withWriteScope(db, 'revoke_api_key', () => {
-    const row = selectApiKeyOwner(db, revoke.keyId);
-    if (!row || row.tenantId !== revoke.tenantId) throw new NotFoundError(`Unknown key_id: ${revoke.keyId}`);
+    const row = ownedKey(selectApiKeyOwner(db, revoke.keyId), revoke.tenantId, revoke.keyId);
     if (row.revokedAt) return row.revokedAt;
     revokeApiKey(db, revoke.keyId, revoke.at);
     appendAuditEvents(db, [{ tenantId: row.tenantId, actor: revoke.actor, op: 'auth_revoke', targetId: revoke.keyId }]);

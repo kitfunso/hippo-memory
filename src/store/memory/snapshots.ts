@@ -3,19 +3,18 @@ import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot, Sessions } from '../port/sessions.js';
 import { continuityStamp, type ContinuityKey } from '../port/types.js';
+import { keyProjects } from '../rules/continuity.js';
 import { newestFirst } from '../rules/order.js';
+import { SESSION_EVENT_LIMIT } from '../rules/windows.js';
 import { nextId, storedObject } from './rows.js';
 import type { Owned, Tenanted } from './session-tables.js';
 import type { MemoryTables } from './tables.js';
 
-const DEFAULT_EVENT_LIMIT = 8;
-
-/** As hippo.db's continuityWhere: all or nothing, so a key missing its owner or every project name matches no row. */
+/** Whether `row` is the key's: no key matches every row. */
 export function keyMatches(key: ContinuityKey | null | undefined, row: Owned<unknown>): boolean {
   if (!key) return true;
-  const names = key.project.filter((n) => n !== '');
-  if (key.owner === '' || names.length === 0) return false;
-  return row.owner === key.owner && row.origin !== null && names.includes(row.origin);
+  const names = keyProjects(key);
+  return names !== null && row.owner === key.owner && row.origin !== null && names.includes(row.origin);
 }
 
 /** The columns a keyed write stamps; a partial key throws before anything changes. */
@@ -103,7 +102,7 @@ export function listEventsIn(
   opts: { readonly sessionId?: string; readonly task?: string; readonly limit?: number },
 ): SessionEvent[] {
   const { sessionId, task } = opts;
-  const limit = Math.max(1, Math.trunc(opts.limit ?? DEFAULT_EVENT_LIMIT));
+  const limit = Math.max(1, Math.trunc(opts.limit ?? SESSION_EVENT_LIMIT));
   const events = t.events.filter(
     (e) => e.tenantId === tenantId && (!sessionId || e.row.sessionId === sessionId) && (!task || e.row.task === task),
   );

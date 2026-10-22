@@ -18,7 +18,7 @@ import { appendAudit, asciiFolded, bumpCounter, tenantKey } from './rows.js';
 import { put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
-/** Sets `entry` aside as hippo.db's dormant row keeps it: the entry as its wire JSON reads back. */
+/** Sets `entry` aside in the form a dormant row keeps: the entry as its wire JSON reads back. */
 export function setAside(t: MemoryTables, snapshot: DormantSnapshot): void {
   const entry = fromWire(JSON.parse(JSON.stringify(toWire(snapshot.entry))));
   t.dormant.set(tenantKey(entry.tenantId, entry.id), { ...snapshot, entry });

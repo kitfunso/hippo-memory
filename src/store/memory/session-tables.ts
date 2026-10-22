@@ -43,7 +43,7 @@ export interface TokenRow {
   readonly blockHash: string | null;
 }
 
-/** One recall trace as hippo.db keeps it: the query's hash and length, never its text. */
+/** One recall trace: the query's hash and length, never its text. */
 interface RecallTrace {
   readonly id: number;
   readonly ts: string;
@@ -67,7 +67,7 @@ export interface SessionTables {
   readonly cardDeps: CardDep[];
   readonly cardRuns: Tenanted<CardRun>[];
   readonly cardComments: Tenanted<CardComment>[];
-  /** In insertion order, which is hippo.db's rowid order. */
+  /** In insertion order, the tie-break order a read falls back to. */
   readonly goals: Goal[];
   readonly policies: Map<string, RetrievalPolicy>;
   readonly goalRecallLog: GoalRecallLogRow[];

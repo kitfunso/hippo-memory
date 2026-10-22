@@ -9,7 +9,8 @@ import {
 } from '../../base/memory/memory.js';
 import { type DatabaseSyncLike, withWriteScope, isSqliteBusy } from '../../db/index.js';
 import { RejectedValueError, ConflictError, CrossTenantIdError, NotFoundError } from '../../base/errors/api-errors.js';
-import { markSummaryDirtyInTx, markSummariesDirtyInTx, summaryDirtyAuditRow } from './summary-dirty.js';
+import { markSummaryDirtyInTx, markSummariesDirtyInTx } from './summary-dirty.js';
+import { summaryDirtyAudit } from '../rules/audit-rows.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
 import { appendAuditEvents } from './audit.js';
@@ -521,7 +522,7 @@ function outcomeAuditRows(
     const level = parent ? flipped.get(parent) : undefined;
     if (parent && level !== undefined && !marked.has(parent)) {
       marked.add(parent);
-      rows.push(summaryDirtyAuditRow(parent, entry.tenantId, actor, level));
+      rows.push(summaryDirtyAudit(parent, entry.tenantId, actor, level));
     }
     rows.push({ tenantId, actor, op: 'outcome', targetId: entry.id, metadata: { good } });
     return rows;

@@ -1,38 +1,39 @@
-// The in-memory Cards group: the agent work board, with hippo.db's transition, lease and promotion rules.
+// The in-memory Cards group: the agent work board, under the shared card checks, transitions and lease.
 import { generateId } from '../../base/memory/memory.js';
-import { assertCardTransition, CARD_LEASE_MS, type Card, type CardStatus } from '../../base/records/card.js';
+import { assertCardTransition, type Card, type CardStatus } from '../../base/records/card.js';
 import type { CardComment, CardRun } from '../../base/records/card.js';
-import { isHandoffOutcome, rowToSessionHandoff, type HandoffOutcome } from '../../base/session/handoff.js';
+import { rowToSessionHandoff, type HandoffOutcome } from '../../base/session/handoff.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { CardDetail, CardCreate, Cards } from '../port/cards.js';
+import {
+  assertCardCreate,
+  assertCardOutcome,
+  assertFilled,
+  assertRunId,
+  isLiveRun,
+  leaseUntilFrom,
+  unknownCard,
+  unknownParentCard,
+} from '../rules/cards.js';
 import { byBytes, newestFirst } from '../rules/order.js';
-import { nextId } from './rows.js';
+import { nextId, ownedRow } from './rows.js';
 import type { MemoryTables } from './tables.js';
 
-const leaseUntilFrom = (now: string): string => new Date(Date.parse(now) + CARD_LEASE_MS).toISOString();
-
-function assertRunId(runId: number): void {
-  if (!Number.isSafeInteger(runId) || runId <= 0) {
-    throw new Error(`Invalid run id: ${runId} (expected a positive integer)`);
-  }
-}
-
-function cardOf(t: MemoryTables, tenantId: string, id: string): Card | null {
-  const card = t.cards.get(id);
-  return card && card.tenantId === tenantId ? card : null;
-}
+const cardOf = (t: MemoryTables, tenantId: string, id: string): Card | null => ownedRow(t.cards, tenantId, id) ?? null;
 
 function known(t: MemoryTables, tenantId: string, id: string): Card {
   const card = cardOf(t, tenantId, id);
-  if (!card) throw new Error(`unknown card id: ${id}`);
+  if (!card) throw unknownCard(id);
   return card;
 }
 
-// A second run that has not ended means a corrupt store; throw rather than guess which run the caller means.
-function isLiveRun(t: MemoryTables, tenantId: string, cardId: string, runId: number): boolean {
+function liveRunIs(t: MemoryTables, tenantId: string, cardId: string, runId: number): boolean {
   const live = t.cardRuns.filter((r) => r.tenantId === tenantId && r.row.card === cardId && r.row.ended === null);
-  if (live.length > 1) throw new Error(`card ${cardId} has ${live.length} runs that have not ended`);
-  return live[0]?.row.id === runId;
+  return isLiveRun(
+    cardId,
+    live.map((r) => r.row.id),
+    runId,
+  );
 }
 
 function closeLiveRun(t: MemoryTables, tenantId: string, cardId: string, outcome: string, now: string): void {
@@ -64,14 +65,11 @@ function transition(
 
 function createIn(t: MemoryTables, tenantId: string, input: CardCreate): Card {
   assertTenantId('createCard', tenantId);
-  if (input.title.trim() === '') throw new Error('title must not be empty');
-  if (input.budget !== undefined && !(Number.isSafeInteger(input.budget) && input.budget > 0)) {
-    throw new Error(`Invalid budget: ${input.budget} (expected a positive integer)`);
-  }
+  assertCardCreate(input);
   const dependsOn = [...new Set(input.dependsOn ?? [])];
   // Checked before any write, so a mistyped parent id never leaves a card behind.
   for (const parentId of dependsOn) {
-    if (!cardOf(t, tenantId, parentId)) throw new Error(`unknown parent card id: ${parentId}`);
+    if (!cardOf(t, tenantId, parentId)) throw unknownParentCard(parentId);
   }
   const allDone = dependsOn.every((pid) => cardOf(t, tenantId, pid)?.status === 'done');
   const now = new Date().toISOString();
@@ -125,7 +123,7 @@ function detailIn(t: MemoryTables, tenantId: string, id: string): CardDetail | n
 
 function claimIn(t: MemoryTables, tenantId: string, id: string, runtime: string, sessionId?: string) {
   assertTenantId('claimCard', tenantId);
-  if (runtime.trim() === '') throw new Error('runtime must not be empty');
+  assertFilled('runtime', runtime);
   assertCardTransition(['ready', 'blocked'], 'running');
   const card = known(t, tenantId, id);
   if (card.assigneeRuntime !== null || !transition(t, card, ['ready', 'blocked'], 'running', runtime)) return null;
@@ -140,7 +138,7 @@ function heartbeatIn(t: MemoryTables, tenantId: string, id: string, runId: numbe
   assertTenantId('heartbeatCard', tenantId);
   assertRunId(runId);
   const card = known(t, tenantId, id);
-  if (card.status !== 'running' || !isLiveRun(t, tenantId, id, runId)) return null;
+  if (card.status !== 'running' || !liveRunIs(t, tenantId, id, runId)) return null;
   const now = new Date().toISOString();
   t.cards.set(id, { ...card, leaseUntil: leaseUntilFrom(now), heartbeatAt: now });
   return { ...known(t, tenantId, id) };
@@ -156,7 +154,7 @@ function commentIn(t: MemoryTables, tenantId: string, cardId: string, author: st
 /** A move out of running, gated on the live run when `runId` is given; null when the card does not move. */
 function leaveRunning(t: MemoryTables, tenantId: string, id: string, to: CardStatus, runId?: number): Card | null {
   if (runId !== undefined) assertRunId(runId);
-  const allowed = runId === undefined || isLiveRun(t, tenantId, id, runId);
+  const allowed = runId === undefined || liveRunIs(t, tenantId, id, runId);
   const card = known(t, tenantId, id);
   const assignee = to === 'blocked' ? null : undefined;
   return allowed && transition(t, card, ['running'], to, assignee) ? known(t, tenantId, id) : null;
@@ -164,7 +162,7 @@ function leaveRunning(t: MemoryTables, tenantId: string, id: string, to: CardSta
 
 function blockIn(t: MemoryTables, tenantId: string, id: string, reason: string, runId?: number): Card | null {
   assertTenantId('blockCard', tenantId);
-  if (reason.trim() === '') throw new Error('reason must not be empty');
+  assertFilled('reason', reason);
   assertCardTransition(['running'], 'blocked');
   if (!leaveRunning(t, tenantId, id, 'blocked', runId)) return null;
   // The interrupted run closes here, so complete's live-run match only ever finds the live one.
@@ -187,11 +185,11 @@ function promoteChildren(t: MemoryTables, tenantId: string, parentId: string): s
 
 function completeIn(t: MemoryTables, tenantId: string, id: string, outcome: HandoffOutcome, runId?: number) {
   assertTenantId('completeCard', tenantId);
-  if (!isHandoffOutcome(outcome)) throw new Error(`invalid card outcome: ${String(outcome)}`);
+  assertCardOutcome(outcome);
   if (runId !== undefined) assertRunId(runId);
   const target: CardStatus = outcome === 'success' ? 'done' : 'shelved';
   assertCardTransition(['review'], target);
-  const allowed = runId === undefined || isLiveRun(t, tenantId, id, runId);
+  const allowed = runId === undefined || liveRunIs(t, tenantId, id, runId);
   const card = known(t, tenantId, id);
   if (!allowed || !transition(t, card, ['review'], target)) return null;
   closeLiveRun(t, tenantId, id, outcome, new Date().toISOString());
@@ -246,7 +244,7 @@ export function memoryCards(t: MemoryTables): Cards {
     reclaimExpired: async (tenantId) => reclaimIn(t, tenantId),
     async comment(tenantId, cardId, author, body) {
       assertTenantId('addCardComment', tenantId);
-      if (body.trim() === '') throw new Error('body must not be empty');
+      assertFilled('body', body);
       return commentIn(t, tenantId, cardId, author, body);
     },
   };

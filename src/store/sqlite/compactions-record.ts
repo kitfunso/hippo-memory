@@ -1,6 +1,6 @@
 // The compaction record's SQL: one record per Claude Code compaction, and the rows its summary's items become.
 import * as path from 'path';
-import { ConflictError } from '../../base/errors/api-errors.js';
+import { otherSessionsRequest } from '../rules/request-ids.js';
 import { REPLAY_AFTER_MS } from '../../base/session/compaction-timing.js';
 import { isStringValue } from '../../base/session/capture-contract.js';
 import { itemWords, restates, writableItemRows } from '../../base/util/compaction-items.js';
@@ -151,10 +151,7 @@ export function compactionByRequest(
   sessionId: string,
 ): CompactionRecord | null {
   const record = compactionRowsByRequest(db, tenantId, requestId).map(toRecord)[0] ?? null;
-  // Sessions are owner-bound, so this also keeps one owner from reading or finishing another's record.
-  if (record !== null && record.sessionId !== sessionId) {
-    throw new ConflictError('request id belongs to another session');
-  }
+  if (record !== null && record.sessionId !== sessionId) throw otherSessionsRequest();
   return record;
 }
 

@@ -16,8 +16,7 @@ const newestFirst = comparing(REJECTED_ORDER);
 
 type Removal = Omit<AppliedRejection, 'digest' | 'content'>;
 
-/** As hippo.db: a raw row is archived, any other deleted with no forget row, and a merged row gives way to its
- * successor. */
+/** A raw row is archived, any other deleted with no forget row, and a merged row gives way to its successor. */
 function removeHolders(tx: Tx, rejection: Rejection, holds: (text: string) => boolean): Removal {
   const { tenantId, actor, reason } = rejection;
   const rows = [...tx.rows.values()]
@@ -50,7 +49,7 @@ function removeHolders(tx: Tx, rejection: Rejection, holds: (text: string) => bo
   return { ...removal, dormantSuccessorIds: [] };
 }
 
-/** Writes the tombstone, replacing any the tenant holds for the digest, as hippo.db's upsert does. */
+/** Writes the tombstone, replacing any the tenant holds for the digest. */
 export function keepTombstone(t: MemoryTables, row: RejectedValueRow): void {
   t.rejected.set(tenantKey(row.tenantId, row.digest), row);
 }

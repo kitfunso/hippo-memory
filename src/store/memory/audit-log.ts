@@ -1,4 +1,4 @@
-// The in-memory AuditLog group: the tenant's audit rows, filtered, ordered and paged as hippo.db's query does.
+// The in-memory AuditLog group: the tenant's audit rows, filtered, ordered and paged by the port's auditRowsRead.
 import { auditRowsRead, type AuditLog, type QueryAuditOptions } from '../port/audit.js';
 import type { AuditEvent } from '../port/types.js';
 import { byBytes, isBelow, newestFirst, type DescendingKeyset } from '../rules/order.js';

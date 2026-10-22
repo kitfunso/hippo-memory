@@ -1,5 +1,5 @@
-// A memory as hippo.db reads it back after a write: its column defaults filled and its stamp normalized, so both
-// adapters return the same entry for the same write.
+// A memory as it reads back after a write: its column defaults filled and its stamp normalized, so both adapters
+// return the same entry for the same write.
 import { isoInstant } from '../../base/memory/created-stamp.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { storedEntry } from '../rules/stored-entry.js';
