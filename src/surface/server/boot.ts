@@ -20,7 +20,7 @@ import { configReader, loadConfig } from '../../host/config-file.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { MINUTE_MS } from '../../base/util/time.js';
-import { errorClassFields, errorFields, errorMessage, log } from '../../base/util/log.js';
+import { errorCode, errorClassFields, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { runWithRequestId } from '../../base/util/request-scope.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import { RecallContractError } from '../../api/index.js';
@@ -318,7 +318,7 @@ function logLateFailure<E>(req: IncomingMessage, err: E, requestId: string): voi
 // A handler that ends after the 504 finds the response finished, so sending its own reply throws this: its work ran to
 // the end.
 function isDroppedLateReply<E>(err: E): boolean {
-  return err instanceof Error && 'code' in err && err.code === 'ERR_HTTP_HEADERS_SENT';
+  return errorCode(err) === 'ERR_HTTP_HEADERS_SENT';
 }
 
 /** A GET only reads; every other method this server routes can write. */

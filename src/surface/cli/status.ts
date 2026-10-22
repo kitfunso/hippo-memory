@@ -34,7 +34,7 @@ import type { ParticleStats } from '../../store/port.js';
 import { cliConfig, cliApiContext, cliDiagnostics, type CliContext } from './api-context.js';
 
 const diagnosticsBodies = (hippoRoot: string): DoctorStore => cliDiagnostics(hippoRoot);
-import { errorMessage, log, errorFields } from '../../base/util/log.js';
+import { errorCode, errorMessage, log, errorFields } from '../../base/util/log.js';
 import { printError } from './output.js';
 import { type CommandContext, boolFlag, parseCountFlag, stringFlagOrExit } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
@@ -370,7 +370,7 @@ export async function handleSupportBundle({ tenantId, flags }: CommandContext): 
   try {
     fs.writeFileSync(file, `${json}\n`, { flag: 'wx', mode: 0o600 });
   } catch (err) {
-    if (err instanceof Error && 'code' in err && err.code === 'EEXIST') {
+    if (errorCode(err) === 'EEXIST') {
       printError(`${file} already exists; pass --out to choose another file. Nothing was written.`);
     } else {
       printError(errorMessage(err));

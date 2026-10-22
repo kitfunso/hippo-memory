@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { userHome, type Homes } from '../../base/util/agent-homes.js';
+import { HIPPO_DIR, userHome, type Homes } from '../../base/util/agent-homes.js';
 
 export type JsonHookTarget = 'claude-code' | 'codex' | 'copilot';
 
@@ -52,7 +52,7 @@ export const CODEX_TRUST_LINE =
 
 /** Default log path consumed by `hippo last-sleep` when a caller passes no --path. */
 export function defaultSleepLogPath(homes: Homes): string {
-  return path.join(userHome(homes), '.hippo', 'logs', 'last-sleep.log');
+  return path.join(userHome(homes), HIPPO_DIR, 'logs', 'last-sleep.log');
 }
 
 /**
@@ -60,5 +60,5 @@ export function defaultSleepLogPath(homes: Homes): string {
  * truncates that one every SessionStart.
  * Nothing reads it programmatically; overridden by `--log-file`. */
 export function defaultPreCompactLogPath(homes: Homes): string {
-  return path.join(userHome(homes), '.hippo', 'logs', 'pre-compact.log');
+  return path.join(userHome(homes), HIPPO_DIR, 'logs', 'pre-compact.log');
 }

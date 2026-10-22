@@ -44,7 +44,7 @@ export interface HippoConfig {
     hybridWeight: number;
     /** Embedding backend: 'local' (default) = zero-dependency transformers.js; 'openai' | 'voyage' | 'cohere' = opt-in
      * API embedder needing the provider's
-     * API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/base/embeddings/provider.ts. */
+     * API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/infra/embedding-provider.ts. */
     provider?: 'local' | 'openai' | 'voyage' | 'cohere';
     /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost may use http). Ignored by the local
      *  provider. */
@@ -130,7 +130,7 @@ export interface HippoConfig {
   memoryValue: {
     enabled: boolean;
   };
-  /** Dormant memories (src/store/dormant.ts), on by default: the sleep decay pass moves a memory that faded below the
+  /** Dormant memories (sqlite/dormant.ts), on by default: the sleep decay pass moves a memory that faded below the
    * threshold there instead of deleting it (`hippo dormant restore|forget <id>`); a faded memory the secret detector
    * flags is always deleted. `{"enabled": false}` restores delete-on-fade. */
   dormant: {
@@ -148,7 +148,7 @@ export interface HippoConfig {
   agentMemories: {
     tools: string[] | null;
   };
-  /** Per-turn delivery ledger (src/store/recall-trace.ts): hashes, ids, counts and rejection reasons for each
+  /** Per-turn delivery ledger (src/store/sqlite/recall-trace.ts): hashes, ids, counts and rejection reasons for each
    *  pinned-only context call. Default off; read from the store the token ledger writes to. */
   deliveryLedger: {
     enabled: boolean;

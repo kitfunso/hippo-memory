@@ -211,7 +211,7 @@ function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry
 }
 
 /** Writes, deletes and dormant moves in one transaction. With `snapshot`, a write keeps only the fields the caller
- * changed and never resurrects a gone row. Dormant moves (src/store/dormant.ts) leave `memories` like a delete; both
+ * changed and never resurrects a gone row. Dormant moves (sqlite/dormant.ts) leave `memories` like a delete; both
  * skip rows no longer auto-deletable. Returns ids that left `memories`. */
 export function batchWriteAndDelete(
   db: DatabaseSyncLike,

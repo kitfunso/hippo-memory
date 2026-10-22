@@ -14,6 +14,7 @@ import { isObjectLike } from '../../base/session/capture-contract.js';
 import { envHealthProbeMs } from '../../base/util/env.js';
 import { isJsonObject, parseJson } from '../../base/util/json.js';
 import { tryReadJsonFile } from '../../host/json-file.js';
+import { pidAlive } from '../../host/pid-alive.js';
 import { tryParseUrl } from '../../base/util/net.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 
@@ -75,19 +76,9 @@ export class ServerAlreadyRunningError extends Error {
   }
 }
 
-/** Signal 0 throws ESRCH for a dead pid and EPERM for a live process of another user, which still holds the store. */
-function pidIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return errorCode(err) === 'EPERM';
-  }
-}
-
 /** False when the pidfile's pid is dead or its url could not be one serve() wrote. */
 function isLiveLoopbackTarget(info: ServerInfo): boolean {
-  if (!pidIsAlive(info.pid)) return false;
+  if (!pidAlive(info.pid)) return false;
 
   // The pid may have been reused and the recorded url is read from a forgeable file; serve() only binds loopback, so a
   // url that is not http on a loopback host and the recorded port is malformed or forged. Reject it before probing,
@@ -262,7 +253,7 @@ function startingClaim(path: string): ServerInfo | undefined {
         : undefined;
     }
     const info = parseJson(raw);
-    return isServerInfo(info) && info.port === 0 && pidIsAlive(info.pid) ? info : undefined;
+    return isServerInfo(info) && info.port === 0 && pidAlive(info.pid) ? info : undefined;
   } catch (err) {
     // Expected: the file vanished after EEXIST, or it is corrupt and detectServer clears it.
     if (errorCode(err) === 'ENOENT' || err instanceof SyntaxError) return undefined;

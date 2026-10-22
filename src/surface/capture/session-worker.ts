@@ -3,12 +3,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { homeDir } from '../../host/agent-homes.js';
+import { holderAlive } from '../../host/pid-alive.js';
 import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
 import { isObjectLike, isStringValue, type ProgressCursor } from '../../base/session/capture-contract.js';
 import { SESSION_ID_RE } from './copilot-transcript.js';
 import type { SessionTurn } from './transcript.js';
 import { blockHash } from '../../base/util/token-text.js';
 import { MINUTE_MS } from '../../base/util/time.js';
+import { HIPPO_DIR } from '../../base/util/agent-homes.js';
 
 /** A turn close runs after each reply; a full close runs once, when the session ends. */
 export type WorkerMode = 'turn' | 'full';
@@ -22,18 +24,8 @@ interface SessionStateFiles {
 /** Null for a missing id or one that could climb out of the sessions folder. */
 function sessionStateFiles(sessionId: string | null): SessionStateFiles | null {
   if (sessionId === null || !SESSION_ID_RE.test(sessionId)) return null;
-  const base = path.join(homeDir(), '.hippo', 'sessions', sessionId);
+  const base = path.join(homeDir(), HIPPO_DIR, 'sessions', sessionId);
   return { lock: `${base}.lock`, queued: `${base}.queued`, cursor: `${base}.cursor.json` };
-}
-
-function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    // EPERM means the process exists but belongs to someone else.
-    return err instanceof Error && 'code' in err && err.code === 'EPERM';
-  }
 }
 
 /** Windows reuses pids, so past this a lock is stale whatever process it names; a worker rarely waits more than minutes
@@ -43,7 +35,7 @@ const STALE_LOCK_MS = 15 * MINUTE_MS;
 const heldHere = new Set<string>();
 
 /** A dead holder frees its session at once, and any holder at STALE_LOCK_MS. */
-function holderAlive(lock: string): boolean {
+function lockHeld(lock: string): boolean {
   let text: string;
   let mtimeMs: number;
   try {
@@ -51,7 +43,7 @@ function holderAlive(lock: string): boolean {
     mtimeMs = fs.statSync(lock).mtimeMs;
   } catch (err) {
     // Gone means released; any other read error is taken as held, so two workers never run on a guess.
-    return !(err instanceof Error && 'code' in err && err.code === 'ENOENT');
+    return errorCode(err) !== 'ENOENT';
   }
   const held = /^(\d+):(\d+)$/.exec(text.trim());
   if (Date.now() - (held ? Number(held[2]) : mtimeMs) > STALE_LOCK_MS) return false;
@@ -59,7 +51,7 @@ function holderAlive(lock: string): boolean {
   if (!held) return true;
   const pid = Number(held[1]);
   // Our own pid is live only while this process holds the lock; a leftover from a dead run that reused the pid is not.
-  return pid === process.pid ? heldHere.has(lock) : pidAlive(pid);
+  return holderAlive(pid, () => heldHere.has(lock));
 }
 
 type Take = 'taken' | 'held' | 'unusable';
@@ -80,7 +72,7 @@ function takeSessionLock(lock: string): Take {
         unusableCause.set(lock, err);
         return 'unusable';
       }
-      if (holderAlive(lock)) return 'held';
+      if (lockHeld(lock)) return 'held';
     }
     try {
       fs.rmSync(lock, { force: true });

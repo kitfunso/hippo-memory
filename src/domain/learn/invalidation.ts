@@ -15,10 +15,11 @@ import {
   type ChurnRepo,
 } from './churn-git.js';
 import type { EntryCursor } from '../../store/port/types.js';
+import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
 const HEADLINE_CHARS = 60;
-// Rows decoded per read of the rows that may mention a target; the match pass runs page by page.
-const MENTION_PAGE_ROWS = 500;
+// The share of a row's tokens that must match the target's before the row counts as mentioning it.
+const MENTION_TOKEN_MATCH_MIN = 0.5;
 
 export interface InvalidationTarget {
   from: string;
@@ -118,7 +119,7 @@ export async function invalidateMatching(
   const weakened: MemoryEntry[] = [];
   let after: EntryCursor | undefined;
   do {
-    const page = await store.learning.entriesMentioning(tokens, tag, tenantId, { limit: MENTION_PAGE_ROWS, after });
+    const page = await store.learning.entriesMentioning(tokens, tag, tenantId, { limit: READ_PAGE_ROWS, after });
     const found = weakenMatches(page.entries, target, options);
     result.invalidated += found.result.invalidated;
     result.targets.push(...found.result.targets);
@@ -166,7 +167,7 @@ function referencesPattern(entry: MemoryEntry, fromTokens: string[], exactTag: s
   const tagTokens = entry.tags.map((t) => t.toLowerCase());
   const tokenMatch = matchScore(fromTokens, contentTokens);
   const tagMatch = tagTokens.includes(exactTag);
-  return tokenMatch >= 0.5 || tagMatch;
+  return tokenMatch >= MENTION_TOKEN_MATCH_MIN || tagMatch;
 }
 
 /** The match pass: weakens each unpinned match in place and returns them, writing nothing. */

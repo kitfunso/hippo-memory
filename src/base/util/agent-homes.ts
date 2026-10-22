@@ -6,6 +6,9 @@ import type { AgentFiles } from './agent-files.js';
 import type { GitRunner } from '../ports/git.js';
 import type { ProjectIdentity } from '../scope/project-identity.js';
 
+/** The folder a hippo store lives in: `<project>/.hippo`, and `~/.hippo` for the global one. */
+export const HIPPO_DIR = '.hippo';
+
 type Env = Readonly<Record<string, string | undefined>>;
 
 /** Everything the agent-memory adapters and the hook installers may know about the machine, its disk and git included;

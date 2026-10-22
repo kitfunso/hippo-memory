@@ -10,6 +10,7 @@ import { namesProjectsByRemote } from './config-file.js';
 import { originRemoteId, projectFileId, readGitFilePointer } from './project-remote.js';
 import { realpathOrResolve } from './real-path.js';
 import { hippoHomeDir } from './agent-homes.js';
+import { HIPPO_DIR } from '../base/util/agent-homes.js';
 
 const MAX_WALK_DEPTH = 64;
 
@@ -132,7 +133,7 @@ function walkProjectMarkers(start: string, home: string, stopDirs: readonly stri
       break;
     }
     if (stopDirs.some((stop) => samePath(dir, stop))) break;
-    if (hippoRoot === null && isDirectoryAt(path.join(dir, '.hippo'))) {
+    if (hippoRoot === null && isDirectoryAt(path.join(dir, HIPPO_DIR))) {
       hippoRoot = dir;
     }
     if (gitRoot === null && fs.existsSync(path.join(dir, '.git'))) {
@@ -153,12 +154,12 @@ export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOpt
   if (opts?.stopDir) stops.push(realpathOrResolve(opts.stopDir));
   const start = realpathOrResolve(cwd ?? process.cwd());
   const { hippoRoot } = walkProjectMarkers(start, home, stops);
-  return hippoRoot === null ? null : path.join(hippoRoot, '.hippo');
+  return hippoRoot === null ? null : path.join(hippoRoot, HIPPO_DIR);
 }
 
 /** Nearest ancestor store like git; the strict join is the fallback so `hippo init` still creates `<cwd>/.hippo`. */
 export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string {
-  return findHippoStoreDir(cwd, opts) ?? path.join(realpathOrResolve(cwd), '.hippo');
+  return findHippoStoreDir(cwd, opts) ?? path.join(realpathOrResolve(cwd), HIPPO_DIR);
 }
 
 export function isInitialized(hippoRoot: string): boolean {

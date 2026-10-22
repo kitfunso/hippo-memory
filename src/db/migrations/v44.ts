@@ -3,7 +3,7 @@ import type { Migration } from './types.js';
 export const v44: Migration = {
   version: 44,
   up: (db) => {
-    // Dormant memories (src/store/dormant.ts): with `dormant.enabled`, sleep moves a faded memory here; `hippo dormant
+    // Dormant memories (sqlite/dormant.ts): with `dormant.enabled`, sleep moves a faded memory here; `hippo dormant
     // restore` writes entry_json back.
     // No FK to memories (the row is gone by design). Additive only: no min_compatible_binary bump, an older binary
     // ignores the table and keeps deleting.

@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentFiles, DirListing, TextFile } from '../base/util/agent-files.js';
-import { errorMessage } from '../base/util/log.js';
+import { errorCode, errorMessage } from '../base/util/log.js';
 import { isFile, realpathOrResolve } from '../host/real-path.js';
 
 const MAX_ITEM_BYTES = 256 * 1024;
@@ -62,7 +62,7 @@ function readHead(file: string, bytes: number): string | null {
     fd = fs.openSync(file, 'r');
   } catch (err) {
     // A file that is not there has no head; any other failure is the caller's to see.
-    if (err instanceof Error && 'code' in err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) return null;
+    if (['ENOENT', 'ENOTDIR'].includes(errorCode(err))) return null;
     throw err;
   }
   try {

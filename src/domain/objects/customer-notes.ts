@@ -3,6 +3,7 @@
  *  SET NULL) is for recall. */
 
 import type { KeysetPosition } from '../../base/util/keyset.js';
+import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import type { Objects } from '../../store/port.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
@@ -18,7 +19,6 @@ export const VALID_NOTE_STATES: ReadonlySet<NoteStatus> = new Set<NoteStatus>(['
  *  convention. */
 export const MAX_CUSTOMER_LEN = 256;
 export const MAX_NOTE_LEN = 8192;
-export const MAX_CHANGE_SUMMARY_LEN = 4096;
 
 export interface SaveCustomerNoteOptions {
   customer: string;
@@ -64,8 +64,8 @@ export const CUSTOMER_NOTE: SavableDescriptor<'customer_note', SaveCustomerNoteO
       required: 'saveCustomerNote: note is required',
       tooLong: `saveCustomerNote: note exceeds the ${MAX_NOTE_LEN}-char cap`,
     });
-    checkText(opts.changeSummary, MAX_CHANGE_SUMMARY_LEN, {
-      tooLong: `saveCustomerNote: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`,
+    checkText(opts.changeSummary, MAX_SHORT_FIELD_LEN, {
+      tooLong: `saveCustomerNote: changeSummary exceeds the ${MAX_SHORT_FIELD_LEN}-char cap`,
     });
     return {
       fields: { customer, note: opts.note },

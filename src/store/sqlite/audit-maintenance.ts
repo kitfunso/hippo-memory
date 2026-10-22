@@ -28,8 +28,7 @@ import { answered, bound, skipEmpty } from './bound.js';
 import type { AuditMaintenance } from '../port.js';
 import { withUnmigratedDb } from '../../db/open.js';
 import type { EntryCursor } from '../port/types.js';
-
-const PLAN_PAGE_ROWS = 500;
+import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
 /** The rows a repair judged and the issues it found among them, in store order. */
 interface RepairPlan {
@@ -96,7 +95,7 @@ function planRows(db: DatabaseSyncLike, run: RepairRun): RepairPlan {
   let total = 0;
   let after: EntryCursor | undefined;
   do {
-    const page = loadEntriesPage(db, run.tenantId, { limit: PLAN_PAGE_ROWS, after });
+    const page = loadEntriesPage(db, run.tenantId, { limit: READ_PAGE_ROWS, after });
     const entries = page.entries.filter(isRepairCandidate);
     total += entries.length;
     issues.push(
@@ -138,10 +137,10 @@ function unsupportedPreview(db: DatabaseSyncLike, tenantId: string): RepairPlan 
   // Hippo never names a rowid on insert, so every row's rowid is above 0.
   let afterRowid = 0;
   for (;;) {
-    const rows = selectPreviewRowsPage(db, columns, tenantId, { limit: PLAN_PAGE_ROWS, afterRowid });
+    const rows = selectPreviewRowsPage(db, columns, tenantId, { limit: READ_PAGE_ROWS, afterRowid });
     total += rows.length;
     issues.push(...rows.flatMap(previewIssue));
-    if (rows.length < PLAN_PAGE_ROWS) return { total, issues };
+    if (rows.length < READ_PAGE_ROWS) return { total, issues };
     afterRowid = rows[rows.length - 1].row_id;
   }
 }
