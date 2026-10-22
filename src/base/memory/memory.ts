@@ -87,7 +87,7 @@ export interface MemoryEntry {
   /**
    * Owning project, lowercased; '' = user-global (injectable everywhere), null = none known (legacy or unnamed write),
    * denied by ambient context.
-   * Stamped at write time by stampOriginProject (src/store/entry-row.ts); undefined only before the first write. */
+   * Stamped at write time by stampOriginProject (sqlite/entry-row.ts); undefined only before the first write. */
   originProject?: string | null;
   /**
    * Raw FTS5 bm25() from the search path (negative, lower = better); set only for a non-empty query the FTS join
@@ -149,7 +149,7 @@ export function calculateRewardFactor(
 /** Bad marks alone never push a memory under sleep's 0.05 retire line; supersede is the hard correction. */
 export const MAX_WRONG_HALVINGS = 3;
 
-// Shared by calculateStrength and strengthSql (src/store/rule-sql.ts) so the two cannot drift.
+// Shared by calculateStrength and strengthSql (src/store/sqlite/rule-sql.ts) so the two cannot drift.
 export const DECAY_BASE = 0.5;
 export const REWARD_SLOPE = 0.5;
 export const RETRIEVAL_BOOST_SLOPE = 0.1;

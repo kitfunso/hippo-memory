@@ -27,6 +27,7 @@ import type {
 } from '../port/conflicts.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
+import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
 // The JOIN with both members' memories rows needs each conflict column qualified, or `id` would be ambiguous.
 const CONFLICT_COLS_MC = MEMORY_CONFLICT_COLUMNS.split(', ')
@@ -223,8 +224,6 @@ function writeConflictRefresh(
   });
 }
 
-const STALE_PAGE = 500;
-
 function resolveStaleOpenConflicts(
   db: DatabaseSyncLike,
   canonicalDetected: DetectedConflict[],
@@ -239,7 +238,7 @@ function resolveStaleOpenConflicts(
     const page = cachedStatement(
       db,
       `SELECT id, memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'open' AND id > ? ORDER BY id LIMIT ?`,
-    ).all(after, STALE_PAGE) as Array<{ id: number; memory_a_id: string; memory_b_id: string }>;
+    ).all(after, READ_PAGE_ROWS) as Array<{ id: number; memory_a_id: string; memory_b_id: string }>;
     // Auto-resolve any open cross-tenant row: the insert loop and refMap rebuild skip those pairs, so re-detected ones
     // would linger as 'open'.
     const resolved = page.filter(
@@ -252,7 +251,7 @@ function resolveStaleOpenConflicts(
         `UPDATE memory_conflicts SET status = 'resolved', updated_at = ? WHERE id IN (SELECT value FROM json_each(?))`,
       ).run(detectedAt, JSON.stringify(resolved.map((row) => row.id)));
     }
-    if (page.length < STALE_PAGE) return;
+    if (page.length < READ_PAGE_ROWS) return;
     after = page[page.length - 1].id;
   }
 }

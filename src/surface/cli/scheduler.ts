@@ -3,6 +3,7 @@ import * as path from 'path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { isJsonObject, isJsonString, parseJson } from '../../base/util/json.js';
+import { HIPPO_DIR } from '../../base/util/agent-homes.js';
 
 export const DAILY_TASK_NAME = 'hippo-daily-runner';
 
@@ -147,7 +148,7 @@ export function runDailyMaintenance(
 ): void {
   for (const workspace of workspaces) {
     const resolved = normalizeWorkspace(workspace);
-    if (!fs.existsSync(path.join(resolved, '.hippo'))) continue;
+    if (!fs.existsSync(path.join(resolved, HIPPO_DIR))) continue;
     runCommand(resolved, ['learn', '--git', '--days', '1']);
     runCommand(resolved, ['sleep']);
   }

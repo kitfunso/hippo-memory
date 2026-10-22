@@ -439,7 +439,7 @@ export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: stri
   try {
     raw = fs.readFileSync(fp, 'utf8');
   } catch (err) {
-    if (err instanceof Error && 'code' in err && err.code === 'ENOENT') return;
+    if (errorCode(err) === 'ENOENT') return;
     throw err;
   }
   const index = parseLegacyIndex(raw);

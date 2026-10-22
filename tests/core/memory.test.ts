@@ -320,30 +320,17 @@ describe('MemoryEntry trace fields', () => {
 });
 
 describe('strengthSql parity', () => {
-  it('scores each stored row as calculateStrength does', () => {
-    const now = new Date('2026-06-01T00:00:00.000Z');
-    const at = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
-    const row = (id: string, days: number, extra: Partial<MemoryEntry> = {}) => ({
-      ...createMemory7(`parity ${id}`),
-      id,
-      lastRetrieved: at(days),
-      ...extra,
-    });
-    const entries = [
-      row('pinned-old', 400, { pinned: true }),
-      row('never-retrieved', 0),
-      row('old', 90),
-      row('fresh', 1, { retrievalCount: 3 }),
-      row('zero-count', 14, { retrievalCount: 0 }),
-      row('high-count', 14, { retrievalCount: 500 }),
-      row('rewarded', 20, { outcomePositive: 6, outcomeNegative: 1 }),
-      row('wrong', 5, { outcomeNegative: 4 }),
-      row('short-half-life', 6, { halfLifeDays: 2 }),
-      ...(['neutral', 'positive', 'negative', 'critical'] as const).map((v) =>
-        row(`valence-${v}`, 10, { emotionalValence: v }),
-      ),
-    ];
-    const home = makeRoot('strength-parity');
+  const now = new Date('2026-06-01T00:00:00.000Z');
+  const at = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
+  const row = (id: string, days: number, extra: Partial<MemoryEntry> = {}) => ({
+    ...createMemory7(`parity ${id}`),
+    id,
+    lastRetrieved: at(days),
+    ...extra,
+  });
+
+  function expectSqlMatchesJs(name: string, entries: readonly MemoryEntry[]): void {
+    const home = makeRoot(name);
     try {
       for (const e of entries) writeEntry(home, e);
       const db = openHippoDb(home);
@@ -366,5 +353,44 @@ describe('strengthSql parity', () => {
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
+  }
+
+  it('scores each stored row as calculateStrength does', () => {
+    expectSqlMatchesJs('strength-parity', [
+      row('pinned-old', 400, { pinned: true }),
+      row('never-retrieved', 0),
+      row('old', 90),
+      row('fresh', 1, { retrievalCount: 3 }),
+      row('zero-count', 14, { retrievalCount: 0 }),
+      row('high-count', 14, { retrievalCount: 500 }),
+      row('rewarded', 20, { outcomePositive: 6, outcomeNegative: 1 }),
+      row('wrong', 5, { outcomeNegative: 4 }),
+      row('short-half-life', 6, { halfLifeDays: 2 }),
+      ...(['neutral', 'positive', 'negative', 'critical'] as const).map((v) =>
+        row(`valence-${v}`, 10, { emotionalValence: v }),
+      ),
+    ]);
+  });
+
+  it('scores 200 seeded random rows as calculateStrength does', () => {
+    // A fixed-seed LCG keeps a failing row reproducible.
+    let seed = 20261022;
+    const next = (): number => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed / 2 ** 32;
+    };
+    const int = (max: number): number => Math.floor(next() * max);
+    const valences = ['neutral', 'positive', 'negative', 'critical'] as const;
+    const entries = Array.from({ length: 200 }, (_, i) =>
+      row(`random-${i}`, next() * 500, {
+        pinned: next() < 0.1,
+        retrievalCount: int(60),
+        outcomePositive: int(10),
+        outcomeNegative: int(10),
+        halfLifeDays: 1 + int(120),
+        emotionalValence: valences[int(valences.length)],
+      }),
+    );
+    expectSqlMatchesJs('strength-parity-random', entries);
   });
 });

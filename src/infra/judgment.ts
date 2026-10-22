@@ -34,6 +34,8 @@ export interface JudgeOptions {
 }
 
 const JUDGE_MAX_ERROR_BYTES = 4096;
+// The kind-confidence at or above which a judged answer counts as observed, not inferred.
+const OBSERVED_CONFIDENCE_MIN = 0.8;
 
 /**
  * One named answer of a Jev reply `{ answers: { <name>: Answer } }`; an empty object when the reply has none of that
@@ -88,7 +90,7 @@ function oneOf<T extends string>(value: JsonValue | undefined, allowed: readonly
 
 /** `verified` is unreachable: that tier means a human or a test confirmed it. */
 function toConfidenceTier(kindConfidence: number): ConfidenceLevel {
-  if (kindConfidence >= 0.8) return 'observed';
+  if (kindConfidence >= OBSERVED_CONFIDENCE_MIN) return 'observed';
   return 'inferred';
 }
 
