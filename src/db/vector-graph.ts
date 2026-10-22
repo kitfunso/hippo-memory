@@ -28,6 +28,16 @@ export interface VectorGraph {
   readonly unit: Map<number, Float32Array>;
 }
 
+/** A graph a search can walk, held in memory or read from a file as the walk reaches each node. */
+export interface GraphView {
+  readonly dim: number;
+  /** The node every search starts from; -1 for an empty graph. */
+  readonly entry: number;
+  readonly maxLevel: number;
+  /** The links of `node` at `level`; a view over a file throws on a link it cannot trust. */
+  linksOf(node: number, level: number): ArrayLike<number>;
+}
+
 export interface SearchOptions {
   k: number;
   ef: number;
@@ -44,7 +54,8 @@ export interface GraphHit {
   score: number;
 }
 
-export type SearchResult = { aborted: false; hits: GraphHit[] } | { aborted: true };
+/** `visited` counts the nodes the bottom layer's walk reached, so a caller can tell a walk that reached every node. */
+export type SearchResult = { aborted: false; hits: GraphHit[]; visited: number } | { aborted: true };
 
 type VectorLookup = (node: number) => Float32Array;
 
@@ -157,11 +168,13 @@ function cosine(q: Float32Array, qNorm: number, v: Float32Array): number {
 }
 
 interface WalkContext {
-  graph: VectorGraph;
+  graph: GraphView;
   score: (node: number) => number;
   admit?: (node: number) => boolean;
   /** Vectors still allowed to be scored, shared by every layer of one search; negative means no budget. */
   budget: { left: number };
+  /** Nodes the last layer's walk reached. */
+  visited: number;
 }
 
 /** Best-first walk of one layer: the ef best admitted candidates, best first, or null when the budget ran out. */
@@ -177,9 +190,10 @@ function searchLayer(ctx: WalkContext, entries: GraphHit[], ef: number, level: n
   while (frontier.size > 0) {
     const cur = frontier.pop();
     if (result.size >= ef && cur.score < result.peekKey()) break;
-    const links = ctx.graph.nodes.get(cur.node)?.links[level] ?? [];
-    for (const n of links) {
-      if (visited.has(n) || !ctx.graph.nodes.has(n)) continue;
+    const links = ctx.graph.linksOf(cur.node, level);
+    for (let i = 0; i < links.length; i++) {
+      const n = links[i];
+      if (visited.has(n)) continue;
       visited.add(n);
       if (ctx.budget.left === 0) return null;
       if (ctx.budget.left > 0) ctx.budget.left--;
@@ -193,6 +207,7 @@ function searchLayer(ctx: WalkContext, entries: GraphHit[], ef: number, level: n
       }
     }
   }
+  ctx.visited = visited.size;
   const out: GraphHit[] = [];
   while (result.size > 0) out.push(result.pop());
   return out.reverse();
@@ -210,10 +225,27 @@ function descend(ctx: WalkContext, stop: number): GraphHit[] | null {
   return cur;
 }
 
+const NO_LINKS: readonly number[] = [];
+
+/** The in-memory graph as a search walks it. */
+function viewOf(graph: VectorGraph): GraphView {
+  const { dim, entry, maxLevel, nodes } = graph;
+  return { dim, entry, maxLevel, linksOf: (node, level) => nodes.get(node)?.links[level] ?? NO_LINKS };
+}
+
 export function searchGraph(graph: VectorGraph, query: Float32Array, opts: SearchOptions): SearchResult {
-  if (graph.entry < 0 || opts.k <= 0 || query.length !== graph.dim) return { aborted: false, hits: [] };
+  return searchView(viewOf(graph), query, { ...opts, vectorOf: opts.vectorOf ?? ((n: number) => unitOf(graph, n)) });
+}
+
+/** searchGraph over any view; `vectorOf` scores each node it reaches. */
+export function searchView(
+  graph: GraphView,
+  query: Float32Array,
+  opts: SearchOptions & { vectorOf: VectorLookup },
+): SearchResult {
+  if (graph.entry < 0 || opts.k <= 0 || query.length !== graph.dim) return { aborted: false, hits: [], visited: 0 };
   const qNorm = normOf(query);
-  const vectorOf = opts.vectorOf ?? ((n: number) => unitOf(graph, n));
+  const vectorOf = opts.vectorOf;
   const seen = new Map<number, boolean>();
   const admit = opts.admit;
   const memo = admit
@@ -230,13 +262,14 @@ export function searchGraph(graph: VectorGraph, query: Float32Array, opts: Searc
     score: (n) => cosine(query, qNorm, vectorOf(n)),
     admit: memo,
     budget: { left: opts.visitBudget ?? -1 },
+    visited: 0,
   };
   const entry = descend({ ...ctx, admit: undefined }, 0);
   if (!entry) return { aborted: true };
   const found = searchLayer(ctx, entry, Math.max(opts.ef, opts.k), 0);
   if (!found) return { aborted: true };
   found.sort((a, b) => b.score - a.score || a.node - b.node);
-  return { aborted: false, hits: found.slice(0, opts.k) };
+  return { aborted: false, hits: found.slice(0, opts.k), visited: ctx.visited };
 }
 
 function unitOf(graph: VectorGraph, node: number): Float32Array {
@@ -291,7 +324,7 @@ export function insertNode(graph: VectorGraph, node: number, vector: Float32Arra
     return;
   }
   const unitFor = (n: number) => unitOf(graph, n);
-  const ctx: WalkContext = { graph, score: (n) => dot(q, unitFor(n)), budget: { left: -1 } };
+  const ctx: WalkContext = { graph: viewOf(graph), score: (n) => dot(q, unitFor(n)), budget: { left: -1 }, visited: 0 };
   let entries = descend(ctx, level) ?? unreachable();
   for (let l = Math.min(level, graph.maxLevel); l >= 0; l--) {
     const found = searchLayer(ctx, entries, graph.efConstruction, l) ?? unreachable();
