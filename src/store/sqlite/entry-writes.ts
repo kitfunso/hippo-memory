@@ -8,7 +8,6 @@ import {
   strengthOptionsOf,
 } from '../../base/memory/memory.js';
 import { type DatabaseSyncLike, withWriteScope, isSqliteBusy } from '../../db/index.js';
-import { chunked } from '../../base/util/chunked.js';
 import { RejectedValueError, ConflictError, CrossTenantIdError, NotFoundError } from '../../base/errors/api-errors.js';
 import { markSummaryDirtyInTx, markSummariesDirtyInTx } from './summary-dirty.js';
 import { summaryDirtyAudit } from '../rules/audit-rows.js';
@@ -238,8 +237,13 @@ export function warnStrengthenFailed<E>(error: E): void {
   log.warn(`retrieval stats not saved (${errorMessage(error)})`, errorFields(error));
 }
 
-/** Rows per recall-write statement: five bound values each, far under SQLite's parameter limit. */
-const RETRIEVAL_UPDATE_CHUNK = 100;
+// One statement text for any number of rows. Numbers round-trip through JSON exactly from 1e-80 up; only the cached
+// strength of a long-decayed wrong memory falls below, and that one may land a unit in the last place off.
+const RETRIEVAL_UPDATE_SQL =
+  `WITH v AS (SELECT json_extract(value, '$[0]') AS id, json_extract(value, '$[1]') AS rc, ` +
+  `json_extract(value, '$[2]') AS lr, json_extract(value, '$[3]') AS hl, json_extract(value, '$[4]') AS st ` +
+  `FROM json_each(?)) UPDATE memories SET retrieval_count = v.rc, last_retrieved = v.lr, half_life_days = v.hl, ` +
+  `strength = v.st FROM v WHERE memories.id = v.id`;
 
 /** strengthenRetrieved on the caller's handle, inside the caller's transaction. Throws; the caller decides. */
 export function strengthenRetrievedOn(
@@ -253,17 +257,10 @@ export function strengthenRetrievedOn(
   const byId = selectEntriesByIds(db, ids, opts.tenantId);
   const live = [...new Set(ids)].flatMap((id) => byId.get(id) ?? []);
   const updated = markRetrieved(live, undefined, strengthOptionsOf(rules));
-  // One UPDATE ... FROM per chunk of rows instead of one statement per row.
-  for (const chunk of chunked(updated, RETRIEVAL_UPDATE_CHUNK)) {
-    const values = chunk.map(() => '(?, ?, ?, ?, ?)').join(', ');
-    cachedStatement(
-      db,
-      `WITH v(id, rc, lr, hl, st) AS (VALUES ${values})
-       UPDATE memories SET retrieval_count = v.rc, last_retrieved = v.lr, half_life_days = v.hl, strength = v.st
-       FROM v WHERE memories.id = v.id`,
-    ).run(...chunk.flatMap((e) => [e.id, e.retrievalCount, e.lastRetrieved, e.halfLifeDays, e.strength]));
-    for (const e of chunk) found.add(e.id);
-  }
+  if (updated.length === 0) return found;
+  const rows = updated.map((e) => [e.id, e.retrievalCount, e.lastRetrieved, e.halfLifeDays, e.strength]);
+  cachedStatement(db, RETRIEVAL_UPDATE_SQL).run(JSON.stringify(rows));
+  for (const e of updated) found.add(e.id);
   return found;
 }
 

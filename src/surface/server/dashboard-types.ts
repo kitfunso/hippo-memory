@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '../../api/index.js';
 import type { DashboardReader } from './dashboard-reader.js';
 import type { DashboardSession } from './dashboard-session.js';
+import type { StaticFiles } from '../dashboard/static-file.js';
 import type { RouteAuth, RouteEndpoint } from './types.js';
 
 /** What a dashboard handler gets once the session gate has passed. */
@@ -16,8 +17,8 @@ export interface DashboardRouteRequest {
   /** The dashboard reads, answered off the server thread. */
   readonly reader: DashboardReader;
   readonly bodyDeadlineMs: number;
-  /** The built React app's folder, or null when it is not built. */
-  readonly staticRoot: string | null;
+  /** The built React app, read at start, or null when it is not built. */
+  readonly staticFiles: StaticFiles | null;
 }
 
 /** One dashboard row: a JSON path, or the React app's pages. */

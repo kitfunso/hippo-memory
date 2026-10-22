@@ -1,9 +1,8 @@
 // The dashboard's pages: the React app and its assets, the not-built page, and the step off the token URL.
 import { createHash } from 'crypto';
 import type * as http from 'http';
-import * as path from 'path';
 import type { DashboardRouteRequest } from '../server/dashboard-types.js';
-import { serveStaticFile, staticFileUnder } from './static-file.js';
+import { assetFor, sendAsset } from './static-file.js';
 
 // One style block, not style attributes, so the policy below can name its hash and allow no other inline style.
 const NOT_BUILT_CSS =
@@ -60,10 +59,7 @@ function leaveTokenUrl(res: http.ServerResponse, pathname: string, query: URLSea
 export async function pageRoute(r: DashboardRouteRequest, match: RegExpMatchArray): Promise<void> {
   const pathname = match[0];
   if (r.session === 'token') return leaveTokenUrl(r.res, pathname, r.query);
-  const root = r.staticRoot;
-  if (root === null) return notBuilt(r.res);
-  const file = staticFileUnder(root, pathname);
-  if (file !== null && serveStaticFile(r.res, file)) return;
-  if (serveStaticFile(r.res, path.join(root, 'index.html'))) return;
-  notBuilt(r.res);
+  const asset = r.staticFiles === null ? undefined : assetFor(r.staticFiles, pathname);
+  if (asset === undefined) return notBuilt(r.res);
+  sendAsset(r.req, r.res, asset);
 }

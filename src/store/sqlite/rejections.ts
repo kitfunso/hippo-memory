@@ -166,8 +166,9 @@ function removeDormantCopies(db: DatabaseSyncLike, sweep: Sweep): void {
 // After the commit, on the same handle: a purged raw mirror is stamped so the reaper skips it, and one that stays is
 // logged.
 function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: Removal): void {
+  const rawIds = new Set(removal.removedRawIds);
   for (const id of removal.removedIds) {
-    const isRaw = removal.removedRawIds.includes(id);
+    const isRaw = rawIds.has(id);
     const mirrorOk = purgeMirrorBestEffort(hippoRoot, id, isRaw, 'hippo reject');
     if (mirrorOk && isRaw) markMirrorCleaned(db, id, new Date().toISOString());
   }
