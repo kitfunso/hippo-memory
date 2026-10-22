@@ -151,10 +151,7 @@ function ambientIn(t: MemoryTables, tenantId: string, request: AmbientCandidateR
   const byId = new Map<string, MemoryEntry>();
   for (const e of rows.filter((r) => r.pinned).sort(oldestFirst)) if (admit(e)) byId.set(e.id, e);
   if (needed > 0) for (const e of recentRows(rows, needed, admit, request.origins)) byId.set(e.id, e);
-  // hippo.db sorts these in JavaScript with localeCompare, so this does too.
-  const entries = structuredClone(
-    [...byId.values()].sort((a, b) => a.created.localeCompare(b.created) || a.id.localeCompare(b.id)),
-  );
+  const entries = structuredClone([...byId.values()].sort(oldestFirst));
   const { recall } = request;
   if (!recall) return { entries, refused };
   const counts = docCounts(t);
