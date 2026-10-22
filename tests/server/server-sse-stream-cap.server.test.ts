@@ -4,9 +4,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -79,7 +80,7 @@ describe('/mcp/stream concurrent stream cap', () => {
     expect(status).toBe(200);
   });
 
-  it('counts each API key separately from the keyless loopback caller', async () => {
+  it.skipIf(needsHippoDb('db'))('counts each API key separately from the keyless loopback caller', async () => {
     const keyA = mintKey('sse-cap-a');
     const auth = { authorization: `Bearer ${keyA}` };
     expect((await openStream(auth)).status).toBe(200);

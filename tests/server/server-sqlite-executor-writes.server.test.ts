@@ -40,6 +40,7 @@ import {
   watched,
 } from '../_helpers/store-worker-server.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -308,81 +309,87 @@ async function runSteps(root: string, store?: HippoStore) {
 }
 
 describe('the worker-backed write, key and audit routes against the in-process store', () => {
-  it('gives every moved route the same status, headers, body, audit rows, stored rows and mirror files', async () => {
-    const inProcessRoot = newRoot();
-    const inProcess = await runSteps(inProcessRoot, sqliteStore(inProcessRoot));
-    const onWorkers = await runSteps(newRoot());
+  it.skipIf(needsHippoDb('lock'))(
+    'gives every moved route the same status, headers, body, audit rows, stored rows and mirror files',
+    async () => {
+      const inProcessRoot = newRoot();
+      const inProcess = await runSteps(inProcessRoot, sqliteStore(inProcessRoot));
+      const onWorkers = await runSteps(newRoot());
 
-    expect(onWorkers.replies).toEqual(inProcess.replies);
-    expect(onWorkers.audit).toEqual(inProcess.audit);
-    expect(onWorkers.stored).toEqual(inProcess.stored);
-    expect(onWorkers.mirrors).toEqual(inProcess.mirrors);
-    const statusOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.status]));
-    expect(statusOf).toMatchObject({
-      create: 200,
-      'create without content': 400,
-      'create a rejected value': 400,
-      'create with an unknown key': 401,
-      'create with a revoked key': 401,
-      'create with an expired key': 401,
-      supersede: 200,
-      'supersede a missing row': 404,
-      "supersede the other tenant's row": 404,
-      archive: 200,
-      "archive the other tenant's row": 404,
-      forget: 200,
-      'forget it again': 404,
-      assemble: 200,
-      'assemble a bad budget': 400,
-      mint: 200,
-      'mint as a member': 403,
-      'list keys with the minted key': 200,
-      'list keys': 200,
-      revoke: 200,
-      'revoke a missing key': 404,
-      'revoke as a member': 403,
-      'list keys with the minted key, now revoked': 401,
-      audit: 200,
-      'audit an invalid op': 400,
-      'audit another tenant': 403,
-      'audit with an unknown key': 401,
-    });
-    expect(onWorkers.audit.filter((row) => row.includes('"reject_refusal"'))).toHaveLength(2);
-    expect(onWorkers.mirrors.length).toBeGreaterThan(4);
-  });
+      expect(onWorkers.replies).toEqual(inProcess.replies);
+      expect(onWorkers.audit).toEqual(inProcess.audit);
+      expect(onWorkers.stored).toEqual(inProcess.stored);
+      expect(onWorkers.mirrors).toEqual(inProcess.mirrors);
+      const statusOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.status]));
+      expect(statusOf).toMatchObject({
+        create: 200,
+        'create without content': 400,
+        'create a rejected value': 400,
+        'create with an unknown key': 401,
+        'create with a revoked key': 401,
+        'create with an expired key': 401,
+        supersede: 200,
+        'supersede a missing row': 404,
+        "supersede the other tenant's row": 404,
+        archive: 200,
+        "archive the other tenant's row": 404,
+        forget: 200,
+        'forget it again': 404,
+        assemble: 200,
+        'assemble a bad budget': 400,
+        mint: 200,
+        'mint as a member': 403,
+        'list keys with the minted key': 200,
+        'list keys': 200,
+        revoke: 200,
+        'revoke a missing key': 404,
+        'revoke as a member': 403,
+        'list keys with the minted key, now revoked': 401,
+        audit: 200,
+        'audit an invalid op': 400,
+        'audit another tenant': 403,
+        'audit with an unknown key': 401,
+      });
+      expect(onWorkers.audit.filter((row) => row.includes('"reject_refusal"'))).toHaveLength(2);
+      expect(onWorkers.mirrors.length).toBeGreaterThan(4);
+    },
+  );
 
-  it('answers a write behind a held lock with the same 503 and Retry-After, and a read with its 200', async () => {
-    const busyReplies = async (root: string, store?: HippoStore) => {
-      const [memoryId = ''] = seedSession(root, 'default', 'sess-1', 1);
-      const key = keyFor(root, 'default');
-      const server = await start(root, store);
-      const lock = holdWriteLock(root);
-      const replies = [
-        await seen('create', await post(server, '/v1/memories', { content: 'refused' }, key.plaintext), [key.keyId]),
-        await seen(
-          'archive',
-          await post(server, `/v1/memories/${memoryId}/archive`, { reason: 'refused' }, key.plaintext),
-          [key.keyId],
-        ),
-        await seen('mint', await post(server, '/v1/auth/keys', { label: 'refused', role: 'member' }, key.plaintext), [
-          key.keyId,
-        ]),
-        await seen('list keys', await get(server, '/v1/auth/keys', key.plaintext), [key.keyId]),
-        await seen('audit', await get(server, '/v1/audit', key.plaintext), [key.keyId]),
-      ];
-      lock.release();
-      return replies;
-    };
-    const inProcessRoot = newRoot();
-    const inProcess = await busyReplies(inProcessRoot, sqliteStore(inProcessRoot));
-    const workerRoot = newRoot();
-    const onWorkers = await busyReplies(workerRoot);
+  it.skipIf(needsHippoDb('lock'))(
+    'answers a write behind a held lock with the same 503 and Retry-After, and a read with its 200',
+    async () => {
+      const busyReplies = async (root: string, store?: HippoStore) => {
+        const [memoryId = ''] = seedSession(root, 'default', 'sess-1', 1);
+        const key = keyFor(root, 'default');
+        const server = await start(root, store);
+        const lock = holdWriteLock(root);
+        const replies = [
+          await seen('create', await post(server, '/v1/memories', { content: 'refused' }, key.plaintext), [key.keyId]),
+          await seen(
+            'archive',
+            await post(server, `/v1/memories/${memoryId}/archive`, { reason: 'refused' }, key.plaintext),
+            [key.keyId],
+          ),
+          await seen('mint', await post(server, '/v1/auth/keys', { label: 'refused', role: 'member' }, key.plaintext), [
+            key.keyId,
+          ]),
+          await seen('list keys', await get(server, '/v1/auth/keys', key.plaintext), [key.keyId]),
+          await seen('audit', await get(server, '/v1/audit', key.plaintext), [key.keyId]),
+        ];
+        lock.release();
+        return replies;
+      };
+      const inProcessRoot = newRoot();
+      const inProcess = await busyReplies(inProcessRoot, sqliteStore(inProcessRoot));
+      const workerRoot = newRoot();
+      const onWorkers = await busyReplies(workerRoot);
 
-    expect(onWorkers).toEqual(inProcess);
-    expect(onWorkers.map((reply) => reply.status)).toEqual([503, 503, 503, 200, 200]);
-    expect(onWorkers[0]?.headers).toContainEqual(['retry-after', '1']);
-    expect(contents(workerRoot)).toEqual(['default sess-1 message 0']);
-  });
+      expect(onWorkers).toEqual(inProcess);
+      expect(onWorkers.map((reply) => reply.status)).toEqual([503, 503, 503, 200, 200]);
+      expect(onWorkers[0]?.headers).toContainEqual(['retry-after', '1']);
+      expect(contents(workerRoot)).toEqual(['default sess-1 message 0']);
+    },
+  );
 });
 
 describe('the event loop while a memory write waits', () => {
@@ -627,22 +634,25 @@ describe('a 429 and the store workers', () => {
 });
 
 describe('an audit write failure counted on a worker thread', () => {
-  it('reaches /health when the write was refused and its refusal row could not be written', async () => {
-    const root = newRoot();
-    rejectValue(root, 'default', REFUSED);
-    const server = await start(root);
-    const before = await auditFailures(server);
-    execOn(
-      root,
-      `CREATE TRIGGER refusal_audit_broken BEFORE INSERT ON audit_log WHEN NEW.op = 'reject_refusal' BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`,
-    );
+  it.skipIf(needsHippoDb('lock'))(
+    'reaches /health when the write was refused and its refusal row could not be written',
+    async () => {
+      const root = newRoot();
+      rejectValue(root, 'default', REFUSED);
+      const server = await start(root);
+      const before = await auditFailures(server);
+      execOn(
+        root,
+        `CREATE TRIGGER refusal_audit_broken BEFORE INSERT ON audit_log WHEN NEW.op = 'reject_refusal' BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`,
+      );
 
-    const res = await post(server, '/v1/memories', { content: REFUSED });
+      const res = await post(server, '/v1/memories', { content: REFUSED });
 
-    expect(res.status).toBe(400);
-    expect(await auditFailures(server)).toBe(before + 1);
-    expect(contents(root)).toEqual([]);
-  });
+      expect(res.status).toBe(400);
+      expect(await auditFailures(server)).toBe(before + 1);
+      expect(contents(root)).toEqual([]);
+    },
+  );
 });
 
 /** Predictions in hippo.db's main file alone, which holds only what a checkpoint has copied out of the WAL. */

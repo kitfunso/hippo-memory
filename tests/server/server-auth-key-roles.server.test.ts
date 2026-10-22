@@ -4,9 +4,10 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { listApiKeys } from '../_helpers/root-forms.js';
 import { log } from '../../src/base/util/log.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -58,7 +59,7 @@ describe('/v1/auth/keys role rules', () => {
     rmSync(globalHome, { recursive: true, force: true });
   });
 
-  it('a member key cannot mint a key of either role', async () => {
+  it.skipIf(needsHippoDb('db'))('a member key cannot mint a key of either role', async () => {
     const member = mint('member');
     for (const body of [{ role: 'admin' }, { role: 'member' }, {}]) {
       const res = await post(member.plaintext, body);
@@ -68,7 +69,7 @@ describe('/v1/auth/keys role rules', () => {
     }
   });
 
-  it('an admin key mints either role', async () => {
+  it.skipIf(needsHippoDb('db'))('an admin key mints either role', async () => {
     const admin = mint('admin');
     for (const role of ['admin', 'member'] as const) {
       const res = await post(admin.plaintext, { role });
@@ -78,27 +79,30 @@ describe('/v1/auth/keys role rules', () => {
     }
   });
 
-  it('a mint with no role makes a member key, and the server log never carries the key', async () => {
-    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
-    try {
-      const admin = mint('admin');
-      // SAFETY: the mint route returns AuthCreateResult as JSON.
-      const made = (await (await post(admin.plaintext, {})).json()) as {
-        keyId: string;
-        plaintext: string;
-        role: string;
-      };
-      expect((await post(admin.plaintext, { role: 'admin' })).status).toBe(200);
-      expect(made.role).toBe('member');
-      expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes(made.plaintext))).toEqual(
-        [],
-      );
-    } finally {
-      warn.mockRestore();
-    }
-  });
+  it.skipIf(needsHippoDb('db'))(
+    'a mint with no role makes a member key, and the server log never carries the key',
+    async () => {
+      const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+      try {
+        const admin = mint('admin');
+        // SAFETY: the mint route returns AuthCreateResult as JSON.
+        const made = (await (await post(admin.plaintext, {})).json()) as {
+          keyId: string;
+          plaintext: string;
+          role: string;
+        };
+        expect((await post(admin.plaintext, { role: 'admin' })).status).toBe(200);
+        expect(made.role).toBe('member');
+        expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes(made.plaintext))).toEqual(
+          [],
+        );
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
 
-  it('a member key cannot revoke another key, or probe a missing one', async () => {
+  it.skipIf(needsHippoDb('db'))('a member key cannot revoke another key, or probe a missing one', async () => {
     const member = mint('member');
     const other = mint('member');
     expect((await revoke(member.plaintext, other.keyId)).status).toBe(403);
@@ -106,7 +110,7 @@ describe('/v1/auth/keys role rules', () => {
     expect((await revoke(member.plaintext, 'hk_does_not_exist')).status).toBe(403);
   });
 
-  it('a member key can revoke itself, and an admin key can revoke any key', async () => {
+  it.skipIf(needsHippoDb('db'))('a member key can revoke itself, and an admin key can revoke any key', async () => {
     const member = mint('member');
     expect((await revoke(member.plaintext, member.keyId)).status).toBe(200);
     expect(isActive(member.keyId)).toBe(false);

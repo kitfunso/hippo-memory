@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { presentConnectionsAsRemote } from '../_helpers/listen.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -67,50 +68,53 @@ describe('MCP-over-HTTP transport', () => {
     expect(names).toContain('hippo_recall');
   });
 
-  it('POST /mcp tools/call hippo_remember stores a memory recoverable via recall', async () => {
-    // A token unique enough that a stray hit in the global store is implausible.
-    const sentinel = `mcp-http-sentinel-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  it.skipIf(needsHippoDb('team'))(
+    'POST /mcp tools/call hippo_remember stores a memory recoverable via recall',
+    async () => {
+      // A token unique enough that a stray hit in the global store is implausible.
+      const sentinel = `mcp-http-sentinel-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    const rememberRes = await fetch(`${handle.url}/mcp`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 2,
-        method: 'tools/call',
-        params: {
-          name: 'hippo_remember',
-          arguments: { text: `mcp-http-canary-99 ${sentinel}` },
-        },
-      }),
-    });
-    expect(rememberRes.status).toBe(200);
-    const rememberBody = await jsonAs<{ id: number; result?: { content: Array<{ text: string }> } }>(rememberRes);
-    expect(rememberBody.id).toBe(2);
-    const rememberText = rememberBody.result?.content?.[0]?.text ?? '';
-    expect(rememberText).toMatch(/Remembered/i);
+      const rememberRes = await fetch(`${handle.url}/mcp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: {
+            name: 'hippo_remember',
+            arguments: { text: `mcp-http-canary-99 ${sentinel}` },
+          },
+        }),
+      });
+      expect(rememberRes.status).toBe(200);
+      const rememberBody = await jsonAs<{ id: number; result?: { content: Array<{ text: string }> } }>(rememberRes);
+      expect(rememberBody.id).toBe(2);
+      const rememberText = rememberBody.result?.content?.[0]?.text ?? '';
+      expect(rememberText).toMatch(/Remembered/i);
 
-    // Round-trip: recall the same sentinel through the same HTTP transport.
-    // This proves the dispatcher lands in a single coherent store across
-    // back-to-back calls without leaning on any specific filesystem layout.
-    const recallRes = await fetch(`${handle.url}/mcp`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: {
-          name: 'hippo_recall',
-          arguments: { query: sentinel, budget: 2000 },
-        },
-      }),
-    });
-    expect(recallRes.status).toBe(200);
-    const recallBody = await jsonAs<{ id: number; result?: { content: Array<{ text: string }> } }>(recallRes);
-    const recallText = recallBody.result?.content?.[0]?.text ?? '';
-    expect(recallText).toContain(sentinel);
-  });
+      // Round-trip: recall the same sentinel through the same HTTP transport.
+      // This proves the dispatcher lands in a single coherent store across
+      // back-to-back calls without leaning on any specific filesystem layout.
+      const recallRes = await fetch(`${handle.url}/mcp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: {
+            name: 'hippo_recall',
+            arguments: { query: sentinel, budget: 2000 },
+          },
+        }),
+      });
+      expect(recallRes.status).toBe(200);
+      const recallBody = await jsonAs<{ id: number; result?: { content: Array<{ text: string }> } }>(recallRes);
+      const recallText = recallBody.result?.content?.[0]?.text ?? '';
+      expect(recallText).toContain(sentinel);
+    },
+  );
 
   it('POST /mcp answers a missing method, a notification, an unknown method and a bad bearer', async () => {
     const post = async (body: string, headers: Record<string, string> = {}) => {

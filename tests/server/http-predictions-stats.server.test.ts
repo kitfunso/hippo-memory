@@ -10,13 +10,14 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction } from '../_helpers/root-forms.js';
 import type { PredictionBaserate } from '../../src/store/port/types.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -50,7 +51,7 @@ async function jsonAs<T>(res: Response): Promise<T> {
 }
 
 describe('HTTP /v1/predictions/stats', () => {
-  it('returns baserate JSON for a class with closed predictions', async () => {
+  it.skipIf(needsHippoDb('db'))('returns baserate JSON for a class with closed predictions', async () => {
     // Seed: 2 closed predictions in class "http-test"
     for (const [est, act] of [
       [3, 5],
@@ -83,7 +84,7 @@ describe('HTTP /v1/predictions/stats', () => {
     expect(body.error).toMatch(/class param is required/);
   });
 
-  it('audit log records predict_baserate row post-call', async () => {
+  it.skipIf(needsHippoDb('db'))('audit log records predict_baserate row post-call', async () => {
     const p = savePrediction(home, 'default', { classTag: 'audit-http', claimText: 'audit test', estimateValue: 1 });
     closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: 2 });
 

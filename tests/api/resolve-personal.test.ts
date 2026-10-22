@@ -61,7 +61,7 @@ function seedConflicts(...pairs: ReadonlyArray<readonly [string, string]>): numb
   );
   const open = listMemoryConflicts(root, 'open', 'default');
   return pairs.map(([a]) => {
-    const conflict = open.find((c) => [c.memory_a_id, c.memory_b_id].includes(a));
+    const conflict = open.find((c) => [c.memoryAId, c.memoryBId].includes(a));
     if (!conflict) throw new Error('seeded conflict not found');
     return conflict.id;
   });

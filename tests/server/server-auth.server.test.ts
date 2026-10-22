@@ -4,11 +4,12 @@ import { Socket } from 'node:net';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey, revokeApiKey } from '../../src/store/sqlite/auth.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { readAuthHeader } from '../../src/surface/server/auth.js';
 import type { RememberResult } from '../../src/api/index.js';
 import { presentConnectionsAsRemote } from '../_helpers/listen.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -41,7 +42,7 @@ describe('server auth middleware', () => {
     await handle.stop();
   });
 
-  it('loopback no-auth: 200 and audit shows actor=localhost:cli', async () => {
+  it.skipIf(needsHippoDb('db'))('loopback no-auth: 200 and audit shows actor=localhost:cli', async () => {
     const res = await fetch(`${handle.url}/v1/memories`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -63,7 +64,7 @@ describe('server auth middleware', () => {
   });
 
   // RFC 6750 schemes are case-insensitive, so a lower-case and a mixed-case one both authenticate.
-  it.each(['bearer', 'BeArEr'])(
+  it.skipIf(needsHippoDb('db')).each(['bearer', 'BeArEr'])(
     'loopback with valid %s scheme: 200 and audit shows actor=api_key:<keyId>',
     async (scheme) => {
       const db = openHippoDb(home);
@@ -214,19 +215,22 @@ describe('server auth middleware for a non-loopback peer', () => {
     expect(rememberEvents()).toEqual([]);
   });
 
-  it('valid Bearer: 200, so the 401 above comes from the missing key and not the relabelled socket', async () => {
-    const db = openHippoDb(home);
-    let created: ReturnType<typeof createApiKey>;
-    try {
-      created = createApiKey(db, { tenantId: 'default', label: 'remote-test' });
-    } finally {
-      closeHippoDb(db);
-    }
-    const res = await rememberAs('auth-canary-remote-bearer', { authorization: `Bearer ${created.plaintext}` });
-    expect(res.status).toBe(200);
-    const body = await jsonAs<RememberResult>(res);
-    expect(rememberEvents().find((e) => e.targetId === body.id)?.actor).toBe(`api_key:${created.keyId}`);
-  });
+  it.skipIf(needsHippoDb('db'))(
+    'valid Bearer: 200, so the 401 above comes from the missing key and not the relabelled socket',
+    async () => {
+      const db = openHippoDb(home);
+      let created: ReturnType<typeof createApiKey>;
+      try {
+        created = createApiKey(db, { tenantId: 'default', label: 'remote-test' });
+      } finally {
+        closeHippoDb(db);
+      }
+      const res = await rememberAs('auth-canary-remote-bearer', { authorization: `Bearer ${created.plaintext}` });
+      expect(res.status).toBe(200);
+      const body = await jsonAs<RememberResult>(res);
+      expect(rememberEvents().find((e) => e.targetId === body.id)?.actor).toBe(`api_key:${created.keyId}`);
+    },
+  );
 });
 
 /** A request that carries only this Authorization header, or none. */

@@ -1,10 +1,11 @@
 // An MCP tool that throws an untyped error must not hand its internal text to the client; typed API errors keep theirs.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { mcpErrorResponse } from '../../src/surface/mcp/server.js';
 import { NotFoundError } from '../../src/base/errors/api-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -56,29 +57,32 @@ afterEach(async () => {
 });
 
 describe('POST /mcp error replies', () => {
-  it('an untyped error inside a tool returns a generic message with the request id, and logs the real text', async () => {
-    // A dropped table makes hippo_status hit a real SQLite error whose text names the schema.
-    const db = openHippoDb(home);
-    try {
-      db.exec('DROP TABLE memory_conflicts');
-    } finally {
-      closeHippoDb(db);
-    }
-    const { status, body } = await callTool('hippo_status', {}, 'req-redact-1');
-    expect(status).toBe(200);
-    expect(body.error?.code).toBe(-32603);
-    expect(body.error?.message).not.toMatch(/memory_conflicts|no such table/i);
-    expect(body.error?.message).toContain('internal server error');
-    expect(body.error?.message).toContain('req-redact-1');
-    expect(body.error?.data?.requestId).toBe('req-redact-1');
-    expect(stderrText()).toMatch(
-      /\[hippo\] error: mcp request \(tools\/call [^)]*\) failed: .*memory_conflicts.* requestId=req-redact-1/,
-    );
-    // The class and stack say where it was thrown, as the HTTP failure line does.
-    expect(stderrText()).toMatch(/mcp request \(.*\) failed: .* errorClass=\w*Error stack=.*\s+at /);
-  });
+  it.skipIf(needsHippoDb('db'))(
+    'an untyped error inside a tool returns a generic message with the request id, and logs the real text',
+    async () => {
+      // A dropped table makes hippo_status hit a real SQLite error whose text names the schema.
+      const db = openHippoDb(home);
+      try {
+        db.exec('DROP TABLE memory_conflicts');
+      } finally {
+        closeHippoDb(db);
+      }
+      const { status, body } = await callTool('hippo_status', {}, 'req-redact-1');
+      expect(status).toBe(200);
+      expect(body.error?.code).toBe(-32603);
+      expect(body.error?.message).not.toMatch(/memory_conflicts|no such table/i);
+      expect(body.error?.message).toContain('internal server error');
+      expect(body.error?.message).toContain('req-redact-1');
+      expect(body.error?.data?.requestId).toBe('req-redact-1');
+      expect(stderrText()).toMatch(
+        /\[hippo\] error: mcp request \(tools\/call [^)]*\) failed: .*memory_conflicts.* requestId=req-redact-1/,
+      );
+      // The class and stack say where it was thrown, as the HTTP failure line does.
+      expect(stderrText()).toMatch(/mcp request \(.*\) failed: .* errorClass=\w*Error stack=.*\s+at /);
+    },
+  );
 
-  it('a typed NotFoundError keeps its message', async () => {
+  it.skipIf(needsHippoDb('team'))('a typed NotFoundError keeps its message', async () => {
     const { body } = await callTool('hippo_share', { id: 'mem_does_not_exist' });
     expect(body.error?.code).toBe(-32603);
     expect(body.error?.message).toBe('Memory not found: mem_does_not_exist');

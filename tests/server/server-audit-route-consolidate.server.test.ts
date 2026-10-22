@@ -22,6 +22,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -45,7 +46,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     rmSync(globalHome, { recursive: true, force: true });
   });
 
-  it('round-trips a consolidate row written by api.sleep', async () => {
+  it.skipIf(needsHippoDb('db'))('round-trips a consolidate row written by api.sleep', async () => {
     // Seed: write one row by invoking api.sleep, then query via HTTP.
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'seed-for-consolidate' });
@@ -70,7 +71,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     expect(await res.text()).toContain('tenant contains invalid characters');
   });
 
-  it('round-trips an outcome row (drift the Set update closed)', async () => {
+  it.skipIf(needsHippoDb('db'))('round-trips an outcome row (drift the Set update closed)', async () => {
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
     const m1 = await remember(ctx, { content: 'outcome-target' });
     await outcome(ctx, [m1.id], true);

@@ -1,7 +1,8 @@
 // The /v1 table declares each route's auth need and dispatch enforces it before any handler runs.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 import { V1_ROUTES } from '../../src/surface/server/route-table.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';

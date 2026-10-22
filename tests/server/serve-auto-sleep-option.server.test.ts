@@ -4,9 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { serve, type ServerHandle, type ServeOpts } from '../../src/server.js';
+import type { ServerHandle, ServeOpts } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sleepRuns } from '../_helpers/sleep-runs.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 const roots: string[] = [];
 const handles: ServerHandle[] = [];
@@ -74,24 +75,30 @@ describe('serve autoSleep option', () => {
     expect(sleepRuns(root)).toBe(0);
   });
 
-  it('the option unset adds one consolidation run past the threshold', async () => {
+  it.skipIf(needsHippoDb('sleep'))('the option unset adds one consolidation run past the threshold', async () => {
     const { root, url, key } = await startServer(undefined);
     for (const note of NOTES) await remember(url, key, note);
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(1), { timeout: 20_000 });
   });
 
-  it('a REST remember past the threshold adds one consolidation run, as hippo_remember does', async () => {
-    const { root, url, key } = await startServer(undefined);
-    for (const note of NOTES) await rememberRest(url, key, note);
-    await vi.waitFor(() => expect(sleepRuns(root)).toBe(1), { timeout: 20_000 });
-  });
+  it.skipIf(needsHippoDb('sleep'))(
+    'a REST remember past the threshold adds one consolidation run, as hippo_remember does',
+    async () => {
+      const { root, url, key } = await startServer(undefined);
+      for (const note of NOTES) await rememberRest(url, key, note);
+      await vi.waitFor(() => expect(sleepRuns(root)).toBe(1), { timeout: 20_000 });
+    },
+  );
 
-  it('stop returns once the auto-sleep a write started has ended, so no sleep child still holds the store', async () => {
-    const { root, url, key } = await startServer(undefined);
-    for (const note of NOTES) await rememberRest(url, key, note);
-    for (const h of handles.splice(0)) await h.stop();
-    expect(sleepRuns(root)).toBe(1);
-  });
+  it.skipIf(needsHippoDb('sleep'))(
+    'stop returns once the auto-sleep a write started has ended, so no sleep child still holds the store',
+    async () => {
+      const { root, url, key } = await startServer(undefined);
+      for (const note of NOTES) await rememberRest(url, key, note);
+      for (const h of handles.splice(0)) await h.stop();
+      expect(sleepRuns(root)).toBe(1);
+    },
+  );
 
   it('autoSleep: false stops a REST remember from starting one too', async () => {
     const { root, url, key } = await startServer(false);
@@ -99,25 +106,30 @@ describe('serve autoSleep option', () => {
     expect(sleepRuns(root)).toBe(0);
   });
 
-  it('runs the consolidation in a child process under the sleep deadline, not on the server event loop', async () => {
-    // Only the child runner has a deadline, so a 1 ms one stops the run before it commits; in process it would finish.
-    vi.stubEnv('HIPPO_SLEEP_TIMEOUT_MS', '1');
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    try {
-      const { root, url, key } = await startServer(undefined);
-      for (const note of NOTES) await remember(url, key, note);
-      await vi.waitFor(
-        () => {
-          const lines = stderr.mock.calls.map(([chunk]) => String(chunk));
-          expect(
-            lines.some((l) => l.includes('auto-sleep consolidate failed') && l.includes('did not finish within 1 ms')),
-          ).toBe(true);
-        },
-        { timeout: 20_000 },
-      );
-      expect(sleepRuns(root)).toBe(0);
-    } finally {
-      stderr.mockRestore();
-    }
-  });
+  it.skipIf(needsHippoDb('sleep'))(
+    'runs the consolidation in a child process under the sleep deadline, not on the server event loop',
+    async () => {
+      // Only the child runner has a deadline, so a 1 ms one stops the run before it commits; in process it would finish.
+      vi.stubEnv('HIPPO_SLEEP_TIMEOUT_MS', '1');
+      const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      try {
+        const { root, url, key } = await startServer(undefined);
+        for (const note of NOTES) await remember(url, key, note);
+        await vi.waitFor(
+          () => {
+            const lines = stderr.mock.calls.map(([chunk]) => String(chunk));
+            expect(
+              lines.some(
+                (l) => l.includes('auto-sleep consolidate failed') && l.includes('did not finish within 1 ms'),
+              ),
+            ).toBe(true);
+          },
+          { timeout: 20_000 },
+        );
+        expect(sleepRuns(root)).toBe(0);
+      } finally {
+        stderr.mockRestore();
+      }
+    },
+  );
 });

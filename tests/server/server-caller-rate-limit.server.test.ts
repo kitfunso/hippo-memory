@@ -4,7 +4,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyOptions } from '../../src/store/sqlite/auth.js';
-import { serve, type AddonRoute, type ServeOpts } from '../../src/server.js';
+import type { AddonRoute, ServeOpts } from '../../src/server.js';
 import { sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/store-kit.js';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
@@ -13,6 +13,7 @@ import { createRateLimiter } from '../../src/surface/server/rate-limit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -176,7 +177,7 @@ describe('per-caller buckets', () => {
     expect(await broken()).toEqual({ status: 429, retryAfter: '10' });
   });
 
-  it('charges an add-on route call and a POST /mcp call once each', async () => {
+  it.skipIf(needsHippoDb('addon'))('charges an add-on route call and a POST /mcp call once each', async () => {
     let runs = 0;
     const a = mint({ ownerSubject: 'oid-addon' });
     const m = mint({ ownerSubject: 'oid-mcp' });

@@ -13,12 +13,12 @@ import {
   runWithRequestStores,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
-import { serve } from '../../src/server.js';
 import * as client from '../../src/surface/cli/client.js';
 import { mcpErrorResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { updateStatsUnlessBusy, copyToGlobal } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -126,46 +126,66 @@ describe('routed writes under a busy store', () => {
     await stop();
   });
 
-  it('remember: a lock held across the first tries ends in one stored row, not an error or a duplicate', async () => {
-    const { result, statuses } = await landedOnRetry(home, () =>
-      client.remember(url, undefined, { content: 'remember-busy-canary', force: true }),
-    );
-    expect(statuses).toEqual([503, 200]);
-    expect(result.id).toMatch(/^mem_[0-9a-f]+$/);
-    expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'remember-busy-canary')).toBe(1);
-    expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, result.id)).toBe(1);
-  });
+  it.skipIf(needsHippoDb('lock'))(
+    'remember: a lock held across the first tries ends in one stored row, not an error or a duplicate',
+    async () => {
+      const { result, statuses } = await landedOnRetry(home, () =>
+        client.remember(url, undefined, { content: 'remember-busy-canary', force: true }),
+      );
+      expect(statuses).toEqual([503, 200]);
+      expect(result.id).toMatch(/^mem_[0-9a-f]+$/);
+      expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'remember-busy-canary')).toBe(1);
+      expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, result.id)).toBe(1);
+    },
+  );
 
-  it('forget: a lock held across the first tries ends in one removal counted once', async () => {
-    const { id } = await client.remember(url, undefined, { content: 'forget-busy-canary', force: true });
-    const before = forgottenTotal(home);
-    await expect(landedOnRetry(home, () => client.forget(url, undefined, id))).resolves.toEqual({
-      result: { ok: true, id },
-      statuses: [503, 200],
-    });
-    expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
-    expect(forgottenTotal(home)).toBe(before + 1);
-  });
+  it.skipIf(needsHippoDb('lock'))(
+    'forget: a lock held across the first tries ends in one removal counted once',
+    async () => {
+      const { id } = await client.remember(url, undefined, { content: 'forget-busy-canary', force: true });
+      const before = forgottenTotal(home);
+      await expect(landedOnRetry(home, () => client.forget(url, undefined, id))).resolves.toEqual({
+        result: { ok: true, id },
+        statuses: [503, 200],
+      });
+      expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
+      expect(forgottenTotal(home)).toBe(before + 1);
+    },
+  );
 
-  it('archiveRaw: a lock held across the first tries ends in one archive row', async () => {
-    const { id } = await client.remember(url, undefined, { content: 'archive-busy-canary', kind: 'raw', force: true });
-    await expect(landedOnRetry(home, () => client.archiveRaw(url, undefined, id, 'test'))).resolves.toMatchObject({
-      result: { ok: true },
-      statuses: [503, 200],
-    });
-    expect(count(home, `SELECT COUNT(*) AS n FROM raw_archive WHERE memory_id = ?`, id)).toBe(1);
-    expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
-  });
+  it.skipIf(needsHippoDb('lock'))(
+    'archiveRaw: a lock held across the first tries ends in one archive row',
+    async () => {
+      const { id } = await client.remember(url, undefined, {
+        content: 'archive-busy-canary',
+        kind: 'raw',
+        force: true,
+      });
+      await expect(landedOnRetry(home, () => client.archiveRaw(url, undefined, id, 'test'))).resolves.toMatchObject({
+        result: { ok: true },
+        statuses: [503, 200],
+      });
+      expect(count(home, `SELECT COUNT(*) AS n FROM raw_archive WHERE memory_id = ?`, id)).toBe(1);
+      expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
+    },
+  );
 
-  it('promote: a held global lock ends in exactly one global copy and one promote audit row', async () => {
-    const { id } = await client.remember(url, undefined, { content: 'promote-busy-canary', force: true });
-    const { result, statuses } = await landedOnRetry(globalHome, () => client.promote(url, undefined, id));
-    expect(statuses).toEqual([503, 200]);
-    expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-busy-canary')).toBe(1);
-    expect(
-      count(globalHome, `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'promote' AND target_id = ?`, result.globalId),
-    ).toBe(1);
-  });
+  it.skipIf(needsHippoDb('lock'))(
+    'promote: a held global lock ends in exactly one global copy and one promote audit row',
+    async () => {
+      const { id } = await client.remember(url, undefined, { content: 'promote-busy-canary', force: true });
+      const { result, statuses } = await landedOnRetry(globalHome, () => client.promote(url, undefined, id));
+      expect(statuses).toEqual([503, 200]);
+      expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-busy-canary')).toBe(1);
+      expect(
+        count(
+          globalHome,
+          `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'promote' AND target_id = ?`,
+          result.globalId,
+        ),
+      ).toBe(1);
+    },
+  );
 
   it('the stats counter after a committed removal skips a busy store with one warning instead of throwing', async () => {
     const before = forgottenTotal(home);
@@ -206,21 +226,24 @@ describe('routed writes under a busy store', () => {
     expect(forgottenTotal(home)).toBe(before + 4);
   });
 
-  it('promote: a busy audit write rolls back the global copy, so a failed promote leaves nothing to duplicate', async () => {
-    const { id } = await client.remember(url, undefined, { content: 'promote-audit-busy-canary', force: true });
-    const globalDb = openHippoDb(globalHome);
-    try {
-      globalDb.exec(
-        `CREATE TRIGGER fail_promote_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'promote' BEGIN SELECT RAISE(ABORT, 'forced promote audit failure'); END`,
-      );
-    } finally {
-      closeHippoDb(globalDb);
-    }
-    await expect(copyToGlobal(home, id)).rejects.toThrow(/forced promote audit failure/);
-    expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-audit-busy-canary')).toBe(
-      0,
-    );
-  });
+  it.skipIf(needsHippoDb('lock'))(
+    'promote: a busy audit write rolls back the global copy, so a failed promote leaves nothing to duplicate',
+    async () => {
+      const { id } = await client.remember(url, undefined, { content: 'promote-audit-busy-canary', force: true });
+      const globalDb = openHippoDb(globalHome);
+      try {
+        globalDb.exec(
+          `CREATE TRIGGER fail_promote_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'promote' BEGIN SELECT RAISE(ABORT, 'forced promote audit failure'); END`,
+        );
+      } finally {
+        closeHippoDb(globalDb);
+      }
+      await expect(copyToGlobal(home, id)).rejects.toThrow(/forced promote audit failure/);
+      expect(
+        count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-audit-busy-canary'),
+      ).toBe(0);
+    },
+  );
 
   it('MCP: a busy store answers with a retry message, not the generic internal error', () => {
     // The adapter hands a driver busy code to every layer above it as the port's error.

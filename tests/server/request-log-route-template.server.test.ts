@@ -1,6 +1,7 @@
 // A path can carry a memory id or other caller data, so a failed request's log line names the route template instead.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 let handle: ServerHandle;

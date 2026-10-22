@@ -21,9 +21,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { log } from '../../src/base/util/log.js';
-import { serve, clientIpForRateLimit, type ServerHandle } from '../../src/server.js';
+import { clientIpForRateLimit, type ServerHandle } from '../../src/server.js';
 import type { IncomingMessage } from 'node:http';
 import { makeStore } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -118,41 +119,44 @@ describe('serve() non-loopback host guard', () => {
       expect(res.status).toBe(401);
     });
 
-    it('mints a key, authorized GET /v1/memories: 200, and a POST + follow-up search finds the row', async () => {
-      const db = openHippoDb(hippoRoot);
-      let plaintext: string;
-      try {
-        ({ plaintext } = createApiKey(db, { tenantId: 'default', label: 'nla-test' }));
-      } finally {
-        closeHippoDb(db);
-      }
+    it.skipIf(needsHippoDb('db'))(
+      'mints a key, authorized GET /v1/memories: 200, and a POST + follow-up search finds the row',
+      async () => {
+        const db = openHippoDb(hippoRoot);
+        let plaintext: string;
+        try {
+          ({ plaintext } = createApiKey(db, { tenantId: 'default', label: 'nla-test' }));
+        } finally {
+          closeHippoDb(db);
+        }
 
-      const authHeaders = { authorization: `Bearer ${plaintext}` };
+        const authHeaders = { authorization: `Bearer ${plaintext}` };
 
-      // 401 -> 200 with a valid bearer token on the read route.
-      const searchRes = await fetch(`http://127.0.0.1:${handle!.port}/v1/memories?q=x`, {
-        headers: authHeaders,
-      });
-      expect(searchRes.status).toBe(200);
+        // 401 -> 200 with a valid bearer token on the read route.
+        const searchRes = await fetch(`http://127.0.0.1:${handle!.port}/v1/memories?q=x`, {
+          headers: authHeaders,
+        });
+        expect(searchRes.status).toBe(200);
 
-      // POST /v1/memories with the bearer succeeds.
-      const postRes = await fetch(`http://127.0.0.1:${handle!.port}/v1/memories`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'content-type': 'application/json' },
-        body: JSON.stringify({ content: 'nonloopback-auth-marker unique content for search' }),
-      });
-      expect(postRes.status).toBeGreaterThanOrEqual(200);
-      expect(postRes.status).toBeLessThan(300);
+        // POST /v1/memories with the bearer succeeds.
+        const postRes = await fetch(`http://127.0.0.1:${handle!.port}/v1/memories`, {
+          method: 'POST',
+          headers: { ...authHeaders, 'content-type': 'application/json' },
+          body: JSON.stringify({ content: 'nonloopback-auth-marker unique content for search' }),
+        });
+        expect(postRes.status).toBeGreaterThanOrEqual(200);
+        expect(postRes.status).toBeLessThan(300);
 
-      // A follow-up authorized search finds the newly created row.
-      const followUpRes = await fetch(`http://127.0.0.1:${handle!.port}/v1/memories?q=nonloopback-auth-marker`, {
-        headers: authHeaders,
-      });
-      expect(followUpRes.status).toBe(200);
-      const followUpBody: { results: Array<{ content: string }> } = await followUpRes.json();
-      const found = followUpBody.results.some((r) => r.content.includes('nonloopback-auth-marker'));
-      expect(found).toBe(true);
-    });
+        // A follow-up authorized search finds the newly created row.
+        const followUpRes = await fetch(`http://127.0.0.1:${handle!.port}/v1/memories?q=nonloopback-auth-marker`, {
+          headers: authHeaders,
+        });
+        expect(followUpRes.status).toBe(200);
+        const followUpBody: { results: Array<{ content: string }> } = await followUpRes.json();
+        const found = followUpBody.results.some((r) => r.content.includes('nonloopback-auth-marker'));
+        expect(found).toBe(true);
+      },
+    );
   });
 });
 

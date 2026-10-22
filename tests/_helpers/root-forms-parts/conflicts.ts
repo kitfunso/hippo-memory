@@ -50,8 +50,8 @@ export function resolveConflictKeeping(
   const conflicts = sqliteSyncStore(handlesOf(hippoRoot)).conflicts;
   const row = conflicts.get(tenantId, conflictId);
   if (!row) return false;
-  const a = { id: row.conflict.memory_a_id, scope: row.a?.scope ?? null };
-  const b = { id: row.conflict.memory_b_id, scope: row.b?.scope ?? null };
+  const a = { id: row.conflict.memoryAId, scope: row.a?.scope ?? null };
+  const b = { id: row.conflict.memoryBId, scope: row.b?.scope ?? null };
   const [keep, loser] = keepId === a.id ? [a, b] : [b, a];
   return conflicts.resolve(tenantId, {
     conflictId,

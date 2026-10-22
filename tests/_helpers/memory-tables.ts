@@ -6,6 +6,7 @@ import type { SessionHandoffRow } from '../../src/base/session/handoff.js';
 import type { FailureOutcome, RoutineRule, RejectedValueRow } from '../../src/store/port/rejections.js';
 import type { QuarantineRow, QuarantineStatus } from '../../src/store/port/quarantine.js';
 import type { SlackWorkspace } from '../../src/store/port/connectors.js';
+import type { Prediction } from '../../src/store/port/objects.js';
 import { auditRowsOn } from './audit-rows.js';
 import { readApiKeyRecord } from '../../src/store/sqlite/auth.js';
 import { readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
@@ -43,7 +44,6 @@ import type {
 
 /** The tables memoryStore models that no test seeds before its other side is built. */
 const NOT_COPIED = [
-  'predictions',
   'cards',
   'card_deps',
   'card_runs',
@@ -210,8 +210,14 @@ function copyObjectKind<K extends ObjectKind>(db: DatabaseSyncLike, t: MemoryTab
   }
 }
 
+const PREDICTIONS_SQL = `SELECT id, memory_id AS memoryId, tenant_id AS tenantId, class_tag AS classTag,
+  claim_text AS claimText, estimate_value AS estimateValue, estimate_unit AS estimateUnit, target_date AS targetDate,
+  actual_value AS actualValue, closure_state AS closureState, closed_at AS closedAt, closure_note AS closureNote,
+  created_at AS createdAt FROM predictions ORDER BY id`;
+
 function copyGraph(db: DatabaseSyncLike, t: MemoryTables): void {
   for (const kind of OBJECT_KINDS) copyObjectKind(db, t, kind);
+  for (const row of rows<Prediction>(db, PREDICTIONS_SQL)) t.predictions.set(row.id, { ...row, id: Number(row.id) });
   // SAFETY: each SELECT names exactly the columns of the row type it is read as.
   const entities = db.prepare(`SELECT ${ENTITY_COLS} FROM entities ORDER BY id`).all() as EntityRow[];
   t.entities.push(...entities.map(rowToEntity));

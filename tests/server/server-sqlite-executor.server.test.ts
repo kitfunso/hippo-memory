@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { closeHippoDb, getHippoDbPath, openHippoDb } from '../../src/db/index.js';
 import { log } from '../../src/base/util/log.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/store/index.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
@@ -31,6 +31,7 @@ import {
 } from '../_helpers/store-worker-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -155,31 +156,34 @@ async function runSteps(root: string, store?: HippoStore) {
 }
 
 describe('worker-backed predictions against the in-process store', () => {
-  it('gives every predictions route the same status, headers, body and audit rows', async () => {
-    const inProcessRoot = newRoot();
-    const inProcess = await runSteps(inProcessRoot, sqliteStore(inProcessRoot));
-    const onWorkers = await runSteps(newRoot());
+  it.skipIf(needsHippoDb('lock'))(
+    'gives every predictions route the same status, headers, body and audit rows',
+    async () => {
+      const inProcessRoot = newRoot();
+      const inProcess = await runSteps(inProcessRoot, sqliteStore(inProcessRoot));
+      const onWorkers = await runSteps(newRoot());
 
-    expect(onWorkers.replies).toEqual(inProcess.replies);
-    expect(onWorkers.audit).toEqual(inProcess.audit);
-    const statusOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.status]));
-    expect(statusOf).toMatchObject({
-      create: 201,
-      'create without a claim': 400,
-      'create with an unknown key': 401,
-      list: 200,
-      get: 200,
-      "get the other tenant's row": 404,
-      'get a missing row': 404,
-      close: 200,
-      'close it again': 400,
-      "close the other tenant's row": 404,
-      stats: 200,
-      'stats without a class': 400,
-    });
-  });
+      expect(onWorkers.replies).toEqual(inProcess.replies);
+      expect(onWorkers.audit).toEqual(inProcess.audit);
+      const statusOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.status]));
+      expect(statusOf).toMatchObject({
+        create: 201,
+        'create without a claim': 400,
+        'create with an unknown key': 401,
+        list: 200,
+        get: 200,
+        "get the other tenant's row": 404,
+        'get a missing row': 404,
+        close: 200,
+        'close it again': 400,
+        "close the other tenant's row": 404,
+        stats: 200,
+        'stats without a class': 400,
+      });
+    },
+  );
 
-  it('answers a write behind a held lock with the same 503 and Retry-After', async () => {
+  it.skipIf(needsHippoDb('lock'))('answers a write behind a held lock with the same 503 and Retry-After', async () => {
     const busyReplies = async (root: string, store?: HippoStore) => {
       const server = await start(root, store);
       expect((await post(server, '/v1/predictions', claim('saved before the lock'))).status).toBe(201);
@@ -272,38 +276,44 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
     expect(claims(root)).toEqual([]);
   });
 
-  it('lets an authResolver that reads hippo.db answer for a worker-backed route', async () => {
-    const root = newRoot();
-    vi.stubEnv('HIPPO_V1_RPS', '0');
-    const server = await serve({
-      hippoRoot: root,
-      port: 0,
-      authResolver: (token) => {
-        closeHippoDb(openHippoDb(root));
-        return token === 'idp-token' ? { tenantId: 'default', subject: 'idp:alice', role: 'admin' } : null;
-      },
-    });
-    cleanups.push(() => server.stop());
+  it.skipIf(needsHippoDb('lock'))(
+    'lets an authResolver that reads hippo.db answer for a worker-backed route',
+    async () => {
+      const root = newRoot();
+      vi.stubEnv('HIPPO_V1_RPS', '0');
+      const server = await serve({
+        hippoRoot: root,
+        port: 0,
+        authResolver: (token) => {
+          closeHippoDb(openHippoDb(root));
+          return token === 'idp-token' ? { tenantId: 'default', subject: 'idp:alice', role: 'admin' } : null;
+        },
+      });
+      cleanups.push(() => server.stop());
 
-    expect((await get(server, '/v1/predictions', 'idp-token')).status).toBe(200);
-    expect((await get(server, '/v1/predictions', 'not-the-token')).status).toBe(401);
-  });
+      expect((await get(server, '/v1/predictions', 'idp-token')).status).toBe(200);
+      expect((await get(server, '/v1/predictions', 'not-the-token')).status).toBe(401);
+    },
+  );
 
-  it('still holds the store connection when the first response of a new store is a worker-backed route', async () => {
-    const root = makeRoot('sqlite-executor-bare', { init: false });
-    const warn = vi.spyOn(log, 'warn');
-    const server = await start(root);
-    expect(existsSync(getHippoDbPath(root))).toBe(false);
+  it.skipIf(needsHippoDb('lock'))(
+    'still holds the store connection when the first response of a new store is a worker-backed route',
+    async () => {
+      const root = makeRoot('sqlite-executor-bare', { init: false });
+      const warn = vi.spyOn(log, 'warn');
+      const server = await start(root);
+      expect(existsSync(getHippoDbPath(root))).toBe(false);
 
-    expect((await post(server, '/v1/predictions', claim('creates the store'))).status).toBe(201);
-    expect((await get(server, '/health')).status).toBe(200);
+      expect((await post(server, '/v1/predictions', claim('creates the store'))).status).toBe(201);
+      expect((await get(server, '/health')).status).toBe(200);
 
-    expect(
-      warn.mock.calls
-        .map((call) => String(call[0]))
-        .filter((line) => line.includes('could not hold a store connection')),
-    ).toEqual([]);
-  });
+      expect(
+        warn.mock.calls
+          .map((call) => String(call[0]))
+          .filter((line) => line.includes('could not hold a store connection')),
+      ).toEqual([]);
+    },
+  );
 });
 
 describe('stopping a server with store workers', () => {
@@ -338,7 +348,7 @@ describe('stopping a server with store workers', () => {
 });
 
 describe('an audit write failure counted on a worker thread', () => {
-  it('reaches /health when the write kept its mutation', async () => {
+  it.skipIf(needsHippoDb('lock'))('reaches /health when the write kept its mutation', async () => {
     const root = newRoot();
     const server = await start(root);
     const before = await auditFailures(server);

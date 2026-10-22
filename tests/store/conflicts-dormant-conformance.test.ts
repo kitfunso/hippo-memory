@@ -65,7 +65,7 @@ function seedConflicts(): void {
   replaceDetectedConflicts(fixture.dir, detected, DETECTED_AT);
   const pairOf = (...ids: string[]): string => ids.sort().join(' ');
   for (const conflict of listMemoryConflicts(fixture.dir)) {
-    const stored = pairOf(conflict.memory_a_id, conflict.memory_b_id);
+    const stored = pairOf(conflict.memoryAId, conflict.memoryBId);
     const name = named.find(([, [a, b]]) => pairOf(rows[a]!.id, rows[b]!.id) === stored);
     if (name) conflictIds[name[0]] = conflict.id;
   }
@@ -193,7 +193,7 @@ describe('Conflicts', () => {
       [conflictIds.reject, 1],
       [conflictIds.weaken, 0],
     ]);
-    expect(outcomes[17]).toMatchObject({ value: { conflict: { status: 'resolved', updated_at: RESOLVED_AT } } });
+    expect(outcomes[17]).toMatchObject({ value: { conflict: { status: 'resolved', updatedAt: RESOLVED_AT } } });
   });
 });
 

@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -36,7 +37,7 @@ describe('MCP-over-HTTP tenant context', () => {
     }
   });
 
-  it('Bearer token for tenant alpha lands the memory under tenant_id=alpha', async () => {
+  it.skipIf(needsHippoDb('db'))('Bearer token for tenant alpha lands the memory under tenant_id=alpha', async () => {
     // Mint an API key bound to tenant 'alpha' directly via the auth helper —
     // the same path the /v1/auth/keys POST exercises end-to-end.
     const db = openHippoDb(home);

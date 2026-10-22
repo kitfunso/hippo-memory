@@ -23,7 +23,7 @@ async function openConflictsOf(
   at: { readonly nowMs: number; readonly lossAversion: LossAversion },
 ): Promise<MemoryConflictDetail[]> {
   const conflicts = (await reads.openConflictsOf(tenantId, entry.id)).map((row) => row.conflict);
-  const otherId = (c: MemoryConflict): string => (c.memory_a_id === entry.id ? c.memory_b_id : c.memory_a_id);
+  const otherId = (c: MemoryConflict): string => (c.memoryAId === entry.id ? c.memoryBId : c.memoryAId);
   const others = new Map<string, MemoryEntry>();
   for (const ids of chunked([...new Set(conflicts.map(otherId))])) {
     for (const other of await store.entriesByIds(ids, tenantId)) others.set(other.id, other);

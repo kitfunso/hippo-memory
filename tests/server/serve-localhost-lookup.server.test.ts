@@ -1,7 +1,8 @@
 // 'localhost' counts as loopback for the auth and TLS checks of a bind only when the resolver says every address of it is.
 import { promises as dns } from 'node:dns';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 import { type LookupAll, loopbackBindHosts } from '../../src/surface/server/loopback.js';
 import { makeStore } from '../_helpers/make-root.js';
 

@@ -6,6 +6,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -51,7 +52,7 @@ describe('server HTTP routes — memories', () => {
     expect(body.tenantId).toBe('default');
   });
 
-  it('GET /v1/memories?q= returns matching results', async () => {
+  it.skipIf(needsHippoDb('db'))('GET /v1/memories?q= returns matching results', async () => {
     await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
       content: 'recall-via-http alpha-token-http sentinel',
     });
@@ -73,7 +74,7 @@ describe('server HTTP routes — memories', () => {
     expect(body.tokens).toBe(11);
   });
 
-  it('DELETE /v1/memories/:id removes the row', async () => {
+  it.skipIf(needsHippoDb('db'))('DELETE /v1/memories/:id removes the row', async () => {
     const { id } = await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
       content: 'forget-canary-target',
     });
@@ -93,7 +94,7 @@ describe('server HTTP routes — memories', () => {
     }
   });
 
-  it('POST /v1/memories/:id/promote copies to global store', async () => {
+  it.skipIf(needsHippoDb('team'))('POST /v1/memories/:id/promote copies to global store', async () => {
     const { id } = await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
       content: 'promote-canary-payload',
     });
@@ -106,7 +107,7 @@ describe('server HTTP routes — memories', () => {
     expect(body.globalId).toMatch(/^g_/);
   });
 
-  it('POST /v1/memories/:id/supersede chains old to new', async () => {
+  it.skipIf(needsHippoDb('db'))('POST /v1/memories/:id/supersede chains old to new', async () => {
     const { id } = await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
       content: 'supersede-old-content',
     });
@@ -123,7 +124,7 @@ describe('server HTTP routes — memories', () => {
     expect(body.newId).not.toBe(id);
   });
 
-  it('POST /v1/memories/:id/archive archives a kind=raw row', async () => {
+  it.skipIf(needsHippoDb('db'))('POST /v1/memories/:id/archive archives a kind=raw row', async () => {
     // Seed a raw row directly: createMemory defaults to distilled, but
     // archiveRawMemory requires kind='raw'.
     const db = openHippoDb(home);
@@ -271,7 +272,7 @@ describe('server HTTP routes — auth + audit', () => {
     expect(missingBody.error).toMatch(/unknown key_id/i);
   });
 
-  it('GET /v1/audit returns events; filter by op works', async () => {
+  it.skipIf(needsHippoDb('db'))('GET /v1/audit returns events; filter by op works', async () => {
     // Generate at least one audit event by remembering through the API.
     await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
       content: 'audit-canary-row',

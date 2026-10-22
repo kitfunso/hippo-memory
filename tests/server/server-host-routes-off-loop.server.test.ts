@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { createHmac, randomBytes } from 'node:crypto';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
@@ -24,6 +24,7 @@ import {
   seen,
   undoAll,
 } from '../_helpers/store-worker-server.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 type InProcess = HippoStore & StoreGroups;
 type Send = (server: ServerHandle) => Promise<Response>;
@@ -301,32 +302,35 @@ afterEach(async () => {
 });
 
 describe('the routes moved off the server thread, on store workers against the in-process store', () => {
-  it('gives each the same status, headers, body, audit rows, stored rows, global rows and mirror files', async () => {
-    const inProcess = await runSteps(true);
-    const onWorkers = await runSteps(false);
+  it.skipIf(needsHippoDb('lock'))(
+    'gives each the same status, headers, body, audit rows, stored rows, global rows and mirror files',
+    async () => {
+      const inProcess = await runSteps(true);
+      const onWorkers = await runSteps(false);
 
-    expect(onWorkers.replies).toEqual(inProcess.replies);
-    expect(onWorkers.audit).toEqual(inProcess.audit);
-    expect(onWorkers.stored).toEqual(inProcess.stored);
-    expect(onWorkers.global).toEqual(inProcess.global);
-    expect(onWorkers.mirrors).toEqual(inProcess.mirrors);
-    expect(onWorkers.replies.map((reply) => [reply.label, reply.status])).toEqual(
-      STEPS.map(([label, , status]) => [label, status]),
-    );
-    const bodyOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.body]));
-    expect(bodyOf['context, reaching the global store']).toContain('global store about rollbacks');
-    expect(bodyOf['slack message']).toContain('"status":"ingested"');
-    expect(bodyOf['slack redelivery']).toBe('{"ok":true,"status":"duplicate","memoryId":"<memory>"}');
-    expect(bodyOf['github deletion']).toContain('"status":"archived"');
-    expect(bodyOf['mcp stream']).toBe(': ping\n\n');
-    expect(bodyOf['mcp resolve']).toContain('weakened');
-    expect(bodyOf['mcp resolve, rejecting the loser']).toContain('rejected (tombstoned) and removed');
-    expect(bodyOf['promote']).toBe('{"ok":true,"sourceId":"mem_p_noise","globalId":"<global>"}');
-    expect(bodyOf['mcp share']).toContain('Shared [<global>] to global store');
-    // The promoted and the shared copy both name the project folder.
-    expect(bodyOf['mcp peers']).toContain('<home>: 2 memories');
-    expect(onWorkers.global.filter((row) => row.startsWith('memories '))).toHaveLength(3);
-  });
+      expect(onWorkers.replies).toEqual(inProcess.replies);
+      expect(onWorkers.audit).toEqual(inProcess.audit);
+      expect(onWorkers.stored).toEqual(inProcess.stored);
+      expect(onWorkers.global).toEqual(inProcess.global);
+      expect(onWorkers.mirrors).toEqual(inProcess.mirrors);
+      expect(onWorkers.replies.map((reply) => [reply.label, reply.status])).toEqual(
+        STEPS.map(([label, , status]) => [label, status]),
+      );
+      const bodyOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.body]));
+      expect(bodyOf['context, reaching the global store']).toContain('global store about rollbacks');
+      expect(bodyOf['slack message']).toContain('"status":"ingested"');
+      expect(bodyOf['slack redelivery']).toBe('{"ok":true,"status":"duplicate","memoryId":"<memory>"}');
+      expect(bodyOf['github deletion']).toContain('"status":"archived"');
+      expect(bodyOf['mcp stream']).toBe(': ping\n\n');
+      expect(bodyOf['mcp resolve']).toContain('weakened');
+      expect(bodyOf['mcp resolve, rejecting the loser']).toContain('rejected (tombstoned) and removed');
+      expect(bodyOf['promote']).toBe('{"ok":true,"sourceId":"mem_p_noise","globalId":"<global>"}');
+      expect(bodyOf['mcp share']).toContain('Shared [<global>] to global store');
+      // The promoted and the shared copy both name the project folder.
+      expect(bodyOf['mcp peers']).toContain('<home>: 2 memories');
+      expect(onWorkers.global.filter((row) => row.startsWith('memories '))).toHaveLength(3);
+    },
+  );
 });
 
 describe('the server-thread block of the routes this file covers', () => {

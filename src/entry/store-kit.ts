@@ -53,6 +53,9 @@ export {
   type VectorRow,
   OTHER_STORE_MARKER,
 } from '../surface/open-store.js';
+// The second supported store: every required group held in memory; CI runs the server and MCP suites on it.
+export { memoryStore } from '../store/memory/store.js';
+export type { MemoryTables } from '../store/memory/tables.js';
 export {
   hasGroup,
   requireGroup,
