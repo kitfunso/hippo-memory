@@ -23,7 +23,7 @@ beforeEach(() => {
 });
 
 describe("listMemoryConflicts '*' sentinel", () => {
-  it("returns only open conflicts when status='open' (legacy behaviour)", () => {
+  it("returns only open conflicts when status='open' (legacy behaviour)", async () => {
     initTestStore(tmpDir);
     const a = createMemory('alpha', { layer: Layer.Semantic });
     const b = createMemory('beta', { layer: Layer.Semantic });
@@ -41,12 +41,12 @@ describe("listMemoryConflicts '*' sentinel", () => {
     // Resolve one by re-running with only the other.
     replaceDetectedConflicts(tmpDir, [{ memory_a_id: b.id, memory_b_id: c.id, reason: 'r2', score: 0.7 }]);
 
-    const openOnly = listMemoryConflicts(tmpDir, 'open');
+    const openOnly = await listMemoryConflicts(tmpDir, 'open');
     expect(openOnly).toHaveLength(1);
     expect(openOnly[0]?.status).toBe('open');
   });
 
-  it("returns ALL conflicts (open + resolved) when status='*' (new sentinel)", () => {
+  it("returns ALL conflicts (open + resolved) when status='*' (new sentinel)", async () => {
     initTestStore(tmpDir);
     const a = createMemory('alpha', { layer: Layer.Semantic });
     const b = createMemory('beta', { layer: Layer.Semantic });
@@ -61,13 +61,13 @@ describe("listMemoryConflicts '*' sentinel", () => {
     ]);
     replaceDetectedConflicts(tmpDir, [{ memory_a_id: b.id, memory_b_id: c.id, reason: 'r2', score: 0.7 }]);
 
-    const all = listMemoryConflicts(tmpDir, '*');
+    const all = await listMemoryConflicts(tmpDir, '*');
     expect(all).toHaveLength(2);
     const statuses = all.map((c) => c.status).sort();
     expect(statuses).toEqual(['open', 'resolved']);
   });
 
-  it("default param remains 'open' (caller-free regression check)", () => {
+  it("default param remains 'open' (caller-free regression check)", async () => {
     initTestStore(tmpDir);
     const a = createMemory('alpha', { layer: Layer.Semantic });
     const b = createMemory('beta', { layer: Layer.Semantic });
@@ -77,11 +77,11 @@ describe("listMemoryConflicts '*' sentinel", () => {
     replaceDetectedConflicts(tmpDir, []);
 
     // listMemoryConflicts(tmpDir) === listMemoryConflicts(tmpDir, 'open')
-    const def = listMemoryConflicts(tmpDir);
+    const def = await listMemoryConflicts(tmpDir);
     expect(def).toHaveLength(0); // only resolved exists; default 'open' filter hides it
   });
 
-  it("returns empty when filtering by 'resolved' and no resolved exist", () => {
+  it("returns empty when filtering by 'resolved' and no resolved exist", async () => {
     initTestStore(tmpDir);
     const a = createMemory('alpha', { layer: Layer.Semantic });
     const b = createMemory('beta', { layer: Layer.Semantic });
@@ -89,10 +89,10 @@ describe("listMemoryConflicts '*' sentinel", () => {
     writeEntry(tmpDir, b);
     replaceDetectedConflicts(tmpDir, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'r1', score: 0.7 }]);
 
-    const resolved = listMemoryConflicts(tmpDir, 'resolved');
+    const resolved = await listMemoryConflicts(tmpDir, 'resolved');
     expect(resolved).toHaveLength(0);
 
-    const allStill = listMemoryConflicts(tmpDir, '*');
+    const allStill = await listMemoryConflicts(tmpDir, '*');
     expect(allStill).toHaveLength(1);
     expect(allStill[0]?.status).toBe('open');
   });

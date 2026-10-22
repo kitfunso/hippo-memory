@@ -9,8 +9,7 @@ import { conflictResolve } from '../../src/api/index.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../src/base/errors/api-errors.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -32,7 +31,7 @@ afterAll(() => {
   // Clean up any leftover temp dirs
 });
 
-function seedConflict() {
+async function seedConflict() {
   const a = createMemory7('Always use semicolons in PowerShell', { tags: ['powershell', 'windows'] });
   const b = createMemory7('Use && to chain commands in PowerShell', { tags: ['powershell', 'windows'] });
   writeEntry(tmpDir, a);
@@ -47,7 +46,7 @@ function seedConflict() {
     },
   ]);
 
-  const conflicts = listMemoryConflicts(tmpDir, 'open');
+  const conflicts = await listMemoryConflicts(tmpDir, 'open');
   expect(conflicts.length).toBe(1);
 
   return { aId: a.id, bId: b.id, conflictId: conflicts[0].id };
@@ -58,7 +57,7 @@ const resolve = (conflictId: number, keepId: string, opts: { forget?: boolean; t
 
 describe('resolveConflict', () => {
   it('resolves conflict and weakens the loser (default)', async () => {
-    const { aId, bId, conflictId } = seedConflict();
+    const { aId, bId, conflictId } = await seedConflict();
 
     const before = readEntry(tmpDir, bId)!;
     const result = await resolve(conflictId, aId);
@@ -69,15 +68,15 @@ describe('resolveConflict', () => {
     expect(after.halfLifeDays).toBe(Math.max(1, before.halfLifeDays / 2));
 
     // Conflict should be resolved
-    const openConflicts = listMemoryConflicts(tmpDir, 'open');
+    const openConflicts = await listMemoryConflicts(tmpDir, 'open');
     expect(openConflicts.length).toBe(0);
 
-    const resolvedConflicts = listMemoryConflicts(tmpDir, 'resolved');
+    const resolvedConflicts = await listMemoryConflicts(tmpDir, 'resolved');
     expect(resolvedConflicts.length).toBe(1);
   });
 
   it('resolves conflict and deletes loser when --forget is set', async () => {
-    const { aId, bId, conflictId } = seedConflict();
+    const { aId, bId, conflictId } = await seedConflict();
 
     expect((await resolve(conflictId, aId, { forget: true })).loserId).toBe(bId);
 
@@ -91,7 +90,7 @@ describe('resolveConflict', () => {
   });
 
   it('cleans up conflicts_with references on both memories', async () => {
-    const { aId, bId, conflictId } = seedConflict();
+    const { aId, bId, conflictId } = await seedConflict();
 
     // Before resolve, both should have conflicts_with set
     const aBefore = readEntry(tmpDir, aId)!;
@@ -105,7 +104,7 @@ describe('resolveConflict', () => {
   });
 
   it('still cleans the other side when a side has malformed conflicts_with_json', async () => {
-    const { aId, bId, conflictId } = seedConflict();
+    const { aId, bId, conflictId } = await seedConflict();
     const db = openHippoDb(tmpDir);
     try {
       db.prepare(`UPDATE memories SET conflicts_with_json = '{not json' WHERE id = ?`).run(aId);
@@ -120,7 +119,7 @@ describe('resolveConflict', () => {
   });
 
   it('answers not-found for an unknown conflict id from one read by id, with no list read', async () => {
-    seedConflict();
+    await seedConflict();
     const { result, statements } = await recordStatementsAsync(() =>
       resolve(999, 'mem_doesnt_exist').catch((err: Error) => err),
     );
@@ -131,9 +130,9 @@ describe('resolveConflict', () => {
     expect(reads[0]).not.toContain('ORDER BY');
   });
 
-  it('writes nothing when a side no longer holds the scope the api decided on', () => {
-    const { aId, bId, conflictId } = seedConflict();
-    const resolved = sqliteSyncStore(handlesOf(tmpDir)).conflicts.resolve('default', {
+  it('writes nothing when a side no longer holds the scope the api decided on', async () => {
+    const { aId, bId, conflictId } = await seedConflict();
+    const resolved = await sqliteStore(tmpDir).conflicts.resolve('default', {
       conflictId,
       keep: { id: aId, scope: null },
       loser: { id: bId, scope: 'personal:private:moved' },
@@ -144,11 +143,11 @@ describe('resolveConflict', () => {
     });
     expect(resolved).toBe(false);
     expect(readEntry(tmpDir, bId)).not.toBeNull();
-    expect(listMemoryConflicts(tmpDir, 'open')).toHaveLength(1);
+    expect(await listMemoryConflicts(tmpDir, 'open')).toHaveLength(1);
   });
 
-  it("a reject fate removes the value's copies its ownScope may touch, in the same write, and keeps another person's", () => {
-    const { aId, bId, conflictId } = seedConflict();
+  it("a reject fate removes the value's copies its ownScope may touch, in the same write, and keeps another person's", async () => {
+    const { aId, bId, conflictId } = await seedConflict();
     const copyOf = (scope: string, owner: string | null = null) => {
       const copy = { ...createMemory7('Use && to chain commands in PowerShell', { tags: ['x'] }), scope, owner };
       writeEntry(tmpDir, copy);
@@ -157,7 +156,7 @@ describe('resolveConflict', () => {
     const team = copyOf('team:shared');
     const mine = copyOf('personal:private:alice', 'alice');
     const theirs = copyOf('personal:private:bob', 'bob');
-    const resolved = sqliteSyncStore(handlesOf(tmpDir)).conflicts.resolve('default', {
+    const resolved = await sqliteStore(tmpDir).conflicts.resolve('default', {
       conflictId,
       keep: { id: aId, scope: null },
       loser: { id: bId, scope: null },
@@ -172,8 +171,8 @@ describe('resolveConflict', () => {
     expect(readEntry(tmpDir, aId)).not.toBeNull();
   });
 
-  it('a reject fate with no ownScope keeps every personal copy', () => {
-    const { aId, bId, conflictId } = seedConflict();
+  it('a reject fate with no ownScope keeps every personal copy', async () => {
+    const { aId, bId, conflictId } = await seedConflict();
     const personal = {
       ...createMemory7('Use && to chain commands in PowerShell', { tags: ['x'] }),
       scope: 'personal:private:alice',
@@ -190,25 +189,25 @@ describe('resolveConflict', () => {
       reason: 'wrong',
       at: RESOLVED_AT,
     };
-    expect(sqliteSyncStore(handlesOf(tmpDir)).conflicts.resolve('default', resolution)).toBe(true);
+    expect(await sqliteStore(tmpDir).conflicts.resolve('default', resolution)).toBe(true);
     expect(readEntry(tmpDir, bId)).toBeNull();
     expect(readEntry(tmpDir, personal.id)).not.toBeNull();
   });
 
   it('answers 409 for an already-resolved conflict', async () => {
-    const { aId, conflictId } = seedConflict();
+    const { aId, conflictId } = await seedConflict();
     await resolve(conflictId, aId);
     await expect(resolve(conflictId, aId)).rejects.toBeInstanceOf(ConflictError);
   });
 
   it('answers 400 when --keep ID is not part of the conflict', async () => {
-    const { conflictId } = seedConflict();
+    const { conflictId } = await seedConflict();
     await expect(resolve(conflictId, 'mem_unrelated')).rejects.toBeInstanceOf(BadRequestError);
-    expect(listMemoryConflicts(tmpDir, 'open')).toHaveLength(1);
+    expect(await listMemoryConflicts(tmpDir, 'open')).toHaveLength(1);
   });
 
   it('works when keeping memory B instead of A', async () => {
-    const { aId, bId, conflictId } = seedConflict();
+    const { aId, bId, conflictId } = await seedConflict();
 
     expect((await resolve(conflictId, bId)).loserId).toBe(aId);
 
@@ -219,7 +218,7 @@ describe('resolveConflict', () => {
 });
 
 describe('conflict tenant isolation', () => {
-  function seedTenantConflict(tenant: string) {
+  async function seedTenantConflict(tenant: string) {
     const a = createMemory7(`semicolons rule for ${tenant}`, { tenantId: tenant, tags: ['x'] });
     const b = createMemory7(`chaining rule for ${tenant}`, { tenantId: tenant, tags: ['x'] });
     writeEntry(tmpDir, a);
@@ -232,12 +231,12 @@ describe('conflict tenant isolation', () => {
         score: 0.8,
       },
     ]);
-    const open = listMemoryConflicts(tmpDir, 'open', tenant);
+    const open = await listMemoryConflicts(tmpDir, 'open', tenant);
     expect(open.length).toBe(1);
     return { aId: a.id, bId: b.id, conflictId: open[0].id };
   }
 
-  it('listMemoryConflicts with tenantId returns only that tenant; omitted returns all', () => {
+  it('listMemoryConflicts with tenantId returns only that tenant; omitted returns all', async () => {
     // Both tenants' conflicts must be seeded in ONE replaceDetectedConflicts
     // call — it is a global replace and resolves any open conflict absent
     // from the detected set.
@@ -252,22 +251,22 @@ describe('conflict tenant isolation', () => {
       { memory_a_id: b1.id, memory_b_id: b2.id, reason: 'tenant-b conflict', score: 0.8 },
     ]);
 
-    expect(listMemoryConflicts(tmpDir, 'open', 'tenant-a').length).toBe(1);
-    expect(listMemoryConflicts(tmpDir, 'open', 'tenant-b').length).toBe(1);
+    expect((await listMemoryConflicts(tmpDir, 'open', 'tenant-a')).length).toBe(1);
+    expect((await listMemoryConflicts(tmpDir, 'open', 'tenant-b')).length).toBe(1);
     // Omitted tenantId = legacy unscoped behaviour: every tenant's conflicts.
-    expect(listMemoryConflicts(tmpDir, 'open').length).toBe(2);
+    expect((await listMemoryConflicts(tmpDir, 'open')).length).toBe(2);
   });
 
   it('resolveConflict with a non-owning tenantId answers not-found and leaves the conflict open', async () => {
-    const { aId, conflictId } = seedTenantConflict('tenant-a');
+    const { aId, conflictId } = await seedTenantConflict('tenant-a');
 
     await expect(resolve(conflictId, aId, { tenantId: 'tenant-b' })).rejects.toBeInstanceOf(NotFoundError);
 
     // The conflict is untouched — still open for its real owner.
-    expect(listMemoryConflicts(tmpDir, 'open', 'tenant-a').length).toBe(1);
+    expect((await listMemoryConflicts(tmpDir, 'open', 'tenant-a')).length).toBe(1);
   });
 
-  it('auto-resolves an existing open cross-tenant row when the pair is re-detected', () => {
+  it('auto-resolves an existing open cross-tenant row when the pair is re-detected', async () => {
     // Seed two memories under different tenants.
     const a = createMemory7('tenant-a content', { tenantId: 'tenant-a', tags: ['x'] });
     const b = createMemory7('tenant-b content', { tenantId: 'tenant-b', tags: ['x'] });
@@ -287,9 +286,9 @@ describe('conflict tenant isolation', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(listMemoryConflicts(tmpDir, 'open').find((c) => c.memoryAId === memA && c.memoryBId === memB)?.reason).toBe(
-      'pre-fix cross-tenant',
-    );
+    expect(
+      (await listMemoryConflicts(tmpDir, 'open')).find((c) => c.memoryAId === memA && c.memoryBId === memB)?.reason,
+    ).toBe('pre-fix cross-tenant');
 
     // Simulate an unscoped detector re-detecting the cross-tenant pair. Before
     // the fix, the resolve-stale loop saw the key in detectedKeys and skipped
@@ -302,18 +301,18 @@ describe('conflict tenant isolation', () => {
     );
 
     // The cross-tenant row is now resolved.
-    const resolved = listMemoryConflicts(tmpDir, 'resolved');
+    const resolved = await listMemoryConflicts(tmpDir, 'resolved');
     const ours = resolved.find((c) => c.memoryAId === memA && c.memoryBId === memB);
     expect(ours?.updatedAt).toBe('2026-05-22T12:00:00.000Z');
 
     // No open cross-tenant row remains.
     expect(
-      listMemoryConflicts(tmpDir, 'open').find((c) => c.memoryAId === memA && c.memoryBId === memB),
+      (await listMemoryConflicts(tmpDir, 'open')).find((c) => c.memoryAId === memA && c.memoryBId === memB),
     ).toBeUndefined();
   });
 
   it('resolveConflict --forget with a foreign tenantId cannot delete the loser memory', async () => {
-    const { aId, bId, conflictId } = seedTenantConflict('tenant-a');
+    const { aId, bId, conflictId } = await seedTenantConflict('tenant-a');
 
     await expect(resolve(conflictId, aId, { forget: true, tenantId: 'tenant-b' })).rejects.toBeInstanceOf(
       NotFoundError,
@@ -325,13 +324,13 @@ describe('conflict tenant isolation', () => {
   });
 
   it('resolveConflict with the owning tenantId still resolves normally', async () => {
-    const { aId, conflictId } = seedTenantConflict('tenant-a');
+    const { aId, conflictId } = await seedTenantConflict('tenant-a');
 
     await expect(resolve(conflictId, aId, { tenantId: 'tenant-a' })).resolves.toMatchObject({ conflictId });
-    expect(listMemoryConflicts(tmpDir, 'resolved', 'tenant-a').length).toBe(1);
+    expect((await listMemoryConflicts(tmpDir, 'resolved', 'tenant-a')).length).toBe(1);
   });
 
-  it('replaceDetectedConflicts skips a cross-tenant pair, keeps a within-tenant pair', () => {
+  it('replaceDetectedConflicts skips a cross-tenant pair, keeps a within-tenant pair', async () => {
     const a = createMemory7('tenant-a memory one', { tenantId: 'tenant-a', tags: ['x'] });
     const b = createMemory7('tenant-b memory one', { tenantId: 'tenant-b', tags: ['x'] });
     const c = createMemory7('tenant-a memory two', { tenantId: 'tenant-a', tags: ['x'] });
@@ -345,8 +344,8 @@ describe('conflict tenant isolation', () => {
     ]);
 
     // Only the within-tenant (a, c) conflict is persisted.
-    expect(listMemoryConflicts(tmpDir, 'open').length).toBe(1);
-    expect(listMemoryConflicts(tmpDir, 'open', 'tenant-a').length).toBe(1);
+    expect((await listMemoryConflicts(tmpDir, 'open')).length).toBe(1);
+    expect((await listMemoryConflicts(tmpDir, 'open', 'tenant-a')).length).toBe(1);
   });
 
   it('replaceDetectedConflicts does not seed a foreign id into conflicts_with for a stale cross-tenant row', () => {

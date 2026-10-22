@@ -6,14 +6,13 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 let root: string;
 
-// The workers must exercise the shipped updateStatsAt on the shipped opener, not a copy of them, so they
+// The workers must exercise the shipped updateStats on the shipped opener, not a copy of them, so they
 // import the build output.
 const DIST_STORE = join(import.meta.dirname, '..', '..', 'dist', 'store');
 const STORE_URL = pathToFileURL(join(DIST_STORE, 'sqlite', 'index-and-stats.js')).href;
@@ -21,11 +20,11 @@ const HANDLES_URL = pathToFileURL(join(DIST_STORE, 'sqlite', 'handles.js')).href
 
 function workerScript(hippoRoot: string, field: string, iterations: number): string {
   return `
-    import { updateStatsAt } from ${JSON.stringify(STORE_URL)};
+    import { updateStats } from ${JSON.stringify(STORE_URL)};
     import { onHandle, openStore } from ${JSON.stringify(HANDLES_URL)};
     const hippoRoot = ${JSON.stringify(hippoRoot)};
     for (let i = 0; i < ${iterations}; i++) {
-      onHandle(hippoRoot, (db) => updateStatsAt(db, { hippoRoot }, { ${field}: 1 }), openStore);
+      onHandle(hippoRoot, (db) => updateStats(db, { hippoRoot }, { ${field}: 1 }), openStore);
     }
   `;
 }
@@ -60,7 +59,7 @@ describe('updateStats under concurrent writers', () => {
       { field: 'remembered', iterations: 40 },
     ]);
 
-    expect(sqliteSyncStore(handlesOf(root)).reports.stats().total_remembered).toBe(160);
+    expect((await sqliteStore(root).reports.stats()).total_remembered).toBe(160);
 
     // reports.stats() coerces with Number(), so it would not notice the column
     // holding "160.0"; node:sqlite binds a JS number as REAL.
@@ -80,7 +79,7 @@ describe('updateStats under concurrent writers', () => {
       { field: 'forgotten', iterations: 60 },
     ]);
 
-    const stats = sqliteSyncStore(handlesOf(root)).reports.stats();
+    const stats = await sqliteStore(root).reports.stats();
     expect(stats.total_remembered).toBe(60);
     expect(stats.total_forgotten).toBe(60);
   });

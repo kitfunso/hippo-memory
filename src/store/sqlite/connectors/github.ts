@@ -3,7 +3,7 @@
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { archiveRawMemory } from '../raw-archive.js';
 import type { ConnectorEventRecord } from '../../port.js';
-import { eventMemoryAt, eventRecordAt, eventSeenAt, markEventSeenAt, type EventLogSpec } from './event-log.js';
+import { eventMemory, eventRecord, eventSeen, markEventSeen, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
 import type {
   GitHubRouting,
@@ -24,17 +24,17 @@ export interface GitHubEventLogEntry {
 
 const GITHUB_LOG: EventLogSpec = { table: 'github_event_log', keyColumn: 'idempotency_key' };
 
-export function githubEventSeenAt(db: DatabaseSyncLike, idempotencyKey: string): boolean {
-  return eventSeenAt(db, GITHUB_LOG, idempotencyKey);
+export function githubEventSeen(db: DatabaseSyncLike, idempotencyKey: string): boolean {
+  return eventSeen(db, GITHUB_LOG, idempotencyKey);
 }
 
-export function githubEventMemoryAt(db: DatabaseSyncLike, idempotencyKey: string): string | null {
-  return eventMemoryAt(db, GITHUB_LOG, idempotencyKey);
+export function githubEventMemory(db: DatabaseSyncLike, idempotencyKey: string): string | null {
+  return eventMemory(db, GITHUB_LOG, idempotencyKey);
 }
 
 /** False when the key was already logged, so a caller inside a write scope can roll its own row back. */
-export function markGitHubEventSeenAt(db: DatabaseSyncLike, entry: GitHubEventLogEntry): boolean {
-  return markEventSeenAt(
+export function markGitHubEventSeen(db: DatabaseSyncLike, entry: GitHubEventLogEntry): boolean {
+  return markEventSeen(
     db,
     GITHUB_LOG,
     entry.idempotencyKey,
@@ -46,8 +46,8 @@ export function markGitHubEventSeenAt(db: DatabaseSyncLike, entry: GitHubEventLo
   );
 }
 
-export function githubEventRecordAt(db: DatabaseSyncLike, idempotencyKey: string): ConnectorEventRecord {
-  return eventRecordAt(db, GITHUB_LOG, idempotencyKey);
+export function githubEventRecord(db: DatabaseSyncLike, idempotencyKey: string): ConnectorEventRecord {
+  return eventRecord(db, GITHUB_LOG, idempotencyKey);
 }
 
 interface ArtifactDeletion {
@@ -67,8 +67,8 @@ interface ArtifactDeletionOutcome {
 
 /** Archives every active raw row of one tenant's artifact and logs the delete event; a failed archive rolls back the
  * batch and the log row. */
-export function archiveDeletedArtifactAt(db: DatabaseSyncLike, del: ArtifactDeletion): ArtifactDeletionOutcome {
-  if (githubEventSeenAt(db, del.idempotencyKey)) return { duplicate: true, archived: 0 };
+export function archiveDeletedArtifact(db: DatabaseSyncLike, del: ArtifactDeletion): ArtifactDeletionOutcome {
+  if (githubEventSeen(db, del.idempotencyKey)) return { duplicate: true, archived: 0 };
   const logged = { idempotencyKey: del.idempotencyKey, deliveryId: del.deliveryId, eventName: del.eventName };
 
   const rows = cachedStatement(
@@ -79,13 +79,13 @@ export function archiveDeletedArtifactAt(db: DatabaseSyncLike, del: ArtifactDele
 
   if (memoryIds.length === 0) {
     // Still logged, so a retry of the same delete answers 'duplicate'.
-    markGitHubEventSeenAt(db, { ...logged, memoryId: null });
+    markGitHubEventSeen(db, { ...logged, memoryId: null });
     return { duplicate: false, archived: 0 };
   }
 
   withWriteScope(db, 'github_delete_all', () => {
     for (const id of memoryIds) archiveRawMemory(db, id, { reason: del.reason, who: del.who });
-    markGitHubEventSeenAt(db, { ...logged, memoryId: memoryIds[0]! });
+    markGitHubEventSeen(db, { ...logged, memoryId: memoryIds[0]! });
   });
   return { duplicate: false, archived: memoryIds.length };
 }
@@ -106,7 +106,7 @@ export const GITHUB_DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
   { field: 'bucket', column: 'bucket', kind: 'bucket', insert: true },
 ]);
 
-export function githubRoutingAt(
+export function githubRouting(
   db: DatabaseSyncLike,
   args: { installationId?: string | null; repoFullName?: string | null },
 ): GitHubRouting {
@@ -136,7 +136,7 @@ export function githubRoutingAt(
   return { ...counts, tenant: row?.tenant_id ?? null };
 }
 
-export function githubCursorsAt(db: DatabaseSyncLike, tenantId: string, repo: string): StoredCursors {
+export function githubCursors(db: DatabaseSyncLike, tenantId: string, repo: string): StoredCursors {
   const row = cachedStatement(
     db,
     `SELECT issues_hwm, issue_comments_hwm, pr_review_comments_hwm
@@ -155,7 +155,7 @@ export function githubCursorsAt(db: DatabaseSyncLike, tenantId: string, repo: st
   };
 }
 
-export function saveGitHubHwmAt(
+export function saveGitHubHwm(
   db: DatabaseSyncLike,
   tenantId: string,
   repo: string,
@@ -172,7 +172,7 @@ export function saveGitHubHwmAt(
 }
 
 /** Sets all three HWMs to `since` for a first run; COALESCE keeps any HWM a stream has already saved. */
-export function seedGitHubCursorsAt(db: DatabaseSyncLike, tenantId: string, repo: string, since: string): void {
+export function seedGitHubCursors(db: DatabaseSyncLike, tenantId: string, repo: string, since: string): void {
   cachedStatement(
     db,
     `INSERT INTO github_cursors (tenant_id, repo_full_name, issues_hwm, issue_comments_hwm, ` +

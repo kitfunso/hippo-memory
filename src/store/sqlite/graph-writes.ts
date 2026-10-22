@@ -356,7 +356,7 @@ export function runGraphRebuildTransaction<T>(
 /** Remove graph rows sourced from one MIRRORLESS object by (type, id) on close: with no mirror memory `markGraphDirty`
  * cannot enqueue a rebuild. Fail-soft like `markGraphDirty`; the explicit relations DELETE also covers a relation whose
  * OWN provenance is this object. */
-export function removeGraphEntitiesForObjectAt(
+export function removeGraphEntitiesForObject(
   db: DatabaseSyncLike,
   tenantId: string,
   sourceObjectType: SourceObjectType,

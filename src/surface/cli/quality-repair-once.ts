@@ -7,7 +7,7 @@ import { memoryQualityRepairOnce } from '../../api/auth/audit.js';
 import { cliApiContext } from './api-context.js';
 
 /** Fault-isolated like the project tag repair: a failure warns, leaves the store unmarked and runs again next time. */
-export async function repairQualityOnceAt(root: string, tenantId: string): Promise<void> {
+export async function repairQualityOnce(root: string, tenantId: string): Promise<void> {
   try {
     const result = await memoryQualityRepairOnce(cliApiContext(root, tenantId));
     if (result === null) return;

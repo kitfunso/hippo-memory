@@ -18,8 +18,7 @@ import {
   type CreateMemoryOptions,
 } from '../../src/base/memory/memory.js';
 import { migrateDefaultHalfLife } from '../../src/domain/consolidate/half-life-migration.js';
-import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { consolidate } from '../../src/index.js';
@@ -242,17 +241,22 @@ describe('default half-life migration', () => {
   });
 
   // Statement counts miss work done in JS: copying the audit record once per memory runs no SQL at all.
-  it('allocates about 4 times the heap for 4 times the memories', () => {
-    const allocated = (n: number): number => {
+  it('allocates about 4 times the heap for 4 times the memories', async () => {
+    const allocated = async (n: number): Promise<number> => {
       const root = bulkLegacyStore(n);
-      // The store's sync body, so the heap count sees the plan and the write in one call.
-      const move = sqliteSyncStore(handlesOf(root)).consolidation;
-      return allocatedBytes(() => move.moveHalfLives(365, { dryRun: false, actor: 'system' }));
+      // The store's body runs to its end inside the call, so the heap count sees the plan and the write in one call.
+      const move = sqliteStore(root).consolidation;
+      let moved: Promise<unknown> | undefined;
+      const bytes = allocatedBytes(() => {
+        moved = move.moveHalfLives(365, { dryRun: false, actor: 'system' });
+      });
+      await moved;
+      return bytes;
     };
     // The first call compiles the migration onto the heap, a fixed cost that would blunt the ratio.
-    allocated(10);
+    await allocated(10);
     // Past about 1,000 keys V8 copies a record more cheaply, so larger stores would hide a per-row copy.
-    const ratio = allocated(1_000) / allocated(250);
+    const ratio = (await allocated(1_000)) / (await allocated(250));
     // Near 1 the measure saw only fixed overhead; linear work gives 4 and a per-row copy 16 or more, so 8 is their geometric mean.
     expect(ratio).toBeGreaterThan(2);
     expect(ratio).toBeLessThan(8);
@@ -505,7 +509,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     pinTo90(root, loser, 47);
     pinTo90(root, winner);
     replaceDetectedConflicts(root, [{ memory_a_id: loser, memory_b_id: winner, reason: 'contradiction', score: 0.9 }]);
-    expect(resolveConflictKeeping(root, 'default', listMemoryConflicts(root)[0]!.id, winner)).toBe(true);
+    expect(await resolveConflictKeeping(root, 'default', (await listMemoryConflicts(root))[0]!.id, winner)).toBe(true);
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
     expect(halfLifeOf(root, loser)).toBe(92);
 

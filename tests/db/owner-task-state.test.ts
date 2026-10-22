@@ -3,8 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { SessionHandoff } from '../../src/base/session/handoff.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
@@ -103,10 +102,10 @@ describe('task snapshots keyed by owner and project', () => {
     expect(loadFreshActiveTaskSnapshot(home, T, {}, B)?.id).toBe(b.id);
   });
 
-  it("closeTaskSnapshotsForSession closes only the owner's rows", () => {
+  it("closeTaskSnapshotsForSession closes only the owner's rows", async () => {
     const a = saveActiveTaskSnapshot(home, T, snap('a'), A);
     const b = saveActiveTaskSnapshot(home, T, snap('b'), B);
-    expect(closeTaskSnapshotsForSession(home, T, 's1', 'session-ended', A)).toBe(1);
+    expect(await closeTaskSnapshotsForSession(home, T, 's1', 'session-ended', A)).toBe(1);
     expect(statusOf(a.id)).toBe('session-ended');
     expect(statusOf(b.id)).toBe('active');
   });
@@ -137,13 +136,13 @@ describe('task snapshots keyed by owner and project', () => {
     expect(handoffRows('s1')).toEqual([{ summary: 'local', owner_subject: null, origin_project: null }]);
   });
 
-  it("on a shared store an unkeyed save or clear throws and every owner's snapshot stays active", () => {
+  it("on a shared store an unkeyed save or clear throws and every owner's snapshot stays active", async () => {
     removeAfterRequest(home);
     home = makeRoot('owner-task-state-shared', { config: { sharedStore: true } });
     const a = saveActiveTaskSnapshot(home, T, snap('a'), A);
     const b = saveActiveTaskSnapshot(home, T, snap('b'), B);
     expect(() => saveActiveTaskSnapshot(home, T, snap('admin'))).toThrow(/needs their continuity key/);
-    expect(() => clearActiveTaskSnapshot(home, T)).toThrow(/needs their continuity key/);
+    await expect(clearActiveTaskSnapshot(home, T)).rejects.toThrow(/needs their continuity key/);
     expect([statusOf(a.id), statusOf(b.id)]).toEqual(['active', 'active']);
     // SAFETY: COUNT(*) returns one row with one integer column.
     expect(withDb((db) => (db.prepare(`SELECT COUNT(*) AS n FROM task_snapshots`).get() as { n: number }).n)).toBe(2);
@@ -195,9 +194,9 @@ describe('handoffs and failures keyed by owner and project', () => {
     expect(handoffRows('sd')).toHaveLength(1);
   });
 
-  it('recordFailure stamps owner and project', () => {
-    const { failureLog } = sqliteSyncStore(handlesOf(home));
-    failureLog.record({
+  it('recordFailure stamps owner and project', async () => {
+    const { failureLog } = sqliteStore(home);
+    await failureLog.record({
       tenantId: T,
       sessionId: 's1',
       tool: 'Bash',
@@ -206,7 +205,7 @@ describe('handoffs and failures keyed by owner and project', () => {
       originProject: 'p',
       requestId: 'req-1',
     });
-    failureLog.record({ tenantId: T, sessionId: 's1', tool: 'Bash', outcome: 'stored' });
+    await failureLog.record({ tenantId: T, sessionId: 's1', tool: 'Bash', outcome: 'stored' });
     // SAFETY: the SELECT names exactly these three columns.
     const rows = withDb((db) =>
       db.prepare(`SELECT owner_subject, origin_project, request_id FROM failure_log ORDER BY id`).all(),
@@ -220,7 +219,7 @@ describe('handoffs and failures keyed by owner and project', () => {
 
 describe('a partial key matches nothing and writes nothing', () => {
   for (const key of PARTIAL) {
-    it(`owner '${key.owner}', project [${key.project.join(',')}]`, () => {
+    it(`owner '${key.owner}', project [${key.project.join(',')}]`, async () => {
       const own = saveActiveTaskSnapshot(home, T, snap('mine'), A);
       saveSessionHandoff(home, T, handoff('mine'), A);
       expect(loadActiveTaskSnapshot(home, T, A)?.id).toBe(own.id);
@@ -228,7 +227,9 @@ describe('a partial key matches nothing and writes nothing', () => {
       expect(loadFreshActiveTaskSnapshot(home, T, { sessionId: 's1' }, key)).toBeNull();
       expect(loadLatestHandoff(home, T, 's1', {}, key)).toBeNull();
       expect(() => saveActiveTaskSnapshot(home, T, snap('x'), key)).toThrow(/owner and a project/);
-      expect(() => closeTaskSnapshotsForSession(home, T, 's1', 'session-ended', key)).toThrow(/owner and a project/);
+      await expect(closeTaskSnapshotsForSession(home, T, 's1', 'session-ended', key)).rejects.toThrow(
+        /owner and a project/,
+      );
       expect(() => saveSessionHandoff(home, T, handoff('x'), key)).toThrow(/owner and a project/);
       expect(() => writeSessionEndHandoff(home, { tenantId: T, sessionId: 's1', evidence: null, key })).toThrow(
         /owner and a project/,

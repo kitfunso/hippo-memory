@@ -8,7 +8,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { countMatching, recordStatements } from '../_helpers/count-statements.js';
+import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import {
   repairAutomaticMemories,
   repairQualityOnce as repairStoreOnce,
@@ -51,29 +51,29 @@ describe('repairQualityOnce', () => {
     root = makeRoot('quality-once');
   });
 
-  it("sets aside certain defects on the first run only, and never a person's words", () => {
+  it("sets aside certain defects on the first run only, and never a person's words", async () => {
     const bad = seed(root, CUT);
     const person = seed(root, CUT, { source: 'cli' });
-    const first = repairQualityOnce({ hippoRoot: root }, 'default');
+    const first = await repairQualityOnce({ hippoRoot: root }, 'default');
     expect(first?.appliedIds).toEqual([bad.id]);
     expect(existsSync(first!.backup!)).toBe(true);
     expect(ids(root)).toEqual([person.id]);
     expect(flag(root)).toBe('1');
 
     const later = seed(root, CUT);
-    expect(repairQualityOnce({ hippoRoot: root }, 'default')).toBeNull();
+    expect(await repairQualityOnce({ hippoRoot: root }, 'default')).toBeNull();
     expect(ids(root)).toEqual([person.id, later.id].sort());
   });
 
-  it('reads the tenant once per plan, and under its lock the apply reads only the rows it moves', () => {
+  it('reads the tenant once per plan, and under its lock the apply reads only the rows it moves', async () => {
     seed(root, CUT);
     const tenantPage = /FROM memories WHERE \(1\) AND tenant_id = \? ORDER BY created/;
-    const preview = recordStatements(() =>
-      repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', protect }),
+    const preview = await recordStatementsAsync(
+      async () => await repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', protect }),
     );
     expect(countMatching(preview.statements, tenantPage)).toBe(1);
-    const { statements } = recordStatements(() =>
-      repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', protect, apply: true }),
+    const { statements } = await recordStatementsAsync(
+      async () => await repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', protect, apply: true }),
     );
     const locked = statements.slice(statements.indexOf('BEGIN IMMEDIATE'));
     expect(countMatching(statements, tenantPage)).toBe(1);
@@ -82,32 +82,32 @@ describe('repairQualityOnce', () => {
     expect(countMatching(locked, /FROM memories WHERE id IN \(SELECT value FROM json_each\(\?\)\)/)).toBeGreaterThan(0);
   });
 
-  it('marks a clean store done without a backup', () => {
+  it('marks a clean store done without a backup', async () => {
     seed(
       root,
       'Keep test schema setup outside production migrations because production applies every sorted migration.',
     );
-    expect(repairQualityOnce({ hippoRoot: root }, 'default')).toMatchObject({ appliedIds: [], backup: null });
+    expect(await repairQualityOnce({ hippoRoot: root }, 'default')).toMatchObject({ appliedIds: [], backup: null });
     expect(existsSync(join(root, 'backups'))).toBe(false);
     expect(flag(root)).toBe('1');
   });
 
   // The failed repair waits out the 5 s lock wait on the held write lock, which is the default test limit.
-  it('leaves the store unmarked when the repair fails, so the next run tries again', () => {
+  it('leaves the store unmarked when the repair fails, so the next run tries again', async () => {
     const bad = seed(root, CUT);
     const holder = new DatabaseSync(join(root, 'hippo.db'));
     holder.exec('BEGIN IMMEDIATE');
     try {
-      expect(() => repairQualityOnce({ hippoRoot: root }, 'default')).toThrow();
+      await expect(repairQualityOnce({ hippoRoot: root }, 'default')).rejects.toThrow();
     } finally {
       holder.exec('ROLLBACK');
       holder.close();
     }
     expect(flag(root)).toBe('');
-    expect(repairQualityOnce({ hippoRoot: root }, 'default')?.appliedIds).toEqual([bad.id]);
+    expect((await repairQualityOnce({ hippoRoot: root }, 'default'))?.appliedIds).toEqual([bad.id]);
   }, 30_000);
 
-  it('leaves a store whose schema it cannot repair unmarked', () => {
+  it('leaves a store whose schema it cannot repair unmarked', async () => {
     const bad = seed(root, CUT);
     const db = new DatabaseSync(join(root, 'hippo.db'));
     try {
@@ -115,7 +115,7 @@ describe('repairQualityOnce', () => {
     } finally {
       db.close();
     }
-    expect(repairQualityOnce({ hippoRoot: root }, 'default')).toMatchObject({ supported: false, appliedIds: [] });
+    expect(await repairQualityOnce({ hippoRoot: root }, 'default')).toMatchObject({ supported: false, appliedIds: [] });
     expect(flag(root)).toBe('');
     expect(ids(root)).toEqual([bad.id]);
   });

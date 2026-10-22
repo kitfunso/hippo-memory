@@ -11,7 +11,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { createHash } from 'node:crypto';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { runDoctor, formatDoctor } from '../../src/surface/cli/doctor.js';
-import { diagnosticsAt } from '../_helpers/cli-stores.js';
+import { diagnosticsBodies } from '../_helpers/cli-stores.js';
 import type { SpoolFs } from '../../src/surface/capture/compaction-spool.js';
 import { startCompaction } from '../../src/store/sqlite/compactions-record.js';
 import { projectNameRepair } from '../../src/api/objects/projects.js';
@@ -53,7 +53,7 @@ describe('hippo doctor', () => {
   it('fails with a fix when there is no store, and creates nothing', async () => {
     const cwd = tmp('doctor-empty-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
-    const r = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' });
+    const r = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' });
     expect(r.ok).toBe(false);
     const store = r.checks.find((c) => c.id === 'store')!;
     expect(store.status).toBe('fail');
@@ -95,7 +95,7 @@ describe('hippo doctor', () => {
         },
       }),
     );
-    const r = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' });
+    const r = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' });
     expect(r.ok).toBe(true);
     const status = Object.fromEntries(r.checks.map((c) => [c.id, c.status]));
     expect(status).toMatchObject({
@@ -118,7 +118,7 @@ describe('hippo doctor', () => {
     db.exec('DROP TABLE failure_log');
     closeHippoDb(db);
     expect(
-      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
+      (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
         (c) => c.id === 'failures',
       ),
     ).toMatchObject({ status: 'warn' });
@@ -131,7 +131,7 @@ describe('hippo doctor', () => {
     initTestStore(hippoRoot);
     const now = new Date('2026-09-29T12:00:00.000Z');
     expect(
-      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test', now })).checks.find(
+      (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test', now })).checks.find(
         (c) => c.id === 'compactions',
       ),
     ).toMatchObject({ status: 'pass', detail: '0 compactions recorded, none stuck' });
@@ -160,7 +160,7 @@ describe('hippo doctor', () => {
     setStatus.run('no-summary', ago(20).toISOString(), closed);
     closeHippoDb(db);
 
-    const report = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test', now });
+    const report = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test', now });
     const check = report.checks.find((c) => c.id === 'compactions')!;
     expect(check).toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo sleep') });
     expect(check.detail).toBe(
@@ -191,7 +191,7 @@ describe('hippo doctor', () => {
       return { cwd, hippoRoot, spoolAt };
     };
     const compactions = async (cwd: string, spoolFs?: SpoolFs) => {
-      const opts = { diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test', now, spoolFs };
+      const opts = { diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test', now, spoolFs };
       const report = await runDoctor(opts);
       return report.checks.find((c) => c.id === 'compactions')!;
     };
@@ -277,7 +277,7 @@ describe('hippo doctor', () => {
     mkdirSync(join(cwd, '.claude'));
     writeFileSync(join(cwd, '.claude', 'settings.json'), '{}');
     const r = await runDoctor({
-      diagnosticsAt,
+      diagnosticsBodies,
       tenantId: 'default',
       cwd,
       home: cwd,
@@ -293,7 +293,7 @@ describe('hippo doctor', () => {
       JSON.stringify({ enabledPlugins: { 'hippo-memory@hippo-memory': true } }),
     );
     expect(
-      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
+      (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
         (c) => c.id === 'claude-code',
       )!.status,
     ).toBe('pass');
@@ -308,7 +308,7 @@ describe('hippo doctor', () => {
     writeFileSync(join(config, 'settings.json'), '{}');
     vi.stubEnv('CLAUDE_CONFIG_DIR', config);
     expect(
-      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
+      (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
         (c) => c.id === 'claude-code',
       ),
     ).toMatchObject({ status: 'warn', fix: 'hippo hook install claude-code' });
@@ -330,7 +330,7 @@ describe('hippo doctor', () => {
     const hooks = { Mixed: commands.map((command) => ({ hooks: [{ type: 'command', command }] })) };
     writeFileSync(join(cwd, '.claude', 'settings.json'), String.fromCodePoint(0xfeff) + JSON.stringify({ hooks }));
     expect(
-      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
+      (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
         (c) => c.id === 'claude-code',
       )!.status,
     ).toBe('pass');
@@ -357,7 +357,7 @@ describe('hippo doctor', () => {
     closeHippoDb(seed); // last close checkpoints the WAL, so hippo.db alone is a stable hash target
 
     const before = sha256(join(hippoRoot, 'hippo.db'));
-    const r = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' });
+    const r = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' });
     expect(r.checks.find((c) => c.id === 'schema')).toMatchObject({
       status: 'info',
       detail: expect.stringContaining(`v${getCurrentSchemaVersion()}`),
@@ -387,7 +387,7 @@ describe('hippo doctor', () => {
     currentRequestStores()?.close();
 
     const before = sha256(join(global, 'hippo.db'));
-    const r = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' });
+    const r = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' });
     expect(r.checks.find((c) => c.id === 'projects')?.status).toBe('pass');
     currentRequestStores()?.close();
     expect(sha256(join(global, 'hippo.db'))).toBe(before);
@@ -400,7 +400,7 @@ describe('hippo doctor', () => {
     const cwd = tmp('doctor-bare-');
     vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
     mkdirSync(join(cwd, '.hippo'));
-    const r = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' });
+    const r = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' });
     const store = r.checks.find((c) => c.id === 'store')!;
     expect(store.status).toBe('fail');
     expect(store.detail).toMatch(/\.hippo has no hippo\.db, so hippo commands run here stop at it$/);
@@ -427,7 +427,7 @@ describe('hippo doctor', () => {
     setMeta(seed, 'min_compatible_binary', '99.0.0');
     closeHippoDb(seed);
 
-    const r = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' });
+    const r = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' });
     expect(r.checks.find((c) => c.id === 'schema')).toMatchObject({
       status: 'fail',
       fix: 'npm install -g hippo-memory@latest',
@@ -440,7 +440,7 @@ describe('hippo doctor', () => {
     mkdirSync(join(cwd, '.hippo'));
     writeFileSync(join(cwd, '.hippo', 'hippo.db'), 'this file is not a database. '.repeat(400));
 
-    const r = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' });
+    const r = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' });
     expect(r.ok).toBe(false);
     expect(r.checks.filter((c) => !['node', 'store', 'claude-code', 'embeddings'].includes(c.id))).toEqual([
       {
@@ -470,14 +470,14 @@ describe('hippo doctor', () => {
     });
 
     expect(
-      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
+      (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
         (c) => c.id === 'projects',
       ),
     ).toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo projects repair --global') });
 
     await projectNameRepair(cliApiContext(global, 'default'), { dryRun: false });
     expect(
-      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
+      (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' })).checks.find(
         (c) => c.id === 'projects',
       )!.status,
     ).toBe('pass');

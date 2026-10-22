@@ -1,8 +1,8 @@
 // hippo.db's half of the Objects store group: every statement the typed objects run, each call on a handle of its own.
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvents } from './audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { escapeLike } from '../../base/util/escape.js';
-import { keysetAfter } from '../../base/util/keyset.js';
+import { keysetAfter } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import {
   calculateStrength,
@@ -14,8 +14,8 @@ import {
 import { scopeAdmitSql } from './rule-sql.js';
 import { stampOriginProjectIn, upsertEntryRow } from './entry-row.js';
 import { auditEntryWrite, writeEntryMirrorsIn, auditingRefusal } from './entry-writes.js';
-import { markGraphDirtyAt } from './graph-queue.js';
-import { removeGraphEntitiesForObjectAt } from './graph-writes.js';
+import { markGraphDirty } from './graph-queue.js';
+import { removeGraphEntitiesForObject } from './graph-writes.js';
 import {
   isObjectRefusal,
   type BriefReceipt,
@@ -29,13 +29,14 @@ import {
 } from '../../base/records/object-types.js';
 import { type OnHandle, TYPED_HALF_LIFE_META_KEY } from './open.js';
 import { openStore } from './handles.js';
-import { bound, type Bodies } from './bound.js';
+import { answered, bound, type Bodies } from './bound.js';
 import type {
   IncidentOpen,
   IncidentOpenRefusal,
   IncidentResolve,
   ObjectClose,
   ObjectListQuery,
+  Objects,
   ObjectSave,
   PoliciesInForceQuery,
 } from '../port.js';
@@ -44,42 +45,17 @@ import { placeholders } from '../../db/sql.js';
 import type { JsonObject } from '../../base/util/json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
-/** The group with each answer as its value; spelled out because `Sync<Objects>` would widen each method's kind to every
- * kind. */
-interface SyncObjects {
-  listObjects<K extends ObjectKind>(tenantId: string, kind: K, query: ObjectListQuery<K>): ObjectByKind[K][];
-  objectById<K extends ObjectKind>(tenantId: string, kind: K, id: number): ObjectByKind[K] | null;
-  closeObject<K extends ObjectKind>(
-    tenantId: string,
-    kind: K,
-    id: number,
-    close: ObjectClose<K>,
-  ): ObjectByKind[K] | ObjectRefusal;
-  saveObject<K extends SavableKind>(tenantId: string, kind: K, save: ObjectSave<K>): ObjectByKind[K] | ObjectRefusal;
-  openIncident(tenantId: string, open: IncidentOpen): Incident | IncidentOpenRefusal;
-  resolveIncident(tenantId: string, id: number, resolve: IncidentResolve): Incident | ObjectRefusal;
-  policiesInForce(tenantId: string, query: PoliciesInForceQuery): Policy[];
-  activeSkillsByName(tenantId: string, limit: number): Skill[];
-  briefReceipts(tenantId: string, tag: string, limit: number): BriefReceipt[];
-  objectIdByMemory<K extends ObjectKind>(
-    tenantId: string,
-    kind: K,
-    status: ObjectByKind[K]['status'],
-    memoryId: string,
-  ): number | null;
-}
-
-export function sqliteObjects(on: OnHandle): SyncObjects {
+export function sqliteObjects(on: OnHandle): Objects {
   return {
     ...objectReads(on),
-    closeObject: (tenantId, kind, id, close) => closeAt(on, tenantId, kind, id, close),
-    saveObject: (tenantId, kind, save) => saveAt(on, tenantId, kind, save),
-    openIncident: (tenantId, open) => openIncidentAt(on, tenantId, open),
+    closeObject: (tenantId, kind, id, change) => answered(() => close(on, tenantId, kind, id, change)),
+    saveObject: (tenantId, kind, object) => answered(() => save(on, tenantId, kind, object)),
+    openIncident: (tenantId, open) => answered(() => openIncident(on, tenantId, open)),
   };
 }
 
 type ObjectReads = Pick<
-  SyncObjects,
+  Objects,
   | 'listObjects'
   | 'objectById'
   | 'resolveIncident'
@@ -89,7 +65,7 @@ type ObjectReads = Pick<
   | 'objectIdByMemory'
 >;
 
-const objectReadsAt: Bodies<ObjectReads> = {
+const objectReadsBodies: Bodies<ObjectReads> = {
   listObjects: listRows,
   objectById: rowById,
   resolveIncident: resolveRow,
@@ -102,7 +78,7 @@ const objectReadsAt: Bodies<ObjectReads> = {
 function objectReads(on: OnHandle): ObjectReads {
   // SAFETY: listRows, rowById and idByMemory are generic in the kind, as ObjectReads is; the mapped Bodies type cannot
   // carry a method's type parameter, so the bound group is typed back to the methods it binds.
-  return bound(on, objectReadsAt) as ObjectReads;
+  return bound(on, objectReadsBodies) as ObjectReads;
 }
 
 /** The newest object in `status` that a memory mirrors, for the CLI flags that name an object by its memory id. */
@@ -203,18 +179,20 @@ function closeRow<K extends ObjectKind>(
     }
     const row = selectRow(db, kind, tenantId, id);
     if (!row) return rollback<ObjectRefusal>({ refused: 'vanished' });
-    appendAuditEvent(db, {
-      tenantId,
-      actor: close.actor,
-      op: spec.closeOp,
-      targetId: String(id),
-      metadata: { [spec.idKey]: id },
-    });
+    appendAuditEvents(db, [
+      {
+        tenantId,
+        actor: close.actor,
+        op: spec.closeOp,
+        targetId: String(id),
+        metadata: { [spec.idKey]: id },
+      },
+    ]);
     return spec.rowTo(row);
   });
 }
 
-function closeAt<K extends ObjectKind>(
+function close<K extends ObjectKind>(
   on: OnHandle,
   tenantId: string,
   kind: K,
@@ -227,8 +205,8 @@ function closeAt<K extends ObjectKind>(
     if (isObjectRefusal(closed) || !graphType) return closed;
     // Each graph write takes its own write lock, so both wait for the commit. The rows go at once because the rebuild
     // queue is keyed by a mirror memory that may be gone.
-    removeGraphEntitiesForObjectAt(db, tenantId, graphType, closed.id);
-    markGraphDirtyAt(db, tenantId, closed.memoryId);
+    removeGraphEntitiesForObject(db, tenantId, graphType, closed.id);
+    markGraphDirty(db, tenantId, closed.memoryId);
     return closed;
   });
 }
@@ -300,13 +278,15 @@ function supersedeRow<K extends SavableKind>(
   const own: JsonObject = insert.versioned
     ? { [spec.idKey]: replaced, superseded_by: id, new_version: row.version }
     : { [spec.idKey]: replaced, superseded_by: id };
-  appendAuditEvent(db, {
-    tenantId: row.tenantId,
-    actor: row.save.actor,
-    op: insert.supersedeOp,
-    targetId: String(replaced),
-    metadata: { ...own, ...insert.supersedeMeta?.(row.save.fields) },
-  });
+  appendAuditEvents(db, [
+    {
+      tenantId: row.tenantId,
+      actor: row.save.actor,
+      op: insert.supersedeOp,
+      targetId: String(replaced),
+      metadata: { ...own, ...insert.supersedeMeta?.(row.save.fields) },
+    },
+  ]);
   return true;
 }
 
@@ -327,13 +307,15 @@ function writeObjectRow<K extends SavableKind>(
   if (replaced !== undefined && !supersedeRow(db, row, replaced, id)) return { refused: 'raced' };
   const saved = selectRow(db, kind, tenantId, id);
   if (!saved) return { refused: 'vanished' };
-  appendAuditEvent(db, {
-    tenantId,
-    actor: save.actor,
-    op: insertSpec(kind).createOp,
-    targetId: String(id),
-    metadata: { [rowSpec(kind).idKey]: id, ...insertSpec(kind).createMeta(save.fields, next.version) },
-  });
+  appendAuditEvents(db, [
+    {
+      tenantId,
+      actor: save.actor,
+      op: insertSpec(kind).createOp,
+      targetId: String(id),
+      metadata: { [rowSpec(kind).idKey]: id, ...insertSpec(kind).createMeta(save.fields, next.version) },
+    },
+  ]);
   return saved;
 }
 
@@ -382,7 +364,7 @@ function withMirror<R extends object, F extends Refused>(
         });
         if (refusalOf<R, F>(written)) return written;
         // The graph mark takes its own write lock, so it waits for the commit.
-        if (write.graphTenant !== undefined) markGraphDirtyAt(db, write.graphTenant, mirror.id);
+        if (write.graphTenant !== undefined) markGraphDirty(db, write.graphTenant, mirror.id);
         writeEntryMirrorsIn(files, mirror);
         return written;
       }),
@@ -390,7 +372,7 @@ function withMirror<R extends object, F extends Refused>(
   );
 }
 
-function saveAt<K extends SavableKind>(
+function save<K extends SavableKind>(
   on: OnHandle,
   tenantId: string,
   kind: K,
@@ -438,21 +420,23 @@ function openIncidentRow(
   const id = Number(result.lastInsertRowid ?? 0);
   const row = selectRow(db, 'incident', tenantId, id);
   if (!row) return { refused: 'vanished' };
-  appendAuditEvent(db, {
-    tenantId,
-    actor: open.actor,
-    op: 'incident_open',
-    targetId: String(id),
-    metadata: {
-      incident_id: id,
-      has_context: context !== undefined && context !== '',
-      linked_memory_count: linkedMemoryIds.length,
+  appendAuditEvents(db, [
+    {
+      tenantId,
+      actor: open.actor,
+      op: 'incident_open',
+      targetId: String(id),
+      metadata: {
+        incident_id: id,
+        has_context: context !== undefined && context !== '',
+        linked_memory_count: linkedMemoryIds.length,
+      },
     },
-  });
+  ]);
   return row;
 }
 
-function openIncidentAt(on: OnHandle, tenantId: string, open: IncidentOpen): Incident | IncidentOpenRefusal {
+function openIncident(on: OnHandle, tenantId: string, open: IncidentOpen): Incident | IncidentOpenRefusal {
   const write: MirroredWrite = { mirror: open.mirror, actor: open.actor };
   const written = withMirror<RowByKind['incident'], IncidentOpenRefusal>(on, write, (db, memoryId) =>
     openIncidentRow(db, tenantId, memoryId, open),
@@ -487,13 +471,15 @@ function resolveRow(
     }
     const row = selectRow(db, 'incident', tenantId, id);
     if (!row) return rollback<ObjectRefusal>({ refused: 'vanished' });
-    appendAuditEvent(db, {
-      tenantId,
-      actor: resolve.actor,
-      op: 'incident_resolve',
-      targetId: String(id),
-      metadata: { incident_id: id },
-    });
+    appendAuditEvents(db, [
+      {
+        tenantId,
+        actor: resolve.actor,
+        op: 'incident_resolve',
+        targetId: String(id),
+        metadata: { incident_id: id },
+      },
+    ]);
     return rowSpec('incident').rowTo(row);
   });
 }

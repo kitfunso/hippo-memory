@@ -76,23 +76,23 @@ describe('conflicts', () => {
     return { x: x!, y: y! };
   };
 
-  it('lists open conflicts and none under another status', () => {
+  it('lists open conflicts and none under another status', async () => {
     const { x, y } = seed();
-    expect(listMemoryConflicts(root).map((c) => [c.memoryAId, c.memoryBId])).toEqual([[x.id, y.id].sort()]);
-    expect(listMemoryConflicts(root, 'resolved')).toEqual([]);
+    expect((await listMemoryConflicts(root)).map((c) => [c.memoryAId, c.memoryBId])).toEqual([[x.id, y.id].sort()]);
+    expect(await listMemoryConflicts(root, 'resolved')).toEqual([]);
   });
 
-  it('resolves in favour of either side and weakens the other', () => {
+  it('resolves in favour of either side and weakens the other', async () => {
     const { x, y } = seed();
-    const [conflict] = listMemoryConflicts(root);
-    expect(resolveConflictKeeping(root, 'default', conflict!.id, y.id)).toBe(true);
-    expect(listMemoryConflicts(root)).toEqual([]);
-    expect(listMemoryConflicts(root, 'resolved')).toHaveLength(1);
+    const [conflict] = await listMemoryConflicts(root);
+    expect(await resolveConflictKeeping(root, 'default', conflict!.id, y.id)).toBe(true);
+    expect(await listMemoryConflicts(root)).toEqual([]);
+    expect(await listMemoryConflicts(root, 'resolved')).toHaveLength(1);
     expect(readEntry(root, x.id)?.halfLifeDays).toBe(DEFAULT_HALF_LIFE_DAYS / 2);
     expect(readEntry(root, y.id)?.halfLifeDays).toBe(DEFAULT_HALF_LIFE_DAYS);
   });
 
-  it('returns false for a conflict that does not exist', () => {
-    expect(resolveConflictKeeping(root, 'default', 999, 'mem_none')).toBe(false);
+  it('returns false for a conflict that does not exist', async () => {
+    expect(await resolveConflictKeeping(root, 'default', 999, 'mem_none')).toBe(false);
   });
 });

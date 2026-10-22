@@ -61,8 +61,8 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 
 // The full-tenant rank as it was before v60, frozen here so a change to the live rank cannot move the expectation.
 function scanIds(cap: number, now: Date, tenant = 'default'): string[] {
-  const { where, params } = contextRowsWhere(tenant, {});
-  const sql = `SELECT id FROM memories WHERE id IN (SELECT id FROM memories WHERE ${where.join(' AND ')}
+  const { sql: where, params } = contextRowsWhere(tenant, {});
+  const sql = `SELECT id FROM memories WHERE id IN (SELECT id FROM memories WHERE ${where}
     ORDER BY pinned DESC, CASE WHEN half_life_days > 0 THEN (julianday(?) - julianday(last_retrieved))
     / (half_life_days * ${rewardFactorSql()}) END ASC NULLS LAST, id ASC LIMIT ?) ORDER BY created ASC, id ASC`;
   // SAFETY: one TEXT `id` column.
@@ -74,9 +74,9 @@ function scanIds(cap: number, now: Date, tenant = 'default'): string[] {
 // The caps at which a key without the reward factor first drops a row it should keep: the pinned rows plus the rows that
 // are within the key's half-lives both with and without the factor.
 function plainKeyCaps(now: Date): number[] {
-  const { where, params } = contextRowsWhere('default', {});
+  const { sql: where, params } = contextRowsWhere('default', {});
   const plain = '(julianday(?) - julianday(last_retrieved)) / half_life_days';
-  const sql = `SELECT COUNT(*) AS n FROM memories WHERE ${where.join(' AND ')} AND (pinned > 0 OR (half_life_days > 0
+  const sql = `SELECT COUNT(*) AS n FROM memories WHERE ${where} AND (pinned > 0 OR (half_life_days > 0
     AND ${plain} <= ? AND ${plain} / ${rewardFactorSql()} <= ?))`;
   const iso = now.toISOString();
   // SAFETY: one INTEGER `n` column.

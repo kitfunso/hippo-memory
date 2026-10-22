@@ -45,7 +45,7 @@ describe('goal_recall_log captured from CLI recall', () => {
       content: 'lesson on auth refactor',
       tags: ['auth-rewrite'],
     });
-    const g = pushGoal(env.hippoRoot, {
+    const g = await pushGoal(env.hippoRoot, {
       sessionId: 's-log-1',
       tenantId: 'default',
       goalName: 'auth-rewrite',
@@ -69,7 +69,7 @@ describe('goal_recall_log captured from CLI recall', () => {
 
   it('no log row is written when no active goal matches', async () => {
     await remember(ctx(env.hippoRoot), { content: 'unrelated note' });
-    pushGoal(env.hippoRoot, {
+    await pushGoal(env.hippoRoot, {
       sessionId: 's-log-2',
       tenantId: 'default',
       goalName: 'auth-rewrite',

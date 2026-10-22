@@ -8,7 +8,6 @@ import type {
   ApplyGraphOpsResult,
   GraphRebuild,
 } from '../port/graph.js';
-import type { Sync } from './served.js';
 import {
   deleteEntityRow,
   deleteRelationRow,
@@ -86,7 +85,7 @@ function applyGraphOpsOn(
 
 /** Applies `ops` from `opts.from` in one rebuild transaction, stopping at the first op boundary past `opts.holdMs`;
  * returns where the next chunk starts and how many ops were skipped as stale. */
-function applyGraphOpsAt(
+function applyGraphOps(
   db: DatabaseSyncLike,
   tenantId: string,
   ops: readonly GraphOp[],
@@ -98,6 +97,6 @@ function applyGraphOpsAt(
 // Sleep's wait, not a request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could otherwise fail.
 const openForChunk = waitingOpener(SLEEP_DB_WAIT_MS);
 
-export function sqliteGraphRebuild(on: OnHandle): Sync<GraphRebuild> {
-  return bound<GraphRebuild>(on, { applyOps: applyGraphOpsAt }, openForChunk);
+export function sqliteGraphRebuild(on: OnHandle): GraphRebuild {
+  return bound<GraphRebuild>(on, { applyOps: applyGraphOps }, openForChunk);
 }

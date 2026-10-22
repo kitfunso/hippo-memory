@@ -2,8 +2,7 @@
 // auto-captured tags. Real SQLite store, no mocks.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRequire } from 'module';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
@@ -57,7 +56,7 @@ describe('capture-error repeat check does not read every memory', () => {
     expect(statements.some((sql) => FULL_TABLE_SCAN.test(sql))).toBe(false);
   });
 
-  it('a tag that merely contains the substring "auto-captured" is not treated as auto-captured', () => {
+  it('a tag that merely contains the substring "auto-captured" is not treated as auto-captured', async () => {
     const entry = createMemory('a memory whose tag looks like the auto-captured marker but is not', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['x"auto-captured'],
@@ -65,6 +64,6 @@ describe('capture-error repeat check does not read every memory', () => {
     });
     writeEntry(root, entry);
 
-    expect(sqliteSyncStore(handlesOf(root)).lessonWrites.contentsWithTag('default', 'auto-captured')).toEqual([]);
+    expect(await sqliteStore(root).lessonWrites.contentsWithTag('default', 'auto-captured')).toEqual([]);
   });
 });

@@ -33,7 +33,7 @@ import type { StatusCounts } from '../../store/port/reports.js';
 import type { ParticleStats } from '../../store/port.js';
 import { cliConfig, cliApiContext, cliDiagnostics, type CliContext } from './api-context.js';
 
-const diagnosticsAt = (hippoRoot: string): DoctorStore => cliDiagnostics(hippoRoot);
+const diagnosticsBodies = (hippoRoot: string): DoctorStore => cliDiagnostics(hippoRoot);
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { printError } from './output.js';
 import { type CommandContext, boolFlag, parseCountFlag, stringFlagOrExit } from './flag-values.js';
@@ -342,7 +342,7 @@ export async function handleProvenance({ hippoRoot, tenantId, flags }: CommandCo
 }
 
 export async function handleDoctor({ tenantId, flags }: CommandContext): Promise<void> {
-  const report = await runDoctor({ version: readPackageVersion(), tenantId, diagnosticsAt });
+  const report = await runDoctor({ version: readPackageVersion(), tenantId, diagnosticsBodies });
   console.log(boolFlag(flags, 'json') ? JSON.stringify(report, null, 2) : formatDoctor(report));
   if (!report.ok) throw new CliExit(1);
 }
@@ -362,7 +362,7 @@ export async function handleSupportBundle({ tenantId, flags }: CommandContext): 
     tenantId,
     includeLogs,
     now,
-    diagnosticsAt,
+    diagnosticsBodies,
   });
   const stamp = now.toISOString().replace(/[:.]/g, '-');
   const file = outFlag ?? path.join(process.cwd(), `hippo-support-${stamp}.json`);

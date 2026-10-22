@@ -53,28 +53,28 @@ describe('completeGoal lifespan-windowed propagation', () => {
     const m = await remember(ctx(root), { content: 'lesson', tags: ['rfx'] });
     // Default strength is 1.0 (ceiling); knock it down so the 1.10x boost shows.
     setStrength(root, m.id, 0.5);
-    const g = pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
+    const g = await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
     seedRecallLog(root, g.id, m.id, new Date().toISOString());
     const before = readStrength(root, m.id);
-    completeGoal(root, g.id, { outcomeScore: 0.9 });
+    await completeGoal(root, g.id, { outcomeScore: 0.9 });
     expect(readStrength(root, m.id)).toBeGreaterThan(before);
   });
 
   it('outcome < 0.3 decays memories within window', async () => {
     const m = await remember(ctx(root), { content: 'misleading', tags: ['rfx'] });
-    const g = pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
+    const g = await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
     seedRecallLog(root, g.id, m.id, new Date().toISOString());
     const before = readStrength(root, m.id);
-    completeGoal(root, g.id, { outcomeScore: 0.1 });
+    await completeGoal(root, g.id, { outcomeScore: 0.1 });
     expect(readStrength(root, m.id)).toBeLessThan(before);
   });
 
   it('neutral band [0.3, 0.7) leaves strength unchanged', async () => {
     const m = await remember(ctx(root), { content: 'neutral', tags: ['rfx'] });
-    const g = pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
+    const g = await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
     seedRecallLog(root, g.id, m.id, new Date().toISOString());
     const before = readStrength(root, m.id);
-    completeGoal(root, g.id, { outcomeScore: 0.5 });
+    await completeGoal(root, g.id, { outcomeScore: 0.5 });
     expect(readStrength(root, m.id)).toBe(before);
   });
 
@@ -82,20 +82,20 @@ describe('completeGoal lifespan-windowed propagation', () => {
     const m = await remember(ctx(root), { content: 'pre-goal', tags: ['rfx'] });
     // Seed a log row dated yesterday — before any goal exists.
     const yesterday = new Date(Date.now() - 86400_000).toISOString();
-    const g = pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
+    const g = await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
     seedRecallLog(root, g.id, m.id, yesterday); // outside lifespan
     const before = readStrength(root, m.id);
-    completeGoal(root, g.id, { outcomeScore: 0.9 });
+    await completeGoal(root, g.id, { outcomeScore: 0.9 });
     expect(readStrength(root, m.id)).toBe(before); // no change
   });
 
   it('UNIQUE(memory_id, goal_id) prevents double-propagation if the log is poked twice', async () => {
     const m = await remember(ctx(root), { content: 'once', tags: ['rfx'] });
-    const g = pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
+    const g = await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
     const now = new Date().toISOString();
     seedRecallLog(root, g.id, m.id, now);
     expect(() => seedRecallLog(root, g.id, m.id, now)).toThrow(/UNIQUE/i);
-    completeGoal(root, g.id, { outcomeScore: 0.9 });
+    await completeGoal(root, g.id, { outcomeScore: 0.9 });
     // Strength multiplied by 1.10 once, not twice.
   });
 
@@ -103,9 +103,9 @@ describe('completeGoal lifespan-windowed propagation', () => {
     const m = await remember(ctx(root), { content: 'near-ceiling', tags: ['rfx'] });
     // The remember API doesn't expose strength; override directly.
     setStrength(root, m.id, 0.95);
-    const g = pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
+    const g = await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
     seedRecallLog(root, g.id, m.id, new Date().toISOString());
-    completeGoal(root, g.id, { outcomeScore: 0.9 });
+    await completeGoal(root, g.id, { outcomeScore: 0.9 });
     // 0.95 * 1.10 = 1.045, but SQLite's MIN(1.0, MAX(0.0, ...)) clamps at 1.0.
     expect(readStrength(root, m.id)).toBe(1.0);
   });

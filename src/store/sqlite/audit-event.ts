@@ -1,5 +1,5 @@
 import { type DatabaseSyncLike } from '../../db/index.js';
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvents } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import type { JsonValue } from '../../base/util/json.js';
@@ -18,13 +18,15 @@ interface AuditOptions {
 export function audit(db: DatabaseSyncLike, op: AuditOp, options: AuditOptions): void {
   const { targetId, metadata, actor = CLI_ACTOR, tenantId } = options;
   try {
-    appendAuditEvent(db, {
-      tenantId,
-      actor,
-      op,
-      targetId,
-      metadata,
-    });
+    appendAuditEvents(db, [
+      {
+        tenantId,
+        actor,
+        op,
+        targetId,
+        metadata,
+      },
+    ]);
   } catch (error) {
     // The mutation has already succeeded; a broken audit table must not undo it.
     reportAuditWriteFailure(op, error, targetId);

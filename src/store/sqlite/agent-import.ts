@@ -3,24 +3,23 @@
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { dormantSnapshotsBySourcePrefix } from './dormant-rows.js';
-import { selectRowsHoldingOutsideSourcePrefixAt } from './entry-reads.js';
+import { selectRowsHoldingOutsideSourcePrefix } from './entry-reads.js';
 import { writeEntryMirrors } from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
 import { openStore } from './handles.js';
-import { waitingOpener, type OnHandle, type StoreFiles } from './open.js';
-import { bound, boundWithFiles, type Bodies } from './bound.js';
-import type { Sync } from './served.js';
+import { waitingOpener, type Handles, type StoreFiles } from './open.js';
+import { bound, type Bodies } from './bound.js';
 import { liveUnder, runSteps } from './agent-import-steps.js';
 import type { AgentImport, ContainerApplied, ContainerApply, MirrorFailure } from '../port/agent-import.js';
 
-const importReadsAt: Bodies<Omit<AgentImport, 'applyContainer'>> = {
+const importReadsBodies: Bodies<Omit<AgentImport, 'applyContainer'>> = {
   liveBySourcePrefix: liveUnder,
   dormantBySourcePrefix: dormantSnapshotsBySourcePrefix,
   rowsHoldingOutsideSourcePrefix: (db, tenantId, texts, prefix, origins) =>
-    texts.map((text) => selectRowsHoldingOutsideSourcePrefixAt(db, tenantId, text, prefix, origins)),
+    texts.map((text) => selectRowsHoldingOutsideSourcePrefix(db, tenantId, text, prefix, origins)),
 };
 
-function applyContainerAt(db: DatabaseSyncLike, files: StoreFiles, plan: ContainerApply): ContainerApplied {
+function applyContainer(db: DatabaseSyncLike, files: StoreFiles, plan: ContainerApply): ContainerApplied {
   const run = () => runSteps(db, files, plan);
   const done = plan.dryRun ? withTrialScope(db, 'sync_container', run) : withWriteScope(db, 'sync_container', run);
   if (done === null) return { kind: 'changed' };
@@ -44,12 +43,12 @@ function purgeMirrors(hippoRoot: string, ids: readonly string[]): MirrorFailure[
 }
 
 /** The import's group; `busyWaitMs` replaces each handle's lock wait, as a compaction hook's import asks. */
-export function sqliteAgentImport(on: OnHandle, busyWaitMs?: number): Sync<AgentImport> {
+export function sqliteAgentImport({ on, files }: Handles, busyWaitMs?: number): AgentImport {
   return {
-    ...bound(on, importReadsAt, waitingOpener(busyWaitMs)),
-    ...boundWithFiles<Pick<AgentImport, 'applyContainer'>>(
+    ...bound(on, importReadsBodies, waitingOpener(busyWaitMs)),
+    ...bound<Pick<AgentImport, 'applyContainer'>>(
       on,
-      { applyContainer: applyContainerAt },
+      { applyContainer: (db, plan) => applyContainer(db, files, plan) },
       waitingOpener(busyWaitMs, openStore),
     ),
   };

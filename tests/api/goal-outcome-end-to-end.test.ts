@@ -71,7 +71,7 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
 
   it('positive outcome boosts strength of memories actually recalled during goal life, and only once', async () => {
     const m = await remember(ctx(env.hippoRoot), { content: 'good lesson', tags: ['rfx'] });
-    const g = pushGoal(env.hippoRoot, {
+    const g = await pushGoal(env.hippoRoot, {
       sessionId: 's-e2e-1',
       tenantId: 'default',
       goalName: 'rfx',
@@ -83,18 +83,18 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
     setStrength(env.hippoRoot, m.id, 0.5);
 
     const before = readStrength(env.hippoRoot, m.id);
-    completeGoal(env.hippoRoot, g.id, { outcomeScore: 0.9 });
+    await completeGoal(env.hippoRoot, g.id, { outcomeScore: 0.9 });
     const boosted = readStrength(env.hippoRoot, m.id);
     expect(boosted).toBeGreaterThan(before);
 
     // A second completeGoal must not re-apply propagation.
-    completeGoal(env.hippoRoot, g.id, { outcomeScore: 0.9 });
+    await completeGoal(env.hippoRoot, g.id, { outcomeScore: 0.9 });
     expect(readStrength(env.hippoRoot, m.id)).toBe(boosted);
   });
 
   it('negative outcome decays strength', async () => {
     const m = await remember(ctx(env.hippoRoot), { content: 'misleading lesson', tags: ['rfx'] });
-    const g = pushGoal(env.hippoRoot, {
+    const g = await pushGoal(env.hippoRoot, {
       sessionId: 's-e2e-2',
       tenantId: 'default',
       goalName: 'rfx',
@@ -103,7 +103,7 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
     await runRecall('misleading lesson', 's-e2e-2');
 
     const before = readStrength(env.hippoRoot, m.id);
-    completeGoal(env.hippoRoot, g.id, { outcomeScore: 0.1 });
+    await completeGoal(env.hippoRoot, g.id, { outcomeScore: 0.1 });
     expect(readStrength(env.hippoRoot, m.id)).toBeLessThan(before);
   });
 });

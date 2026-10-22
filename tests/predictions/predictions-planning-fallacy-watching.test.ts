@@ -38,15 +38,15 @@ function ctxFor(root: string): FullContext {
 
 // Seed N closed predictions in a class so the baserate hint can fire on a
 // matching query (used as the negative control: confirms hint path still works).
-function seedClosedPredictions(root: string, classTag: string, n: number): void {
+async function seedClosedPredictions(root: string, classTag: string, n: number): Promise<void> {
   for (let i = 0; i < n; i++) {
-    const p = savePrediction(root, 'default', {
+    const p = await savePrediction(root, 'default', {
       claimText: `prediction ${i} in ${classTag} for seeding baserate data`,
       classTag,
       estimateValue: 2,
       estimateUnit: 'days',
     });
-    closePrediction(root, 'default', p.id, {
+    await closePrediction(root, 'default', p.id, {
       closureState: 'closed',
       actualValue: 4,
     });
@@ -68,8 +68,8 @@ describe('PlanningFallacyWatching', () => {
     // Class "migration-effort" tokens: ["migration", "effort"] -> overlap {migration} = 1
     // Class "feature-effort" tokens: ["feature", "effort"] -> overlap {feature} = 1
     // -> tie at score 1.
-    seedClosedPredictions(root, 'migration-effort', 1);
-    seedClosedPredictions(root, 'feature-effort', 1);
+    await seedClosedPredictions(root, 'migration-effort', 1);
+    await seedClosedPredictions(root, 'feature-effort', 1);
     const out = await retrieve(ctxFor(root), { query: 'the migration feature will take 2 days' });
     expect(out.planningFallacyHint).toBeUndefined();
     expect(out.planningFallacyWatching!.reason).toBe('tiebreak');
@@ -82,7 +82,7 @@ describe('PlanningFallacyWatching', () => {
   });
 
   it('Output returns {} (neither variant) on non-forward-claim queries', async () => {
-    seedClosedPredictions(root, 'estimate-task', 3);
+    await seedClosedPredictions(root, 'estimate-task', 3);
     const out = await retrieve(ctxFor(root), { query: 'what is the architecture of this system' });
     expect(out.planningFallacyHint).toBeUndefined();
     expect(out.planningFallacyWatching).toBeUndefined();
@@ -107,7 +107,7 @@ describe('PlanningFallacyWatching', () => {
   });
 
   it('api.recall populates planningFallacyHint (NOT watching) when class resolves (mutual exclusivity)', async () => {
-    seedClosedPredictions(root, 'estimate-task', 3);
+    await seedClosedPredictions(root, 'estimate-task', 3);
     writeEntry(
       root,
       createMemory('some unrelated memory content', {

@@ -4,13 +4,13 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { tallyAmbientEntries } from '../../src/base/memory/ambient.js';
 import { type MemoryEntry } from '../../src/base/memory/memory.js';
 import {
-  loadEntriesMentioningAt,
-  loadEntryIdsPageAt,
-  selectEntriesFromOriginAt,
+  loadEntriesMentioning,
+  loadEntryIdsPage,
+  selectEntriesFromOrigin,
   selectLiveEntriesBySourcePrefix,
 } from '../../src/store/sqlite/entry-reads.js';
-import { loadAmbientTalliesAt } from '../../src/store/sqlite/ambient.js';
-import { pendingVectorIdsAt, pruneOrphanVectorsAt } from '../../src/store/sqlite/vector-index.js';
+import { loadAmbientTallies } from '../../src/store/sqlite/ambient.js';
+import { pendingVectorIds, pruneOrphanVectors } from '../../src/store/sqlite/vector-index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -42,14 +42,14 @@ describe('rows that may mention a target', () => {
     seeded(root, 11);
     const db = openHippoDb(root);
     try {
-      const all = loadEntriesMentioningAt(db, ['quuxlib'], 'quuxlib', 'default', { limit: 100 });
+      const all = loadEntriesMentioning(db, ['quuxlib'], 'quuxlib', 'default', { limit: 100 });
       expect(all.entries).toHaveLength(11);
       expect(all.next).toBeNull();
       const ids: string[] = [];
       let after;
       let pages = 0;
       do {
-        const page = loadEntriesMentioningAt(db, ['quuxlib'], 'quuxlib', 'default', { limit: 4, after });
+        const page = loadEntriesMentioning(db, ['quuxlib'], 'quuxlib', 'default', { limit: 4, after });
         ids.push(...page.entries.map((e) => e.id));
         after = page.next ?? undefined;
         pages++;
@@ -69,7 +69,7 @@ describe('the FTS check on a read', () => {
     const db = openHippoDb(root);
     try {
       const { statements } = recordStatements(() =>
-        loadEntriesMentioningAt(db, ['quuxlib'], 'ops', 'default', { limit: 100 }),
+        loadEntriesMentioning(db, ['quuxlib'], 'ops', 'default', { limit: 100 }),
       );
       expect(countMatching(statements, /COUNT\(\*\)/i)).toBe(0);
     } finally {
@@ -85,11 +85,11 @@ describe('vectors without an index entry', () => {
     const db = openHippoDb(root);
     try {
       upsertVectors(db, [[rows[2].id, [1, 0]]], 'm');
-      pruneOrphanVectorsAt(db);
+      pruneOrphanVectors(db);
       const ids: string[] = [];
       let afterId: string | undefined;
       do {
-        const page = pendingVectorIdsAt(db, { limit: 3, afterId });
+        const page = pendingVectorIds(db, { limit: 3, afterId });
         ids.push(...page.ids);
         afterId = page.next ?? undefined;
       } while (afterId !== undefined);
@@ -115,7 +115,7 @@ describe('walks of every row a read names', () => {
         const ids: string[] = [];
         let after: EntryCursor | undefined;
         do {
-          const page = loadEntryIdsPageAt(db, ALL_TENANTS, { limit: 3, after });
+          const page = loadEntryIdsPage(db, ALL_TENANTS, { limit: 3, after });
           ids.push(...page.ids);
           after = page.next ?? undefined;
         } while (after);
@@ -132,7 +132,7 @@ describe('walks of every row a read names', () => {
   it('hand sleep its rows one page of ids and then of rows at a time, never every id in one read', async () => {
     const root = makeRoot('bounded-sleep-pages');
     const rows = seeded(root, 7);
-    const sleepRows = new SleepRows(sqliteStore(root).consolidation, new Map(), 3);
+    const sleepRows = new SleepRows(sqliteStore(root), new Map(), 3);
     const log = await recordStatementsAsync(async () => {
       const pages: string[][] = [];
       for await (const page of sleepRows.pages()) pages.push(page.map((e) => e.id));
@@ -162,7 +162,7 @@ describe('walks of every row a read names', () => {
       expect(peakRowsRead(imported.reads, MEMORY_SELECT_COLUMNS)).toBe(3);
       const alpha = recordStatements(() => [
         ...rowsInPages((after?: EntryCursor) =>
-          selectEntriesFromOriginAt(db, tenant, { origin: 'alpha' }, { limit: 2, after }),
+          selectEntriesFromOrigin(db, tenant, { origin: 'alpha' }, { limit: 2, after }),
         ),
       ]);
       expect(alpha.result.map((e) => e.id)).toEqual(rows.filter((_, i) => i !== 5).map((r) => r.id));
@@ -196,7 +196,7 @@ describe('ambient tag tallies', () => {
     const now = new Date(Date.UTC(2026, 0, 2));
     const db = openHippoDb(root);
     try {
-      const sql = loadAmbientTalliesAt(db, {}, 'default', { currentProject: [], now });
+      const sql = loadAmbientTallies(db, {}, 'default', { currentProject: [], now });
       const js = tallyAmbientEntries(rows, now);
       expect(Object.fromEntries(sql.tagCounts)).toEqual(Object.fromEntries(js.tagCounts));
       expect(sql.errors).toBe(js.errors);

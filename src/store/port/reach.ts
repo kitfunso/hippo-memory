@@ -2,7 +2,7 @@
 import type { HippoStore, StoreWith } from '../port.js';
 
 /** The groups share, sync and promote use on the operator's global store. */
-export type GlobalTargetGroup = 'promotion' | 'sharing' | 'folderFiles' | 'embeddingIndex';
+export type GlobalTargetGroup = 'promotion' | 'sharing' | 'folderFiles' | 'embeddingIndex' | 'captures';
 
 /** A store and the folder its root opened it from; the folder is for the root's own config read. */
 export interface FolderStore<S extends HippoStore = HippoStore> {

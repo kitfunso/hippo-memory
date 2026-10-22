@@ -16,7 +16,7 @@ import {
   authRevoke,
   auditList,
 } from '../../src/api/index.js';
-import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
+import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
@@ -321,9 +321,9 @@ describe('api domain — archive_raw / auth / audit', () => {
     // Seed events directly so the test is independent of remember/recall.
     const db = openHippoDb(home);
     try {
-      appendAuditEvent(db, { tenantId: 'tenant-a', actor: 'cli', op: 'remember', targetId: 'a1' });
-      appendAuditEvent(db, { tenantId: 'tenant-a', actor: 'cli', op: 'forget', targetId: 'a2' });
-      appendAuditEvent(db, { tenantId: 'tenant-b', actor: 'cli', op: 'remember', targetId: 'b1' });
+      appendAuditEvents(db, [{ tenantId: 'tenant-a', actor: 'cli', op: 'remember', targetId: 'a1' }]);
+      appendAuditEvents(db, [{ tenantId: 'tenant-a', actor: 'cli', op: 'forget', targetId: 'a2' }]);
+      appendAuditEvents(db, [{ tenantId: 'tenant-b', actor: 'cli', op: 'remember', targetId: 'b1' }]);
     } finally {
       closeHippoDb(db);
     }

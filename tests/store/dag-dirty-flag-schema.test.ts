@@ -20,8 +20,8 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 oneRequestPerTest();
 
 // loadAllDirtySummaries is the production reader; the tenant filter stands in for the per-tenant wrapper.
-function dirtyFor(root: string, tenantId: string): MemoryEntry[] {
-  return loadAllDirtySummaries(root).filter((m) => m.tenantId === tenantId);
+async function dirtyFor(root: string, tenantId: string): Promise<MemoryEntry[]> {
+  return (await loadAllDirtySummaries(root)).filter((m) => m.tenantId === tenantId);
 }
 
 /** One dirty-mark on its own handle, the way every child-write path calls the production marker. */
@@ -100,7 +100,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     expect(row.dag_level_3_built_at).toBeNull();
   });
 
-  it('markSummaryDirtyInTx + loadDirtySummaries round-trip per tenant (cross-tenant isolation)', () => {
+  it('markSummaryDirtyInTx + loadDirtySummaries round-trip per tenant (cross-tenant isolation)', async () => {
     // Seed 2 summaries in different tenants. createMemory defaults
     // tenantId to 'default'; manually rewrite the second to 'tenant2'
     // via SQL — keeps the test self-contained without env shenanigans.
@@ -120,8 +120,8 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     db.prepare(`UPDATE memories SET tenant_id = ? WHERE id = ?`).run('tenant2', summaryB.id);
     closeHippoDb(db);
     markDirty(hippoRoot, summaryA.id, 'default', 'test-actor');
-    expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toEqual([summaryA.id]);
-    expect(dirtyFor(hippoRoot, 'tenant2').map((m) => m.id)).toEqual([]);
+    expect((await dirtyFor(hippoRoot, 'default')).map((m) => m.id)).toEqual([summaryA.id]);
+    expect((await dirtyFor(hippoRoot, 'tenant2')).map((m) => m.id)).toEqual([]);
   });
 
   it('markSummaryDirtyInTx is idempotent (second call writes no audit row + summary_dirty stays 1)', () => {
@@ -146,7 +146,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     expect(row.summary_dirty).toBe(1);
   });
 
-  it('markSummaryDirtyInTx no-ops on non-summary rows (dag_level !== 2)', () => {
+  it('markSummaryDirtyInTx no-ops on non-summary rows (dag_level !== 2)', async () => {
     const leaf = createMemory('a leaf', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -154,23 +154,23 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     });
     writeEntry(hippoRoot, leaf);
     markDirty(hippoRoot, leaf.id, 'default', 'actor');
-    expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
+    expect(await dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db = openHippoDb(hippoRoot);
     const auditRows = db.prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty'`).all();
     closeHippoDb(db);
     expect(auditRows).toEqual([]);
   });
 
-  it('markSummaryDirtyInTx no-ops on unknown id', () => {
+  it('markSummaryDirtyInTx no-ops on unknown id', async () => {
     markDirty(hippoRoot, 'sem_does_not_exist', 'default', 'actor');
-    expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
+    expect(await dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db = openHippoDb(hippoRoot);
     const auditRows = db.prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty'`).all();
     closeHippoDb(db);
     expect(auditRows).toEqual([]);
   });
 
-  it('markSummaryDirtyInTx rejects cross-tenant attack write (locks WHERE tenant_id=? guard against future regression)', () => {
+  it('markSummaryDirtyInTx rejects cross-tenant attack write (locks WHERE tenant_id=? guard against future regression)', async () => {
     // Write summaryB as tenant2, then attempt to mark it dirty as 'default'
     // tenant. WHERE id=? AND tenant_id=? guard should match 0 rows; no
     // audit row emitted; tenant2's loadDirtySummaries still returns empty.
@@ -189,8 +189,8 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     // Attack: mark dirty using the WRONG tenant.
     markDirty(hippoRoot, summaryB.id, 'default', 'attacker');
     // Verify: tenant2 still sees no dirty rows, no audit row written.
-    expect(dirtyFor(hippoRoot, 'tenant2')).toEqual([]);
-    expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
+    expect(await dirtyFor(hippoRoot, 'tenant2')).toEqual([]);
+    expect(await dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db2 = openHippoDb(hippoRoot);
     const auditRows = db2
       .prepare(`SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)

@@ -4,8 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { Rejection } from '../../src/store/port/rejections.js';
-import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -19,7 +18,7 @@ oneRequestPerTest();
 let root: string;
 // Another person's personal scope, which a rejection with no personal scope of its own leaves alone.
 const ELSEWHERE = 'personal:private:someone-else';
-const rejections = (): ReturnType<typeof sqliteSyncStore>['rejections'] => sqliteSyncStore(handlesOf(root)).rejections;
+const rejections = (): ReturnType<typeof sqliteStore>['rejections'] => sqliteStore(root).rejections;
 
 beforeEach(() => {
   root = makeRoot('rejected-values');
@@ -44,16 +43,16 @@ function rejection(tenantId: string, over: Partial<Rejection>): Rejection {
   };
 }
 
-function rejectText(tenantId: string, text: string): string {
-  return rejections().apply(rejection(tenantId, { value: text })).digest;
+async function rejectText(tenantId: string, text: string): Promise<string> {
+  return (await rejections().apply(rejection(tenantId, { value: text }))).digest;
 }
 
 describe('rejections.apply', () => {
-  it('rejects the text of the row the memory id names, removes that row and writes one reject_value row', () => {
+  it('rejects the text of the row the memory id names, removes that row and writes one reject_value row', async () => {
     const entry = createMemory('the build runs on node 18', { tags: [] });
     writeEntry(root, entry);
 
-    const applied = rejections().apply(rejection('default', { memoryId: entry.id }));
+    const applied = await rejections().apply(rejection('default', { memoryId: entry.id }));
 
     expect(applied).toMatchObject({
       digest: rejectionDigest(entry.content),
@@ -61,7 +60,7 @@ describe('rejections.apply', () => {
       removedIds: [entry.id],
     });
     expect(readEntry(root, entry.id)).toBeNull();
-    expect(rejections().list('default')).toMatchObject([
+    expect(await rejections().list('default')).toMatchObject([
       { digest: applied.digest, reason: 'wrong', rejectedBy: 'tester', sourceMemoryId: entry.id },
     ]);
     expect(auditRows('default', 'reject_value')).toMatchObject([
@@ -69,76 +68,72 @@ describe('rejections.apply', () => {
     ]);
   });
 
-  it('writes nothing when the memory id names no row, or a personal one', () => {
+  it('writes nothing when the memory id names no row, or a personal one', async () => {
     const own = createMemory('my own reminder', { tags: [], scope: ELSEWHERE });
     writeEntry(root, own);
 
-    expect(() => rejections().apply(rejection('default', { memoryId: 'mem_absent' }))).toThrow(
+    await expect(rejections().apply(rejection('default', { memoryId: 'mem_absent' }))).rejects.toThrow(
       'memory not found: mem_absent',
     );
-    expect(() => rejections().apply(rejection('default', { memoryId: own.id }))).toThrow(
+    await expect(rejections().apply(rejection('default', { memoryId: own.id }))).rejects.toThrow(
       "Personal memories can't be rejected",
     );
 
-    expect(rejections().list('default')).toEqual([]);
+    expect(await rejections().list('default')).toEqual([]);
     expect(auditRows('default', 'reject_value')).toEqual([]);
   });
 
-  it("leaves another person's personal row holding the text, and removes the caller's own", () => {
+  it("leaves another person's personal row holding the text, and removes the caller's own", async () => {
     const entry = createMemory('kept out of reach', { tags: [], scope: ELSEWHERE });
     writeEntry(root, entry);
 
-    const applied = rejections().apply(rejection('default', { value: entry.content }));
+    const applied = await rejections().apply(rejection('default', { value: entry.content }));
 
     expect(applied.removedIds).toEqual([]);
     expect(readEntry(root, entry.id)).not.toBeNull();
-    expect(rejections().apply(rejection('default', { value: entry.content, ownScope: ELSEWHERE })).removedIds).toEqual([
-      entry.id,
-    ]);
+    expect(
+      (await rejections().apply(rejection('default', { value: entry.content, ownScope: ELSEWHERE }))).removedIds,
+    ).toEqual([entry.id]);
   });
 });
 
 describe('rejections.lift', () => {
-  it('deletes the one match and writes an unreject_value row naming its digest, reason and source memory', () => {
+  it('deletes the one match and writes an unreject_value row naming its digest, reason and source memory', async () => {
     const entry = createMemory('lifted later', { tags: [] });
     writeEntry(root, entry);
-    const { digest } = rejections().apply(rejection('default', { memoryId: entry.id, reason: 'stale' }));
+    const { digest } = await rejections().apply(rejection('default', { memoryId: entry.id, reason: 'stale' }));
 
-    expect(rejections().lift('default', digest.slice(0, 12), 'lifter')).toEqual({
+    expect(await rejections().lift('default', digest.slice(0, 12), 'lifter')).toEqual({
       status: 'ok',
       digest,
       reason: 'stale',
     });
 
-    expect(rejections().list('default')).toEqual([]);
+    expect(await rejections().list('default')).toEqual([]);
     expect(auditRows('default', 'unreject_value')).toMatchObject([
       { actor: 'lifter', targetId: entry.id, metadata: { digest, reason: 'stale' } },
     ]);
   });
 
-  it('deletes nothing and writes no audit row when the prefix matches two rejected values', () => {
-    const digests = [rejectText('default', 'first value'), rejectText('default', 'second value')];
+  it('deletes nothing and writes no audit row when the prefix matches two rejected values', async () => {
+    const digests = [await rejectText('default', 'first value'), await rejectText('default', 'second value')];
 
-    const outcome = rejections().lift('default', '', 'lifter');
+    const outcome = await rejections().lift('default', '', 'lifter');
 
     expect(outcome.status).toBe('ambiguous');
     expect(outcome.status === 'ambiguous' ? outcome.candidates.map((c) => c.digest).sort() : []).toEqual(
       [...digests].sort(),
     );
-    expect(rejections().list('default')).toHaveLength(2);
+    expect(await rejections().list('default')).toHaveLength(2);
     expect(auditRows('default', 'unreject_value')).toEqual([]);
   });
 
-  it("neither lists nor lifts another tenant's rejected value", () => {
-    const digest = rejectText('tenant-a', 'only tenant a rejects this');
+  it("neither lists nor lifts another tenant's rejected value", async () => {
+    const digest = await rejectText('tenant-a', 'only tenant a rejects this');
 
-    expect(rejections().list('tenant-b')).toEqual([]);
-    expect(rejections().lift('tenant-b', digest, 'lifter')).toEqual({ status: 'not_found' });
-    expect(
-      rejections()
-        .list('tenant-a')
-        .map((r) => r.digest),
-    ).toEqual([digest]);
+    expect(await rejections().list('tenant-b')).toEqual([]);
+    expect(await rejections().lift('tenant-b', digest, 'lifter')).toEqual({ status: 'not_found' });
+    expect((await rejections().list('tenant-a')).map((r) => r.digest)).toEqual([digest]);
   });
 });
 
@@ -147,7 +142,7 @@ const refused = (tenantId: string, entryId: string, content: string): Promise<bo
 
 describe('rejections.refusedAmong', () => {
   it('is true only for the rejected text in the tenant that rejected it, and writes neither a row nor a refusal', async () => {
-    rejectText('tenant-a', 'never store this again');
+    await rejectText('tenant-a', 'never store this again');
     const entry = createMemory('Never  store this AGAIN', { tags: [] });
 
     expect(
@@ -165,7 +160,7 @@ describe('rejections.refusedAmong', () => {
   it('is false for the row that already holds the rejected text and true for a new id bringing it in', async () => {
     const entry = createMemory('held before the rejection', { tags: [], scope: ELSEWHERE });
     writeEntry(root, entry);
-    rejections().apply(rejection('default', { value: entry.content }));
+    await rejections().apply(rejection('default', { value: entry.content }));
 
     expect(await refused('default', entry.id, entry.content)).toEqual([false]);
     expect(await refused('default', 'mem_other_id', entry.content)).toEqual([true]);

@@ -103,9 +103,7 @@ export interface EmbeddingIndex {
   saveModel(providerId: string): Promise<void>;
   entryCount(): Promise<number>;
   /** Up to `page.limit` memory ids in id order after `page.afterId`: a re-embed needs each row once, not time order. */
-  entryIdsPage(page: IdPageRequest): Promise<IdPage>;
-  /** The rows of `ids` that exist, in no set order. */
-  entriesByIds(ids: readonly string[]): Promise<MemoryEntry[]>;
+  entryIdsById(page: IdPageRequest): Promise<IdPage>;
   summary(): Promise<StoredVectorSummary>;
   /** How many memories and vectors the store holds, and how many memories have a vector. */
   coverage(): Promise<VectorCoverage>;

@@ -89,7 +89,7 @@ describe('schema v25 — DAG summary metadata', () => {
     expect(empty).toHaveLength(0);
   });
 
-  it('summaryWithDescendants at depth 1 returns direct children only, tenant scoped, in created order', () => {
+  it('summaryWithDescendants at depth 1 returns direct children only, tenant scoped, in created order', async () => {
     const parent: MemoryEntry = createMemory('parent', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -123,7 +123,7 @@ describe('schema v25 — DAG summary metadata', () => {
     writeEntry(root, grandchild);
 
     const direct =
-      sqliteDagReads(handlesOf(root).on).summaryWithDescendants('default', parent.id, { depth: 1, admit: {} })
+      (await sqliteDagReads(handlesOf(root).on).summaryWithDescendants('default', parent.id, { depth: 1, admit: {} }))
         ?.levels[0] ?? [];
     expect(direct.map((e) => e.id)).toEqual([child1.id, child2.id]);
     // Grandchild reachable only via child1, not directly under parent.

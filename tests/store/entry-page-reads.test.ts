@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { loadEntriesMentioningAt, loadEntryIdsPageAt } from '../../src/store/sqlite/entry-reads.js';
+import { loadEntriesMentioning, loadEntryIdsPage } from '../../src/store/sqlite/entry-reads.js';
 import type { EntryCursor } from '../../src/store/port/types.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -61,7 +61,7 @@ function mentionWalk(db: DatabaseSyncLike, tenantId: TenantId, limit: number): s
   const ids: string[] = [];
   let after: EntryCursor | undefined;
   do {
-    const page = loadEntriesMentioningAt(db, ['quuxlib'], 'quuxlib', tenantId, { limit, after });
+    const page = loadEntriesMentioning(db, ['quuxlib'], 'quuxlib', tenantId, { limit, after });
     ids.push(...page.entries.map((e) => e.id));
     after = page.next ?? undefined;
   } while (after !== undefined);
@@ -85,7 +85,7 @@ describe('the mention read over ASCII and non-ASCII rows', () => {
 describe('a page over every tenant', () => {
   it.each([1, 6])('is one statement over %i tenants', (tenants) => {
     const db = seeded(30, tenants);
-    const { result, statements } = recordStatements(() => loadEntryIdsPageAt(db, ALL_TENANTS, { limit: 4 }));
+    const { result, statements } = recordStatements(() => loadEntryIdsPage(db, ALL_TENANTS, { limit: 4 }));
     expect(countMatching(statements, 'FROM memories')).toBe(1);
     expect(result.ids).toHaveLength(4);
   });

@@ -12,8 +12,7 @@ import { handleMessageDeleted } from '../../src/surface/connectors/slack/deletio
 import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, type HippoStore } from '../../src/entry/store-kit.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
@@ -45,9 +44,9 @@ function markedFolder(): string {
 }
 
 /** A copy that routes Slack team T_ACME and GitHub installation 101 to acme, so any other sender is unroutable. */
-function copyWithRoutes(): string {
+async function copyWithRoutes(): Promise<string> {
   const root = copyOf();
-  sqliteSyncStore(handlesOf(root)).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
+  await sqliteStore(root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
   const db = openHippoDb(root);
   try {
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(
@@ -283,7 +282,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('SLACK_SIGNING_SECRET', secrets.slack);
     vi.stubEnv('GITHUB_WEBHOOK_SECRET', secrets.github);
-    memory = memorySide(copyWithRoutes());
+    memory = memorySide(await copyWithRoutes());
     served = await serveOn(memory.store);
     baseline = memory.auditRows().length;
   });

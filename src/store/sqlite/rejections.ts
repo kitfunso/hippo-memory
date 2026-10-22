@@ -12,11 +12,11 @@ import {
   dormantTextsPage,
   replaceDormantEntry,
 } from './dormant-rows.js';
-import { entryRejectRowAt, selectEntriesByIds, selectTenantTextsPage } from './entry-reads.js';
+import { entryRejectRow, selectEntriesByIds, selectTenantTextsPage } from './entry-reads.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { archiveRawMemory, markMirrorCleaned } from './raw-archive.js';
 import { deleteRejectedValue, insertRejectedValue, listRejectedValues, checkRejectionGuard } from './rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../base/records/rejection-digest.js';
@@ -25,8 +25,7 @@ import { mergedSuccessor } from '../../base/memory/merged-row.js';
 import { rejectedText, rejectionReaches } from '../../base/records/rejection-text.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles } from './bound.js';
-import type { Sync } from './served.js';
+import { bound } from './bound.js';
 import type { EntryCursor } from '../port/types.js';
 
 type HoldsValue = (text: string) => boolean;
@@ -204,10 +203,10 @@ function removeHolders(
 /** Commits the rejected-value row first, so every later write refuses the text; walks the tenant's rows a page at a
  * time with no lock held; then removes each holder in reach (live or dormant, whole or merged) in one short write
  * scope. A failure past the first commit leaves the text refused and its holders kept; rejecting again removes them. */
-function applyRejectionAt(db: DatabaseSyncLike, files: StoreFiles, rejection: Rejection): AppliedRejection {
+function applyRejection(db: DatabaseSyncLike, files: StoreFiles, rejection: Rejection): AppliedRejection {
   const { hippoRoot } = files;
   const { tenantId, actor, reason, memoryId } = rejection;
-  const content = rejectedText(rejection, memoryId === undefined ? undefined : entryRejectRowAt(db, memoryId));
+  const content = rejectedText(rejection, memoryId === undefined ? undefined : entryRejectRow(db, memoryId));
   const digest = rejectionDigest(content);
   const rejectedAt = new Date().toISOString();
   withWriteScope(db, 'reject_value_row', () =>
@@ -242,7 +241,7 @@ function applyRejectionAt(db: DatabaseSyncLike, files: StoreFiles, rejection: Re
 
 /** Deletes the tenant's one rejected value whose digest starts with `digestPrefix` and writes its unreject_value audit
  * row. No match, or more than one, writes nothing. */
-function liftRejectionAt(db: DatabaseSyncLike, tenantId: string, digestPrefix: string, actor: string): LiftedRejection {
+function liftRejection(db: DatabaseSyncLike, tenantId: string, digestPrefix: string, actor: string): LiftedRejection {
   const matches = listRejectedValues(db, tenantId).filter((r) => r.digest.startsWith(digestPrefix));
   const target = matches[0];
   if (target === undefined) return { status: 'not_found' };
@@ -258,7 +257,7 @@ function liftRejectionAt(db: DatabaseSyncLike, tenantId: string, digestPrefix: s
   return { status: 'ok', digest: target.digest, reason: target.reason };
 }
 
-function refusedAmongAt(db: DatabaseSyncLike, checks: readonly RejectionCheck[]): boolean[] {
+export function refusedAmong(db: DatabaseSyncLike, checks: readonly RejectionCheck[]): boolean[] {
   return checks.map(({ tenantId, entryId, content }) => {
     try {
       checkRejectionGuard(db, tenantId, entryId, content);
@@ -270,15 +269,10 @@ function refusedAmongAt(db: DatabaseSyncLike, checks: readonly RejectionCheck[])
   });
 }
 
-/** The guard probe alone, which the local files carry for a dry run that cannot await. */
-export function sqliteRefusedAmong(on: OnHandle): Sync<Pick<Rejections, 'refusedAmong'>> {
-  return bound<Pick<Rejections, 'refusedAmong'>>(on, { refusedAmong: refusedAmongAt });
-}
-
-export function sqliteRejections(on: OnHandle): Sync<Rejections> {
+export function sqliteRejections({ on, files }: Handles): Rejections {
   return {
-    ...boundWithFiles<Pick<Rejections, 'apply'>>(on, { apply: applyRejectionAt }, openStore),
-    ...bound<Pick<Rejections, 'lift' | 'list'>>(on, { lift: liftRejectionAt, list: listRejectedValues }, openStore),
-    ...sqliteRefusedAmong(on),
+    ...bound<Pick<Rejections, 'apply'>>(on, { apply: (db, ...args) => applyRejection(db, files, ...args) }, openStore),
+    ...bound<Pick<Rejections, 'lift' | 'list'>>(on, { lift: liftRejection, list: listRejectedValues }, openStore),
+    ...bound<Pick<Rejections, 'refusedAmong'>>(on, { refusedAmong: refusedAmong }),
   };
 }

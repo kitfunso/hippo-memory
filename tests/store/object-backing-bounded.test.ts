@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { saveDecision } from '../../src/domain/objects/decisions.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import { iterateRowsWithObjectsAt } from '../../src/store/sqlite/entry-reads.js';
+import { iterateRowsWithObjects } from '../../src/store/sqlite/entry-reads.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -50,7 +50,7 @@ describe('the object backing reads', () => {
 
   it('flags each row of the half-life cursor with the object it backs, reading no object row', () => {
     const { result, reads } = recordStatements(() =>
-      withDb(root, (db) => [...iterateRowsWithObjectsAt(db)].map((r) => [r.entry.id, r.object] as const)),
+      withDb(root, (db) => [...iterateRowsWithObjects(db)].map((r) => [r.entry.id, r.object] as const)),
     );
     const flags = new Map(result);
     expect([flags.get(backed[0]), flags.get(backed[1]), ...plain.map((id) => flags.get(id))]).toEqual([

@@ -2,7 +2,8 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { isFtsAvailable, type DatabaseSyncLike } from '../../db/index.js';
 import { tokenize } from '../../base/util/tokenize.js';
 import { recallScopeFilter, type RecallScopeFilter } from '../../base/scope/recall-scope.js';
-import { originInSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
+import { originInSql, scopeAdmitSql } from './rule-sql.js';
+import type { SqlFragment } from '../../db/sql.js';
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../../base/rank/prompt-recall.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { topVectorMatches, type VectorIndex } from '../../db/vector-store.js';
@@ -45,12 +46,12 @@ const FTS_QUERY_SYNTAX_RE = /fts5: syntax error|unterminated string/i;
 interface SearchPredicates {
   tenantPredicate: string;
   tenantOnlyPredicate: string;
-  tenantParams: string[];
+  tenantParams: SqlFragment['params'];
   archivedClauseAlias: string;
   archivedClauseTenantOnly: string;
   aliasScope: SqlFragment;
   plainScope: SqlFragment;
-  scopeParams: string[];
+  scopeParams: SqlFragment['params'];
   currentAlias: string;
   currentNoAlias: string;
 }
@@ -100,7 +101,7 @@ function searchPredicates(
   const one = tenantId !== ALL_TENANTS;
   const tenantPredicate = tenantAnd(tenantId, 'm.tenant_id = ?').sql;
   const tenantOnlyPredicate = one ? ` WHERE tenant_id = ?` : '';
-  const tenantParams = tenantAnd(tenantId).args;
+  const tenantParams = tenantAnd(tenantId).params;
 
   // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this only guards against
   // a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
@@ -203,7 +204,7 @@ function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPr
 }
 
 /** Load likely search candidates: FTS5 when available, else LIKE, then full-store fallback. */
-export function loadSearchEntriesAt(
+export function loadSearchEntries(
   db: DatabaseSyncLike,
   query: string,
   limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
@@ -215,7 +216,7 @@ export function loadSearchEntriesAt(
 /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies
  * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot
  * starve admitted ones; `passesScopeFilterForRecall` is the exact post-filter. */
-export function loadRecallEntriesAt(
+export function loadRecallEntries(
   db: DatabaseSyncLike,
   query: string,
   options: RecallSearchEntriesOptions,
@@ -234,7 +235,7 @@ export function loadRecallEntriesAt(
 }
 
 /** The rows nearest `queryVector` that pass `spec`, nearest first; `index` proposes them when it can. */
-export async function loadVectorCandidateEntriesAt(
+export async function loadVectorCandidateEntries(
   db: DatabaseSyncLike,
   queryVector: readonly number[],
   spec: VectorCandidateSpec,
@@ -243,7 +244,7 @@ export async function loadVectorCandidateEntriesAt(
   const scope = withProject(recallScopeClause('m.', spec.scope), 'm.', spec.origin);
   const tenant = tenantAnd(spec.tenantId, 'm.tenant_id = ?');
   const current = spec.includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
-  const params = [...tenant.args, ...scope.params];
+  const params = [...tenant.params, ...scope.params];
   const matches = await topVectorMatches(db, {
     query: queryVector,
     k: spec.limit ?? VECTOR_CANDIDATE_LIMIT,
@@ -251,14 +252,14 @@ export async function loadVectorCandidateEntriesAt(
     params,
     index,
   });
-  return entriesInOrderAt(
+  return entriesInOrder(
     db,
     matches.map((m) => m.id),
   );
 }
 
 /** The rows of `ids` in that order; an id deleted since it was matched is skipped. */
-export function entriesInOrderAt(db: DatabaseSyncLike, ids: readonly string[]): MemoryEntry[] {
+export function entriesInOrder(db: DatabaseSyncLike, ids: readonly string[]): MemoryEntry[] {
   if (ids.length === 0) return [];
   const rows = cachedStatement(
     db,

@@ -15,7 +15,7 @@ import { teeStdStreams } from '../../base/util/stream-tee.js';
 import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit, learnFromRepo, runChurnStaleForRepo, skipLearnOnSharedStore } from './shared.js';
 import { printAgentImport } from './print.js';
-import { repairQualityOnceAt } from './quality-repair-once.js';
+import { repairQualityOnce } from './quality-repair-once.js';
 import { printError } from './output.js';
 import { plural } from '../../base/util/format.js';
 
@@ -109,7 +109,7 @@ async function runSleep(hippoRoot: string, tenantId: string, flags: CliFlags): P
       console.log(`Finished saving ${plural(finished, 'compaction')} left over from earlier sessions.`);
     }
     await repairProjectTagsOnce(hippoRoot, tenantId);
-    await repairQualityOnceAt(hippoRoot, tenantId);
+    await repairQualityOnce(hippoRoot, tenantId);
   }
 
   // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).

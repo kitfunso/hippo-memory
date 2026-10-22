@@ -10,9 +10,10 @@ import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ownScopeTouches } from '../../base/scope/recall-scope.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
-import { keysetPage, type KeysetClause } from '../../base/util/keyset.js';
+import { keysetPage } from '../../base/util/keyset.js';
+import type { SqlFragment } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { DetectedConflict } from '../port/consolidation.js';
 import type {
@@ -25,8 +26,7 @@ import type {
   Conflicts,
 } from '../port/conflicts.js';
 import { openStore } from './handles.js';
-import type { Sync } from './served.js';
-import { bound, boundWithFiles, type Bodies } from './bound.js';
+import { bound, type Bodies } from './bound.js';
 
 // The JOIN with both members' memories rows needs each conflict column qualified, or `id` would be ambiguous.
 const CONFLICT_COLS_MC = MEMORY_CONFLICT_COLUMNS.split(', ')
@@ -78,9 +78,9 @@ function toConflictRow(r: ConflictJoinRow): ConflictRow {
 
 /** A conflict read's SELECT with its WHERE. With a tenant both members must be in it, so no cross-tenant or stale pair
  * surfaces; with none, every conflict comes back with whichever members still exist. */
-function conflictSelect(tenantId: TenantId, filters: readonly KeysetClause[]): KeysetClause {
+function conflictSelect(tenantId: TenantId, filters: readonly SqlFragment[]): SqlFragment {
   const join = tenantId === ALL_TENANTS ? 'LEFT JOIN' : 'JOIN';
-  const where: KeysetClause[] =
+  const where: SqlFragment[] =
     tenantId === ALL_TENANTS
       ? [...filters]
       : [{ sql: 'ma.tenant_id = ? AND mb.tenant_id = ?', params: [tenantId, tenantId] }, ...filters];
@@ -94,11 +94,11 @@ function conflictSelect(tenantId: TenantId, filters: readonly KeysetClause[]): K
 }
 
 /** One page of conflicts, newest change first, each with both members' columns from the same JOIN. */
-export function conflictPageAt(
+export function conflictPage(
   db: DatabaseSyncLike,
   { tenantId, status, limit, after }: ConflictListQuery,
 ): ConflictRowPage {
-  const filters: KeysetClause[] = [];
+  const filters: SqlFragment[] = [];
   if (status !== '*') filters.push({ sql: 'mc.status = ?', params: [status] });
   if (after) filters.push({ sql: '(mc.updated_at, mc.id) < (?, ?)', params: [after.key, after.id] });
   const select = conflictSelect(tenantId, filters);
@@ -111,7 +111,7 @@ export function conflictPageAt(
 }
 
 /** Conflict `conflictId`, any status, when both its members are in `tenantId`. */
-function conflictByIdAt(db: DatabaseSyncLike, tenantId: string, conflictId: number): ConflictRow | null {
+function conflictById(db: DatabaseSyncLike, tenantId: string, conflictId: number): ConflictRow | null {
   const select = conflictSelect(tenantId, [{ sql: 'mc.id = ?', params: [conflictId] }]);
   const row = cachedStatement(db, select.sql).get(...select.params) as ConflictJoinRow | undefined;
   return row ? toConflictRow(row) : null;
@@ -124,7 +124,7 @@ const OPEN_IN_TENANT = `FROM memory_conflicts mc
   WHERE mc.status = 'open' AND ma.tenant_id = ? AND mb.tenant_id = ?`;
 
 /** countOpenConflicts on a handle the caller holds, so it can share a snapshot with other reads. */
-export function countOpenConflictsAt(db: DatabaseSyncLike, tenantId: string): number {
+export function countOpenConflicts(db: DatabaseSyncLike, tenantId: string): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = cachedStatement(db, `SELECT COUNT(*) AS n ${OPEN_IN_TENANT}`).get(tenantId, tenantId) as {
     n: number | bigint;
@@ -133,7 +133,7 @@ export function countOpenConflictsAt(db: DatabaseSyncLike, tenantId: string): nu
 }
 
 /** The tenant's open conflicts naming `memoryId`, newest change first, each with both members' columns. */
-export function openConflictsNamingAt(db: DatabaseSyncLike, tenantId: string, memoryId: string): ConflictRow[] {
+export function openConflictsNaming(db: DatabaseSyncLike, tenantId: string, memoryId: string): ConflictRow[] {
   const select = conflictSelect(tenantId, [
     { sql: `mc.status = 'open'`, params: [] },
     { sql: '(mc.memory_a_id = ? OR mc.memory_b_id = ?)', params: [memoryId, memoryId] },
@@ -146,7 +146,7 @@ export function openConflictsNamingAt(db: DatabaseSyncLike, tenantId: string, me
 
 type SameTenant = (a: string, b: string) => boolean;
 
-export function replaceDetectedConflictsAt(
+export function replaceDetectedConflicts(
   db: DatabaseSyncLike,
   files: StoreFiles,
   detected: Array<DetectedConflict>,
@@ -349,7 +349,7 @@ function claimConflict(db: DatabaseSyncLike, tenantId: string, resolution: Confl
 
 /** Keeps `keep` and weakens, removes or rejects `loser` as the api decided, with one `conflict_resolve` audit row;
  * false when another resolver got there first or a side moved since the api read it. */
-function resolveConflictAt(
+function resolveConflict(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
@@ -578,7 +578,7 @@ function purgeRemovedLoserMirrors(
 }
 
 /** The conflict and loser ids every conflict_resolve audit row names. */
-export function conflictResolveAuditsAt(db: DatabaseSyncLike): Array<{ conflictId: number; loserId: string }> {
+export function conflictResolveAudits(db: DatabaseSyncLike): Array<{ conflictId: number; loserId: string }> {
   // SAFETY: every conflict_resolve audit row's metadata holds both ids (ConflictResolveMeta above).
   return db
     .prepare(
@@ -590,7 +590,7 @@ export function conflictResolveAuditsAt(db: DatabaseSyncLike): Array<{ conflictI
 }
 
 /** Every resolved conflict with both sides. */
-export function resolvedConflictsAt(
+export function resolvedConflicts(
   db: DatabaseSyncLike,
 ): Array<{ id: number; memory_a_id: string; memory_b_id: string }> {
   return db.prepare(`SELECT id, memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'resolved'`).all() as {
@@ -600,11 +600,15 @@ export function resolvedConflictsAt(
   }[];
 }
 
-const conflictsAt: Bodies<Omit<Conflicts, 'resolve'>> = { list: conflictPageAt, get: conflictByIdAt };
+const conflictsBodies: Bodies<Omit<Conflicts, 'resolve'>> = { list: conflictPage, get: conflictById };
 
-export function sqliteConflicts(on: OnHandle): Sync<Conflicts> {
+export function sqliteConflicts({ on, files }: Handles): Conflicts {
   return {
-    ...bound(on, conflictsAt, openStore),
-    ...boundWithFiles<Pick<Conflicts, 'resolve'>>(on, { resolve: resolveConflictAt }, openStore),
+    ...bound(on, conflictsBodies, openStore),
+    ...bound<Pick<Conflicts, 'resolve'>>(
+      on,
+      { resolve: (db, ...args) => resolveConflict(db, files, ...args) },
+      openStore,
+    ),
   };
 }

@@ -75,14 +75,14 @@ function bundleOf(parents: string[]): Partial<MemoryEntry> {
   return { source: 'consolidation', layer: Layer.Semantic, parents };
 }
 
-const run = (apply = false) =>
-  repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply, protect: PROTECTED_ROWS });
+const run = async (apply = false) =>
+  await repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply, protect: PROTECTED_ROWS });
 
 describe('quality repair across pages', () => {
-  it('plans every issue in store order, judging a bundle by parents on other pages and in dormant storage', () => {
+  it('plans every issue in store order, judging a bundle by parents on other pages and in dormant storage', async () => {
     const { ids } = seed();
 
-    const plan = run();
+    const plan = await run();
 
     expect(plan.total).toBe(ROWS - 3);
     expect(plan.issues.map((issue) => [issue.id, issue.disposition, issue.protection])).toEqual([
@@ -96,16 +96,16 @@ describe('quality repair across pages', () => {
     expect(plan.issues[0].reason).toBe('sentence-fragment');
   });
 
-  it('moves exactly the planned set-aside rows to dormant storage', () => {
+  it('moves exactly the planned set-aside rows to dormant storage', async () => {
     const { ids } = seed();
 
-    const applied = run(true);
+    const applied = await run(true);
 
     expect(applied.appliedIds).toEqual([ids[10], ids[520], ids[1090]]);
     expect(applied.warnings).toEqual([]);
     withDb((db) => {
       for (const id of applied.appliedIds) expect(readDormantSnapshot(db, 'default', id)?.entry.id).toBe(id);
     });
-    expect(run().issues.map((issue) => issue.id)).toEqual([ids[30], ids[600], ids[700]]);
+    expect((await run()).issues.map((issue) => issue.id)).toEqual([ids[30], ids[600], ids[700]]);
   });
 });

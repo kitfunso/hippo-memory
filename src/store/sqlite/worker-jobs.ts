@@ -10,7 +10,7 @@ import { handlesOf, initStore } from './handles.js';
 import { watchCommits } from './commit-watch.js';
 import { flushHeldMirrors } from './mirrors.js';
 import { encodeError } from './error-codec.js';
-import { sqliteSyncStore } from './store.js';
+import { sqliteStoreOn } from './store.js';
 import { restoreAllTenants } from './tenant-wire.js';
 import { PackedVectors, packVectors } from './vector-pack.js';
 import { sqliteVectorReads } from './vector-reads.js';
@@ -24,14 +24,15 @@ import {
   WORKER_OPS,
 } from './worker-ops.js';
 
-/** Every method the op table can name: the synchronous store, and the vector reads, which answer only through Promises.
- *  The two reads that return vectors answer with a pack, which worker-store.ts turns back into the port's Map. */
+/** Every method the op table can name, on the thread's store: each runs its body to its end on the thread's one
+ * connection before it settles. The two reads that return vectors answer with a pack, which worker-store.ts turns back
+ * into the port's Map. */
 function workerOps({ hippoRoot, lossAversionRatio }: WorkerInit, graphs: VectorGraphs | undefined) {
   const handles = handlesOf(hippoRoot, { lossAversionRatio });
-  const sync = sqliteSyncStore(handles);
-  const packed = (ids: readonly string[]) => packVectors(sync.vectorViews.storedVectorViews(ids));
+  const store = sqliteStoreOn(handles);
+  const packed = async (ids: readonly string[]) => packVectors(await store.vectorViews.storedVectorViews(ids));
   return {
-    ...sync,
+    ...store,
     vectors: { ...sqliteVectorReads(handles, graphs), storedVectors: packed },
     vectorViews: { storedVectorViews: packed },
   };

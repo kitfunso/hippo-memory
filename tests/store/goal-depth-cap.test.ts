@@ -16,16 +16,16 @@ describe('goal stack depth cap', () => {
     root = makeRoot('b3-cap');
   });
 
-  it('auto-suspends the oldest active goal when pushing the 4th, even when all share one created_at', () => {
+  it('auto-suspends the oldest active goal when pushing the 4th, even when all share one created_at', async () => {
     // A frozen clock gives every push the same created_at, the tie fast pushes hit by chance.
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T00:00:00.000Z'));
-    let g1: ReturnType<typeof pushGoal>;
+    let g1: Awaited<ReturnType<typeof pushGoal>>;
     try {
-      g1 = pushGoal(root, { ...ctx, goalName: 'oldest' });
-      pushGoal(root, { ...ctx, goalName: 'middle' });
-      pushGoal(root, { ...ctx, goalName: 'recent' });
-      pushGoal(root, { ...ctx, goalName: 'newest' });
+      g1 = await pushGoal(root, { ...ctx, goalName: 'oldest' });
+      await pushGoal(root, { ...ctx, goalName: 'middle' });
+      await pushGoal(root, { ...ctx, goalName: 'recent' });
+      await pushGoal(root, { ...ctx, goalName: 'newest' });
     } finally {
       vi.useRealTimers();
     }
@@ -45,23 +45,23 @@ describe('goal stack depth cap', () => {
     }
   });
 
-  it('cap is per-(tenant, session)', () => {
-    pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'A1' });
-    pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'A2' });
-    pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'A3' });
-    pushGoal(root, { sessionId: 's2', tenantId: 'default', goalName: 'B1' });
-    pushGoal(root, { sessionId: 's1', tenantId: 't2', goalName: 'C1' });
+  it('cap is per-(tenant, session)', async () => {
+    await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'A1' });
+    await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'A2' });
+    await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'A3' });
+    await pushGoal(root, { sessionId: 's2', tenantId: 'default', goalName: 'B1' });
+    await pushGoal(root, { sessionId: 's1', tenantId: 't2', goalName: 'C1' });
     expect(activeGoalsOf(root, { sessionId: 's1', tenantId: 'default' })).toHaveLength(3);
     expect(activeGoalsOf(root, { sessionId: 's2', tenantId: 'default' })).toHaveLength(1);
     expect(activeGoalsOf(root, { sessionId: 's1', tenantId: 't2' })).toHaveLength(1);
   });
 
-  it('serialized pushes never leave more than 3 active (post-Task-3 BEGIN IMMEDIATE)', () => {
+  it('serialized pushes never leave more than 3 active (post-Task-3 BEGIN IMMEDIATE)', async () => {
     // Sequential is enough to verify the invariant — node:sqlite is in-process,
     // and BEGIN IMMEDIATE serializes through SQLite's write lock. This guards
     // against regressions where someone strips the transaction wrapper.
     for (let i = 0; i < 10; i++) {
-      pushGoal(root, { ...ctx, goalName: `g${i}` });
+      await pushGoal(root, { ...ctx, goalName: `g${i}` });
     }
     expect(activeGoalsOf(root, ctx)).toHaveLength(3);
     const db = openHippoDb(root);
@@ -75,14 +75,15 @@ describe('goal stack depth cap', () => {
     }
   });
 
-  it('suspends the oldest active goal when a resume would pass the cap', () => {
-    const goals = ['g0', 'g1', 'g2'].map((goalName) => pushGoal(root, { ...ctx, goalName }));
-    suspendGoal(root, goals[2]!.id);
+  it('suspends the oldest active goal when a resume would pass the cap', async () => {
+    const goals = [];
+    for (const goalName of ['g0', 'g1', 'g2']) goals.push(await pushGoal(root, { ...ctx, goalName }));
+    await suspendGoal(root, goals[2]!.id);
     expect(activeGoalsOf(root, ctx)).toHaveLength(2);
-    pushGoal(root, { ...ctx, goalName: 'g3' });
+    await pushGoal(root, { ...ctx, goalName: 'g3' });
     expect(activeGoalsOf(root, ctx)).toHaveLength(3);
 
-    resumeGoal(root, goals[2]!.id);
+    await resumeGoal(root, goals[2]!.id);
     const active = activeGoalsOf(root, ctx).map((g) => g.goalName);
     expect(active).toHaveLength(3);
     expect(active).not.toContain('g0');

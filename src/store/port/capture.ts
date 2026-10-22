@@ -12,11 +12,13 @@ export interface Captures {
   /** The rows holding any of `words`, for the dedup before a write; a row equal to a text apart from spacing holds its
    * every word. `project` keeps rows carrying one of those names plus user-global rows, `everyScope` lifts the
    * team-visible filter for a reader that sees the whole store. */
-  textsHolding(
-    tenantId: TenantId,
-    words: readonly string[],
-    opts?: { readonly project?: readonly string[]; readonly everyScope?: boolean },
-  ): Promise<HeldText[]>;
+  textsHolding(tenantId: TenantId, words: readonly string[], opts?: TextsHoldingOptions): Promise<HeldText[]>;
+}
+
+/** Which rows a `textsHolding` read keeps beyond the tenant. */
+export interface TextsHoldingOptions {
+  readonly project?: readonly string[];
+  readonly everyScope?: boolean;
 }
 
 export type CapturedOutcome = 'captured' | 'skipped' | 'rejected';

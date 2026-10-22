@@ -28,7 +28,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { applyOutcomeAt } from '../../src/store/sqlite/entry-writes.js';
+import { applyOutcome } from '../../src/store/sqlite/entry-writes.js';
 import { loadLastRecall, saveIndex } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
@@ -122,7 +122,7 @@ describe('outcomeForLastRecall — no prior trace', () => {
   });
 });
 
-describe('applyOutcomeAt with an explicit traceId (store linkage)', () => {
+describe('applyOutcome with an explicit traceId (store linkage)', () => {
   it('links to the given trace when a caller supplies traceId explicitly', async () => {
     const { home, restore } = tmpHome();
     try {
@@ -146,7 +146,7 @@ describe('applyOutcomeAt with an explicit traceId (store linkage)', () => {
       const target = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ...scopeReaderOf(ctx.actor) };
       const at = openHippoDb(home);
       try {
-        applyOutcomeAt(at, { hippoRoot: home }, { ...target, ids, good: true }, traceId);
+        applyOutcome(at, { hippoRoot: home }, { ...target, ids, good: true }, traceId);
       } finally {
         closeHippoDb(at);
       }

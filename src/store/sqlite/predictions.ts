@@ -2,13 +2,13 @@
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import type { StoreFiles, OnHandle } from './open.js';
-import { writeEntryRowAt } from './entry-writes.js';
+import type { Handles, StoreFiles } from './open.js';
+import { writeEntryRow } from './entry-writes.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import { appendAuditEvent } from './audit.js';
-import { keysetAfter, type KeysetPosition } from '../../base/util/keyset.js';
+import { appendAuditEvents } from './audit.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
+import { keysetAfter } from '../../db/sql.js';
 import type { PredictionSave, Predictions } from '../port.js';
-import type { Sync } from './served.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../../base/records/prediction.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { PredictionBaserate } from '../port/types.js';
@@ -19,7 +19,7 @@ import {
   type SavePredictionOptions,
 } from '../port/objects.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
+import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 /** First-class prediction: an ex-ante claim closed against an outcome. The `predictions` table is the source of truth;
@@ -85,7 +85,7 @@ function rowToPrediction(row: PredictionRow): Prediction {
 
 /** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant check included, and
  * its predictions row shares that write scope, so neither lands alone. */
-function writePredictionAt(
+function writePrediction(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
@@ -99,7 +99,7 @@ function writePredictionAt(
   // SAVEPOINT.
   let savedRow: PredictionRow | undefined;
 
-  writeEntryRowAt(db, files, { entry: save.mirror, actor }, (writeDb, memoryId) => {
+  writeEntryRow(db, files, { entry: save.mirror, actor }, (writeDb, memoryId) => {
     savedRow = insertPredictionRow(writeDb, memoryId, tenantId, save, { now, actor });
   });
 
@@ -169,23 +169,25 @@ function auditPredictionCreate(
 ): void {
   // GDPR-light audit metadata: prediction_id + class_tag + flags only.
   // No claim_text in metadata; the predictions table holds it canonically.
-  appendAuditEvent(db, {
-    tenantId: who.tenantId,
-    actor: who.actor,
-    op: 'predict_create',
-    targetId: String(who.predictionId),
-    metadata: {
-      prediction_id: who.predictionId,
-      class_tag: opts.classTag,
-      has_estimate: opts.estimateValue !== undefined && opts.estimateValue !== null,
-      target_date: opts.targetDate ?? null,
+  appendAuditEvents(db, [
+    {
+      tenantId: who.tenantId,
+      actor: who.actor,
+      op: 'predict_create',
+      targetId: String(who.predictionId),
+      metadata: {
+        prediction_id: who.predictionId,
+        class_tag: opts.classTag,
+        has_estimate: opts.estimateValue !== undefined && opts.estimateValue !== null,
+        target_date: opts.targetDate ?? null,
+      },
     },
-  });
+  ]);
 }
 
 /** Close an open prediction. Updates the predictions row only; the memory mirror is not mutated (the predictions table
  * is the source of truth). Accuracy is computed from (estimateValue, actualValue) at query time. */
-function closePredictionAt(
+function closePrediction(
   db: DatabaseSyncLike,
   tenantId: string,
   id: number,
@@ -240,17 +242,19 @@ function closeOpenPredictionRow(
     throw new NotFoundError(`closePrediction: prediction ${id} not found after UPDATE`);
   }
 
-  appendAuditEvent(db, {
-    tenantId,
-    actor,
-    op: 'predict_close',
-    targetId: String(id),
-    metadata: {
-      prediction_id: id,
-      closure_state: opts.closureState,
-      has_actual: opts.actualValue !== undefined && opts.actualValue !== null,
+  appendAuditEvents(db, [
+    {
+      tenantId,
+      actor,
+      op: 'predict_close',
+      targetId: String(id),
+      metadata: {
+        prediction_id: id,
+        closure_state: opts.closureState,
+        has_actual: opts.actualValue !== undefined && opts.actualValue !== null,
+      },
     },
-  });
+  ]);
   return row;
 }
 
@@ -271,7 +275,7 @@ function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): nev
   );
 }
 
-function loadPredictionByIdAt(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
+function loadPredictionById(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
   assertTenantId('loadPredictionById', tenantId);
   const row = cachedStatement(
     db,
@@ -283,7 +287,7 @@ function loadPredictionByIdAt(db: DatabaseSyncLike, tenantId: string, id: number
   return row ? rowToPrediction(row) : null;
 }
 
-function loadPredictionsByClassAt(
+function loadPredictionsByClass(
   db: DatabaseSyncLike,
   tenantId: string,
   classTag: string,
@@ -326,7 +330,7 @@ function loadPredictionsByClassAt(
 }
 
 /** Every prediction in the tenant, open and closed, across all classes: the `status=all` list without a class. */
-function loadAllPredictionsAt(
+function loadAllPredictions(
   db: DatabaseSyncLike,
   tenantId: string,
   opts: { limit?: number; after?: KeysetPosition } = {},
@@ -356,7 +360,7 @@ interface BaserateRow {
 /** Base-rate stats for closed predictions in a class (Lovallo-Kahneman inside-vs-outside view): closure_state='closed'
  * with estimate and actual non-null; closed-unknown and open are excluded. Audit-emit is built in here, not at the 3
  * call sites, so callers cannot drift. */
-export function computePredictionBaserateAt(
+export function computePredictionBaserate(
   db: DatabaseSyncLike,
   tenantId: string,
   classTag: string,
@@ -399,16 +403,18 @@ function auditBaserateRead(
   classTag: string,
   nClosed: number,
 ): void {
-  appendAuditEvent(db, {
-    tenantId,
-    actor,
-    op: 'predict_baserate',
-    targetId: classTag,
-    metadata: { class_tag: classTag, n_closed: nClosed },
-  });
+  appendAuditEvents(db, [
+    {
+      tenantId,
+      actor,
+      op: 'predict_baserate',
+      targetId: classTag,
+      metadata: { class_tag: classTag, n_closed: nClosed },
+    },
+  ]);
 }
 
-function loadOpenPredictionsAt(
+function loadOpenPredictions(
   db: DatabaseSyncLike,
   tenantId: string,
   opts: { classTag?: string; limit?: number; after?: KeysetPosition } = {},
@@ -444,26 +450,30 @@ function loadOpenPredictionsAt(
 }
 
 /** One page of the tenant's predictions: the open ones, every one, or one class's, as the query names. */
-function listPredictionsAt(
+function listPredictions(
   db: DatabaseSyncLike,
   tenantId: string,
   { classTag, closureState, limit, after }: PredictionListQuery,
 ): Prediction[] {
-  if (closureState === 'open') return loadOpenPredictionsAt(db, tenantId, { classTag, limit, after });
-  if (classTag === undefined) return loadAllPredictionsAt(db, tenantId, { limit, after });
-  return loadPredictionsByClassAt(db, tenantId, classTag, { closureState, limit, after });
+  if (closureState === 'open') return loadOpenPredictions(db, tenantId, { classTag, limit, after });
+  if (classTag === undefined) return loadAllPredictions(db, tenantId, { limit, after });
+  return loadPredictionsByClass(db, tenantId, classTag, { closureState, limit, after });
 }
 
-const predictionsAt: Bodies<Omit<Predictions, 'savePrediction'>> = {
-  closePrediction: closePredictionAt,
-  predictionById: loadPredictionByIdAt,
-  listPredictions: listPredictionsAt,
-  predictionBaserate: computePredictionBaserateAt,
+const predictionsBodies: Bodies<Omit<Predictions, 'savePrediction'>> = {
+  closePrediction: closePrediction,
+  predictionById: loadPredictionById,
+  listPredictions: listPredictions,
+  predictionBaserate: computePredictionBaserate,
 };
 
 // The save writes the prediction's mirror, so it alone opens the store with its mirror folders.
-const predictionSaveAt: FileBodies<Pick<Predictions, 'savePrediction'>> = { savePrediction: writePredictionAt };
+function predictionSaveBodies(files: StoreFiles): Bodies<Pick<Predictions, 'savePrediction'>> {
+  return {
+    savePrediction: (db, ...args) => writePrediction(db, files, ...args),
+  };
+}
 
-export function sqlitePredictions(on: OnHandle): Sync<Predictions> {
-  return { ...bound(on, predictionsAt), ...boundWithFiles(on, predictionSaveAt, openStore) };
+export function sqlitePredictions({ on, files }: Handles): Predictions {
+  return { ...bound(on, predictionsBodies), ...bound(on, predictionSaveBodies(files), openStore) };
 }

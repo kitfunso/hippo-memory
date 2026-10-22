@@ -151,7 +151,7 @@ async function candidatePartitions(store: StoreWith<'consolidation'>): Promise<P
 
 async function scanPairs(store: StoreWith<'consolidation'>, partitions: Partitions): Promise<DedupPair[]> {
   const losers = [...partitions.values()].flatMap((groups) => [...groups.values()].flatMap((g) => g.losers));
-  const backing = await store.consolidation.objectBackedAmong(losers.map((loser) => loser.id));
+  const backing = await store.auditMaintenance.objectBackedAmong(losers.map((loser) => loser.id));
   return [...partitions.values()].flatMap((groups) => partitionPairs(groups, backing));
 }
 

@@ -1,26 +1,25 @@
 // hippo.db's LessonWrites group: git learn's batch, with the word and tag reads it checks first.
-import { loadTextsHoldingWordsAt } from './candidates.js';
-import { contentsWithTagAt } from './entry-reads.js';
-import { writeEntriesSkippingRejectedAt, writeEntriesTogetherAt } from './entry-writes.js';
-import { updateStatsAt } from './index-and-stats.js';
+import { loadTextsHoldingWords } from './candidates.js';
+import { contentsWithTag } from './entry-reads.js';
+import { writeEntriesSkippingRejected, writeEntriesTogether } from './entry-writes.js';
+import { updateStats } from './index-and-stats.js';
 import type { Handles, StoreFiles } from './open.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import { bound, boundWithFiles, skipEmpty, type Bodies, type FileBodies } from './bound.js';
+import { bound, skipEmpty, type Bodies } from './bound.js';
 import { openStore } from './handles.js';
 import type { LessonWrites } from '../port.js';
-import type { Sync } from './served.js';
 import { touchableScopeSql } from './rule-sql.js';
 
 /** `entries` in order, each one a rejection refuses left out; returns the ids written. */
-function writeSkippingRejectedAt(
+function writeSkippingRejected(
   db: DatabaseSyncLike,
   files: StoreFiles,
   entries: readonly MemoryEntry[],
   actor: string,
 ): string[] {
   const written: string[] = [];
-  writeEntriesSkippingRejectedAt(
+  writeEntriesSkippingRejected(
     db,
     files,
     (put) => {
@@ -31,24 +30,26 @@ function writeSkippingRejectedAt(
   return written;
 }
 
-const lessonReadsAt: Bodies<Pick<LessonWrites, 'textsHoldingWords' | 'contentsWithTag'>> = {
+const lessonReadsBodies: Bodies<Pick<LessonWrites, 'textsHoldingWords' | 'contentsWithTag'>> = {
   textsHoldingWords: (db, tenantId, words, ownScope) =>
-    loadTextsHoldingWordsAt(db, tenantId, words, undefined, touchableScopeSql('', ownScope)),
-  contentsWithTag: contentsWithTagAt,
+    loadTextsHoldingWords(db, tenantId, words, undefined, touchableScopeSql('', ownScope)),
+  contentsWithTag: contentsWithTag,
 };
 
-const lessonWritesAt: FileBodies<Omit<LessonWrites, 'textsHoldingWords' | 'contentsWithTag'>> = {
-  writeSkippingRejected: writeSkippingRejectedAt,
-  writeTogether: (db, files, entries) => {
-    writeEntriesTogetherAt(db, files, entries);
-  },
-  bumpRemembered: (db, files, count) => updateStatsAt(db, files, { remembered: count }),
-};
-
-export function sqliteLessonWrites({ on }: Handles): Sync<LessonWrites> {
-  const writes = boundWithFiles(on, lessonWritesAt, openStore);
+function lessonWritesBodies(files: StoreFiles): Bodies<Omit<LessonWrites, 'textsHoldingWords' | 'contentsWithTag'>> {
   return {
-    ...bound(on, lessonReadsAt, openStore),
+    writeSkippingRejected: (db, ...args) => writeSkippingRejected(db, files, ...args),
+    writeTogether: (db, entries) => {
+      writeEntriesTogether(db, files, entries);
+    },
+    bumpRemembered: (db, count) => updateStats(db, files, { remembered: count }),
+  };
+}
+
+export function sqliteLessonWrites({ on, files }: Handles): LessonWrites {
+  const writes = bound(on, lessonWritesBodies(files), openStore);
+  return {
+    ...bound(on, lessonReadsBodies, openStore),
     ...writes,
     writeTogether: skipEmpty(writes.writeTogether, () => undefined),
   };

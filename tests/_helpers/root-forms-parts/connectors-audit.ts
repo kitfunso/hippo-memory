@@ -1,12 +1,10 @@
-// Root-keyed connectors and audit forms tests call; production code goes through the store port or the At forms.
+// Root-keyed connectors and audit forms tests call; production code goes through the port or the handle-first forms.
 
-import { recordAuditEventsRowByRowAt, type FailedAuditEvent } from '../../../src/store/sqlite/audit.js';
-import {
-  githubEventRecordAt,
-  markGitHubEventSeenAt,
-  type GitHubEventLogEntry,
-} from '../../../src/store/sqlite/connectors/github.js';
-import { markSlackEventSeenAt, slackEventRecordAt } from '../../../src/store/sqlite/connectors/slack.js';
+import type { FailedAuditEvent } from '../../../src/store/sqlite/audit.js';
+import * as auditSql from '../../../src/store/sqlite/audit.js';
+import type { GitHubEventLogEntry } from '../../../src/store/sqlite/connectors/github.js';
+import * as githubSql from '../../../src/store/sqlite/connectors/github.js';
+import * as slackSql from '../../../src/store/sqlite/connectors/slack.js';
 import { onHandle } from '../../../src/store/sqlite/handles.js';
 import { listApiKeyRows } from '../../../src/store/sqlite/auth.js';
 import type { ApiKeyListItem, ListApiKeysOpts } from '../../../src/store/port/keys.js';
@@ -25,26 +23,26 @@ export function auditHighId(hippoRoot: string): number {
 }
 
 export function recordAuditEventsRowByRow(hippoRoot: string, events: readonly AppendAuditOpts[]): FailedAuditEvent[] {
-  return onHandle(hippoRoot, (db) => recordAuditEventsRowByRowAt(db, events));
+  return onHandle(hippoRoot, (db) => auditSql.recordAuditEventsRowByRow(db, events));
 }
 
 export function githubEventRecord(hippoRoot: string, idempotencyKey: string): ConnectorEventRecord {
-  return onHandle(hippoRoot, (db) => githubEventRecordAt(db, idempotencyKey));
+  return onHandle(hippoRoot, (db) => githubSql.githubEventRecord(db, idempotencyKey));
 }
 
 export function markGitHubEventSeen(hippoRoot: string, entry: GitHubEventLogEntry): void {
   onHandle(hippoRoot, (db) => {
-    markGitHubEventSeenAt(db, entry);
+    githubSql.markGitHubEventSeen(db, entry);
   });
 }
 
 export function slackEventRecord(hippoRoot: string, eventId: string): ConnectorEventRecord {
-  return onHandle(hippoRoot, (db) => slackEventRecordAt(db, eventId));
+  return onHandle(hippoRoot, (db) => slackSql.slackEventRecord(db, eventId));
 }
 
 export function markSlackEventSeen(hippoRoot: string, eventId: string, memoryId: string | null): void {
   onHandle(hippoRoot, (db) => {
-    markSlackEventSeenAt(db, eventId, memoryId);
+    slackSql.markSlackEventSeen(db, eventId, memoryId);
   });
 }
 

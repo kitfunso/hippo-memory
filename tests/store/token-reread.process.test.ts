@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { runDoctor } from '../../src/surface/cli/doctor.js';
-import { diagnosticsAt } from '../_helpers/cli-stores.js';
+import { diagnosticsBodies } from '../_helpers/cli-stores.js';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { carryingCalls, lastSentState, recordTokenUse } from '../../src/store/sqlite/token-ledger.js';
@@ -736,7 +736,7 @@ describe('re-read reports', () => {
   it('hippo doctor reports tokens sent and re-read', async () => {
     const tokens = (
       await runDoctor({
-        diagnosticsAt,
+        diagnosticsBodies,
         tenantId: 'default',
         cwd: proj,
         home: join(root, 'home'),

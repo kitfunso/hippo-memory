@@ -48,8 +48,8 @@ beforeAll(async () => {
   replaceDetectedConflicts(root, [
     { memory_a_id: 'mem_g_fly', memory_b_id: 'mem_g_render', reason: 'deploy target', score: 0.9 },
   ]);
-  const parent = createCard(root, 'default', { title: 'parent', repo: 'r', contract: 'c', budget: 3 });
-  createCard(root, 'default', { title: 'child', dependsOn: [parent.id] });
+  const parent = await createCard(root, 'default', { title: 'parent', repo: 'r', contract: 'c', budget: 3 });
+  await createCard(root, 'default', { title: 'child', dependsOn: [parent.id] });
   dash = await startDashboard(root);
 });
 

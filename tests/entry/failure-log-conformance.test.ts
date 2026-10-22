@@ -3,8 +3,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { FailureEvent, FailureOutcome } from '../../src/entry/store-kit.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   onBothStores,
@@ -38,11 +37,13 @@ const event = (over: Partial<FailureEvent> = {}): FailureEvent => ({
   ...over,
 });
 
-function seed(dir: string): void {
-  const log = sqliteSyncStore(handlesOf(dir)).failureLog;
-  log.record(event({ requestId: 'req-old', outcome: 'duplicate', now: '2025-10-01T00:00:00.000Z' }));
-  log.record(event({ requestId: 'req-1', outcome: 'store-failed', now: '2026-02-28T00:00:00.000Z' }));
-  log.record(event({ tenantId: TENANT_B, sessionId: 's-b', requestId: 'req-1', now: '2026-02-28T00:00:00.000Z' }));
+async function seed(dir: string): Promise<void> {
+  const log = sqliteStore(dir).failureLog;
+  await log.record(event({ requestId: 'req-old', outcome: 'duplicate', now: '2025-10-01T00:00:00.000Z' }));
+  await log.record(event({ requestId: 'req-1', outcome: 'store-failed', now: '2026-02-28T00:00:00.000Z' }));
+  await log.record(
+    event({ tenantId: TENANT_B, sessionId: 's-b', requestId: 'req-1', now: '2026-02-28T00:00:00.000Z' }),
+  );
   const lesson = (content: string, over: Parameters<typeof createMemory>[1], origin: string | null): void =>
     writeEntry(
       dir,
@@ -64,9 +65,9 @@ async function conforms<G extends 'failureLog' | 'lessonWrites'>(group: G, calls
   return sides.sqlite.outcomes;
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   fixture = seedTwoTenants();
-  seed(fixture.dir);
+  await seed(fixture.dir);
 });
 
 afterAll(() => rmSync(fixture.dir, { recursive: true, force: true }));

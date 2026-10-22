@@ -296,6 +296,6 @@ export type {
   RecallSearchEntriesOptions,
   Sharing,
   SourceTally,
-  TextsHoldingOptions,
 } from './port/sharing.js';
+export type { TextsHoldingOptions } from './port/capture.js';
 export type { FolderFiles, StoreHome } from './port/folder-files.js';

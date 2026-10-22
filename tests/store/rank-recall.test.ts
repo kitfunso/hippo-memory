@@ -108,7 +108,7 @@ describe('rankRecall', () => {
   });
 
   it('returns the goal-stack log rows and writes none of them', async () => {
-    pushGoal(hippoRoot, { sessionId: 's-rank', tenantId: 'default', goalName: 'goal-alpha' });
+    await pushGoal(hippoRoot, { sessionId: 's-rank', tenantId: 'default', goalName: 'goal-alpha' });
     const rank = await rankRecall(ctx(), opts({ boost: { sessionId: 's-rank' } }));
     expect(rank.goalRecallLog.map((r) => r.memoryId)).toEqual(['mem_rank_goal']);
     expect(ids(rank.results)[0]).toBe('mem_rank_goal');

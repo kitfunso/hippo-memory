@@ -2,9 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { selectEntriesFromOriginAt } from '../../src/store/sqlite/entry-reads.js';
+import { selectEntriesFromOrigin } from '../../src/store/sqlite/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { recordStatements } from '../_helpers/count-statements.js';
+import { recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { loadAllPredictions, writeEntry } from '../_helpers/root-forms.js';
@@ -58,15 +58,16 @@ afterEach(() => {
 });
 
 describe('schema v61', () => {
-  it('pages predictions off the tenant index with no sort', () => {
+  it('pages predictions off the tenant index with no sort', async () => {
     withDb((db) => insertPredictions(db, 12));
-    const first = loadAllPredictions(home, 'default', { limit: 5 });
+    const first = await loadAllPredictions(home, 'default', { limit: 5 });
     const last = first[first.length - 1];
-    const { statements } = recordStatements(() =>
-      loadAllPredictions(home, 'default', {
-        limit: 5,
-        after: { key: last.createdAt, id: last.id },
-      }),
+    const { statements } = await recordStatementsAsync(
+      async () =>
+        await loadAllPredictions(home, 'default', {
+          limit: 5,
+          after: { key: last.createdAt, id: last.id },
+        }),
     );
     const sql = statements.find((s) => s.includes('FROM predictions') && s.includes('ORDER BY created_at DESC'));
     withDb((db) => {
@@ -85,7 +86,7 @@ describe('schema v61', () => {
     }
     const { statements } = recordStatements(() =>
       withDb((db) =>
-        selectEntriesFromOriginAt(db, 'default', { origin: 'alpha', live: true }, { limit: 2, after: undefined }),
+        selectEntriesFromOrigin(db, 'default', { origin: 'alpha', live: true }, { limit: 2, after: undefined }),
       ),
     );
     const sql = statements.find((s) => s.includes('origin_project = ?') && s.includes('ORDER BY created ASC'));

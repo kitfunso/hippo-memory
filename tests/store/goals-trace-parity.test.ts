@@ -35,10 +35,10 @@ describe('session goal boost trace parity (side-channel)', () => {
     return entry;
   }
 
-  it('produces identical ordered output + scores with vs without the trace accumulator', () => {
+  it('produces identical ordered output + scores with vs without the trace accumulator', async () => {
     const goalMatch = seed('auth bug fix details', ['fix-auth']);
     const unrelated = seed('auth UI polish', ['ui']);
-    pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
+    await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
 
     const rows = [
       { entry: goalMatch, score: 0.9 },

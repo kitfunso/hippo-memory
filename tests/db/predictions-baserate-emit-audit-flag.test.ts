@@ -1,7 +1,7 @@
 /**
  * J3.2 — emitAudit flag on computePredictionBaserate.
  *
- * The flag was added so the J3.2 orchestrator (planningFallacyEvidenceAt)
+ * The flag was added so the J3.2 orchestrator (planningFallacyEvidence)
  * can call the baserate helper WITHOUT emitting a predict_baserate audit
  * row (the orchestrator emits its own recall_autodebias_hint row, with
  * n_closed + mean_ratio in metadata, so no telemetry is lost). This keeps
@@ -52,9 +52,9 @@ describe('computePredictionBaserate emitAudit flag', () => {
     expect(countPredictBaserateAudits(root)).toBe(1);
   });
 
-  it('default emitAudit=true on n>0 path: emits exactly one predict_baserate audit', () => {
-    const p = savePrediction(root, 'default', { classTag: 'pop', claimText: 'populated case', estimateValue: 2 });
-    closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: 4 });
+  it('default emitAudit=true on n>0 path: emits exactly one predict_baserate audit', async () => {
+    const p = await savePrediction(root, 'default', { classTag: 'pop', claimText: 'populated case', estimateValue: 2 });
+    await closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: 4 });
     expect(countPredictBaserateAudits(root)).toBe(0);
     const br = computePredictionBaserate(root, 'default', 'pop');
     expect(br.nClosed).toBe(1);
@@ -68,9 +68,9 @@ describe('computePredictionBaserate emitAudit flag', () => {
     expect(countPredictBaserateAudits(root)).toBe(0);
   });
 
-  it('emitAudit=false on n>0 path: skips audit emit', () => {
-    const p = savePrediction(root, 'default', { classTag: 'pop', claimText: 'populated case', estimateValue: 2 });
-    closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: 4 });
+  it('emitAudit=false on n>0 path: skips audit emit', async () => {
+    const p = await savePrediction(root, 'default', { classTag: 'pop', claimText: 'populated case', estimateValue: 2 });
+    await closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: 4 });
     expect(countPredictBaserateAudits(root)).toBe(0);
     const br = computePredictionBaserate(root, 'default', 'pop', 'recall', /*emitAudit=*/ false);
     expect(br.nClosed).toBe(1);

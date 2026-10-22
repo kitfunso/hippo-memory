@@ -169,7 +169,7 @@ describe('(e) rescue semantics', () => {
     expect(rescuedTargets.has(a.id)).toBe(true);
     expect(rescuedTargets.has(b.id)).toBe(true);
 
-    const conflicts = listMemoryConflicts(dir, 'open', 'tc');
+    const conflicts = await listMemoryConflicts(dir, 'open', 'tc');
     const found = conflicts.find(
       (c) => (c.memoryAId === a.id && c.memoryBId === b.id) || (c.memoryAId === b.id && c.memoryBId === a.id),
     );

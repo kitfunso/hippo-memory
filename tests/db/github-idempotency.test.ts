@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import {
-  githubEventSeenAt as hasSeenKey,
-  markGitHubEventSeenAt as markKeySeen,
-  githubEventMemoryAt as lookupMemoryByKey,
+  githubEventSeen as hasSeenKey,
+  markGitHubEventSeen as markKeySeen,
+  githubEventMemory as lookupMemoryByKey,
 } from '../../src/store/sqlite/connectors/github.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

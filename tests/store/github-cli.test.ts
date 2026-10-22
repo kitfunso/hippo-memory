@@ -14,8 +14,7 @@ import { parkInDlq } from '../../src/surface/connectors/dlq.js';
 import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
 import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../../src/surface/cli/github.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
@@ -188,10 +187,9 @@ describe('hippo github CLI', () => {
     });
   const liveRaws = (artifactRef: string) =>
     loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw' && e.artifactRef === artifactRef);
-  const retryCountOf = (id: number) =>
-    sqliteSyncStore(handlesOf(hippoRoot))
-      .connectorEvents.deadLetters('github', 'default', 100)
-      .find((row) => row.id === id)?.retryCount;
+  const retryCountOf = async (id: number) =>
+    (await sqliteStore(hippoRoot).connectorEvents.deadLetters('github', 'default', 100)).find((row) => row.id === id)
+      ?.retryCount;
 
   it('dlq replay re-ingests a parked delivery and counts the retry', async () => {
     const id = await parkDelivery('issues', issueOpenedBody);
@@ -202,7 +200,7 @@ describe('hippo github CLI', () => {
     const raws = liveRaws('github://acme/repo/issue/42');
     expect(raws).toHaveLength(1);
     expect(r.stdout).toContain(`replay ok: status=replayed memory_id=${raws[0].id} retry_count=1`);
-    expect(retryCountOf(id)).toBe(1);
+    expect(await retryCountOf(id)).toBe(1);
   });
 
   it.each(COMMENT_EVENTS)(
@@ -235,7 +233,7 @@ describe('hippo github CLI', () => {
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('replay ok: status=replayed memory_id=(none) retry_count=1');
     expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
-    expect(retryCountOf(id)).toBe(1);
+    expect(await retryCountOf(id)).toBe(1);
   });
 
   it('dlq replay refuses a row signed with another secret, and --force or the previous secret lets it through', async () => {
@@ -257,7 +255,7 @@ describe('hippo github CLI', () => {
     const forced = await replay(id, '--force');
     expect(forced.status).toBe(0);
     expect(forced.stdout).toContain('retry_count=3');
-    expect(retryCountOf(id)).toBe(3);
+    expect(await retryCountOf(id)).toBe(3);
   });
 
   /** Backfills one page of three issues in-process and returns how many the command reports ingested. */

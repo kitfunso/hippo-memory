@@ -147,7 +147,7 @@ describe('consolidate auto-promote: session -> trace', () => {
     const traceIds = new Set(entries.filter((e) => e.layer === Layer.Trace).map((e) => e.id));
     expect(traceIds.size).toBe(2);
 
-    const conflicts = listMemoryConflicts(tmpDir);
+    const conflicts = await listMemoryConflicts(tmpDir);
     const traceVsTrace = conflicts.filter((c) => traceIds.has(c.memoryAId) && traceIds.has(c.memoryBId));
     expect(traceVsTrace).toHaveLength(0);
   });

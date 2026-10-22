@@ -13,7 +13,7 @@ import { RejectedValueError, ConflictError, CrossTenantIdError, NotFoundError } 
 import { markSummaryDirtyInTx, markSummariesDirtyInTx, summaryDirtyAuditRow } from './summary-dirty.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
-import { appendAuditEvent, appendAuditEventsAt } from './audit.js';
+import { appendAuditEvents } from './audit.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import {
   stampOriginProject,
@@ -26,7 +26,7 @@ import {
 } from './entry-row.js';
 import { mirrorBestEffort, writeMarkdownMirror, purgeMirrorBestEffortIn, removeEntryMirrorsIn } from './mirrors.js';
 import { deferDueMirrors, markMirrorsDue } from './due-mirrors.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { RenameSourceOptions } from '../port/agent-import.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
@@ -34,13 +34,12 @@ import { archiveRawMemory, type ArchiveOptions } from './raw-archive.js';
 import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';
 import { recordTraceOutcome } from './recall-trace.js';
 import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite } from '../port.js';
-import type { Sync } from './served.js';
 import type { PinWrite } from '../port/entry-writes.js';
 import type { AppendAuditOpts } from '../port/types.js';
 import { deleteEntryCore } from './delete-and-batch.js';
-import { updateStatsUnlessBusyAt } from './index-and-stats.js';
+import { updateStatsUnlessBusy } from './index-and-stats.js';
 import { openStore } from './handles.js';
-import { boundWithFiles } from './bound.js';
+import { bound } from './bound.js';
 import { selectMemoryReach } from './tenant-lookup.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
@@ -58,7 +57,7 @@ interface WriteEntryInternalOptions extends WriteEntryOptions {
 
 /** Writes a promoted copy on the caller's open store; with `auditAs` the `promote` audit row joins the INSERT's
  * SAVEPOINT, so both or neither. */
-export function writePromotedEntryAt(
+export function writePromotedEntry(
   db: DatabaseSyncLike,
   files: StoreFiles,
   entry: MemoryEntry,
@@ -68,24 +67,22 @@ export function writePromotedEntryAt(
   const afterWrite =
     auditAs &&
     ((own: DatabaseSyncLike, globalId: string) => {
-      appendAuditEvent(own, {
-        tenantId: auditAs.tenantId,
-        actor: auditAs.actor,
-        op: 'promote',
-        targetId: globalId,
-        metadata: { sourceId },
-      });
+      appendAuditEvents(own, [
+        {
+          tenantId: auditAs.tenantId,
+          actor: auditAs.actor,
+          op: 'promote',
+          targetId: globalId,
+          metadata: { sourceId },
+        },
+      ]);
     });
-  writeEntryAt(db, files, entry, { actor: opts.actor, afterWrite });
+  writeEntry(db, files, entry, { actor: opts.actor, afterWrite });
 }
 
 /** writeEntry for each of `entries` in one transaction, so all land or none; each keeps its audit row, and mirrors
  * follow the commit. Returns how many were written; an empty list opens no store. */
-export function writeEntriesTogetherAt(
-  db: DatabaseSyncLike,
-  files: StoreFiles,
-  entries: readonly MemoryEntry[],
-): number {
+export function writeEntriesTogether(db: DatabaseSyncLike, files: StoreFiles, entries: readonly MemoryEntry[]): number {
   const stamped = entries.map((entry) => stampOriginProject(files.hippoRoot, entry));
   try {
     withWriteScope(db, 'write_entries_together', () => {
@@ -93,7 +90,7 @@ export function writeEntriesTogetherAt(
     });
     for (const entry of stamped) writeEntryMirrors(files.hippoRoot, entry);
   } catch (error) {
-    // The scope has unwound, so the refusal row outlives the rollback, as writeEntryAt's does.
+    // The scope has unwound, so the refusal row outlives the rollback, as writeEntry's does.
     if (error instanceof RejectedValueError) auditRejectionRefusal(db, error, CLI_ACTOR);
     throw error;
   }
@@ -103,7 +100,7 @@ export function writeEntriesTogetherAt(
 /** Runs `fill` in one transaction; each `put` writes one entry and returns false when the store rejects its value,
  * leaving that row's refusal audit and the rest of the batch. Mirrors follow the commit. Returns how many were written.
  */
-export function writeEntriesSkippingRejectedAt(
+export function writeEntriesSkippingRejected(
   db: DatabaseSyncLike,
   files: StoreFiles,
   fill: (put: (entry: MemoryEntry) => boolean) => void,
@@ -136,7 +133,7 @@ export function writeEntriesSkippingRejectedAt(
 
 /** Adds `tag` to each of a tenant's rows that lacks it, in `ids` order, all in one transaction; an id the tenant does
  * not hold is skipped. */
-export function addTagToEntriesAt(
+export function addTagToEntries(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
@@ -148,12 +145,12 @@ export function addTagToEntriesAt(
     const entry = live.get(id);
     return !entry || entry.tags.includes(tag) ? [] : [{ ...entry, tags: [...entry.tags, tag] }];
   });
-  if (tagged.length > 0) writeEntriesTogetherAt(db, files, tagged);
+  if (tagged.length > 0) writeEntriesTogether(db, files, tagged);
 }
 
 /** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone.
  * `opts.afterWrite` shares the INSERT's SAVEPOINT. */
-export function writeEntryAt(
+export function writeEntry(
   db: DatabaseSyncLike,
   files: StoreFiles,
   entry: MemoryEntry,
@@ -287,13 +284,13 @@ export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, act
 }
 
 /** One half-life per memory id, on the caller's transaction. */
-export function setHalfLivesAt(db: DatabaseSyncLike, rows: readonly { id: string; halfLifeDays: number }[]): void {
+export function setHalfLives(db: DatabaseSyncLike, rows: readonly { id: string; halfLifeDays: number }[]): void {
   const update = cachedStatement(db, 'UPDATE memories SET half_life_days = ? WHERE id = ?');
   for (const r of rows) update.run(r.halfLifeDays, r.id);
 }
 
 /** Moves every row of `from` in a tenant to project `into`. */
-export function restampOriginProjectAt(db: DatabaseSyncLike, tenantId: string, from: string, into: string): void {
+export function restampOriginProject(db: DatabaseSyncLike, tenantId: string, from: string, into: string): void {
   cachedStatement(
     db,
     `UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND origin_project = ?`,
@@ -301,7 +298,7 @@ export function restampOriginProjectAt(db: DatabaseSyncLike, tenantId: string, f
 }
 
 /** Stamps each id with its project. */
-export function stampOriginProjectsAt(
+export function stampOriginProjects(
   db: DatabaseSyncLike,
   tenantId: string,
   rows: readonly { id: string; origin: string }[],
@@ -314,7 +311,7 @@ export function stampOriginProjectsAt(
 }
 
 /** Renames a live row's source from `from` to `to`; the count is 0 when another writer moved or superseded it first. */
-export function renameEntrySourceAt(
+export function renameEntrySource(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
@@ -329,7 +326,7 @@ export function renameEntrySourceAt(
 }
 
 /** Renames a row's source and, when `origin` is not null, its project; the count is 0 when the row is gone or moved. */
-export function renameEntrySourceAndOriginAt(
+export function renameEntrySourceAndOrigin(
   db: DatabaseSyncLike,
   tenantId: string,
   id: string,
@@ -345,7 +342,7 @@ export function renameEntrySourceAndOriginAt(
 }
 
 /** Marks `id` superseded by `newId`; false when another writer superseded it first. */
-export function supersedeEntryAt(db: DatabaseSyncLike, tenantId: string, id: string, newId: string): boolean {
+export function supersedeEntry(db: DatabaseSyncLike, tenantId: string, id: string, newId: string): boolean {
   const result = cachedStatement(
     db,
     `UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`,
@@ -355,43 +352,43 @@ export function supersedeEntryAt(db: DatabaseSyncLike, tenantId: string, id: str
 
 /** Each call on its own handle; mirrors and the forgotten counter follow the commit, so a rolled-back write leaves
  * neither. */
-export function sqliteEntryWrites(on: OnHandle): Sync<EntryWrites> {
+export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
   return {
-    ...boundWithFiles<Pick<EntryWrites, 'writeEntry' | 'applyOutcome'>>(
+    ...bound<Pick<EntryWrites, 'writeEntry' | 'applyOutcome' | 'setPinned' | 'forget'>>(
       on,
-      { writeEntry: writeEntryRowAt, applyOutcome: applyOutcomeAt },
+      {
+        writeEntry: (db, write) => writeEntryRow(db, files, write),
+        applyOutcome: (db, ...args) => applyOutcome(db, files, ...args),
+        setPinned: (db, pin) => {
+          const entry = commitPinned(db, pin);
+          writeEntryMirrorsIn(files, entry);
+          return entry;
+        },
+        forget: (db, removal) => {
+          withWriteScope(db, 'forget_in_reach', () => {
+            assertInReach(db, removal, removal.id);
+            const { id, tenantId, actor } = removal;
+            if (!deleteEntryCore(db, id, tenantId, { actor })) throw notFound(id);
+          });
+          purgeMirrorBestEffortIn(files, removal.id, false, 'deleteEntry');
+          updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${removal.id}`);
+        },
+      },
       openStore,
     ),
-    ...boundWithFiles<Pick<EntryWrites, 'archiveRaw'>>(on, { archiveRaw: archiveRawAt }),
-    setPinned(pin) {
-      return on((db, files) => {
-        const entry = commitPinned(db, pin);
-        writeEntryMirrorsIn(files, entry);
-        return entry;
-      }, openStore);
-    },
-    supersede(write) {
-      on((db, files) => {
+    ...bound<Pick<EntryWrites, 'archiveRaw' | 'supersede'>>(on, {
+      archiveRaw: (db, ...args) => archiveRaw(db, files, ...args),
+      supersede: (db, write) => {
         const successor = stampOriginProjectIn(files, write.successor);
         commitSupersede(db, { ...write, successor });
         writeEntryMirrorsIn(files, successor);
-      });
-    },
-    forget(removal) {
-      on((db, files) => {
-        withWriteScope(db, 'forget_in_reach', () => {
-          assertInReach(db, removal, removal.id);
-          if (!deleteEntryCore(db, removal.id, removal.tenantId, { actor: removal.actor })) throw notFound(removal.id);
-        });
-        purgeMirrorBestEffortIn(files, removal.id, false, 'deleteEntry');
-        updateStatsUnlessBusyAt(db, files, { forgotten: 1 }, `removed ${removal.id}`);
-      }, openStore);
-    },
+      },
+    }),
   };
 }
 
 /** A store-side hook writes on the row's handle inside its write scope, so its throw undoes the row. */
-export function writeEntryRowAt(
+export function writeEntryRow(
   db: DatabaseSyncLike,
   files: StoreFiles,
   { entry, actor }: EntryWrite,
@@ -404,7 +401,7 @@ export function writeEntryRowAt(
 
 /** A trace link follows the commit on the same handle and names only the ids applied, so a rolled-back outcome leaves
  * none. */
-export function applyOutcomeAt(
+export function applyOutcome(
   db: DatabaseSyncLike,
   files: StoreFiles,
   outcome: OutcomeWrite,
@@ -425,7 +422,7 @@ export function applyOutcomeAt(
 
 /** Reach is checked inside the archive's write scope. A store-side hook writes on the same handle inside that scope, so
  * its throw undoes the archive. */
-export function archiveRawAt(
+export function archiveRaw(
   db: DatabaseSyncLike,
   files: StoreFiles,
   archive: RawArchive,
@@ -436,7 +433,7 @@ export function archiveRawAt(
     return archiveRawMemory(db, archive.id, { reason: archive.reason, who: archive.actor, afterArchive });
   });
   cleanArchivedMirrors(db, files, archive.id);
-  updateStatsUnlessBusyAt(db, files, { forgotten: 1 }, `removed ${archive.id}`);
+  updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${archive.id}`);
   return at;
 }
 
@@ -460,7 +457,7 @@ export function auditingRefusal<T>(db: DatabaseSyncLike, actor: string, write: (
   }
 }
 
-/** writeEntryRowAt on the caller's handle, so a sibling group can read on it after the scope has unwound. */
+/** writeEntryRow on the caller's handle, so a sibling group can read on it after the scope has unwound. */
 export function writeInOwnTenant(
   db: DatabaseSyncLike,
   entry: MemoryEntry,
@@ -502,7 +499,7 @@ function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite, rules: Loss
     }
     const parents = [...new Set(rows.flatMap((row) => (row.dagParentId ? [row.dagParentId] : [])))];
     const flipped = markSummariesDirtyInTx(db, parents, outcome.tenantId);
-    appendAuditEventsAt(db, outcomeAuditRows(applied, flipped, outcome));
+    appendAuditEvents(db, outcomeAuditRows(applied, flipped, outcome));
     markMirrorsDue(
       db,
       rows.map((row) => row.id),
@@ -543,7 +540,7 @@ function commitPinned(db: DatabaseSyncLike, pin: PinWrite): MemoryEntry {
       if (!entry) throw notFound(id);
       const updated = { ...entry, pinned };
       writeEntryDbOnly(db, updated, { actor });
-      appendAuditEvent(db, { tenantId, actor, op: 'pin', targetId: id, metadata: { pinned } });
+      appendAuditEvents(db, [{ tenantId, actor, op: 'pin', targetId: id, metadata: { pinned } }]);
       return updated;
     }),
   );
@@ -567,7 +564,7 @@ function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
       // After the CAS, so a lost race marks no parent for rebuild.
       if (won.dag_parent_id) markSummaryDirtyInTx(db, won.dag_parent_id, tenantId, actor);
       writeEntryDbOnly(db, successor, { actor });
-      appendAuditEvent(db, { tenantId, actor, op: 'supersede', targetId: oldId, metadata: { newId: successor.id } });
+      appendAuditEvents(db, [{ tenantId, actor, op: 'supersede', targetId: oldId, metadata: { newId: successor.id } }]);
     }),
   );
 }

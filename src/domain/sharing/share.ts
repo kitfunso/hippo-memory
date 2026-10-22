@@ -15,8 +15,9 @@ import { isReusable } from '../../base/memory/memory-quality.js';
 import { log } from '../../base/util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
 import type { SharingStore } from './text-keys.js';
-import type { EntrySignals, PageRequest, Sharing, StoreGroups, StoreHome, StoreWith } from '../../store/port.js';
+import type { EntrySignals, PageRequest, StoreGroups, StoreHome, StoreWith } from '../../store/port.js';
 import type { EntryCursor } from '../../store/port/types.js';
+import type { Captures } from '../../store/port/capture.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
 const PROJECT_SPECIFIC_TAGS = new Set([
@@ -282,14 +283,18 @@ function isNewAndClean(
 
 /** The local rows a page at a time: above the neutral score only a row carrying a signal can share or count as a
  * never-auto-share skip, so only those are read. */
-async function* autoSharePages(sharing: Sharing, minScore: number, tenantId: TenantId): AsyncGenerator<MemoryEntry[]> {
+async function* autoSharePages(
+  { sharing, reports }: Pick<StoreGroups, 'sharing' | 'reports'>,
+  minScore: number,
+  tenantId: TenantId,
+): AsyncGenerator<MemoryEntry[]> {
   let after: EntryCursor | null = null;
   do {
     const page: PageRequest = { limit: AUTO_SHARE_PAGE_ROWS, after: after ?? undefined };
     const { entries, next } =
       minScore > TRANSFER_WEIGHTS.neutral
         ? await sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, tenantId, page)
-        : await sharing.entriesPage(tenantId, page);
+        : await reports.entriesPage(tenantId, page);
     yield entries;
     after = next;
   } while (after !== null);
@@ -298,7 +303,7 @@ async function* autoSharePages(sharing: Sharing, minScore: number, tenantId: Ten
 /** The page's rows that share. Only a global row holding a row's longest word can hold its text, so the global store,
  * the union of every tenant, is asked for those rows alone. */
 async function pageCandidates(
-  to: Sharing,
+  to: Captures,
   page: readonly MemoryEntry[],
   minScore: number,
   stats: AutoShareStats | undefined,
@@ -346,8 +351,8 @@ async function shareCandidates(
  * `options.stats` is an opt-in out-param: `secretSkipped` counts shares the secret veto prevented, `rejectedSkipped`
  * rejection refusals (0 under `dryRun`). */
 export async function autoShare(
-  from: { readonly store: Pick<StoreGroups, 'sharing' | 'folderFiles'> },
-  global: ConfiguredFolder<SharingStore>,
+  from: { readonly store: Pick<StoreGroups, 'sharing' | 'folderFiles' | 'reports'> },
+  global: ConfiguredFolder<StoreWith<'sharing' | 'folderFiles' | 'captures'>>,
   options: {
     minScore?: number;
     dryRun?: boolean;
@@ -361,8 +366,8 @@ export async function autoShare(
   await to.folderFiles.ensure();
   // Every page is judged before any is written, so a copy written early cannot hide a later row's twin.
   const candidates: MemoryEntry[] = [];
-  for await (const page of autoSharePages(from.store.sharing, minScore, options.tenantId)) {
-    candidates.push(...(await pageCandidates(to.sharing, page, minScore, options.stats)));
+  for await (const page of autoSharePages(from.store, minScore, options.tenantId)) {
+    candidates.push(...(await pageCandidates(to.captures, page, minScore, options.stats)));
   }
 
   if (dryRun) return candidates;

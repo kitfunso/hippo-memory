@@ -7,8 +7,7 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import type { AuditEvent } from '../../src/entry/store-kit.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type {
   ConnectorDeadLetter,
   ConnectorEvent,
@@ -126,8 +125,8 @@ function seed(dir: string): Seeded {
 }
 
 /** One workspace, one installation, and a repository two tenants registered, acme first. */
-function registerRoutes(root: string): void {
-  sqliteSyncStore(handlesOf(root)).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
+async function registerRoutes(root: string): Promise<void> {
+  await sqliteStore(root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
   const db = openHippoDb(root);
   try {
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(
@@ -144,10 +143,10 @@ function registerRoutes(root: string): void {
   }
 }
 
-function copyOfFixture(prepare: (root: string) => void): string {
+async function copyOfFixture(prepare: (root: string) => void | Promise<void>): Promise<string> {
   const root = join(home, `copy-${String(++copies)}`);
   cpSync(fixture.dir, root, { recursive: true });
-  prepare(root);
+  await prepare(root);
   return root;
 }
 
@@ -160,9 +159,12 @@ async function runSide(side: ConnectorEventsSide, calls: readonly Call[], guard:
 }
 
 /** The other store's calls run with hippo.db blocked, so a method that falls back to it throws instead of matching by accident. */
-async function conforms(calls: readonly Call[], prepare: (root: string) => void = () => undefined): Promise<Side> {
-  const sqlite = await runSide(sqliteConnectorEventsSide(copyOfFixture(prepare)), calls, (fn) => fn());
-  const memory = memorySide(copyOfFixture(prepare));
+async function conforms(
+  calls: readonly Call[],
+  prepare: (root: string) => void | Promise<void> = () => undefined,
+): Promise<Side> {
+  const sqlite = await runSide(sqliteConnectorEventsSide(await copyOfFixture(prepare)), calls, (fn) => fn());
+  const memory = memorySide(await copyOfFixture(prepare));
   const other = await runSide(memory, calls, (fn) => withSqliteBlocked(memory.store.kind, fn));
   expectSameOutcomes({ other, sqlite });
   return sqlite;

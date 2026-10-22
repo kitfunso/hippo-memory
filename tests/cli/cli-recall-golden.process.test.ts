@@ -32,7 +32,7 @@ const SPAWNED = new Set(['recall default', 'explain default']);
 let template: string;
 let goalId = '';
 
-function seedLocal(hippoRoot: string): void {
+async function seedLocal(hippoRoot: string): Promise<void> {
   const rows: MemoryEntry[] = [
     seeded(
       'deploy pipeline uses blue green rollout for the api',
@@ -85,7 +85,7 @@ function seedLocal(hippoRoot: string): void {
     seeded('unrelated note about lunch options near the office', 'mem_golden_noise', '2026-01-21T00:00:00.000Z'),
   ];
   for (const row of rows) writeEntry(hippoRoot, row);
-  goalId = pushGoal(hippoRoot, { sessionId: SESSION, tenantId: 'default', goalName: 'goal-alpha' }).id;
+  goalId = (await pushGoal(hippoRoot, { sessionId: SESSION, tenantId: 'default', goalName: 'goal-alpha' })).id;
 }
 
 function seedGlobal(globalRoot: string): void {
@@ -293,9 +293,9 @@ const goalLogged = (score: number) => ({
 });
 
 describe('cli recall and explain golden output', () => {
-  beforeAll(() => {
+  beforeAll(async () => {
     template = makeStore('golden-template').root;
-    seedLocal(template);
+    await seedLocal(template);
   });
 
   it.each(CASES)('$name', async (c) => {

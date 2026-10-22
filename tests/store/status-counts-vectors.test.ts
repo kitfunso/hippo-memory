@@ -10,10 +10,9 @@ import {
   Layer,
   type MemoryEntry,
 } from '../../src/base/memory/memory.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
-import { withRequestStoresSync } from '../../src/db/request-stores.js';
+import { runWithRequestStores, withRequestStoresSync } from '../../src/db/request-stores.js';
 import { listMemoryConflicts, writeEntry, updateStats } from '../_helpers/root-forms.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 import { handleStatus } from '../../src/surface/cli/status.js';
@@ -169,11 +168,11 @@ function row(lastRetrieved: string, fields: Partial<MemoryEntry> = {}): string {
   return id;
 }
 
-function seedEveryCase(): void {
-  withRequestStoresSync(seedEveryCaseIn);
+async function seedEveryCase(): Promise<void> {
+  await runWithRequestStores(seedEveryCaseIn);
 }
 
-function seedEveryCaseIn(): void {
+async function seedEveryCaseIn(): Promise<void> {
   seq = 0;
   const fresh = row(daysAgo(1), { layer: Layer.Buffer, confidence: 'verified' });
   const aged = row(daysAgo(31));
@@ -202,9 +201,10 @@ function seedEveryCaseIn(): void {
     ],
     NOW,
   );
-  const resolved = listMemoryConflicts(root).find((c) => c.reason === 'resolved below');
+  const resolved = (await listMemoryConflicts(root)).find((c) => c.reason === 'resolved below');
   if (!resolved) throw new Error('fixture conflict missing');
-  if (!resolveConflictKeeping(root, 'default', resolved.id, fresh)) throw new Error('fixture conflict not resolved');
+  const kept = await resolveConflictKeeping(root, 'default', resolved.id, fresh);
+  if (!kept) throw new Error('fixture conflict not resolved');
   saveStoredVectors(
     root,
     [
@@ -251,7 +251,7 @@ function countLines(layers: string[], health: string[], tiers: string[]): string
 describe('hippo status full text', () => {
   it('prints every count of a store holding each layer, tier, tenant and date shape', async () => {
     useKeylessProvider();
-    seedEveryCase();
+    await seedEveryCase();
     expect(await status()).toEqual([
       ...countLines(['12', '2', '6', '3', '1'], ['2', '4', '2', '0.59'], ['3', '5', '2', '2', '3']),
       'Total remembered:  5',
@@ -282,8 +282,8 @@ describe('hippo status full text', () => {
 });
 
 describe('reports.statusCounts', () => {
-  it('equals a tally over every loaded entry, to the last bit of the average', () => {
-    seedEveryCase();
+  it('equals a tally over every loaded entry, to the last bit of the average', async () => {
+    await seedEveryCase();
     // Written weakest first and created strongest first: a sum over rows in any other order than loadAllEntries' ends on other last bits.
     withRequestStoresSync(() => {
       for (let i = 0; i < 40; i++) row(daysAgo(20), { created: daysAgo(900 - i), halfLifeDays: 0.5 * 1.18 ** i });
@@ -291,21 +291,21 @@ describe('reports.statusCounts', () => {
     const now = new Date(NOW);
     const entries = loadEveryTenantEntries(root);
     const strengths = entries.map((e) => calculateStrength(e, now));
-    const counts = sqliteSyncStore(handlesOf(root)).reports.statusCounts(now, 0.2);
+    const counts = await sqliteStore(root).reports.statusCounts(now, 0.2);
     expect(counts.total).toBe(52);
     expect(counts.avgStrength).toBe(strengths.reduce((sum, x) => sum + x, 0) / entries.length);
     expect(counts.atRisk).toBe(strengths.filter((x) => x < 0.2).length);
     expect(counts.agedOut).toBe(entries.filter((e) => confidenceFacets(e, now).agedOut).length);
     expect(counts.pinned).toBe(entries.filter((e) => e.pinned).length);
     expect(counts.byLayer[Layer.Trace]).toBe(entries.filter((e) => e.layer === Layer.Trace).length);
-    expect(counts.openConflicts).toBe(listMemoryConflicts(root).length);
+    expect(counts.openConflicts).toBe((await listMemoryConflicts(root)).length);
     expect(counts.embedded).toBe(2);
   });
 });
 
 describe('hippo status read bound', () => {
   it('selects no memory text and no JSON column from the memories table', async () => {
-    seedEveryCase();
+    await seedEveryCase();
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { statements } = await (async () => {
       try {

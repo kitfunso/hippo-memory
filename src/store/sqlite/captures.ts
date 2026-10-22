@@ -6,23 +6,23 @@ import { writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
 import { gatedWrite } from './gated-write.js';
 import { updateStatsOn } from './index-and-stats.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import type { CaptureDedup, CaptureWriteOptions, CapturedOutcome, Captures } from '../port/capture.js';
-import type { Sync } from './served.js';
-import { EVERY_SCOPE, loadTextsHoldingWordsAt } from './candidates.js';
+import { loadTextsHoldingWords } from './candidates.js';
+import { EVERY_SCOPE } from './rule-sql.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles, skipEmpty, type Bodies } from './bound.js';
+import { bound, skipEmpty, type Bodies } from './bound.js';
 
 /** The texts rows under `dedup` hold, of those the entries' longest words find. */
-function heldKeysAt(db: DatabaseSyncLike, entries: readonly MemoryEntry[], dedup: CaptureDedup): Set<string> {
+function heldKeys(db: DatabaseSyncLike, entries: readonly MemoryEntry[], dedup: CaptureDedup): Set<string> {
   const words = entries.map((entry) => longestWord(entry.content));
   const admit = dedup.everyScope ? EVERY_SCOPE : undefined;
-  return storedTextKeys(loadTextsHoldingWordsAt(db, dedup.tenantId, words, dedup.project, admit));
+  return storedTextKeys(loadTextsHoldingWords(db, dedup.tenantId, words, dedup.project, admit));
 }
 
 /** One outcome per entry, in order, in one transaction that reads the caller's dedup again first, so a text another
  * writer stored since that read is skipped; mirrors and stats follow the commit. */
-function writeCapturedEntriesAt(
+function writeCapturedEntries(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
   entries: readonly MemoryEntry[],
@@ -30,7 +30,7 @@ function writeCapturedEntriesAt(
 ): CapturedOutcome[] {
   const written: MemoryEntry[] = [];
   const outcomes = withWriteScope(db, 'capture_write', () => {
-    const held = heldKeysAt(db, entries, opts.dedup);
+    const held = heldKeys(db, entries, opts.dedup);
     return entries.map((entry): CapturedOutcome => {
       if (held.has(duplicateKey(entry.content))) return 'skipped';
       // One rejected entry must not abort the rest of this capture's entries.
@@ -47,15 +47,19 @@ function writeCapturedEntriesAt(
   return outcomes;
 }
 
-const capturedTextsAt: Bodies<Pick<Captures, 'textsHolding'>> = {
+const capturedTextsBodies: Bodies<Pick<Captures, 'textsHolding'>> = {
   textsHolding: (db, tenantId, words, { project, everyScope } = {}) =>
-    loadTextsHoldingWordsAt(db, tenantId, words, project, everyScope ? EVERY_SCOPE : undefined),
+    loadTextsHoldingWords(db, tenantId, words, project, everyScope ? EVERY_SCOPE : undefined),
 };
 
-export function sqliteCaptures(on: OnHandle): Sync<Captures> {
-  const { write } = boundWithFiles<Pick<Captures, 'write'>>(on, { write: writeCapturedEntriesAt }, openStore);
+export function sqliteCaptures({ on, files }: Handles): Captures {
+  const { write } = bound<Pick<Captures, 'write'>>(
+    on,
+    { write: (db, ...args) => writeCapturedEntries(db, files, ...args) },
+    openStore,
+  );
   return {
     write: skipEmpty(write, () => []),
-    ...bound(on, capturedTextsAt, openStore),
+    ...bound(on, capturedTextsBodies, openStore),
   };
 }

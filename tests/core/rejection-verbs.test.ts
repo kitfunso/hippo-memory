@@ -144,7 +144,7 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
 });
 
 describe('resolveConflict rejection wiring', () => {
-  function seedConflict() {
+  async function seedConflict() {
     const a = createMemory('Always use semicolons in PowerShell', { tags: ['x'] });
     const b = createMemory('Use && to chain commands in PowerShell', { tags: ['x'] });
     writeEntry(tmpDir, a);
@@ -157,18 +157,18 @@ describe('resolveConflict rejection wiring', () => {
         score: 0.85,
       },
     ]);
-    const conflicts = listMemoryConflicts(tmpDir, 'open');
+    const conflicts = await listMemoryConflicts(tmpDir, 'open');
     return { aId: a.id, bId: b.id, conflictId: conflicts[0]!.id };
   }
 
   it('a plain resolve writes a conflict_resolve audit with disposition=weakened', async () => {
-    const { aId, bId, conflictId } = seedConflict();
+    const { aId, bId, conflictId } = await seedConflict();
     expect(await api.conflictResolve(ctx(), conflictId, { keepId: aId })).toEqual({
       conflictId,
       keptId: aId,
       loserId: bId,
     });
-    expect(listMemoryConflicts(tmpDir, 'open')).toEqual([]);
+    expect(await listMemoryConflicts(tmpDir, 'open')).toEqual([]);
 
     const db = openHippoDb(tmpDir);
     try {
@@ -182,7 +182,7 @@ describe('resolveConflict rejection wiring', () => {
   });
 
   it('resolveConflict --forget writes a conflict_resolve audit with disposition=deleted', async () => {
-    const { aId, bId, conflictId } = seedConflict();
+    const { aId, bId, conflictId } = await seedConflict();
     await api.conflictResolve(ctx(), conflictId, { keepId: aId, forget: true });
     expect(readEntry(tmpDir, bId)).toBeNull();
 
@@ -197,7 +197,7 @@ describe('resolveConflict rejection wiring', () => {
   });
 
   it('rejectLoserValue tombstones + removes the loser; re-remember of its content is refused', async () => {
-    const { aId, bId, conflictId } = seedConflict();
+    const { aId, bId, conflictId } = await seedConflict();
     await api.conflictResolve(ctx(), conflictId, { keepId: aId, rejectLoser: true, reason: 'loser rejected' });
     expect(readEntry(tmpDir, bId)).toBeNull();
 
@@ -216,7 +216,7 @@ describe('resolveConflict rejection wiring', () => {
   });
 
   it('rejectLoserValue removes a same-tenant same-digest duplicate but leaves an identical-content row in ANOTHER tenant untouched', async () => {
-    const { aId, bId, conflictId } = seedConflict();
+    const { aId, bId, conflictId } = await seedConflict();
     const loserContent = 'Use && to chain commands in PowerShell';
 
     // Same-tenant duplicate of the loser's content — must be swept up too.
@@ -266,7 +266,7 @@ describe('resolveConflict rejection wiring', () => {
         score: 0.85,
       },
     ]);
-    const conflicts = listMemoryConflicts(tmpDir, 'open');
+    const conflicts = await listMemoryConflicts(tmpDir, 'open');
     const conflictId = conflicts[0]!.id;
 
     await expect(api.conflictResolve(ctx(), conflictId, { keepId: a.id, forget: true })).resolves.toEqual({
@@ -302,7 +302,7 @@ describe('resolveConflict rejection wiring', () => {
         score: 0.85,
       },
     ]);
-    const conflicts = listMemoryConflicts(tmpDir, 'open');
+    const conflicts = await listMemoryConflicts(tmpDir, 'open');
     const conflictId = conflicts[0]!.id;
 
     // Plain --forget, deliberately WITHOUT rejectLoserValue — before P1b the
@@ -342,7 +342,7 @@ describe('resolveConflict rejection wiring', () => {
         score: 0.85,
       },
     ]);
-    const conflicts = listMemoryConflicts(tmpDir, 'open');
+    const conflicts = await listMemoryConflicts(tmpDir, 'open');
     const conflictId = conflicts[0]!.id;
 
     await expect(

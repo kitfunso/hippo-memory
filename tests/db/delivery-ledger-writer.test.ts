@@ -12,8 +12,13 @@ import { DELIVERY_LEDGER_VERSION } from '../../src/base/session/delivery.js';
 import type { DeliveryEventInput, DeliveryRejectReason, DeliveryStage } from '../../src/base/session/delivery.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { runWithRequestId } from '../../src/base/util/request-scope.js';
-import { countMatching, recordStatements, type StatementLog } from '../_helpers/count-statements.js';
-import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import {
+  countMatching,
+  recordStatements,
+  type StatementLog,
+  recordStatementsAsync,
+} from '../_helpers/count-statements.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 
@@ -372,23 +377,23 @@ describe('writeDeliveryEventOnHandle', () => {
 describe('the delivery ledger prune', () => {
   const prunes = (log: StatementLog<number | null>): number =>
     countMatching(log.statements, /^DELETE FROM delivery_events/);
-  const writeVia = (ledger: ReturnType<typeof sqliteSyncStore>['ledger'], promptHash: string, ms: number) =>
-    recordStatements(() => ledger.writeDeliveryEvent(event({ promptHash, ts: at(ms) })));
+  const writeVia = async (ledger: ReturnType<typeof sqliteStore>['ledger'], promptHash: string, ms: number) =>
+    await recordStatementsAsync(async () => await ledger.writeDeliveryEvent(event({ promptHash, ts: at(ms) })));
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("runs at most once a minute per store, and again once the store's minute has passed", () => {
+  it("runs at most once a minute per store, and again once the store's minute has passed", async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(Date.parse('2026-09-01T00:00:00.000Z'));
-    const { ledger } = sqliteSyncStore(handlesOf(root));
-    expect([writeVia(ledger, 'p1', 0), writeVia(ledger, 'p2', 30_000)].map(prunes)).toEqual([1, 0]);
+    const { ledger } = sqliteStore(root);
+    expect([await writeVia(ledger, 'p1', 0), await writeVia(ledger, 'p2', 30_000)].map(prunes)).toEqual([1, 0]);
     vi.setSystemTime(Date.parse('2026-09-01T00:00:59.000Z'));
-    expect(prunes(writeVia(ledger, 'p3', 59_000))).toBe(0);
+    expect(prunes(await writeVia(ledger, 'p3', 59_000))).toBe(0);
     vi.setSystemTime(Date.parse('2026-09-01T00:01:01.000Z'));
-    expect(prunes(writeVia(ledger, 'p4', 61_000))).toBe(1);
-    expect(prunes(writeVia(sqliteSyncStore(handlesOf(root)).ledger, 'another store', 62_000))).toBe(1);
+    expect(prunes(await writeVia(ledger, 'p4', 61_000))).toBe(1);
+    expect(prunes(await writeVia(sqliteStore(root).ledger, 'another store', 62_000))).toBe(1);
     expect(count('delivery_events')).toBe(5);
   });
 

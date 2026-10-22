@@ -42,13 +42,13 @@ describe('computePredictionBaserate (baserate detector)', () => {
     expect(br.summary).toBe('');
   });
 
-  it('single closed prediction returns n=1 with correct stats', () => {
-    const p = savePrediction(home, 'default', {
+  it('single closed prediction returns n=1 with correct stats', async () => {
+    const p = await savePrediction(home, 'default', {
       classTag: 'one-test',
       claimText: 'single estimate',
       estimateValue: 2,
     });
-    closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: 3 });
+    await closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: 3 });
 
     const br = computePredictionBaserate(home, 'default', 'one-test');
     expect(br.nClosed).toBe(1);
@@ -62,7 +62,7 @@ describe('computePredictionBaserate (baserate detector)', () => {
     expect(br.summary).toContain('1.50x actual');
   });
 
-  it('multiple closed predictions compute mean/median/MAE correctly', () => {
+  it('multiple closed predictions compute mean/median/MAE correctly', async () => {
     // Estimates [2, 4, 6]; Actuals [4, 6, 6]
     // Ratios: 2.0, 1.5, 1.0; mean=1.5, median=1.5
     // MAE: |4-2| + |6-4| + |6-6| / 3 = 4/3
@@ -73,12 +73,12 @@ describe('computePredictionBaserate (baserate detector)', () => {
       [6, 6],
     ];
     for (const [est, act] of estimateVsActual) {
-      const p = savePrediction(home, 'default', {
+      const p = await savePrediction(home, 'default', {
         classTag: 'multi-test',
         claimText: `est ${est} act ${act}`,
         estimateValue: est,
       });
-      closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
+      await closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
       ids.push(p.id);
     }
 
@@ -92,10 +92,14 @@ describe('computePredictionBaserate (baserate detector)', () => {
     expect(br.mae).toBeCloseTo(4 / 3, 6);
   });
 
-  it('open + closed mixed only counts closed in baserate', () => {
-    const closed = savePrediction(home, 'default', { classTag: 'mixed', claimText: 'closed one', estimateValue: 2 });
-    closePrediction(home, 'default', closed.id, { closureState: 'closed', actualValue: 4 });
-    savePrediction(home, 'default', { classTag: 'mixed', claimText: 'open one', estimateValue: 10 });
+  it('open + closed mixed only counts closed in baserate', async () => {
+    const closed = await savePrediction(home, 'default', {
+      classTag: 'mixed',
+      claimText: 'closed one',
+      estimateValue: 2,
+    });
+    await closePrediction(home, 'default', closed.id, { closureState: 'closed', actualValue: 4 });
+    await savePrediction(home, 'default', { classTag: 'mixed', claimText: 'open one', estimateValue: 10 });
 
     const br = computePredictionBaserate(home, 'default', 'mixed');
     expect(br.nClosed).toBe(1);
@@ -103,11 +107,15 @@ describe('computePredictionBaserate (baserate detector)', () => {
     expect(br.meanActual).toBe(4);
   });
 
-  it('closed-unknown excluded from baserate (no actual_value to compare)', () => {
-    const a = savePrediction(home, 'default', { classTag: 'unk', claimText: 'categorical one', estimateValue: 1 });
-    closePrediction(home, 'default', a.id, { closureState: 'closed-unknown', closureNote: 'not measurable' });
-    const b = savePrediction(home, 'default', { classTag: 'unk', claimText: 'numeric one', estimateValue: 2 });
-    closePrediction(home, 'default', b.id, { closureState: 'closed', actualValue: 4 });
+  it('closed-unknown excluded from baserate (no actual_value to compare)', async () => {
+    const a = await savePrediction(home, 'default', {
+      classTag: 'unk',
+      claimText: 'categorical one',
+      estimateValue: 1,
+    });
+    await closePrediction(home, 'default', a.id, { closureState: 'closed-unknown', closureNote: 'not measurable' });
+    const b = await savePrediction(home, 'default', { classTag: 'unk', claimText: 'numeric one', estimateValue: 2 });
+    await closePrediction(home, 'default', b.id, { closureState: 'closed', actualValue: 4 });
 
     const br = computePredictionBaserate(home, 'default', 'unk');
     expect(br.nClosed).toBe(1); // only the closed-with-actual row
@@ -115,11 +123,19 @@ describe('computePredictionBaserate (baserate detector)', () => {
     expect(br.meanActual).toBe(4);
   });
 
-  it('estimate_value=0 row counts in nClosed + MAE but NOT in ratio calc', () => {
-    const zero = savePrediction(home, 'default', { classTag: 'zero', claimText: 'zero estimate', estimateValue: 0 });
-    closePrediction(home, 'default', zero.id, { closureState: 'closed', actualValue: 3 });
-    const norm = savePrediction(home, 'default', { classTag: 'zero', claimText: 'normal estimate', estimateValue: 2 });
-    closePrediction(home, 'default', norm.id, { closureState: 'closed', actualValue: 4 });
+  it('estimate_value=0 row counts in nClosed + MAE but NOT in ratio calc', async () => {
+    const zero = await savePrediction(home, 'default', {
+      classTag: 'zero',
+      claimText: 'zero estimate',
+      estimateValue: 0,
+    });
+    await closePrediction(home, 'default', zero.id, { closureState: 'closed', actualValue: 3 });
+    const norm = await savePrediction(home, 'default', {
+      classTag: 'zero',
+      claimText: 'normal estimate',
+      estimateValue: 2,
+    });
+    await closePrediction(home, 'default', norm.id, { closureState: 'closed', actualValue: 4 });
 
     const br = computePredictionBaserate(home, 'default', 'zero');
     expect(br.nClosed).toBe(2);
@@ -130,13 +146,13 @@ describe('computePredictionBaserate (baserate detector)', () => {
     expect(br.mae).toBe(2.5);
   });
 
-  it('cross-tenant scoping: tenant-b request on tenant-a class returns empty', () => {
-    const p = savePrediction(home, 'tenant-a', {
+  it('cross-tenant scoping: tenant-b request on tenant-a class returns empty', async () => {
+    const p = await savePrediction(home, 'tenant-a', {
       classTag: 'scope-test',
       claimText: 'tenant a only',
       estimateValue: 1,
     });
-    closePrediction(home, 'tenant-a', p.id, { closureState: 'closed', actualValue: 2 });
+    await closePrediction(home, 'tenant-a', p.id, { closureState: 'closed', actualValue: 2 });
 
     const aResult = computePredictionBaserate(home, 'tenant-a', 'scope-test');
     expect(aResult.nClosed).toBe(1);
@@ -146,13 +162,17 @@ describe('computePredictionBaserate (baserate detector)', () => {
     expect(bResult.summary).toBe('');
   });
 
-  it('predict_baserate audit emitted on every call (including n=0)', () => {
+  it('predict_baserate audit emitted on every call (including n=0)', async () => {
     // n=0 call
     computePredictionBaserate(home, 'default', 'audit-test');
 
     // Add data + non-zero call
-    const p = savePrediction(home, 'default', { classTag: 'audit-test', claimText: 'audit data', estimateValue: 1 });
-    closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: 2 });
+    const p = await savePrediction(home, 'default', {
+      classTag: 'audit-test',
+      claimText: 'audit data',
+      estimateValue: 1,
+    });
+    await closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: 2 });
     computePredictionBaserate(home, 'default', 'audit-test');
 
     const db = openHippoDb(home);

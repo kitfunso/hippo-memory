@@ -5,17 +5,16 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import { summarizeTokenUse } from './token-ledger.js';
 import { summarizeFailures } from './failure-log.js';
 import { keysetPage } from '../../base/util/keyset.js';
-import type { SqlAnd } from './keyset.js';
+import type { SqlFragment } from '../../db/sql.js';
 import type { CorrectionLinkPage, RawProvenancePage, ReportPage, Reports, StrengthTallies } from '../port/reports.js';
-import { statusCountsAt, strengthTalliesAt } from './candidates.js';
-import { countOpenConflictsAt } from './conflicts.js';
-import { countAllEntriesAt, loadEntriesPageAt } from './entry-reads.js';
-import { createdSinceLastSleepAt } from './index-and-stats.js';
+import { statusCounts, strengthTallies } from './candidates.js';
+import { countOpenConflicts } from './conflicts.js';
+import { countAllEntries, loadEntriesPage } from './entry-reads.js';
+import { createdSinceLastSleep } from './index-and-stats.js';
 import { buildStatsFromDb } from './mirrors.js';
-import type { OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles, type Bodies, type FileBodies } from './bound.js';
-import type { Sync } from './served.js';
+import { bound, type Bodies } from './bound.js';
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 type CorrectionLinkDbRow = {
@@ -27,17 +26,17 @@ type CorrectionLinkDbRow = {
 };
 
 /** The ` AND` range that resumes after `after` on the given created and id columns, and the arguments it binds. */
-function afterRange(created: string, id: string, after: ReportPage['after']): SqlAnd {
-  if (!after) return { sql: '', args: [] };
+function afterRange(created: string, id: string, after: ReportPage['after']): SqlFragment {
+  if (!after) return { sql: '', params: [] };
   return {
     sql: ` AND ${created} >= ? AND (${created} > ? OR ${id} > ?)`,
-    args: [after.created, after.created, after.id],
+    params: [after.created, after.created, after.id],
   };
 }
 
 /** A page of the superseded rows joined to their successor and that row's extraction source: the pairs the report
  * lists, and no other row. */
-function correctionLinksAt(db: DatabaseSyncLike, page: ReportPage): CorrectionLinkPage {
+function correctionLinks(db: DatabaseSyncLike, page: ReportPage): CorrectionLinkPage {
   const range = afterRange('old.created', 'old.id', page.after);
   const rows = cachedStatement(
     db,
@@ -47,7 +46,7 @@ function correctionLinksAt(db: DatabaseSyncLike, page: ReportPage): CorrectionLi
      LEFT JOIN memories src ON new.extracted_from <> '' AND src.id = new.extracted_from
      WHERE old.superseded_by IS NOT NULL AND old.superseded_by != ''${range.sql}
      ORDER BY old.created ASC, old.id ASC LIMIT ?`,
-  ).all(...range.args, page.limit + 1) as CorrectionLinkDbRow[];
+  ).all(...range.params, page.limit + 1) as CorrectionLinkDbRow[];
   const kept = keysetPage(rows, page.limit, (r) => ({ created: r.old_created, id: r.old_id }));
   return {
     links: kept.rows.map((r) => ({
@@ -63,7 +62,7 @@ function correctionLinksAt(db: DatabaseSyncLike, page: ReportPage): CorrectionLi
 const RAW = "kind = 'raw'";
 
 /** The raw count in SQL and a page of the raw rows missing provenance, on one snapshot. */
-function rawProvenanceAt(db: DatabaseSyncLike, page: ReportPage): RawProvenancePage {
+function rawProvenance(db: DatabaseSyncLike, page: ReportPage): RawProvenancePage {
   return withReadSnapshot(db, () => {
     // SAFETY: an aggregate with no GROUP BY always answers one row.
     const { n } = cachedStatement(db, `SELECT COUNT(*) AS n FROM memories WHERE ${RAW}`).get() as { n: number };
@@ -74,7 +73,7 @@ function rawProvenanceAt(db: DatabaseSyncLike, page: ReportPage): RawProvenanceP
       `SELECT id, owner, artifact_ref, created FROM memories WHERE ${RAW} ` +
         `AND (COALESCE(owner, '') = '' OR COALESCE(artifact_ref, '') = '')${range.sql} ` +
         `ORDER BY created ASC, id ASC LIMIT ?`,
-    ).all(...range.args, page.limit + 1) as Array<{
+    ).all(...range.params, page.limit + 1) as Array<{
       id: string;
       owner: string | null;
       artifact_ref: string | null;
@@ -90,7 +89,7 @@ function rawProvenanceAt(db: DatabaseSyncLike, page: ReportPage): RawProvenanceP
 }
 
 /** Strength tallies and the open-conflict count on one snapshot, so they never straddle another process's write. */
-function memoryStatusAt(
+function memoryStatus(
   db: DatabaseSyncLike,
   rules: LossAversion,
   tenantId: string,
@@ -98,38 +97,40 @@ function memoryStatusAt(
   atRiskBelow: number,
 ): StrengthTallies & { openConflicts: number } {
   return withReadSnapshot(db, () => ({
-    ...strengthTalliesAt(db, rules, tenantId, now, atRiskBelow),
-    openConflicts: countOpenConflictsAt(db, tenantId),
+    ...strengthTallies(db, rules, tenantId, now, atRiskBelow),
+    openConflicts: countOpenConflicts(db, tenantId),
   }));
 }
 
 // The two totals read side tables only, so they skip the mirror setup the memory reads open with.
-const reportTotalsAt: Bodies<Pick<Reports, 'tokenUse' | 'failures'>> = {
+const reportTotalsBodies: Bodies<Pick<Reports, 'tokenUse' | 'failures'>> = {
   tokenUse: summarizeTokenUse,
   failures: summarizeFailures,
 };
 
 type Scored = 'memoryStatus' | 'statusCounts';
 
-// These two score strength, so they take the store's loss-aversion rules beside the handle.
-const scoredReadsAt: FileBodies<Pick<Reports, Scored>> = {
-  memoryStatus: memoryStatusAt,
-  statusCounts: statusCountsAt,
-};
-
-const reportReadsAt: Bodies<Omit<Reports, 'tokenUse' | 'failures' | Scored>> = {
-  entriesPage: loadEntriesPageAt,
-  countEntries: countAllEntriesAt,
-  stats: buildStatsFromDb,
-  correctionLinks: correctionLinksAt,
-  rawProvenance: rawProvenanceAt,
-  createdSinceLastSleep: createdSinceLastSleepAt,
-};
-
-export function sqliteReports(on: OnHandle): Sync<Reports> {
+// These two score strength, so they score by the store's loss-aversion rules.
+function scoredReadsBodies(files: StoreFiles): Bodies<Pick<Reports, Scored>> {
   return {
-    ...bound(on, reportTotalsAt),
-    ...bound(on, reportReadsAt, openStore),
-    ...boundWithFiles(on, scoredReadsAt, openStore),
+    memoryStatus: (db, ...args) => memoryStatus(db, files, ...args),
+    statusCounts: (db, ...args) => statusCounts(db, files, ...args),
+  };
+}
+
+const reportReadsBodies: Bodies<Omit<Reports, 'tokenUse' | 'failures' | Scored>> = {
+  entriesPage: loadEntriesPage,
+  countEntries: countAllEntries,
+  stats: buildStatsFromDb,
+  correctionLinks: correctionLinks,
+  rawProvenance: rawProvenance,
+  createdSinceLastSleep: createdSinceLastSleep,
+};
+
+export function sqliteReports({ on, files }: Handles): Reports {
+  return {
+    ...bound(on, reportTotalsBodies),
+    ...bound(on, reportReadsBodies, openStore),
+    ...bound(on, scoredReadsBodies(files), openStore),
   };
 }

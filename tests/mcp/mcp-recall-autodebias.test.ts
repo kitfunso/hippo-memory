@@ -51,19 +51,19 @@ function extractText(res: McpResponse | null): string {
   return r?.result?.content?.[0]?.text ?? '';
 }
 
-function seedBaserate(home: string): void {
+async function seedBaserate(home: string): Promise<void> {
   const estimateVsActual: Array<[number, number]> = [
     [2, 4],
     [3, 6],
     [4, 8],
   ];
   for (const [est, act] of estimateVsActual) {
-    const p = savePrediction(home, 'default', {
+    const p = await savePrediction(home, 'default', {
       classTag: 'migration-effort',
       claimText: `migration effort ${est} days`,
       estimateValue: est,
     });
-    closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
+    await closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
   }
 }
 
@@ -81,7 +81,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
   });
 
   it('prepends "## Planning fallacy hint" block when query matches forward-claim AND class resolves', async () => {
-    seedBaserate(home);
+    await seedBaserate(home);
     const ctx: McpContext = {
       hippoRoot: home,
       tenantId: 'default',
@@ -102,7 +102,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
   });
 
   it('does NOT prepend the hint block when query has no forward-claim phrase', async () => {
-    seedBaserate(home);
+    await seedBaserate(home);
     const ctx: McpContext = {
       hippoRoot: home,
       tenantId: 'default',
@@ -119,7 +119,7 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
   });
 
   it('does NOT prepend the hint block when HIPPO_AUTODEBIAS=off', async () => {
-    seedBaserate(home);
+    await seedBaserate(home);
     vi.stubEnv('HIPPO_AUTODEBIAS', 'off');
     const ctx: McpContext = {
       hippoRoot: home,

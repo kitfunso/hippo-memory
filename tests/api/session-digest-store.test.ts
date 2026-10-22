@@ -241,6 +241,6 @@ describe('consolidation leaves digests alone', () => {
     writeEntry(hippoRoot, row('always use port 3000 for the dev server', digest));
     writeEntry(hippoRoot, row('never use port 3000 for the dev server', digest));
     await consolidate(hippoRoot, { dryRun: false, now: FIXED_NOW });
-    expect(listMemoryConflicts(hippoRoot).length > 0).toBe(!digest);
+    expect((await listMemoryConflicts(hippoRoot)).length > 0).toBe(!digest);
   });
 });

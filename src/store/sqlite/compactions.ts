@@ -1,6 +1,6 @@
 // hippo.db's Compactions group: a caller's compaction items, each call on a handle of its own.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { StoreFiles, OnHandle } from './open.js';
+import type { Handles, StoreFiles } from './open.js';
 import {
   compactionByRequest,
   recordSummary,
@@ -10,12 +10,11 @@ import {
   type Log,
 } from './compactions-record.js';
 import type { CallerItems, CallerItemsSaved, Compactions } from '../port/capture.js';
-import type { Sync } from './served.js';
-import { bound, boundWithFiles, type Bodies } from './bound.js';
+import { bound, type Bodies } from './bound.js';
 
 /** A caller's items, already scrubbed, under its record: a retry of a finished request answers with the first count,
  * and a `summarised` one is reused. */
-function writeCallerItemsAt(
+function writeCallerItems(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
@@ -52,27 +51,29 @@ function writeCallerItemsAt(
 }
 
 /** A caller's items saved, with each note the save logged so the caller can show it. */
-function saveCallerItemsAt(
+function saveCallerItems(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
   req: CallerItems,
 ): CallerItemsSaved {
   const notes: string[] = [];
-  const written = writeCallerItemsAt(db, files, tenantId, req, (message) => {
+  const written = writeCallerItems(db, files, tenantId, req, (message) => {
     notes.push(message);
   });
   return { written, notes };
 }
 
-const compactionsAt: Bodies<Omit<Compactions, 'saveCallerItems'>> = {
+const compactionsBodies: Bodies<Omit<Compactions, 'saveCallerItems'>> = {
   start: startCompaction,
   markSnapshotSaved,
 };
 
-export function sqliteCompactions(on: OnHandle): Sync<Compactions> {
+export function sqliteCompactions({ on, files }: Handles): Compactions {
   return {
-    ...bound(on, compactionsAt),
-    ...boundWithFiles<Pick<Compactions, 'saveCallerItems'>>(on, { saveCallerItems: saveCallerItemsAt }),
+    ...bound(on, compactionsBodies),
+    ...bound<Pick<Compactions, 'saveCallerItems'>>(on, {
+      saveCallerItems: (db, ...args) => saveCallerItems(db, files, ...args),
+    }),
   };
 }

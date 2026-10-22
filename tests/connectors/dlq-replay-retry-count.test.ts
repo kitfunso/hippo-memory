@@ -2,8 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { parkInDlq } from '../../src/surface/connectors/dlq.js';
 import { githubDlq, replayDlqEntry as replayGitHub } from '../../src/surface/connectors/github/dlq.js';
 import { slackDlq, replayDlqEntry as replaySlack } from '../../src/surface/connectors/slack/dlq.js';
-import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/base/config/config.js';
@@ -19,10 +18,10 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
 
   const countOf = (items: { id: number; retryCount: number }[], id: number): number =>
     items.find((i) => i.id === id)?.retryCount ?? -1;
-  const githubCount = (id: number): number =>
-    countOf(sqliteSyncStore(handlesOf(root)).connectorEvents.deadLetters('github', 'default', 100), id);
-  const slackCount = (id: number): number =>
-    countOf(sqliteSyncStore(handlesOf(root)).connectorEvents.deadLetters('slack', 'default', 100), id);
+  const githubCount = async (id: number): Promise<number> =>
+    countOf(await sqliteStore(root).connectorEvents.deadLetters('github', 'default', 100), id);
+  const slackCount = async (id: number): Promise<number> =>
+    countOf(await sqliteStore(root).connectorEvents.deadLetters('slack', 'default', 100), id);
 
   it('unparseable payload', async () => {
     const g = await parkInDlq(githubDlq, sqliteStore(root), {
@@ -46,7 +45,7 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
       force: true,
     });
     expect([gr.retryCount, sr.retryCount]).toEqual([1, 1]);
-    expect([githubCount(g), slackCount(s)]).toEqual([1, 1]);
+    expect([await githubCount(g), await slackCount(s)]).toEqual([1, 1]);
   });
 
   it('signature that does not verify', async () => {
@@ -76,6 +75,6 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
       now: 1700000000,
     });
     expect([gr.status, sr.status]).toEqual(['sig_fail', 'sig_fail']);
-    expect([githubCount(g), slackCount(s)]).toEqual([1, 1]);
+    expect([await githubCount(g), await slackCount(s)]).toEqual([1, 1]);
   });
 });

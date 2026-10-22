@@ -12,7 +12,7 @@ import { loadConfig } from '../../src/base/config/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
-import { finishRecallAt } from '../../src/store/sqlite/last-recall.js';
+import { finishRecall } from '../../src/store/sqlite/last-recall.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import {
@@ -121,16 +121,19 @@ describe('rankRecall with a global store', () => {
 });
 
 describe('activeGoalsWithPolicies', () => {
-  it('reads every active goal policy in one query', () => {
+  it('reads every active goal policy in one query', async () => {
     const root = freshRoot('hp-goals');
-    const goals = ['ship', 'test', 'deploy'].map((goalName) =>
-      pushGoal(root, {
-        sessionId: 's1',
-        tenantId: 'default',
-        goalName,
-        policy: { policyType: 'hybrid', weightRecency: 1.5 },
-      }),
-    );
+    const goals = [];
+    for (const goalName of ['ship', 'test', 'deploy']) {
+      goals.push(
+        await pushGoal(root, {
+          sessionId: 's1',
+          tenantId: 'default',
+          goalName,
+          policy: { policyType: 'hybrid', weightRecency: 1.5 },
+        }),
+      );
+    }
     const { result, statements } = recordStatements(() =>
       activeGoalsWithPolicies(root, { sessionId: 's1', tenantId: 'default' }),
     );
@@ -187,7 +190,7 @@ describe('updateStats', () => {
   });
 });
 
-describe('finishRecallAt', () => {
+describe('finishRecall', () => {
   it('commits the audit row, trace and strengthen of one recall in one transaction', () => {
     const root = freshRoot('hp-finish');
     const entries = [memory('first zephyrine cache row'), memory('second zephyrine cache row')];
@@ -195,7 +198,7 @@ describe('finishRecallAt', () => {
     const ids = entries.map((e) => e.id);
     const { result, statements } = recordStatements(() =>
       handlesOf(root).on((db) =>
-        finishRecallAt(
+        finishRecall(
           db,
           {},
           {

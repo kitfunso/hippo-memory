@@ -121,10 +121,8 @@ describe('rebuildDirtySummaries', () => {
     const read: number[] = [];
     for (const n of [10, 60]) {
       const root = seededDirty(n);
-      const newest = loadAllDirtySummaries(root)
-        .slice(0, 3)
-        .map((e) => e.id);
-      expect(loadAllDirtySummaries(root, 3).map((e) => e.id)).toEqual(newest);
+      const newest = (await loadAllDirtySummaries(root)).slice(0, 3).map((e) => e.id);
+      expect((await loadAllDirtySummaries(root, 3)).map((e) => e.id)).toEqual(newest);
       const { result, rowsRead } = await recordStatementsAsync(() =>
         rebuildDirtySummaries(sqliteStore(root), { llm: anthropicLlm({ apiKey: 'k', fetcher }), cap: 2 }),
       );

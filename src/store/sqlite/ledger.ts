@@ -9,7 +9,7 @@ import {
 } from '../../db/index.js';
 import { errorMessage, expectedErrorText, log, errorFields } from '../../base/util/log.js';
 import { firstPilotArmHash } from './token-ledger-rows.js';
-import { recordTokenUse, lastSentState, recordRereadsAt } from './token-ledger.js';
+import { recordTokenUse, lastSentState, recordRereads } from './token-ledger.js';
 import { hashArm, type PilotArm } from '../../base/session/pilot-arm.js';
 import {
   type DeliveryPruneSchedule,
@@ -20,8 +20,7 @@ import {
 import type { Ledger, LedgerTurn, PilotArmOptions } from '../port/ledger.js';
 import type { DeliveryEventInput } from '../../base/session/delivery.js';
 import type { OnHandle } from './open.js';
-import { bound, type Bodies } from './bound.js';
-import type { Sync } from './served.js';
+import { answered, bound } from './bound.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 
 // One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate in basis points in
@@ -110,7 +109,7 @@ function noteLedgerRowSkipped<E>(error: E): void {
 }
 
 /** The turn's rows on `db`: each its own attempt with `perRow`, else up to the first that fails. */
-function recordRowsAt(db: DatabaseSyncLike, turn: LedgerTurn): void {
+function recordRows(db: DatabaseSyncLike, turn: LedgerTurn): void {
   try {
     for (const use of turn.uses) {
       if (turn.perRow !== true) {
@@ -129,7 +128,7 @@ function recordRowsAt(db: DatabaseSyncLike, turn: LedgerTurn): void {
 }
 
 /** The delivery event on the rows' own handle, so it costs no second open; a failed write is logged. */
-function recordDeliveryAt(db: DatabaseSyncLike, input: DeliveryEventInput, prune: DeliveryPruneSchedule): void {
+function recordDelivery(db: DatabaseSyncLike, input: DeliveryEventInput, prune: DeliveryPruneSchedule): void {
   try {
     writeDeliveryEventOnHandle(db, input, prune);
   } catch (error) {
@@ -144,8 +143,8 @@ function recordTurnVia(on: OnHandle, turn: LedgerTurn, prune: DeliveryPruneSched
   try {
     on((db) => {
       opened = true;
-      recordRowsAt(db, turn);
-      if (delivery !== undefined) recordDeliveryAt(db, delivery, prune);
+      recordRows(db, turn);
+      if (delivery !== undefined) recordDelivery(db, delivery, prune);
     });
   } catch (error) {
     noteLedgerRowSkipped(error);
@@ -164,7 +163,7 @@ function noting<T>(read: () => T, fallback: () => T): T {
 }
 
 /** The session's pilot arm: `write` books it as ensurePilotArm does, else the stored arm or the hash arm. */
-function pilotArmAt(
+function pilotArm(
   db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
@@ -179,28 +178,26 @@ function pilotArmAt(
 
 /** Each call runs on the request's handle or a short-lived one. The delivery write takes the opener, since it is
  * fail-soft on an open that fails. */
-export function sqliteLedger(on: OnHandle): Sync<Ledger> {
+export function sqliteLedger(on: OnHandle): Ledger {
   // One schedule per store, so a long-lived server prunes the delivery ledger once a minute, not on every event.
   const prune = deliveryPruneSchedule();
-  const ledgerAt: Bodies<Pick<Ledger, 'lastSent' | 'pilotArm' | 'replaceRereads'>> = {
-    lastSent: lastSentState,
-    pilotArm: pilotArmAt,
-    replaceRereads: recordRereadsAt,
-  };
-  const reads = bound(on, ledgerAt);
   return {
-    recordTurn: (turn) => recordTurnVia(on, turn, prune),
+    recordTurn: (turn) => answered(() => recordTurnVia(on, turn, prune)),
     lastSent: (tenantId, sessionId, surface) =>
-      noting(
-        () => reads.lastSent(tenantId, sessionId, surface),
-        () => null,
+      answered(() =>
+        noting(
+          () => on((db) => lastSentState(db, tenantId, sessionId, surface)),
+          () => null,
+        ),
       ),
     pilotArm: (tenantId, sessionId, rateBp, opts) =>
-      noting(
-        () => reads.pilotArm(tenantId, sessionId, rateBp, opts),
-        () => hashArm(sessionId, rateBp),
+      answered(() =>
+        noting(
+          () => on((db) => pilotArm(db, tenantId, sessionId, rateBp, opts)),
+          () => hashArm(sessionId, rateBp),
+        ),
       ),
-    writeDeliveryEvent: (input) => writeDeliveryEventVia(on, input, prune),
-    replaceRereads: reads.replaceRereads,
+    writeDeliveryEvent: (input) => answered(() => writeDeliveryEventVia(on, input, prune)),
+    ...bound<Pick<Ledger, 'replaceRereads'>>(on, { replaceRereads: recordRereads }),
   };
 }

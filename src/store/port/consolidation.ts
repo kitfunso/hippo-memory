@@ -20,10 +20,6 @@ export type {
 export interface Consolidation {
   /** Up to `page.limit` memory ids of every tenant, by created then id, after `page.after`. */
   entryIdsPage(page: { readonly limit: number; readonly after?: EntryCursor }): Promise<EntryIdPage>;
-  /** The rows for `ids` by id; an id deleted since it was listed is absent. */
-  entriesByIds(ids: readonly string[]): Promise<Map<string, MemoryEntry>>;
-  /** The ids among `ids` that a typed object row names; sleep never retires one. */
-  objectBackedAmong(ids: readonly string[]): Promise<Set<string>>;
   /** The full-text index counts when they drift from `memories` (re-synced when `repair`), else null. */
   ftsDrift(repair: boolean): Promise<{ memories: number; fts: number } | null>;
   /** The sleep count and the average interval between recent sleeps. */
@@ -67,8 +63,6 @@ export interface Consolidation {
   countSleep(): Promise<void>;
   /** Appends each row as its own write; a failed row is logged and counted, and the failures returned as a count. */
   auditEachRow(events: readonly AppendAuditOpts[]): Promise<number>;
-  /** Up to `limit` memories of every tenant after `after`, by created then id, so a pass holds one page at a time. */
-  entriesPage(page: { readonly limit: number; readonly after?: EntryCursor }): Promise<EntryPage>;
   /** The current distilled memories that may share a text with another, and the order partitions first appear in. */
   duplicateCandidates(): Promise<DuplicateCandidates>;
   /** Deletes the targets, one transaction per chunk, each with its own forget row; true where the row went. */

@@ -5,7 +5,7 @@
 // storeImportsInDomain counts value imports, re-exports and import() calls from every folder layers.json marks domain into src/store or src/db: domain code reaches hippo.db through the port.
 // storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
 // portImportsFromSql counts imports and re-exports in src/store/port.ts, src/store/port-groups.ts and src/store/port/ of a src/store file outside those, or of a src/db file that runs SQL (.prepare, .exec or node:sqlite): the port defines its own types.
-// buildsOutsideRoots counts calls of sqliteStore, sqliteSyncStore or initStore (as imported from src/store or src/db) in src files outside the data layer and COMPOSITION_ROOTS.
+// buildsOutsideRoots counts calls of sqliteStore, sqliteStoreOn or initStore (as imported from src/store or src/db) in src files outside the data layer and COMPOSITION_ROOTS.
 // storeImportsInCli counts value imports of src/store or src/db in src/surface/cli files other than the CLI's composition root.
 // groupChecksInApi counts requireGroup and hasGroup calls in files that layers.json puts in the api or a domain layer.
 // portFunctionParams fails outright on any parameter of a method on a port interface whose type holds a function, through aliases, unions, object properties and imports: no function crosses to a store worker, so a rule goes to the store as data. No baseline.
@@ -224,7 +224,7 @@ function countDomainStoreImports(file, sf) {
   return n;
 }
 
-const STORE_BUILDERS = new Set(['sqliteStore', 'sqliteSyncStore', 'initStore']);
+const STORE_BUILDERS = new Set(['sqliteStore', 'sqliteStoreOn', 'initStore']);
 const GROUP_CHECKS = new Set(['requireGroup', 'hasGroup']);
 // Where a store may be built, each with why: every other file takes its store as a parameter or from the Context.
 const COMPOSITION_ROOTS = new Map([
@@ -463,7 +463,7 @@ const FOLDER_OPENERS = new Set([
   'initStore',
   'handlesOf',
   'sqliteStore',
-  'sqliteSyncStore',
+  'sqliteStoreOn',
 ]);
 /** The file's top-level functions, declared or bound to a const, each with its node and whether the file exports it. */
 function topLevelFunctions(sf) {

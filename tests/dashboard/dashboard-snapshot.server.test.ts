@@ -153,10 +153,10 @@ describe('dashboard tallies', () => {
       { memory_a_id: a2.id, memory_b_id: q.id, reason: 'quarantined member', score: 0.7 },
       { memory_a_id: r1.id, memory_b_id: r2.id, reason: 'already settled', score: 0.6 },
     ]);
-    const settled = listMemoryConflicts(store.hippoRoot, 'open', 'default').find(
+    const settled = (await listMemoryConflicts(store.hippoRoot, 'open', 'default')).find(
       (c) => c.reason === 'already settled',
     )!;
-    expect(resolveConflictKeeping(store.hippoRoot, 'default', settled.id, r1.id)).toBe(true);
+    expect(await resolveConflictKeeping(store.hippoRoot, 'default', settled.id, r1.id)).toBe(true);
 
     const o = await overview();
     const { reads, clock } = dashboardOf(store.hippoRoot, () => NOW);

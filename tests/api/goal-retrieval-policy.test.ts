@@ -48,7 +48,7 @@ describe('retrieval policy', () => {
     });
     await remember(ctx, { content: 'note two about auth refactor', tags: ['auth-rewrite'] });
 
-    pushGoal(env.hippoRoot, {
+    await pushGoal(env.hippoRoot, {
       sessionId: 's-p1',
       tenantId: 'default',
       goalName: 'auth-rewrite',
@@ -67,7 +67,7 @@ describe('retrieval policy', () => {
     const base = await recallCli('high-error lesson', '');
     const baseScore = base[0]?.score ?? 1.0;
 
-    pushGoal(env.hippoRoot, {
+    await pushGoal(env.hippoRoot, {
       sessionId: 's-p2',
       tenantId: 'default',
       goalName: 'plan-x',

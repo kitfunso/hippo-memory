@@ -117,12 +117,12 @@ describe('a v42 store migrates to v43 with the four tables present, empty', () =
 
 describe('createCard initial status', () => {
   it('no deps -> ready', async () => {
-    const card = createCard(root, 'default', { title: 'No deps' });
+    const card = await createCard(root, 'default', { title: 'No deps' });
     expect(card.status).toBe('ready');
   });
 
   it('one backlog-status dep -> backlog', async () => {
-    const parent = createCard(root, 'default', { title: 'Parent' });
+    const parent = await createCard(root, 'default', { title: 'Parent' });
     expect(parent.status).toBe('ready');
     // Force the parent to a non-done status so the child's pre-check sees a not-done parent.
     const db = openHippoDb(root);
@@ -131,25 +131,25 @@ describe('createCard initial status', () => {
     } finally {
       closeHippoDb(db);
     }
-    const child = createCard(root, 'default', { title: 'Child', dependsOn: [parent.id] });
+    const child = await createCard(root, 'default', { title: 'Child', dependsOn: [parent.id] });
     expect(child.status).toBe('backlog');
   });
 
   it('dep on an already-done parent -> ready', async () => {
-    const parent = createCard(root, 'default', { title: 'Done parent' });
+    const parent = await createCard(root, 'default', { title: 'Done parent' });
     const db = openHippoDb(root);
     try {
       db.prepare(`UPDATE cards SET status = 'done' WHERE id = ?`).run(parent.id);
     } finally {
       closeHippoDb(db);
     }
-    const child = createCard(root, 'default', { title: 'Child of done', dependsOn: [parent.id] });
+    const child = await createCard(root, 'default', { title: 'Child of done', dependsOn: [parent.id] });
     expect(child.status).toBe('ready');
   });
 
   it('a repeated dependsOn id is recorded once', async () => {
-    const parent = createCard(root, 'default', { title: 'Parent' });
-    const child = createCard(root, 'default', { title: 'Child', dependsOn: [parent.id, parent.id] });
+    const parent = await createCard(root, 'default', { title: 'Parent' });
+    const child = await createCard(root, 'default', { title: 'Child', dependsOn: [parent.id, parent.id] });
     expect(child.status).toBe('backlog');
     expect((await cardDetailOf(root, 'default', child.id))?.deps.parents).toEqual([parent.id]);
   });
@@ -169,21 +169,21 @@ describe('status-transition matrix', () => {
   });
 
   it('blocked -> running is accepted via claimCard', async () => {
-    const card = createCard(root, 'default', { title: 'Blocked card' });
+    const card = await createCard(root, 'default', { title: 'Blocked card' });
     const db = openHippoDb(root);
     try {
       db.prepare(`UPDATE cards SET status = 'blocked' WHERE id = ?`).run(card.id);
     } finally {
       closeHippoDb(db);
     }
-    const claimed = claimCard(root, 'default', card.id, 'codex');
+    const claimed = await claimCard(root, 'default', card.id, 'codex');
     expect(claimed?.status).toBe('running');
   });
 });
 
 describe('unknown dependsOn pre-check', () => {
   it('throws and leaves zero rows in cards and card_deps', async () => {
-    expect(() => createCard(root, 'default', { title: 'x', dependsOn: ['nope'] })).toThrow(
+    await expect(createCard(root, 'default', { title: 'x', dependsOn: ['nope'] })).rejects.toThrow(
       'unknown parent card id: nope',
     );
     const db = openHippoDb(root);
@@ -198,15 +198,15 @@ describe('unknown dependsOn pre-check', () => {
 
 describe("addCardComment checks the card belongs to the caller's tenant", () => {
   it('throws unknown card id for a foreign-tenant card and for a missing id; happy path still works', async () => {
-    const card = createCard(root, 'default', { title: 'Commented' });
+    const card = await createCard(root, 'default', { title: 'Commented' });
 
-    expect(() => addCardComment(root, 'tenant2', card.id, 'x', 'y')).toThrow(`unknown card id: ${card.id}`);
-    expect(() => addCardComment(root, 'default', 'nope', 'x', 'y')).toThrow('unknown card id: nope');
+    await expect(addCardComment(root, 'tenant2', card.id, 'x', 'y')).rejects.toThrow(`unknown card id: ${card.id}`);
+    await expect(addCardComment(root, 'default', 'nope', 'x', 'y')).rejects.toThrow('unknown card id: nope');
 
     expect((await cardDetailOf(root, 'default', card.id))?.comments).toEqual([]);
     expect(await cardDetailOf(root, 'tenant2', card.id)).toBeNull();
 
-    const comment = addCardComment(root, 'default', card.id, 'x', 'y');
+    const comment = await addCardComment(root, 'default', card.id, 'x', 'y');
     expect(comment.body).toBe('y');
     expect((await cardDetailOf(root, 'default', card.id))?.comments).toHaveLength(1);
   });
@@ -214,41 +214,41 @@ describe("addCardComment checks the card belongs to the caller's tenant", () => 
 
 describe('claim/block/review/complete throw on an unknown card id, keep null for the wrong state', () => {
   it('claimCard throws for a nonexistent id and for a card read under another tenant', async () => {
-    const card = createCard(root, 'default', { title: 'x' });
-    expect(() => claimCard(root, 'default', 'nope', 'r1')).toThrow('unknown card id: nope');
-    expect(() => claimCard(root, 'tenant2', card.id, 'r1')).toThrow(`unknown card id: ${card.id}`);
+    const card = await createCard(root, 'default', { title: 'x' });
+    await expect(claimCard(root, 'default', 'nope', 'r1')).rejects.toThrow('unknown card id: nope');
+    await expect(claimCard(root, 'tenant2', card.id, 'r1')).rejects.toThrow(`unknown card id: ${card.id}`);
   });
 
   it('blockCard throws for a nonexistent id and for a card read under another tenant', async () => {
-    const card = createCard(root, 'default', { title: 'x' });
-    claimCard(root, 'default', card.id, 'r1');
-    expect(() => blockCard(root, 'default', 'nope', 'why')).toThrow('unknown card id: nope');
-    expect(() => blockCard(root, 'tenant2', card.id, 'why')).toThrow(`unknown card id: ${card.id}`);
+    const card = await createCard(root, 'default', { title: 'x' });
+    await claimCard(root, 'default', card.id, 'r1');
+    await expect(blockCard(root, 'default', 'nope', 'why')).rejects.toThrow('unknown card id: nope');
+    await expect(blockCard(root, 'tenant2', card.id, 'why')).rejects.toThrow(`unknown card id: ${card.id}`);
   });
 
   it('reviewCard throws for a nonexistent id and for a card read under another tenant', async () => {
-    const card = createCard(root, 'default', { title: 'x' });
-    claimCard(root, 'default', card.id, 'r1');
-    expect(() => reviewCard(root, 'default', 'nope')).toThrow('unknown card id: nope');
-    expect(() => reviewCard(root, 'tenant2', card.id)).toThrow(`unknown card id: ${card.id}`);
+    const card = await createCard(root, 'default', { title: 'x' });
+    await claimCard(root, 'default', card.id, 'r1');
+    await expect(reviewCard(root, 'default', 'nope')).rejects.toThrow('unknown card id: nope');
+    await expect(reviewCard(root, 'tenant2', card.id)).rejects.toThrow(`unknown card id: ${card.id}`);
   });
 
   it('completeCard throws for a nonexistent id and for a card read under another tenant', async () => {
-    const card = createCard(root, 'default', { title: 'x' });
-    claimCard(root, 'default', card.id, 'r1');
-    reviewCard(root, 'default', card.id);
-    expect(() => completeCard(root, 'default', 'nope', 'success')).toThrow('unknown card id: nope');
-    expect(() => completeCard(root, 'tenant2', card.id, 'success')).toThrow(`unknown card id: ${card.id}`);
+    const card = await createCard(root, 'default', { title: 'x' });
+    await claimCard(root, 'default', card.id, 'r1');
+    await reviewCard(root, 'default', card.id);
+    await expect(completeCard(root, 'default', 'nope', 'success')).rejects.toThrow('unknown card id: nope');
+    await expect(completeCard(root, 'tenant2', card.id, 'success')).rejects.toThrow(`unknown card id: ${card.id}`);
   });
 
   it('a card that exists but is in the wrong state still returns null, not throws', async () => {
-    const parent = createCard(root, 'default', { title: 'parent' });
-    const backlogChild = createCard(root, 'default', { title: 'child', dependsOn: [parent.id] });
-    expect(claimCard(root, 'default', backlogChild.id, 'r1')).toBeNull();
+    const parent = await createCard(root, 'default', { title: 'parent' });
+    const backlogChild = await createCard(root, 'default', { title: 'child', dependsOn: [parent.id] });
+    expect(await claimCard(root, 'default', backlogChild.id, 'r1')).toBeNull();
 
-    const readyCard = createCard(root, 'default', { title: 'ready-one' });
-    expect(blockCard(root, 'default', readyCard.id, 'why')).toBeNull();
-    expect(reviewCard(root, 'default', readyCard.id)).toBeNull();
+    const readyCard = await createCard(root, 'default', { title: 'ready-one' });
+    expect(await blockCard(root, 'default', readyCard.id, 'why')).toBeNull();
+    expect(await reviewCard(root, 'default', readyCard.id)).toBeNull();
   });
 });
 
@@ -256,8 +256,8 @@ describe('createCard/claimCard/blockCard/addCardComment validate their inputs', 
   it('createCard throws for an empty or whitespace-only title and commits nothing', async () => {
     const db = openHippoDb(root);
     try {
-      expect(() => createCard(root, 'default', { title: '' })).toThrow('title must not be empty');
-      expect(() => createCard(root, 'default', { title: '   ' })).toThrow('title must not be empty');
+      await expect(createCard(root, 'default', { title: '' })).rejects.toThrow('title must not be empty');
+      await expect(createCard(root, 'default', { title: '   ' })).rejects.toThrow('title must not be empty');
       expect(countRows(db, 'cards')).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -267,13 +267,13 @@ describe('createCard/claimCard/blockCard/addCardComment validate their inputs', 
   it('createCard throws for a budget that is not a positive integer and commits nothing', async () => {
     const db = openHippoDb(root);
     try {
-      expect(() => createCard(root, 'default', { title: 'x', budget: 0 })).toThrow(
+      await expect(createCard(root, 'default', { title: 'x', budget: 0 })).rejects.toThrow(
         'Invalid budget: 0 (expected a positive integer)',
       );
-      expect(() => createCard(root, 'default', { title: 'x', budget: -3 })).toThrow(
+      await expect(createCard(root, 'default', { title: 'x', budget: -3 })).rejects.toThrow(
         'Invalid budget: -3 (expected a positive integer)',
       );
-      expect(() => createCard(root, 'default', { title: 'x', budget: 2.5 })).toThrow(
+      await expect(createCard(root, 'default', { title: 'x', budget: 2.5 })).rejects.toThrow(
         'Invalid budget: 2.5 (expected a positive integer)',
       );
       expect(countRows(db, 'cards')).toBe(0);
@@ -283,23 +283,23 @@ describe('createCard/claimCard/blockCard/addCardComment validate their inputs', 
   });
 
   it('claimCard throws for an empty runtime and leaves the card unclaimed', async () => {
-    const card = createCard(root, 'default', { title: 'x' });
-    expect(() => claimCard(root, 'default', card.id, '')).toThrow('runtime must not be empty');
-    expect(loadCard(root, 'default', card.id)?.status).toBe('ready');
-    expect(loadCardRuns(root, 'default', card.id)).toEqual([]);
+    const card = await createCard(root, 'default', { title: 'x' });
+    await expect(claimCard(root, 'default', card.id, '')).rejects.toThrow('runtime must not be empty');
+    expect((await loadCard(root, 'default', card.id))?.status).toBe('ready');
+    expect(await loadCardRuns(root, 'default', card.id)).toEqual([]);
   });
 
   it('blockCard throws for an empty reason and leaves the card running with no comment', async () => {
-    const card = createCard(root, 'default', { title: 'x' });
-    claimCard(root, 'default', card.id, 'r1');
-    expect(() => blockCard(root, 'default', card.id, '')).toThrow('reason must not be empty');
-    expect(loadCard(root, 'default', card.id)?.status).toBe('running');
+    const card = await createCard(root, 'default', { title: 'x' });
+    await claimCard(root, 'default', card.id, 'r1');
+    await expect(blockCard(root, 'default', card.id, '')).rejects.toThrow('reason must not be empty');
+    expect((await loadCard(root, 'default', card.id))?.status).toBe('running');
     expect((await cardDetailOf(root, 'default', card.id))?.comments).toEqual([]);
   });
 
   it('addCardComment throws for an empty body and adds no comment', async () => {
-    const card = createCard(root, 'default', { title: 'x' });
-    expect(() => addCardComment(root, 'default', card.id, 'author', '')).toThrow('body must not be empty');
+    const card = await createCard(root, 'default', { title: 'x' });
+    await expect(addCardComment(root, 'default', card.id, 'author', '')).rejects.toThrow('body must not be empty');
     expect((await cardDetailOf(root, 'default', card.id))?.comments).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 // The seams a server uses to save another machine's compaction: pre-compact, compact-resume and the store calls under them.
 import { describe, expect, it, vi } from 'vitest';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { PRE_COMPACT_INSTRUCTION } from '../../src/surface/capture/compaction-record.js';
 import {
@@ -87,22 +87,25 @@ describe('storeLesson for a caller', () => {
 
   it('counts a user-global lesson as a repeat in every project', async () => {
     seed(LESSON, '', ['error', 'auto-captured']);
-    expect(
-      sqliteSyncStore(handlesOf(root)).lessonWrites.contentsWithTag(TENANT, 'auto-captured', ['acme/web']),
-    ).toEqual([LESSON]);
+    expect(await sqliteStore(root).lessonWrites.contentsWithTag(TENANT, 'auto-captured', ['acme/web'])).toEqual([
+      LESSON,
+    ]);
     expect(await storeLesson(failureTarget(root, TENANT), LESSON, other)).toBe('duplicate');
   });
 });
 
 describe('snapshot_saved under a tenant the environment does not name', () => {
-  it('marks the record through both the handle and the root', () => {
-    withDb((db) => {
+  it('marks the record through both the handle and the root', async () => {
+    // The group's body runs to its end inside the call, so the row reads below see its write before the await.
+    const marking = withDb((db) => {
       const a = startCompaction(db, TENANT, { ...META, originProject: 'acme/app' });
       const b = startCompaction(db, TENANT, { ...META, sessionId: 's3', originProject: 'acme/app' });
       markSnapshotSaved(db, TENANT, a);
-      sqliteCompactionHooks(handlesOf(root).on).markSnapshotSaved(TENANT, b);
+      const marked = sqliteCompactionHooks(handlesOf(root)).markSnapshotSaved(TENANT, b);
       expect([recordRow(db, a)?.snapshot_saved, recordRow(db, b)?.snapshot_saved]).toEqual([1, 1]);
+      return marked;
     });
+    await marking;
   });
 });
 

@@ -14,9 +14,9 @@ describe('goal lifecycle', () => {
     root = makeRoot('b3-life');
   });
 
-  it('completeGoal sets status, completed_at, outcome_score', () => {
-    const g = pushGoal(root, { ...ctx, goalName: 'work' });
-    completeGoal(root, g.id, { outcomeScore: 0.85 });
+  it('completeGoal sets status, completed_at, outcome_score', async () => {
+    const g = await pushGoal(root, { ...ctx, goalName: 'work' });
+    await completeGoal(root, g.id, { outcomeScore: 0.85 });
     const db = openHippoDb(root);
     try {
       // SAFETY: the goal_stack table's status/completed_at/outcome_score columns are
@@ -36,10 +36,10 @@ describe('goal lifecycle', () => {
     expect(activeGoalsOf(root, ctx)).toHaveLength(0);
   });
 
-  it('completeGoal on a suspended goal still works', () => {
-    const g = pushGoal(root, { ...ctx, goalName: 'sus-then-done' });
-    suspendGoal(root, g.id);
-    completeGoal(root, g.id, { outcomeScore: 0.5 });
+  it('completeGoal on a suspended goal still works', async () => {
+    const g = await pushGoal(root, { ...ctx, goalName: 'sus-then-done' });
+    await suspendGoal(root, g.id);
+    await completeGoal(root, g.id, { outcomeScore: 0.5 });
     const db = openHippoDb(root);
     try {
       // SAFETY: status is a TEXT column on goal_stack per the migration in src/db/index.ts;

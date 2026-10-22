@@ -16,8 +16,8 @@ describe('pushGoal + activeGoalsOf', () => {
     root = makeRoot('b3-push');
   });
 
-  it('push then list returns the new goal as active', () => {
-    const goal = pushGoal(root, {
+  it('push then list returns the new goal as active', async () => {
+    const goal = await pushGoal(root, {
       sessionId: 's1',
       tenantId: 'default',
       goalName: 'review auth code',
@@ -30,17 +30,17 @@ describe('pushGoal + activeGoalsOf', () => {
     expect(active[0].goalName).toBe('review auth code');
   });
 
-  it('isolates goals across sessions and tenants', () => {
-    pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'A' });
-    pushGoal(root, { sessionId: 's2', tenantId: 'default', goalName: 'B' });
-    pushGoal(root, { sessionId: 's1', tenantId: 't2', goalName: 'C' });
+  it('isolates goals across sessions and tenants', async () => {
+    await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'A' });
+    await pushGoal(root, { sessionId: 's2', tenantId: 'default', goalName: 'B' });
+    await pushGoal(root, { sessionId: 's1', tenantId: 't2', goalName: 'C' });
     expect(activeGoalsOf(root, { sessionId: 's1', tenantId: 'default' })[0].goalName).toBe('A');
     expect(activeGoalsOf(root, { sessionId: 's2', tenantId: 'default' })[0].goalName).toBe('B');
     expect(activeGoalsOf(root, { sessionId: 's1', tenantId: 't2' })[0].goalName).toBe('C');
   });
 
-  it('attaches retrieval policy when provided (no FK error)', () => {
-    const g = pushGoal(root, {
+  it('attaches retrieval policy when provided (no FK error)', async () => {
+    const g = await pushGoal(root, {
       sessionId: 's1',
       tenantId: 'default',
       goalName: 'with policy',
@@ -61,41 +61,41 @@ describe('pushGoal + activeGoalsOf', () => {
     }
   }
 
-  it('refuses a parent goal id that does not exist and writes no row', () => {
-    expect(() =>
+  it('refuses a parent goal id that does not exist and writes no row', async () => {
+    await expect(
       pushGoal(root, {
         sessionId: 's1',
         tenantId: 'default',
         goalName: 'child',
         parentGoalId: 'g_missing',
       }),
-    ).toThrow(new Error('parent goal not found: g_missing'));
+    ).rejects.toThrow(new Error('parent goal not found: g_missing'));
     expect(goalRowCount()).toBe(0);
   });
 
-  it('refuses a parent goal owned by another tenant and writes no new row', () => {
-    const parent = pushGoal(root, { sessionId: 's1', tenantId: 't2', goalName: 'parent' });
-    expect(() =>
+  it('refuses a parent goal owned by another tenant and writes no new row', async () => {
+    const parent = await pushGoal(root, { sessionId: 's1', tenantId: 't2', goalName: 'parent' });
+    await expect(
       pushGoal(root, {
         sessionId: 's1',
         tenantId: 'default',
         goalName: 'child',
         parentGoalId: parent.id,
       }),
-    ).toThrow(new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`));
+    ).rejects.toThrow(new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`));
     expect(goalRowCount()).toBe(1);
   });
 
-  it('refuses a parent goal sitting in another session and writes no new row', () => {
-    const parent = pushGoal(root, { sessionId: 's2', tenantId: 'default', goalName: 'parent' });
-    expect(() =>
+  it('refuses a parent goal sitting in another session and writes no new row', async () => {
+    const parent = await pushGoal(root, { sessionId: 's2', tenantId: 'default', goalName: 'parent' });
+    await expect(
       pushGoal(root, {
         sessionId: 's1',
         tenantId: 'default',
         goalName: 'child',
         parentGoalId: parent.id,
       }),
-    ).toThrow(new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`));
+    ).rejects.toThrow(new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`));
     expect(goalRowCount()).toBe(1);
   });
 });

@@ -4,7 +4,6 @@ import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, GetActiveGoalsOpts } from '../port/types.js';
 import type { GoalRecallLogRow } from '../port/recall-writes.js';
 import type { CompleteGoalOpts, PushGoalOpts, Goals } from '../port/goals.js';
-import type { Sync } from './served.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -56,7 +55,7 @@ export function rowToGoal(row: GoalRow): Goal {
   };
 }
 
-/** Depth-cap enforcer for pushGoalAt and resumeGoalAt: suspends the oldest `overflow` goals; **caller MUST be inside a
+/** Depth-cap enforcer for pushGoal and resumeGoal: suspends the oldest `overflow` goals; **caller MUST be inside a
  * `BEGIN IMMEDIATE` transaction**. @internal Internal goal-stack invariant. Subject to change. */
 function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, sessionId: string): void {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
@@ -89,7 +88,7 @@ function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, session
   }
 }
 
-function pushGoalAt(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalOpts, 'tenantId'>): Goal {
+function pushGoal(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalOpts, 'tenantId'>): Goal {
   const opts: PushGoalOpts = { ...goal, tenantId };
   const id = generateId('g', GOAL_ID_CHARS);
   const createdAt = new Date().toISOString();
@@ -174,13 +173,13 @@ function insertRetrievalPolicy(
 }
 
 /** The active goals and their policies on one handle, so a goal and its policy never disagree. */
-export function activeGoalsWithPoliciesAt(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): ActiveGoals {
+export function activeGoalsWithPolicies(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): ActiveGoals {
   const goals = getActiveGoalsWithDb(db, opts);
   return { goals, policies: loadGoalPolicies(db, goals) };
 }
 
 /** Every goal of a (tenant, session), whatever its status, oldest first. */
-function getSessionGoalsAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): Goal[] {
+function getSessionGoals(db: DatabaseSyncLike, tenantId: string, sessionId: string): Goal[] {
   const rows = cachedStatement(
     db,
     `
@@ -281,7 +280,7 @@ const NEGATIVE_OUTCOME_THRESHOLD = 0.3;
 const STRENGTH_BOOST = 1.1;
 const STRENGTH_DECAY = 0.85;
 
-function completeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string, opts: CompleteGoalOpts): void {
+function completeGoal(db: DatabaseSyncLike, _tenantId: string, goalId: string, opts: CompleteGoalOpts): void {
   const completedAt = new Date().toISOString();
   const score = opts.outcomeScore ?? null;
 
@@ -330,11 +329,11 @@ function completeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string,
   });
 }
 
-function suspendGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string): void {
+function suspendGoal(db: DatabaseSyncLike, _tenantId: string, goalId: string): void {
   cachedStatement(db, `UPDATE goal_stack SET status = 'suspended' WHERE id = ? AND status = 'active'`).run(goalId);
 }
 
-function resumeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string): void {
+function resumeGoal(db: DatabaseSyncLike, _tenantId: string, goalId: string): void {
   withWriteScope(db, 'resume_goal', () => {
     const row = cachedStatement(db, `SELECT session_id, tenant_id, status FROM goal_stack WHERE id = ?`).get(goalId) as
       | { session_id: string; tenant_id: string; status: string }
@@ -349,14 +348,14 @@ function resumeGoalAt(db: DatabaseSyncLike, _tenantId: string, goalId: string): 
 
 // Goal ids are not tenant-scoped in hippo.db, so complete, suspend and resume ignore the tenant; the api checks the
 // host admin.
-const goalsAt: Bodies<Goals> = {
-  push: pushGoalAt,
-  sessionGoals: getSessionGoalsAt,
-  complete: completeGoalAt,
-  suspend: suspendGoalAt,
-  resume: resumeGoalAt,
+const goalsBodies: Bodies<Goals> = {
+  push: pushGoal,
+  sessionGoals: getSessionGoals,
+  complete: completeGoal,
+  suspend: suspendGoal,
+  resume: resumeGoal,
 };
 
-export function sqliteGoals(on: OnHandle): Sync<Goals> {
-  return bound(on, goalsAt);
+export function sqliteGoals(on: OnHandle): Goals {
+  return bound(on, goalsBodies);
 }

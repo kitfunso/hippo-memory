@@ -57,12 +57,12 @@ describe('HTTP /v1/predictions/stats', () => {
       [3, 5],
       [4, 6],
     ]) {
-      const p = savePrediction(home, 'default', {
+      const p = await savePrediction(home, 'default', {
         classTag: 'http-test',
         claimText: `est=${est} act=${act}`,
         estimateValue: est,
       });
-      closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
+      await closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
     }
 
     const res = await fetch(`${handle.url}/v1/predictions/stats?class=http-test`, {
@@ -85,8 +85,12 @@ describe('HTTP /v1/predictions/stats', () => {
   });
 
   it.skipIf(needsHippoDb('db'))('audit log records predict_baserate row post-call', async () => {
-    const p = savePrediction(home, 'default', { classTag: 'audit-http', claimText: 'audit test', estimateValue: 1 });
-    closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: 2 });
+    const p = await savePrediction(home, 'default', {
+      classTag: 'audit-http',
+      claimText: 'audit test',
+      estimateValue: 1,
+    });
+    await closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: 2 });
 
     await fetch(`${handle.url}/v1/predictions/stats?class=audit-http`, { headers: authHeaders() });
 

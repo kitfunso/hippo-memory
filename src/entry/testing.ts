@@ -31,7 +31,7 @@ export {
 export { resolveTenantId } from '../surface/server/boot.js';
 export {
   buildIndexFromDb,
-  loadVectorCandidateEntriesAt,
+  loadVectorCandidateEntries as loadVectorCandidateEntriesAt,
   recordTokenUse,
   tokensBySession,
   upsertEntryRow,

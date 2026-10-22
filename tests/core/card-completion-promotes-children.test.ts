@@ -23,18 +23,18 @@ beforeEach(() => {
   root = makeRoot('card-promotion');
 });
 
-function toReview(id: string): void {
-  claimCard(root, TENANT, id, 'test-runtime');
-  reviewCard(root, TENANT, id);
+async function toReview(id: string): Promise<void> {
+  await claimCard(root, TENANT, id, 'test-runtime');
+  await reviewCard(root, TENANT, id);
 }
 
-function finish(id: string): void {
-  toReview(id);
-  completeCard(root, TENANT, id, 'success');
+async function finish(id: string): Promise<void> {
+  await toReview(id);
+  await completeCard(root, TENANT, id, 'success');
 }
 
-function card(id: string): Card {
-  const found = loadCard(root, TENANT, id);
+async function card(id: string): Promise<Card> {
+  const found = await loadCard(root, TENANT, id);
   if (!found) throw new Error(`card ${id} is missing`);
   return found;
 }
@@ -47,17 +47,18 @@ interface Family {
 }
 
 /** A parent in review with `children` children: every fourth waits on an open second parent, every fifth already left backlog, the rest are promotable. */
-function seedFamily(children: number): Family {
-  const parent = createCard(root, TENANT, { title: 'parent' }).id;
-  const doneParent = createCard(root, TENANT, { title: 'done parent' }).id;
-  const openParent = createCard(root, TENANT, { title: 'open parent' }).id;
+async function seedFamily(children: number): Promise<Family> {
+  const parent = (await createCard(root, TENANT, { title: 'parent' })).id;
+  const doneParent = (await createCard(root, TENANT, { title: 'done parent' })).id;
+  const openParent = (await createCard(root, TENANT, { title: 'open parent' })).id;
   const promotable = new Set<string>();
   const otherIds: string[] = [];
-  const ids = Array.from({ length: children }, (_, i) => {
+  const ids: string[] = [];
+  for (let i = 0; i < children; i++) {
     const second = i % 4 === 3 ? [openParent] : i % 3 === 1 ? [doneParent] : [];
-    return createCard(root, TENANT, { title: `child ${i}`, dependsOn: [parent, ...second] }).id;
-  });
-  finish(doneParent);
+    ids.push((await createCard(root, TENANT, { title: `child ${i}`, dependsOn: [parent, ...second] })).id);
+  }
+  await finish(doneParent);
   const db = openHippoDb(root);
   const toReady = db.prepare(
     "UPDATE cards SET status = 'ready', updated_at = ? WHERE id = ? AND tenant_id = ? AND status = 'backlog'",
@@ -71,8 +72,8 @@ function seedFamily(children: number): Family {
   } finally {
     closeHippoDb(db);
   }
-  toReview(parent);
-  return { parent, promotable, others: otherIds.map(card) };
+  await toReview(parent);
+  return { parent, promotable, others: await Promise.all(otherIds.map(card)) };
 }
 
 // Each case writes a family of up to 100 cards and their dependency rows to a real store, one statement at a time.
@@ -80,8 +81,8 @@ describe('completeCard child promotion', () => {
   it.each([1, 10, 100])(
     'promotes the unblocked backlog children of a parent with %i children, in card_deps order',
     async (children) => {
-      const family = seedFamily(children);
-      const result = completeCard(root, TENANT, family.parent, 'success');
+      const family = await seedFamily(children);
+      const result = await completeCard(root, TENANT, family.parent, 'success');
 
       const deps = (await cardDetailOf(root, TENANT, family.parent))?.deps;
       const inDepsOrder = (deps?.children ?? []).filter((id) => family.promotable.has(id));
@@ -89,21 +90,27 @@ describe('completeCard child promotion', () => {
       expect(result?.promotedChildren).toHaveLength(family.promotable.size);
       expect(result?.card.status).toBe('done');
       for (const id of family.promotable) {
-        expect(card(id)).toMatchObject({ status: 'ready', leaseUntil: null, heartbeatAt: null, assigneeRuntime: null });
+        expect(await card(id)).toMatchObject({
+          status: 'ready',
+          leaseUntil: null,
+          heartbeatAt: null,
+          assigneeRuntime: null,
+        });
       }
-      expect(family.others.map((before) => card(before.id))).toEqual(family.others);
+      expect(await Promise.all(family.others.map((before) => card(before.id)))).toEqual(family.others);
     },
   );
 
-  it('promotes nothing when the parent is shelved', () => {
-    const family = seedFamily(10);
-    const result = completeCard(root, TENANT, family.parent, 'failure');
+  it('promotes nothing when the parent is shelved', async () => {
+    const family = await seedFamily(10);
+    const result = await completeCard(root, TENANT, family.parent, 'failure');
     expect(result?.promotedChildren).toEqual([]);
-    expect([...family.promotable].map((id) => card(id).status)).toEqual([...family.promotable].map(() => 'backlog'));
+    const promotable = await Promise.all([...family.promotable].map((id) => card(id)));
+    expect(promotable.map((child) => child.status)).toEqual([...family.promotable].map(() => 'backlog'));
   });
 
-  it("leaves another tenant's child of the same parent id in backlog", () => {
-    const family = seedFamily(3);
+  it("leaves another tenant's child of the same parent id in backlog", async () => {
+    const family = await seedFamily(3);
     const db = openHippoDb(root);
     try {
       db.prepare(`
@@ -115,9 +122,9 @@ describe('completeCard child promotion', () => {
     } finally {
       closeHippoDb(db);
     }
-    const result = completeCard(root, TENANT, family.parent, 'success');
+    const result = await completeCard(root, TENANT, family.parent, 'success');
     expect(result?.promotedChildren).toHaveLength(family.promotable.size);
-    expect(loadCard(root, 'tenant-b', 'card_other')?.status).toBe('backlog');
+    expect((await loadCard(root, 'tenant-b', 'card_other'))?.status).toBe('backlog');
   });
 });
 
@@ -139,15 +146,17 @@ function recordPrepares<T>(fn: () => T) {
 // Each measured call runs outside the test's request, so it prepares on a fresh connection as one CLI command does.
 describe('statements one completion prepares and runs', () => {
   // Writes three families of 1, 10 and 100 cards to a real store.
-  it('do not grow with the child count: one read of the children and one update for all it promotes', () => {
-    const runs = [1, 10, 100].map((children) => {
-      const family = seedFamily(children);
+  it('do not grow with the child count: one read of the children and one update for all it promotes', async () => {
+    const runs: { prepared: string[]; run: string[] }[] = [];
+    for (const children of [1, 10, 100]) {
+      const family = await seedFamily(children);
+      // The completion's statements all run inside the call; only its answer waits on the Promise.
       const log = recordStatements(() =>
         recordPrepares(() => outsideRequestStores(() => completeCard(root, TENANT, family.parent, 'success'))),
       );
-      expect(log.result.result?.promotedChildren).toHaveLength(family.promotable.size);
-      return { prepared: log.result.prepared, run: log.statements };
-    });
+      expect((await log.result.result)?.promotedChildren).toHaveLength(family.promotable.size);
+      runs.push({ prepared: log.result.prepared, run: log.statements });
+    }
     expect(runs.map((r) => [r.prepared.length, r.run.length])).toEqual(
       runs.map(() => [runs[0].prepared.length, runs[0].run.length]),
     );
@@ -159,7 +168,8 @@ describe('statements one completion prepares and runs', () => {
   });
 
   it('prepares the dependency insert of a new card once for 20 parents', async () => {
-    const parents = Array.from({ length: 20 }, (_, i) => createCard(root, TENANT, { title: `parent ${i}` }).id);
+    const parents: string[] = [];
+    for (let i = 0; i < 20; i++) parents.push((await createCard(root, TENANT, { title: `parent ${i}` })).id);
     const log = recordStatements(() =>
       recordPrepares(() =>
         outsideRequestStores(() => createCard(root, TENANT, { title: 'child', dependsOn: parents })),
@@ -167,7 +177,8 @@ describe('statements one completion prepares and runs', () => {
     );
     expect(countMatching(log.result.prepared, 'INSERT INTO card_deps')).toBe(1);
     expect(countMatching(log.statements, 'INSERT INTO card_deps')).toBe(20);
-    expect(log.result.result.status).toBe('backlog');
-    expect((await cardDetailOf(root, TENANT, log.result.result.id))?.deps.parents.sort()).toEqual([...parents].sort());
+    const child = await log.result.result;
+    expect(child.status).toBe('backlog');
+    expect((await cardDetailOf(root, TENANT, child.id))?.deps.parents.sort()).toEqual([...parents].sort());
   });
 });

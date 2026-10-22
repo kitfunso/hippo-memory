@@ -92,9 +92,9 @@ describe('sleep skips superseded rows', () => {
     writeEntry(root, stale!);
     await supersede(ctxFor(root), stale!.id, 'bob runs payroll');
 
-    expect(loadChildrenOfSummary(root, summary.id, 'default').map((e) => e.id)).toEqual([kept!.id]);
-    expect(loadAllL2Summaries(root).map((e) => e.id)).toEqual([summary.id]);
+    expect((await loadChildrenOfSummary(root, summary.id, 'default')).map((e) => e.id)).toEqual([kept!.id]);
+    expect((await loadAllL2Summaries(root)).map((e) => e.id)).toEqual([summary.id]);
     await supersede(ctxFor(root), summary.id, 'alice runs billing and bob runs payroll');
-    expect(loadAllL2Summaries(root)).toEqual([]);
+    expect(await loadAllL2Summaries(root)).toEqual([]);
   });
 });

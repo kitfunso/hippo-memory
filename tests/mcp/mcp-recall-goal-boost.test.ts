@@ -82,7 +82,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
       content: 'auth bug fix details',
       tags: ['fix-auth'],
     });
-    pushGoal(home, { sessionId, tenantId, goalName: 'fix-auth' });
+    await pushGoal(home, { sessionId, tenantId, goalName: 'fix-auth' });
 
     const res = await callTool('hippo_recall', { query: 'auth', budget: 2000, session_id: sessionId }, ctx);
     const text = extractText(res);
@@ -118,7 +118,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
       content: 'auth bug fix details',
       tags: ['fix-auth'],
     });
-    pushGoal(home, { sessionId, tenantId, goalName: 'fix-auth' });
+    await pushGoal(home, { sessionId, tenantId, goalName: 'fix-auth' });
 
     await callTool('hippo_recall', { query: 'auth', budget: 2000 }, ctx);
 

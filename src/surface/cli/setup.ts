@@ -60,7 +60,7 @@ import { printError } from './output.js';
 import { boolFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
 import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
-import { repairQualityOnceAt } from './quality-repair-once.js';
+import { repairQualityOnce } from './quality-repair-once.js';
 import {
   appendHookBlock,
   hookBlock,
@@ -575,7 +575,7 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
     if (finished > 0) {
       console.log(`Finished saving ${plural(finished, 'compaction')} left over in the global store.`);
     }
-    await repairQualityOnceAt(globalRoot, tenantId);
+    await repairQualityOnce(globalRoot, tenantId);
   }
   printAgentImport(await importUserMemories(globalRoot, cliSyncOptions(tenantId, currentMachine())), '');
   const workspaces = listRegisteredWorkspaces(globalRoot);

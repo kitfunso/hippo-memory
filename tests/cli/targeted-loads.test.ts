@@ -6,8 +6,7 @@ import { countMatching, recordStatements, recordStatementsAsync } from '../_help
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { memoryList } from '../../src/api/memories/memories.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { storedTextKeys } from '../../src/base/util/same-text.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -53,7 +52,7 @@ async function seed(count: number, tenantId = 'default'): Promise<string[]> {
   return ids;
 }
 
-describe('loadEntryTextKeysPageAt', () => {
+describe('loadEntryTextKeysPage', () => {
   it('pages the same text keys, in the same order, as the whole-row read, for one tenant or all', async () => {
     await seed(5);
     await seed(3, 'acme');
@@ -152,15 +151,16 @@ describe('rejections.apply', () => {
     await seed(5);
     const target = createMemory('the deploy window is friday afternoon', { tenantId: 'default' });
     writeEntry(root, target);
-    const { rejections } = sqliteSyncStore(handlesOf(root));
-    const { result, statements } = recordStatements(() =>
-      rejections.apply({
-        tenantId: 'default',
-        actor: 'tester',
-        reason: 'wrong',
-        value: '  The Deploy WINDOW is friday   afternoon ',
-        ownScope: null,
-      }),
+    const { rejections } = sqliteStore(root);
+    const { result, statements } = await recordStatementsAsync(
+      async () =>
+        await rejections.apply({
+          tenantId: 'default',
+          actor: 'tester',
+          reason: 'wrong',
+          value: '  The Deploy WINDOW is friday   afternoon ',
+          ownScope: null,
+        }),
     );
     expect(result.removedIds).toEqual([target.id]);
     expect(readEntry(root, target.id)).toBeNull();

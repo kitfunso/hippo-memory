@@ -7,12 +7,6 @@ export interface KeysetPosition {
   readonly id: string | number;
 }
 
-/** A WHERE fragment and the params it binds. */
-export interface KeysetClause {
-  sql: string;
-  params: Array<string | number>;
-}
-
 /** A page's rows and the cursor the next page starts after, null on the last page. */
 export interface KeysetPage<T, C> {
   readonly rows: T[];
@@ -24,10 +18,4 @@ export function keysetPage<T, C>(rows: readonly T[], limit: number, cursorOf: (r
   const kept = rows.slice(0, limit);
   const last = kept[kept.length - 1];
   return { rows: kept, next: rows.length > limit && last !== undefined ? cursorOf(last) : null };
-}
-
-/** An ` AND ...` WHERE fragment and its params selecting rows strictly after `after`; empty when `after` is unset. */
-export function keysetAfter(sortCol: string, idCol: string, after: KeysetPosition | undefined): KeysetClause {
-  if (!after) return { sql: '', params: [] };
-  return { sql: ` AND (${sortCol}, ${idCol}) < (?, ?)`, params: [after.key, after.id] };
 }

@@ -38,7 +38,7 @@ import {
 } from './compaction-rows.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './entry-writes.js';
 import { isRecallBoostAblated } from '../../base/memory/ablation.js';
-import { updateStatsAt } from './index-and-stats.js';
+import { updateStats } from './index-and-stats.js';
 import type { StoreFiles } from './open.js';
 import { errorFields, errorMessage, log as hippoLog } from '../../base/util/log.js';
 import type { CompactionStart, CompactionText } from '../port/capture.js';
@@ -353,7 +353,7 @@ function finishItemWrites(db: DatabaseSyncLike, hippoRoot: string, writes: ItemW
   for (const entry of writes.written) writeEntryMirrors(hippoRoot, entry);
   if (writes.written.length > 0) {
     try {
-      updateStatsAt(db, { hippoRoot }, { remembered: writes.written.length });
+      updateStats(db, { hippoRoot }, { remembered: writes.written.length });
     } catch (err) {
       // The rows are committed; a counter that could not be bumped must not turn that into a failed step.
       log(`remembered counter not updated: ${errorMessage(err)}`);

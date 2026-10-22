@@ -35,7 +35,7 @@ function at(entry: MemoryEntry, iso: string): MemoryEntry {
   return { ...entry, created: iso, validFrom: iso, lastRetrieved: iso };
 }
 
-function seed(dir: string): void {
+async function seed(dir: string): Promise<void> {
   const a = (content: string, iso: string, over: Parameters<typeof createMemory>[1] = {}): MemoryEntry =>
     at(createMemory(content, { tenantId: TENANT_A, ...over }), iso);
   const raw = a('slack: the tier moved to 120', ago(30 * 24 * HOUR), { kind: 'raw' });
@@ -58,9 +58,9 @@ function seed(dir: string): void {
     ],
     NOW,
   );
-  const resolved = listMemoryConflicts(dir).find((c) => c.reason === 'resolved below');
+  const resolved = (await listMemoryConflicts(dir)).find((c) => c.reason === 'resolved below');
   if (!resolved) throw new Error('fixture conflict missing');
-  resolveConflictKeeping(dir, TENANT_B, resolved.id, recentB.id);
+  await resolveConflictKeeping(dir, TENANT_B, resolved.id, recentB.id);
   saveStoredVectors(
     dir,
     [
@@ -82,9 +82,9 @@ async function conforms<R>(calls: readonly GroupCall<'reports', R>[]) {
 }
 
 beforeAll(() =>
-  withSharedStoreHandles(() => {
+  withSharedStoreHandles(async () => {
     fixture = seedTwoTenants();
-    seed(fixture.dir);
+    await seed(fixture.dir);
   }),
 );
 

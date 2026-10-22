@@ -11,8 +11,7 @@ import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/base/config/config.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
 
 const OBJECT_TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'];
@@ -154,8 +153,8 @@ describe('object list query plan', () => {
 describe('session digest read plan', () => {
   it('reads the digest rows through idx_memories_source_tenant_created, not the tenant walk', async () => {
     const root = newRoot();
-    const sql = await preparedSql(() => {
-      sqliteSyncStore(handlesOf(root)).contextReads.liveContentsBySourceAndTag(
+    const sql = await preparedSql(async () => {
+      await sqliteStore(root).contextReads.liveContentsBySourceAndTag(
         'default',
         'session-digest',
         'session-digest',
@@ -169,7 +168,7 @@ describe('session digest read plan', () => {
     });
   });
 
-  it('returns the same digests, in store order, as a filter over every row', () => {
+  it('returns the same digests, in store order, as a filter over every row', async () => {
     const root = newRoot();
     const digest = (
       content: string,
@@ -202,7 +201,7 @@ describe('session digest read plan', () => {
       .map((e) => e.content);
     expect([...expected].sort()).toEqual(['digest from another session', 'digest with no session']);
     expect(
-      sqliteSyncStore(handlesOf(root)).contextReads.liveContentsBySourceAndTag(
+      await sqliteStore(root).contextReads.liveContentsBySourceAndTag(
         'default',
         'session-digest',
         'session-digest',

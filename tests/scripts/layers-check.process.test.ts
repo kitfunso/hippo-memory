@@ -432,11 +432,11 @@ const rows: Row[] = [
     output: ['Layer order OK'],
   },
   {
-    name: 'naming sqliteSyncStore outside the adapter and the roots fails',
-    files: { ...SQLITE_BASE, 'src/sub/s.ts': 'export const pick = (sqliteSyncStore: number) => sqliteSyncStore;\n' },
+    name: 'naming sqliteStoreOn outside the adapter and the roots fails',
+    files: { ...SQLITE_BASE, 'src/sub/s.ts': 'export const pick = (sqliteStoreOn: number) => sqliteStoreOn;\n' },
     map: SQLITE_MAP,
     status: 1,
-    output: ['src/sub/s.ts:1 names sqliteSyncStore'],
+    output: ['src/sub/s.ts:1 names sqliteStoreOn'],
   },
   {
     name: 'a connectors or mcp file that imports the SQLite adapter fails the same way',

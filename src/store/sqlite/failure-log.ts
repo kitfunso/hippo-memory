@@ -7,7 +7,6 @@ import type { RatedFailure } from '../../base/records/failure-repeats.js';
 import { failureRow, failureTotals, RATED_OUTCOMES, retentionCutoff, sameStoredSession } from '../rules/failure-log.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
-import type { Sync } from './served.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the new row's id. */
@@ -102,12 +101,12 @@ export function summarizeFailures(db: DatabaseSyncLike, tenantId: string, sinceI
   return failureTotals(sinceIso, (outcome) => counts.get(outcome) ?? 0, ratedFailures(db, tenantId));
 }
 
-const failureLogAt: Bodies<FailureLog> = {
+const failureLogBodies: Bodies<FailureLog> = {
   record: recordFailure,
   requestOutcome,
   settleOutcome: settleFailureOutcome,
 };
 
-export function sqliteFailureLog(on: OnHandle): Sync<FailureLog> {
-  return bound(on, failureLogAt);
+export function sqliteFailureLog(on: OnHandle): FailureLog {
+  return bound(on, failureLogBodies);
 }

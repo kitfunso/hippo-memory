@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteGraphRebuild } from '../../src/store/sqlite/graph-rebuild.js';
 import type { GraphOp, NaturalKey } from '../../src/store/port/graph.js';
-import { countMatching, recordStatements } from '../_helpers/count-statements.js';
+import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadRelations } from '../_helpers/root-forms.js';
 
@@ -37,7 +37,7 @@ function rebuildOps(decisionIds: readonly number[]): GraphOp[] {
 }
 
 /** Applies a rebuild of `count` decisions on a fresh store and handle; returns the prepares and statements it ran. */
-function applyFresh(count: number) {
+async function applyFresh(count: number) {
   const root = makeRoot(`graph-apply-${count}`);
   const db = openHippoDb(root);
   try {
@@ -48,7 +48,7 @@ function applyFresh(count: number) {
     const graphRebuild = sqliteGraphRebuild((fn) => fn(db, { hippoRoot: root }));
     const prepare = vi.spyOn(DatabaseSync.prototype, 'prepare');
     try {
-      const { result, statements } = recordStatements(() =>
+      const { result, statements } = await recordStatementsAsync(() =>
         graphRebuild.applyOps('default', rebuildOps(ids), { from: 0, holdMs: Infinity }),
       );
       return { result, statements, prepares: prepare.mock.calls.length, root };
@@ -61,9 +61,9 @@ function applyFresh(count: number) {
 }
 
 describe('GraphRebuild.applyOps', () => {
-  it('prepares the same statements for 2 decisions as for 12', () => {
-    const small = applyFresh(2);
-    const large = applyFresh(12);
+  it('prepares the same statements for 2 decisions as for 12', async () => {
+    const small = await applyFresh(2);
+    const large = await applyFresh(12);
 
     expect(small.result).toEqual({ next: 6, skipped: 0 });
     expect(large.result).toEqual({ next: 36, skipped: 0 });
@@ -71,8 +71,8 @@ describe('GraphRebuild.applyOps', () => {
     expect(large.prepares).toBe(small.prepares);
   });
 
-  it('checks each relation endpoint once, by the natural-key lookup, and does not read the relation back', () => {
-    const { statements } = applyFresh(5);
+  it('checks each relation endpoint once, by the natural-key lookup, and does not read the relation back', async () => {
+    const { statements } = await applyFresh(5);
 
     expect(countMatching(statements, 'SELECT tenant_id FROM entities')).toBe(0);
     expect(countMatching(statements, /FROM relations WHERE id = \?/)).toBe(0);

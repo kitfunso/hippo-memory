@@ -255,7 +255,7 @@ describe('MCP hippo_recall ranking', () => {
 
   it('session goals boost by score, not by position', async () => {
     const s = track(seed());
-    pushGoal(s.home, { sessionId: 'sess-rank', tenantId: TENANT, goalName: 'ship-goal' });
+    await pushGoal(s.home, { sessionId: 'sess-rank', tenantId: TENANT, goalName: 'ship-goal' });
     expect(observe(s, textOf(await call(s.home, { query: QUERY, session_id: 'sess-rank' })))).toEqual(
       EXPECTED.goalBoost,
     );

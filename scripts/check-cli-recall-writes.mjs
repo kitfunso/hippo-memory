@@ -14,7 +14,7 @@ export const RECALL_ONLY = [
   'writeRecallTrace',
   'writeGoalRecallLog',
   'finishRecall',
-  'finishRecallAt',
+  'finishRecall',
   'strengthenRetrieved',
   'strengthenRetrievedInOwnTx',
   'strengthenRetrievedOn',

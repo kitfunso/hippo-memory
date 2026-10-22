@@ -14,8 +14,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
 
 function makePool(): MemoryEntry[] {
@@ -98,7 +97,7 @@ describe('contextReads.schemaFit', () => {
     for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('scores a tenant from the store as computeSchemaFit scores the same rows loaded', () => {
+  it('scores a tenant from the store as computeSchemaFit scores the same rows loaded', async () => {
     const root = makeRoot('schema-fit-store');
     roots.push(root);
     const pool = [
@@ -126,19 +125,17 @@ describe('contextReads.schemaFit', () => {
       ['Walk-forward Sharpe overestimates returns', []],
       ['another tenant', []],
     ];
-    const fits = probes.map(([content, tags]) =>
-      sqliteSyncStore(handlesOf(root)).contextReads.schemaFit('default', content, tags),
+    const fits = await Promise.all(
+      probes.map(([content, tags]) => sqliteStore(root).contextReads.schemaFit('default', content, tags)),
     );
     expect(fits).toEqual(probes.map(([content, tags]) => computeSchemaFit(content, tags, loaded)));
     expect(fits.filter((fit) => fit > 0 && fit < 1)).toHaveLength(3);
     // No tags and a capped content score: 0.6 * 0 + 0.4 * 1.
-    expect(sqliteSyncStore(handlesOf(root)).contextReads.schemaFit('default', 'zephyrine refresh', [])).toBe(0.4);
-    expect(
-      sqliteSyncStore(handlesOf(root)).contextReads.schemaFit('nobody', 'zephyrine refresh', ['data-pipeline']),
-    ).toBe(0.5);
+    expect(await sqliteStore(root).contextReads.schemaFit('default', 'zephyrine refresh', [])).toBe(0.4);
+    expect(await sqliteStore(root).contextReads.schemaFit('nobody', 'zephyrine refresh', ['data-pipeline'])).toBe(0.5);
   });
 
-  it('scores against only the newest window of rows, not the whole tenant', () => {
+  it('scores against only the newest window of rows, not the whole tenant', async () => {
     const root = makeRoot('schema-fit-window');
     roots.push(root);
     // Mirrors SCHEMA_FIT_WINDOW_ROWS in src/store/candidates.ts; a drift fails the fit comparison below.
@@ -160,12 +157,12 @@ describe('contextReads.schemaFit', () => {
     } finally {
       closeHippoDb(db);
     }
-    const window = sqliteSyncStore(handlesOf(root)).contextReads.newestEntries('default', windowRows);
+    const window = await sqliteStore(root).contextReads.newestEntries('default', windowRows);
     expect(window).toHaveLength(windowRows);
     expect(window.some((entry) => entry.tags.includes('oldonly'))).toBe(false);
 
     const tags = ['oldonly', 'recent'];
-    const fit = sqliteSyncStore(handlesOf(root)).contextReads.schemaFit('default', 'ancient ledger entry', tags);
+    const fit = await sqliteStore(root).contextReads.schemaFit('default', 'ancient ledger entry', tags);
     expect(fit).toBe(computeSchemaFit('ancient ledger entry', tags, window));
     expect(fit).not.toBe(computeSchemaFit('ancient ledger entry', tags, loadAllEntries(root, 'default')));
   }, 30_000);

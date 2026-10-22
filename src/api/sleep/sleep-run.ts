@@ -190,7 +190,7 @@ function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['dedup
 async function* entryPages(store: StoreWith<'consolidation'>, limit: number): AsyncGenerator<MemoryEntry[]> {
   let after: EntryCursor | undefined;
   do {
-    const page = await store.consolidation.entriesPage({ limit, after });
+    const page = await store.reports.entriesPage(ALL_TENANTS, { limit, after });
     yield page.entries;
     after = page.next ?? undefined;
   } while (after);
@@ -214,7 +214,7 @@ async function runQualityAudit(ctx: SleepContext, phases: SleepPhases, options: 
   const issues: AuditIssue[] = [];
   for await (const page of pages()) {
     const rows = page.filter((e) => !planned.has(e.id));
-    const backing = await ctx.store.consolidation.objectBackedAmong(rows.map((e) => e.id));
+    const backing = await ctx.store.auditMaintenance.objectBackedAmong(rows.map((e) => e.id));
     issues.push(...phases.auditMemories(rows, backing).issues);
   }
   if (issues.length === 0) return 0;
@@ -233,13 +233,13 @@ async function runQualityAudit(ctx: SleepContext, phases: SleepPhases, options: 
 async function shareOnSleep(ctx: SleepContext, phases: SleepPhases, result: SleepResult): Promise<void> {
   // No global target means a store with no operator's global store beside it, as context reads it.
   const target = globalTargetOf(ctx);
-  const { sharing, folderFiles } = ctx.store;
+  const { sharing, folderFiles, reports } = ctx.store;
   if (!ctx.config.autoShareOnSleep || target === undefined || sharing === undefined || folderFiles === undefined) {
     return;
   }
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable, not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
-  const shared = await phases.autoShare({ store: { sharing, folderFiles } }, target, {
+  const shared = await phases.autoShare({ store: { sharing, folderFiles, reports } }, target, {
     tenantId: ALL_TENANTS,
     minScore: AUTO_SHARE_MIN_SCORE,
     stats: autoShareStats,

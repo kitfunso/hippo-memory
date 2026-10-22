@@ -132,8 +132,8 @@ async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoSt
 }
 
 beforeAll(async () => {
-  templates = await seedTemplates((root) => {
-    seedPortBranches(root);
+  templates = await seedTemplates(async (root) => {
+    await seedPortBranches(root);
     // A shared store reads only the caller's keyed snapshot, and MCP's loopback caller owns by its subject.
     const key = { owner: 'localhost:cli', project: [PROJECT] };
     saveActiveTaskSnapshot(

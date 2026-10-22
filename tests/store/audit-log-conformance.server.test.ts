@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
+import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { auditRowsOn } from '../_helpers/audit-rows.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { shareRoot } from '../_helpers/share-root.js';
@@ -95,11 +95,11 @@ function seedAuditRows(dir: string): void {
   try {
     for (const [tenantId, op, second, targetId] of LOGGED) {
       vi.setSystemTime(new Date(at(second)));
-      appendAuditEvent(db, { tenantId, actor: 'cli', op, targetId, metadata: { second } });
+      appendAuditEvents(db, [{ tenantId, actor: 'cli', op, targetId, metadata: { second } }]);
     }
     vi.setSystemTime(new Date(at(30)));
     for (let i = 0; i < BULK_ROWS; i++) {
-      appendAuditEvent(db, { tenantId: 'bulk', actor: 'cli', op: 'outcome', targetId: `b${i}` });
+      appendAuditEvents(db, [{ tenantId: 'bulk', actor: 'cli', op: 'outcome', targetId: `b${i}` }]);
     }
     hostAdminToken = createApiKey(db, {
       tenantId: 'default',

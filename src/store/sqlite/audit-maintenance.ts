@@ -1,6 +1,6 @@
 // hippo.db's AuditMaintenance group: the quality audit and repair, object-backed ids, automatic deletes and the audit
 // prune.
-import { appendAuditEvent, pruneAuditRowsAt } from './audit.js';
+import { appendAuditEvents, pruneAuditRows } from './audit.js';
 import { withBackup } from '../../db/backup.js';
 import { withTrialScope, withWriteScope } from '../../db/busy.js';
 import type { DatabaseSyncLike } from '../../db/sqlite.js';
@@ -14,19 +14,18 @@ import { repairIssues } from '../rules/repair-issues.js';
 import {
   deleteEntryCore,
   MEMORY_BACKED_TABLES,
-  deleteEntriesAutomaticallyAt,
-  memoriesBackingAmongAt,
+  deleteEntriesAutomatically,
+  memoriesBackingAmong,
 } from './delete-and-batch.js';
-import { loadEntriesPageAt, selectEntriesByIds, selectPreviewRowsPage, type PreviewRow } from './entry-reads.js';
+import { loadEntriesPage, selectEntriesByIds, selectPreviewRowsPage, type PreviewRow } from './entry-reads.js';
 import { ftsRowExists } from './entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
 import type { StoreFiles, Handles } from './open.js';
 import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../port/audit.js';
 import { openStore } from './handles.js';
-import { bound, boundWithFiles, skipEmpty } from './bound.js';
+import { answered, bound, skipEmpty } from './bound.js';
 import type { AuditMaintenance } from '../port.js';
-import type { Sync } from './served.js';
 import { withUnmigratedDb } from '../../db/open.js';
 import type { EntryCursor } from '../port/types.js';
 
@@ -97,7 +96,7 @@ function planRows(db: DatabaseSyncLike, run: RepairRun): RepairPlan {
   let total = 0;
   let after: EntryCursor | undefined;
   do {
-    const page = loadEntriesPageAt(db, run.tenantId, { limit: PLAN_PAGE_ROWS, after });
+    const page = loadEntriesPage(db, run.tenantId, { limit: PLAN_PAGE_ROWS, after });
     const entries = page.entries.filter(isRepairCandidate);
     total += entries.length;
     issues.push(
@@ -105,7 +104,7 @@ function planRows(db: DatabaseSyncLike, run: RepairRun): RepairPlan {
         db,
         run,
         entries,
-        memoriesBackingAmongAt(
+        memoriesBackingAmong(
           db,
           entries.map((e) => e.id),
         ),
@@ -187,13 +186,15 @@ function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string,
   if (getMeta(db, 'fts5_available', '0') === '1' && ftsRowExists(db, entry.id)) {
     throw new Error(`Quality repair could not remove the full-text row for ${entry.id}`);
   }
-  appendAuditEvent(db, {
-    tenantId: entry.tenantId,
-    actor,
-    op: 'quality_repair',
-    targetId: entry.id,
-    metadata: { reason, backup },
-  });
+  appendAuditEvents(db, [
+    {
+      tenantId: entry.tenantId,
+      actor,
+      op: 'quality_repair',
+      targetId: entry.id,
+      metadata: { reason, backup },
+    },
+  ]);
   return true;
 }
 
@@ -202,7 +203,7 @@ function rejudgeSetAsides(db: DatabaseSyncLike, run: RepairRun, plan: QualityRep
   const ids = plan.issues.filter((issue) => issue.disposition === 'set-aside').map((issue) => issue.id);
   const rows = selectEntriesByIds(db, ids, run.tenantId);
   const entries = ids.flatMap((id) => rows.get(id) ?? []).filter(isRepairCandidate);
-  const backing = memoriesBackingAmongAt(
+  const backing = memoriesBackingAmong(
     db,
     entries.map((e) => e.id),
   );
@@ -255,7 +256,7 @@ function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): Qual
 
 /** Preview by default; apply backs the database up, then moves certain defects `protect` lets go to dormant storage.
  * `db` is opened without running migrations, read-only for a preview. */
-function repairAutomaticMemoriesAt(
+function repairAutomaticMemories(
   db: DatabaseSyncLike,
   files: StoreFiles,
   opts: { tenantId: string; protect: RepairProtection; apply?: boolean },
@@ -267,7 +268,7 @@ const AUTO_REPAIR_META_KEY = 'quality_repair_auto';
 
 /** Applies the repair once per store, so stores that predate the quality gate are cleaned on upgrade with no command;
  * null once done. `db` is opened writable without running migrations. */
-function repairQualityOnceAt(
+function repairQualityOnce(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
@@ -281,24 +282,28 @@ function repairQualityOnceAt(
   return result;
 }
 
-export function sqliteAuditMaintenance({ on, files }: Handles): Sync<AuditMaintenance> {
-  const { deleteAutomatically } = boundWithFiles<Pick<AuditMaintenance, 'deleteAutomatically'>>(
+export function sqliteAuditMaintenance({ on, files }: Handles): AuditMaintenance {
+  const { deleteAutomatically } = bound<Pick<AuditMaintenance, 'deleteAutomatically'>>(
     on,
-    { deleteAutomatically: deleteEntriesAutomaticallyAt },
+    { deleteAutomatically: (db, ...args) => deleteEntriesAutomatically(db, files, ...args) },
     openStore,
   );
+  const reads = bound<Pick<AuditMaintenance, 'objectBackedAmong' | 'pruneAuditRows'>>(on, {
+    objectBackedAmong: memoriesBackingAmong,
+    pruneAuditRows: pruneAuditRows,
+  });
   return {
-    ...bound<Pick<AuditMaintenance, 'objectBackedAmong' | 'pruneAuditRows'>>(on, {
-      objectBackedAmong: memoriesBackingAmongAt,
-      pruneAuditRows: pruneAuditRowsAt,
-    }),
+    ...reads,
+    objectBackedAmong: skipEmpty(reads.objectBackedAmong, () => new Set<string>()),
     deleteAutomatically: skipEmpty(deleteAutomatically, () => []),
     // Quality repair opens the store unmigrated, so it opens its own handle from the folder.
     repairQuality: (tenantId, apply, protect) =>
-      withUnmigratedDb(files.hippoRoot, !apply, (db) =>
-        repairAutomaticMemoriesAt(db, files, { tenantId, apply, protect }),
+      answered(() =>
+        withUnmigratedDb(files.hippoRoot, !apply, (db) =>
+          repairAutomaticMemories(db, files, { tenantId, apply, protect }),
+        ),
       ),
     repairQualityOnce: (tenantId, protect) =>
-      withUnmigratedDb(files.hippoRoot, false, (db) => repairQualityOnceAt(db, files, tenantId, protect)),
+      answered(() => withUnmigratedDb(files.hippoRoot, false, (db) => repairQualityOnce(db, files, tenantId, protect))),
   };
 }

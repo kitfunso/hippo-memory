@@ -7,7 +7,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
-import { applyOutcomeAt, writeEntriesTogetherAt, writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { applyOutcome, writeEntriesTogether, writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { selectEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { markMirrorsDue } from '../../src/store/sqlite/due-mirrors.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
@@ -55,10 +55,10 @@ describe('outcome mirrors', () => {
     const db = openStore(root);
     open.push(db);
     const entries = [memory(1, Layer.Episodic), memory(2, Layer.Semantic)];
-    writeEntriesTogetherAt(db, { hippoRoot: root }, entries);
+    writeEntriesTogether(db, { hippoRoot: root }, entries);
     const before = entries.map((entry) => mirrorText(root, entry));
     const ids = entries.map((entry) => entry.id);
-    applyOutcomeAt(
+    applyOutcome(
       db,
       { hippoRoot: root },
       { tenantId: 'default', actor: 'test', ownScope: null, role: 'admin', ids, good: true },

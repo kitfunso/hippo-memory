@@ -25,18 +25,18 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function seedBaserate(home: string): void {
+async function seedBaserate(home: string): Promise<void> {
   for (const [est, act] of [
     [2, 4],
     [3, 6],
     [4, 8],
   ]) {
-    const p = savePrediction(home, 'default', {
+    const p = await savePrediction(home, 'default', {
       classTag: 'migration-effort',
       claimText: `migration effort ${est} days`,
       estimateValue: est,
     });
-    closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
+    await closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
   }
 }
 
@@ -65,7 +65,7 @@ describe('HTTP /v1/memories planningFallacyHint', () => {
   it.skipIf(needsHippoDb('db'))(
     'response includes planningFallacyHint with camelCase shape when query matches',
     async () => {
-      seedBaserate(home);
+      await seedBaserate(home);
       const q = encodeURIComponent('migration effort will take 3 days');
       const res = await fetch(`${handle.url}/v1/memories?q=${q}`);
       expect(res.status).toBe(200);
@@ -84,7 +84,7 @@ describe('HTTP /v1/memories planningFallacyHint', () => {
   );
 
   it('planningFallacyHint absent when query has no forward-claim phrase', async () => {
-    seedBaserate(home);
+    await seedBaserate(home);
     const q = encodeURIComponent('show me the auth flow');
     const res = await fetch(`${handle.url}/v1/memories?q=${q}`);
     const body = await jsonAs<Partial<RecallResult>>(res);
@@ -92,7 +92,7 @@ describe('HTTP /v1/memories planningFallacyHint', () => {
   });
 
   it('planningFallacyHint absent when HIPPO_AUTODEBIAS=off', async () => {
-    seedBaserate(home);
+    await seedBaserate(home);
     vi.stubEnv('HIPPO_AUTODEBIAS', 'off');
     const q = encodeURIComponent('migration effort will take 3 days');
     const res = await fetch(`${handle.url}/v1/memories?q=${q}`);

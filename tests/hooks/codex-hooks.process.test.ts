@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { CODEX_TRUST_LINE } from '../../src/domain/hooks/shared.js';
 import { installJsonHooks, uninstallJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
 import { formatDoctor, runDoctor } from '../../src/surface/cli/doctor.js';
-import { diagnosticsAt } from '../_helpers/cli-stores.js';
+import { diagnosticsBodies } from '../_helpers/cli-stores.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import type { JsonValue } from '../../src/base/util/json.js';
@@ -534,7 +534,7 @@ describe('hippo doctor and Codex', () => {
     const fake = withFakeHome('hippo-codex-doctor-');
     try {
       const report = () =>
-        runDoctor({ diagnosticsAt, tenantId: 'default', cwd: fake.home, home: fake.home, version: 'test' });
+        runDoctor({ diagnosticsBodies, tenantId: 'default', cwd: fake.home, home: fake.home, version: 'test' });
       expect((await report()).checks.find((c) => c.id === 'codex')).toBeUndefined();
       fs.mkdirSync(path.join(fake.home, '.codex'));
       const before = await report();
@@ -560,7 +560,7 @@ describe('hippo doctor and Codex', () => {
     try {
       writeFile(path.join(fake.home, '.codex', 'hooks.json'), text);
       const report = await runDoctor({
-        diagnosticsAt,
+        diagnosticsBodies,
         tenantId: 'default',
         cwd: fake.home,
         home: fake.home,

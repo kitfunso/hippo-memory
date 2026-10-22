@@ -23,22 +23,23 @@ beforeEach(() => {
 afterEach(() => closeHippoDb(db));
 
 /** A parent whose completion promotes `children` backlog children, plus one card that waits on `children` open cards. */
-function promoteFamily(children: number): void {
-  const parent = cards.create(TENANT, { title: 'parent' }).id;
-  const others = Array.from({ length: children }, (_, i) => cards.create(TENANT, { title: `other ${i}` }).id);
-  for (let i = 0; i < children; i++) cards.create(TENANT, { title: `child ${i}`, dependsOn: [parent] });
-  cards.create(TENANT, { title: 'waits on all', dependsOn: others });
-  cards.claim(TENANT, parent, 'test-runtime');
-  cards.review(TENANT, parent);
-  cards.complete(TENANT, parent, 'success');
+async function promoteFamily(children: number): Promise<void> {
+  const parent = (await cards.create(TENANT, { title: 'parent' })).id;
+  const others: string[] = [];
+  for (let i = 0; i < children; i++) others.push((await cards.create(TENANT, { title: `other ${i}` })).id);
+  for (let i = 0; i < children; i++) await cards.create(TENANT, { title: `child ${i}`, dependsOn: [parent] });
+  await cards.create(TENANT, { title: 'waits on all', dependsOn: others });
+  await cards.claim(TENANT, parent, 'test-runtime');
+  await cards.review(TENANT, parent);
+  await cards.complete(TENANT, parent, 'success');
 }
 
 describe('list-bound card statements', () => {
-  it('prepare the transition and parent-check statements once for 3 ids and for 30', () => {
-    promoteFamily(3);
+  it('prepare the transition and parent-check statements once for 3 ids and for 30', async () => {
+    await promoteFamily(3);
     const spy = vi.spyOn(DatabaseSync.prototype, 'prepare');
     try {
-      promoteFamily(30);
+      await promoteFamily(30);
       const freshPrepares = spy.mock.calls
         .map(([text]) => text)
         .filter((text) => /UPDATE cards SET status|FROM cards WHERE tenant_id = \? AND id/.test(text));

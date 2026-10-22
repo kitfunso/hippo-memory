@@ -170,7 +170,7 @@ describe('replaceDetectedConflicts', () => {
     }
   });
 
-  it('resolveConflict rewrites only the two members mirrors', () => {
+  it('resolveConflict rewrites only the two members mirrors', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-resolve');
       const entries = rows(n, 'resolve');
@@ -178,9 +178,9 @@ describe('replaceDetectedConflicts', () => {
       replaceDetectedConflicts(root, [
         { memory_a_id: entries[0].id, memory_b_id: entries[1].id, reason: 'test', score: 0.9 },
       ]);
-      const [conflict] = listMemoryConflicts(root);
+      const [conflict] = await listMemoryConflicts(root);
       const mirrorsRewritten = ageMirrors(root);
-      expect(resolveConflictKeeping(root, 'default', conflict.id, conflict.memoryAId)).toBe(true);
+      expect(await resolveConflictKeeping(root, 'default', conflict.id, conflict.memoryAId)).toBe(true);
       expect(mirrorsRewritten()).toBe(2);
     }
   });

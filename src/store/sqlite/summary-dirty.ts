@@ -1,5 +1,5 @@
 // Leaf module so entry-writes.ts and raw-archive.ts can both mark a parent summary dirty without importing each other.
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvents } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { DAG_LEVEL } from '../../base/memory/memory.js';
@@ -37,7 +37,7 @@ export function markSummaryDirtyInTx(db: DatabaseSyncLike, summaryId: string, te
   ).get(summaryId, tenantId) as { dag_level: number } | undefined;
   if (!result) return;
   try {
-    appendAuditEvent(db, summaryDirtyAuditRow(summaryId, tenantId, actor, result.dag_level));
+    appendAuditEvents(db, [summaryDirtyAuditRow(summaryId, tenantId, actor, result.dag_level)]);
   } catch (error) {
     // The mark has already succeeded; a broken audit table must not undo it.
     reportAuditWriteFailure('summary_marked_dirty', error, summaryId);

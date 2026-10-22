@@ -70,7 +70,7 @@ describe('dashboard conflicts are tenant-scoped', () => {
 
   it("passes the running tenant to a memory's conflict load, so later filters are not the only guard", async () => {
     const { a1 } = seedTwoTenants();
-    const loadOwn = vi.spyOn(conflicts, 'openConflictsNamingAt');
+    const loadOwn = vi.spyOn(conflicts, 'openConflictsNaming');
     // Served, this load runs on the reader thread, which no spy reaches, so the same api call runs here.
     const view = dashboardOf(tmp.hippoRoot, () => Date.now());
     try {

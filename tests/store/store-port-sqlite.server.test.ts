@@ -5,13 +5,13 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../../src/db/index.js';
 import { recordTokens } from '../../src/api/index.js';
-import { appendAuditEvent } from '../../src/store/sqlite/audit.js';
+import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
 import { localGoalRecallRows, writeGoalRecallLog } from '../../src/store/sqlite/goals.js';
 import { boostByGoals } from '../../src/domain/search/goal-boost.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../../src/db/physics-state.js';
-import { planningFallacyEvidenceAt } from '../../src/store/sqlite/planning-fallacy-evidence.js';
+import { planningFallacyEvidence } from '../../src/store/sqlite/planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../../src/store/sqlite/recall-trace.js';
 import { serve } from '../../src/server.js';
 import {
@@ -26,10 +26,10 @@ import {
   type RecallWrites,
   type VectorCandidateSpec,
 } from '../../src/entry/store-kit.js';
-import { loadLatestHandoffAt } from '../../src/store/sqlite/handoffs.js';
+import { loadLatestHandoff } from '../../src/store/sqlite/handoffs.js';
 import { loadRecallSearchEntries } from '../../src/store/sqlite/folder-forms.js';
-import { listSessionEventsAt } from '../../src/store/sqlite/sessions.js';
-import { loadActiveTaskSnapshotAt } from '../../src/store/sqlite/task-snapshots.js';
+import { listSessionEvents } from '../../src/store/sqlite/sessions.js';
+import { loadActiveTaskSnapshot } from '../../src/store/sqlite/task-snapshots.js';
 import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../../src/db/vector-store.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
@@ -216,11 +216,11 @@ function seedTeam(root: string): void {
 
 // Seeds recall-port-only-parity's branches plus a team, a goal and vectors into real stores, so the runner's disk sets its time.
 beforeAll(async () => {
-  templates = await seedTemplates((root) => {
-    seedPortBranches(root);
+  templates = await seedTemplates(async (root) => {
+    await seedPortBranches(root);
     seedTeam(root);
     // A goal with a retrieval policy, so activeGoals has a policy row to read.
-    pushGoal(root, {
+    await pushGoal(root, {
       sessionId: SESSION,
       tenantId: TENANT,
       goalName: 'goal-beta',
@@ -361,14 +361,12 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     const { direct, port } = await parity(
       (s) =>
         handlesOf(s.root).on((db, files) => {
-          const activeSnapshot = loadActiveTaskSnapshotAt(db, files, tenantId, key ?? undefined);
+          const activeSnapshot = loadActiveTaskSnapshot(db, files, tenantId, key ?? undefined);
           const sessionId = activeSnapshot?.sessionId ?? undefined;
           return {
             activeSnapshot,
-            sessionHandoff: sessionId ? loadLatestHandoffAt(db, tenantId, sessionId, {}, key ?? undefined) : null,
-            recentSessionEvents: sessionId
-              ? listSessionEventsAt(db, tenantId, { session_id: sessionId, limit: 5 })
-              : [],
+            sessionHandoff: sessionId ? loadLatestHandoff(db, tenantId, sessionId, {}, key ?? undefined) : null,
+            recentSessionEvents: sessionId ? listSessionEvents(db, tenantId, { session_id: sessionId, limit: 5 }) : [],
           };
         }, openStore),
       (store) => store.continuity(tenantId, 5, key),
@@ -386,7 +384,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
   ] as const)('planningFallacyEvidence for %s, with no audit row', async (_name, tokens, classTag) => {
     // The planning-fallacy reads of a recall; its audit rows stay with the caller.
     const { direct, port } = await parity(
-      (s) => onHandle(s.root, (db) => planningFallacyEvidenceAt(db, TENANT, tokens), openStore),
+      (s) => onHandle(s.root, (db) => planningFallacyEvidence(db, TENANT, tokens), openStore),
       (store) => store.planningFallacyEvidence(TENANT, tokens),
     );
     expect(direct.value).toMatchObject({ classTag, tiebreak: false, baserate: classTag ? { nClosed: 1 } : null });
@@ -499,7 +497,7 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
         for (const event of events) {
           const db = openHippoDb(s.root);
           try {
-            appendAuditEvent(db, event);
+            appendAuditEvents(db, [event]);
           } finally {
             closeHippoDb(db);
           }
@@ -585,7 +583,7 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
             { sessionId: SESSION, tenantId: TENANT, limit: 10 },
           );
           writeGoalRecallLog(db, localGoalRecallRows(db, boost.log));
-          for (const event of events) appendAuditEvent(db, event);
+          for (const event of events) appendAuditEvents(db, [event]);
           writeRecallTrace(db, trace);
         } finally {
           closeHippoDb(db);

@@ -14,7 +14,7 @@ export function captureTarget(root: string): CaptureTarget {
   return { root, store, config, index: folderIndex({ store, config, embedderFor: resolveEmbeddingProvider }) };
 }
 
-export function diagnosticsAt(root: string): DoctorStore {
+export function diagnosticsBodies(root: string): DoctorStore {
   return cliDiagnostics(root);
 }
 
@@ -33,6 +33,7 @@ export function compactionFolder(root: string, tenantId = 'default'): Compaction
 export function localIndex(root: string): EmbedTarget {
   return {
     embeddingIndex: cliStore(root).embeddingIndex,
+    rows: cliStore(root),
     embeddings: loadConfig(root).embeddings,
     embedderFor: resolveEmbeddingProvider,
   };

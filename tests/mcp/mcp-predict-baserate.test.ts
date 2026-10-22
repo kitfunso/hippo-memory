@@ -66,12 +66,12 @@ describe('mcp hippo_predict_baserate', () => {
       [1, 1],
     ];
     for (const [est, act] of estimateActualPairs) {
-      const p = savePrediction(home, 'default', {
+      const p = await savePrediction(home, 'default', {
         classTag: 'mcp-test',
         claimText: `est ${est} act ${act}`,
         estimateValue: est,
       });
-      closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
+      await closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
     }
 
     const res = await callTool(

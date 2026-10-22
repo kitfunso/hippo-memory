@@ -5,7 +5,7 @@ import { closeHippoDb, openHippoDb, setMeta, type DatabaseSyncLike } from '../..
 import { VectorGraphs } from '../../src/db/vector-graph-index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors, type VectorIndex } from '../../src/db/vector-store.js';
 import type { VectorCandidateSpec } from '../../src/store/port/vectors.js';
-import { loadVectorCandidateEntriesAt } from '../../src/store/sqlite/search-rows.js';
+import { loadVectorCandidateEntries } from '../../src/store/sqlite/search-rows.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, near, seedVectorRows, type VectorRowSeed } from '../_helpers/vector-rows.js';
@@ -71,11 +71,11 @@ function spec(tenantId: string, extra: Partial<VectorCandidateSpec> = {}): Vecto
 }
 
 async function nearest(f: Fixture, query: readonly number[], s: VectorCandidateSpec): Promise<string[]> {
-  return (await loadVectorCandidateEntriesAt(f.db, query, s, f.index)).map((e) => e.id);
+  return (await loadVectorCandidateEntries(f.db, query, s, f.index)).map((e) => e.id);
 }
 
 async function scanned(f: Fixture, query: readonly number[], s: VectorCandidateSpec): Promise<string[]> {
-  return (await loadVectorCandidateEntriesAt(f.db, query, s)).map((e) => e.id);
+  return (await loadVectorCandidateEntries(f.db, query, s)).map((e) => e.id);
 }
 
 /** The first read starts the build; the graph answers once it has settled. */

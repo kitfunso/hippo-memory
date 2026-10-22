@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { peakRowsRead, recordStatements } from '../_helpers/count-statements.js';
+import { peakRowsRead, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   loadAllEntries,
@@ -49,9 +49,9 @@ describe('whole-tenant walks', () => {
     expect(peakRowsRead(reads, 'FROM memories')).toBeLessThanOrEqual(READ_PAGE_ROWS + 1);
   }, 60_000);
 
-  it('reads the unprofiled topic summaries in pages', () => {
+  it('reads the unprofiled topic summaries in pages', async () => {
     const { root, ids } = seeded(false, { dagLevel: DAG_LEVEL.topic });
-    const { result, reads } = recordStatements(() => loadAllL2Summaries(root));
+    const { result, reads } = await recordStatementsAsync(async () => await loadAllL2Summaries(root));
     expect(result.map((e) => e.id)).toEqual(ids);
     expect(peakRowsRead(reads, 'dag_parent_id IS NULL')).toBeLessThanOrEqual(READ_PAGE_ROWS + 1);
   }, 60_000);

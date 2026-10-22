@@ -325,7 +325,7 @@ describe('consolidation conflicts', () => {
       writeEntry(home, visible);
       writeEntry(home, { ...poisoned, scope: 'quarantine:private:unscoped' });
       await consolidate(home, { now: FIXED_NOW });
-      expect(listMemoryConflicts(home)).toHaveLength(0);
+      expect(await listMemoryConflicts(home)).toHaveLength(0);
       expect(readEntry(home, visible.id)?.conflictsWith ?? []).not.toContain(poisoned.id);
     } finally {
       rmSync(home, { recursive: true, force: true });

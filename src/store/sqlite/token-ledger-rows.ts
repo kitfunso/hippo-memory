@@ -178,5 +178,5 @@ export function firstPilotArmHash(
     db,
     `SELECT block_hash FROM token_ledger WHERE session_id = ?${tenant.sql}
      AND surface = 'pilot' AND event = 'arm' ORDER BY id LIMIT 1`,
-  ).get(sessionId, ...tenant.args) as { block_hash: string | null } | undefined;
+  ).get(sessionId, ...tenant.params) as { block_hash: string | null } | undefined;
 }

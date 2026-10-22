@@ -11,7 +11,7 @@ import {
 import { listTableNames } from '../../db/tables.js';
 import { errorMessage } from '../../base/util/log.js';
 import { countFailuresSince } from './failure-log.js';
-import { lastConsolidationAt } from './index-and-stats.js';
+import { lastConsolidation } from './index-and-stats.js';
 import type { JsonObject } from '../../base/util/json.js';
 import type {
   Attempt,
@@ -24,7 +24,6 @@ import type {
 } from '../port/diagnostics.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
-import type { Sync } from './served.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 function attempt<T>(read: () => T): Attempt<T> {
@@ -37,7 +36,7 @@ function attempt<T>(read: () => T): Attempt<T> {
 }
 
 /** Everything `hippo doctor` reads from one store; throws when its schema version cannot be read. */
-function storeHealthAt(db: DatabaseSyncLike, cutoffs: HealthCutoffs): StoreHealth {
+function storeHealth(db: DatabaseSyncLike, cutoffs: HealthCutoffs): StoreHealth {
   return {
     schemaVersion: getSchemaVersion(db),
     binarySchemaVersion: getCurrentSchemaVersion(),
@@ -46,14 +45,14 @@ function storeHealthAt(db: DatabaseSyncLike, cutoffs: HealthCutoffs): StoreHealt
     fts: attempt(() => ftsRowCounts(db)),
     tokens: attempt(() => tokenTallySince(db, cutoffs.since)),
     failures: attempt(() => countFailuresSince(db, cutoffs.since)),
-    lastSleep: attempt(() => lastConsolidationAt(db)),
-    compactions: attempt(() => compactionCountsAt(db, cutoffs.stuckBefore, cutoffs.transcriptFloor)),
+    lastSleep: attempt(() => lastConsolidation(db)),
+    compactions: attempt(() => compactionCounts(db, cutoffs.stuckBefore, cutoffs.transcriptFloor)),
   };
 }
 
 /** Schema version, oldest allowed binary and row count of every table, for a support bundle; never reads a memory
  * column. */
-function storeInventoryAt(db: DatabaseSyncLike): StoreInventory {
+function storeInventory(db: DatabaseSyncLike): StoreInventory {
   const schemaVersion = getSchemaVersion(db);
   const minCompatibleBinary = getMeta(db, 'min_compatible_binary', '') || null;
   const tables: JsonObject = {};
@@ -63,7 +62,7 @@ function storeInventoryAt(db: DatabaseSyncLike): StoreInventory {
 
 /** Compaction records in all, those with a summary whose memories never got saved, and those still without a summary;
  * each cutoff is an ISO time. */
-function compactionCountsAt(db: DatabaseSyncLike, stuckBefore: string, transcriptFloor: string): CompactionCounts {
+function compactionCounts(db: DatabaseSyncLike, stuckBefore: string, transcriptFloor: string): CompactionCounts {
   const row = cachedStatement(
     db,
     `SELECT COUNT(*) AS total,
@@ -93,11 +92,11 @@ function tokenTallySince(db: DatabaseSyncLike, sinceIso: string): TokenTally {
   return { injected: Number(row?.n ?? 0), tokensSent: Number(row?.t ?? 0), tokensReread: Number(row?.r ?? 0) };
 }
 
-const diagnosticsAt: Bodies<Diagnostics> = {
-  health: storeHealthAt,
-  inventory: storeInventoryAt,
+const diagnosticsBodies: Bodies<Diagnostics> = {
+  health: storeHealth,
+  inventory: storeInventory,
 };
 
-export function sqliteDiagnostics(on: OnHandle): Sync<Diagnostics> {
-  return bound(on, diagnosticsAt, openHippoDbReadOnly);
+export function sqliteDiagnostics(on: OnHandle): Diagnostics {
+  return bound(on, diagnosticsBodies, openHippoDbReadOnly);
 }

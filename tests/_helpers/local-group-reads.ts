@@ -115,7 +115,6 @@ export async function seedLocalGroups(root: string): Promise<void> {
 }
 
 const CUTOFFS = { since: EVER, stuckBefore: NEVER, transcriptFloor: EVER };
-const idsOfPage = async (s: Served) => (await s.consolidation.entryIdsPage({ limit: 200 })).ids;
 
 export const LOCAL_GROUP_READS: readonly Read[] = [
   read('agentImport.liveBySourcePrefix', (s) => s.agentImport.liveBySourcePrefix(TENANT, IMPORTED), NOTE),
@@ -132,8 +131,6 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
   read('captures.textsHolding', (s) => s.captures.textsHolding(TENANT, ['deploy'], {}), PLAIN),
   read('compactionHooks.openRecords', (s) => s.compactionHooks.openRecords(TENANT, {}), TRANSCRIPT),
   read('consolidation.entryIdsPage', (s) => s.consolidation.entryIdsPage({ limit: 3 }), /ids: \[ 'mem_/),
-  read('consolidation.entriesByIds', (s) => s.consolidation.entriesByIds(['mem_p_plain', 'mem_missing']), PLAIN),
-  read('consolidation.objectBackedAmong', async (s) => s.consolidation.objectBackedAmong(await idsOfPage(s)), /'sem_/),
   read('consolidation.sessionDecayContext', (s) => s.consolidation.sessionDecayContext(), /sleepCount: 2/),
   read(
     'consolidation.rejectedValue',
@@ -158,7 +155,6 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
     (s) => s.consolidation.particlesByIds(['mem_p_noise', 'mem_missing']),
     'mem_p_noise',
   ),
-  read('consolidation.entriesPage', (s) => s.consolidation.entriesPage({ limit: 3 }), /id: 'mem_/),
   read('consolidation.duplicateCandidates', (s) => s.consolidation.duplicateCandidates(), 'mem_z_twin2'),
   read('consolidation.dirtyGraphTenants', (s) => s.consolidation.dirtyGraphTenants(), /maxPendingId: [1-9]/),
   read('consolidation.dirtySummaries', (s) => s.consolidation.dirtySummaries(10), 'mem_x_summary'),

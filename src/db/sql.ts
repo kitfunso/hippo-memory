@@ -1,4 +1,5 @@
 // SQL text for an IN list or VALUES rows, for the data layer and the SQLite adapter that bind them.
+import type { KeysetPosition } from '../base/util/keyset.js';
 
 /** `n` bound-parameter marks joined for an IN list or VALUES row, e.g. 3 -> "?, ?, ?". */
 export function placeholders(n: number): string {
@@ -17,4 +18,16 @@ export function rowsPerStatement(bindsPerRow: number): number {
 export function valuesRows(rows: number, bindsPerRow: number): string {
   const row = `(${placeholders(bindsPerRow)})`;
   return Array.from({ length: rows }, () => row).join(', ');
+}
+
+/** A piece of SQL and the values its marks bind, in order: a WHERE term, or an ` AND ...` tail that may be empty. */
+export interface SqlFragment {
+  readonly sql: string;
+  readonly params: readonly (string | number)[];
+}
+
+/** An ` AND ...` tail selecting rows strictly after `after` in (key DESC, id DESC) order; empty when it is unset. */
+export function keysetAfter(sortCol: string, idCol: string, after: KeysetPosition | undefined): SqlFragment {
+  if (!after) return { sql: '', params: [] };
+  return { sql: ` AND (${sortCol}, ${idCol}) < (?, ?)`, params: [after.key, after.id] };
 }

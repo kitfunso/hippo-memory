@@ -189,15 +189,13 @@ const FOLDER_GROUP_READS: readonly Read[] = [
   read('embeddingIndex.requiresReindex', (s) => s.embeddingIndex.requiresReindex('another-provider'), /^true$/),
   read('embeddingIndex.entryCount', (s) => s.embeddingIndex.entryCount(), /^[1-9]\d*$/),
   read('embeddingIndex.lockKey', (s) => s.embeddingIndex.lockKey(), /\S/),
-  read('embeddingIndex.entryIdsPage', (s) => s.embeddingIndex.entryIdsPage({ limit: 3 }), /ids: \[ 'mem_/),
-  read('embeddingIndex.entriesByIds', (s) => s.embeddingIndex.entriesByIds(['mem_p_plain', 'mem_missing']), PLAIN),
+  read('embeddingIndex.entryIdsById', (s) => s.embeddingIndex.entryIdsById({ limit: 3 }), /ids: \[ 'mem_/),
   read('embeddingIndex.summary', (s) => s.embeddingIndex.summary(), /vectors: [1-9]/),
   read('embeddingIndex.coverage', (s) => s.embeddingIndex.coverage(), /memories: [1-9]/),
   read('embeddingIndex.particleStats', (s) => s.embeddingIndex.particleStats(1_000), 'mem_p_noise'),
   read('embeddingIndex.pendingIds', (s) => s.embeddingIndex.pendingIds({ limit: 50 }), 'mem_p_fill0'),
   read('folderFiles.home', (s) => s.folderFiles.home(), /folderName: '/),
   read('ledger.lastSent', (s) => s.ledger.lastSent(TENANT, SESSION, 'http_recall'), "hash: 'block-seeded'"),
-  read('sharing.entriesPage', (s) => s.sharing.entriesPage(TENANT, { limit: 3 }), /id: 'mem_/),
   read(
     'sharing.entriesWithSignals',
     (s) =>
@@ -208,9 +206,7 @@ const FOLDER_GROUP_READS: readonly Read[] = [
   ),
   read('sharing.textKeysPage', (s) => s.sharing.textKeysPage(TENANT, { limit: 3 }), /id: 'mem_/),
   read('sharing.textKeysHolding', (s) => s.sharing.textKeysHolding(TENANT, [PLAIN]), 'mem_p_plain'),
-  read('sharing.textsHolding', (s) => s.sharing.textsHolding(TENANT, ['deploy'], {}), PLAIN),
   read('sharing.takenIds', (s) => s.sharing.takenIds(['mem_p_plain', 'mem_missing']), "[ 'mem_p_plain' ]"),
-  read('sharing.entriesByIds', (s) => s.sharing.entriesByIds(['mem_p_plain', 'mem_missing']), PLAIN),
   read('sharing.searchEntries', (s) => s.sharing.searchEntries('deploy', 50, TENANT), 'mem_p_plain'),
   read(
     'sharing.recallEntries',

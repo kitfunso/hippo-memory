@@ -46,7 +46,7 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
     // fix-auth wins.
     const goalMatch = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
     const unrelated = await remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
-    pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
+    await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
 
     const result = await retrieve(ctx, { query: 'auth', window: { limit: 10 }, boost: { sessionId } });
     const ids = result.results.map((r) => r.id);
@@ -57,7 +57,7 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
   });
 
   it('writes a goal_recall_log row when sessionId set AND the boosted memory is local', async () => {
-    const goal = pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
+    const goal = await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     const m = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
     await retrieve(ctx, { query: 'auth', window: { limit: 10 }, boost: { sessionId } });
     const db = openHippoDb(hippoRoot);
@@ -78,8 +78,8 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
     // Sanity: same setup as the first test but with goalTag set.
     const goalMatch = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
     const unrelated = await remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
-    pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
-    const goal = pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'pin-this' });
+    await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
+    const goal = await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'pin-this' });
 
     const result = await retrieve(ctx, {
       query: 'auth',
@@ -99,7 +99,7 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
   });
 
   it('omitting sessionId keeps the old behaviour (no boost, no log)', async () => {
-    const goal = pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
+    const goal = await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     const m = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
     await retrieve(ctx, { query: 'auth', window: { limit: 10 } }); // no sessionId
     const db = openHippoDb(hippoRoot);

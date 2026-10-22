@@ -37,7 +37,7 @@ import {
   type ScatterRows,
   type SearchTally,
 } from '../port/dashboard-reads.js';
-import { openConflictsNamingAt } from './conflicts.js';
+import { openConflictsNaming } from './conflicts.js';
 import {
   FACT_COLUMNS,
   factInputs,
@@ -51,8 +51,7 @@ import {
 import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
 import type { StoreFiles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
-import { bound, boundWithFiles } from './bound.js';
-import { served } from './served.js';
+import { answered, bound } from './bound.js';
 
 // One past the list's cut, so the cut and its truncated flag come out as they would on the whole text.
 const HEAD_READ = 241;
@@ -86,7 +85,7 @@ const noneExcluded = (): ExcludedCounts => ({
   quarantined: 0,
 });
 
-function excludedAt(db: DatabaseSyncLike, tenantId: string): ExcludedCounts {
+function excluded(db: DatabaseSyncLike, tenantId: string): ExcludedCounts {
   // SAFETY: `why` is one of the three CASE arms or NULL.
   const counts = cachedStatement(
     db,
@@ -122,7 +121,7 @@ function projectTally(origin: Origin, tally: SqlValue, openConflicts: number): P
 
 type TallyRow = { origin: Origin; tally: SqlValue };
 
-function totalsAt(db: DatabaseSyncLike, _files: StoreFiles, tenantId: string, nowMs: number): DashboardTotals {
+function totals(db: DatabaseSyncLike, tenantId: string, nowMs: number): DashboardTotals {
   return withReadSnapshot(db, () => {
     // SAFETY: one row per origin_project, its tally a BLOB from hippo_project_tally.
     const rows = cachedStatement(
@@ -145,13 +144,13 @@ function totalsAt(db: DatabaseSyncLike, _files: StoreFiles, tenantId: string, no
     };
     return {
       projects: rows.map((row) => projectTally(row.origin, row.tally, conflictsOf.get(row.origin) ?? 0)),
-      excluded: excludedAt(db, tenantId),
+      excluded: excluded(db, tenantId),
       openConflicts: Number(all.n),
     };
   });
 }
 
-function scatterAt(db: DatabaseSyncLike, tenantId: string, origin: Origin, nowMs: number, tally: ProjectTally) {
+function scatter(db: DatabaseSyncLike, tenantId: string, origin: Origin, nowMs: number, tally: ProjectTally) {
   const maxAgeDays = Math.max(1, Math.ceil(tally.maxAgeDays));
   if (tally.live <= SCATTER_POINTS_MAX) {
     // SAFETY: each column is named in the SELECT; layer holds a Layer value.
@@ -195,9 +194,8 @@ function scatterAt(db: DatabaseSyncLike, tenantId: string, origin: Origin, nowMs
   return { mode: 'grid', maxAgeDays, cells } satisfies ScatterRows;
 }
 
-function projectAt(
+function project(
   db: DatabaseSyncLike,
-  _files: StoreFiles,
   tenantId: string,
   origin: Origin,
   nowMs: number,
@@ -219,7 +217,7 @@ function projectAt(
       `WITH ${OPEN_PAIRS} SELECT COUNT(*) AS n FROM open_pairs WHERE pa IS :origin OR pb IS :origin`,
     ).get({ tenant: tenantId, origin }) as { n: number };
     const tally = projectTally(origin, row.tally, Number(conflicts.n));
-    return { tally, scatter: scatterAt(db, tenantId, origin, nowMs, tally) };
+    return { tally, scatter: scatter(db, tenantId, origin, nowMs, tally) };
   });
 }
 
@@ -337,7 +335,7 @@ function listedRow(row: PageRow & { id: string }, nowMs: number, rules: LossAver
   };
 }
 
-function memoryPageAt(
+function memoryPage(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
@@ -366,7 +364,7 @@ function memoryPageAt(
   });
 }
 
-function searchAt(db: DatabaseSyncLike, _files: StoreFiles, tenantId: string, needle: string): SearchTally[] {
+function search(db: DatabaseSyncLike, tenantId: string, needle: string): SearchTally[] {
   // SAFETY: one row per origin_project, each a count and a sum.
   const rows = cachedStatement(
     db,
@@ -388,56 +386,67 @@ function searchAt(db: DatabaseSyncLike, _files: StoreFiles, tenantId: string, ne
 
 /** Whether `id` has a stored vector; false on a store that has never held one. Runs on the held reader, so its
  * statement is prepared once. */
-function hasVectorAt(db: DatabaseSyncLike, id: string): boolean {
+function hasVector(db: DatabaseSyncLike, id: string): boolean {
   if (!tableExists(db, 'memory_vectors')) return false;
   return cachedStatement(db, 'SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
+}
+
+/** Opens the store writable with the dashboard's functions scored by `rules`. */
+function dashboardOpener(rules: LossAversion): (root: string) => DatabaseSyncLike {
+  return (root) => {
+    const db = openStore(root);
+    useDashboardFunctions(db, rules);
+    return db;
+  };
 }
 
 /** Reads run on a fresh writable open, which runs any pending migration and legacy import first and carries the
  * dashboard's functions scored by `rules`; while no hippo.db exists they answer empty and create none. */
 export function sqliteDashboardReads(hippoRoot: string, rules: LossAversion = {}): DashboardReads {
-  const { on } = handlesOf(hippoRoot, rules);
-  const open = (root: string): DatabaseSyncLike => {
-    const db = openStore(root);
-    useDashboardFunctions(db, rules);
-    return db;
-  };
-  type Scans = Pick<DashboardReads, 'totals' | 'project' | 'memoryPage' | 'search'>;
-  const scans = boundWithFiles<Scans>(
+  const { on, files } = handlesOf(hippoRoot, rules);
+  const open = dashboardOpener(rules);
+  type Scans = Pick<DashboardReads, 'totals' | 'project' | 'memoryPage' | 'search' | 'openConflictsOf'>;
+  const scans = bound<Scans>(
     on,
     {
-      totals: totalsAt,
-      project: projectAt,
-      memoryPage: memoryPageAt,
-      search: searchAt,
+      totals,
+      project,
+      memoryPage: (db, ...args) => memoryPage(db, files, ...args),
+      search,
+      openConflictsOf: openConflictsNaming,
     },
     open,
   );
-  const points = bound<Pick<DashboardReads, 'openConflictsOf'>>(on, { openConflictsOf: openConflictsNamingAt }, open);
   const stored = (): boolean => fs.existsSync(getHippoDbPath(hippoRoot));
   let held: DatabaseSyncLike | null = null;
   const reader = (): DatabaseSyncLike | null => {
     if (held === null && stored()) held = openHippoDbReadOnly(hippoRoot);
     return held;
   };
-  return served<DashboardReads>({
-    commitCount() {
-      const db = reader();
-      return db === null ? null : pragmaDataVersion(db);
-    },
+  return {
+    commitCount: () =>
+      answered(() => {
+        const db = reader();
+        return db === null ? null : pragmaDataVersion(db);
+      }),
     totals: (tenantId, nowMs) =>
-      stored() ? scans.totals(tenantId, nowMs) : { projects: [], excluded: noneExcluded(), openConflicts: 0 },
-    project: (tenantId, origin, nowMs) => (stored() ? scans.project(tenantId, origin, nowMs) : null),
-    memoryPage: (tenantId, query, nowMs) => (stored() ? scans.memoryPage(tenantId, query, nowMs) : null),
-    search: (tenantId, needle) => (stored() ? scans.search(tenantId, needle) : []),
-    openConflictsOf: points.openConflictsOf,
-    hasVector(id) {
-      const db = reader();
-      return db !== null && hasVectorAt(db, id);
-    },
-    close() {
-      if (held !== null) closeHippoDb(held);
-      held = null;
-    },
-  });
+      stored()
+        ? scans.totals(tenantId, nowMs)
+        : Promise.resolve({ projects: [], excluded: noneExcluded(), openConflicts: 0 }),
+    project: (tenantId, origin, nowMs) => (stored() ? scans.project(tenantId, origin, nowMs) : Promise.resolve(null)),
+    memoryPage: (tenantId, query, nowMs) =>
+      stored() ? scans.memoryPage(tenantId, query, nowMs) : Promise.resolve(null),
+    search: (tenantId, needle) => (stored() ? scans.search(tenantId, needle) : Promise.resolve([])),
+    openConflictsOf: scans.openConflictsOf,
+    hasVector: (id) =>
+      answered(() => {
+        const db = reader();
+        return db !== null && hasVector(db, id);
+      }),
+    close: () =>
+      answered(() => {
+        if (held !== null) closeHippoDb(held);
+        held = null;
+      }),
+  };
 }

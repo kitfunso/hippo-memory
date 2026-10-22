@@ -3,15 +3,10 @@
 import { keysetPage, type KeysetPage } from '../../base/util/keyset.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
+import type { SqlFragment } from '../../db/sql.js';
 import { orderSql, STORE_ORDER } from '../rules/order.js';
 import type { EntryCursor } from '../port/types.js';
 import type { IdPage } from '../port/vectors.js';
-
-/** An ` AND ...` WHERE fragment, or empty, and the arguments it binds. */
-export interface SqlAnd {
-  readonly sql: string;
-  readonly args: readonly string[];
-}
 
 /** What a page in loadAllEntries' order asks for. */
 export interface EntryPageRequest {
@@ -23,22 +18,22 @@ export interface EntryPageRequest {
 export const ENTRY_PAGE_ORDER = `ORDER BY ${orderSql(STORE_ORDER)} LIMIT ?`;
 
 /** Where one page in loadAllEntries' order reads: `match(filter)` is the WHERE that keeps the rows `filter` keeps of
- * the page's tenant, or of every tenant, after its cursor, and `args` binds what it adds, after the filter's own. */
+ * the page's tenant, or of every tenant, after its cursor, and `params` binds what it adds, after the filter's own. */
 export interface EntryRows {
   readonly match: (filter: string) => string;
-  readonly args: readonly (string | number)[];
+  readonly params: readonly (string | number)[];
 }
 
 /** Up to `limit` rows in loadAllEntries' order: its SQL is `SELECT ... FROM memories WHERE ${rows.match(filter)}`
- * then ENTRY_PAGE_ORDER, and it binds the filter's arguments, then `rows.args`, then `limit`. */
+ * then ENTRY_PAGE_ORDER, and it binds the filter's arguments, then `rows.params`, then `limit`. */
 export type EntryRowsRead<R> = (rows: EntryRows, limit: number) => R[];
 
 /** Rows after `after`. The plain `created >=` is the range term SQLite seeks the index on; the OR only settles ties on
  * created. */
-function entryRange(after: EntryCursor | undefined): SqlAnd {
+function entryRange(after: EntryCursor | undefined): SqlFragment {
   return after
-    ? { sql: ' AND created >= ? AND (created > ? OR id > ?)', args: [after.created, after.created, after.id] }
-    : { sql: '', args: [] };
+    ? { sql: ' AND created >= ? AND (created > ? OR id > ?)', params: [after.created, after.created, after.id] }
+    : { sql: '', params: [] };
 }
 
 const entryCursorOf = (row: EntryCursor): EntryCursor => ({ created: row.created, id: row.id });
@@ -56,20 +51,20 @@ export function entryPage<R extends EntryCursor>(
   return keysetPage(read(rows, keep), page.limit, entryCursorOf);
 }
 
-function oneTenantRows(tenant: SqlAnd, range: SqlAnd): EntryRows {
-  return { match: (filter) => `(${filter})${tenant.sql}${range.sql}`, args: [...tenant.args, ...range.args] };
+function oneTenantRows(tenant: SqlFragment, range: SqlFragment): EntryRows {
+  return { match: (filter) => `(${filter})${tenant.sql}${range.sql}`, params: [...tenant.params, ...range.params] };
 }
 
 // No index orders memories by created across tenants, so each tenant's first `keep` rows come off its own index, one
 // seek per tenant in a loose scan, and the statement sorts only those. INDEXED BY: a filter the origin index covers
 // would otherwise sort the whole tenant.
-function everyTenantRows(range: SqlAnd, keep: number): EntryRows {
+function everyTenantRows(range: SqlFragment, keep: number): EntryRows {
   return {
     match: (filter) =>
       `rowid IN (${TENANT_IDS} SELECT m.rowid FROM t JOIN memories m ON m.rowid IN (SELECT rowid FROM memories ` +
       `INDEXED BY idx_memories_tenant_created WHERE tenant_id = t.tid AND (${filter})${range.sql} ` +
       `${ENTRY_PAGE_ORDER}))`,
-    args: [...range.args, keep],
+    params: [...range.params, keep],
   };
 }
 
@@ -78,8 +73,8 @@ const TENANT_IDS =
   'SELECT (SELECT MIN(tenant_id) FROM memories WHERE tenant_id > t.tid) FROM t WHERE t.tid IS NOT NULL)';
 
 /** The keyset clause that resumes id order after `afterId`; the primary key serves it, so the page sorts nothing. */
-export function afterIdAnd(afterId: string | undefined): SqlAnd {
-  return afterId === undefined ? { sql: '', args: [] } : { sql: ' AND id > ?', args: [afterId] };
+export function afterIdAnd(afterId: string | undefined): SqlFragment {
+  return afterId === undefined ? { sql: '', params: [] } : { sql: ' AND id > ?', params: [afterId] };
 }
 
 /** The ids of a read in id order that fetched one row past `limit`, and the id the next page starts after. */

@@ -11,11 +11,11 @@ export interface EventLogSpec {
   readonly keyColumn: 'event_id' | 'idempotency_key';
 }
 
-export function eventSeenAt(db: DatabaseSyncLike, log: EventLogSpec, key: string): boolean {
+export function eventSeen(db: DatabaseSyncLike, log: EventLogSpec, key: string): boolean {
   return !!cachedStatement(db, `SELECT 1 FROM ${log.table} WHERE ${log.keyColumn} = ?`).get(key);
 }
 
-export function eventMemoryAt(db: DatabaseSyncLike, log: EventLogSpec, key: string): string | null {
+export function eventMemory(db: DatabaseSyncLike, log: EventLogSpec, key: string): string | null {
   const row = cachedStatement(db, `SELECT memory_id FROM ${log.table} WHERE ${log.keyColumn} = ?`).get(key) as
     | { memory_id: string | null }
     | undefined;
@@ -24,7 +24,7 @@ export function eventMemoryAt(db: DatabaseSyncLike, log: EventLogSpec, key: stri
 
 /** Records the key unless a row holds it already; false means another writer got there first. `extra` pairs
  * connector-only columns with values. */
-export function markEventSeenAt(
+export function markEventSeen(
   db: DatabaseSyncLike,
   log: EventLogSpec,
   key: string,
@@ -40,6 +40,6 @@ export function markEventSeenAt(
   return Number(inserted.changes ?? 0) !== 0;
 }
 
-export function eventRecordAt(db: DatabaseSyncLike, log: EventLogSpec, key: string): ConnectorEventRecord {
-  return eventSeenAt(db, log, key) ? { seen: true, memoryId: eventMemoryAt(db, log, key) } : { seen: false };
+export function eventRecord(db: DatabaseSyncLike, log: EventLogSpec, key: string): ConnectorEventRecord {
+  return eventSeen(db, log, key) ? { seen: true, memoryId: eventMemory(db, log, key) } : { seen: false };
 }

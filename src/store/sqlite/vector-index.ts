@@ -36,7 +36,7 @@ import {
   storedVectorDims,
   upsertVectors,
 } from '../../db/vector-store.js';
-import { countAllEntriesAt, loadEntryIdsByIdAt, selectEntriesByIds } from './entry-reads.js';
+import { countAllEntries, loadEntryIdsById, selectEntriesByIds } from './entry-reads.js';
 import { afterIdAnd, idPageOf } from './keyset.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
@@ -49,7 +49,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 const MAX_BACKFILL_PAGE = 500;
 
 /** hippo.db's index state, the meta row and the EXISTS on one handle. */
-export function storedIndexStateAt(db: DatabaseSyncLike): EmbeddingIndexState {
+export function storedIndexState(db: DatabaseSyncLike): EmbeddingIndexState {
   return {
     storedModel: getMeta(db, EMBEDDING_MODEL_META_KEY, '').trim() || null,
     hasVectors: hasStoredVectors(db),
@@ -57,13 +57,13 @@ export function storedIndexStateAt(db: DatabaseSyncLike): EmbeddingIndexState {
 }
 
 /** Records `identity` as what built the index. */
-function saveIndexIdentityAt(db: DatabaseSyncLike, identity: string): void {
+function saveIndexIdentity(db: DatabaseSyncLike, identity: string): void {
   setMeta(db, EMBEDDING_MODEL_META_KEY, identity);
 }
 
 function loadStoredEmbeddingModel(on: OnHandle): string | null {
   try {
-    return on(storedIndexStateAt).storedModel;
+    return on(storedIndexState).storedModel;
   } catch (err) {
     rethrowIfStoreBlocked(err);
     log.debug(`stored embedding model unreadable: ${errorMessage(err)}`, errorFields(err));
@@ -74,7 +74,7 @@ function loadStoredEmbeddingModel(on: OnHandle): string | null {
 /** Saves the index identity of provider `model`, versioned by `embeddingIndexIdentity` as the compare side is. */
 export function saveStoredEmbeddingModel(on: OnHandle, model: string): void {
   on((db) => {
-    saveIndexIdentityAt(db, embeddingIndexIdentity(model));
+    saveIndexIdentity(db, embeddingIndexIdentity(model));
   });
 }
 
@@ -83,7 +83,7 @@ function resolveIndexedEmbeddingModel(on: OnHandle, index?: Record<string, numbe
   if (storedModel) return storedModel;
   return indexedModel({
     storedModel,
-    hasVectors: index ? Object.keys(index).length > 0 : on(storedIndexStateAt).hasVectors,
+    hasVectors: index ? Object.keys(index).length > 0 : on(storedIndexState).hasVectors,
   });
 }
 
@@ -94,23 +94,23 @@ export function embeddingModelRequiresReindex(on: OnHandle, model: string, index
 /**
  * Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via `loadStoredVectors`.
  */
-export function loadEmbeddingIndexAt(db: DatabaseSyncLike): Record<string, number[]> {
+export function loadEmbeddingIndex(db: DatabaseSyncLike): Record<string, number[]> {
   return Object.fromEntries(loadVectors(db));
 }
 
 /** How many vectors are stored and the float count of the first row, with no vector decoded. */
-export function storedVectorSummaryAt(db: DatabaseSyncLike): StoredVectorSummary {
+export function storedVectorSummary(db: DatabaseSyncLike): StoredVectorSummary {
   return { vectors: storedVectorCount(db), dims: storedVectorDims(db) };
 }
 
 /** Stored vectors for `ids` only. */
-export function loadStoredVectorsAt(db: DatabaseSyncLike, ids: readonly string[]): Map<string, number[]> {
+export function loadStoredVectors(db: DatabaseSyncLike, ids: readonly string[]): Map<string, number[]> {
   if (ids.length === 0) return new Map();
   return loadVectors(db, ids);
 }
 
 /** `loadStoredVectors` as Float32 views, for a caller that only scores them. */
-export function loadStoredVectorViewsAt(db: DatabaseSyncLike, ids: readonly string[]): Map<string, Float32Array> {
+export function loadStoredVectorViews(db: DatabaseSyncLike, ids: readonly string[]): Map<string, Float32Array> {
   if (ids.length === 0) return new Map();
   return loadVectorViews(db, ids);
 }
@@ -125,42 +125,42 @@ export interface VectorRebuild {
 }
 
 /** A rebuild staged on `db`, a handle of its own that `release` closes, which drops the staging table with it. */
-export function beginVectorRebuildAt(db: DatabaseSyncLike, release: () => void): VectorRebuild {
+export function beginVectorRebuild(db: DatabaseSyncLike, release: () => void): VectorRebuild {
   openVectorStaging(db);
   return {
     stage: (rows) => stageVectors(db, rows),
     commit: (model) =>
       withWriteScope(db, 'rebuild_vectors', () => {
         replaceVectorsWithStaged(db, model);
-        saveIndexIdentityAt(db, model);
+        saveIndexIdentity(db, model);
       }),
     close: release,
   };
 }
 
 /** How many memories and vectors hippo.db holds, and how many memories have a vector. */
-export function vectorCoverageAt(db: DatabaseSyncLike): VectorCoverage {
-  return { memories: countAllEntriesAt(db), ...countVectors(db) };
+export function vectorCoverage(db: DatabaseSyncLike): VectorCoverage {
+  return { memories: countAllEntries(db), ...countVectors(db) };
 }
 
 /** Drops the vectors of deleted memories. */
-export function pruneOrphanVectorsAt(db: DatabaseSyncLike): void {
+export function pruneOrphanVectors(db: DatabaseSyncLike): void {
   deleteOrphanVectors(db);
 }
 
 /** The ids with no vector, in id order, `page.limit` at a time after `page.afterId`: a backfill needs each once. */
-export function pendingVectorIdsAt(db: DatabaseSyncLike, page: IdPageRequest): IdPage {
+export function pendingVectorIds(db: DatabaseSyncLike, page: IdPageRequest): IdPage {
   const after = afterIdAnd(page.afterId);
   const rows = cachedStatement(
     db,
     `SELECT id FROM memories
        WHERE NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)${after.sql}
        ORDER BY id LIMIT ?`,
-  ).all(...after.args, page.limit + 1) as Array<{ id: string }>;
+  ).all(...after.params, page.limit + 1) as Array<{ id: string }>;
   return idPageOf(rows, page.limit);
 }
 
-export function entriesWithoutVectorAt(db: DatabaseSyncLike, query: VectorBackfillQuery): MemoryEntry[] {
+export function entriesWithoutVector(db: DatabaseSyncLike, query: VectorBackfillQuery): MemoryEntry[] {
   if (!Number.isInteger(query.limit)) throw new RangeError('limit must be an integer');
   const limit = Math.max(1, Math.min(query.limit, MAX_BACKFILL_PAGE));
   const tenant = tenantAnd(query.tenantId);
@@ -169,7 +169,7 @@ export function entriesWithoutVectorAt(db: DatabaseSyncLike, query: VectorBackfi
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id > ?${tenant.sql}
        AND NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id AND v.model = ?)
      ORDER BY id LIMIT ?`,
-  ).all(query.afterId ?? '', ...tenant.args, query.model, limit) as MemoryRow[];
+  ).all(query.afterId ?? '', ...tenant.params, query.model, limit) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -208,9 +208,9 @@ function insertNewParticles(db: DatabaseSyncLike, rows: readonly VectorRowWrite[
   }
 }
 
-export function writeVectorsAt(db: DatabaseSyncLike, write: VectorWrite): VectorWriteResult {
+export function writeVectors(db: DatabaseSyncLike, write: VectorWrite): VectorWriteResult {
   return withWriteScope(db, 'write_vectors', () => {
-    const replaces = replacesIndex(storedIndexStateAt(db), write.model);
+    const replaces = replacesIndex(storedIndexState(db), write.model);
     if (replaces && !write.replaceIndex) return { written: 0, modelMismatch: true };
     const owned = ownedIds(
       db,
@@ -234,23 +234,23 @@ export function writeVectorsAt(db: DatabaseSyncLike, write: VectorWrite): Vector
 }
 
 /** Every particle stored under `hippoRoot`. */
-function loadStoredParticlesAt(db: DatabaseSyncLike): PhysicsParticle[] {
+function loadStoredParticles(db: DatabaseSyncLike): PhysicsParticle[] {
   return Array.from(loadPhysicsState(db).values());
 }
 
 /** The particle count and mean speed from the velocity column alone, and every particle while at most `fullUpTo` are
  * stored, on one snapshot. */
-export function particleStatsAt(db: DatabaseSyncLike, fullUpTo: number): ParticleStats {
+export function particleStats(db: DatabaseSyncLike, fullUpTo: number): ParticleStats {
   return withReadSnapshot(db, () => {
     const { count, speedSum } = physicsSpeedSum(db);
-    const particles = count > 0 && count <= fullUpTo ? loadStoredParticlesAt(db) : null;
+    const particles = count > 0 && count <= fullUpTo ? loadStoredParticles(db) : null;
     return { count, meanSpeed: count > 0 ? speedSum / count : 0, particles };
   });
 }
 
-/** The memory id of every stored particle in loadStoredParticlesAt's order, so a caller reads only the particles it
+/** The memory id of every stored particle in loadStoredParticles's order, so a caller reads only the particles it
  * keeps. */
-export function storedParticleIdsAt(db: DatabaseSyncLike): string[] {
+export function storedParticleIds(db: DatabaseSyncLike): string[] {
   const rows = cachedStatement(db, 'SELECT memory_id FROM memory_physics ORDER BY rowid').all() as Array<{
     memory_id: string;
   }>;
@@ -258,14 +258,14 @@ export function storedParticleIdsAt(db: DatabaseSyncLike): string[] {
 }
 
 /** The stored particles for `ids`, in that order; an id with no particle is skipped. */
-export function storedParticlesByIdsAt(db: DatabaseSyncLike, ids: readonly string[]): PhysicsParticle[] {
+export function storedParticlesByIds(db: DatabaseSyncLike, ids: readonly string[]): PhysicsParticle[] {
   if (ids.length === 0) return [];
   const byId = loadPhysicsState(db, [...ids]);
   return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
 /** Writes `particles` over their stored state under `hippoRoot`, as one batch. */
-export function saveStoredParticlesAt(db: DatabaseSyncLike, particles: PhysicsParticle[]): void {
+export function saveStoredParticles(db: DatabaseSyncLike, particles: PhysicsParticle[]): void {
   savePhysicsState(db, particles);
 }
 
@@ -277,7 +277,7 @@ const RESET_ID_PAGE = 1000;
 function* storedSeeds(db: DatabaseSyncLike): Generator<ParticleSeed> {
   let afterId: string | undefined;
   do {
-    const page = loadEntryIdsByIdAt(db, { limit: RESET_ID_PAGE, afterId });
+    const page = loadEntryIdsById(db, { limit: RESET_ID_PAGE, afterId });
     for (const ids of chunked(page.ids, PARTICLE_PAGE)) {
       const vectors = loadVectors(db, ids);
       const rows = selectEntriesByIds(db, [...vectors.keys()], ALL_TENANTS);
@@ -292,12 +292,12 @@ function* storedSeeds(db: DatabaseSyncLike): Generator<ParticleSeed> {
 }
 
 /** Replaces every particle with a fresh one per memory that has a stored vector; returns how many. */
-export function resetStoredParticlesAt(db: DatabaseSyncLike, rules: LossAversion): number {
+export function resetStoredParticles(db: DatabaseSyncLike, rules: LossAversion): number {
   return resetPhysicsFromSeeds(db, storedSeeds(db), strengthOptionsOf(rules));
 }
 
 /** Stores a first particle for `entry`, placed at `vector`; a memory that has one keeps it. */
-export function seedStoredParticleAt(
+export function seedStoredParticle(
   db: DatabaseSyncLike,
   rules: LossAversion,
   entry: MemoryEntry,

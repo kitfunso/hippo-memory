@@ -18,7 +18,7 @@ import { lessonFromFailure, failureSignature } from '../../src/surface/capture/f
 import { getHippoRoot } from '../../src/base/scope/project-identity.js';
 import { installJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
 import { runDoctor } from '../../src/surface/cli/doctor.js';
-import { diagnosticsAt } from '../_helpers/cli-stores.js';
+import { diagnosticsBodies } from '../_helpers/cli-stores.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot, loadAllEntries } from '../_helpers/root-forms.js';
@@ -485,14 +485,14 @@ describe('both install routes wire compaction and failed-tool capture', () => {
         },
       }),
     );
-    const report = await runDoctor({ diagnosticsAt, tenantId: 'default', cwd: dir, home: dir, version: 't' });
+    const report = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd: dir, home: dir, version: 't' });
     const check = report.checks.find((c) => c.id === 'claude-code')!;
     expect(check.status).toBe('warn');
     expect(check.detail).toMatch(/compaction snapshot and memories request/);
     expect(check.detail).toMatch(/failed-tool capture/);
     installJsonHooks('claude-code');
     expect(
-      (await runDoctor({ diagnosticsAt, tenantId: 'default', cwd: dir, home: dir, version: 't' })).checks.find(
+      (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd: dir, home: dir, version: 't' })).checks.find(
         (c) => c.id === 'claude-code',
       )!.status,
     ).toBe('pass');

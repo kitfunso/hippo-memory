@@ -62,7 +62,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     // The created summary MUST NOT be dirty (the clearSummaryDirtyAfterBuild
     // call inside buildDag cancels the dirty-marks fired during child linkage)
-    const stillDirty = loadAllDirtySummaries(hippoRoot);
+    const stillDirty = await loadAllDirtySummaries(hippoRoot);
     expect(stillDirty.length).toBe(0);
 
     // Audit row for summary_marked_clean source='buildDag-clean' should exist
@@ -169,12 +169,12 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     }
   });
 
-  it('race-loser no-op: pre-cleared dirty flag → applyRebuildResult returns false, no audit, no rebuild_count bump', () => {
+  it('race-loser no-op: pre-cleared dirty flag → applyRebuildResult returns false, no audit, no rebuild_count bump', async () => {
     const summary = makeSummary('s11-summary-content');
     writeEntry(hippoRoot, summary);
     // Note: we do NOT force-mark dirty — simulate the race-loser by leaving clean
 
-    const result = applyRebuildResult(hippoRoot, summary, {
+    const result = await applyRebuildResult(hippoRoot, summary, {
       content: 'should-not-land',
       descendantCount: 5,
       earliestAt: '2026-05-25T10:00:00Z',

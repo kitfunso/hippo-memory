@@ -41,7 +41,7 @@ beforeEach(async () => {
     content: 'auth bug fix details',
     tags: ['fix-auth'],
   });
-  pushGoal(home, { sessionId, tenantId, goalName: 'fix-auth' });
+  await pushGoal(home, { sessionId, tenantId, goalName: 'fix-auth' });
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 afterEach(async () => {

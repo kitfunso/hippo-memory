@@ -88,7 +88,7 @@ async function seedTenant(tenantId: string, count: number): Promise<void> {
       customer: `${tenantId} customer ${i}`,
       note: 'a note',
     });
-    savePrediction(home, tenantId, { classTag: 'paging', claimText: `${tenantId} claim ${i}` });
+    await savePrediction(home, tenantId, { classTag: 'paging', claimText: `${tenantId} claim ${i}` });
     const { id } = await api.remember(ctx, { content: `${tenantId} held memory ${i} for review` });
     const db = openHippoDb(home);
     try {
@@ -189,7 +189,7 @@ describe('no paging params: the body a small store got before cursors existed', 
   // Each reference is the store call the route made before paging, with the same arguments.
   const before = new Map<string, () => JsonValue | Promise<JsonValue>>([
     ['/v1/quarantine', async () => json(await api.quarantineList(ctx(), { status: 'pending' }))],
-    ['/v1/predictions', () => json(loadAllPredictions(home, 'default', { limit: 100 }))],
+    ['/v1/predictions', async () => json(await loadAllPredictions(home, 'default', { limit: 100 }))],
     ['/v1/decisions', async () => json(await loadDecisions(objectsAt(home), 'default', { limit: 100 }))],
     ['/v1/incidents', async () => json(await listObjects(objectsAt(home), INCIDENT, 'default', { limit: 100 }))],
     ['/v1/processes', async () => json(await listObjects(objectsAt(home), PROCESS, 'default', { limit: 100 }))],

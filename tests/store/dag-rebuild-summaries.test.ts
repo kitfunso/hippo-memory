@@ -200,7 +200,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(result.capped).toBe(true);
 
     // 5 should remain dirty
-    const stillDirty = loadAllDirtySummaries(hippoRoot);
+    const stillDirty = await loadAllDirtySummaries(hippoRoot);
     expect(stillDirty.length).toBe(5);
   });
 
@@ -299,7 +299,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(result.rebuilt).toBe(1);
 
     // Verify per-summary state — exactly one stayed dirty
-    const stillDirty = loadAllDirtySummaries(hippoRoot);
+    const stillDirty = await loadAllDirtySummaries(hippoRoot);
     expect(stillDirty.length).toBe(1);
   });
 
@@ -327,10 +327,10 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     });
     expect(result.failed).toBe(1);
     expect(result.rebuilt).toBe(1);
-    expect(loadAllDirtySummaries(hippoRoot).length).toBe(1);
+    expect((await loadAllDirtySummaries(hippoRoot)).length).toBe(1);
   });
 
-  it('atomicity: applyRebuildResult issues exactly ONE UPDATE memories statement (jest.spyOn-equivalent via SQL spy)', () => {
+  it('atomicity: applyRebuildResult issues exactly ONE UPDATE memories statement (jest.spyOn-equivalent via SQL spy)', async () => {
     const summary = makeSummary('s8-summary');
     writeEntry(hippoRoot, summary);
     forceMarkDirty(hippoRoot, summary.id);
@@ -366,7 +366,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(sql).toContain('AND summary_dirty = 1'); // race-loser guard
 
     // Smoke test the function actually applies the patch in one round-trip
-    const result = applyRebuildResult(hippoRoot, summary, {
+    const result = await applyRebuildResult(hippoRoot, summary, {
       content: 'one-shot-content-xyzabc',
       descendantCount: 0,
       earliestAt: null,
@@ -406,7 +406,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(result.summariesZeroChildSkipped).toBe(0);
 
     // Dirty still set
-    const stillDirty = loadAllDirtySummaries(hippoRoot);
+    const stillDirty = await loadAllDirtySummaries(hippoRoot);
     expect(stillDirty.map((s) => s.id)).toContain(summary.id);
   });
 });

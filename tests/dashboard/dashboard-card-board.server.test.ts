@@ -199,29 +199,29 @@ describe('card routes', () => {
     vi.stubEnv('HIPPO_HOME', globalDir);
     tenant = resolveTenantId({});
 
-    const p = createCard(hippoRoot, tenant, { title: 'P', repo: 'r', contract: 'c', budget: 5 });
+    const p = await createCard(hippoRoot, tenant, { title: 'P', repo: 'r', contract: 'c', budget: 5 });
     P = p.id;
-    const c = createCard(hippoRoot, tenant, { title: 'C', dependsOn: [P] });
+    const c = await createCard(hippoRoot, tenant, { title: 'C', dependsOn: [P] });
     C = c.id;
 
-    expect(claimCard(hippoRoot, tenant, P, 'r1')).not.toBeNull();
-    expect(addCardComment(hippoRoot, tenant, P, 'a', 'note')).not.toBeNull();
+    expect(await claimCard(hippoRoot, tenant, P, 'r1')).not.toBeNull();
+    expect(await addCardComment(hippoRoot, tenant, P, 'a', 'note')).not.toBeNull();
     expect(
       saveSessionHandoff(hippoRoot, tenant, { version: 1, sessionId: 's1', summary: 's', cardId: P }),
     ).not.toBeNull();
 
-    expect(blockCard(hippoRoot, tenant, P, 'waiting')).not.toBeNull();
-    expect(claimCard(hippoRoot, tenant, P, 'r2')).not.toBeNull();
-    expect(reviewCard(hippoRoot, tenant, P)).not.toBeNull();
-    expect(completeCard(hippoRoot, tenant, P, 'success')).not.toBeNull();
+    expect(await blockCard(hippoRoot, tenant, P, 'waiting')).not.toBeNull();
+    expect(await claimCard(hippoRoot, tenant, P, 'r2')).not.toBeNull();
+    expect(await reviewCard(hippoRoot, tenant, P)).not.toBeNull();
+    expect(await completeCard(hippoRoot, tenant, P, 'success')).not.toBeNull();
 
-    const q = createCard(hippoRoot, tenant, { title: 'Q' });
+    const q = await createCard(hippoRoot, tenant, { title: 'Q' });
     Q = q.id;
-    const claimedQ = claimCard(hippoRoot, tenant, Q, 'r3');
+    const claimedQ = await claimCard(hippoRoot, tenant, Q, 'r3');
     expect(claimedQ).not.toBeNull();
-    expect(heartbeatCard(hippoRoot, tenant, Q, claimedQ!.runId)).not.toBeNull();
+    expect(await heartbeatCard(hippoRoot, tenant, Q, claimedQ!.runId)).not.toBeNull();
 
-    const t = createCard(hippoRoot, 'tenant_a', { title: 'T' });
+    const t = await createCard(hippoRoot, 'tenant_a', { title: 'T' });
     T = t.id;
 
     listJson = await runCliOut(['card', 'list', '--json'], { cwd, env: cliEnv });

@@ -116,7 +116,7 @@ export interface AppendAuditOpts {
   actor: string; // 'cli' | 'api_key:hk_...' | 'system'
   op: AuditOp;
   targetId?: string;
-  // Opaque on purpose: appendAuditEvent only JSON.stringify's it wholesale and never reads a field, so no parsed
+  // Opaque on purpose: appendAuditEvents only JSON.stringify's it wholesale and never reads a field, so no parsed
   // contract is claimed.
   metadata?: unknown;
 }

@@ -1,7 +1,6 @@
 // The status verbs read only the rows their report needs, and the report is the one the whole-store read gave.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { buildCorrectionLatency } from '../../src/api/correction-latency.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import { physicsEnergyText } from '../../src/surface/cli/status.js';
@@ -11,7 +10,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, writeEntriesTogether, loadAllEntries, loadStoredParticles } from '../_helpers/root-forms.js';
 import { vecNorm } from '../../src/base/rank/physics.js';
-import { recordStatements } from '../_helpers/count-statements.js';
+import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { correctionLinksOf, rawProvenanceOf } from '../../src/store/memory/reports.js';
 
@@ -53,31 +52,29 @@ function seed(): void {
 }
 
 describe('status report reads', () => {
-  it('builds the same correction-latency report from the join as from every row', () => {
+  it('builds the same correction-latency report from the join as from every row', async () => {
     seed();
-    const report = buildCorrectionLatency(
-      sqliteSyncStore(handlesOf(root)).reports.correctionLinks({ limit: 500 }).links,
-    );
+    const report = buildCorrectionLatency((await sqliteStore(root).reports.correctionLinks({ limit: 500 })).links);
     expect(report).toEqual(buildCorrectionLatency(correctionLinksOf(loadAllEntries(root, 'default'))));
     expect(report.count).toBe(2);
     expect(report.extractionCount).toBe(1);
   });
 
-  it('builds the same provenance report from the count and the gaps as from every row', () => {
+  it('builds the same provenance report from the count and the gaps as from every row', async () => {
     seed();
-    const report = buildProvenanceCoverage(sqliteSyncStore(handlesOf(root)).reports.rawProvenance({ limit: 500 }));
+    const report = buildProvenanceCoverage(await sqliteStore(root).reports.rawProvenance({ limit: 500 }));
     expect(report).toEqual(buildProvenanceCoverage(rawProvenanceOf(loadAllEntries(root, 'default'))));
     expect(report.rawTotal).toBe(2);
     expect(report.gaps).toHaveLength(1);
   });
 
-  it('reads the same rows when the store holds five times more rows outside the reports', () => {
+  it('reads the same rows when the store holds five times more rows outside the reports', async () => {
     seed();
-    const reports = () => {
-      const { correctionLinks, rawProvenance } = sqliteSyncStore(handlesOf(root)).reports;
-      return { links: correctionLinks({ limit: 500 }), raw: rawProvenance({ limit: 500 }) };
+    const reports = async () => {
+      const { correctionLinks, rawProvenance } = sqliteStore(root).reports;
+      return { links: await correctionLinks({ limit: 500 }), raw: await rawProvenance({ limit: 500 }) };
     };
-    const before = recordStatements(reports);
+    const before = await recordStatementsAsync(reports);
     writeEntriesTogether(
       root,
       Array.from({ length: 200 }, (_, i) => createMemory(`more filler memory ${i}`)),
@@ -88,7 +85,7 @@ describe('status report reads', () => {
         createMemory(`raw receipt ${i}`, { kind: 'raw', owner: 'o', artifactRef: 'r' }),
       ),
     );
-    const after = recordStatements(reports);
+    const after = await recordStatementsAsync(reports);
     expect(after.reads.map((r) => r.rows)).toEqual(before.reads.map((r) => r.rows));
     expect(after.result.raw.total).toBe(22);
     expect(after.result.links).toEqual(before.result.links);
@@ -96,15 +93,15 @@ describe('status report reads', () => {
 });
 
 describe('status report pages', () => {
-  it('walks the links and the gaps one row at a time to the same rows as one big page', () => {
+  it('walks the links and the gaps one row at a time to the same rows as one big page', async () => {
     seed();
-    const { reports } = sqliteSyncStore(handlesOf(root));
-    const whole = reports.correctionLinks({ limit: 500 });
+    const { reports } = sqliteStore(root);
+    const whole = await reports.correctionLinks({ limit: 500 });
     const links: typeof whole.links = [];
     for (
-      let page = reports.correctionLinks({ limit: 1 });
+      let page = await reports.correctionLinks({ limit: 1 });
       ;
-      page = reports.correctionLinks({ limit: 1, after: page.next! })
+      page = await reports.correctionLinks({ limit: 1, after: page.next! })
     ) {
       expect(page.links.length).toBeLessThanOrEqual(1);
       links.push(...page.links);
@@ -112,12 +109,13 @@ describe('status report pages', () => {
     }
     expect(links).toEqual(whole.links);
     expect(links).toHaveLength(2);
-    const bigGaps = reports.rawProvenance({ limit: 500 });
-    const first = reports.rawProvenance({ limit: 1 });
+    const bigGaps = await reports.rawProvenance({ limit: 500 });
+    const first = await reports.rawProvenance({ limit: 1 });
     expect(first.total).toBe(bigGaps.total);
-    expect([...first.gaps, ...(first.next ? reports.rawProvenance({ limit: 1, after: first.next }).gaps : [])]).toEqual(
-      bigGaps.gaps,
-    );
+    expect([
+      ...first.gaps,
+      ...(first.next ? (await reports.rawProvenance({ limit: 1, after: first.next })).gaps : []),
+    ]).toEqual(bigGaps.gaps);
   });
 });
 
@@ -133,27 +131,27 @@ describe('physics status stats', () => {
       lastSimulation: '2026-01-01T00:00:00.000Z',
     }));
 
-  function seedParticles(n: number): PhysicsParticle[] {
+  async function seedParticles(n: number): Promise<PhysicsParticle[]> {
     const entries = Array.from({ length: n }, (_, i) => createMemory(`particle memory ${i}`));
     writeEntriesTogether(root, entries);
     const saved = particles(entries.map((e) => e.id));
-    sqliteSyncStore(handlesOf(root)).consolidation.saveParticles(saved);
+    await sqliteStore(root).consolidation.saveParticles(saved);
     return saved;
   }
 
-  it('averages the speeds a whole read averages, and loads the particles only up to the limit', () => {
-    seedParticles(3);
-    const index = sqliteSyncStore(handlesOf(root)).embeddingIndex;
+  it('averages the speeds a whole read averages, and loads the particles only up to the limit', async () => {
+    await seedParticles(3);
+    const index = sqliteStore(root).embeddingIndex;
     const whole = loadStoredParticles(root);
     const mean = whole.reduce((sum, p) => sum + vecNorm(p.velocity), 0) / whole.length;
-    expect(index.particleStats(3)).toEqual({ count: 3, meanSpeed: mean, particles: whole });
-    expect(index.particleStats(2)).toEqual({ count: 3, meanSpeed: mean, particles: null });
+    expect(await index.particleStats(3)).toEqual({ count: 3, meanSpeed: mean, particles: whole });
+    expect(await index.particleStats(2)).toEqual({ count: 3, meanSpeed: mean, particles: null });
   });
 
-  it('reads one column past the limit, whatever the particle count', () => {
-    seedParticles(4);
-    const stats = () => sqliteSyncStore(handlesOf(root)).embeddingIndex.particleStats(2);
-    const reads = recordStatements(stats).reads.filter((r) => r.sql.includes('memory_physics'));
+  it('reads one column past the limit, whatever the particle count', async () => {
+    await seedParticles(4);
+    const stats = async () => await sqliteStore(root).embeddingIndex.particleStats(2);
+    const reads = (await recordStatementsAsync(stats)).reads.filter((r) => r.sql.includes('memory_physics'));
     expect(reads.map((r) => r.sql)).toEqual(['SELECT velocity_blob FROM memory_physics ORDER BY rowid']);
   });
 
