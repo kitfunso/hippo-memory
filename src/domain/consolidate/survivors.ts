@@ -1,7 +1,8 @@
 // Sleep holds ids, strengths and the few rows a pass changed; every other row is read back a page at a time by id.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { chunked } from '../../base/util/chunked.js';
-import type { Consolidation } from '../../store/port/consolidation.js';
+import type { StoreWith } from '../../store/port.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../../store/port/types.js';
 
 /** Rows per read: one id-list query's worth, so a page is one statement and about a megabyte of rows. */
@@ -15,7 +16,7 @@ export class SleepRows {
   private readonly backed = new Set<string>();
 
   constructor(
-    private readonly store: Pick<Consolidation, 'entriesByIds' | 'entryIdsPage' | 'objectBackedAmong'>,
+    private readonly store: Pick<StoreWith<'consolidation'>, 'entriesByIds' | 'consolidation' | 'auditMaintenance'>,
     private readonly preview: ReadonlyMap<string, number>,
     readonly pageRows: number,
   ) {
@@ -26,8 +27,8 @@ export class SleepRows {
   async read(ids: readonly string[]): Promise<MemoryEntry[]> {
     const out: MemoryEntry[] = [];
     for (const page of chunked(ids, this.pageRows)) {
-      const byId = await this.store.entriesByIds(page);
-      for (const id of await this.store.objectBackedAmong([...byId.keys()])) this.backed.add(id);
+      const byId = new Map((await this.store.entriesByIds(page, ALL_TENANTS)).map((e) => [e.id, e]));
+      for (const id of await this.store.auditMaintenance.objectBackedAmong([...byId.keys()])) this.backed.add(id);
       for (const id of page) {
         const row = byId.get(id);
         if (row) out.push(this.loaded(row));
@@ -45,7 +46,7 @@ export class SleepRows {
   async *pages(): AsyncGenerator<MemoryEntry[]> {
     let after: EntryCursor | undefined;
     do {
-      const page = await this.store.entryIdsPage({ limit: this.idPage, after });
+      const page = await this.store.consolidation.entryIdsPage({ limit: this.idPage, after });
       yield await this.read(page.ids);
       after = page.next ?? undefined;
     } while (after);

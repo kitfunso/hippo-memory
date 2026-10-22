@@ -34,6 +34,7 @@ function countingProvider(hold: (seen: { active: number; peak: number }) => Prom
 function targetOn(root: string, provider: EmbeddingProvider) {
   return {
     embeddingIndex: cliStore(root).embeddingIndex,
+    rows: cliStore(root),
     embeddings: loadConfig(root).embeddings,
     embedderFor: () => provider,
   };

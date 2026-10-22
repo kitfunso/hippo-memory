@@ -289,11 +289,13 @@ export function sqliteAuditMaintenance({ on, files }: Handles): Sync<AuditMainte
     { deleteAutomatically: deleteEntriesAutomatically },
     openStore,
   );
+  const reads = bound<Pick<AuditMaintenance, 'objectBackedAmong' | 'pruneAuditRows'>>(on, {
+    objectBackedAmong: memoriesBackingAmong,
+    pruneAuditRows: pruneAuditRows,
+  });
   return {
-    ...bound<Pick<AuditMaintenance, 'objectBackedAmong' | 'pruneAuditRows'>>(on, {
-      objectBackedAmong: memoriesBackingAmong,
-      pruneAuditRows: pruneAuditRows,
-    }),
+    ...reads,
+    objectBackedAmong: skipEmpty(reads.objectBackedAmong, () => new Set<string>()),
     deleteAutomatically: skipEmpty(deleteAutomatically, () => []),
     // Quality repair opens the store unmigrated, so it opens its own handle from the folder.
     repairQuality: (tenantId, apply, protect) =>

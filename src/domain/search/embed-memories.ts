@@ -32,9 +32,9 @@ const STORE_PAGE = 64;
 const ID_PAGE = 1000;
 
 /** The rows for `ids`, a page at a time and in that order; an id deleted since it was listed is skipped. */
-async function* entryPages(index: EmbeddingIndex, ids: readonly string[]): AsyncGenerator<MemoryEntry[]> {
+async function* entryPages(rows: IndexRows, ids: readonly string[]): AsyncGenerator<MemoryEntry[]> {
   for (const page of chunked(ids, STORE_PAGE)) {
-    const byId = new Map((await index.entriesByIds(page)).map((e) => [e.id, e]));
+    const byId = new Map((await rows.entriesByIds(page, ALL_TENANTS)).map((e) => [e.id, e]));
     const entries = page.flatMap((id) => byId.get(id) ?? []);
     if (entries.length > 0) yield entries;
   }
@@ -53,15 +53,15 @@ function embeddedRows(entries: readonly MemoryEntry[], vectors: readonly number[
 
 /** Embeds every memory onto `rebuild`, a page of ids and then a page of rows at a time; answers how many it staged. */
 async function stageEmbeddingIndex(
-  index: EmbeddingIndex,
+  { embeddingIndex: index, rows }: IndexOf,
   rebuild: string,
   provider: EmbeddingProvider,
 ): Promise<number> {
   let staged = 0;
   let afterId: string | undefined;
   do {
-    const page = await index.entryIdsPage({ limit: ID_PAGE, afterId });
-    for await (const entries of entryPages(index, page.ids)) {
+    const page = await index.entryIdsById({ limit: ID_PAGE, afterId });
+    for await (const entries of entryPages(rows, page.ids)) {
       // A hard transport or auth failure throws here, before the commit, so the old index and identity stay.
       const vectors = await provider.embed(
         entries.map((e) => embeddingInputText(e)),
@@ -293,8 +293,15 @@ interface EmbedWith {
   readonly embedderFor: EmbedderFor;
 }
 
+/** The rows an index embeds, read by id. */
+type IndexRows = Pick<HippoStore, 'entriesByIds'>;
+
+/** A store's own index with the rows it embeds. */
+type IndexOf = Pick<IndexEmbedTarget, 'embeddingIndex' | 'rows'>;
+
 export interface IndexEmbedTarget extends EmbedWith {
   readonly embeddingIndex: EmbeddingIndex;
+  readonly rows: IndexRows;
 }
 
 /** A store's vector groups, with the strength rules the particles a vector write seeds are scored by. */
@@ -315,7 +322,10 @@ export interface ConfiguredFolder<S extends HippoStore = HippoStore> {
 export function folderIndex({ store, config, embedderFor }: ConfiguredFolder): EmbedTarget {
   const { embeddingIndex } = store;
   const { embeddings } = config;
-  if (embeddingIndex !== undefined) return { embeddingIndex, embeddings, embedderFor };
+  if (embeddingIndex !== undefined) {
+    const rows: IndexRows = { entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
+    return { embeddingIndex, rows, embeddings, embedderFor };
+  }
   return { store, embeddings, embedderFor, strength: strengthOptionsOf(config.runtime) };
 }
 
@@ -336,7 +346,7 @@ export async function embedMemory(on: EmbedTarget, entry: MemoryEntry, model?: s
   if (!available) return 'off';
   if ('store' in on) return embedMemoryInStore(on, provider, entry);
   const index = on.embeddingIndex;
-  return withEmbedLock(index, () => embedMemoryLocked(index, provider, entry)).catch((err): EmbedOutcome => {
+  return withEmbedLock(index, () => embedMemoryLocked(on, provider, entry)).catch((err): EmbedOutcome => {
     log.warn(`skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`, errorFields(err));
     return 'failed';
   });
@@ -351,11 +361,8 @@ export function embedMemoryDetached(on: EmbedTarget, entry: MemoryEntry): void {
 /** Best-effort: an embedding failure (API down, bad key, 5xx) must not reject the caller's write; the existing index is
  * left as-is.
  * Failures surface on the explicit `hippo embed` / `embedAll` path. */
-async function embedMemoryLocked(
-  index: EmbeddingIndex,
-  provider: EmbeddingProvider,
-  entry: MemoryEntry,
-): Promise<EmbedOutcome> {
+async function embedMemoryLocked(on: IndexOf, provider: EmbeddingProvider, entry: MemoryEntry): Promise<EmbedOutcome> {
+  const index = on.embeddingIndex;
   try {
     const identity = provider.id;
     if (await index.requiresReindex(identity)) {
@@ -365,7 +372,7 @@ async function embedMemoryLocked(
         warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
         return 'failed';
       }
-      await rebuildIndexForProvider(index, provider);
+      await rebuildIndexForProvider(on, provider);
       return 'indexed';
     }
 
@@ -385,13 +392,14 @@ async function embedMemoryLocked(
 
 // Every page is staged apart from the live index, then one transaction swaps the vectors and the identity in: a
 // provider failure or a crash before it leaves the old pair, so the next run rebuilds from the start.
-async function rebuildIndexForProvider(index: EmbeddingIndex, provider: EmbeddingProvider): Promise<number> {
+async function rebuildIndexForProvider(on: IndexOf, provider: EmbeddingProvider): Promise<number> {
+  const index = on.embeddingIndex;
   // Host-wide rebuild: one embedding index per hippoRoot, keyed by tenant-scoped entry.id; per-tenant indices would be
   // a larger architecture change.
   const rebuild = await index.beginRebuild();
   let staged: number;
   try {
-    staged = await stageEmbeddingIndex(index, rebuild, provider);
+    staged = await stageEmbeddingIndex(on, rebuild, provider);
     await index.commitRebuild(rebuild, embeddingIndexIdentity(provider.id));
   } finally {
     await index.closeRebuild(rebuild);
@@ -427,7 +435,7 @@ function throwIfProviderKeyMissing(cfg: EmbeddingsConfig, provider: EmbeddingPro
 // On a hard provider failure mid-backfill the chunks already embedded are persisted (paid progress), then it stops and
 // resumes next run.
 async function backfillPending(
-  index: EmbeddingIndex,
+  { embeddingIndex: index, rows }: IndexOf,
   provider: EmbeddingProvider,
   pending: readonly string[],
   model: string,
@@ -435,7 +443,7 @@ async function backfillPending(
   let count = 0;
   // Initialized to `undefined` so it stays a plain `unknown` binding for the arbitrary caught value; falsy either way.
   let backfillError: unknown = undefined;
-  for await (const chunk of entryPages(index, pending)) {
+  for await (const chunk of entryPages(rows, pending)) {
     let vectors: number[][];
     try {
       vectors = await provider.embed(
@@ -455,15 +463,15 @@ async function backfillPending(
 
 /** backfillPending over the whole backlog, one page of ids at a time; a hard failure stops after the page it hit. */
 async function backfillAllPending(
-  index: EmbeddingIndex,
+  on: IndexOf,
   provider: EmbeddingProvider,
   model: string,
 ): Promise<{ count: number; backfillError: unknown }> {
   let count = 0;
   let afterId: string | undefined;
   do {
-    const page = await index.pendingIds({ limit: ID_PAGE, afterId });
-    const done = await backfillPending(index, provider, page.ids, model);
+    const page = await on.embeddingIndex.pendingIds({ limit: ID_PAGE, afterId });
+    const done = await backfillPending(on, provider, page.ids, model);
     count += done.count;
     if (done.backfillError) return { count, backfillError: done.backfillError };
     afterId = page.next ?? undefined;
@@ -485,12 +493,12 @@ export async function embedAll(on: EmbedTarget, model?: string, givenProvider?: 
   const index = on.embeddingIndex;
   return withEmbedLock(index, async () => {
     const identity = provider.id;
-    if (await index.requiresReindex(identity)) return rebuildIndexForProvider(index, provider);
+    if (await index.requiresReindex(identity)) return rebuildIndexForProvider(on, provider);
 
     // Host-wide by design: embedAll backfills all tenants' entries into the per-host index; per-tenant filtering would
     // produce partial indices and break recall.
     await index.pruneOrphans();
-    const { count, backfillError } = await backfillAllPending(index, provider, embeddingIndexIdentity(identity));
+    const { count, backfillError } = await backfillAllPending(on, provider, embeddingIndexIdentity(identity));
 
     await index.saveModel(identity);
 

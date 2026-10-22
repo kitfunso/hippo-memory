@@ -116,7 +116,7 @@ async function copyMissingRows(into: ConfiguredFolder<SharingStore>, from: Shari
   if (candidates.length === 0) return 0;
   const byId = new Map<string, MemoryEntry>();
   for (const ids of chunked(candidates.map((k) => k.id))) {
-    for (const entry of await from.sharing.entriesByIds(ids)) byId.set(entry.id, entry);
+    for (const entry of await from.entriesByIds(ids, ALL_TENANTS)) byId.set(entry.id, entry);
   }
 
   // Syncing down must not re-import what ambient context excludes: other-project rows are skipped by default and secret

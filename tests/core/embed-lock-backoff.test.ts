@@ -42,6 +42,7 @@ describe('embedAll waiting on a held embedding index lock', () => {
     const run = embedAll(
       {
         embeddingIndex: { ...index, tryLock },
+        rows: cliStore(root),
         embeddings: loadConfig(root).embeddings,
         embedderFor: resolveEmbeddingProvider,
       },

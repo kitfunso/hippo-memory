@@ -1,8 +1,7 @@
 // hippo.db's EmbeddingIndex. The model checks take the opener, since an unreadable index there reads as none.
 import { randomUUID } from 'node:crypto';
 import { closeHippoDb } from '../../db/index.js';
-import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { countAllEntries, loadEntriesByIds, loadEntryIdsById } from './entry-reads.js';
+import { countAllEntries, loadEntryIdsById } from './entry-reads.js';
 import type { EmbeddingIndex } from '../port/vectors.js';
 import {
   type VectorRebuild,
@@ -42,10 +41,9 @@ function beginRebuild(open: Handles['open']): VectorRebuild {
   }
 }
 
-const entryRowsBodies: Bodies<Pick<EmbeddingIndex, 'entryCount' | 'entryIdsPage' | 'entriesByIds' | 'coverage'>> = {
+const entryRowsBodies: Bodies<Pick<EmbeddingIndex, 'entryCount' | 'entryIdsById' | 'coverage'>> = {
   entryCount: countAllEntries,
-  entryIdsPage: loadEntryIdsById,
-  entriesByIds: (db, ids) => loadEntriesByIds(db, ids, ALL_TENANTS),
+  entryIdsById: loadEntryIdsById,
   coverage: vectorCoverage,
 };
 

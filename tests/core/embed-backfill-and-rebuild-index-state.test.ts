@@ -305,6 +305,7 @@ describe('a model identity change on hippo.db', () => {
     };
     const target = {
       embeddingIndex: watched,
+      rows: cliStore(root),
       embeddings: loadConfig(root).embeddings,
       embedderFor: resolveEmbeddingProvider,
     };

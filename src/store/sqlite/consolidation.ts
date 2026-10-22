@@ -27,16 +27,14 @@ import { appendAuditEvents, recordAuditEventsRowByRow } from './audit.js';
 import { conflictResolveAudits, resolvedConflicts, replaceDetectedConflicts } from './conflicts.js';
 import {
   iterateEveryTenantEntries,
-  iterateRowsWithObjectsAt,
+  iterateRowsWithObjects,
   loadDuplicateCandidates,
-  loadEntriesPage,
   loadEntryIdsPage,
-  selectEntriesByIds,
 } from './entry-reads.js';
 import { setHalfLives } from './entry-writes.js';
 import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY, type Handles, waitingOpener } from './open.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
-import { commitInChunks, deleteEntriesInBatches, memoriesBackingAmong } from './delete-and-batch.js';
+import { commitInChunks, deleteEntriesInBatches } from './delete-and-batch.js';
 import { expireDormantBefore } from './dormant.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from './graph-queue.js';
 import { appendConsolidationRun, incrementSleepCount, loadSessionDecayContext } from './index-and-stats.js';
@@ -353,7 +351,7 @@ function readRows(db: DatabaseSyncLike, from: number, typedPending: boolean): Ha
     typedPending,
     conflictAudits: typedPending ? conflictResolveAudits(db) : [],
     resolvedConflicts: typedPending ? resolvedConflicts(db) : [],
-    rows: typedPending ? iterateRowsWithObjectsAt(db) : withoutObjects(iterateEveryTenantEntries(db)),
+    rows: typedPending ? iterateRowsWithObjects(db) : withoutObjects(iterateEveryTenantEntries(db)),
   };
 }
 
@@ -428,28 +426,24 @@ export type SqliteConsolidation = Sync<Omit<Consolidation, Chunked>> & Pick<Cons
 
 type StoreReads =
   | 'entryIdsPage'
-  | 'entriesByIds'
   | 'sessionDecayContext'
   | 'moveHalfLives'
   | 'promotableSessions'
   | 'traceExists'
   | 'sessionEvents'
   | 'countSleep'
-  | 'entriesPage'
   | 'duplicateCandidates';
 type StoreWrites = 'replaceConflicts' | 'recordRun' | 'deleteInBatches';
 type BareRows = Exclude<keyof Consolidation, Chunked | StoreReads | StoreWrites | keyof SummaryOps>;
 
 const storeReadsBodies: Bodies<Pick<Consolidation, StoreReads>> = {
   entryIdsPage: (db, page) => loadEntryIdsPage(db, ALL_TENANTS, page),
-  entriesByIds: (db, ids) => selectEntriesByIds(db, ids, ALL_TENANTS),
   sessionDecayContext: loadSessionDecayContext,
   moveHalfLives: moveHalfLives,
   promotableSessions: findPromotableSessions,
   traceExists: traceExistsForSession,
   sessionEvents: listSessionEvents,
   countSleep: incrementSleepCount,
-  entriesPage: (db, page) => loadEntriesPage(db, ALL_TENANTS, page),
   duplicateCandidates: loadDuplicateCandidates,
 };
 
@@ -460,7 +454,6 @@ const storeWritesBodies: FileBodies<Pick<Consolidation, StoreWrites>> = {
 };
 
 const bareRowsBodies: Bodies<Pick<Consolidation, BareRows>> = {
-  objectBackedAmong: memoriesBackingAmong,
   ftsDrift: ftsDrift,
   rejectedValue: findRejectedValue,
   rejectedDigests: rejectedDigests,
@@ -513,10 +506,8 @@ export function sqliteConsolidation(handles: Handles): SqliteConsolidation {
     ...writes,
     ...bare,
     ...bound(on, summariesBodies, openStore),
-    entriesByIds: skipEmpty(reads.entriesByIds, () => new Map()),
     particlesByIds: skipEmpty(bare.particlesByIds, () => []),
     deleteInBatches: skipEmpty(writes.deleteInBatches, () => []),
-    objectBackedAmong: skipEmpty(bare.objectBackedAmong, () => new Set<string>()),
     ...chunkedWriters(handles),
   };
 }

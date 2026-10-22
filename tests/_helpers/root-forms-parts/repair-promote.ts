@@ -1,6 +1,7 @@
 // Root-keyed repair and promote forms tests call; production code goes through the port or the handle-first forms.
 
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
+import { ALL_TENANTS } from '../../../src/base/util/tenant.js';
 import type { MemoryEntry } from '../../../src/base/memory/memory.js';
 import { promote } from '../../../src/api/memories/promote.js';
 import { sqliteSyncStore } from '../../../src/store/sqlite/store.js';
@@ -21,7 +22,7 @@ export async function copyToGlobal(
     owner: opts.owner,
   });
   const { globalId } = await promote(ctx, id);
-  const [copy] = (await ctx.reach?.globalTarget?.store.sharing.entriesByIds([globalId])) ?? [];
+  const [copy] = (await ctx.reach?.globalTarget?.store.entriesByIds([globalId], ALL_TENANTS)) ?? [];
   if (!copy) throw new Error(`the promoted copy ${globalId} is not in the global store`);
   return copy;
 }

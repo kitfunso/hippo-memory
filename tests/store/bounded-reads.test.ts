@@ -132,7 +132,7 @@ describe('walks of every row a read names', () => {
   it('hand sleep its rows one page of ids and then of rows at a time, never every id in one read', async () => {
     const root = makeRoot('bounded-sleep-pages');
     const rows = seeded(root, 7);
-    const sleepRows = new SleepRows(sqliteStore(root).consolidation, new Map(), 3);
+    const sleepRows = new SleepRows(sqliteStore(root), new Map(), 3);
     const log = await recordStatementsAsync(async () => {
       const pages: string[][] = [];
       for await (const page of sleepRows.pages()) pages.push(page.map((e) => e.id));

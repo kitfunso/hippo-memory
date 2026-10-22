@@ -33,6 +33,7 @@ export function compactionFolder(root: string, tenantId = 'default'): Compaction
 export function localIndex(root: string): EmbedTarget {
   return {
     embeddingIndex: cliStore(root).embeddingIndex,
+    rows: cliStore(root),
     embeddings: loadConfig(root).embeddings,
     embedderFor: resolveEmbeddingProvider,
   };

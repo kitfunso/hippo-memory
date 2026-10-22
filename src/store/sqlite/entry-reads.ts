@@ -620,7 +620,7 @@ const OBJECT_LINK_SQL =
 type ObjectLinkedRow = MemoryRow & { object_link: ObjectLink };
 
 /** Every tenant's rows in loadAllEntries' order through one cursor, each with the typed object it backs. */
-export function* iterateRowsWithObjectsAt(db: DatabaseSyncLike): Generator<HalfLifeRow> {
+export function* iterateRowsWithObjects(db: DatabaseSyncLike): Generator<HalfLifeRow> {
   const rows = cachedStatement(
     db,
     `SELECT ${MEMORY_SELECT_COLUMNS}, ${OBJECT_LINK_SQL} AS object_link FROM memories ORDER BY created ASC, id ASC`,
