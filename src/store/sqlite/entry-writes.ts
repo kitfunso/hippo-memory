@@ -281,10 +281,18 @@ export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, act
   if (entry.dagParentId) markSummaryDirtyInTx(db, entry.dagParentId, entry.tenantId, actor);
 }
 
-/** One half-life per memory id, on the caller's transaction. */
+// The last value given for an id wins, as a row-by-row write left it: UPDATE FROM applies any one of an id's matches.
+const lastPerId = (pairs: ReadonlyArray<readonly [string, number | string]>): string =>
+  JSON.stringify([...new Map(pairs)]);
+
+const HALF_LIFE_UPDATE_SQL =
+  `WITH v AS (SELECT json_extract(value, '$[0]') AS id, json_extract(value, '$[1]') AS hl FROM json_each(?)) ` +
+  `UPDATE memories SET half_life_days = v.hl FROM v WHERE memories.id = v.id`;
+
+/** One half-life per memory id, in one statement on the caller's transaction. */
 export function setHalfLives(db: DatabaseSyncLike, rows: readonly { id: string; halfLifeDays: number }[]): void {
-  const update = cachedStatement(db, 'UPDATE memories SET half_life_days = ? WHERE id = ?');
-  for (const r of rows) update.run(r.halfLifeDays, r.id);
+  if (rows.length === 0) return;
+  cachedStatement(db, HALF_LIFE_UPDATE_SQL).run(lastPerId(rows.map((r) => [r.id, r.halfLifeDays])));
 }
 
 /** Moves every row of `from` in a tenant to project `into`. */
@@ -295,17 +303,19 @@ export function restampOriginProject(db: DatabaseSyncLike, tenantId: string, fro
   ).run(into, tenantId, from);
 }
 
-/** Stamps each id with its project. */
+const ORIGIN_STAMP_SQL =
+  `WITH v AS (SELECT json_extract(value, '$[0]') AS id, json_extract(value, '$[1]') AS origin FROM json_each(?)) ` +
+  `UPDATE memories SET origin_project = v.origin, updated_at = datetime('now') FROM v ` +
+  `WHERE memories.id = v.id AND memories.tenant_id = ?`;
+
+/** Stamps each id with its project, in one statement. */
 export function stampOriginProjects(
   db: DatabaseSyncLike,
   tenantId: string,
   rows: readonly { id: string; origin: string }[],
 ): void {
-  const stamp = cachedStatement(
-    db,
-    `UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?`,
-  );
-  for (const { id, origin } of rows) stamp.run(origin, tenantId, id);
+  if (rows.length === 0) return;
+  cachedStatement(db, ORIGIN_STAMP_SQL).run(lastPerId(rows.map((r) => [r.id, r.origin])), tenantId);
 }
 
 /** Renames a live row's source from `from` to `to`; the count is 0 when another writer moved or superseded it first. */
