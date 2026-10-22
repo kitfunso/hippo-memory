@@ -53,7 +53,7 @@ const DB_DEFINITION_FILES = {
   'src/store/sqlite/': 'the SQLite adapter and its executor plumbing',
   'src/store/local/': 'the types of the stores a hippo.db root keeps beside its own',
   'src/store/memory/': 'the in-memory adapter, which keeps its rows in plain tables',
-  'src/store/rules/': 'the row rules both adapters read: orders, column defaults and classifications',
+  'src/store/rules/': 'the rules both adapters apply, each written once: orders, defaults, checks and audit rows',
 };
 const DB_TOUCH_NAMES = new Set([...OPENERS, ...HANDLE_TYPES, 'withWriteScope', 'withWriteScopeOr']);
 const TX_OWNER = 'src/db/busy.ts';

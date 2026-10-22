@@ -4,6 +4,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { reject } from '../../src/api/index.js';
+import { RawAppendOnlyError } from '../../src/base/errors/raw-append-only.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { AuditEvent, ScopeReader } from '../../src/entry/store-kit.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -477,6 +478,12 @@ describe('EntryWrites.forget', () => {
       forget(personal.id),
       forget(personal.id, ALICE),
       readBack(TENANT_A, raw.id, personal.id),
+      // The CLI and dashboard tell this refusal apart by its class, so both stores must throw the same one.
+      (g) =>
+        g.forget(target(raw.id)).then(
+          () => 'kept',
+          (err) => (err instanceof RawAppendOnlyError ? 'RawAppendOnlyError' : String(err)),
+        ),
     ]);
     expect(side.outcomes.slice(0, 4)).toEqual([
       { error: 'Error: raw is append-only' },
@@ -486,6 +493,7 @@ describe('EntryWrites.forget', () => {
     ]);
     // SAFETY: the fifth call reads rows back, so it resolved to Row[].
     expect((side.outcomes[4] as { value: Row[] }).value.map((r) => r.id)).toEqual([raw.id]);
+    expect(side.outcomes[5]).toEqual({ value: 'RawAppendOnlyError' });
     expect(added(side).map((r) => [r.op, r.targetId])).toEqual([['forget', personal.id]]);
   });
 });
