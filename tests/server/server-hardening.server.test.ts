@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey, revokeApiKey } from '../../src/store/sqlite/auth.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -101,7 +102,7 @@ describe('server hardening', () => {
   });
 
   // ---- Fix 5.3: SSE auth-revoked closes stream -------------------------
-  it('SSE heartbeat closes stream with reason=auth_revoked when key revoked', async () => {
+  it.skipIf(needsHippoDb('db'))('SSE heartbeat closes stream with reason=auth_revoked when key revoked', async () => {
     vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '200');
     vi.stubEnv('MCP_SSE_MAX_AGE_SEC', '60'); // far enough out of the way

@@ -5,6 +5,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -307,8 +308,11 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   }
 
+  // A keyless loopback caller of these routes reaches the global store, the caller's project or sleep.
+  const onHippoDbOnly = (path: string): boolean =>
+    path.endsWith('/sleep') ? needsHippoDb('sleep') : /\/promote$|^\/v1\/context$/.test(path) && needsHippoDb('team');
   for (const [method, path, , [status, error]] of ROUTES) {
-    it(`${method} ${path} with no body on loopback`, async () => {
+    it.skipIf(onHippoDbOnly(path))(`${method} ${path} with no body on loopback`, async () => {
       const r = await call({ method, path: fill(path) });
       expect({ status: r.status, error: r.error, contentType: r.contentType }).toEqual({
         status,
@@ -318,7 +322,7 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   }
 
-  it('memory routes with valid input', async () => {
+  it.skipIf(needsHippoDb('team'))('memory routes with valid input', async () => {
     const out = {
       create: await post('/v1/memories', { content: 'parity http create', kind: 'distilled', tags: ['a'] }),
       graph: await get('/v1/graph?limit=5'),

@@ -2,7 +2,8 @@
 // on no other text.
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const SECRET = 'raw-bytes-secret';

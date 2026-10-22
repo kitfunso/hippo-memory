@@ -1,6 +1,7 @@
 // Verbs that weaken, suppress or retire memories: outcome, forget, conflicts, reject, dormant, quarantine, invalidate.
 
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
+import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import * as path from 'path';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
@@ -144,7 +145,7 @@ export async function handleConflicts({ hippoRoot, tenantId, flags }: CommandCon
   const ctx = cliApiContext(hippoRoot, tenantId);
   const conflicts = await api.conflictListAll((page) => api.conflictList(ctx, status, { everyTenant: true }, page));
   if (boolFlag(flags, 'json')) {
-    console.log(JSON.stringify({ conflicts }, null, 2));
+    console.log(JSON.stringify({ conflicts: conflicts.map(conflictToWire) }, null, 2));
     return;
   }
 
@@ -156,7 +157,7 @@ export async function handleConflicts({ hippoRoot, tenantId, flags }: CommandCon
   console.log(`Found ${conflicts.length} memory conflict${conflicts.length === 1 ? '' : 's'}\n`);
   for (const conflict of conflicts) {
     console.log(`--- conflict_${conflict.id} score=${fmt(conflict.score, 3)} status=${conflict.status}`);
-    console.log(`    ${conflict.memory_a_id} <-> ${conflict.memory_b_id}`);
+    console.log(`    ${conflict.memoryAId} <-> ${conflict.memoryBId}`);
     console.log(`    reason: ${conflict.reason}`);
     console.log('');
   }
@@ -171,18 +172,18 @@ async function showConflictForResolve(hippoRoot: string, conflictId: number, ten
   }
 
   console.log(`Conflict ${conflictId}:`);
-  console.log(`  ${conflict.memory_a_id} <-> ${conflict.memory_b_id}`);
+  console.log(`  ${conflict.memoryAId} <-> ${conflict.memoryBId}`);
   console.log(`  Reason: ${conflict.reason}`);
   console.log('');
 
-  const entryA = await memoryGet(ctx, conflict.memory_a_id);
-  const entryB = await memoryGet(ctx, conflict.memory_b_id);
+  const entryA = await memoryGet(ctx, conflict.memoryAId);
+  const entryB = await memoryGet(ctx, conflict.memoryBId);
   if (entryA) {
-    console.log(`  [A] ${conflict.memory_a_id}:`);
+    console.log(`  [A] ${conflict.memoryAId}:`);
     console.log(`      ${truncateWithEllipsis(entryA.content, CONFLICT_PREVIEW_CHARS)}`);
   }
   if (entryB) {
-    console.log(`  [B] ${conflict.memory_b_id}:`);
+    console.log(`  [B] ${conflict.memoryBId}:`);
     console.log(`      ${truncateWithEllipsis(entryB.content, CONFLICT_PREVIEW_CHARS)}`);
   }
   console.log('');

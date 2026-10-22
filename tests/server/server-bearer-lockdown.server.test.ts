@@ -2,7 +2,8 @@
 // /v1 and /mcp route must 401 without a valid Bearer. The route list is derived from
 // the route table so a new route missing buildContextWithAuth/requireAuth fails here.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 import { HOST_ROUTES, routeLabel } from '../../src/surface/server/route-table.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';
 import { makeRoot } from '../_helpers/make-root.js';

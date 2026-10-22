@@ -3,7 +3,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { serve } from '../../src/server.js';
 import { sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../../src/entry/store-kit.js';
 import { folderVectorSource, hybridSearch } from '../../src/entry/folder-search.js';
 import { resolveVectorArm } from '../../src/domain/search/vector.js';
@@ -32,6 +31,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { memorySide } from '../_helpers/memory-side.js';
 import { memoryRowsOf } from '../_helpers/memory-recall-rows.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -242,7 +242,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('recall through the vector reads of a store other than hippo.db', () => {
+describe.skipIf(needsHippoDb('parity'))('recall through the vector reads of a store other than hippo.db', () => {
   it.each([
     ['GET /v1/memories mode=hybrid', [http('hybrid')], false, 'nearestEntries'],
     ['GET /v1/memories mode=physics', [http('physics')], true, 'physicsParticles'],
@@ -276,7 +276,7 @@ describe('recall through the vector reads of a store other than hippo.db', () =>
   );
 });
 
-describe('when the vector arm cannot run, both stores fall back to BM25 alike', () => {
+describe.skipIf(needsHippoDb('parity'))('when the vector arm cannot run, both stores fall back to BM25 alike', () => {
   const emptyIndex = (root: string): void =>
     withDb(root, (db) => db.exec('DELETE FROM memory_vectors; DELETE FROM memory_physics;'));
   const staleModel = (root: string): void =>

@@ -5,10 +5,11 @@ import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { createApiKey, grantScope } from '../../src/store/sqlite/auth.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEntriesByIds, writeEntry } from '../_helpers/root-forms.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 const OPS = 'slack:private:Cops';
 
@@ -77,10 +78,13 @@ describe('DELETE /v1/memories/:id and POST /v1/memories/:id/archive on a restric
     expect(recall.status).toBe(403);
   });
 
-  it.each(['granted', 'admin'] as const)('let a %s key delete and archive both rows', async (who) => {
-    const [deleted, archived] = [await forget(keys[who], note.id), await archive(keys[who], raw.id)];
-    expect([deleted.status, archived.status]).toEqual([200, 200]);
-    expect(JSON.parse(deleted.body)).toEqual({ ok: true, id: '<id>' });
-    expect(kept()).toEqual([]);
-  });
+  it.skipIf(needsHippoDb('db')).each(['granted', 'admin'] as const)(
+    'let a %s key delete and archive both rows',
+    async (who) => {
+      const [deleted, archived] = [await forget(keys[who], note.id), await archive(keys[who], raw.id)];
+      expect([deleted.status, archived.status]).toEqual([200, 200]);
+      expect(JSON.parse(deleted.body)).toEqual({ ok: true, id: '<id>' });
+      expect(kept()).toEqual([]);
+    },
+  );
 });

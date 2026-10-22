@@ -1,7 +1,8 @@
 // On/off variables share one reader: unknown spellings take the safe side, and serve refuses to boot on them.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 import {
   envAblateDecay,
   envAllowKeylessLocal,

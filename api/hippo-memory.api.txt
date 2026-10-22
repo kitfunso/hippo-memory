@@ -206,6 +206,7 @@ entry/store-kit.d.ts: ListDormantOpts re-export
 entry/store-kit.d.ts: LoserFate re-export
 entry/store-kit.d.ts: MemoryConflict re-export
 entry/store-kit.d.ts: MemoryEntry re-export
+entry/store-kit.d.ts: MemoryTables re-export
 entry/store-kit.d.ts: NewApiKey re-export
 entry/store-kit.d.ts: OTHER_STORE_MARKER re-export
 entry/store-kit.d.ts: OptionalGroup re-export
@@ -278,6 +279,7 @@ entry/store-kit.d.ts: hasGroup re-export
 entry/store-kit.d.ts: heldTexts re-export
 entry/store-kit.d.ts: isSharedStore re-export
 entry/store-kit.d.ts: loadConfig re-export
+entry/store-kit.d.ts: memoryStore re-export
 entry/store-kit.d.ts: normalizeValueForRejection re-export
 entry/store-kit.d.ts: ownScopeTouches re-export
 entry/store-kit.d.ts: passesScopeFilterForRecall re-export

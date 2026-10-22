@@ -284,13 +284,13 @@ export function rowToTaskSnapshot(row: TaskSnapshotRow): TaskSnapshot {
 export function rowToMemoryConflict(row: MemoryConflictRow): MemoryConflict {
   return {
     id: Number(row.id),
-    memory_a_id: row.memory_a_id,
-    memory_b_id: row.memory_b_id,
+    memoryAId: row.memory_a_id,
+    memoryBId: row.memory_b_id,
     reason: row.reason,
     score: Number(row.score ?? 0),
     status: row.status,
-    detected_at: row.detected_at,
-    updated_at: row.updated_at,
+    detectedAt: row.detected_at,
+    updatedAt: row.updated_at,
   };
 }
 

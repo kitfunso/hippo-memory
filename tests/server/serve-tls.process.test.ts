@@ -7,7 +7,8 @@ import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { join } from 'node:path';
 import { log } from '../../src/base/util/log.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeStore } from '../_helpers/make-root.js';
 

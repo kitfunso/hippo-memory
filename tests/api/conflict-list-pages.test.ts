@@ -103,7 +103,7 @@ describe('conflict list pages', () => {
     seedTeamConflicts(4, 'default', [conflictOf(bPersonal, aTeam)]);
     const all = (await conflictList(apiCtx(root), 'open', {}, { limit: 1000 })).conflicts;
     expect(all).toHaveLength(5);
-    const hidden = all.find((c) => [c.memory_a_id, c.memory_b_id].includes(bPersonal))!.id;
+    const hidden = all.find((c) => [c.memoryAId, c.memoryBId].includes(bPersonal))!.id;
 
     const ctxA = apiCtx(root, 'default', actorA);
     const seenByA = await walk((page) => conflictListOpen(ctxA, page), 1);

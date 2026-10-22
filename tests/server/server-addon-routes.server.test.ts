@@ -5,12 +5,13 @@ import { join } from 'node:path';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { HttpError, serve, type AddonCall, type AddonRoute, type ServerHandle } from '../../src/server.js';
+import { HttpError, type AddonCall, type AddonRoute, type ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 const ECHO = '/v1/x-echo';
 
@@ -79,15 +80,18 @@ async function post(
 }
 
 describe('an add-on route behind serve()', () => {
-  it('hands the handler the key tenant and the parsed body, and sends its value back as 200 JSON', async () => {
-    await start([route(ECHO, async () => ({ seen: calls.length, nested: { list: [1, 'two', null] } }))]);
-    const res = await post(ECHO, JSON.stringify({ a: 1, b: { c: 'd' } }));
-    expect(res).toEqual({ status: 200, reply: { seen: 1, nested: { list: [1, 'two', null] } } });
-    expect(calls).toHaveLength(1);
-    expect(calls[0]!.ctx.tenantId).toBe('tenant-x');
-    expect(calls[0]!.ctx).not.toHaveProperty('hippoRoot');
-    expect(calls[0]!.body).toEqual({ a: 1, b: { c: 'd' } });
-  });
+  it.skipIf(needsHippoDb('addon'))(
+    'hands the handler the key tenant and the parsed body, and sends its value back as 200 JSON',
+    async () => {
+      await start([route(ECHO, async () => ({ seen: calls.length, nested: { list: [1, 'two', null] } }))]);
+      const res = await post(ECHO, JSON.stringify({ a: 1, b: { c: 'd' } }));
+      expect(res).toEqual({ status: 200, reply: { seen: 1, nested: { list: [1, 'two', null] } } });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.ctx.tenantId).toBe('tenant-x');
+      expect(calls[0]!.ctx).not.toHaveProperty('hippoRoot');
+      expect(calls[0]!.body).toEqual({ a: 1, b: { c: 'd' } });
+    },
+  );
 
   it('answers 401 and never runs the handler for no key or a bad key', async () => {
     await start([echo()]);
@@ -96,81 +100,99 @@ describe('an add-on route behind serve()', () => {
     expect(calls).toEqual([]);
   });
 
-  it('answers 400 and never runs the handler for a body that is not a JSON object', async () => {
-    await start([echo()]);
-    for (const body of ['{not json', '[1,2]', '"text"']) expect((await post(ECHO, body)).status, body).toBe(400);
-    expect(calls).toEqual([]);
-  });
+  it.skipIf(needsHippoDb('addon'))(
+    'answers 400 and never runs the handler for a body that is not a JSON object',
+    async () => {
+      await start([echo()]);
+      for (const body of ['{not json', '[1,2]', '"text"']) expect((await post(ECHO, body)).status, body).toBe(400);
+      expect(calls).toEqual([]);
+    },
+  );
 
-  it('maps an HttpError from the handler to its status with an {error} body', async () => {
-    await start([
-      route(ECHO, async () => {
-        throw new HttpError(404, 'no such thing');
-      }),
-    ]);
-    expect(await post(ECHO, '{}')).toEqual({ status: 404, reply: { error: 'no such thing' } });
-  });
-
-  it('answers 500 for an HttpError status writeHead would refuse, and keeps serving', async () => {
-    const statuses = [0, 99, 1000, 404.5, Number.NaN];
-    await start([
-      ...statuses.map((s, i) =>
-        route(`/v1/x-status-${i}`, async () => {
-          throw new HttpError(s, 'upstream failed');
+  it.skipIf(needsHippoDb('addon'))(
+    'maps an HttpError from the handler to its status with an {error} body',
+    async () => {
+      await start([
+        route(ECHO, async () => {
+          throw new HttpError(404, 'no such thing');
         }),
-      ),
-      echo(),
-    ]);
-    for (const i of statuses.keys()) {
-      expect(await post(`/v1/x-status-${i}`, '{}')).toEqual({
-        status: 500,
-        reply: { error: 'internal server error', requestId: expect.any(String) },
+      ]);
+      expect(await post(ECHO, '{}')).toEqual({ status: 404, reply: { error: 'no such thing' } });
+    },
+  );
+
+  it.skipIf(needsHippoDb('addon'))(
+    'answers 500 for an HttpError status writeHead would refuse, and keeps serving',
+    async () => {
+      const statuses = [0, 99, 1000, 404.5, Number.NaN];
+      await start([
+        ...statuses.map((s, i) =>
+          route(`/v1/x-status-${i}`, async () => {
+            throw new HttpError(s, 'upstream failed');
+          }),
+        ),
+        echo(),
+      ]);
+      for (const i of statuses.keys()) {
+        expect(await post(`/v1/x-status-${i}`, '{}')).toEqual({
+          status: 500,
+          reply: { error: 'internal server error', requestId: expect.any(String) },
+        });
+      }
+      expect(await post(ECHO, '{}')).toEqual({ status: 200, reply: { ok: true } });
+    },
+  );
+
+  it.skipIf(needsHippoDb('addon'))(
+    'closes the socket and keeps serving when building the failure reply throws',
+    async () => {
+      const unreadable = new HttpError(500, 'x');
+      Object.defineProperty(unreadable, 'message', {
+        get: () => {
+          throw new Error('unreadable message');
+        },
       });
-    }
-    expect(await post(ECHO, '{}')).toEqual({ status: 200, reply: { ok: true } });
-  });
+      await start([
+        route('/v1/x-unreadable', async () => {
+          throw unreadable;
+        }),
+        echo(),
+      ]);
+      await expect(post('/v1/x-unreadable', '{}')).rejects.toThrow();
+      expect(await post(ECHO, '{}')).toEqual({ status: 200, reply: { ok: true } });
+    },
+  );
 
-  it('closes the socket and keeps serving when building the failure reply throws', async () => {
-    const unreadable = new HttpError(500, 'x');
-    Object.defineProperty(unreadable, 'message', {
-      get: () => {
-        throw new Error('unreadable message');
-      },
-    });
-    await start([
-      route('/v1/x-unreadable', async () => {
-        throw unreadable;
-      }),
-      echo(),
-    ]);
-    await expect(post('/v1/x-unreadable', '{}')).rejects.toThrow();
-    expect(await post(ECHO, '{}')).toEqual({ status: 200, reply: { ok: true } });
-  });
+  it.skipIf(needsHippoDb('addon'))(
+    'answers 500 with a request id, never a 200, when the handler value is not JSON',
+    async () => {
+      const circular: unknown[] = [];
+      circular.push(circular);
+      const bad: unknown[] = [undefined, circular];
+      // SAFETY: both values break the JsonValue contract on purpose, the way an untyped add-on could.
+      await start(bad.map((value, i) => route(`/v1/x-bad-${i}`, async () => value as JsonValue)));
+      for (const i of [0, 1]) {
+        expect(await post(`/v1/x-bad-${i}`, '{}')).toEqual({
+          status: 500,
+          reply: { error: 'internal server error', requestId: expect.any(String) },
+        });
+      }
+    },
+  );
 
-  it('answers 500 with a request id, never a 200, when the handler value is not JSON', async () => {
-    const circular: unknown[] = [];
-    circular.push(circular);
-    const bad: unknown[] = [undefined, circular];
-    // SAFETY: both values break the JsonValue contract on purpose, the way an untyped add-on could.
-    await start(bad.map((value, i) => route(`/v1/x-bad-${i}`, async () => value as JsonValue)));
-    for (const i of [0, 1]) {
-      expect(await post(`/v1/x-bad-${i}`, '{}')).toEqual({
-        status: 500,
-        reply: { error: 'internal server error', requestId: expect.any(String) },
-      });
-    }
-  });
-
-  it('keeps the routes it checked at boot when the caller changes its array or a route afterwards', async () => {
-    const first = { ...echo() };
-    const routes: AddonRoute[] = [first];
-    await start(routes);
-    routes.push(route('/v1/x-late', async () => ({ late: true })));
-    first.path = '/v1/x-renamed';
-    expect((await post('/v1/x-late', '{}')).status).toBe(404);
-    expect((await post('/v1/x-renamed', '{}')).status).toBe(404);
-    expect(await post(ECHO, '{}')).toEqual({ status: 200, reply: { ok: true } });
-  });
+  it.skipIf(needsHippoDb('addon'))(
+    'keeps the routes it checked at boot when the caller changes its array or a route afterwards',
+    async () => {
+      const first = { ...echo() };
+      const routes: AddonRoute[] = [first];
+      await start(routes);
+      routes.push(route('/v1/x-late', async () => ({ late: true })));
+      first.path = '/v1/x-renamed';
+      expect((await post('/v1/x-late', '{}')).status).toBe(404);
+      expect((await post('/v1/x-renamed', '{}')).status).toBe(404);
+      expect(await post(ECHO, '{}')).toEqual({ status: 200, reply: { ok: true } });
+    },
+  );
 
   it("serves POST only: a GET on the add-on path is core's 404", async () => {
     await start([echo()]);
@@ -268,13 +290,16 @@ describe('serve() refuses an add-on route that could shadow or dodge core', () =
     expect(existsSync(join(root, 'server.pid'))).toBe(false);
   });
 
-  it('accepts a near-miss of a regex core row, and routes it to the add-on handler', async () => {
-    const near = '/v1/predictions/abc/close';
-    await start([route(near, async () => ({ near: true }))]);
-    expect(await post(near, '{}')).toEqual({ status: 200, reply: { near: true } });
-    expect(calls).toHaveLength(1);
-    // The real row is untouched: a numeric id still reaches core's handler, never the add-on's.
-    expect((await post('/v1/predictions/7/close', '{"state":"closed"}')).reply).not.toEqual({ near: true });
-    expect(calls).toHaveLength(1);
-  });
+  it.skipIf(needsHippoDb('addon'))(
+    'accepts a near-miss of a regex core row, and routes it to the add-on handler',
+    async () => {
+      const near = '/v1/predictions/abc/close';
+      await start([route(near, async () => ({ near: true }))]);
+      expect(await post(near, '{}')).toEqual({ status: 200, reply: { near: true } });
+      expect(calls).toHaveLength(1);
+      // The real row is untouched: a numeric id still reaches core's handler, never the add-on's.
+      expect((await post('/v1/predictions/7/close', '{"state":"closed"}')).reply).not.toEqual({ near: true });
+      expect(calls).toHaveLength(1);
+    },
+  );
 });

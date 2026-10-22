@@ -10,7 +10,7 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/memory.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/base/config/config.js';
@@ -27,6 +27,7 @@ import {
 } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -412,19 +413,22 @@ describe('MCP on a shared store with two repos', () => {
     expect(summaries).not.toContain(ids.betaSumO);
   });
 
-  it("hippo_remember stamps the caller's repo, and hippo_outcome touches only what that repo recalled", async () => {
-    const remembered = await tool('acme', 'hippo_remember', { text: 'the acme repo pins node twenty two' });
-    const newId = /Remembered \[([^\]]+)\]/.exec(remembered.text)?.[1] ?? '';
-    expect(readEntry(store, newId)?.originProject, remembered.text).toBe('acme');
+  it.skipIf(needsHippoDb('db'))(
+    "hippo_remember stamps the caller's repo, and hippo_outcome touches only what that repo recalled",
+    async () => {
+      const remembered = await tool('acme', 'hippo_remember', { text: 'the acme repo pins node twenty two' });
+      const newId = /Remembered \[([^\]]+)\]/.exec(remembered.text)?.[1] ?? '';
+      expect(readEntry(store, newId)?.originProject, remembered.text).toBe('acme');
 
-    await shown('beta', 'hippo_recall', { query: 'lighthouse' });
-    await shown('acme', 'hippo_recall', { query: 'lighthouse' });
-    const before = new Map(loadAllEntries(store, 'default').map((e) => [e.id, e.outcomePositive]));
-    const applied = await tool('acme', 'hippo_outcome', { good: true });
-    expect(applied.text).toMatch(/Applied positive outcome to [1-9]\d* memories/);
-    const touched = loadAllEntries(store, 'default')
-      .filter((e) => e.outcomePositive !== before.get(e.id))
-      .map((e) => e.id);
-    expectOnly(touched, [ids.acme], HIDDEN_FROM_ACME(), 'acme outcome');
-  });
+      await shown('beta', 'hippo_recall', { query: 'lighthouse' });
+      await shown('acme', 'hippo_recall', { query: 'lighthouse' });
+      const before = new Map(loadAllEntries(store, 'default').map((e) => [e.id, e.outcomePositive]));
+      const applied = await tool('acme', 'hippo_outcome', { good: true });
+      expect(applied.text).toMatch(/Applied positive outcome to [1-9]\d* memories/);
+      const touched = loadAllEntries(store, 'default')
+        .filter((e) => e.outcomePositive !== before.get(e.id))
+        .map((e) => e.id);
+      expectOnly(touched, [ids.acme], HIDDEN_FROM_ACME(), 'acme outcome');
+    },
+  );
 });

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -59,7 +60,7 @@ describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) =
     return { def: (await list('default')).length, empty: (await list('')).length };
   }
 
-  it('github unhandled-event DLQ row lands under tenant default', async () => {
+  it.skipIf(needsHippoDb('db'))('github unhandled-event DLQ row lands under tenant default', async () => {
     const res = await ghPost(handle.port, '{}', 'not-an-allowed-event');
     expect(res.status).toBe(200);
     expect(await tenantsOf((t) => sqliteStore(root).connectorEvents.deadLetters('github', t, 100))).toEqual({
@@ -68,7 +69,7 @@ describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) =
     });
   });
 
-  it('github invalid-JSON DLQ row lands under tenant default', async () => {
+  it.skipIf(needsHippoDb('db'))('github invalid-JSON DLQ row lands under tenant default', async () => {
     await ghPost(handle.port, '{broken', 'issues');
     expect(await tenantsOf((t) => sqliteStore(root).connectorEvents.deadLetters('github', t, 100))).toEqual({
       def: 1,
@@ -76,7 +77,7 @@ describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) =
     });
   });
 
-  it('slack non-envelope DLQ row lands under tenant default', async () => {
+  it.skipIf(needsHippoDb('db'))('slack non-envelope DLQ row lands under tenant default', async () => {
     await slackPost(handle.port, '{"foo":1}');
     expect(await tenantsOf((t) => sqliteStore(root).connectorEvents.deadLetters('slack', t, 100))).toEqual({
       def: 1,

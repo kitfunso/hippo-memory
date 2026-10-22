@@ -25,13 +25,13 @@ const memberOf = (row: MemoryEntry | undefined): ConflictMember | null =>
 
 /** With a tenant both members must be in it; with none, every conflict comes back with whichever members exist. */
 function rowOf(t: MemoryTables, tenantId: TenantId, conflict: MemoryConflict): ConflictRow | null {
-  const a = t.entries.get(conflict.memory_a_id);
-  const b = t.entries.get(conflict.memory_b_id);
+  const a = t.entries.get(conflict.memoryAId);
+  const b = t.entries.get(conflict.memoryBId);
   if (tenantId !== ALL_TENANTS && (a?.tenantId !== tenantId || b?.tenantId !== tenantId)) return null;
   return { conflict: { ...conflict }, a: memberOf(a), b: memberOf(b) };
 }
 
-const WALK: DescendingKeyset<MemoryConflict> = { key: (c) => c.updated_at, intId: (c) => c.id };
+const WALK: DescendingKeyset<MemoryConflict> = { key: (c) => c.updatedAt, intId: (c) => c.id };
 
 function pageIn(t: MemoryTables, { tenantId, status, limit, after }: ConflictListQuery): ConflictRowPage {
   const hits = t.conflicts
@@ -39,7 +39,7 @@ function pageIn(t: MemoryTables, { tenantId, status, limit, after }: ConflictLis
     .sort(newestFirst(WALK))
     .flatMap((c) => rowOf(t, tenantId, c) ?? []);
   const page = keysetPage(hits.slice(0, limit + 1), limit, (row) => ({
-    key: row.conflict.updated_at,
+    key: row.conflict.updatedAt,
     id: row.conflict.id,
   }));
   return { rows: page.rows, next: page.next };
@@ -58,7 +58,7 @@ function claimable(tx: Tx, t: MemoryTables, tenantId: string, r: ConflictResolut
   };
   const conflict = t.conflicts.find((c) => c.id === r.conflictId && c.status === 'open');
   if (!conflict) return undefined;
-  const pair = [conflict.memory_a_id, conflict.memory_b_id].sort().join('\u0000');
+  const pair = [conflict.memoryAId, conflict.memoryBId].sort().join('\u0000');
   const named = [r.keep.id, r.loser.id].sort().join('\u0000');
   return pair === named && holds(r.keep) && holds(r.loser) ? conflict : undefined;
 }
@@ -136,7 +136,7 @@ function resolveIn(t: MemoryTables, tenantId: string, r: ConflictResolution): bo
       rejectedDigest: out.digest,
     };
     tx.audit.push({ tenantId, actor: r.actor, op: 'conflict_resolve', targetId: r.keep.id, metadata });
-    t.conflicts[t.conflicts.indexOf(conflict)] = { ...conflict, status: 'resolved', updated_at: r.at };
+    t.conflicts[t.conflicts.indexOf(conflict)] = { ...conflict, status: 'resolved', updatedAt: r.at };
     return true;
   });
 }

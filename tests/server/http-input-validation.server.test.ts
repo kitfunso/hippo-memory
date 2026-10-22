@@ -3,11 +3,12 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { request } from 'node:http';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -376,11 +377,14 @@ describe('HTTP input validation', () => {
     ['prediction stats class cap', 'GET', `/v1/predictions/stats?class=${long(256)}`, undefined, /class exceeds 256/],
   ];
 
-  it.each(bad)('%s is a 400 that names the problem', async (_name, method, path, body, message) => {
+  const namesTheProblem = async (...[, method, path, body, message]: (typeof bad)[number]): Promise<void> => {
     const r = await call(method, path, body);
     expect(r.status).toBe(400);
     expect(String(r.json.error)).toMatch(message);
-  });
+  };
+  const isSleep = (row: (typeof bad)[number]): boolean => row[2] === '/v1/sleep';
+  it.each(bad.filter((row) => !isSleep(row)))('%s is a 400 that names the problem', namesTheProblem);
+  it.skipIf(needsHippoDb('sleep')).each(bad.filter(isSleep))('%s is a 400 that names the problem', namesTheProblem);
 
   it('none of the rejected writes reached the store', async () => {
     const counts = await Promise.all(
@@ -466,7 +470,7 @@ describe('HTTP input validation', () => {
     expect(r.json.predictions).toEqual([expect.objectContaining({ id: ids.prediction })]);
   });
 
-  it('include_recent is accepted, and audit since filters by time', async () => {
+  it.skipIf(needsHippoDb('team'))('include_recent is accepted, and audit since filters by time', async () => {
     expect((await call('GET', '/v1/context?include_recent=2')).status).toBe(200);
     const since = async (iso: string): Promise<number> => {
       const r = await call('GET', `/v1/audit?since=${encodeURIComponent(iso)}`);

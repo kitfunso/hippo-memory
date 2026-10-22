@@ -78,7 +78,7 @@ describe('conflicts', () => {
 
   it('lists open conflicts and none under another status', async () => {
     const { x, y } = seed();
-    expect((await listMemoryConflicts(root)).map((c) => [c.memory_a_id, c.memory_b_id])).toEqual([[x.id, y.id].sort()]);
+    expect((await listMemoryConflicts(root)).map((c) => [c.memoryAId, c.memoryBId])).toEqual([[x.id, y.id].sort()]);
     expect(await listMemoryConflicts(root, 'resolved')).toEqual([]);
   });
 

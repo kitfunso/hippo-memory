@@ -3,9 +3,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 const NO_OWNER_TEXT =
   'personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot hold them';
@@ -58,7 +59,7 @@ afterEach(async () => {
 });
 
 describe('hippo_remember personal over HTTP MCP', () => {
-  it("an owned key stores the row in its owner's scope with origin ''", async () => {
+  it.skipIf(needsHippoDb('team'))("an owned key stores the row in its owner's scope with origin ''", async () => {
     const reply = await callTool(keyA, 'hippo_remember', { text: NOTE, personal: true });
     expect(reply.error).toBeUndefined();
     expect(reply.result?.content[0]?.text).toMatch(/^Remembered \[/);
@@ -69,33 +70,39 @@ describe('hippo_remember personal over HTTP MCP', () => {
     expect(rows[0]?.content).toBe(NOTE);
   });
 
-  it('an unowned admin key gets the 400 text and stores nothing, while the same key still writes a team row', async () => {
-    const refused = await callTool(keyAdmin, 'hippo_remember', { text: NOTE, personal: true });
-    expect(refused.result).toBeUndefined();
-    expect(refused.error?.message).toBe(NO_OWNER_TEXT);
-    expect(loadAllEntries(root, 'default')).toHaveLength(0);
+  it.skipIf(needsHippoDb('team'))(
+    'an unowned admin key gets the 400 text and stores nothing, while the same key still writes a team row',
+    async () => {
+      const refused = await callTool(keyAdmin, 'hippo_remember', { text: NOTE, personal: true });
+      expect(refused.result).toBeUndefined();
+      expect(refused.error?.message).toBe(NO_OWNER_TEXT);
+      expect(loadAllEntries(root, 'default')).toHaveLength(0);
 
-    const team = await callTool(keyAdmin, 'hippo_remember', { text: 'team note from the admin key' });
-    expect(team.error).toBeUndefined();
-    expect(loadAllEntries(root, 'default').map((e) => e.scope)).toEqual([null]);
-  });
+      const team = await callTool(keyAdmin, 'hippo_remember', { text: 'team note from the admin key' });
+      expect(team.error).toBeUndefined();
+      expect(loadAllEntries(root, 'default').map((e) => e.scope)).toEqual([null]);
+    },
+  );
 
   // Needs lane A's read sites (the owner's own scope admitted on recall); red on lane B alone.
-  it("hippo_recall by the same key finds it, and another owner's key finds only the team row", async () => {
-    await callTool(keyA, 'hippo_remember', { text: NOTE, personal: true });
-    await callTool(keyB, 'hippo_remember', { text: 'quartzlamp: the team deploy script lives in ops' });
-    const own = await callTool(keyA, 'hippo_recall', { query: 'quartzlamp shell alias deploy' });
-    expect(own.result?.content[0]?.text).toContain('my own shell alias');
-    for (const key of [keyB, keyAdmin]) {
-      const other = await callTool(key, 'hippo_recall', { query: 'quartzlamp shell alias deploy' });
-      expect(other.result?.content[0]?.text).toContain('the team deploy script');
-      expect(JSON.stringify(other)).not.toContain('my own shell alias');
-    }
-  });
+  it.skipIf(needsHippoDb('team'))(
+    "hippo_recall by the same key finds it, and another owner's key finds only the team row",
+    async () => {
+      await callTool(keyA, 'hippo_remember', { text: NOTE, personal: true });
+      await callTool(keyB, 'hippo_remember', { text: 'quartzlamp: the team deploy script lives in ops' });
+      const own = await callTool(keyA, 'hippo_recall', { query: 'quartzlamp shell alias deploy' });
+      expect(own.result?.content[0]?.text).toContain('my own shell alias');
+      for (const key of [keyB, keyAdmin]) {
+        const other = await callTool(key, 'hippo_recall', { query: 'quartzlamp shell alias deploy' });
+        expect(other.result?.content[0]?.text).toContain('the team deploy script');
+        expect(JSON.stringify(other)).not.toContain('my own shell alias');
+      }
+    },
+  );
 });
 
 describe('hippo_remember is not salience-gated', () => {
-  it('stores a short low-salience text that POST /v1/memories would skip', async () => {
+  it.skipIf(needsHippoDb('team'))('stores a short low-salience text that POST /v1/memories would skip', async () => {
     const reply = await callTool(keyA, 'hippo_remember', { text: 'yes' });
     expect(reply.result?.content[0]?.text).toMatch(/^Remembered \[/);
     expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual(['yes']);

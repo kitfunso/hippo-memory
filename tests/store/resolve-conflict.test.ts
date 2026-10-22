@@ -287,7 +287,7 @@ describe('conflict tenant isolation', () => {
       closeHippoDb(db);
     }
     expect(
-      (await listMemoryConflicts(tmpDir, 'open')).find((c) => c.memory_a_id === memA && c.memory_b_id === memB)?.reason,
+      (await listMemoryConflicts(tmpDir, 'open')).find((c) => c.memoryAId === memA && c.memoryBId === memB)?.reason,
     ).toBe('pre-fix cross-tenant');
 
     // Simulate an unscoped detector re-detecting the cross-tenant pair. Before
@@ -302,12 +302,12 @@ describe('conflict tenant isolation', () => {
 
     // The cross-tenant row is now resolved.
     const resolved = await listMemoryConflicts(tmpDir, 'resolved');
-    const ours = resolved.find((c) => c.memory_a_id === memA && c.memory_b_id === memB);
-    expect(ours?.updated_at).toBe('2026-05-22T12:00:00.000Z');
+    const ours = resolved.find((c) => c.memoryAId === memA && c.memoryBId === memB);
+    expect(ours?.updatedAt).toBe('2026-05-22T12:00:00.000Z');
 
     // No open cross-tenant row remains.
     expect(
-      (await listMemoryConflicts(tmpDir, 'open')).find((c) => c.memory_a_id === memA && c.memory_b_id === memB),
+      (await listMemoryConflicts(tmpDir, 'open')).find((c) => c.memoryAId === memA && c.memoryBId === memB),
     ).toBeUndefined();
   });
 

@@ -6,11 +6,12 @@ import * as path from 'node:path';
 import { adminActor } from '../../src/api/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -75,12 +76,12 @@ afterEach(async () => {
 });
 
 describe('POST /v1/memories on a shared store', () => {
-  it("stores the caller's project name", async () => {
+  it.skipIf(needsHippoDb('db'))("stores the caller's project name", async () => {
     const h = await start({ sharedStore: true });
     expect(await originAfterPost(h, { content: ROW, project: { name: 'acme/app' } })).toBe('acme/app');
   });
 
-  it('stores NULL when the caller names no project', async () => {
+  it.skipIf(needsHippoDb('db'))('stores NULL when the caller names no project', async () => {
     const h = await start({ sharedStore: true });
     expect(await originAfterPost(h, { content: ROW })).toBeNull();
   });
@@ -106,13 +107,13 @@ describe('POST /v1/memories on a shared store', () => {
     expect(loadAllEntries(store, 'default')).toHaveLength(0);
   });
 
-  it('accepts the shape the resolver sends: a remote id with its aliases', async () => {
+  it.skipIf(needsHippoDb('db'))('accepts the shape the resolver sends: a remote id with its aliases', async () => {
     const h = await start({ sharedStore: true });
     const project = { name: 'github.com/acme/app', aliases: ['acme-app', 'app'] };
     expect(await originAfterPost(h, { content: ROW, project })).toBe('github.com/acme/app');
   });
 
-  it('ignores legacy_name, so a folder name never lands', async () => {
+  it.skipIf(needsHippoDb('db'))('ignores legacy_name, so a folder name never lands', async () => {
     const h = await start({ sharedStore: true });
     expect(await originAfterPost(h, { content: ROW, project: { name: 'acme/app', legacy_name: 'hippo-team' } })).toBe(
       'acme/app',
@@ -125,7 +126,7 @@ describe('POST /v1/memories on a shared store', () => {
     expect(await hookText('other')).not.toContain('zorblaxian');
   });
 
-  it('a row posted with a project reaches that project and no other', async () => {
+  it.skipIf(needsHippoDb('db'))('a row posted with a project reaches that project and no other', async () => {
     const h = await start({ sharedStore: true, pinnedInject: { promptRecall: true } });
     await originAfterPost(h, { content: ROW, project: { name: 'acme/app' } });
     expect(await hookText('acme/app')).toContain('zorblaxian');
@@ -134,7 +135,7 @@ describe('POST /v1/memories on a shared store', () => {
 });
 
 describe('POST /v1/memories on a store that is not shared', () => {
-  it('stores the folder stamp when the caller names no project', async () => {
+  it.skipIf(needsHippoDb('db'))('stores the folder stamp when the caller names no project', async () => {
     const h = await start({});
     expect(await originAfterPost(h, { content: ROW })).toBe('');
   });

@@ -111,8 +111,8 @@ interface ResolveSides {
 /** `keepId`'s side and the other one, with the scopes the store must still find at write time. */
 function sidesOf(row: ConflictRow, keepId: string): ResolveSides {
   const { conflict } = row;
-  const a = { id: conflict.memory_a_id, scope: row.a?.scope ?? null };
-  const b = { id: conflict.memory_b_id, scope: row.b?.scope ?? null };
+  const a = { id: conflict.memoryAId, scope: row.a?.scope ?? null };
+  const b = { id: conflict.memoryBId, scope: row.b?.scope ?? null };
   if (keepId === a.id) return { keep: a, loser: b };
   if (keepId === b.id) return { keep: b, loser: a };
   throw new BadRequestError(`keep must be one of the two memories in conflict ${conflict.id}: ${a.id}, ${b.id}`);

@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { serve, type ServeOpts, type ServerHandle } from '../../src/server.js';
+import type { ServeOpts, ServerHandle } from '../../src/server.js';
+import { serve } from './store-switch.js';
 import type { HippoStore } from '../../src/store/index.js';
 import {
   type CallOptions,

@@ -148,7 +148,7 @@ describe('consolidate auto-promote: session -> trace', () => {
     expect(traceIds.size).toBe(2);
 
     const conflicts = await listMemoryConflicts(tmpDir);
-    const traceVsTrace = conflicts.filter((c) => traceIds.has(c.memory_a_id) && traceIds.has(c.memory_b_id));
+    const traceVsTrace = conflicts.filter((c) => traceIds.has(c.memoryAId) && traceIds.has(c.memoryBId));
     expect(traceVsTrace).toHaveLength(0);
   });
 

@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { serve, type AuthResolver, type ServerHandle } from '../../src/server.js';
+import type { AuthResolver, ServerHandle } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 beforeEach(() => {

@@ -171,7 +171,7 @@ describe('(e) rescue semantics', () => {
 
     const conflicts = await listMemoryConflicts(dir, 'open', 'tc');
     const found = conflicts.find(
-      (c) => (c.memory_a_id === a.id && c.memory_b_id === b.id) || (c.memory_a_id === b.id && c.memory_b_id === a.id),
+      (c) => (c.memoryAId === a.id && c.memoryBId === b.id) || (c.memoryAId === b.id && c.memoryBId === a.id),
     );
     expect(found!.reason).toMatch(/enabled\/disabled/);
   });

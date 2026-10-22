@@ -1,7 +1,8 @@
 // Pins the GET /v1/memories body bytes for one entry with every field set, so a rename of MemoryEntry's fields cannot
 // move a key an HTTP client reads.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 import { DEFAULT_TENANT_ID } from '../../src/base/util/tenant.js';
 import { recallableEntry } from '../_helpers/every-field-entry.js';
 import { makeRoot } from '../_helpers/make-root.js';

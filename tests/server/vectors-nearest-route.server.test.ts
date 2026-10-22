@@ -7,6 +7,7 @@ import { MAX_ID_LEN, MAX_LIST_LIMIT } from '../../src/base/util/limits.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { seedVectorRows } from '../_helpers/vector-rows.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
 
 const SPEC = { tenantId: 'default', includeSuperseded: false };
 
@@ -74,7 +75,7 @@ describe('POST /v1/vectors/nearest', () => {
     expect(await post(body)).toEqual({ status: 400, json: { error } });
   });
 
-  it("answers the caller's tenant's nearest ids, and 403 for another tenant", async () => {
+  it.skipIf(needsHippoDb('team'))("answers the caller's tenant's nearest ids, and 403 for another tenant", async () => {
     expect(await post({ vector: [1, 0, 0], spec: { ...SPEC, limit: 2 } })).toEqual({
       status: 200,
       json: { ids: ['nearest', 'near'] },

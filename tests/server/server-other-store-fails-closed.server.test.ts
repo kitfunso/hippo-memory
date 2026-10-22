@@ -7,7 +7,8 @@ import { STORE_BUSY_MESSAGE } from '../../src/store/port.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../src/base/util/http-util.js';
 import { mcpErrorResponse } from '../../src/surface/mcp/server.js';
 import { TOOLS } from '../../src/surface/mcp/tools.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
+import { serve } from '../_helpers/store-switch.js';
 import {
   sqliteStore,
   StoreBusyError,

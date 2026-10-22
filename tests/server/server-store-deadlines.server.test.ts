@@ -9,7 +9,7 @@ import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/store/port.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { log, type LogFields } from '../../src/base/util/log.js';
 import { currentSignal } from '../../src/base/util/request-scope.js';
-import { serve, type AuthResolver, type ServeOpts, type ServerHandle } from '../../src/server.js';
+import type { AuthResolver, ServeOpts, ServerHandle } from '../../src/server.js';
 import {
   type CallOptions,
   createSqliteExecutor,
@@ -20,6 +20,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -408,80 +409,90 @@ describe("a write still running at its request's deadline", () => {
 });
 
 describe('the handler deadline', () => {
-  it('answers 504 with the request id while the handler still runs, and drops what the handler returns later', async () => {
-    const root = newRoot();
-    let release = (): void => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let returned = (): void => {};
-    const handlerDone = new Promise<void>((resolve) => {
-      returned = resolve;
-    });
-    const routes = [
-      {
-        path: '/v1/slow',
-        handler: async () => {
-          await gate;
-          returned();
-          return { late: true };
+  it.skipIf(needsHippoDb('addon'))(
+    'answers 504 with the request id while the handler still runs, and drops what the handler returns later',
+    async () => {
+      const root = newRoot();
+      let release = (): void => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let returned = (): void => {};
+      const handlerDone = new Promise<void>((resolve) => {
+        returned = resolve;
+      });
+      const routes = [
+        {
+          path: '/v1/slow',
+          handler: async () => {
+            await gate;
+            returned();
+            return { late: true };
+          },
         },
-      },
-    ];
-    const server = await start(root, { routes });
-    const before = await counts(server);
-    const errors = vi.spyOn(log, 'error').mockImplementation(() => {});
-    const warns = vi.spyOn(log, 'warn').mockImplementation(() => {});
-    const finished = loggedFields('info', LATE);
+      ];
+      const server = await start(root, { routes });
+      const before = await counts(server);
+      const errors = vi.spyOn(log, 'error').mockImplementation(() => {});
+      const warns = vi.spyOn(log, 'warn').mockImplementation(() => {});
+      const finished = loggedFields('info', LATE);
 
-    deadline(SHORT_DEADLINE_MS);
-    const late = await post(server, '/v1/slow', {});
+      deadline(SHORT_DEADLINE_MS);
+      const late = await post(server, '/v1/slow', {});
 
-    await expectDeadlineReply(late, 'did not finish by its deadline');
-    deadline('0');
-    release();
-    await handlerDone;
-    // A write that ends late did run, so one info line says so under the id and the route of the 504's access line.
-    expect(await finished).toEqual({ requestId: late.headers.get('x-request-id'), method: 'POST', route: '/v1/slow' });
-    const after = await counts(server);
-    expect(after.handler_deadlines).toBe(before.handler_deadlines + 1);
-    expect(errors.mock.calls.map((call) => call[0])).toEqual([
-      expect.stringContaining('POST /v1/slow failed: the request did not finish by its deadline'),
-    ]);
-    expect(warns.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([]);
-  });
+      await expectDeadlineReply(late, 'did not finish by its deadline');
+      deadline('0');
+      release();
+      await handlerDone;
+      // A write that ends late did run, so one info line says so under the id and the route of the 504's access line.
+      expect(await finished).toEqual({
+        requestId: late.headers.get('x-request-id'),
+        method: 'POST',
+        route: '/v1/slow',
+      });
+      const after = await counts(server);
+      expect(after.handler_deadlines).toBe(before.handler_deadlines + 1);
+      expect(errors.mock.calls.map((call) => call[0])).toEqual([
+        expect.stringContaining('POST /v1/slow failed: the request did not finish by its deadline'),
+      ]);
+      expect(warns.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([]);
+    },
+  );
 
-  it('aborts the signal of a handler that runs past the deadline, and not one that finishes inside it', async () => {
-    const root = newRoot();
-    let release = (): void => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let seen = (_aborted: boolean): void => {};
-    const afterGate = new Promise<boolean>((resolve) => {
-      seen = resolve;
-    });
-    const routes = [
-      {
-        path: '/v1/slow',
-        handler: async () => {
-          await gate;
-          seen(currentSignal()?.aborted === true);
-          return {};
+  it.skipIf(needsHippoDb('addon'))(
+    'aborts the signal of a handler that runs past the deadline, and not one that finishes inside it',
+    async () => {
+      const root = newRoot();
+      let release = (): void => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let seen = (_aborted: boolean): void => {};
+      const afterGate = new Promise<boolean>((resolve) => {
+        seen = resolve;
+      });
+      const routes = [
+        {
+          path: '/v1/slow',
+          handler: async () => {
+            await gate;
+            seen(currentSignal()?.aborted === true);
+            return {};
+          },
         },
-      },
-      { path: '/v1/quick', handler: async () => ({ aborted: currentSignal()?.aborted === true }) },
-    ];
-    const server = await start(root, { routes });
-    vi.spyOn(log, 'error').mockImplementation(() => {});
+        { path: '/v1/quick', handler: async () => ({ aborted: currentSignal()?.aborted === true }) },
+      ];
+      const server = await start(root, { routes });
+      vi.spyOn(log, 'error').mockImplementation(() => {});
 
-    deadline(SHORT_DEADLINE_MS);
-    await expectDeadlineReply(await post(server, '/v1/slow', {}), 'did not finish by its deadline');
-    release();
-    expect(await afterGate).toBe(true);
-    const quick = await post(server, '/v1/quick', {});
-    expect(await quick.json()).toEqual({ aborted: false });
-  });
+      deadline(SHORT_DEADLINE_MS);
+      await expectDeadlineReply(await post(server, '/v1/slow', {}), 'did not finish by its deadline');
+      release();
+      expect(await afterGate).toBe(true);
+      const quick = await post(server, '/v1/quick', {});
+      expect(await quick.json()).toEqual({ aborted: false });
+    },
+  );
 
   it('drops a store call still queued when its request is aborted, without running it', async () => {
     const root = newRoot();
@@ -505,54 +516,57 @@ describe('the handler deadline', () => {
     expect(claims(root)).not.toContain('dropped');
   });
 
-  it('logs one warn line when the handler fails after the 504, with the request id and the route and none of the error text', async () => {
-    const root = newRoot();
-    let release = (): void => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const routes = [
-      {
-        path: '/v1/slow',
-        handler: async () => {
-          await gate;
-          throw new RangeError('no row for private-caller-text');
-        },
-      },
-    ];
-    const server = await start(root, { routes });
-    vi.spyOn(log, 'error').mockImplementation(() => {});
-    const infos = vi.spyOn(log, 'info').mockImplementation(() => {});
-    const warned = vi.spyOn(log, 'warn');
-    const failed = new Promise<void>((resolve) => {
-      warned.mockImplementation((message) => {
-        if (message.includes(LATE)) resolve();
+  it.skipIf(needsHippoDb('addon'))(
+    'logs one warn line when the handler fails after the 504, with the request id and the route and none of the error text',
+    async () => {
+      const root = newRoot();
+      let release = (): void => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
       });
-    });
-
-    deadline(SHORT_DEADLINE_MS);
-    const late = await post(server, '/v1/slow?q=private-query', {});
-
-    await expectDeadlineReply(late, 'did not finish by its deadline');
-    deadline('0');
-    release();
-    await failed;
-    await counts(server);
-    expect(warned.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([
-      [
-        'request failed after its deadline reply',
+      const routes = [
         {
-          requestId: late.headers.get('x-request-id'),
-          method: 'POST',
-          route: '/v1/slow',
-          failureStatus: 500,
-          errorClass: 'RangeError',
+          path: '/v1/slow',
+          handler: async () => {
+            await gate;
+            throw new RangeError('no row for private-caller-text');
+          },
         },
-      ],
-    ]);
-    expect(infos.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([]);
-    expect(JSON.stringify([warned.mock.calls, infos.mock.calls])).not.toContain('private-');
-  });
+      ];
+      const server = await start(root, { routes });
+      vi.spyOn(log, 'error').mockImplementation(() => {});
+      const infos = vi.spyOn(log, 'info').mockImplementation(() => {});
+      const warned = vi.spyOn(log, 'warn');
+      const failed = new Promise<void>((resolve) => {
+        warned.mockImplementation((message) => {
+          if (message.includes(LATE)) resolve();
+        });
+      });
+
+      deadline(SHORT_DEADLINE_MS);
+      const late = await post(server, '/v1/slow?q=private-query', {});
+
+      await expectDeadlineReply(late, 'did not finish by its deadline');
+      deadline('0');
+      release();
+      await failed;
+      await counts(server);
+      expect(warned.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([
+        [
+          'request failed after its deadline reply',
+          {
+            requestId: late.headers.get('x-request-id'),
+            method: 'POST',
+            route: '/v1/slow',
+            failureStatus: 500,
+            errorClass: 'RangeError',
+          },
+        ],
+      ]);
+      expect(infos.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([]);
+      expect(JSON.stringify([warned.mock.calls, infos.mock.calls])).not.toContain('private-');
+    },
+  );
 
   it('says nothing when a read finishes after its 504: nothing was written', async () => {
     const root = newRoot();

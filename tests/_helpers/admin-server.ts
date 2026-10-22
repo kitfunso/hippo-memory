@@ -1,6 +1,7 @@
 // A keyless local caller is always a member, so a test that needs host admin mints a key and sends it.
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
+import { serve } from './store-switch.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
 
@@ -17,9 +18,10 @@ export function mintAdminKey(hippoRoot: string): string {
 
 /** serve() plus an admin key that global fetch sends to this server unless the call names its own Authorization. */
 export async function serveAsAdmin(opts: ServeOpts): Promise<ServerHandle> {
+  // Minted before the boot so the memory-store run, which copies the folder's rows at boot, holds the key too.
+  const key = mintAdminKey(opts.hippoRoot);
   // A keyed caller is charged by the per-caller limiter where a keyless one was not, so these runs switch it off.
   const handle = await serve({ rateLimits: { perCaller: 'off' }, ...opts });
-  const key = mintAdminKey(opts.hippoRoot);
   const realFetch = globalThis.fetch;
   globalThis.fetch = (input, init) => {
     const url = input instanceof Request ? input.url : String(input);

@@ -5,10 +5,11 @@ import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { MAX_PROJECT_ALIASES, MCP_PROJECT_SCOPED_HEADER } from '../../src/entry/project-identity.js';
-import { serve, type ServerHandle } from '../../src/server.js';
+import type { ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -78,26 +79,29 @@ afterEach(async () => {
 });
 
 describe('X-Hippo-Project on a shared store', () => {
-  it('stamps hippo_remember with the decoded name, and an encoded comma in an alias widens recall to it', async () => {
-    const store = makeStore(true);
-    handle = await serve({ hippoRoot: store, port: 0 });
-    const headers = {
-      'x-hippo-project': encodeURIComponent('acme/café'),
-      'x-hippo-project-aliases': [encodeURIComponent('old,name'), 'legacy'].join(','),
-    };
-    const r = await post(headers);
-    expect(r.status, r.text).toBe(200);
-    expect(r.text).toContain('Remembered');
-    expect(loadAllEntries(store, 'default').map((e) => e.originProject)).toEqual(['acme/café']);
+  it.skipIf(needsHippoDb('team'))(
+    'stamps hippo_remember with the decoded name, and an encoded comma in an alias widens recall to it',
+    async () => {
+      const store = makeStore(true);
+      handle = await serve({ hippoRoot: store, port: 0 });
+      const headers = {
+        'x-hippo-project': encodeURIComponent('acme/café'),
+        'x-hippo-project-aliases': [encodeURIComponent('old,name'), 'legacy'].join(','),
+      };
+      const r = await post(headers);
+      expect(r.status, r.text).toBe(200);
+      expect(r.text).toContain('Remembered');
+      expect(loadAllEntries(store, 'default').map((e) => e.originProject)).toEqual(['acme/café']);
 
-    const aliased = { ...createMemory('the aliasmark row from before the rename'), originProject: 'old,name' };
-    writeEntry(store, aliased);
-    const recalled = await post(headers, toolCall('hippo_recall', { query: 'aliasmark' }));
-    expect(recalled.status, recalled.text).toBe(200);
-    expect(recalled.text).toContain(aliased.content);
-  });
+      const aliased = { ...createMemory('the aliasmark row from before the rename'), originProject: 'old,name' };
+      writeEntry(store, aliased);
+      const recalled = await post(headers, toolCall('hippo_recall', { query: 'aliasmark' }));
+      expect(recalled.status, recalled.text).toBe(200);
+      expect(recalled.text).toContain(aliased.content);
+    },
+  );
 
-  it('reads an empty aliases header as no aliases', async () => {
+  it.skipIf(needsHippoDb('team'))('reads an empty aliases header as no aliases', async () => {
     const store = makeStore(true);
     handle = await serve({ hippoRoot: store, port: 0 });
     const r = await post({ 'x-hippo-project': 'acme', 'x-hippo-project-aliases': '' });
@@ -190,7 +194,7 @@ describe('X-Hippo-Project-Scoped on every /mcp reply', () => {
 });
 
 describe('X-Hippo-Project on a store that is not shared', () => {
-  it('ignores the headers, valid or not', async () => {
+  it.skipIf(needsHippoDb('team'))('ignores the headers, valid or not', async () => {
     const store = makeStore(false);
     handle = await serve({ hippoRoot: store, port: 0 });
     for (const name of ['acme', 'Acme App']) {

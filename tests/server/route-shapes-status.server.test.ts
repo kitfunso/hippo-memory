@@ -5,6 +5,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { routeLabel, V1_ROUTES } from '../../src/surface/server/route-table.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
 
 const METHODS = ['GET', 'POST', 'DELETE', 'PUT'] as const;
 
@@ -91,7 +92,7 @@ describe('every /v1 route shape under every method', () => {
     expect([...rows].sort()).toEqual([...ROWS].sort());
   });
 
-  it('answers each path with the same status and error text', async () => {
+  it.skipIf(needsHippoDb('team'))('answers each path with the same status and error text', async () => {
     const paths = [...new Set(ROWS.flatMap((row) => pathsOf(row.slice(row.indexOf(' ') + 1))))];
     const lines: string[] = [];
     for (const path of paths) {
