@@ -1,6 +1,7 @@
-// hippo.db's memories_fts as this adapter reads it: each row's unicode61 tokens in the content and tags columns, and
-// FTS5's own bm25 over them, so whole-word recall ranks and scores its matches as hippo.db does.
+// The full-text index rule, once: FTS5's unicode61 tokens over the content and tags columns, the phrase a write's
+// text names, and FTS5's bm25 over the tokens, so whole-word recall ranks and scores alike under either store.
 import type { MemoryEntry } from '../../base/memory/memory.js';
+import { duplicateKey } from '../../base/util/same-text.js';
 import { naturalLog } from './natural-log.js';
 
 /** FTS5's unicode61 tokens: runs of letters and digits, case folded, diacritics removed. */
@@ -12,12 +13,24 @@ const ftsTokens = (text: string): string[] =>
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean);
 
+// Letters and digits in every Unicode table unicode61 has shipped (Latin, Greek, Cyrillic, Hebrew, Arabic, Devanagari,
+// Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
+const SURE_TOKEN_CHAR = new RegExp('[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-я' + 'א-תء-غف-يअ-हก-ะ' + 'ぁ-んァ-ヶ一-龥가-힣]');
+const PHRASE_WORDS = 32;
+
+/** The first words of `text`, which a row holding the text word for word holds in a row; null when they might name no
+ * token, since an empty phrase matches no row. */
+export function openingPhrase(text: string): string | null {
+  const opening = duplicateKey(text).split(' ').slice(0, PHRASE_WORDS).join(' ');
+  return SURE_TOKEN_CHAR.test(opening) ? opening : null;
+}
+
 interface FtsRow {
   readonly content: readonly string[];
   readonly tags: readonly string[];
 }
 
-// A write replaces the entry object, so a row cached by its entry stays true.
+// The memory store replaces the entry object on a write, so a row cached by its entry stays true.
 const indexed = new WeakMap<MemoryEntry, FtsRow>();
 
 function ftsRowOf(entry: MemoryEntry): FtsRow {

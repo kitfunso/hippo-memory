@@ -1,5 +1,4 @@
 // hippo.db's Goals group: the goal stack's writes and the every-status listing.
-import { generateId } from '../../base/memory/memory.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, GetActiveGoalsOpts } from '../port/types.js';
 import type { GoalRecallLogRow } from '../port/recall-writes.js';
@@ -7,6 +6,14 @@ import type { CompleteGoalOpts, PushGoalOpts, Goals } from '../port/goals.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import {
+  assertParentInSession,
+  goalOverflow,
+  newGoalId,
+  outcomeMultiplier,
+  pushedGoal,
+  retrievalPolicyOf,
+} from '../rules/goals.js';
 
 const INSERT_GOAL_SQL = `
   INSERT INTO goal_stack
@@ -14,9 +21,6 @@ const INSERT_GOAL_SQL = `
      success_condition, retrieval_policy_id, created_at)
   VALUES (?, ?, ?, ?, ?, ?, 'active', ?, NULL, ?)
 `;
-
-// The CLI prints these ids and the sequential-learning adapter reads them back as 16 hex characters.
-const GOAL_ID_CHARS = 16;
 
 // SAFETY: every read cast to this row selects GOAL_COLUMNS; scripts/check-row-casts.mjs proves it.
 export interface GoalRow {
@@ -35,8 +39,6 @@ export interface GoalRow {
 }
 const GOAL_COLUMNS = `id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
            success_condition, retrieval_policy_id, created_at, completed_at, outcome_score`;
-
-const MAX_ACTIVE_GOAL_DEPTH = 3;
 
 export function rowToGoal(row: GoalRow): Goal {
   return {
@@ -70,8 +72,8 @@ function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, session
     ).get(tenantId, sessionId) as { c: number }
   ).c;
 
-  if (activeCount >= MAX_ACTIVE_GOAL_DEPTH) {
-    const overflow = activeCount - MAX_ACTIVE_GOAL_DEPTH + 1;
+  const overflow = goalOverflow(activeCount);
+  if (overflow > 0) {
     cachedStatement(
       db,
       `
@@ -90,15 +92,14 @@ function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, session
 
 function pushGoal(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalOpts, 'tenantId'>): Goal {
   const opts: PushGoalOpts = { ...goal, tenantId };
-  const id = generateId('g', GOAL_ID_CHARS);
+  const id = newGoalId();
   const createdAt = new Date().toISOString();
-  let policyId: string | null = null;
+  const policy = opts.policy ? retrievalPolicyOf(id, opts.policy) : undefined;
 
   withWriteScope(db, 'push_goal', () => {
     // Depth cap: count active for (tenant, session); suspend oldest if at cap.
     enforceDepthCapWithinTx(db, opts.tenantId, opts.sessionId);
-
-    assertParentInSession(db, opts);
+    assertParentInSession(opts, opts.parentGoalId ? parentOf(db, opts.parentGoalId) : undefined);
 
     // Parent goal_stack row first (FK target).
     cachedStatement(db, INSERT_GOAL_SQL).run(
@@ -111,47 +112,20 @@ function pushGoal(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalOpt
       opts.successCondition ?? null,
       createdAt,
     );
-
-    // Optional policy row, then point goal_stack.retrieval_policy_id at it.
-    if (opts.policy) {
-      policyId = insertRetrievalPolicy(db, id, opts.policy);
-    }
+    if (policy) insertRetrievalPolicy(db, policy);
   });
-
-  return {
-    id,
-    sessionId: opts.sessionId,
-    tenantId: opts.tenantId,
-    goalName: opts.goalName,
-    level: opts.level ?? 0,
-    parentGoalId: opts.parentGoalId,
-    status: 'active',
-    successCondition: opts.successCondition,
-    retrievalPolicyId: policyId ?? undefined,
-    createdAt,
-  };
+  return pushedGoal(id, opts, createdAt, policy?.id);
 }
 
-function assertParentInSession(db: DatabaseSyncLike, opts: PushGoalOpts): void {
-  if (!opts.parentGoalId) return;
-  const parent = cachedStatement(db, `SELECT tenant_id, session_id FROM goal_stack WHERE id = ?`).get(
-    opts.parentGoalId,
-  ) as { tenant_id: string; session_id: string } | undefined;
-  if (!parent) {
-    throw new Error(`parent goal not found: ${opts.parentGoalId}`);
-  }
-  if (parent.tenant_id !== opts.tenantId || parent.session_id !== opts.sessionId) {
-    throw new Error(`parent goal ${opts.parentGoalId} belongs to a different (tenant, session)`);
-  }
+function parentOf(db: DatabaseSyncLike, parentGoalId: string) {
+  const parent = cachedStatement(db, `SELECT tenant_id, session_id FROM goal_stack WHERE id = ?`).get(parentGoalId) as
+    | { tenant_id: string; session_id: string }
+    | undefined;
+  return parent && { tenantId: parent.tenant_id, sessionId: parent.session_id };
 }
 
-/** Insert the policy row, then point goal_stack.retrieval_policy_id at it; returns the new policy id. */
-function insertRetrievalPolicy(
-  db: DatabaseSyncLike,
-  goalId: string,
-  policy: NonNullable<PushGoalOpts['policy']>,
-): string {
-  const policyId = generateId('rp', GOAL_ID_CHARS);
+/** Insert the policy row, then point goal_stack.retrieval_policy_id at it. */
+function insertRetrievalPolicy(db: DatabaseSyncLike, policy: RetrievalPolicy): void {
   cachedStatement(
     db,
     `
@@ -160,16 +134,15 @@ function insertRetrievalPolicy(
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `,
   ).run(
-    policyId,
-    goalId,
+    policy.id,
+    policy.goalId,
     policy.policyType,
-    policy.weightSchemaFit ?? 1.0,
-    policy.weightRecency ?? 1.0,
-    policy.weightOutcome ?? 1.0,
-    policy.errorPriority ?? 1.0,
+    policy.weightSchemaFit,
+    policy.weightRecency,
+    policy.weightOutcome,
+    policy.errorPriority,
   );
-  cachedStatement(db, `UPDATE goal_stack SET retrieval_policy_id = ? WHERE id = ?`).run(policyId, goalId);
-  return policyId;
+  cachedStatement(db, `UPDATE goal_stack SET retrieval_policy_id = ? WHERE id = ?`).run(policy.id, policy.goalId);
 }
 
 /** The active goals and their policies on one handle, so a goal and its policy never disagree. */
@@ -211,7 +184,7 @@ function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<st
   const policiesByGoalId = new Map<string, RetrievalPolicy>();
   const policyIds = [...new Set(active.flatMap((g) => (g.retrievalPolicyId ? [g.retrievalPolicyId] : [])))];
   if (policyIds.length === 0) return policiesByGoalId;
-  // SAFETY: MAX_ACTIVE_GOAL_DEPTH bounds the IN list.
+  // SAFETY: the goal stack's depth cap bounds the IN list.
   const rows = cachedStatement(
     db,
     `
@@ -275,11 +248,6 @@ export function writeGoalRecallLog(db: DatabaseSyncLike, rows: readonly GoalReca
   }
 }
 
-const POSITIVE_OUTCOME_THRESHOLD = 0.7;
-const NEGATIVE_OUTCOME_THRESHOLD = 0.3;
-const STRENGTH_BOOST = 1.1;
-const STRENGTH_DECAY = 0.85;
-
 function completeGoal(db: DatabaseSyncLike, _tenantId: string, goalId: string, opts: CompleteGoalOpts): void {
   const completedAt = new Date().toISOString();
   const score = opts.outcomeScore ?? null;
@@ -304,9 +272,7 @@ function completeGoal(db: DatabaseSyncLike, _tenantId: string, goalId: string, o
     ).run(completedAt, score, goalId);
 
     if (score !== null && !opts.noPropagate) {
-      let multiplier = 1;
-      if (score >= POSITIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_BOOST;
-      else if (score < NEGATIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_DECAY;
+      const multiplier = outcomeMultiplier(score);
 
       if (multiplier !== 1) {
         // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one adjustment

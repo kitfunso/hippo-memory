@@ -1,17 +1,17 @@
-// The in-memory session handoffs: kept as hippo.db's rows, so each reads back through the same row codec.
+// The in-memory session handoffs: kept as SessionHandoffRow, so each reads back through the shared row codec.
 import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import {
   isHandoffOutcome,
   rowToSessionHandoff,
-  type HandoffEvidence,
   type HandoffOutcome,
   type SessionHandoff,
   type SessionHandoffRow,
 } from '../../base/session/handoff.js';
-import type { HandoffFilter, SessionEndHandoffRequest, TaskSnapshot } from '../port/sessions.js';
+import type { HandoffFilter, SessionEndHandoffRequest } from '../port/sessions.js';
 import { isJsonObject, tryParseJson } from '../../base/util/json.js';
 import type { ContinuityKey } from '../port/types.js';
 import { byBytes, newestFirst } from '../rules/order.js';
+import { sessionEndHandoff, sessionEndSource } from '../rules/session-end.js';
 import { nextId } from './rows.js';
 import type { Owned } from './session-tables.js';
 import { keyMatches, loadSnapshotIn, sessionCompletion, stampOf } from './snapshots.js';
@@ -19,9 +19,8 @@ import type { MemoryTables } from './tables.js';
 
 type Handoff = Omit<SessionHandoff, 'updatedAt'>;
 type Stored = Owned<SessionHandoffRow>;
-type HandoffSnapshot = Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep' | 'scope'>;
 
-/** The columns every write of `handoff` sets, as hippo.db's insert and in-place rewrite bind them. */
+/** The columns every write of `handoff` sets, on an insert and an in-place rewrite alike. */
 function columnsOf(handoff: Handoff, now: string): Omit<SessionHandoffRow, 'id' | 'session_id'> {
   return {
     repo_root: handoff.repoRoot ?? null,
@@ -59,7 +58,7 @@ function newestRevisions(t: MemoryTables, tenantId: string, key: ContinuityKey |
   return new Set(newest.values());
 }
 
-/** hippo.db's handoff filter; the scope test runs before the newest is picked, so a denied row never hides another. */
+/** The handoff filter; the scope test runs before the newest is picked, so a denied row never hides another. */
 function handoffMatcher(
   t: MemoryTables,
   tenantId: string,
@@ -112,7 +111,7 @@ export function stampOutcomeIn(t: MemoryTables, tenantId: string, sessionId: str
   return 1;
 }
 
-/** As hippo.db's json_extract: only valid evidence JSON naming the transcript counts. */
+/** Only valid evidence JSON naming the transcript counts as a transcript read. */
 function readFromTranscript(evidence: string | null): boolean {
   if (evidence === null) return false;
   const parsed = tryParseJson(evidence);
@@ -127,69 +126,6 @@ function replaceTranscriptIn(t: MemoryTables, tenantId: string, handoff: Handoff
   return rowToSessionHandoff(newest.row);
 }
 
-// Copied from hippo.db's adapter, where it is not exported: only an earlier transcript read gives way, and a retried
-// session end that reads the same transcript adds no second revision.
-function transcriptSource(
-  existing: SessionHandoff | null,
-  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'> | null,
-  evidence: HandoffEvidence | null,
-): { snapshot: HandoffSnapshot; evidence: HandoffEvidence } | null {
-  if (!derived || (existing && existing.evidence?.derivedFrom !== 'transcript')) return null;
-  const same =
-    existing?.taskId === derived.task &&
-    existing.summary === derived.summary &&
-    existing.nextAction === derived.nextStep;
-  if (existing && same) return null;
-  return { snapshot: { ...derived, scope: null }, evidence: { ...evidence, derivedFrom: 'transcript' } };
-}
-
-// A same-task refresh carries forward the envelope fields nobody cleared; a scope mismatch carries none.
-function sessionEndHandoff(
-  sessionId: string,
-  snapshot: HandoffSnapshot,
-  existing: SessionHandoff | null,
-  evidence: HandoffEvidence | null,
-  outcome: HandoffOutcome | null,
-): Handoff {
-  const carry =
-    existing != null && existing.taskId === snapshot.task && (existing.scope ?? null) === (snapshot.scope ?? null);
-  return {
-    version: 1,
-    sessionId,
-    repoRoot: carry ? existing.repoRoot : undefined,
-    taskId: snapshot.task,
-    summary: snapshot.summary,
-    nextAction: snapshot.nextStep,
-    artifacts: carry ? existing.artifacts : [],
-    scope: snapshot.scope,
-    evidence,
-    outcome,
-    constraints: carry ? existing.constraints : undefined,
-    targetRuntime: carry ? existing.targetRuntime : undefined,
-    cardId: carry ? existing.cardId : undefined,
-  };
-}
-
-/** The snapshot and evidence a session end writes from, or null when a newer handoff already covers it. */
-function sessionEndSource(
-  t: MemoryTables,
-  tenantId: string,
-  request: Omit<SessionEndHandoffRequest, 'tenantId'>,
-  existing: SessionHandoff | null,
-) {
-  const { sessionId, evidence, derived = null, key, inPlace } = request;
-  const active = loadSnapshotIn(t, tenantId, key);
-  // After every reply the transcript is newer than the last compaction's snapshot.
-  const snapshotGivesWay = inPlace === true && derived !== null && active?.source === 'pre-compact';
-  if (active && active.sessionId === sessionId && !snapshotGivesWay) {
-    // Strict '>': a same-millisecond tie must not swallow the session's only write.
-    if (existing && existing.updatedAt > active.updatedAt) return null;
-    return { snapshot: active, evidence, fromTranscript: false };
-  }
-  const fromDerived = transcriptSource(existing, derived, evidence);
-  return fromDerived && { ...fromDerived, fromTranscript: true };
-}
-
 export function writeSessionEndIn(
   t: MemoryTables,
   tenantId: string,
@@ -198,11 +134,10 @@ export function writeSessionEndIn(
   const { sessionId, key = null, inPlace } = request;
   if (key) stampOf(key);
   const existing = latestHandoffIn(t, tenantId, sessionId, {}, key);
-  const source = sessionEndSource(t, tenantId, request, existing);
+  const source = sessionEndSource(loadSnapshotIn(t, tenantId, key), existing, request);
   if (!source) return null;
   const done = sessionCompletion(t, tenantId, sessionId);
-  const outcome = isHandoffOutcome(done) ? done : null;
-  const handoff = sessionEndHandoff(sessionId, source.snapshot, existing, source.evidence, outcome);
+  const handoff = sessionEndHandoff(sessionId, source, existing, isHandoffOutcome(done) ? done : null);
   // A miss means a handoff landed since the read, and a new transcript row would hide it.
   if (source.fromTranscript && inPlace && existing) return replaceTranscriptIn(t, tenantId, handoff, key);
   return saveHandoffIn(t, tenantId, handoff, key);

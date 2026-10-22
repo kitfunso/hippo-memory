@@ -4,17 +4,16 @@ import {
   type SessionHandoffRow,
   rowToSessionHandoff,
   type HandoffOutcome,
-  type HandoffEvidence,
   isHandoffOutcome,
 } from '../../base/session/handoff.js';
 import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import type { TaskSnapshot } from '../port/sessions.js';
 import type { StoreFiles } from './open.js';
 import { continuityWhere, loadActiveTaskSnapshot } from './task-snapshots.js';
 import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../port/types.js';
 import type { HandoffFilter, SessionEndHandoffRequest } from '../port/sessions.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { sessionEndHandoff, sessionEndSource } from '../rules/session-end.js';
 
 /** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card handoff lookup. */
 export const HANDOFF_COLUMNS =
@@ -231,59 +230,6 @@ function replaceTranscriptHandoff(
   return row ? rowToSessionHandoff(row) : null;
 }
 
-interface HandoffSource {
-  snapshot: Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep' | 'scope'>;
-  evidence: HandoffEvidence | null;
-}
-
-function transcriptHandoffSource(
-  existing: SessionHandoff | null,
-  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'> | null,
-  evidence: HandoffEvidence | null,
-): HandoffSource | null {
-  // Only an earlier transcript read gives way; `hippo handoff create` and unmarked older handoffs keep winning.
-  if (!derived || (existing && existing.evidence?.derivedFrom !== 'transcript')) return null;
-  // A retried session end reads the same transcript, so it must not add a second revision.
-  if (
-    existing &&
-    existing.taskId === derived.task &&
-    existing.summary === derived.summary &&
-    existing.nextAction === derived.nextStep
-  ) {
-    return null;
-  }
-  return { snapshot: { ...derived, scope: null }, evidence: { ...evidence, derivedFrom: 'transcript' } };
-}
-
-function buildSessionEndHandoff(
-  sessionId: string,
-  snapshot: HandoffSource['snapshot'],
-  existing: SessionHandoff | null,
-  handoffEvidence: HandoffEvidence | null,
-  outcome: HandoffOutcome | null,
-): Omit<SessionHandoff, 'updatedAt'> {
-  // A same-task refresh carries forward envelope fields nobody cleared; a scope mismatch must not leak private metadata
-  // into an unscoped envelope.
-  const carryForward =
-    existing != null && existing.taskId === snapshot.task && (existing.scope ?? null) === (snapshot.scope ?? null);
-
-  return {
-    version: 1,
-    sessionId,
-    repoRoot: carryForward ? existing.repoRoot : undefined,
-    taskId: snapshot.task,
-    summary: snapshot.summary,
-    nextAction: snapshot.nextStep,
-    artifacts: carryForward ? existing.artifacts : [],
-    scope: snapshot.scope,
-    evidence: handoffEvidence,
-    outcome,
-    constraints: carryForward ? existing.constraints : undefined,
-    targetRuntime: carryForward ? existing.targetRuntime : undefined,
-    cardId: carryForward ? existing.cardId : undefined,
-  };
-}
-
 /** Session-end handoff from the active snapshot, else `derived` transcript state; `inPlace` rewrites an earlier
  * transcript read instead of adding a revision. Returns null when no source is the session's, a newer handoff covers
  * it, or the latest one is not transcript-derived or already holds `derived`. */
@@ -293,32 +239,16 @@ export function writeSessionEndHandoff(
   tenantId: string,
   request: Omit<SessionEndHandoffRequest, 'tenantId'>,
 ): SessionHandoff | null {
-  const { sessionId, evidence, derived = null, key, inPlace } = request;
+  const { sessionId, key, inPlace } = request;
   assertTenantId('writeSessionEndHandoff', tenantId);
   if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than write nothing
   const active = loadActiveTaskSnapshot(db, files, tenantId, key);
   const existing = loadLatestHandoff(db, tenantId, sessionId, {}, key);
-  let snapshot: Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep' | 'scope'>;
-  let handoffEvidence = evidence;
-  let fromTranscript = false;
-  // After every reply the transcript is newer than the last compaction's snapshot, which the open chat keeps for the
-  // next one.
-  const snapshotGivesWay = inPlace === true && derived !== null && active?.source === 'pre-compact';
-  if (active && active.sessionId === sessionId && !snapshotGivesWay) {
-    // Strict '>': a same-millisecond tie must not swallow the session's only write (test 6e).
-    if (existing && existing.updatedAt > active.updatedAt) return null;
-    snapshot = active;
-  } else {
-    const fromDerived = transcriptHandoffSource(existing, derived, evidence);
-    if (!fromDerived) return null;
-    snapshot = fromDerived.snapshot;
-    handoffEvidence = fromDerived.evidence;
-    fromTranscript = true;
-  }
-  const outcome = sessionOutcome(db, tenantId, sessionId);
-  const handoff = buildSessionEndHandoff(sessionId, snapshot, existing, handoffEvidence, outcome);
+  const source = sessionEndSource(active, existing, request);
+  if (!source) return null;
+  const handoff = sessionEndHandoff(sessionId, source, existing, sessionOutcome(db, tenantId, sessionId));
   // A miss means a handoff landed since the read, and a new transcript row would hide it.
-  if (fromTranscript && inPlace && existing) return replaceTranscriptHandoff(db, tenantId, handoff, key);
+  if (source.fromTranscript && inPlace && existing) return replaceTranscriptHandoff(db, tenantId, handoff, key);
   return saveSessionHandoff(db, tenantId, handoff, key);
 }
 

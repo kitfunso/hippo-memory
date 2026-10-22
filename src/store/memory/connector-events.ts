@@ -116,7 +116,7 @@ function routingOn(t: MemoryTables): Routing {
     async githubRouting({ installationId, repoFullName }) {
       const counts = { installations: t.githubInstallations.size, repositories: t.githubRepositories.length };
       if (installationId) return { ...counts, tenant: t.githubInstallations.get(installationId) ?? null };
-      // The rows are held oldest first, then by tenant, so the first match is the one hippo.db answers.
+      // The rows are held oldest first, then by tenant, so a repo two tenants installed routes to the first.
       const match = repoFullName ? t.githubRepositories.find((row) => row.repoFullName === repoFullName) : undefined;
       return { ...counts, tenant: match?.tenantId || null };
     },

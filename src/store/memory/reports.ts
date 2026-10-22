@@ -1,14 +1,9 @@
 // The in-memory Reports group: the tallies, listings and usage totals the status verbs print.
-import {
-  calculateStrength,
-  confidenceFacets,
-  Layer,
-  type LossAversion,
-  type MemoryEntry,
-} from '../../base/memory/memory.js';
+import { calculateStrength, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
 import { keysetPage } from '../../base/util/keyset.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { DAY_MS } from '../../base/util/time.js';
+import { CONSOLIDATION_RUNS_KEPT } from '../../db/tables.js';
 import type {
   Reports,
   CorrectionLink,
@@ -23,13 +18,12 @@ import type { EntryCursor, EntryPage } from '../port/types.js';
 import { openConflictsIn } from './conflicts.js';
 import { failureSummary } from './failure-log.js';
 import { byBytes, oldestFirst } from '../rules/order.js';
+import { tallyStatus } from '../rules/status-tally.js';
 import { counter } from './rows.js';
 import type { MemoryTables } from './tables.js';
 import { tokenUseIn } from './token-ledger.js';
 
-const CONSOLIDATION_RUNS_KEPT = 50;
-
-/** Every tenant's rows in hippo.db's report order, so a float sum adds up in the same order. */
+/** Every tenant's rows oldest first, the report order, so a float sum adds up the same under either store. */
 const inStoreOrder = (t: MemoryTables): MemoryEntry[] => [...t.entries.values()].sort(oldestFirst);
 
 function strengthTallies(t: MemoryTables, rules: LossAversion, tenantId: string, now: Date, line: number) {
@@ -47,31 +41,9 @@ function strengthTallies(t: MemoryTables, rules: LossAversion, tenantId: string,
 }
 
 function statusCounts(t: MemoryTables, rules: LossAversion, now: Date, line: number): StatusCounts {
-  const byLayer = { [Layer.Buffer]: 0, [Layer.Episodic]: 0, [Layer.Semantic]: 0, [Layer.Trace]: 0 };
-  const byConfidence = { verified: 0, observed: 0, inferred: 0, stale: 0 };
-  const sums = { total: 0, strength: 0, pinned: 0, atRisk: 0, agedOut: 0 };
-  for (const entry of inStoreOrder(t)) {
-    const strength = calculateStrength(entry, now, rules);
-    const facets = confidenceFacets(entry, now);
-    sums.total += 1;
-    sums.strength += strength;
-    byLayer[entry.layer] += 1;
-    byConfidence[facets.tier] += 1;
-    if (entry.pinned) sums.pinned += 1;
-    if (strength < line) sums.atRisk += 1;
-    if (facets.agedOut) sums.agedOut += 1;
-  }
-  const { total, pinned, atRisk, agedOut } = sums;
   const embedded = [...t.vectors.keys()].filter((id) => t.entries.has(id)).length;
-  const avgStrength = total > 0 ? sums.strength / total : 0;
   return {
-    total,
-    byLayer,
-    byConfidence,
-    pinned,
-    atRisk,
-    agedOut,
-    avgStrength,
+    ...tallyStatus(inStoreOrder(t), now, line, rules),
     openConflicts: openConflictsIn(t, ALL_TENANTS),
     embedded,
   };

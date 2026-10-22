@@ -1,8 +1,8 @@
 // The in-memory FailureLog group, and the failure totals the Reports group reads from the same rows.
-import { ConflictError } from '../../base/errors/api-errors.js';
 import type { FailureEvent, FailureLog, FailureSummary } from '../port/rejections.js';
 import { failureRow, failureTotals, RATED_OUTCOMES, retentionCutoff, sameStoredSession } from '../rules/failure-log.js';
 import { byBytes } from '../rules/order.js';
+import { otherSessionsRequest } from '../rules/request-ids.js';
 import { nextId } from './rows.js';
 import type { LoggedFailure, MemoryTables } from './tables.js';
 
@@ -25,9 +25,7 @@ function recordIn(t: MemoryTables, event: FailureEvent): number {
 function requestOutcomeIn(t: MemoryTables, tenantId: string, requestId: string, sessionId: string) {
   const row = byRequest(t, tenantId, requestId);
   if (row === undefined) return null;
-  if (!sameStoredSession(row.sessionId, sessionId)) {
-    throw new ConflictError('request id belongs to another session');
-  }
+  if (!sameStoredSession(row.sessionId, sessionId)) throw otherSessionsRequest();
   return row.outcome;
 }
 

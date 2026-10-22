@@ -12,6 +12,7 @@ import { insertDormantRow } from './dormant-rows.js';
 import { log } from '../../base/util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
+import { refusalAudit } from '../rules/audit-rows.js';
 import { deleteFtsRow, replaceFtsRows, stampOriginProject, upsertMemoryRow } from './entry-row.js';
 import { purgeMirrorBestEffort, writeMarkdownMirrors } from './mirrors.js';
 import type { StoreFiles } from './open.js';
@@ -535,12 +536,8 @@ function refusedWrites(db: DatabaseSyncLike, planned: readonly PlannedWrite[]): 
 }
 
 function auditRefusal(db: DatabaseSyncLike, row: MemoryEntry, tombstone: RejectedValueRow): void {
-  audit(db, 'reject_refusal', {
-    targetId: row.id,
-    metadata: { digest: tombstone.digest, reason: tombstone.reason },
-    actor: 'sleep-batch',
-    tenantId: tombstone.tenantId,
-  });
+  const refused = refusalAudit(tombstone.tenantId, 'sleep-batch', row.id, tombstone);
+  audit(db, refused.op, refused);
 }
 
 /** Lands one batch row with its full-text and dirty-parent bookkeeping. */

@@ -24,7 +24,7 @@ function backedAmong(t: MemoryTables, ids: readonly string[]): Set<string> {
   return new Set(named.flatMap((row) => (row.memoryId !== null && wanted.has(row.memoryId) ? [row.memoryId] : [])));
 }
 
-/** hippo.db's automatic-delete guard: a pinned, raw, kept or object-backing row stays. */
+/** The automatic-delete guard: a pinned, raw, kept or object-backing row stays. */
 function deletesAutomatically(t: MemoryTables, tx: Tx, id: string, actor: string, reason?: string): MemoryEntry | null {
   const row = tx.rows.get(id);
   if (!row || !canAutoDelete(row) || backedAmong(t, [id]).has(id)) return null;
@@ -98,7 +98,7 @@ function applyIssues(t: MemoryTables, issues: readonly QualityRepairIssue[], rul
   return { appliedIds, warnings };
 }
 
-// No hippo.db file, so no schema version and no backup file; a moved row comes back through dormant restore.
+// A store with no file has no schema version and no backup file; a moved row comes back through dormant restore.
 function repairIn(t: MemoryTables, tenantId: string, apply: boolean, protect: RepairProtection, rules: LossAversion) {
   const { total, issues } = planIssues(t, tenantId, protect);
   const applied = apply ? applyIssues(t, issues, rules) : { appliedIds: [], warnings: [] };

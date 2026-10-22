@@ -12,33 +12,21 @@ import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave, Objects } from '../port/objects.js';
 import type { PoliciesInForceQuery } from '../port/objects.js';
 import type { AppendAuditOpts } from '../port/types.js';
-import { closeOp, createOp, filterValue, ID_KEY, saveRules, supersedeOp } from './object-rules.js';
+import { filterValue, rowOf } from './object-rules.js';
+import {
+  closeAudit,
+  createAudit,
+  incidentOpenAudit,
+  isVersioned,
+  objectTable,
+  supersedeAudit,
+} from '../rules/objects.js';
 import { byBytes, type DescendingKeyset, isBelow, newestFirst } from '../rules/order.js';
-import { appendAudit, asciiFolded, nextId, peekId } from './rows.js';
+import { appendAudit, asciiFolded, nextId, ownedRow, peekId } from './rows.js';
 import { put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
 const tableOf = <K extends ObjectKind>(t: MemoryTables, kind: K): Map<number, ObjectByKind[K]> => t.objects[kind];
-/** Each kind's hippo.db table, whose AUTOINCREMENT sequence its ids follow. */
-const TABLE_OF = {
-  decision: 'decisions',
-  incident: 'incidents',
-  process: 'processes',
-  policy: 'policies',
-  skill: 'skills',
-  project_brief: 'project_briefs',
-  customer_note: 'customer_notes',
-} as const satisfies Record<ObjectKind, string>;
-
-function owned<K extends ObjectKind>(
-  t: MemoryTables,
-  kind: K,
-  tenantId: string,
-  id: number,
-): ObjectByKind[K] | undefined {
-  const row = tableOf(t, kind).get(id);
-  return row?.tenantId === tenantId ? row : undefined;
-}
 
 /** Drops a staged incident whose linked id is no memory of the tenant. */
 class Unlinked extends Error {
@@ -73,30 +61,27 @@ interface SaveSlot {
 
 /** The supersede row (when a row is replaced) and the create row, in that order. */
 function saveEvents<K extends SavableKind>(kind: K, save: ObjectSave<K>, slot: SaveSlot): AppendAuditOpts[] {
-  const rules = saveRules(kind);
   const { tenantId, id, version, replaced } = slot;
-  const events: AppendAuditOpts[] = [];
-  if (replaced !== undefined) {
-    const own = { [ID_KEY[kind]]: replaced, superseded_by: id };
-    if (rules.versionOf) own.new_version = version;
-    const metadata = { ...own, ...rules.supersedeKeys?.(save.fields) };
-    events.push({ tenantId, actor: save.actor, op: supersedeOp(kind), targetId: String(replaced), metadata });
-  }
-  const metadata = { [ID_KEY[kind]]: id, ...rules.createKeys(save.fields, version) };
-  events.push({ tenantId, actor: save.actor, op: createOp(kind), targetId: String(id), metadata });
-  return events;
+  const audits = [
+    ...(replaced === undefined ? [] : [supersedeAudit(kind, replaced, id, version, save.fields)]),
+    createAudit(kind, id, save.fields, version),
+  ];
+  return audits.map((audit) => ({ tenantId, actor: save.actor, ...audit }));
 }
 
+const versionOf = (row: ObjectByKind[SavableKind]): number => ('version' in row ? row.version : 0);
+
 function saveIn<K extends SavableKind>(t: MemoryTables, tenantId: string, kind: K, save: ObjectSave<K>) {
-  const rules = saveRules(kind);
   const table = tableOf(t, kind);
-  const replaced = save.supersedesId === undefined ? undefined : owned(t, kind, tenantId, save.supersedesId);
+  const replaced =
+    save.supersedesId === undefined ? undefined : ownedRow(tableOf(t, kind), tenantId, save.supersedesId);
   if (save.supersedesId !== undefined && !replaced) return { refused: 'missing' } as const;
   if (replaced && replaced.status !== 'active') return { refused: 'status', status: replaced.status } as const;
-  const id = peekId(t, TABLE_OF[kind]);
-  const version = replaced && rules.versionOf ? rules.versionOf(replaced) + 1 : 1;
-  const changeSummary = replaced && rules.versionOf ? (save.changeSummary ?? null) : null;
-  const row = rules.row(save.fields, {
+  const id = peekId(t, objectTable(kind));
+  const successor = replaced !== undefined && isVersioned(kind);
+  const version = successor ? versionOf(replaced) + 1 : 1;
+  const changeSummary = successor ? (save.changeSummary ?? null) : null;
+  const row = rowOf(kind)(save.fields, {
     id,
     memoryId: save.mirror.id,
     tenantId,
@@ -112,7 +97,7 @@ function saveIn<K extends SavableKind>(t: MemoryTables, tenantId: string, kind: 
     if (replaced) {
       table.set(replaced.id, { ...replaced, status: 'superseded', supersededBy: id, supersededAt: save.at });
     }
-    table.set(nextId(t, TABLE_OF[kind]), row);
+    table.set(nextId(t, objectTable(kind)), row);
     return structuredClone(row);
   });
 }
@@ -125,7 +110,7 @@ function openIn(t: MemoryTables, tenantId: string, open: IncidentOpen): Incident
       put(t, tx, mirror, open.actor);
       const unlinked = fields.linkedMemoryIds.find((linkId) => tx.rows.get(linkId)?.tenantId !== tenantId);
       if (unlinked !== undefined) throw new Unlinked(unlinked);
-      const id = peekId(t, TABLE_OF.incident);
+      const id = peekId(t, objectTable('incident'));
       const row: Incident = {
         id,
         memoryId: mirror.id,
@@ -139,10 +124,8 @@ function openIn(t: MemoryTables, tenantId: string, open: IncidentOpen): Incident
         linkedMemoryIds: [...fields.linkedMemoryIds],
         createdAt: open.at,
       };
-      const count = fields.linkedMemoryIds.length;
-      const metadata = { incident_id: id, has_context: Boolean(fields.context), linked_memory_count: count };
-      tx.audit.splice(at, 0, { tenantId, actor: open.actor, op: 'incident_open', targetId: String(id), metadata });
-      t.objects.incident.set(nextId(t, TABLE_OF.incident), row);
+      tx.audit.splice(at, 0, { tenantId, actor: open.actor, ...incidentOpenAudit(id, fields) });
+      t.objects.incident.set(nextId(t, objectTable('incident')), row);
       return structuredClone(row);
     });
   } catch (err) {
@@ -158,12 +141,11 @@ function closeIn<K extends ObjectKind>(
   id: number,
   close: { from: readonly ObjectByKind[K]['status'][]; actor: string; at: string },
 ): ObjectByKind[K] | ObjectRefusal {
-  const row = owned(t, kind, tenantId, id);
+  const row = ownedRow(tableOf(t, kind), tenantId, id);
   if (!row) return { refused: 'missing' };
   if (!close.from.includes(row.status)) return { refused: 'status', status: row.status };
   const closed = { ...row, status: 'closed', closedAt: close.at };
-  const metadata = { [ID_KEY[kind]]: id };
-  appendAudit(t, [{ tenantId, actor: close.actor, op: closeOp(kind), targetId: String(id), metadata }]);
+  appendAudit(t, [{ tenantId, actor: close.actor, ...closeAudit(kind, id) }]);
   tableOf(t, kind).set(id, closed);
   return structuredClone(closed);
 }
@@ -205,7 +187,7 @@ function resolveIn(
   id: number,
   resolve: { text: string; actor: string; at: string },
 ) {
-  const row = owned(t, 'incident', tenantId, id);
+  const row = ownedRow(tableOf(t, 'incident'), tenantId, id);
   if (!row) return { refused: 'missing' } as const;
   if (row.status !== 'open') return { refused: 'status', status: row.status } as const;
   const resolved: Incident = { ...row, status: 'resolved', resolutionText: resolve.text, resolvedAt: resolve.at };
@@ -218,7 +200,7 @@ function resolveIn(
 export function memoryObjects(t: MemoryTables): Objects {
   return {
     listObjects: async (tenantId, kind, query) => listIn(t, tenantId, kind, query),
-    objectById: async (tenantId, kind, id) => structuredClone(owned(t, kind, tenantId, id) ?? null),
+    objectById: async (tenantId, kind, id) => structuredClone(ownedRow(tableOf(t, kind), tenantId, id) ?? null),
     closeObject: async (tenantId, kind, id, close) => closeIn(t, tenantId, kind, id, close),
     saveObject: async (tenantId, kind, save) => saveIn(t, tenantId, kind, save),
     openIncident: async (tenantId, open) => openIn(t, tenantId, open),

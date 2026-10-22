@@ -1,5 +1,5 @@
 // ln(x) rounded to the nearest double. V8's Math.log can land one unit in the last place off where the C library under
-// hippo.db's FTS5 does not, and bm25() scores are compared exactly, so this works in double-double precision.
+// SQLite's FTS5 does not, and bm25() scores are compared exactly, so this works in double-double precision.
 
 /** A value as an unevaluated sum hi + lo, with |lo| at most half a unit in the last place of hi. */
 type Pair = readonly [number, number];
