@@ -1,5 +1,5 @@
-// The in-memory recall candidates: hippo.db's three tiers, whole-word matches, then part-word matches among the newest
-// rows, then every admitted row, over the same admission rule its SQL applies.
+// The in-memory recall candidates in three tiers: whole-word matches, then part-word matches among the newest rows,
+// then every admitted row, all under the shared admission rule.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { recallScopeFilter } from '../../base/scope/recall-scope.js';
 import { tokenize } from '../../base/util/tokenize.js';
@@ -11,10 +11,10 @@ import { admitsCandidate } from './vectors.js';
 import { ftsMatches } from '../rules/fts.js';
 import { LIKE_WINDOW_ROWS } from '../rules/windows.js';
 
-/** memories.updated_at, which both match tiers order by before created; '' sorts as hippo.db's NULL does, last. */
+/** memories.updated_at, which both match tiers order by before created; '' sorts last, as a NULL does. */
 const updatedOf = (t: MemoryTables, entry: MemoryEntry): string => t.updatedAt.get(entry.id) ?? '';
 
-/** Newest updated_at first, then newest created, then content and id: hippo.db's LIKE tier order. */
+/** Newest updated_at first, then newest created, then content and id: the part-word tier's order. */
 const newestFirst =
   (t: MemoryTables) =>
   (a: MemoryEntry, b: MemoryEntry): number =>
@@ -23,7 +23,7 @@ const newestFirst =
     byBytes(a.content, b.content) ||
     byBytes(a.id, b.id);
 
-/** As hippo.db's FTS join: best bm25 first, then updated_at newest first, content and id; each row keeps its score. */
+/** The whole-word tier: best bm25 first, then updated_at newest first, content and id; each row keeps its score. */
 function wholeWordMatches(t: MemoryTables, admitted: readonly MemoryEntry[], terms: readonly string[], limit: number) {
   const byUpdated = (a: MemoryEntry, b: MemoryEntry): number => byBytes(updatedOf(t, b), updatedOf(t, a));
   const matches = ftsMatches(t.entries.values(), admitted, terms).sort(
@@ -36,7 +36,7 @@ function wholeWordMatches(t: MemoryTables, admitted: readonly MemoryEntry[], ter
   return matches.slice(0, limit).map(({ entry, bm25 }): MemoryEntry => ({ ...entry, bm25Score: bm25 }));
 }
 
-/** Substrings of the content or tags JSON among the newest admitted rows, as hippo.db's LIKE window reads them. */
+/** Substrings of the content or tags JSON among the newest admitted rows: the part-word tier's window. */
 function partWordMatches(t: MemoryTables, admitted: readonly MemoryEntry[], terms: readonly string[], limit: number) {
   // Newest by created, as the tenant's index reads them; a tie goes to the row written last, as its rowid does.
   const window = [...admitted].reverse().sort((a, b) => byBytes(b.created, a.created));

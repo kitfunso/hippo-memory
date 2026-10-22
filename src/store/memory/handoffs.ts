@@ -1,4 +1,4 @@
-// The in-memory session handoffs: kept as hippo.db's rows, so each reads back through the same row codec.
+// The in-memory session handoffs: kept as SessionHandoffRow, so each reads back through the shared row codec.
 import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import {
   isHandoffOutcome,
@@ -20,7 +20,7 @@ import type { MemoryTables } from './tables.js';
 type Handoff = Omit<SessionHandoff, 'updatedAt'>;
 type Stored = Owned<SessionHandoffRow>;
 
-/** The columns every write of `handoff` sets, as hippo.db's insert and in-place rewrite bind them. */
+/** The columns every write of `handoff` sets, on an insert and an in-place rewrite alike. */
 function columnsOf(handoff: Handoff, now: string): Omit<SessionHandoffRow, 'id' | 'session_id'> {
   return {
     repo_root: handoff.repoRoot ?? null,
@@ -58,7 +58,7 @@ function newestRevisions(t: MemoryTables, tenantId: string, key: ContinuityKey |
   return new Set(newest.values());
 }
 
-/** hippo.db's handoff filter; the scope test runs before the newest is picked, so a denied row never hides another. */
+/** The handoff filter; the scope test runs before the newest is picked, so a denied row never hides another. */
 function handoffMatcher(
   t: MemoryTables,
   tenantId: string,
@@ -111,7 +111,7 @@ export function stampOutcomeIn(t: MemoryTables, tenantId: string, sessionId: str
   return 1;
 }
 
-/** As hippo.db's json_extract: only valid evidence JSON naming the transcript counts. */
+/** Only valid evidence JSON naming the transcript counts as a transcript read. */
 function readFromTranscript(evidence: string | null): boolean {
   if (evidence === null) return false;
   const parsed = tryParseJson(evidence);

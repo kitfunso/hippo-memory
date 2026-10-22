@@ -72,7 +72,7 @@ function summarize(t: MemoryTables, tenantId: string, req: CallerItems): Compact
   return record;
 }
 
-/** One item through the restatement match and the write gate, as hippo.db runs it inside its transaction. */
+/** One item through the restatement match and the write gate, inside the batch's one staged write. */
 function writeItem({ t, tx, held, tally }: Batch, entry: MemoryEntry, actor: string): void {
   const words = itemWords(entry.content);
   const match = held.find((h) => restates(words, h.words));

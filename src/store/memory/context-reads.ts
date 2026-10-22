@@ -1,5 +1,5 @@
-// The in-memory ContextReads group: contextGet's fallback handoff, candidate rows and ambient tallies, read with the
-// same windows and order hippo.db's SQL reads them in.
+// The in-memory ContextReads group: contextGet's fallback handoff, candidate rows and ambient tallies, each read in
+// the windows and order the port fixes, so both stores pick the same rows.
 import { tallyAmbientEntries } from '../../base/memory/ambient.js';
 import { sortableStamp } from '../../base/memory/created-stamp.js';
 import { computeSchemaFit, type MemoryEntry } from '../../base/memory/memory.js';
@@ -95,7 +95,7 @@ const inOrigins = (e: MemoryEntry, origins: RecentOrigins): boolean => {
   return origin === '' ? origins.userGlobal : origin !== null && origins.names.includes(origin);
 };
 
-/** The recent rows hippo.db reads: a window, then the caller's own projects' window, then keyset pages past it. */
+/** The recent rows: a window, then the caller's own projects' window, then keyset pages past it. */
 function recentRows(
   rows: readonly MemoryEntry[],
   needed: number,
@@ -149,7 +149,7 @@ function ambientIn(t: MemoryTables, tenantId: string, request: AmbientCandidateR
   const byId = new Map<string, MemoryEntry>();
   for (const e of rows.filter((r) => r.pinned).sort(oldestFirst)) if (admit(e)) byId.set(e.id, e);
   if (needed > 0) for (const e of recentRows(rows, needed, admit, request.origins)) byId.set(e.id, e);
-  // hippo.db sorts these in JavaScript with localeCompare, so this does too.
+  // The read's order: created, then id, each by localeCompare.
   const entries = structuredClone(
     [...byId.values()].sort((a, b) => a.created.localeCompare(b.created) || a.id.localeCompare(b.id)),
   );
@@ -162,7 +162,7 @@ function ambientIn(t: MemoryTables, tenantId: string, request: AmbientCandidateR
   return { entries, recall: found, refused };
 }
 
-/** The tenant's `limit` newest rows, oldest first; a negative limit is no limit, as hippo.db's LIMIT reads it. */
+/** The tenant's `limit` newest rows, oldest first; a negative limit is no limit, as SQL's LIMIT reads it. */
 function newestIn(t: MemoryTables, tenantId: string, limit: number): MemoryEntry[] {
   const newest = [...t.entries.values()].filter((e) => e.tenantId === tenantId).sort(newestFirst(BY_CREATED));
   return structuredClone((limit < 0 ? newest : newest.slice(0, limit)).reverse());

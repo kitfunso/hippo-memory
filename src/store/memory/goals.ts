@@ -54,7 +54,7 @@ function propagateOutcome(t: MemoryTables, goal: Goal, completedAt: string, scor
   }
 }
 
-// Goal ids are not tenant-scoped in hippo.db, so complete, suspend and resume ignore the tenant there and here.
+// Goal ids are not tenant-scoped, so complete, suspend and resume ignore the tenant.
 function completeIn(t: MemoryTables, goalId: string, opts: CompleteGoalOpts): void {
   const goal = t.goals.find((g) => g.id === goalId);
   if (!goal || goal.status === 'completed') return;

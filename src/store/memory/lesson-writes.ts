@@ -12,8 +12,8 @@ import { bumpCounter } from './rows.js';
 import { put, refusalEvent, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
-/** As hippo.db's batches: a row one of a batch's phrases hits that holds one of its words as a case-sensitive
- * substring; a word with no phrase is the substring test alone. */
+/** A row one of a batch's phrases hits that holds one of its words as a case-sensitive substring; a word with no
+ * phrase is the substring test alone. */
 function holdsBatch(entry: MemoryEntry, batch: readonly string[], phrased: boolean): boolean {
   const hit = !phrased || batch.some((word) => contentHoldsPhrase(entry, openingPhrase(word)!));
   return hit && batch.some((word) => entry.content.includes(word));

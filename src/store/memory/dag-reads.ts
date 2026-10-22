@@ -1,4 +1,4 @@
-// The in-memory DagReads group: a session's raw rows and a summary's descendants, with hippo.db's admission rules.
+// The in-memory DagReads group: a session's raw rows and a summary's descendants, under the recall admission rules.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import { descendantAdmits } from '../../base/scope/read-admission.js';

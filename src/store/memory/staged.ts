@@ -1,5 +1,5 @@
 // A staged write on the memories: a copy of the rows and the audit rows to append, committed together only when the
-// write returns, as one hippo.db transaction would be; with the rules every memory write applies to a row it puts.
+// write returns, so a write lands whole or not at all; with the rules every memory write applies to a row it puts.
 import {
   BadRequestError,
   CrossTenantIdError,
@@ -27,7 +27,7 @@ export interface Tx {
 export const refusalEvent = (err: RejectedValueError, actor: string): AppendAuditOpts =>
   refusalAudit(err.tenantId, actor, err.entryId, err);
 
-/** A row with the columns hippo.db's UPDATEs set without stamping updated_at blanked, so other changes show. */
+/** A row with the columns an update sets without stamping updated_at blanked, so other changes show. */
 const stampedColumns = (e: MemoryEntry): string =>
   JSON.stringify({
     ...e,
@@ -42,8 +42,8 @@ const stampedColumns = (e: MemoryEntry): string =>
     summaryDirty: false,
   });
 
-/** Stamps updated_at on each new row and each rewritten one, as an upsert does; an UPDATE of only the blanked
- * columns leaves it, as hippo.db's do. */
+/** Stamps updated_at on each new row and each rewritten one, as an upsert does; an update of only the blanked
+ * columns leaves it. */
 function stampUpdates(t: MemoryTables, next: ReadonlyMap<string, MemoryEntry>): void {
   const now = hippoDbNow();
   for (const [id, row] of next) {
@@ -76,7 +76,7 @@ export function stage<T>(t: MemoryTables, actor: string, fn: (tx: Tx) => T): T {
   return result;
 }
 
-/** As hippo.db: a level 2 or 3 summary of the same tenant, live and clean, flips to dirty with one audit row. */
+/** A level 2 or 3 summary of the same tenant, live and clean, flips to dirty with one audit row. */
 export function markParentDirty(tx: Tx, parentId: string, tenantId: string, actor: string): void {
   const parent = tx.rows.get(parentId);
   if (!parent || parent.tenantId !== tenantId || (parent.dagLevel !== 2 && parent.dagLevel !== 3)) return;

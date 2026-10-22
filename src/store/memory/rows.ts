@@ -1,5 +1,5 @@
-// What every in-memory group shares: hippo.db's case folding, the id sequences, the audit append and the
-// store-wide counters.
+// What every in-memory group shares: ASCII case folding, the id sequences, the tenant-owned lookup, the audit
+// append and the store-wide counters.
 import type { JsonObject, JsonValue } from '../../base/util/json.js';
 import { parseStoredObject, type StoredJsonSite } from '../../base/util/stored-json.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
@@ -7,16 +7,16 @@ import type { AppendAuditOpts, AuditEvent } from '../port/types.js';
 import { byIdOrder } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 
-/** A key unique within a tenant, as hippo.db's (tenant_id, x) primary keys are. */
+/** A key unique within a tenant; the NUL between the parts appears in no tenant id. */
 export const tenantKey = (tenantId: string, key: string): string => `${tenantId}\u0000${key}`;
 
-/** hippo.db's LOWER and LIKE fold ASCII letters only. */
+/** The store's LOWER and LIKE fold ASCII letters only. */
 export const asciiFolded = (text: string): string => text.replace(/[A-Z]/g, (c) => c.toLowerCase());
 
-/** datetime('now') as hippo.db writes it: UTC to the second, a space before the time. */
+/** A stamp in SQL datetime('now') form: UTC to the second, a space before the time. */
 export const hippoDbNow = (): string => new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-/** The id the next row of hippo.db table `table` gets, which is AUTOINCREMENT there; a rolled-back write takes none. */
+/** The id the next row of `table` gets; ids only grow, and a rolled-back write takes none. */
 export const peekId = (t: MemoryTables, table: string): number => (t.seq.get(table) ?? 0) + 1;
 
 /** Takes the next id of `table`. */
@@ -28,10 +28,10 @@ export function nextId(t: MemoryTables, table: string): number {
 
 type JsonOrBigint = JsonValue | bigint;
 const isBigint = (value: JsonOrBigint): value is bigint => typeof value === 'bigint';
-// hippo.db writes a bigint as its digits, where JSON.stringify alone throws.
+// A bigint is stored as its digits, where JSON.stringify alone throws.
 const bigintAsText = (_key: string, value: JsonOrBigint): JsonOrBigint => (isBigint(value) ? value.toString() : value);
 
-/** A JSON object column as hippo.db reads back `text`: anything but an object reads as empty. */
+/** A JSON object column read back from `text`: anything but an object reads as empty. */
 export function storedObject(text: string, site: StoredJsonSite): JsonObject {
   return parseStoredObject(site, text) ?? {};
 }
