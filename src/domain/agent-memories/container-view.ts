@@ -2,7 +2,6 @@
 // earlier names are planned as steps, and applied to the rows read, as the store will apply them.
 import type { MemoryEntry, StrengthOptions } from '../../base/memory/memory.js';
 import type { AgentMemoryTool } from '../../base/memory/agent-memory-tools.js';
-import { chunked } from '../../base/util/chunked.js';
 import type { ImportStep, PlannedRow } from '../../store/port/agent-import.js';
 import type { DormantSnapshot } from '../../store/port/types.js';
 import { itemSource } from './source.js';
@@ -92,10 +91,8 @@ async function adoptLegacy(s: StoreSession, w: ContainerWork, draft: Draft): Pro
 async function standingLegacy(s: StoreSession, rows: readonly MemoryEntry[]): Promise<Map<string, MemoryEntry>> {
   const from = new Map(rows.map((row) => [row.id, row.source]));
   const out = new Map<string, MemoryEntry>();
-  for (const ids of chunked([...from.keys()])) {
-    for (const row of await s.store.entriesByIds(ids, s.tenantId)) {
-      if (!row.supersededBy && row.source === from.get(row.id)) out.set(row.id, row);
-    }
+  for (const row of await s.store.entriesByIds([...from.keys()], s.tenantId)) {
+    if (!row.supersededBy && row.source === from.get(row.id)) out.set(row.id, row);
   }
   return out;
 }

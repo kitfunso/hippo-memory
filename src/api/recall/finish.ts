@@ -10,7 +10,6 @@ import { recordTokens } from '../tokens.js';
 import type { Context } from '../types.js';
 import type { CallerState } from '../callers.js';
 import type { AppendAuditOpts } from '../../store/port/types.js';
-import { chunked } from '../../base/util/chunked.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 
 /**
@@ -280,9 +279,7 @@ export function biasHintEnabled(config: HintConfig, kind: 'anchoring' | 'availab
 /** The ids among `ids` that a tenant's rows in `store` hold. */
 export async function heldIds(store: HippoStore, ids: readonly string[], tenantId: string): Promise<Set<string>> {
   const held = new Set<string>();
-  for (const chunk of chunked(ids)) {
-    for (const entry of await store.entriesByIds(chunk, tenantId)) held.add(entry.id);
-  }
+  for (const entry of await store.entriesByIds(ids, tenantId)) held.add(entry.id);
   return held;
 }
 
