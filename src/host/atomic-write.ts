@@ -64,12 +64,12 @@ function removeTemp(tmp: string): void {
 /**
  * Flushed before the rename, or a crash soon after could leave the file's name on bytes that never reached the disk.
  */
-function writeFlushed(tmp: string, text: string, old: fs.Stats | undefined, durable: boolean): void {
-  const fd = fs.openSync(tmp, 'w', (old?.mode ?? 0o666) & 0o777);
+function writeFlushed(tmp: string, data: string | Uint8Array, old: fs.Stats | undefined, opts: WriteOpts): void {
+  const fd = fs.openSync(tmp, 'w', (old?.mode ?? opts.mode) & 0o777);
   try {
-    fs.writeFileSync(fd, text, 'utf8');
+    fs.writeFileSync(fd, data, 'utf8');
     if (old) keepAccess(tmp, old);
-    if (durable) fs.fsyncSync(fd);
+    if (opts.durable) fs.fsyncSync(fd);
   } finally {
     fs.closeSync(fd);
   }
@@ -94,23 +94,23 @@ function flushFolder(dir: string): void {
   }
 }
 
-function replaceViaTemp(target: string, text: string, old: fs.Stats | undefined, durable: boolean): void {
+function replaceViaTemp(target: string, data: string | Uint8Array, old: fs.Stats | undefined, opts: WriteOpts): void {
   const tmp = `${target}.${process.pid}.tmp`;
   try {
-    writeFlushed(tmp, text, old, durable);
+    writeFlushed(tmp, data, old, opts);
     renameOnto(tmp, target);
   } catch (err) {
     removeTemp(tmp);
     throw err;
   }
-  if (durable) flushFolder(path.dirname(target));
+  if (opts.durable) flushFolder(path.dirname(target));
 }
 
 /** The pre-rename write: it truncates first, so it is only the fallback, but it needs just a writable file and keeps
  * hard links together. */
-function writeInPlace(target: string, text: string): void {
+function writeInPlace(target: string, data: string | Uint8Array): void {
   try {
-    fs.writeFileSync(target, text, 'utf8');
+    fs.writeFileSync(target, data, 'utf8');
   } catch (err) {
     if (!(err instanceof Error)) throw err;
     const reason =
@@ -121,13 +121,24 @@ function writeInPlace(target: string, text: string): void {
   }
 }
 
+export interface AtomicWriteOptions {
+  /** False skips the fsyncs, for derived files that can be rebuilt; a reader still never sees a torn file. */
+  readonly durable?: boolean;
+  /** The mode a new file is created with, before the umask; a replaced file keeps its own. */
+  readonly mode?: number;
+  /** False never writes in place: a refused rename throws, for a file other processes read while it is replaced. */
+  readonly inPlace?: boolean;
+}
+
+type WriteOpts = Required<Pick<AtomicWriteOptions, 'durable' | 'mode'>>;
+
 /** Replaces `file` through a flushed temp file and a rename, so a reader, or a crash at any point, finds the old
  * content or the new, whole.
- * A file with other hard links, or a rename the platform refuses (logged), is written in place: a crash mid-write can
- * leave it truncated.
- * `durable: false` skips the fsyncs for derived files that can be rebuilt; a reader still never sees a torn file. */
-export function writeFileAtomic(file: string, text: string, opts: { readonly durable?: boolean } = {}): void {
-  const durable = opts.durable !== false;
+ * A file with other hard links, or a rename the platform refuses (logged), is written in place unless `inPlace` is
+ * false: a crash mid-write can leave it truncated. */
+export function writeFileAtomic(file: string, data: string | Uint8Array, opts: AtomicWriteOptions = {}): void {
+  const write: WriteOpts = { durable: opts.durable !== false, mode: opts.mode ?? 0o666 };
+  const inPlace = opts.inPlace !== false;
   const target = writeTarget(file);
   const old = fs.statSync(target, { throwIfNoEntry: false });
   if (old === undefined) {
@@ -137,20 +148,20 @@ export function writeFileAtomic(file: string, text: string, opts: { readonly dur
     // second.
     fs.accessSync(target, fs.constants.W_OK);
   }
-  if (old !== undefined && old.nlink > 1) {
+  if (inPlace && old !== undefined && old.nlink > 1) {
     // A rename gives the file a new inode, which would leave the other hard links on the old content.
-    writeInPlace(target, text);
+    writeInPlace(target, data);
     return;
   }
   try {
-    replaceViaTemp(target, text, old, durable);
+    replaceViaTemp(target, data, old, write);
   } catch (err) {
-    if (!(err instanceof Error) || !REPLACE_REFUSALS.includes(errnoCode(err))) throw err;
+    if (!inPlace || !(err instanceof Error) || !REPLACE_REFUSALS.includes(errnoCode(err))) throw err;
     log.warn(
       `${target} could not be replaced by a rename (${errnoCode(err)}), so it is ` +
         `written in place: not atomic, a crash mid-write can leave it truncated`,
       errorFields(err),
     );
-    writeInPlace(target, text);
+    writeInPlace(target, data);
   }
 }

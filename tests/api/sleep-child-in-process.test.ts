@@ -1,13 +1,14 @@
 // The sleep child's job body in process: its 'message' listener is captured on import, and send and exit are stubbed.
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { remember } from '../../src/api/index.js';
-import type { SleepJob, SleepReply } from '../../src/surface/server/sleep-offload.js';
+import type { SleepJob, SleepMessage, SleepReply } from '../../src/surface/server/sleep-offload.js';
 import type { SleepResult } from '../../src/api/sleep/sleep.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { clusteredVectors, seedVectorRows } from '../_helpers/vector-rows.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -81,4 +82,39 @@ describe('sleep child', () => {
       expect(reply.message).toMatch(/not a database/i);
     }
   });
+
+  it('replies to a sleep before it saves the vector graph file, then exits 0', async () => {
+    seedVectorRows(
+      home,
+      clusteredVectors(1_100, 32, 3).map((vector, i) => ({ id: `v-${i}`, tenantId: 'default', vector })),
+    );
+    const graphFile = join(home, 'vector-graph-32.bin');
+    const fileAtReply: boolean[] = [];
+    Object.defineProperty(process, 'send', {
+      configurable: true,
+      writable: true,
+      value: (reply: SleepReply<SleepResult>, done: (err: Error | null) => void) => {
+        fileAtReply.push(existsSync(graphFile));
+        sent.push(reply);
+        done(null);
+        return true;
+      },
+    });
+    const ctx = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+    const job: SleepMessage = {
+      kind: 'sleep',
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: ctx.actor,
+      opts: { noShare: true },
+      deadline: Date.now() + 120_000,
+    };
+
+    fire(listeners, 'message', job);
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0), { timeout: 60_000 });
+
+    expect(sent.map((reply) => reply.ok)).toEqual([true]);
+    expect(fileAtReply).toEqual([false]);
+    expect(existsSync(graphFile)).toBe(true);
+  }, 90_000);
 });

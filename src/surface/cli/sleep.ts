@@ -9,6 +9,7 @@ import { currentMachine } from '../../infra/machine.js';
 import { replayCompactions } from '../capture/compaction-record.js';
 import * as api from '../../api/index.js';
 import { cliConfig, cliApiContext, cliStore, cliSyncOptions } from './api-context.js';
+import { saveVectorGraphFile } from '../open-store.js';
 import { sleepResultLines } from './sleep-render.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { teeStdStreams } from '../../host/stream-tee.js';
@@ -119,4 +120,8 @@ async function runSleep(hippoRoot: string, tenantId: string, flags: CliFlags): P
     noShare: boolFlag(flags, 'no-share'),
   });
   renderSleepResult(result);
+  // A store with no `hippo serve` gets its saved vector graph from its sleeps.
+  if (!result.dryRun) {
+    await saveVectorGraphFile(hippoRoot, { maxVectors: cliConfig(hippoRoot).vectorGraph.maxVectors });
+  }
 }
