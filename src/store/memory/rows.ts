@@ -36,6 +36,16 @@ export function storedObject(text: string, site: StoredJsonSite): JsonObject {
   return parseStoredObject(site, text) ?? {};
 }
 
+/** The row `id` of `table` when the tenant holds it; another tenant's row reads as missing. */
+export function ownedRow<K, R extends { readonly tenantId: string }>(
+  table: ReadonlyMap<K, R>,
+  tenantId: string,
+  id: K,
+): R | undefined {
+  const row = table.get(id);
+  return row?.tenantId === tenantId ? row : undefined;
+}
+
 /** Appends the rows in order, all or none: each is built before the first goes in. */
 export function appendAudit(t: MemoryTables, events: readonly AppendAuditOpts[]): void {
   const ts = new Date().toISOString();

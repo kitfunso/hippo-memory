@@ -8,9 +8,8 @@ import { byBytes, oldestFirst } from '../rules/order.js';
 import { asciiFolded } from './rows.js';
 import type { MemoryTables } from './tables.js';
 import { admitsCandidate } from './vectors.js';
-import { ftsMatches } from './fts.js';
-
-const LIKE_WINDOW_ROWS = 2000;
+import { ftsMatches } from '../rules/fts.js';
+import { LIKE_WINDOW_ROWS } from '../rules/windows.js';
 
 /** memories.updated_at, which both match tiers order by before created; '' sorts as hippo.db's NULL does, last. */
 const updatedOf = (t: MemoryTables, entry: MemoryEntry): string => t.updatedAt.get(entry.id) ?? '';

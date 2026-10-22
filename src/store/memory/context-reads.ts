@@ -19,16 +19,14 @@ import type {
 } from '../port/context-reads.js';
 import { latestHandoffIn } from './handoffs.js';
 import { byBytes, newestFirst, oldestFirst, type DescendingKeyset } from '../rules/order.js';
-import { rowTerms } from './fts.js';
+import { rowTerms } from '../rules/fts.js';
+import { SCHEMA_FIT_WINDOW_ROWS } from '../rules/windows.js';
 import { searchRecallIn } from './search.js';
 import type { MemoryTables } from './tables.js';
 
 const BY_CREATED: DescendingKeyset<MemoryEntry> = { key: (e) => e.created, textId: (e) => e.id };
 // A drifted stamp sorts at the instant Date reads in it, as if written in toISOString form.
 const BY_STAMP: DescendingKeyset<MemoryEntry> = { key: (e) => sortableStamp(e.created), textId: (e) => e.id };
-
-/** schemaFit's window: the tenant's newest rows that move the fit. */
-const SCHEMA_FIT_WINDOW_ROWS = 2000;
 
 /** julianday's reading of a stamp: a zoneless one is UTC. */
 function stampMs(text: string | null): number | null {

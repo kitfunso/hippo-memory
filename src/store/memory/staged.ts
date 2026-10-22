@@ -12,6 +12,7 @@ import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';
 import type { EntryTarget, RawArchive } from '../port/entry-writes.js';
 import type { AppendAuditOpts } from '../port/types.js';
 import { appendAudit, bumpCounter, hippoDbNow, tenantKey } from './rows.js';
+import { refusalAudit, summaryDirtyAudit } from '../rules/audit-rows.js';
 import { asStored } from './stored-entry.js';
 import type { ArchivedRow, MemoryTables } from './tables.js';
 import { dropOrphanVectors } from './vectors.js';
@@ -22,11 +23,9 @@ export interface Tx {
   readonly audit: AppendAuditOpts[];
 }
 
-/** The audit row a refused value leaves, as hippo.db writes it beside the refusal. */
-export function refusalEvent(err: RejectedValueError, actor: string): AppendAuditOpts {
-  const metadata = { digest: err.digest, reason: err.reason };
-  return { tenantId: err.tenantId, actor, op: 'reject_refusal', targetId: err.entryId, metadata };
-}
+/** The audit row a refused value leaves beside the refusal. */
+export const refusalEvent = (err: RejectedValueError, actor: string): AppendAuditOpts =>
+  refusalAudit(err.tenantId, actor, err.entryId, err);
 
 /** A row with the columns hippo.db's UPDATEs set without stamping updated_at blanked, so other changes show. */
 const stampedColumns = (e: MemoryEntry): string =>
@@ -83,8 +82,7 @@ export function markParentDirty(tx: Tx, parentId: string, tenantId: string, acto
   if (!parent || parent.tenantId !== tenantId || (parent.dagLevel !== 2 && parent.dagLevel !== 3)) return;
   if (parent.summaryDirty === true || parent.kind === 'archived') return;
   tx.rows.set(parentId, { ...parent, summaryDirty: true });
-  const metadata = { dag_level: parent.dagLevel, source: 'E2' };
-  tx.audit.push({ tenantId, actor, op: 'summary_marked_dirty', targetId: parentId, metadata });
+  tx.audit.push(summaryDirtyAudit(parentId, tenantId, actor, parent.dagLevel));
 }
 
 /** The row `id` when the target's tenant holds it in a scope the target may reach; NotFoundError otherwise. */

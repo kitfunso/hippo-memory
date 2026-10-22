@@ -3,24 +3,13 @@ import { appendAuditEvents } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { DAG_LEVEL } from '../../base/memory/memory.js';
-import type { AppendAuditOpts } from '../port/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { summaryDirtyAudit } from '../rules/audit-rows.js';
 
 const MARK_DIRTY_WHERE = `tenant_id = ?
        AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
        AND summary_dirty = 0
        AND kind != 'archived'`;
-
-/** The audit row for a summary whose dirty flag flipped from 0 to 1. */
-export function summaryDirtyAuditRow(
-  summaryId: string,
-  tenantId: string,
-  actor: string,
-  dagLevel: number,
-): AppendAuditOpts {
-  const metadata = { dag_level: dagLevel, source: 'E2' };
-  return { tenantId, actor, op: 'summary_marked_dirty', targetId: summaryId, metadata };
-}
 
 /** Runs in the caller's transaction so the mark commits or rolls back with the child change; only a 0 to 1 flip is
  * audited. */
@@ -37,7 +26,7 @@ export function markSummaryDirtyInTx(db: DatabaseSyncLike, summaryId: string, te
   ).get(summaryId, tenantId) as { dag_level: number } | undefined;
   if (!result) return;
   try {
-    appendAuditEvents(db, [summaryDirtyAuditRow(summaryId, tenantId, actor, result.dag_level)]);
+    appendAuditEvents(db, [summaryDirtyAudit(summaryId, tenantId, actor, result.dag_level)]);
   } catch (error) {
     // The mark has already succeeded; a broken audit table must not undo it.
     reportAuditWriteFailure('summary_marked_dirty', error, summaryId);
