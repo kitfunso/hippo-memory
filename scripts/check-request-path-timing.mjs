@@ -256,7 +256,7 @@ const cases = [
     },
     [19, 6, 2],
   ],
-  ['mcp hippo_context', tool('hippo_context'), [75, 687, 2]],
+  ['mcp hippo_context', tool('hippo_context'), [63, 1726, 2]],
   ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [32, 1495, 1]],
   ['mcp hippo_status', tool('hippo_status'), [13, 4, 1]],
   ['mcp hippo_peers', tool('hippo_peers'), [10, 17, 1]],
