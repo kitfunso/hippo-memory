@@ -1,0 +1,3 @@
+### Performance
+
+- **A recall with no running server searches a saved vector graph instead of scanning every vector.** `hippo sleep`, a server's sleep and a server's store worker save `vector-graph-<length>.bin` beside hippo.db once the store holds 1,000 vectors, and rebuild it when a tenth of it has changed. A one-shot recall's vector read at 50,000 vectors took 30 ms at the median instead of 200 ms, with the same top 10. The build reads on a read-only handle, so no writer waits on it. A missing, stale or damaged file only means the scan, with one warn line for a damaged one; copy or back up the file with hippo.db, or let the next sleep rebuild it.

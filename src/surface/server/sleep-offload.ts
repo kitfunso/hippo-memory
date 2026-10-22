@@ -23,6 +23,10 @@ export type SleepJob =
     }
   | { readonly kind: 'consolidate'; readonly hippoRoot: string };
 
+/** A job as the child receives it, with the epoch ms at which the server stops it, so work after the sleep stops
+ * first. */
+export type SleepMessage = SleepJob & { readonly deadline: number };
+
 export type SleepReply<R = SleepResult> =
   | { readonly ok: true; readonly result: R }
   | { readonly ok: false; readonly busy: boolean; readonly message: string; readonly stack?: string };
@@ -52,7 +56,21 @@ function failureOf<R>(reply: SleepReply<R> | undefined, code: number | null, sig
   return failure;
 }
 
-function runInChild<R>(job: SleepJob): Promise<R> {
+/** A child's answer, settled by its reply, and its end, which comes after the work it does once it has replied. */
+interface ChildRun<R> {
+  readonly answer: Promise<R>;
+  readonly ended: Promise<void>;
+}
+
+function runInChild<R>(job: SleepJob): ChildRun<R> {
+  let ended: () => void = () => undefined;
+  const end = new Promise<void>((resolve) => {
+    ended = resolve;
+  });
+  return { answer: childAnswer<R>(job, ended), ended: end };
+}
+
+function childAnswer<R>(job: SleepJob, ended: () => void): Promise<R> {
   const deadlineMs = envSleepTimeoutMs() ?? DEFAULT_SLEEP_DEADLINE_MS;
   return new Promise((resolve, reject) => {
     // The child's stderr is the server's log, so Node's experimental-module notice would repeat there on every sleep.
@@ -72,15 +90,19 @@ function runInChild<R>(job: SleepJob): Promise<R> {
     child.once('message', (message) => {
       if (isSleepReply<R, typeof message>(message)) reply = message;
       else malformed = true;
+      if (reply?.ok) resolve(reply.result);
     });
     child.once('error', (err) => {
       clearTimeout(timer);
+      ended();
       reject(err);
     });
     // 'close' and not 'exit': it waits for the channel to drain, so the reply is in hand and the child's store handles
     // are gone.
     child.once('close', (code, signal) => {
       clearTimeout(timer);
+      ended();
+      if (reply?.ok) return;
       if (timedOut) {
         reject(
           new HttpError(
@@ -90,10 +112,9 @@ function runInChild<R>(job: SleepJob): Promise<R> {
         );
       } else if (malformed) {
         reject(new Error(`sleep process sent a reply that is not a sleep result (code ${code}, signal ${signal})`));
-      } else if (reply?.ok) resolve(reply.result);
-      else reject(failureOf(reply, code, signal));
+      } else reject(failureOf(reply, code, signal));
     });
-    child.send(job);
+    child.send({ ...job, deadline: Date.now() + deadlineMs } satisfies SleepMessage);
   });
 }
 
@@ -130,17 +151,14 @@ export function createSleepQueue(hippoRoot: string, onHippoDb: boolean): SleepQu
     inLine += 1;
     // One sleep at a time, as on the server's single thread: a second one waits its turn and does not fight the first
     // for the write lock.
-    const run = turn.then(() => runInChild<R>(job));
-    // A failed sleep reaches its own caller through `run`; the queue only needs to know the turn is over.
-    turn = run
-      .then(
-        () => undefined,
-        () => undefined,
-      )
+    const child = turn.then(() => runInChild<R>(job));
+    // A failed sleep reaches its own caller through its answer; the turn lasts until the child has exited.
+    turn = child
+      .then((run) => run.ended)
       .finally(() => {
         inLine -= 1;
       });
-    return run;
+    return child.then((run) => run.answer);
   };
   return {
     // The child sleeps the hippo.db under the folder, so another store that sets the sleep groups gets 501 as before.

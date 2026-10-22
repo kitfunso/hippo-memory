@@ -232,7 +232,8 @@ describe('a write by another connection', () => {
       ),
     );
     const answers: string[][] = [];
-    // Behind by more rows than one read inserts, then stale past a tenth, then rebuilt.
+    // Behind by more rows than one read inserts, so it answers for the rows it holds; then stale past a tenth, so the
+    // read scans while the graph rebuilds; then rebuilt.
     for (let step = 0; step < 4; step++) {
       answers.push(await nearest(f, q, spec('t1')));
       await f.graphs.idle();
@@ -240,12 +241,30 @@ describe('a write by another connection', () => {
 
     const scan = await scanned(f, q, spec('t1'));
     expect(answers).toEqual([scan, scan, scan, scan]);
-    expect(f.answered.slice(1)).toEqual([false, false, false, true]);
+    expect(f.answered.slice(1)).toEqual([true, false, false, true]);
+  });
+
+  it('of more rows than one read inserts answers from the graph for its rows and scores the newer ones', async () => {
+    const rows = tenantRows('t1', 400, 14);
+    const f = fixture(rows);
+    const q = near(rows[3].vector, 14);
+    await built(f, q, spec('t1'));
+    const late = tenantRows('t1', 33, 15).map((r, i) => ({ ...r, id: `late-${i}`, vector: i === 0 ? q : r.vector }));
+
+    seedVectorRows(f.root, late, MODEL);
+    const behind = await nearest(f, q, spec('t1'));
+    await f.graphs.idle();
+    const caughtUp = await nearest(f, q, spec('t1'));
+
+    const scan = await scanned(f, q, spec('t1'));
+    expect([behind, caughtUp]).toEqual([scan, scan]);
+    expect(behind[0]).toBe('late-0');
+    expect(f.answered.slice(1)).toEqual([true, true]);
   });
 });
 
 describe('a read the graph cannot fill', () => {
-  it('falls back to the scan when fewer than k admitted rows are near', async () => {
+  it('answers with fewer than k rows once its walk has reached every node', async () => {
     const rows = [...tenantRows('t1', 400, 9), ...tenantRows('few', 3, 90)];
     const f = fixture(rows);
     const q = near(rows[400].vector, 9);
@@ -255,7 +274,7 @@ describe('a read the graph cannot fill', () => {
 
     expect([...answer].sort()).toEqual(['few-0', 'few-1', 'few-2']);
     expect(answer).toEqual(await scanned(f, q, spec('few')));
-    expect(f.answered.slice(1)).toEqual([false]);
+    expect(f.answered.slice(1)).toEqual([true]);
   });
 });
 
@@ -276,11 +295,11 @@ describe('a store over the vector graph cap', () => {
     expect(answer).toEqual(await scanned(f, q, spec('t1')));
     expect(f.answered).toEqual([false, false]);
     expect(capLines(warn)).toEqual([
-      'the store holds 400 vectors, over the vector graph cap of 350 (vectorGraph.maxVectors), so nearest-row reads scan',
+      'the store holds 400 vectors, over the vector graph cap of 350 (vectorGraph.maxVectors), so no graph is built',
     ]);
   });
 
-  it('drops a ready graph once the store grows past the cap, then scans with one warn line', async () => {
+  it('drops a ready graph once the store grows past the cap, then reads its saved file with one warn line', async () => {
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
     const rows = tenantRows('t1', 400, 12);
     const f = fixture(rows, 410);
@@ -295,7 +314,7 @@ describe('a store over the vector graph cap', () => {
 
     expect([ready, over, still]).toEqual([0, 1, 2].map(() => ready));
     expect(ready).toEqual(await scanned(f, q, spec('t1')));
-    expect(f.answered).toEqual([false, true, false, false]);
+    expect(f.answered).toEqual([false, true, true, true]);
     expect(capLines(warn)).toHaveLength(1);
   });
 });
