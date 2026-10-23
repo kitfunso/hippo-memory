@@ -5,7 +5,9 @@ import { longestWord, mergedText, storedTextKeys, duplicateKey } from '../../src
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadTextsHolding, writeEntriesTogether } from '../_helpers/root-forms.js';
-import { recordStatements } from '../_helpers/count-statements.js';
+import { countMatching, peakRowsRead, recordStatements } from '../_helpers/count-statements.js';
+import { bareText, SPACE_CODES } from '../../src/store/rules/copies.js';
+import { chunked } from '../../src/base/util/chunked.js';
 
 function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
@@ -87,5 +89,57 @@ describe('loadTextsHolding through the full-text index', () => {
     expect(after.rowsRead).toBe(before.rowsRead);
     expect(after.statements.length).toBe(before.statements.length);
     expect(after.result.map((r) => r.content).sort()).toEqual(before.result.map((r) => r.content).sort());
+  });
+});
+
+const TEXT = 'deploy the build first then tag';
+const EVERY_SPACE = String.fromCodePoint(...SPACE_CODES);
+
+describe('loadTextsHolding returns only copies', () => {
+  let root: string;
+  const copies = [
+    row(TEXT.replaceAll(' ', EVERY_SPACE)),
+    row(mergedText('Merged lessons', [TEXT, 'other text']), { source: 'consolidation' }),
+  ];
+
+  beforeEach(() => {
+    root = makeStore('held-copies').root;
+    const sharing = Array.from({ length: 50 }, (_, i) => row(`${TEXT} on step ${i}`));
+    const nearMisses = [row(TEXT.toUpperCase()), row(`deploy the build first`), row(`${TEXT} now`)];
+    writeEntriesTogether(root, [...sharing, ...nearMisses, ...copies]);
+  });
+
+  it.each([true, false])('reads 2 of 55 rows sharing its words, index in sync: %s', (inSync) => {
+    withDb(root, (db) => setFtsInSync(db, inSync));
+    const { result, reads } = recordStatements(() => loadTextsHolding(root, 'default', [TEXT]));
+    expect(result.map((r) => r.content).sort()).toEqual(copies.map((c) => c.content).sort());
+    expect(peakRowsRead(reads, 'json_each')).toBe(2);
+    expect(storedTextKeys(result).has(duplicateKey(TEXT))).toBe(true);
+  });
+});
+
+describe('loadTextsHolding statements', () => {
+  it.each([
+    [10, true],
+    [1200, true],
+    [10, false],
+    [1200, false],
+  ])('runs one statement per chunk of texts at %i texts, index in sync: %s', (n, inSync) => {
+    const root = makeStore('held-chunks').root;
+    writeEntriesTogether(root, [row('lesson 3 of the batch')]);
+    withDb(root, (db) => setFtsInSync(db, inSync));
+    const texts = Array.from({ length: n }, (_, i) => `lesson ${i} of the batch`);
+    const { result, statements } = recordStatements(() => loadTextsHolding(root, 'default', texts));
+    expect(countMatching(statements, 'json_each')).toBe(chunked(texts).length);
+    expect(result.map((r) => r.content)).toEqual(['lesson 3 of the batch']);
+  });
+});
+
+describe('SPACE_CODES', () => {
+  it('lists every code point JavaScript reads as a space, and only those', () => {
+    const spaces: number[] = [];
+    for (let code = 0; code <= 0x10ffff; code++) if (/^\s$/u.test(String.fromCodePoint(code))) spaces.push(code);
+    expect([...SPACE_CODES]).toEqual(spaces);
+    expect(bareText(`a${EVERY_SPACE}b`)).toBe('ab');
   });
 });
