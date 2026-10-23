@@ -4,7 +4,7 @@
 import { envApiKey, envRequireServer } from '../../base/util/env.js';
 import { execFileSync } from 'child_process';
 import { isSharedStore } from '../../host/config-file.js';
-import { type ChurnStaleResult, detectChurnStale } from '../../api/repo-learning.js';
+import { type ChurnStaleResult, detectChurnStale } from '../../domain/learn/invalidation.js';
 import { resolveProjectIdentity, isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
 import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';

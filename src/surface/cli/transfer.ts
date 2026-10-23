@@ -6,12 +6,12 @@ import { isInitialized, resolveGlobalRootDir } from '../../host/project-identity
 import { toWire } from '../../base/memory/memory-wire.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { embedCoverage, memoryEmbedMissing } from '../../api/embeddings.js';
-import { captureError } from '../../api/repo-learning.js';
+import { captureError } from '../../domain/learn/autolearn.js';
 import { DEFAULT_LEARN_DAYS } from '../../base/util/limits.js';
 import { runWatched } from './run-watched.js';
-import { importAtSessionEnd, importForStore } from '../../api/agent-memories.js';
+import { importAtSessionEnd, importForStore } from '../../domain/agent-memories/sync.js';
 import { currentMachine } from '../../infra/machine.js';
-import { detailLines } from '../../api/agent-memory-report.js';
+import { detailLines } from '../../domain/agent-memories/report.js';
 import { importChatGPT, importClaude, importCursor, importGenericFile } from '../importers/sources.js';
 import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
