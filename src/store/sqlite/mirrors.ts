@@ -26,7 +26,6 @@ import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import type { TaskSnapshot, SessionEvent } from '../port/sessions.js';
 import { serializeEntry } from '../../base/memory/markdown.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
-import type { StoreFiles } from './open.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
@@ -262,10 +261,6 @@ function writeListedMirror(hippoRoot: string, entry: MemoryEntry, listed: LayerL
   writeMirror(path.join(dir, name), serializeEntry(entry));
 }
 
-export function removeEntryMirrorsIn(files: StoreFiles, id: string): void {
-  removeEntryMirrors(files.hippoRoot, id);
-}
-
 /** Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge with no reaper to retry it
  * can name the stuck file. */
 function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
@@ -308,10 +303,6 @@ export function purgeMirrorBestEffort(hippoRoot: string, id: string, isRaw: bool
       return false;
     }
   }
-}
-
-export function purgeMirrorBestEffortIn(files: StoreFiles, id: string, isRaw: boolean, logPrefix: string): boolean {
-  return purgeMirrorBestEffort(files.hippoRoot, id, isRaw, logPrefix);
 }
 
 /** Derive the current `HippoIndex` from SQLite. Exported for the longmemeval benchmark. */

@@ -16,7 +16,7 @@ import {
   type MemoryEntry,
 } from '../../src/base/memory/memory.js';
 import { readerReaches, targetReader } from '../../src/base/scope/recall-scope.js';
-import { writeEntriesTogether, writeEntryDbOnly, writeEntryMirrorsIn } from '../../src/store/sqlite/entry-writes.js';
+import { writeEntriesTogether, writeEntryDbOnly, writeEntryMirrors } from '../../src/store/sqlite/entry-writes.js';
 import { selectEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { applyOutcome, auditingRefusal } from '../../src/store/sqlite/entry-writes.js';
@@ -65,7 +65,7 @@ function applyOutcomePerId(db: DatabaseSyncLike, root: string, outcome: OutcomeW
       return out;
     }),
   );
-  for (const entry of applied) writeEntryMirrorsIn(storeFilesOf(root), entry);
+  for (const entry of applied) writeEntryMirrors(root, entry);
   return applied.map((entry) => entry.id);
 }
 

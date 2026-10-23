@@ -24,7 +24,7 @@ import {
   replaceFtsRows,
   updateMemoryRows,
 } from './entry-row.js';
-import { mirrorBestEffort, writeMarkdownMirror, purgeMirrorBestEffortIn, removeEntryMirrorsIn } from './mirrors.js';
+import { mirrorBestEffort, writeMarkdownMirror, purgeMirrorBestEffort, removeEntryMirrors } from './mirrors.js';
 import { deferDueMirrors, markMirrorsDue } from './due-mirrors.js';
 import type { Handles, StoreFiles } from './open.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -212,10 +212,6 @@ export function writeEntryMirrors(hippoRoot: string, entry: MemoryEntry): void {
   mirrorBestEffort(`${entry.id}.md`, () => writeMarkdownMirror(hippoRoot, entry));
 }
 
-export function writeEntryMirrorsIn(files: StoreFiles, entry: MemoryEntry): void {
-  writeEntryMirrors(files.hippoRoot, entry);
-}
-
 /** strengthenRetrieved on an open handle in its own write scope, a savepoint inside a caller's transaction, so a
  * recall's last writes share one handle. */
 export function strengthenRetrievedInOwnTx(
@@ -383,7 +379,7 @@ export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
         applyOutcome: (db, ...args) => applyOutcome(db, files, ...args),
         setPinned: (db, pin) => {
           const entry = commitPinned(db, pin);
-          writeEntryMirrorsIn(files, entry);
+          writeEntryMirrors(files.hippoRoot, entry);
           return entry;
         },
         forget: (db, removal) => {
@@ -392,7 +388,7 @@ export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
             const { id, tenantId, actor } = removal;
             if (!deleteEntryCore(db, id, tenantId, { actor })) throw notFound(id);
           });
-          purgeMirrorBestEffortIn(files, removal.id, false, 'deleteEntry');
+          purgeMirrorBestEffort(files.hippoRoot, removal.id, false, 'deleteEntry');
           updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${removal.id}`);
         },
       },
@@ -403,7 +399,7 @@ export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
       supersede: (db, write) => {
         const successor = stampOriginProject(files, write.successor);
         commitSupersede(db, { ...write, successor });
-        writeEntryMirrorsIn(files, successor);
+        writeEntryMirrors(files.hippoRoot, successor);
       },
     }),
   };
@@ -418,7 +414,7 @@ export function writeEntryRow(
 ): void {
   const stamped = stampOriginProject(files, entry);
   writeInOwnTenant(db, stamped, actor, afterWrite);
-  writeEntryMirrorsIn(files, stamped);
+  writeEntryMirrors(files.hippoRoot, stamped);
 }
 
 /** A trace link follows the commit on the same handle and names only the ids applied, so a rolled-back outcome leaves
@@ -595,7 +591,7 @@ function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
  * mirror_cleaned_at stays NULL. */
 function cleanArchivedMirrors(db: DatabaseSyncLike, files: StoreFiles, id: string): void {
   try {
-    removeEntryMirrorsIn(files, id);
+    removeEntryMirrors(files.hippoRoot, id);
   } catch (mirrorErr) {
     log.error(
       `archiveRaw: mirror cleanup failed for ${id} (will retry via reaper on next openHippoDb): ` +

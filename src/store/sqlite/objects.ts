@@ -21,7 +21,7 @@ import {
   supersedeAudit,
 } from '../rules/objects.js';
 import { stampOriginProject, upsertEntryRow } from './entry-row.js';
-import { auditEntryWrite, writeEntryMirrorsIn, auditingRefusal } from './entry-writes.js';
+import { auditEntryWrite, writeEntryMirrors, auditingRefusal } from './entry-writes.js';
 import { markGraphDirty } from './graph-queue.js';
 import { removeGraphEntitiesForObject } from './graph-writes.js';
 import {
@@ -345,7 +345,7 @@ function withMirror<R extends object, F extends Refused>(
         if (refusalOf<R, F>(written)) return written;
         // The graph mark takes its own write lock, so it waits for the commit.
         if (write.graphTenant !== undefined) markGraphDirty(db, write.graphTenant, mirror.id);
-        writeEntryMirrorsIn(files, mirror);
+        writeEntryMirrors(files.hippoRoot, mirror);
         return written;
       }),
     openStore,

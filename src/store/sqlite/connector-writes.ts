@@ -15,7 +15,7 @@ import type {
 } from '../port.js';
 import { recordQuarantine } from './quarantine.js';
 import { stampOriginProject } from './entry-row.js';
-import { writeEntryMirrorsIn, archiveRaw, writeInOwnTenant } from './entry-writes.js';
+import { writeEntryMirrors, archiveRaw, writeInOwnTenant } from './entry-writes.js';
 
 /** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever sees it. */
 class EventAlreadyLogged extends Error {}
@@ -78,7 +78,7 @@ export function sqliteConnectorWrites({ on, files }: Handles): ConnectorWrites {
         writeConnectorEntry: (db, write) => {
           const entry = stampOriginProject(files, write.entry);
           const result = writeOnce(db, { ...write, entry });
-          if (result.outcome === 'written') writeEntryMirrorsIn(files, entry);
+          if (result.outcome === 'written') writeEntryMirrors(files.hippoRoot, entry);
           return result;
         },
       },
