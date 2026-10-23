@@ -1,23 +1,13 @@
 // Where-you-left-off verbs: snapshot, session, handoff, current and working memory.
 
+import { continuityLatest } from '../../api/continuity.js';
+import { cliApiContext, cliStore } from './api-context.js';
 import {
-  snapshotSave as apiSnapshotSave,
-  snapshotClear as apiSnapshotClear,
-  snapshotLoad,
-  sessionEventAppend,
-  sessionEventList,
-  continuityLatest,
-  handoffStampOutcome,
-  handoffSave,
-  handoffLatest as apiHandoffLatest,
-  handoffById,
-  workingMemoryPush,
-  workingMemoryRead,
-  workingMemoryClear,
-  workingMemoryFlush,
-} from '../../api/continuity.js';
-import { cliApiContext } from './api-context.js';
-import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../../base/session/handoff.js';
+  isHandoffOutcome,
+  formatHandoffEvidenceLine,
+  type HandoffOutcome,
+  type SessionHandoff,
+} from '../../base/session/handoff.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
 import type { SessionEvent, TaskSnapshot } from '../../store/port/sessions.js';
 import { sessionEventJson, snapshotJson } from '../../api/continuity-json.js';
@@ -51,13 +41,17 @@ async function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags
     );
   }
 
-  const snapshot = await apiSnapshotSave(cliApiContext(hippoRoot, tenantId), {
-    task,
-    summary,
-    nextStep,
-    source: stringFlagOrExit(flags, 'source') ?? 'cli',
-    sessionId: sessionId || null,
-  });
+  const snapshot = await cliStore(hippoRoot).sessions.saveSnapshot(
+    tenantId,
+    {
+      task,
+      summary,
+      nextStep,
+      source: stringFlagOrExit(flags, 'source') ?? 'cli',
+      sessionId: sessionId || null,
+    },
+    null,
+  );
 
   console.log(`Saved active task snapshot #${snapshot.id}`);
   console.log(`   Task: ${snapshot.task}`);
@@ -69,7 +63,7 @@ async function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags
 
 async function snapshotClear(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const status = stringFlagOrExit(flags, 'status') ?? 'cleared';
-  const cleared = await apiSnapshotClear(cliApiContext(hippoRoot, tenantId), status);
+  const cleared = await cliStore(hippoRoot).sessions.clearSnapshot(tenantId, status);
   if (!cleared) {
     console.log('No active task snapshot to clear.');
     return;
@@ -78,7 +72,7 @@ async function snapshotClear(hippoRoot: string, tenantId: string, flags: CliFlag
 }
 
 async function snapshotShow(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
-  const snapshot = await snapshotLoad(cliApiContext(hippoRoot, tenantId));
+  const snapshot = await cliStore(hippoRoot).sessions.loadSnapshot(tenantId, null);
   if (!snapshot) {
     if (boolFlag(flags, 'json')) {
       console.log(JSON.stringify({ snapshot: null }));
@@ -126,7 +120,7 @@ async function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, f
     );
   }
 
-  const event = await sessionEventAppend(cliApiContext(hippoRoot, tenantId), {
+  const event = await cliStore(hippoRoot).sessions.appendEvent(tenantId, {
     sessionId: s.sessionId,
     task: s.task || null,
     eventType: eventType || 'note',
@@ -140,7 +134,7 @@ async function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, f
 }
 
 async function sessionShow(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): Promise<void> {
-  const events = await sessionEventList(cliApiContext(hippoRoot, tenantId), {
+  const events = await cliStore(hippoRoot).sessions.listEvents(tenantId, {
     sessionId: s.sessionId || undefined,
     task: s.task || undefined,
     limit: s.limit,
@@ -201,7 +195,7 @@ async function sessionComplete(hippoRoot: string, tenantId: string, s: SessionAr
   const metadata: SessionCompleteMetadata = { ended_at: new Date().toISOString() };
   if (summary) metadata.summary = summary;
 
-  const event = await sessionEventAppend(cliApiContext(hippoRoot, tenantId), {
+  const event = await cliStore(hippoRoot).sessions.appendEvent(tenantId, {
     sessionId,
     task: task || null,
     eventType: 'session_complete',
@@ -212,7 +206,7 @@ async function sessionComplete(hippoRoot: string, tenantId: string, s: SessionAr
 
   console.log(`Completed session ${event.sessionId} with outcome=${outcome} (event #${event.id})`);
 
-  const stamped = await handoffStampOutcome(cliApiContext(hippoRoot, tenantId), sessionId, outcome);
+  const stamped = await cliStore(hippoRoot).sessions.stampHandoffOutcome(tenantId, sessionId, outcome);
   if (stamped > 0) {
     console.log(`Stamped outcome on handoff for session ${sessionId}`);
   }
@@ -237,7 +231,7 @@ export async function handleSession({ hippoRoot, tenantId, args, flags }: Comman
 }
 
 async function sessionResume(hippoRoot: string, tenantId: string, sessionId: string): Promise<void> {
-  const handoff = await apiHandoffLatest(cliApiContext(hippoRoot, tenantId), sessionId || undefined);
+  const handoff = await cliStore(hippoRoot).sessions.latestHandoff(tenantId, sessionId || null, {}, null);
   if (!handoff) {
     console.log('No handoff to resume from.');
     return;
@@ -310,25 +304,29 @@ async function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlag
     testStatus === 'pass' || testStatus === 'fail' ? testStatus : 'unknown',
   );
 
-  const handoff = await handoffSave(cliApiContext(hippoRoot, tenantId), {
-    version: 1,
-    sessionId,
-    repoRoot: process.cwd(),
-    taskId,
-    summary,
-    nextAction,
-    artifacts,
-    constraints,
-    evidence,
-    // SAFETY: isHandoffOutcome above already refused any non-matching value.
-    outcome: outcomeRaw as HandoffOutcome | undefined,
-    targetRuntime,
-    cardId,
-  });
+  const handoff = await cliStore(hippoRoot).sessions.saveHandoff(
+    tenantId,
+    {
+      version: 1,
+      sessionId,
+      repoRoot: process.cwd(),
+      taskId,
+      summary,
+      nextAction,
+      artifacts,
+      constraints,
+      evidence,
+      // SAFETY: isHandoffOutcome above already refused any non-matching value.
+      outcome: outcomeRaw as HandoffOutcome | undefined,
+      targetRuntime,
+      cardId,
+    },
+    null,
+  );
   printCreatedHandoff(handoff);
 }
 
-function printCreatedHandoff(handoff: Awaited<ReturnType<typeof handoffSave>>): void {
+function printCreatedHandoff(handoff: SessionHandoff): void {
   console.log(`Created session handoff for session ${handoff.sessionId}`);
   console.log(`   Summary: ${handoff.summary}`);
   if (handoff.nextAction) console.log(`   Next: ${handoff.nextAction}`);
@@ -346,7 +344,7 @@ function printCreatedHandoff(handoff: Awaited<ReturnType<typeof handoffSave>>): 
 
 async function handoffLatest(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const sessionId = (stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '') || undefined;
-  const handoff = await apiHandoffLatest(cliApiContext(hippoRoot, tenantId), sessionId);
+  const handoff = await cliStore(hippoRoot).sessions.latestHandoff(tenantId, sessionId ?? null, {}, null);
 
   if (!handoff) {
     if (boolFlag(flags, 'json')) {
@@ -373,7 +371,7 @@ async function handoffShow(hippoRoot: string, tenantId: string, args: string[], 
 
   const handoffId = parsePositiveId(idArg, 'handoff');
 
-  const handoff = await handoffById(cliApiContext(hippoRoot, tenantId), handoffId);
+  const handoff = await cliStore(hippoRoot).sessions.handoffById(tenantId, handoffId);
 
   if (!handoff) {
     if (boolFlag(flags, 'json')) {
@@ -477,7 +475,7 @@ export async function handleWm({ hippoRoot, tenantId, args, flags }: CommandCont
     const scope = stringFlagOrExit(flags, 'scope') || undefined;
     const sessionId = stringFlagOrExit(flags, 'session') || undefined;
 
-    const count = await workingMemoryClear(cliApiContext(hippoRoot, tenantId), { scope, sessionId });
+    const count = await cliStore(hippoRoot).sessions.clearWorkingMemory(tenantId, { scope, sessionId });
     console.log(`Cleared ${count} working memory entries.`);
     return;
   }
@@ -486,7 +484,7 @@ export async function handleWm({ hippoRoot, tenantId, args, flags }: CommandCont
     const scope = stringFlagOrExit(flags, 'scope') || undefined;
     const sessionId = stringFlagOrExit(flags, 'session') || undefined;
 
-    const count = await workingMemoryFlush(cliApiContext(hippoRoot, tenantId), { scope, sessionId });
+    const count = await cliStore(hippoRoot).sessions.clearWorkingMemory(tenantId, { scope, sessionId });
     console.log(`Flushed ${count} working memory entries.`);
     return;
   }
@@ -507,7 +505,7 @@ async function wmPushCmd(hippoRoot: string, tenantId: string, flags: CliFlags): 
     fail('Usage: hippo wm push --scope <scope> --content "..." [--importance 0.8] [--session <id>] [--task <id>]');
   }
 
-  const id = await workingMemoryPush(cliApiContext(hippoRoot, tenantId), {
+  const id = await cliStore(hippoRoot).sessions.pushWorkingMemory(tenantId, {
     scope,
     content,
     importance,
@@ -523,7 +521,7 @@ async function wmReadCmd(hippoRoot: string, tenantId: string, flags: CliFlags): 
   const sessionId = stringFlagOrExit(flags, 'session') || undefined;
   const limit = numberFlag(flags, 'limit') || 20;
 
-  const items = await workingMemoryRead(cliApiContext(hippoRoot, tenantId), { scope, sessionId, limit });
+  const items = await cliStore(hippoRoot).sessions.readWorkingMemory(tenantId, { scope, sessionId, limit });
 
   if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify({ items }, null, 2));

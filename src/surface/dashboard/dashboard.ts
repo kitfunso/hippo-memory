@@ -2,7 +2,6 @@
 // here.
 import type * as http from 'http';
 import type { Context } from '../../api/index.js';
-import { cardDetail, cardList } from '../../api/objects/cards.js';
 import type { DashboardRouteRequest } from '../server/dashboard-types.js';
 import { readBody, sendJson } from '../../base/util/http-util.js';
 import { forgetMemory, markWrong, pinMemory, resolveOpenConflict, type ActionResult } from './dashboard-actions.js';
@@ -51,12 +50,12 @@ export async function searchRoute(r: DashboardRouteRequest): Promise<void> {
 }
 
 export async function cardsRoute(r: DashboardRouteRequest): Promise<void> {
-  sendJson(r.res, 200, { cards: await cardList(r.ctx) });
+  sendJson(r.res, 200, { cards: await r.ctx.store.cards.list(r.ctx.tenantId, {}) });
 }
 
 export async function cardRoute(r: DashboardRouteRequest, { id }: Params): Promise<void> {
   // The Board has always answered 404, not 400, for an id that does not fit the pattern.
-  sendOrNotFound(r.res, CARD_ID.test(id!) ? await cardDetail(r.ctx, id!) : null);
+  sendOrNotFound(r.res, CARD_ID.test(id!) ? await r.ctx.store.cards.detail(r.ctx.tenantId, id!) : null);
 }
 
 type Action = (ctx: Context, body: ActionBody) => Promise<ActionResult>;

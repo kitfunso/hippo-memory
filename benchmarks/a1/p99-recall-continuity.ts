@@ -245,7 +245,7 @@ async function main(): Promise<void> {
   };
   await sessions.saveSnapshot('default', snapshot, null);
   const handoff = {
-    version: 1,
+    version: 1 as const,
     sessionId,
     summary: 'Bench handoff fixture.',
     nextAction: 'Land Task 6 of the continuity-first plan.',

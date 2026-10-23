@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { handoffLatest, sessionEventList, snapshotLoad, workingMemoryRead } from '../../src/api/continuity.js';
 import { memoryList } from '../../src/api/memories/memories.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { handleHandoff, handleSession, handleSnapshot, handleWm } from '../../src/surface/cli/continuity.js';
@@ -28,14 +27,16 @@ const c = (args: string[], flags: CliFlags): CommandContext => ({ hippoRoot: roo
 
 async function stored() {
   const ctx = cliApiContext(root, 'default');
+  const { sessions } = ctx.store;
   return {
-    snapshot: Boolean(await snapshotLoad(ctx)),
-    events: (await sessionEventList(ctx, { limit: 50 })).length,
-    handoff: Boolean(await handoffLatest(ctx)),
-    working: (await workingMemoryRead(ctx, { limit: 50 })).length,
+    snapshot: Boolean(await sessions.loadSnapshot('default', null)),
+    events: (await sessions.listEvents('default', { limit: 50 })).length,
+    handoff: Boolean(await sessions.latestHandoff('default', null, {}, null)),
+    working: (await sessions.readWorkingMemory('default', { limit: 50 })).length,
     memories: (await memoryList(ctx)).length,
   };
 }
+const sessionsOf = (hippoRoot: string) => cliApiContext(hippoRoot, 'default').store.sessions;
 const NOTHING = { snapshot: false, events: 0, handoff: false, working: 0, memories: 0 };
 
 beforeEach(() => {
@@ -111,7 +112,7 @@ describe('a text flag with a value', () => {
       handleSnapshot(c(['save'], { task: 'ship', summary: 'half done', 'next-step': 'merge', source: 'test' })),
     );
     expect(result.status).toBe(0);
-    expect(await snapshotLoad(cliApiContext(root, 'default'))).toMatchObject({
+    expect(await sessionsOf(root).loadSnapshot('default', null)).toMatchObject({
       task: 'ship',
       summary: 'half done',
       nextStep: 'merge',
@@ -124,14 +125,14 @@ describe('a text flag with a value', () => {
       handleSession(c(['log'], { id: 's1', content: 'tried the fix', type: 'attempt' })),
     );
     expect(log.status).toBe(0);
-    expect(await sessionEventList(cliApiContext(root, 'default'), { limit: 5 })).toMatchObject([
+    expect(await sessionsOf(root).listEvents('default', { limit: 5 })).toMatchObject([
       { sessionId: 's1', content: 'tried the fix', eventType: 'attempt' },
     ]);
     const made = await runInProcess(() =>
       handleHandoff(c(['create'], { summary: 'stopped at step 2', next: 'run the suite', session: 's1' })),
     );
     expect(made.status).toBe(0);
-    expect(await handoffLatest(cliApiContext(root, 'default'), 's1')).toMatchObject({
+    expect(await sessionsOf(root).latestHandoff('default', 's1', {}, null)).toMatchObject({
       summary: 'stopped at step 2',
       nextAction: 'run the suite',
     });
@@ -140,7 +141,7 @@ describe('a text flag with a value', () => {
   it('wm push stores the scope and content it was given', async () => {
     const result = await runInProcess(() => handleWm(c(['push'], { scope: 'plan', content: 'check the lease' })));
     expect(result.status).toBe(0);
-    expect(await workingMemoryRead(cliApiContext(root, 'default'), { limit: 5 })).toMatchObject([
+    expect(await sessionsOf(root).readWorkingMemory('default', { limit: 5 })).toMatchObject([
       { scope: 'plan', content: 'check the lease' },
     ]);
   });
