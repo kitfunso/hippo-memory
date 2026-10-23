@@ -3,14 +3,15 @@
  *  guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
 
 import { MAX_ENTITY_NAME_LEN } from '../../base/records/entity-name.js';
-import type { SourceObjectRef, EntityType, SourceObjectType } from '../../store/port/graph.js';
-import {
-  readGraphDelta,
-  type DesiredEntity,
-  type DesiredGraph,
-  type DesiredRelation,
-  type NaturalKey,
-} from './delta.js';
+import type {
+  DesiredEntity,
+  DesiredGraph,
+  DesiredRelation,
+  EntityType,
+  NaturalKey,
+  SourceObjectRef,
+  SourceObjectType,
+} from '../../store/port/graph.js';
 import { WRITE_BUDGET, type WriteBudget } from '../../base/util/write-budget.js';
 import { loadDecisions } from '../objects/decisions.js';
 import { loadPolicies } from '../objects/policies.js';
@@ -377,7 +378,7 @@ async function rebuildGraph(
   budget: WriteBudget,
 ): Promise<ExtractResult> {
   const derived = deriveGraph(await loadGraphSources(store.objects, tenantId));
-  const ops = await readGraphDelta(store.graphReads, tenantId, derived);
+  const ops = await store.graphReads.graphDelta(tenantId, derived);
   let next = 0;
   let skipped = 0;
   let committedAt = 0;

@@ -6,9 +6,9 @@ import { savePolicy } from '../../src/domain/objects/policies.js';
 import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
 import { extractGraph, deriveGraph, loadGraphSources } from '../../src/domain/graph/extract.js';
-import { readGraphDelta, entityKey, type GraphOp } from '../../src/domain/graph/delta.js';
+import { entityKey } from '../../src/store/rules/graph-delta.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
-import type { EntityType, SourceObjectType } from '../../src/store/port/graph.js';
+import type { EntityType, GraphOp, SourceObjectType } from '../../src/store/port/graph.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -30,7 +30,7 @@ function onStore<R>(home: string, read: (db: DatabaseSyncLike) => R): R {
 
 async function deltaOf(home: string, tenant: string = T): Promise<GraphOp[]> {
   const derived = deriveGraph(await loadGraphSources(objectsAt(home), tenant));
-  return readGraphDelta(sqliteStore(home).graphReads, tenant, derived);
+  return sqliteStore(home).graphReads.graphDelta(tenant, derived);
 }
 
 const opNames = (ops: GraphOp[]): string[] => ops.map((o) => o.op);

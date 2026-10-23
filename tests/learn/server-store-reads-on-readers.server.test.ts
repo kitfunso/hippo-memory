@@ -355,13 +355,13 @@ const READS: readonly Read[] = [
     /relType: '[^']+'/,
   ),
   read(
-    'graphReads.storedGraph',
-    async (s) =>
-      s.graphReads.storedGraph(
-        TENANT,
-        (await graphEntities(s)).flatMap((e) => (e.memoryId === null ? [] : [e.memoryId])),
-      ),
-    /=> '[a-z]+'/,
+    'graphReads.graphDelta',
+    (s) =>
+      s.graphReads.graphDelta(TENANT, {
+        entities: [{ entityType: 'policy', sourceObject: { type: 'policy', id: 1 }, name: 'Renamed', memoryId: null }],
+        relations: [],
+      }),
+    /op: '(update|insert)Entity'/,
   ),
   read('objects.listObjects', (s) => s.objects.listObjects(TENANT, 'decision', { limit: 5 }), 'We adopt RetryPolicy'),
   read('objects.objectById', (s) => s.objects.objectById(TENANT, 'policy', 1), 'retry up to 3x'),

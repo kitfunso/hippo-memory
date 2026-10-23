@@ -25,7 +25,6 @@ import {
   loadGraphSources,
 } from '../../src/domain/graph/extract.js';
 import type { EntityType } from '../../src/store/port/graph.js';
-import { readGraphDelta } from '../../src/domain/graph/delta.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { sleep, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
@@ -356,7 +355,7 @@ describe('sleep enqueue-hook', () => {
 
     expect(pending(tc.hippoRoot)).toHaveLength(0);
     const desired = deriveGraph(await loadGraphSources(objectsAt(tc.hippoRoot), T));
-    expect(await readGraphDelta(sqliteStore(tc.hippoRoot).graphReads, T, desired)).toEqual([]);
+    expect(await sqliteStore(tc.hippoRoot).graphReads.graphDelta(T, desired)).toEqual([]);
     expect(loadRelations(tc.hippoRoot, T, { limit: 100 })).toHaveLength(3);
   });
 

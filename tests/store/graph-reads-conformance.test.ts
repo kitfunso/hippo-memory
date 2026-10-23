@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ScopeActor } from '../../src/base/scope/recall-scope.js';
 import type { GraphRows, GraphViewQuery } from '../../src/store/port.js';
-import type { Entity, Relation, StoredGraph } from '../../src/store/port/graph.js';
+import type { Entity, GraphOp, Relation } from '../../src/store/port/graph.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -439,37 +439,39 @@ describe('GraphReads walk reads', () => {
   });
 });
 
-describe('GraphReads.storedGraph', () => {
-  it("reads the tenant's rows in id order and the kind of each memory asked, whichever tenant holds it", async () => {
+describe('GraphReads.graphDelta', () => {
+  it('plans the same ops on both stores: deletes in id order, then updates and inserts in desired order', async () => {
     const { e, memories } = g;
-    const [inA, inB, unknown] = await answers<StoredGraph>([
-      (r) => r.storedGraph(TENANT_A, [memories.team, 'mem_gb', 'mem_never_written']),
-      (r) => r.storedGraph(TENANT_B, []),
-      (r) => r.storedGraph('nobody', [memories.held]),
+    const [[anchored]] = await answers<Entity[]>([(r) => r.entitiesByIds(TENANT_A, [e.anchored])]);
+    const key = {
+      entityType: 'policy' as const,
+      sourceObject: { type: 'policy' as const, id: anchored!.sourceObjectId! },
+    };
+    const fresh = { entityType: 'decision' as const, sourceObject: { type: 'decision' as const, id: 9999 } };
+    const kept = { ...key, name: anchored!.name, memoryId: anchored!.memoryId };
+    const moved = { ...kept, memoryId: memories.team };
+    const added = { ...fresh, name: 'New', memoryId: 'mem_gb' };
+    const edge = {
+      from: key,
+      to: fresh,
+      relType: 'references' as const,
+      memoryId: null,
+      sourceObject: fresh.sourceObject,
+    };
+    const [same, update, inB, nobody] = await answers<GraphOp[]>([
+      (r) => r.graphDelta(TENANT_A, { entities: [kept, { ...kept, name: 'Later twin' }, added], relations: [edge] }),
+      (r) => r.graphDelta(TENANT_A, { entities: [moved], relations: [] }),
+      (r) => r.graphDelta(TENANT_B, { entities: [], relations: [] }),
+      (r) => r.graphDelta('nobody', { entities: [added], relations: [] }),
     ]);
-    expect(inA.entities.map((row) => row.id)).toEqual([
-      e.hub,
-      e.spoke1,
-      e.spoke2,
-      e.secret,
-      e.mine,
-      e.twinHeld,
-      e.twinOpen,
-      e.lone,
-      e.shared,
-      e.anchored,
+    const loose = [e.hub, e.spoke1, e.spoke2, e.secret, e.mine, e.twinHeld, e.twinOpen, e.lone, e.shared];
+    const deletes = loose.map((id) => ({ op: 'deleteEntity', id }));
+    expect(same).toEqual([...deletes, { op: 'insertEntity', entity: added }, { op: 'insertRelation', relation: edge }]);
+    expect(update).toEqual([...deletes, { op: 'updateEntity', id: e.anchored, entity: moved }]);
+    expect(inB).toEqual([
+      { op: 'deleteEntity', id: e.sharedB },
+      { op: 'deleteEntity', id: e.otherB },
     ]);
-    expect(inA.relations.map((row): Edge => [row.from_entity_id, row.to_entity_id])).toEqual(
-      [...newest.relations].reverse(),
-    );
-    expect(inA.kinds).toEqual(
-      new Map([
-        [memories.team, 'distilled'],
-        ['mem_gb', 'distilled'],
-      ]),
-    );
-    expect(inB.entities.map((row) => row.id)).toEqual([e.sharedB, e.otherB]);
-    expect(inB.kinds).toEqual(new Map());
-    expect(unknown).toEqual({ kinds: new Map([[memories.held, 'distilled']]), entities: [], relations: [] });
+    expect(nobody).toEqual([{ op: 'insertEntity', entity: added }]);
   });
 });

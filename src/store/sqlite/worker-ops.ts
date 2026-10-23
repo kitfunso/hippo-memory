@@ -93,7 +93,7 @@ export const WORKER_OPS = {
     entitiesForMemories: 'read',
     entitiesByIds: 'read',
     neighborRelations: 'read',
-    storedGraph: 'read',
+    graphDelta: 'read',
   },
   objects: {
     listObjects: 'read',

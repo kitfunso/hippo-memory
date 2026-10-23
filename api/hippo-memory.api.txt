@@ -248,6 +248,7 @@ entry/store-kit.d.ts: StatusCounts re-export
 entry/store-kit.d.ts: StoreBusyError re-export
 entry/store-kit.d.ts: StoreGroup re-export
 entry/store-kit.d.ts: StoreGroups re-export
+entry/store-kit.d.ts: StoredGraph re-export
 entry/store-kit.d.ts: StrengthTallies re-export
 entry/store-kit.d.ts: StrengthenOptions re-export
 entry/store-kit.d.ts: SupersedeWrite re-export
@@ -271,6 +272,7 @@ entry/store-kit.d.ts: ambientRefusal re-export
 entry/store-kit.d.ts: bufferToFloat32 re-export
 entry/store-kit.d.ts: decodeVector re-export
 entry/store-kit.d.ts: descendantAdmits re-export
+entry/store-kit.d.ts: diffGraph re-export
 entry/store-kit.d.ts: encodeVector re-export
 entry/store-kit.d.ts: entryAfterOutcome re-export
 entry/store-kit.d.ts: float32ToBuffer re-export

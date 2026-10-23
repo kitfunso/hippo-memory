@@ -39,8 +39,9 @@ export interface GraphReads {
     entityIds: readonly number[],
     opts: { readonly limit: number },
   ): Promise<Relation[]>;
-  /** The tenant's entities and relations, each id ascending, and the kind of each of `memoryIds` held in any tenant. */
-  storedGraph(tenantId: string, memoryIds: readonly string[]): Promise<StoredGraph>;
+  /** The ops that turn the tenant's stored graph into `desired`, as store/rules/graph-delta.ts diffGraph plans them.
+   * Read outside any write lock, so the apply re-checks each op against what changed since. */
+  graphDelta(tenantId: string, desired: DesiredGraph): Promise<GraphOp[]>;
 }
 
 export type EntityType = 'person' | 'project' | 'customer' | 'system' | 'policy' | 'decision';
@@ -84,37 +85,7 @@ export interface Relation {
   createdAt: string;
 }
 
-/** The entity columns a rebuild diffs against. */
-export interface StoredEntity {
-  id: number;
-  entity_type: string;
-  name: string;
-  memory_id: string | null;
-  source_kind: string;
-  source_object_type: string | null;
-  source_object_id: number | null;
-}
-
-/** The relation columns a rebuild diffs against. */
-export interface StoredRelation {
-  id: number;
-  from_entity_id: number;
-  to_entity_id: number;
-  rel_type: string;
-  memory_id: string | null;
-  source_kind: string;
-  source_object_type: string | null;
-  source_object_id: number | null;
-}
-
-/** One tenant's stored graph as a rebuild reads it, with the kind of each memory the desired rows name. */
-export interface StoredGraph {
-  readonly kinds: ReadonlyMap<string, string>;
-  readonly entities: readonly StoredEntity[];
-  readonly relations: readonly StoredRelation[];
-}
-
-// The graph rebuild's writes: ops a diff of graphReads.storedGraph planned, applied as plain data.
+// The graph rebuild's writes: ops graphReads.graphDelta planned, applied as plain data.
 export interface GraphRebuild {
   /** Applies `ops` from `opts.from` in one transaction, stopping at the first op past `opts.holdMs`. Each insert and
    * update is checked against the rows as they stand, so one a writer made stale since the diff's read is skipped. */

@@ -12,21 +12,14 @@ import {
   ENTITY_COLS,
   RELATION_COLS,
 } from './graph-rows.js';
-import {
-  GRAPH_ID_BATCH,
-  type EntityType,
-  type Entity,
-  type Relation,
-  type StoredEntity,
-  type StoredGraph,
-  type StoredRelation,
-} from '../port/graph.js';
+import { GRAPH_ID_BATCH, type EntityType, type Entity, type Relation } from '../port/graph.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { GraphRows, GraphReads, GraphViewQuery } from '../port.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { graphDeltaOn } from './graph-delta.js';
 
 const DEFAULT_GRAPH_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 const DEFAULT_GRAPH_SCAN_LIMIT = 1000;
@@ -215,39 +208,6 @@ function loadEntitiesByMemoryId(db: DatabaseSyncLike, tenantId: string, memoryId
   return out;
 }
 
-// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-type StoredEntityDbRow = StoredEntity;
-
-// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-type StoredRelationDbRow = StoredRelation;
-
-/** The stored rows a rebuild diffs against, read on the caller's handle so the diff and the apply can share one write
- * lock. */
-function storedGraphOn(db: DatabaseSyncLike, tenantId: string, memoryIds: readonly string[]): StoredGraph {
-  const kinds = memoryKindsOn(db, memoryIds);
-  const entities = cachedStatement(
-    db,
-    `SELECT id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id FROM entities ` +
-      `WHERE tenant_id = ? ORDER BY id`,
-  ).all(tenantId) as StoredEntityDbRow[];
-  const relations = cachedStatement(
-    db,
-    `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, ` +
-      `source_kind, source_object_type, source_object_id ` +
-      `FROM relations WHERE tenant_id = ? ORDER BY id`,
-  ).all(tenantId) as StoredRelationDbRow[];
-  return { kinds, entities, relations };
-}
-
-function memoryKindsOn(db: DatabaseSyncLike, memoryIds: readonly string[]): ReadonlyMap<string, string> {
-  if (memoryIds.length === 0) return new Map();
-  const rows = cachedStatement(db, `SELECT id, kind FROM memories WHERE id IN (SELECT value FROM json_each(?))`).all(
-    JSON.stringify(memoryIds),
-  ) as Array<{ id: string; kind: string }>;
-  return new Map(rows.map((row) => [row.id, row.kind]));
-}
-
-/** storedGraphOn on its own connection, outside any write lock. */
 /** Run `fn` in ONE read transaction (a single WAL snapshot) so every `load*` read via `txDb` sees a consistent view
  * even if a rebuild commits concurrently (it clears and reinserts entities, so separate reads could mix old entity ids
  * with new relation ids). */
@@ -367,7 +327,7 @@ const graphReadsBodies: Bodies<GraphReads> = {
   entitiesForMemories: loadEntitiesByMemoryId,
   entitiesByIds: loadEntitiesByIds,
   neighborRelations: loadNeighborRelations,
-  storedGraph: storedGraphOn,
+  graphDelta: graphDeltaOn,
 };
 
 export function sqliteGraphReads(on: OnHandle): GraphReads {
