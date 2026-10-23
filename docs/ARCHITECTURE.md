@@ -3,9 +3,9 @@
 ## Layers
 
 Eight layers, lowest first: base (pure helpers, core types, the ports), host (the disk, environment and process reads: config.json, project walks, home folders, atomic writes, child processes), db (SQLite connection and schema), store (code that runs SQL on hippo.db, plus its row shapes, SQL text and adapter), domain (recall, graph, consolidation, hooks), infra (the adapters behind the ports), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
-Domain code gets every model and socket through a port in `src/base/ports`: `EmbedderFor` builds an embedding provider from a config, `Http` sends a request under a timeout policy, `CrossEncoderLoad` loads the reranker's model, and `Llm`, the machine and the git runner do the rest. `src/infra` holds the real ones: the embedding providers and the local embedder, the Transformers.js loaders, `fetchWithRetry` and the reranker registry. `src/base/embeddings/local.ts` keeps only the model rules and a package probe that loads nothing, because token-eval scripts import it by its dist path. `scripts/check-domain-io.mjs` fails a domain file that imports `src/infra` or an adapter module, or that calls `fetch`.
+Domain code gets every model and socket through a port in `src/base/ports`: `EmbedderFor` builds an embedding provider from a config, `Http` sends a request under a timeout policy, `CrossEncoderLoad` loads the reranker's model, and `Llm`, the machine and the git runner do the rest. `src/infra` holds the real ones: the embedding providers and the local embedder, the Transformers.js loaders, `fetchWithRetry`, and the hosted rerankers with their registry and the TypeSafe judge (`src/infra/rerankers`, whose `endpoint.ts` holds the one outbound rule: TypeSafe's address, the pinned Jev model and the bounded, retried post). `src/base/embeddings/local.ts` keeps only the model rules and a package probe that loads nothing, because token-eval scripts import it by its dist path. `scripts/check-domain-io.mjs` fails a domain file that imports `src/infra` or an adapter module, or that calls `fetch`.
 `src/base` imports no `fs`, `os` or `child_process`; those reads live in `src/host`, and domain and api import host for its types only, getting its answers from the machine port or their caller. `scripts/check-domain-io.mjs` holds both lines. A host keeps no module state: the project-walk cache and the sticky shared-store flag live in a `Host` (`src/host/host.ts`) that each root builds and drops with itself (a CLI command through `currentMachine()`, a server runtime, the sleep child, and each SQLite store object through `storeFilesOf`).
-The roots wire the real adapters in. `infraOf(ctx)` in `src/api/infra.ts` hands api code the context's embedder, and a `ConfiguredFolder` or `globalTarget` carries its `embedderFor`, so a target built from it embeds with no further wiring. Eval and benchmark scripts import the wired `embedAll`, `folderIndex`, `getReranker` and `judgeAll` from `src/entry/eval-scripts.ts`.
+The roots wire the real adapters in. Every api `Context` carries them as `ctx.infra`, which its composition root sets. A published entry takes an `EntryContext`, where `infra` is optional, and `withEntryInfra` in `src/surface/entry-infra.ts` fills in the real ports. `ctx.infra` hands api code the context's embedder, and a `ConfiguredFolder` or `globalTarget` carries its `embedderFor`, so a target built from it embeds with no further wiring. Eval and benchmark scripts import the wired `embedAll`, `folderIndex`, `getReranker` and `judgeAll` from `src/entry/eval-scripts.ts`.
 The tree shows them: `src/base`, `src/domain` and `src/surface` hold one folder per feature, and `src/db`, `src/store` and `src/api` are one feature each. `src/entry` and the five root files stay at the top of `src` because package.json exports and bin/hippo.js name their dist paths.
 A file imports only from its own layer or a lower one. `layers.json` is the map and `scripts/check-layers.mjs` enforces it: any upward import fails, and `.layers-baseline.json` caps the root files. `scripts/check-folder-cycles.mjs` fails on a runtime import cycle between two features.
 
@@ -277,11 +277,15 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `handleRemember`: B2 v1.12.6 — validate --owner on the thin-client path too. Failure on this path exits early so the user gets the same validation experience whether or not a server is up.
 - `handleRemember`: A routed remember meets the same salience gate as a direct one: `POST /v1/memories` always asks `api.remember` for it (#1018, which closed the 2026-09-07 gap). `--force` is a rich flag, so a forced remember takes the direct path and skips the gate there.
 
-### src/surface/cli/session-hooks.ts
+### src/surface/cli/hooks/compact-resume.ts
 - `COMPACT_RESUME_EVENT_CONTENT_CAP`: X8: session-event content is capped at print time only — the shared printSessionEvents stays untouched for every other caller.
 - `restoreCompactSnapshot`: X5: concurrent sessions must not cross-restore. Only suppress when BOTH ids are present and differ — either side missing, or a manual invocation with no payload session_id, still prints.
 - `restoreCompactSnapshot`: X12: re-injected state is background reference, not instructions: the framing line the model actually sees at every compaction.
+
+### src/surface/cli/hooks/session-end.ts
 - `handleSessionEnd`: Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md): extracts transcript_path + session_id for the detached worker's argv.
+
+### src/surface/cli/hooks/session-end-worker.ts
 - `cmdSessionEndWorker`: DF1 T3: close the ending session's own active task snapshot AFTER sleep+capture complete — neither producer (runPreCompact, `hippo snapshot save`) runs inside session-end, so this can never destroy same-run work. Scoped to `--session-id`: a concurrent session's active snapshot is untouched (closeTaskSnapshotsForSession's own WHERE clause). Absent session id -> no-op plus one log line; session-end is not guaranteed to fire at all (crash, kill -9), so the freshness bound in loadFreshActiveTaskSnapshot is the backstop layer, not this close. Handoff write happens BEFORE the snapshot close below, while the snapshot writeSessionEndHandoff reads is still active.
 
 ### src/surface/cli/slack.ts
@@ -827,12 +831,16 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `deleteRejectedValue`: Delete a tombstone by tenant + exact digest — the T2 `unreject` verb, the only v1 escape hatch (plan §4).
 - `listRejectedValues`: List tombstones for a tenant, newest first — the T2 `rejections` verb.
 
-### src/domain/rerankers/jev.ts
-- `DEFAULT_MODEL`: Pinned, not `jev-latest`: every number in docs/evals/2026-09-19-jev-reranker.md was measured on this version, and the alias moves whenever the vendor ships a release.
+### src/infra/rerankers/endpoint.ts
+- `JEV_MODEL`: Pinned, not `jev-latest`: every number in docs/evals/2026-09-19-jev-reranker.md was measured on this version, and the alias moves whenever the vendor ships a release.
+
+### src/domain/rerankers/hosted.ts
 - `JEV_DEFAULT_TOP_K`: The pool size every number in docs/evals/2026-09-19-jev-reranker.md was measured at.
+
+### src/infra/rerankers/jev.ts
 - `jevReranker`: Cost, env vars, evidence and limits: docs/evals/2026-09-19-jev-reranker.md.
 
-### src/domain/rerankers/llm.ts
+### src/infra/rerankers/llm.ts
 - `module header`: Skeleton only — see docs/plans/2026-05-10-f6-reranker-hardening.md Task 8. Full characterisation deferred to a follow-on plan.
 
 ### src/base/ports/reranker.ts

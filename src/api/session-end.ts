@@ -5,13 +5,13 @@
 import * as path from 'path';
 import type { HandoffEvidence } from '../base/session/handoff.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';
-import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
+import type { SessionEvent } from '../store/port/sessions.js';
 import type { TranscriptCalls } from '../base/session/transcript-calls.js';
-import { infraOf } from './infra.js';
 import { truncateCodePointSafe } from '../base/util/code-point-cut.js';
 import { errorMessage, log, errorFields } from '../base/util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
 import { autoSleepDue } from './sleep/auto-sleep.js';
+import { snapshotFields, type WorkingState } from '../domain/capture/working-state.js';
 import type { Context } from './types.js';
 import type { Ledger } from '../store/port.js';
 
@@ -23,7 +23,7 @@ export interface SessionClose {
    */
   turn: boolean;
   /** The transcript's working state, or null with no readable transcript. */
-  workingState: () => Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'> | null;
+  workingState: () => WorkingState | null;
   evidence: () => HandoffEvidence;
   /** One line to the session-end log. */
   log: (line: string) => void;
@@ -46,7 +46,8 @@ async function writeEndHandoff(ctx: Context, sessionId: string, close: SessionCl
     const ownSnapshot = (await sessions.loadSnapshot(ctx.tenantId, null))?.sessionId === sessionId;
     // A never-compacted session has no snapshot; read even when it has one, as another session's PreCompact can take
     // the slot before the write.
-    const derived = close.workingState();
+    const state = close.workingState();
+    const derived = state === null ? null : snapshotFields(state);
     if (!ownSnapshot && !derived) {
       close.log('skip: no snapshot or transcript for session');
       return;
@@ -95,7 +96,7 @@ export async function bookSessionRereads(
   sessionId: string | null,
 ): Promise<string[]> {
   if (!transcriptPath || !sessionId) return [];
-  const { transcriptCalls } = infraOf(ctx);
+  const { transcriptCalls } = ctx.infra;
   if (transcriptCalls === undefined) return ['skip re-read count: this context reads no transcripts'];
   let read: TranscriptCalls;
   try {

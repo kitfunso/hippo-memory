@@ -18,6 +18,7 @@ import { OTHER_STORE_MARKER, type HippoStore } from '../../src/entry/store-kit.j
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { type MemorySide, memorySide } from '../_helpers/memory-side.js';
+import { testInfra } from '../_helpers/infra.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const slackActor: Actor = { subject: 'connector:slack', role: 'admin' };
@@ -100,6 +101,7 @@ describe('the connector entry points on a store with connectorEvents', () => {
       actor: slackActor,
       store: memory.store,
       config: loadConfig(hippoRoot),
+      infra: testInfra(),
     };
     const github: Context = { ...slack, actor: githubActor };
     const message = (eventId: string, text: string, ts: string) =>

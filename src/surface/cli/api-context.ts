@@ -26,7 +26,7 @@ import {
 } from '../open-store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
-import type { RerankerFn } from '../../domain/rerankers/index.js';
+import type { RerankerFn } from '../../base/ports/reranker.js';
 import { autoSleepHost, createCallerState, type CallerState } from '../../api/callers.js';
 import { anthropicLlmFromEnv, rootInfra } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';

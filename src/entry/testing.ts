@@ -6,11 +6,11 @@ import {
   upsertEntryRow,
   writeEntry,
   type WriteEntryOptions,
-} from '../surface/open-store.js';
+} from '../surface/testing-kit.js';
 // The eval kit: an eval seeds a store folder and reads it back whole, every tenant's rows included.
 export { ambientSecretAdmit } from '../base/scope/read-admission.js';
-export { initStore, loadAllEntries, loadEmbeddingIndex, writeEntry } from '../surface/open-store.js';
-export type { WriteEntryOptions } from '../surface/open-store.js';
+export { initStore, loadAllEntries, loadEmbeddingIndex, writeEntry } from '../surface/testing-kit.js';
+export type { WriteEntryOptions } from '../surface/testing-kit.js';
 export { embedMemory, loadRecallSearchEntries } from './folder-search.js';
 // A second adapter of every required store group, held in memory, so an add-on's tests can run without a folder.
 export { memoryStore } from '../store/memory/store.js';
@@ -38,7 +38,7 @@ export {
   writeDeliveryEventOnHandle,
   writeEntryDbOnly,
   writeIndexMirror,
-} from '../surface/open-store.js';
+} from '../surface/testing-kit.js';
 
 // The wire forms that read or write hippo.db live here, at the root, so wire-kit.ts stays off the hippo.db adapter.
 export function loadAllEntriesWire(hippoRoot: string): MemoryWire[] {

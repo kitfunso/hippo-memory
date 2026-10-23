@@ -12,7 +12,6 @@ import {
   retrieve,
 } from '../../../api/index.js';
 import { RECALL_RECORDING } from '../../../api/recall/finish.js';
-import { infraOf } from '../../../api/infra.js';
 import { continuityJson, sessionEventJson, snapshotJson } from '../../../api/continuity-json.js';
 import { httpParams, parseContextRequest, parseRecallRequest } from '../../../api/recall/request.js';
 import { HttpError, sendJson } from '../../../base/util/http-util.js';
@@ -104,7 +103,7 @@ export async function handleDrillRecall({ res, ctx, query }: AuthedRouteRequest,
  * contextGet refuses.
  */
 function contextReader(ctx: Context, hippoRoot: string, query: URLSearchParams): ProjectRef {
-  if (!sharedStoreOf(ctx)) return infraOf(ctx).machine.projectIdentity(dirname(resolve(hippoRoot)));
+  if (!sharedStoreOf(ctx)) return ctx.infra.machine.projectIdentity(dirname(resolve(hippoRoot)));
   const name = query.get('project');
   if (name === null) return '';
   const aliases = query.getAll('alias');

@@ -39,7 +39,8 @@
   "adapter": {
     "folder": "store/sqlite",
     "root": "surface/open-store.ts",
-    "doors": ["store/sqlite/index.ts", "store/sqlite/fixtures.ts"],
+    "doors": ["store/sqlite/index.ts"],
+    "testKit": { "file": "surface/testing-kit.ts", "door": "store/sqlite/fixtures.ts" },
     "unnamedIn": ["domain", "api"]
   }
 }

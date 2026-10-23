@@ -23,7 +23,6 @@ import { type JsonValue, isJsonString, isJsonObject, tryParseJson } from '../../
 import { tryDecodeUri } from '../../base/util/expected-errors.js';
 import { blockHash } from '../../base/util/token-text.js';
 import { MINUTE_MS } from '../../base/util/time.js';
-import { infraOf } from '../../api/infra.js';
 
 const DEFAULT_SSE_HEARTBEAT_MS = MINUTE_MS;
 const DEFAULT_SSE_MAX_AGE_SEC = 3600;
@@ -80,7 +79,7 @@ function mcpContextFor(ctx: Context, hippoRoot: string, clientKey: string, proje
     config: ctx.config,
     reach: ctx.reach,
     callers: ctx.callers,
-    infra: infraOf(ctx),
+    infra: ctx.infra,
   };
   if (project !== undefined) mcpCtx.project = project;
   return mcpCtx;

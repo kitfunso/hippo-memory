@@ -227,7 +227,7 @@ export const HEALTH_VERBS = {
     quarantine reject <id>  Keep a quarantined memory hidden for good`,
     ],
   }),
-  'capture-error': verb(() => import('../session-hooks.js'), 'handleCaptureError', {
+  'capture-error': verb(() => import('../hooks/capture-error.js'), 'handleCaptureError', {
     flags: { values: ['format', 'runtime'] },
     usage: [
       `

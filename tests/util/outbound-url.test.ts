@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseOutboundUrl } from '../../src/base/util/net.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import { createLlmReranker } from '../../src/domain/rerankers/llm.js';
+import { createLlmReranker } from '../../src/infra/rerankers/llm.js';
 import { processHttp } from '../../src/infra/http.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

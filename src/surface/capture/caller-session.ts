@@ -9,7 +9,7 @@ import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../../base/scope/project-identity.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { bindSessionOwner } from '../../api/auth/session-owners.js';
-import { fitWorkingState, WORKING_STATE_CAPS, type WorkingState } from './working-state.js';
+import { fitWorkingState, WORKING_STATE_CAPS, type WorkingState } from '../../domain/capture/working-state.js';
 import type { ContinuityKey } from '../../store/port/types.js';
 
 /**

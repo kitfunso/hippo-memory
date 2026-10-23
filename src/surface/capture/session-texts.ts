@@ -1,8 +1,7 @@
 // `hippo capture --last-session` for a caller whose transcript was read on another machine: its project names the rows,
 // never the store's folder.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { ContextWith } from '../../api/types.js';
-import { infraOf } from '../../api/infra.js';
+import type { ContextWith, EntryContext } from '../../api/types.js';
 import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../../base/scope/project-identity.js';
 import { longestWord, storedTextKeys } from '../../base/util/same-text.js';
@@ -13,7 +12,7 @@ import { extractFromTexts } from './extract.js';
 import { withEntryInfra } from '../entry-infra.js';
 
 /** A context whose store has the captures group, which a session's capture reads and writes. */
-export type CaptureContext = ContextWith<'captures'>;
+export type CaptureContext = EntryContext<ContextWith<'captures'>>;
 
 const MAX_TEXTS = 30;
 const MAX_TEXT_BYTES = 32 * 1024;
@@ -68,7 +67,7 @@ export async function captureSessionTexts(
   );
   const { store, config } = ctx;
   const tally = await captureExtractedItems(
-    { store, config, index: folderIndex({ store, config, embedderFor: infraOf(ctx).embedderFor }) },
+    { store, config, index: folderIndex({ store, config, embedderFor: ctx.infra.embedderFor }) },
     {
       tenantId: ctx.tenantId,
       originProject: req.project,

@@ -1,6 +1,6 @@
 // The api runs remember, recall, context and sleep on the ports its Context carries: fakes here and a real SQLite
 // store. check-layers keeps src/infra out of src/api's imports; this proves the calls go to the fakes.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { adminActor, contextGet, remember, sleep } from '../../src/api/index.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
@@ -177,9 +177,8 @@ describe('the api on fake infra ports', () => {
     expect(network).not.toHaveBeenCalled();
   });
 
-  it('a Context with no infra fails at the api, not deep in a real service', async () => {
+  it('the api takes no Context without infra', () => {
     const { infra: _unused, ...bare } = contextOn(fakeInfra(join(hippoRoot, '..')));
-    await expect(sleep(bare, { noShare: true })).rejects.toThrow('this Context has no infra');
-    expect(network).not.toHaveBeenCalled();
+    expectTypeOf(bare).not.toExtend<Parameters<typeof sleep>[0]>();
   });
 });

@@ -13,6 +13,7 @@ import { stageSupersedeWinner } from '../_helpers/supersede-now.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { readEntry } from '../_helpers/root-forms.js';
+import { testInfra } from '../_helpers/infra.js';
 
 /**
  * Typed wrapper around a single-row SQL lookup. Every call site below
@@ -55,6 +56,7 @@ describe('api tenant isolation', () => {
           config: loadConfig(home),
           tenantId: 'bravo',
           actor: { subject: 'api_key:bravo-key', role: 'admin' },
+          infra: testInfra(),
         },
         created.id,
       ),

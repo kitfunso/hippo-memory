@@ -197,7 +197,7 @@ describe('CLI help output is byte-identical and runs nothing', () => {
   it('every verb row names a handle<Verb> export and never a cmd<Name>', () => {
     // Read from source: the spies above replaced each run function.
     const dir = resolve(__dirname, '..', '..', 'src', 'surface', 'cli', 'verbs');
-    const rowCall = /\bverb\(\(\) => import\('[^']+'\), '(\w+)'/g;
+    const rowCall = /\bverb\(\s*\(\) => import\('[^']+'\),\s*'(\w+)'/g;
     const names = readdirSync(dir).flatMap((file) =>
       [...readFileSync(join(dir, file), 'utf8').matchAll(rowCall)].map((m) => m[1]),
     );

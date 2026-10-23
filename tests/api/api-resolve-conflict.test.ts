@@ -151,6 +151,7 @@ describe('conflictResolve', () => {
     actor: adminActor('test'),
     store: sqliteStore(root),
     config: loadConfig(root),
+    infra: testInfra(),
   });
 
   it("answers a resolved conflict with 409 and another tenant's with 404", async () => {

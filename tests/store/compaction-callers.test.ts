@@ -12,11 +12,10 @@ import {
 } from '../../src/store/sqlite/compactions-record.js';
 import { storeLesson } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
-import { snapshotFields, WORKING_STATE_CAPS } from '../../src/surface/capture/working-state.js';
+import { snapshotFields, WORKING_STATE_CAPS } from '../../src/domain/capture/working-state.js';
 import { compactResumeText } from '../../src/api/context-render.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
-import type { Context } from '../../src/api/types.js';
-import { bindSessionOwner, compactResumeForCaller } from '../../src/server.js';
+import { bindSessionOwner, compactResumeForCaller, type Context } from '../../src/server.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { handlesOf, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { sqliteCompactionHooks } from '../../src/store/sqlite/compaction-hooks.js';

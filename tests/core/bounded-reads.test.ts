@@ -14,6 +14,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntriesTogether, loadAllDirtySummaries, loadAllEntries } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
 
@@ -145,6 +146,7 @@ describe('memoryCountAll', () => {
         actor: adminActor('test:count'),
         store: sqliteStore(root),
         config: loadConfig(root),
+        infra: testInfra(),
       };
       const { result, rowsRead } = await recordStatementsAsync(() => memoryCountAll(ctx));
       expect(result).toBe(n + 1);
