@@ -120,8 +120,8 @@ export async function searchBothHybrid(
         passesScopeFilterForRecall(e.scope ?? null, undefined, recallScope.ownScope)
       : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested, recallScope.ownScope));
   const admit = (e: MemoryEntry): boolean => passesScope(e) && (!entryFilter || entryFilter(e));
-  const localEntries = (await loadEntries(local)).filter(admit);
-  const globalEntries = (await loadEntries(global)).filter(admit);
+  const loaded = await Promise.all([loadEntries(local), loadEntries(global)]);
+  const [localEntries, globalEntries] = loaded.map((entries) => entries.filter(admit));
 
   // The vector arm loads under the same SQL rules as loadEntries, then the same JS admission.
   const vectorCandidates: HybridVectorCandidates = {

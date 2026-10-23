@@ -12,11 +12,11 @@ import type { StoreFiles } from './open.js';
 import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../port/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { SqlFragment } from '../../db/sql.js';
+import { keyProjects } from '../rules/continuity.js';
 
-/** All or nothing: a key missing its owner or every project name matches no row, never the tenant's newest. */
 export function continuityWhere(key: ContinuityKey): SqlFragment {
-  const names = key.project.filter((n) => n !== '');
-  if (key.owner === '' || names.length === 0) return { sql: '0', params: [] };
+  const names = keyProjects(key);
+  if (names === null) return { sql: '0', params: [] };
   return { sql: `owner_subject = ? AND ${originInSql(names)}`, params: [key.owner, ...names] };
 }
 

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { archiveRawMemory } from '../../src/store/sqlite/raw-archive.js';
+import { archiveRawMemories, archiveRawMemory } from '../../src/store/sqlite/raw-archive.js';
+import { recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 interface ArchivedRawPayload {
@@ -123,6 +124,52 @@ describe('archiveRawMemory', () => {
       ).toBeUndefined();
     } finally {
       closeHippoDb(db);
+    }
+  });
+});
+
+describe('archiveRawMemories', () => {
+  const insertRaw = (db: ReturnType<typeof openHippoDb>, id: string, kind = 'raw'): void => {
+    db.prepare(
+      `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES (?,'2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed',?,?)`,
+    ).run(id, `raw text of ${id}`, kind);
+  };
+  const count = (db: ReturnType<typeof openHippoDb>, sql: string): number =>
+    // SAFETY: COUNT(*) answers one row.
+    (db.prepare(sql).get() as { n: number }).n;
+
+  it('archives one row or many in as many statements, each with its own archive and audit row', () => {
+    const home = makeRoot('arch');
+    const db = openHippoDb(home);
+    try {
+      for (const id of ['one', 'm1', 'm2', 'm3', 'm4', 'm5']) insertRaw(db, id);
+      const opts = { reason: 'artifact deleted', who: 'github:bot' };
+      const single = recordStatements(() => archiveRawMemories(db, ['one'], opts)).statements;
+      const many = recordStatements(() => archiveRawMemories(db, ['m1', 'm2', 'm3', 'm4', 'm5'], opts)).statements;
+      expect(many).toHaveLength(single.length);
+      expect(count(db, `SELECT COUNT(*) AS n FROM memories`)).toBe(0);
+      expect(count(db, `SELECT COUNT(*) AS n FROM raw_archive WHERE archived_by = 'github:bot'`)).toBe(6);
+      expect(count(db, `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'archive_raw'`)).toBe(6);
+    } finally {
+      closeHippoDb(db);
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('archives none when any row is missing or not raw', () => {
+    const home = makeRoot('arch');
+    const db = openHippoDb(home);
+    try {
+      insertRaw(db, 'r1');
+      insertRaw(db, 'd1', 'distilled');
+      const opts = { reason: 'test', who: 'user:1' };
+      expect(() => archiveRawMemories(db, ['r1', 'gone'], opts)).toThrow(/memory not found: gone/);
+      expect(() => archiveRawMemories(db, ['r1', 'd1'], opts)).toThrow(/memory d1 is not raw/);
+      expect(count(db, `SELECT COUNT(*) AS n FROM memories`)).toBe(2);
+      expect(count(db, `SELECT COUNT(*) AS n FROM raw_archive`)).toBe(0);
+    } finally {
+      closeHippoDb(db);
+      rmSync(home, { recursive: true, force: true });
     }
   });
 });

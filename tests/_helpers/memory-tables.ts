@@ -15,6 +15,7 @@ import { ENTITY_COLS, RELATION_COLS, rowToEntity, rowToRelation } from '../../sr
 import type { EntityRow, RelationRow } from '../../src/store/sqlite/graph-rows.js';
 import { HANDOFF_COLUMNS } from '../../src/store/sqlite/handoffs.js';
 import { rowSpec, type RowByKind } from '../../src/store/sqlite/object-rows.js';
+import { objectTable } from '../../src/store/rules/objects.js';
 import {
   MEMORY_CONFLICT_COLUMNS,
   MEMORY_SELECT_COLUMNS,
@@ -202,7 +203,7 @@ function copySessions(db: DatabaseSyncLike, t: MemoryTables): void {
 function copyObjectKind<K extends ObjectKind>(db: DatabaseSyncLike, t: MemoryTables, kind: K): void {
   const spec = rowSpec(kind);
   // SAFETY: the SELECT names spec.cols, exactly the columns of the kind's row.
-  const found = db.prepare(`SELECT ${spec.cols} FROM ${spec.table} ORDER BY id`).all() as RowByKind[K][];
+  const found = db.prepare(`SELECT ${spec.cols} FROM ${objectTable(kind)} ORDER BY id`).all() as RowByKind[K][];
   const table = t.objects[kind];
   for (const row of found) {
     const object = spec.rowTo(row);

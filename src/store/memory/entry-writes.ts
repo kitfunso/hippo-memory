@@ -1,5 +1,6 @@
 // The in-memory EntryWrites group: each write runs staged, so a refused or failed one leaves the rows as they were.
 import { ConflictError } from '../../base/errors/api-errors.js';
+import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { entryAfterOutcome, type MemoryEntry } from '../../base/memory/memory.js';
 import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';
 import type { EntryRemoval, EntryWrites, OutcomeWrite, PinWrite, SupersedeWrite } from '../port/entry-writes.js';
@@ -49,8 +50,7 @@ function supersedeIn(t: MemoryTables, write: SupersedeWrite): void {
 function forgetIn(t: MemoryTables, removal: EntryRemoval): void {
   stage(t, removal.actor, (tx) => {
     const row = inReach(tx, removal, removal.id);
-    // hippo.db's trigger message, so the dashboard and CLI match it the same way under either store.
-    if (row.kind === 'raw') throw new Error('raw is append-only');
+    if (row.kind === 'raw') throw new RawAppendOnlyError();
     tx.rows.delete(removal.id);
     tx.audit.push({ tenantId: row.tenantId, actor: removal.actor, op: 'forget', targetId: removal.id });
     if (row.dagParentId) markParentDirty(tx, row.dagParentId, row.tenantId, removal.actor);

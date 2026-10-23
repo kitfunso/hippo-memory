@@ -12,6 +12,14 @@ import {
   type MemoryEntry,
 } from '../../base/memory/memory.js';
 import { scopeAdmitSql } from './rule-sql.js';
+import {
+  closeAudit,
+  createAudit,
+  incidentOpenAudit,
+  isVersioned,
+  objectTable,
+  supersedeAudit,
+} from '../rules/objects.js';
 import { stampOriginProject, upsertEntryRow } from './entry-row.js';
 import { auditEntryWrite, writeEntryMirrorsIn, auditingRefusal } from './entry-writes.js';
 import { markGraphDirty } from './graph-queue.js';
@@ -42,7 +50,6 @@ import type {
 } from '../port.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
 import { placeholders } from '../../db/sql.js';
-import type { JsonObject } from '../../base/util/json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 export function sqliteObjects(on: OnHandle): Objects {
@@ -91,7 +98,7 @@ function idByMemory<K extends ObjectKind>(
 ): number | null {
   const row = cachedStatement(
     db,
-    `SELECT id FROM ${rowSpec(kind).table} WHERE memory_id = ? AND tenant_id = ? AND status = ? ORDER BY id DESC ` +
+    `SELECT id FROM ${objectTable(kind)} WHERE memory_id = ? AND tenant_id = ? AND status = ? ORDER BY id DESC ` +
       `LIMIT 1`,
   ).get(memoryId, tenantId, status) as { id: number } | undefined;
   return row ? row.id : null;
@@ -105,7 +112,7 @@ function selectRow<K extends ObjectKind>(
 ): RowByKind[K] | undefined {
   const spec = rowSpec(kind);
   // SAFETY: the SELECT names spec.cols, the columns the kind's row declares.
-  return cachedStatement(db, `SELECT ${spec.cols} FROM ${spec.table} WHERE id = ? AND tenant_id = ?`).get(
+  return cachedStatement(db, `SELECT ${spec.cols} FROM ${objectTable(kind)} WHERE id = ? AND tenant_id = ?`).get(
     id,
     tenantId,
   ) as RowByKind[K] | undefined;
@@ -143,7 +150,7 @@ function listRows<K extends ObjectKind>(
   const rows = cachedStatement(
     db,
     `
-    SELECT ${spec.cols} FROM ${spec.table}
+    SELECT ${spec.cols} FROM ${objectTable(kind)}
     WHERE ${clauses.join(' AND ')}${after.sql}
     ORDER BY created_at DESC, id DESC
     LIMIT ?
@@ -161,15 +168,16 @@ function closeRow<K extends ObjectKind>(
   close: ObjectClose<K>,
 ): ObjectByKind[K] | ObjectRefusal {
   const spec = rowSpec(kind);
+  const table = objectTable(kind);
   return withWriteScopeOr(db, 'close_object', (rollback) => {
     const marks = placeholders(close.from.length);
     const updated = cachedStatement(
       db,
-      `UPDATE ${spec.table} SET status = 'closed', closed_at = ? WHERE id = ? AND tenant_id = ? AND status IN ` +
+      `UPDATE ${table} SET status = 'closed', closed_at = ? WHERE id = ? AND tenant_id = ? AND status IN ` +
         `(${marks})`,
     ).run(close.at, id, tenantId, ...close.from);
     if (updated.changes === 0) {
-      const existing = cachedStatement(db, `SELECT status FROM ${spec.table} WHERE id = ? AND tenant_id = ?`).get(
+      const existing = cachedStatement(db, `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(
         id,
         tenantId,
       ) as { status: string } | undefined;
@@ -179,15 +187,7 @@ function closeRow<K extends ObjectKind>(
     }
     const row = selectRow(db, kind, tenantId, id);
     if (!row) return rollback<ObjectRefusal>({ refused: 'vanished' });
-    appendAuditEvents(db, [
-      {
-        tenantId,
-        actor: close.actor,
-        op: spec.closeOp,
-        targetId: String(id),
-        metadata: { [spec.idKey]: id },
-      },
-    ]);
+    appendAuditEvents(db, [{ tenantId, actor: close.actor, ...closeAudit(kind, id) }]);
     return spec.rowTo(row);
   });
 }
@@ -229,7 +229,7 @@ function successorVersion(
   // SAFETY: the SELECT names status, and version or a 0 AS version for a kind with no versions.
   const pred = cachedStatement(
     db,
-    `SELECT status, ${insertSpec(kind).versioned ? 'version' : '0 AS version'} FROM ${rowSpec(kind).table} WHERE ` +
+    `SELECT status, ${isVersioned(kind) ? 'version' : '0 AS version'} FROM ${objectTable(kind)} WHERE ` +
       `id = ? AND tenant_id = ?`,
   ).get(replaced, tenantId) as { status: string; version: number } | undefined;
   if (!pred) return { refused: 'missing' };
@@ -241,14 +241,14 @@ function insertRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K>):
   const insert = insertSpec(row.kind);
   const cols = ['memory_id', 'tenant_id', ...insert.columns];
   const values: ColumnValue[] = [row.memoryId, row.tenantId, ...insert.values(row.save.fields)];
-  if (insert.versioned) {
+  if (isVersioned(row.kind)) {
     cols.push('version', 'change_summary');
     values.push(row.version, row.save.supersedesId === undefined ? null : (row.save.changeSummary ?? null));
   }
   const result = cachedStatement(
     db,
     `
-    INSERT INTO ${rowSpec(row.kind).table}(${cols.join(', ')}, status, superseded_by, superseded_at, closed_at,
+    INSERT INTO ${objectTable(row.kind)}(${cols.join(', ')}, status, superseded_by, superseded_at, closed_at,
     created_at)
     VALUES (${placeholders(cols.length)}, 'active', NULL, NULL, NULL, ?)
   `,
@@ -264,29 +264,17 @@ function supersedeRow<K extends SavableKind>(
   replaced: number,
   id: number,
 ): boolean {
-  const spec = rowSpec(row.kind);
-  const insert = insertSpec(row.kind);
   const updated = cachedStatement(
     db,
     `
-    UPDATE ${spec.table}
+    UPDATE ${objectTable(row.kind)}
     SET status = 'superseded', superseded_by = ?, superseded_at = ?
     WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
   `,
   ).run(id, row.save.at, replaced, row.tenantId, id);
   if (updated.changes === 0) return false;
-  const own: JsonObject = insert.versioned
-    ? { [spec.idKey]: replaced, superseded_by: id, new_version: row.version }
-    : { [spec.idKey]: replaced, superseded_by: id };
-  appendAuditEvents(db, [
-    {
-      tenantId: row.tenantId,
-      actor: row.save.actor,
-      op: insert.supersedeOp,
-      targetId: String(replaced),
-      metadata: { ...own, ...insert.supersedeMeta?.(row.save.fields) },
-    },
-  ]);
+  const audit = supersedeAudit(row.kind, replaced, id, row.version, row.save.fields);
+  appendAuditEvents(db, [{ tenantId: row.tenantId, actor: row.save.actor, ...audit }]);
   return true;
 }
 
@@ -307,15 +295,7 @@ function writeObjectRow<K extends SavableKind>(
   if (replaced !== undefined && !supersedeRow(db, row, replaced, id)) return { refused: 'raced' };
   const saved = selectRow(db, kind, tenantId, id);
   if (!saved) return { refused: 'vanished' };
-  appendAuditEvents(db, [
-    {
-      tenantId,
-      actor: save.actor,
-      op: insertSpec(kind).createOp,
-      targetId: String(id),
-      metadata: { [rowSpec(kind).idKey]: id, ...insertSpec(kind).createMeta(save.fields, next.version) },
-    },
-  ]);
+  appendAuditEvents(db, [{ tenantId, actor: save.actor, ...createAudit(kind, id, save.fields, next.version) }]);
   return saved;
 }
 
@@ -420,19 +400,7 @@ function openIncidentRow(
   const id = Number(result.lastInsertRowid ?? 0);
   const row = selectRow(db, 'incident', tenantId, id);
   if (!row) return { refused: 'vanished' };
-  appendAuditEvents(db, [
-    {
-      tenantId,
-      actor: open.actor,
-      op: 'incident_open',
-      targetId: String(id),
-      metadata: {
-        incident_id: id,
-        has_context: context !== undefined && context !== '',
-        linked_memory_count: linkedMemoryIds.length,
-      },
-    },
-  ]);
+  appendAuditEvents(db, [{ tenantId, actor: open.actor, ...incidentOpenAudit(id, open.fields) }]);
   return row;
 }
 

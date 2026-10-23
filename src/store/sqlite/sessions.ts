@@ -35,6 +35,7 @@ import {
   saveActiveTaskSnapshot,
 } from './task-snapshots.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../rules/windows.js';
 
 /** Bounded read for AMBIENT snapshot surfaces so orphaned snapshots expire. The owner (both session ids non-empty and
  * `===`) always sees its own state; all others, null ids included (null === null is no match), get it only if
@@ -193,7 +194,7 @@ export function listSessionEvents(
     params.push(options.task);
   }
 
-  const limit = Math.max(1, Math.trunc(options.limit ?? 8));
+  const limit = Math.max(1, Math.trunc(options.limit ?? SESSION_EVENT_LIMIT));
   params.push(limit);
 
   const where = `WHERE ${clauses.join(' AND ')}`;
@@ -317,8 +318,6 @@ function sessionOwnerOrBind(
 
 /** Working Memory: bounded buffer for current-state notes, separate from long-term memory; scoped, importance-ranked,
  * evicted past WM_MAX_ENTRIES per scope. */
-
-const WM_MAX_ENTRIES = 20;
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface WorkingMemoryRow {

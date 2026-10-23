@@ -7,6 +7,7 @@ import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { log } from '../../base/util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
+import { refusalAudit } from '../rules/audit-rows.js';
 import { syncFtsRow, ftsDrift } from './entry-row.js';
 import { chunked } from '../../base/util/chunked.js';
 import { keysetPage } from '../../base/util/keyset.js';
@@ -249,12 +250,8 @@ function auditRefusedRebuild(
   // refused === true here (narrowed for the tombstone.* access). Best-effort refusal audit written INLINE in this
   // still-open SAVEPOINT (the metadata UPDATE already committed to it), so a direct audit() call is correct, not the
   // post-rollback auditRejectionRefusal.
-  audit(db, 'reject_refusal', {
-    targetId: summary.id,
-    metadata: { digest: tombstone.digest, reason: tombstone.reason },
-    actor: patch.actor,
-    tenantId: summary.tenantId,
-  });
+  const refused = refusalAudit(summary.tenantId, patch.actor, summary.id, tombstone);
+  audit(db, refused.op, refused);
   log.warn(
     `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
       `(digest ${tombstone.digest.slice(0, DIGEST_DISPLAY_CHARS)}...); metadata updated, content unchanged`,

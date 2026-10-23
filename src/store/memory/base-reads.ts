@@ -2,15 +2,15 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import type { ContinuityBlock } from '../port.js';
-import type { ClassResolution, ContinuityKey, PlanningFallacyEvidence } from '../port/types.js';
+import type { ContinuityKey, PlanningFallacyEvidence } from '../port/types.js';
+import { resolveClass } from '../rules/class-resolution.js';
 import { latestHandoffIn } from './handoffs.js';
 import { baserateIn } from './predictions.js';
 import { freshRawOrder } from '../rules/order.js';
+import { MAX_FRESH_RAW } from '../rules/windows.js';
 import { rowsByIds } from './rows.js';
 import { listEventsIn, loadSnapshotIn } from './snapshots.js';
 import type { MemoryTables } from './tables.js';
-
-const MAX_FRESH_RAW = 200;
 
 export function entriesByIdsIn(t: MemoryTables, ids: readonly string[], tenantId: TenantId): MemoryEntry[] {
   return rowsByIds(t.entries.values(), ids, (tenant) => tenantId === ALL_TENANTS || tenant === tenantId);
@@ -54,40 +54,13 @@ export function continuityIn(
   };
 }
 
-// Copied from hippo.db's adapter, where it is not exported: lower-cased token overlap, a unique best of at least one
-// wins, a tie at the top resolves no class.
-function resolveClass(t: MemoryTables, tenantId: string, queryTokens: readonly string[]): ClassResolution {
-  if (queryTokens.length === 0) return { classTag: null, tiebreak: false };
-  const tags = new Set([...t.predictions.values()].flatMap((p) => (p.tenantId === tenantId ? [p.classTag] : [])));
-  const query = new Set(queryTokens);
-  let best = 0;
-  let second = 0;
-  let bestClass: string | null = null;
-  for (const tag of tags) {
-    const parts = tag
-      .toLowerCase()
-      .split(/[-_\s]+/)
-      .filter((part) => part.length >= 3);
-    const score = parts.filter((part) => query.has(part)).length;
-    if (score > best) {
-      second = best;
-      best = score;
-      bestClass = tag;
-    } else if ((score === best && score > 0) || score > second) {
-      second = score;
-    }
-  }
-  if (best < 1) return { classTag: null, tiebreak: false };
-  if (best === second) return { classTag: null, tiebreak: true };
-  return { classTag: bestClass, tiebreak: false };
-}
-
 export function planningEvidenceIn(
   t: MemoryTables,
   tenantId: string,
   tokens: readonly string[],
 ): PlanningFallacyEvidence {
-  const resolution = resolveClass(t, tenantId, tokens);
+  const tags = new Set([...t.predictions.values()].flatMap((p) => (p.tenantId === tenantId ? [p.classTag] : [])));
+  const resolution = resolveClass(tags, tokens);
   const { classTag } = resolution;
   return { ...resolution, baserate: classTag ? baserateIn(t, tenantId, classTag) : null };
 }

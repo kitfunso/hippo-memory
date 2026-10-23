@@ -10,16 +10,11 @@ import {
 } from '../port/objects.js';
 import type { PredictionBaserate } from '../port/types.js';
 import { byBytes, newestFirst } from '../rules/order.js';
-import { appendAudit, nextId, peekId } from './rows.js';
+import { appendAudit, nextId, ownedRow, peekId } from './rows.js';
 import { put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
 const newestPrediction = newestFirst<Prediction>({ key: (p) => p.createdAt, intId: (p) => p.id });
-
-function owned(t: MemoryTables, tenantId: string, id: number): Prediction | undefined {
-  const row = t.predictions.get(id);
-  return row?.tenantId === tenantId ? row : undefined;
-}
 
 function saveIn(t: MemoryTables, tenantId: string, input: PredictionSave, actor: string): Prediction {
   const { mirror } = input;
@@ -55,7 +50,7 @@ function saveIn(t: MemoryTables, tenantId: string, input: PredictionSave, actor:
 }
 
 function closeIn(t: MemoryTables, tenantId: string, id: number, close: PredictionClose, actor: string): Prediction {
-  const row = owned(t, tenantId, id);
+  const row = ownedRow(t.predictions, tenantId, id);
   if (!row) throw new NotFoundError(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
   if (row.closureState !== 'open') {
     throw new BadRequestError(
@@ -116,7 +111,7 @@ export function memoryPredictions(t: MemoryTables): Predictions {
   return {
     savePrediction: async (tenantId, input, actor) => saveIn(t, tenantId, input, actor),
     closePrediction: async (tenantId, id, close, actor) => closeIn(t, tenantId, id, close, actor),
-    predictionById: async (tenantId, id) => structuredClone(owned(t, tenantId, id) ?? null),
+    predictionById: async (tenantId, id) => structuredClone(ownedRow(t.predictions, tenantId, id) ?? null),
     listPredictions: async (tenantId, query) => listIn(t, tenantId, query),
     async predictionBaserate(tenantId, classTag, actor) {
       const baserate = baserateIn(t, tenantId, classTag);

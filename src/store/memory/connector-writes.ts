@@ -9,7 +9,7 @@ class AlreadyLogged extends Error {}
 const eventKeyOf = (event: ConnectorEvent): string =>
   event.connector === 'slack' ? event.eventId : event.idempotencyKey;
 
-/** One key space per connector, as hippo.db keeps one log table for each. */
+/** One key space per connector, since an event id is unique only within its connector. */
 export const eventSlot = (event: ConnectorEvent): string => `${event.connector}\u0000${eventKeyOf(event)}`;
 
 function logRow(event: ConnectorEvent, memoryId: string | null): LoggedEvent {

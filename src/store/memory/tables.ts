@@ -1,4 +1,4 @@
-// The rows an in-memory store holds: plain tables its caller owns, as whoever opens hippo.db owns the folder. Every
+// The rows an in-memory store holds: plain tables its caller owns, as whoever opens a store folder owns it. Every
 // group of memoryStore reads and writes these, so a write through one group shows in the reads of every other.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
@@ -106,7 +106,7 @@ export interface SleepRun {
 type ObjectTables = { readonly [K in ObjectKind]: Map<number, ObjectByKind[K]> };
 
 export interface MemoryTables extends SessionTables {
-  /** Every tenant's memories by id, in the order hippo.db's rowids would hold them. */
+  /** Every tenant's memories by id, in insertion order, the tie-break order a read falls back to. */
   entries: Map<string, MemoryEntry>;
   /** memories.updated_at by id, as datetime('now') stamped it; recall's match tiers order by it. */
   readonly updatedAt: Map<string, string>;
@@ -114,7 +114,7 @@ export interface MemoryTables extends SessionTables {
   readonly rejected: Map<string, RejectedValueRow>;
   readonly rawArchive: ArchivedRow[];
   readonly audit: AuditEvent[];
-  /** The highest id each hippo.db table has handed out; as AUTOINCREMENT there, a deleted id is never reused. */
+  /** The highest id each table has handed out; a deleted id is never reused. */
   readonly seq: Map<string, number>;
   readonly keys: Map<string, KeyRow>;
   /** Store-wide counters and settings by name: total_remembered, total_recalled, total_forgotten, embedding_model. */
@@ -157,7 +157,7 @@ function emptyObjectTables(): ObjectTables {
   };
 }
 
-/** A store with no rows; the counters start at zero, as a new hippo.db's do. */
+/** A store with no rows; the counters start at zero. */
 export function emptyTables(): MemoryTables {
   return {
     entries: new Map(),

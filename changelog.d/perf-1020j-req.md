@@ -1,0 +1,6 @@
+### Changed
+
+- **Dashboard memory pages sort a list once per commit and read later pages from it.** The list sits in a TEMP table on the held reader, keyed by the query and the stamp's instant, so paging no longer re-sorts the project; the text filter and the age brush now run as native SQL on the rows that can match, with the JavaScript rules deciding only those rows.
+- **A store reopened inside one request asks once whether it holds a memory, for both setup steps.** contextGet in a hook scope now runs 45 statements, not 51, and the request-path gate measures it inside that scope with every ceiling back at 1.3 times the work.
+- **The dashboard reads its built app once at start and serves each file from memory with an ETag, gzip and a cache rule.** A second request for an unchanged file gets a 304, a hashed bundle is cached as immutable and index.html is revalidated; a path outside the built files is never read from disk.
+- **Recall writes, GitHub artifact deletes and the reject sweep do the same work in fewer statements.** A recall's retrieval update is one statement text for any row count, an artifact's raw rows are archived together, and the local and global candidate loads run at once.

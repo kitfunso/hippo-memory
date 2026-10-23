@@ -1,5 +1,5 @@
-// The in-memory ContextReads group: contextGet's fallback handoff, candidate rows and ambient tallies, read with the
-// same windows and order hippo.db's SQL reads them in.
+// The in-memory ContextReads group: contextGet's fallback handoff, candidate rows and ambient tallies, each read in
+// the windows and order the port fixes, so both stores pick the same rows.
 import { tallyAmbientEntries } from '../../base/memory/ambient.js';
 import { sortableStamp } from '../../base/memory/created-stamp.js';
 import { computeSchemaFit, type MemoryEntry } from '../../base/memory/memory.js';
@@ -19,16 +19,14 @@ import type {
 } from '../port/context-reads.js';
 import { latestHandoffIn } from './handoffs.js';
 import { byBytes, newestFirst, oldestFirst, type DescendingKeyset } from '../rules/order.js';
-import { rowTerms } from './fts.js';
+import { rowTerms } from '../rules/fts.js';
+import { SCHEMA_FIT_WINDOW_ROWS } from '../rules/windows.js';
 import { searchRecallIn } from './search.js';
 import type { MemoryTables } from './tables.js';
 
 const BY_CREATED: DescendingKeyset<MemoryEntry> = { key: (e) => e.created, textId: (e) => e.id };
 // A drifted stamp sorts at the instant Date reads in it, as if written in toISOString form.
 const BY_STAMP: DescendingKeyset<MemoryEntry> = { key: (e) => sortableStamp(e.created), textId: (e) => e.id };
-
-/** schemaFit's window: the tenant's newest rows that move the fit. */
-const SCHEMA_FIT_WINDOW_ROWS = 2000;
 
 /** julianday's reading of a stamp: a zoneless one is UTC. */
 function stampMs(text: string | null): number | null {
@@ -97,7 +95,7 @@ const inOrigins = (e: MemoryEntry, origins: RecentOrigins): boolean => {
   return origin === '' ? origins.userGlobal : origin !== null && origins.names.includes(origin);
 };
 
-/** The recent rows hippo.db reads: a window, then the caller's own projects' window, then keyset pages past it. */
+/** The recent rows: a window, then the caller's own projects' window, then keyset pages past it. */
 function recentRows(
   rows: readonly MemoryEntry[],
   needed: number,
@@ -161,7 +159,7 @@ function ambientIn(t: MemoryTables, tenantId: string, request: AmbientCandidateR
   return { entries, recall: found, refused };
 }
 
-/** The tenant's `limit` newest rows, oldest first; a negative limit is no limit, as hippo.db's LIMIT reads it. */
+/** The tenant's `limit` newest rows, oldest first; a negative limit is no limit, as SQL's LIMIT reads it. */
 function newestIn(t: MemoryTables, tenantId: string, limit: number): MemoryEntry[] {
   const newest = [...t.entries.values()].filter((e) => e.tenantId === tenantId).sort(newestFirst(BY_CREATED));
   return structuredClone((limit < 0 ? newest : newest.slice(0, limit)).reverse());

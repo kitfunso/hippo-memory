@@ -1,4 +1,4 @@
-// The in-memory VectorWrites group: the backfill read and the vector write, keeping hippo.db's bytes.
+// The in-memory VectorWrites group: the backfill read and the vector write, keeping the stored vector bytes.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
 import { replacesIndex } from '../../base/embeddings/index-identity.js';
@@ -10,7 +10,7 @@ import { byBytes } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 import { indexState } from './vectors.js';
 
-// hippo.db keeps positions and velocities as Float32 BLOBs, so a particle read back is rounded the same way.
+// Positions and velocities are stored as Float32, so a particle reads back rounded the same under either store.
 function storedParticle(p: PhysicsParticle, memoryId: string): PhysicsParticle {
   const position = bufferToFloat32(float32ToBuffer(p.position));
   return { ...p, memoryId, position, velocity: bufferToFloat32(float32ToBuffer(p.velocity)) };
