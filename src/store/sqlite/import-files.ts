@@ -4,7 +4,7 @@ import type { TenantId } from '../../base/util/tenant.js';
 import type { EntryWrite } from '../port/entry-writes.js';
 import type { RejectionCheck } from '../port/rejections.js';
 import type { EntryTextKey } from '../port/sharing.js';
-import { selectTextKeysHolding } from './entry-reads.js';
+import { selectTextKeysHolding } from './copy-rows.js';
 import { writeEntryRow } from './entry-writes.js';
 import { handlesOf, openStore } from './handles.js';
 import { inPortTerms } from './port-errors.js';

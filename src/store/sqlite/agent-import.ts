@@ -3,7 +3,7 @@
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { dormantSnapshotsBySourcePrefix } from './dormant-rows.js';
-import { selectRowsHoldingOutsideSourcePrefix } from './entry-reads.js';
+import { selectRowsHoldingOutsideSourcePrefix } from './copy-rows.js';
 import { writeEntryMirrors } from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
 import { openStore } from './handles.js';
@@ -15,8 +15,7 @@ import type { AgentImport, ContainerApplied, ContainerApply, MirrorFailure } fro
 const importReadsBodies: Bodies<Omit<AgentImport, 'applyContainer'>> = {
   liveBySourcePrefix: liveUnder,
   dormantBySourcePrefix: dormantSnapshotsBySourcePrefix,
-  rowsHoldingOutsideSourcePrefix: (db, tenantId, texts, prefix, origins) =>
-    texts.map((text) => selectRowsHoldingOutsideSourcePrefix(db, tenantId, text, prefix, origins)),
+  rowsHoldingOutsideSourcePrefix: selectRowsHoldingOutsideSourcePrefix,
 };
 
 function applyContainer(db: DatabaseSyncLike, files: StoreFiles, plan: ContainerApply): ContainerApplied {

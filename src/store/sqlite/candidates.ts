@@ -340,7 +340,7 @@ export function loadTextsHolding(
   const filter = { sql: `${origin} AND ${admit.sql}`, params: [...(project ?? []), ...admit.params] };
   const byId = new Map<string, HeldText>();
   for (const row of rowsHoldingTexts(db, { tenantId, filter }, texts)) {
-    byId.set(row.id, { content: row.content, source: row.source ?? 'cli', originProject: row.origin_project });
+    byId.set(row.id, { content: row.content, source: row.source, originProject: row.origin_project });
   }
   return [...byId.values()];
 }
