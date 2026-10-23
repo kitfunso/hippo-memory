@@ -168,13 +168,13 @@ async function seed(config: { memoryValue?: { enabled: boolean } }): Promise<str
     NOW.toISOString(),
   );
   const session = 'sess-golden';
-  appendSessionEvent(root, 'default', {
+  await appendSessionEvent(root, 'default', {
     sessionId: session,
     eventType: 'action',
     content: 'read the deploy runbook',
     source: 'agent',
   });
-  appendSessionEvent(root, 'default', {
+  await appendSessionEvent(root, 'default', {
     sessionId: session,
     eventType: 'session_complete',
     content: 'success',

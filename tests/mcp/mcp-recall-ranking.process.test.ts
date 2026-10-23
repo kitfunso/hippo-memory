@@ -220,7 +220,7 @@ describe('MCP hippo_recall ranking', () => {
       sessionId: 'sess-x',
       source: 'test',
     });
-    appendSessionEvent(s.home, 'default', {
+    await appendSessionEvent(s.home, 'default', {
       sessionId: 'sess-x',
       eventType: 'note',
       content: 'rollout paused at 50 percent',

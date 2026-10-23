@@ -143,7 +143,7 @@ describe('CLI end to end', () => {
       nextAction: 'Resume unrelated global action',
       artifacts: [],
     });
-    appendSessionEvent(globalStore, 'default', {
+    await appendSessionEvent(globalStore, 'default', {
       sessionId: 'other-project-session',
       eventType: 'note',
       content: 'Foreign global event trail',

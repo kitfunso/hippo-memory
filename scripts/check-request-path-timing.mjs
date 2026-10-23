@@ -33,7 +33,7 @@ const load = (rel) => import(pathToFileURL(path.join(REPO, 'dist', rel)).href);
 const { createMemory } = await load('base/memory/memory.js');
 const { initStore } = await load('entry/testing.js');
 const { writeEntryDbOnly } = await load('store/sqlite/entry-writes.js');
-const { loadAmbientTallies } = await load('store/sqlite/folder-forms.js');
+const { loadAmbientTallies } = await load('store/sqlite/fixtures.js');
 const { openHippoDb, closeHippoDb } = await load('db/index.js');
 const { createApiKey } = await load('store/sqlite/auth.js');
 const { contextGet, adminActor } = await load('api/index.js');

@@ -648,7 +648,7 @@ describe('check-store-port.mjs', () => {
         'export function noFolder(busyWaitMs: number, o = openHippoDb) { return (r: string) => o(r, busyWaitMs); }',
         'function notExported(hippoRoot: string) { return openHippoDb(hippoRoot); }',
       ].join('\n'),
-      'src/store/sqlite/folder-forms.ts':
+      'src/store/sqlite/fixtures.ts':
         'export const writeEntry = (hippoRoot: string) => onHandle(hippoRoot, () => 1);\n',
     };
     withFixture(files, null, ({ run }) => {
@@ -663,7 +663,7 @@ describe('check-store-port.mjs', () => {
   });
 
   it('folderFormsAboveAdapter keeps no exception: the eval kit form passes in src/store/sqlite and fails above it', () => {
-    withFixture({ 'src/store/sqlite/folder-forms.ts': FOLDER_FORM }, null, ({ run }) => {
+    withFixture({ 'src/store/sqlite/fixtures.ts': FOLDER_FORM }, null, ({ run }) => {
       const r = run();
       expect(r.status, r.stderr).toBe(0);
     });

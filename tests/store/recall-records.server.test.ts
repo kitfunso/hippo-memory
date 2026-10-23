@@ -190,7 +190,7 @@ function refuseRecallAudit(root: string, on: boolean): void {
 }
 
 /** The continuity a recall can return: a live snapshot, its handoff and one session event. */
-function seedContinuity(root: string): void {
+async function seedContinuity(root: string): Promise<void> {
   saveActiveTaskSnapshot(root, TENANT, {
     task: 'ship the eu cluster',
     summary: 'cutover planned',
@@ -203,7 +203,7 @@ function seedContinuity(root: string): void {
     summary: 'handoff after the canary',
     nextAction: 'promote it',
   });
-  appendSessionEvent(root, TENANT, { sessionId: SESSION, eventType: 'note', content: 'canary passed' });
+  await appendSessionEvent(root, TENANT, { sessionId: SESSION, eventType: 'note', content: 'canary passed' });
 }
 
 /** A store with no memory in it and no global store beside it. */

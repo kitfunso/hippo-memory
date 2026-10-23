@@ -319,24 +319,24 @@ describe('rowToSessionHandoff', () => {
 });
 
 describe('session events integration with handoffs', () => {
-  it('session_start and session_end events can be recorded', () => {
+  it('session_start and session_end events can be recorded', async () => {
     initTestStore(tmpDir);
 
-    appendSessionEvent(tmpDir, 'default', {
+    await appendSessionEvent(tmpDir, 'default', {
       sessionId: 'sess-lifecycle',
       eventType: 'session_start',
       content: 'Session started',
       source: 'openclaw',
     });
 
-    appendSessionEvent(tmpDir, 'default', {
+    await appendSessionEvent(tmpDir, 'default', {
       sessionId: 'sess-lifecycle',
       eventType: 'note',
       content: 'Did some work',
       source: 'openclaw',
     });
 
-    appendSessionEvent(tmpDir, 'default', {
+    await appendSessionEvent(tmpDir, 'default', {
       sessionId: 'sess-lifecycle',
       eventType: 'session_end',
       content: 'Session ended',
@@ -350,7 +350,7 @@ describe('session events integration with handoffs', () => {
     expect(events[2]!.eventType).toBe('session_end');
   });
 
-  it('handoff + session latest returns combined view', () => {
+  it('handoff + session latest returns combined view', async () => {
     initTestStore(tmpDir);
 
     saveActiveTaskSnapshot(tmpDir, 'default', {
@@ -360,7 +360,7 @@ describe('session events integration with handoffs', () => {
       sessionId: 'sess-combined',
     });
 
-    appendSessionEvent(tmpDir, 'default', {
+    await appendSessionEvent(tmpDir, 'default', {
       sessionId: 'sess-combined',
       eventType: 'session_start',
       content: 'Session started',

@@ -10,7 +10,6 @@ import { saveDecision } from '../../dist/domain/objects/decisions.js';
 import { savePolicy } from '../../dist/domain/objects/policies.js';
 import { saveCustomerNote } from '../../dist/domain/objects/customer-notes.js';
 import { saveProjectBrief } from '../../dist/domain/objects/project-briefs.js';
-import { loadEntities, loadRelations } from '../../dist/store/sqlite/folder-forms.js';
 import { extractGraph } from '../../dist/domain/graph/extract.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 
@@ -48,9 +47,9 @@ await decRef('the team is retrying flaky steps', 'd-retry', null);   // "retry" 
 await decRef('we refactored the core scheduler module', 'd-core', null); // "core" the generic word -> FALSE if it matches the "Core" customer
 
 const r = await extractGraph(sqliteStore(home), T);
-const ents = loadEntities(home, T, { limit: 1000 });
-const nameById = new Map(ents.map((e) => [e.id, e.name]));
-const edges = loadRelations(home, T, { limit: 1000 }).filter((x) => x.relType === 'references');
+const graph = await sqliteStore(home).graphReads.graphRows(T, { limit: 1000 });
+const nameById = new Map(graph.entities.map((e) => [e.id, e.name]));
+const edges = graph.relations.filter((x) => x.relType === 'references');
 let truthy = 0, falsy = 0; const falseEdges = [];
 for (const e of edges) {
   const key = `${nameById.get(e.fromEntityId)}=>${nameById.get(e.toEntityId)}`;

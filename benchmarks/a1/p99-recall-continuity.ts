@@ -39,7 +39,6 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig } from '../../dist/host/config-file.js';
 import { initStore } from '../../dist/entry/testing.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
-import { saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../../dist/store/sqlite/folder-forms.js';
 import { remember as apiRemember, retrieve as apiRetrieve } from '../../dist/entry/eval-scripts.js';
 
 interface CliArgs {
@@ -236,22 +235,25 @@ async function main(): Promise<void> {
   // three helper paths (snapshot, handoff, events) instead of fast-pathing on
   // null. Continuity-off iterations ignore these rows entirely.
   const sessionId = 'sess-bench';
-  saveActiveTaskSnapshot(home, 'default', {
+  const { sessions } = sqliteStore(home);
+  const snapshot = {
     task: 'Benchmark continuity overhead',
     summary: 'Seed continuity so the helper paths actually do work.',
     nextStep: 'Compare p99 with and without --continuity.',
     sessionId: sessionId,
     source: 'bench',
-  });
-  saveSessionHandoff(home, 'default', {
+  };
+  await sessions.saveSnapshot('default', snapshot, null);
+  const handoff = {
     version: 1,
     sessionId,
     summary: 'Bench handoff fixture.',
     nextAction: 'Land Task 6 of the continuity-first plan.',
     artifacts: ['benchmarks/a1/p99-recall-continuity.ts'],
-  });
+  };
+  await sessions.saveHandoff('default', handoff, null);
   for (let i = 0; i < 5; i++) {
-    appendSessionEvent(home, 'default', {
+    await sessions.appendEvent('default', {
       sessionId: sessionId,
       eventType: 'note',
       content: `Bench event ${i}: a small trail row to exercise listSessionEvents.`,

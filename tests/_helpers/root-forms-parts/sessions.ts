@@ -7,6 +7,8 @@ import type {
   HandoffFilter,
   SessionEndHandoffRequest,
   SessionEvent,
+  SessionEventInput,
+  SnapshotInput,
   TaskSnapshot,
   WorkingMemoryItem,
 } from '../../../src/store/port/sessions.js';
@@ -21,6 +23,36 @@ import { freshActiveSnapshot } from '../../../src/base/session/session-snapshot.
 import type { ContinuityKey } from '../../../src/store/port/types.js';
 import type { JsonObject } from '../../../src/base/util/json.js';
 import type { SessionDecayContext } from '../../../src/store/port/consolidation.js';
+
+export function saveActiveTaskSnapshot(
+  hippoRoot: string,
+  tenantId: string,
+  snapshot: SnapshotInput,
+  key?: ContinuityKey,
+): TaskSnapshot {
+  return onHandle(
+    hippoRoot,
+    (db) => taskSnapshotsSql.saveActiveTaskSnapshot(db, storeFilesOf(hippoRoot), tenantId, snapshot, key),
+    openStore,
+  );
+}
+
+export function appendSessionEvent(
+  hippoRoot: string,
+  tenantId: string,
+  event: SessionEventInput,
+): Promise<SessionEvent> {
+  return sqliteStore(hippoRoot).sessions.appendEvent(tenantId, event);
+}
+
+export function saveSessionHandoff(
+  hippoRoot: string,
+  tenantId: string,
+  handoff: Omit<SessionHandoff, 'updatedAt'>,
+  key?: ContinuityKey,
+): SessionHandoff {
+  return onHandle(hippoRoot, (db) => handoffsSql.saveSessionHandoff(db, tenantId, handoff, key), openStore);
+}
 
 export function loadLatestHandoff(
   hippoRoot: string,

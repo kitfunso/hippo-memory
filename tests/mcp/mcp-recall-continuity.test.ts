@@ -101,7 +101,7 @@ describe('mcp hippo_recall include_continuity', () => {
       nextAction: 'Resume on commit.',
       artifacts: [],
     });
-    appendSessionEvent(home, 'default', {
+    await appendSessionEvent(home, 'default', {
       sessionId: 'sess-mcp-1',
       eventType: 'note',
       content: 'A trail event.',

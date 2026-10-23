@@ -63,7 +63,7 @@ async function rankDeploy() {
   );
 }
 
-function seedContinuity(): void {
+async function seedContinuity(): Promise<void> {
   saveActiveTaskSnapshot(hippoRoot, 'default', {
     task: 'Route recall through the api',
     summary: 'Moving the store reads.',
@@ -77,20 +77,20 @@ function seedContinuity(): void {
     summary: 'Halfway.',
     nextAction: 'Pick up at the test file.',
   });
-  appendSessionEvent(hippoRoot, 'default', {
+  await appendSessionEvent(hippoRoot, 'default', {
     sessionId: 'sess-1',
     eventType: 'note',
     content: 'open trail event',
     source: 'test',
   });
-  appendSessionEvent(hippoRoot, 'default', {
+  await appendSessionEvent(hippoRoot, 'default', {
     sessionId: 'sess-1',
     eventType: 'note',
     content: 'team trail event',
     source: 'test',
     scope: 'team-a',
   });
-  appendSessionEvent(hippoRoot, 'default', {
+  await appendSessionEvent(hippoRoot, 'default', {
     sessionId: 'sess-1',
     eventType: 'note',
     content: 'private trail event',
@@ -194,7 +194,7 @@ describe('recallStoreSetting and recallRowOrigin', () => {
 
 describe('loadScopedContinuity', () => {
   it('returns the snapshot and handoff that render, and drops private trail rows with no scope asked', async () => {
-    seedContinuity();
+    await seedContinuity();
     const c = await loadScopedContinuity(ctx(), setting(null), true);
     expect(snapshotText(c.activeSnapshot!)).toContain('Route recall through the api');
     expect(handoffText(c.sessionHandoff!)).toContain('Pick up at the test file.');
@@ -202,7 +202,7 @@ describe('loadScopedContinuity', () => {
   });
 
   it('keeps only the rows in the active scope, so a row from another scope drops', async () => {
-    seedContinuity();
+    await seedContinuity();
     const c = await loadScopedContinuity(ctx(), setting('team-a'), true);
     expect(c.activeSnapshot).toBeNull();
     expect(c.sessionHandoff).toBeNull();
@@ -210,7 +210,7 @@ describe('loadScopedContinuity', () => {
   });
 
   it('reads nothing when continuity is not asked for or the store searched is the global one', async () => {
-    seedContinuity();
+    await seedContinuity();
     const empty = { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] };
     expect(await loadScopedContinuity(ctx(), setting(null), false)).toEqual(empty);
     expect(await loadScopedContinuity(ctx(), setting(null, true), true)).toEqual(empty);

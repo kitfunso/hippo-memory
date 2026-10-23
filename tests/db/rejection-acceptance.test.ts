@@ -519,13 +519,13 @@ describe('auto-promoted trace tombstone check', () => {
   it('reject an auto-promoted trace -> next consolidate does not recreate it: skip counted, one reject_refusal audit, no trace row', async () => {
     const home = makeRoot('rejection-acceptance-trace');
     const sid = 'test-session-rejected-trace';
-    appendSessionEvent(home, 'default', {
+    await appendSessionEvent(home, 'default', {
       sessionId: sid,
       eventType: 'action',
       content: 'read config.ts',
       source: 'agent',
     });
-    appendSessionEvent(home, 'default', {
+    await appendSessionEvent(home, 'default', {
       sessionId: sid,
       eventType: 'session_complete',
       content: 'success',

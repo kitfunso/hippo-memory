@@ -7,7 +7,8 @@ import {
   entryAfterOutcome,
   strengthOptionsOf,
 } from '../../base/memory/memory.js';
-import { type DatabaseSyncLike, withWriteScope, isSqliteBusy } from '../../db/index.js';
+import { closeHippoDb, type DatabaseSyncLike, openHippoDb, withWriteScope, isSqliteBusy } from '../../db/index.js';
+import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { RejectedValueError, ConflictError, CrossTenantIdError, NotFoundError } from '../../base/errors/api-errors.js';
 import { markSummaryDirtyInTx, markSummariesDirtyInTx } from './summary-dirty.js';
 import { summaryDirtyAudit } from '../rules/audit-rows.js';
@@ -232,8 +233,32 @@ export function strengthenRetrievedInOwnTx(
   }
 }
 
-export function warnStrengthenFailed<E>(error: E): void {
+function warnStrengthenFailed<E>(error: E): void {
   log.warn(`retrieval stats not saved (${errorMessage(error)})`, errorFields(error));
+}
+
+/** Strengthen what a recall returned from the global store, on a handle of its own: only the four retrieval columns
+ * of the live row change. Best effort: a failure logs and never fails the read. Returns the ids found there. */
+export function strengthenRetrieved(
+  hippoRoot: string,
+  ids: readonly string[],
+  opts: StrengthenOptions,
+  rules: LossAversion,
+): Set<string> {
+  if (ids.length === 0 || opts.recallBoostAblated) return new Set();
+  let db: DatabaseSyncLike;
+  try {
+    db = openHippoDb(hippoRoot);
+  } catch (error) {
+    rethrowIfStoreBlocked(error);
+    warnStrengthenFailed(error);
+    return new Set();
+  }
+  try {
+    return strengthenRetrievedInOwnTx(db, ids, opts, rules);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 // One statement text for any number of rows. Numbers round-trip through JSON exactly from 1e-80 up; only the cached

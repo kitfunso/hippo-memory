@@ -55,7 +55,7 @@ describe('GET /v1/memories continuity + scope', () => {
       nextAction: 'na',
       artifacts: [],
     });
-    appendSessionEvent(home, 'default', {
+    await appendSessionEvent(home, 'default', {
       sessionId: 'sess-http',
       eventType: 'note',
       content: 'a trail',
@@ -124,7 +124,7 @@ describe('continuity JSON on the wire', () => {
   const EVENTS_JSON =
     '[{"id":1,"session_id":"sess-wire","task":null,"event_type":"note","content":"a trail","source":"test","scope":null,"metadata":{"k":1},"created_at":"<at>"}]';
 
-  function seedSession(): void {
+  async function seedSession(): Promise<void> {
     saveActiveTaskSnapshot(home, 'default', {
       task: 'pin the wire',
       summary: 's',
@@ -132,7 +132,7 @@ describe('continuity JSON on the wire', () => {
       sessionId: 'sess-wire',
       source: 'test',
     });
-    appendSessionEvent(home, 'default', {
+    await appendSessionEvent(home, 'default', {
       sessionId: 'sess-wire',
       eventType: 'note',
       content: 'a trail',
@@ -142,7 +142,7 @@ describe('continuity JSON on the wire', () => {
   }
 
   it('GET /v1/memories include_continuity sends snake_case snapshot and event keys', async () => {
-    seedSession();
+    await seedSession();
     const res = await fetch(`${handle.url}/v1/memories?q=wire&include_continuity=1`);
     expect(res.status).toBe(200);
     const body = await jsonAs<JsonObject>(res);
@@ -152,7 +152,7 @@ describe('continuity JSON on the wire', () => {
   });
 
   it('GET /v1/context sends snake_case snapshot and event keys', async () => {
-    seedSession();
+    await seedSession();
     writeEntry(
       home,
       createMemory('a memory so the context has an entry', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),

@@ -15,7 +15,7 @@ import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js'
 import { projectNameRepair, projectNameRepairOnce } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';
-import { loadRecallSearchEntries } from '../../src/store/sqlite/folder-forms.js';
+import { loadRecallSearchEntries } from '../../src/store/sqlite/fixtures.js';
 import {
   closeWorld,
   ctxFor,

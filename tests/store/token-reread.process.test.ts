@@ -428,7 +428,7 @@ describe('compact-resume books the block it prints', () => {
       source: 'pre-compact',
       sessionId: SESSION,
     });
-    const event = appendSessionEvent(store, 'default', {
+    const event = await appendSessionEvent(store, 'default', {
       sessionId: SESSION,
       eventType: 'note',
       content: 'chose a token bucket',

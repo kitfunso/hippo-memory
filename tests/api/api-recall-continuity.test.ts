@@ -41,7 +41,7 @@ describe('api.recall continuity flag', () => {
       nextAction: 'Pick up at Task 3.',
       artifacts: ['src/api/index.ts'],
     });
-    appendSessionEvent(tmpDir, 'default', {
+    await appendSessionEvent(tmpDir, 'default', {
       sessionId: 'sess-1',
       eventType: 'note',
       content: 'A trail event we want to surface.',
@@ -89,7 +89,7 @@ describe('api.recall continuity flag', () => {
       nextAction: 'A action',
       artifacts: [],
     });
-    appendSessionEvent(tmpDir, 'tenantA', {
+    await appendSessionEvent(tmpDir, 'tenantA', {
       sessionId: 'sess-a',
       eventType: 'note',
       content: 'A trail',

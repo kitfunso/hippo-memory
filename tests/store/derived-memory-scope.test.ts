@@ -135,14 +135,14 @@ describe('auto-promote stamps the session scope, or skips a mixed one', () => {
   it('a session whose events are all slack:private:C1 promotes a trace in that scope', async () => {
     const home = makeRoot('derived-scope');
     const sid = 'sess-private-uniform';
-    appendSessionEvent(home, 'default', {
+    await appendSessionEvent(home, 'default', {
       sessionId: sid,
       eventType: 'action',
       content: 'read the private doc',
       source: 'agent',
       scope: 'slack:private:C1',
     });
-    appendSessionEvent(home, 'default', {
+    await appendSessionEvent(home, 'default', {
       sessionId: sid,
       eventType: 'session_complete',
       content: 'success',
@@ -163,21 +163,21 @@ describe('auto-promote stamps the session scope, or skips a mixed one', () => {
   it('a session mixing a private scope with an unscoped event is skipped, not promoted', async () => {
     const home = makeRoot('derived-scope');
     const sid = 'sess-mixed';
-    appendSessionEvent(home, 'default', {
+    await appendSessionEvent(home, 'default', {
       sessionId: sid,
       eventType: 'action',
       content: 'read the private doc',
       source: 'agent',
       scope: 'slack:private:C1',
     });
-    appendSessionEvent(home, 'default', {
+    await appendSessionEvent(home, 'default', {
       sessionId: sid,
       eventType: 'action',
       content: 'post the public update',
       source: 'agent',
       scope: null,
     });
-    appendSessionEvent(home, 'default', {
+    await appendSessionEvent(home, 'default', {
       sessionId: sid,
       eventType: 'session_complete',
       content: 'success',
