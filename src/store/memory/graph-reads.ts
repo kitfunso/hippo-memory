@@ -1,4 +1,4 @@
-// The in-memory GraphReads group: the entity and relation walks hippo.db runs, in its id batches and orders.
+// The in-memory GraphReads group: the entity and relation walks, in the id batches and orders the port fixes.
 import { canReadScope } from '../../base/scope/recall-scope.js';
 import {
   GRAPH_ID_BATCH,
@@ -92,7 +92,7 @@ function graphRowsIn(t: MemoryTables, tenantId: string, { entity, limit, reader 
   return structuredClone({ ...visible, truncated: rows.truncated });
 }
 
-/** The provenance columns a rebuild diffs, as hippo.db names them. */
+/** The provenance columns a rebuild diffs, by their column names. */
 const sourceColumns = (row: Entity | Relation) => ({
   memory_id: row.memoryId,
   source_kind: row.sourceKind,

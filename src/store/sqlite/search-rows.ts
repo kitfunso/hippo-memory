@@ -17,6 +17,7 @@ import type { RecallSearchEntriesOptions } from '../port/sharing.js';
 import { VECTOR_CANDIDATE_LIMIT, type VectorCandidateSpec } from '../port/vectors.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
+import { LIKE_WINDOW_ROWS } from '../rules/windows.js';
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall` in recall-scope.ts is
  * its JS twin. */
@@ -165,11 +166,6 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
     return [];
   }
 }
-
-/**
- * Newest admitted rows the substring match tests, so a query matching nothing costs the same in a store of any size.
- */
-const LIKE_WINDOW_ROWS = 2000;
 
 /** Substring matches in content or tags among the newest admitted rows: the lexical path without FTS5, and the catch
  * for a part-word that FTS5 tokens miss. */

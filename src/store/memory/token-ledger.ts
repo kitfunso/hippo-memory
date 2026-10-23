@@ -1,27 +1,10 @@
 // The in-memory token ledger: the base recordTokens write and the reports group's tokenUse summary.
-import { DAY_MS } from '../../base/util/time.js';
 import type { TokenSummary, TokenSurface, TokenSurfaceSummary, TokenUse } from '../port/ledger.js';
 import { byBytes } from '../rules/order.js';
+import { ledgerCutoff, REREAD_SURFACES, TOKEN_SURFACES } from '../rules/token-ledger.js';
 import { nextId } from './rows.js';
 import type { TokenRow } from './session-tables.js';
 import type { MemoryTables } from './tables.js';
-
-// Copied from hippo.db's adapter, where neither list is exported: every surface in report order, and the hook
-// surfaces whose re-reads are counted.
-const TOKEN_SURFACES: readonly TokenSurface[] = [
-  'hook',
-  'hook_recall',
-  'compact_resume',
-  'context',
-  'recall',
-  'mcp_recall',
-  'mcp_context',
-  'http_recall',
-  'http_context',
-  'http_assemble',
-];
-const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume'];
-const TOKEN_LEDGER_RETENTION_DAYS = 90;
 
 /** One ledger row, then every row past the retention window from its timestamp goes. */
 export function recordTokensIn(t: MemoryTables, use: TokenUse): void {
@@ -37,7 +20,7 @@ export function recordTokensIn(t: MemoryTables, use: TokenUse): void {
     items: Math.max(0, Math.round(use.items)),
     tokens: Math.max(0, Math.round(use.tokens)),
   });
-  const cutoff = new Date(Date.parse(ts) - TOKEN_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
+  const cutoff = ledgerCutoff(ts);
   t.tokenLedger = t.tokenLedger.filter((row) => byBytes(row.ts, cutoff) >= 0);
 }
 

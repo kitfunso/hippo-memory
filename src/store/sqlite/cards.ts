@@ -1,18 +1,21 @@
 // hippo.db's Cards group: the agent work board.
 import { generateId } from '../../base/memory/memory.js';
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
-import { SessionHandoff, rowToSessionHandoff, isHandoffOutcome, HandoffOutcome } from '../../base/session/handoff.js';
-import {
-  Card,
-  CardStatus,
-  CardRun,
-  CardComment,
-  CARD_LEASE_MS,
-  assertCardTransition,
-} from '../../base/records/card.js';
+import { SessionHandoff, rowToSessionHandoff, HandoffOutcome } from '../../base/session/handoff.js';
+import { Card, CardStatus, CardRun, CardComment, assertCardTransition } from '../../base/records/card.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { chunked } from '../../base/util/chunked.js';
 import { HANDOFF_COLUMNS, type SessionHandoffDbRow } from './handoffs.js';
+import {
+  assertCardCreate,
+  assertCardOutcome,
+  assertFilled,
+  assertRunId,
+  isLiveRun,
+  leaseUntilFrom,
+  unknownCard,
+  unknownParentCard,
+} from '../rules/cards.js';
 import { placeholders } from '../../db/sql.js';
 import type { CardDetail, CardCreate, Cards } from '../port/cards.js';
 import type { OnHandle } from './open.js';
@@ -120,32 +123,22 @@ function insertCardComment(
   `,
   ).run(cardId, author, body, now, tenantId, cardId, tenantId);
   if (Number(result.changes ?? 0) === 0) {
-    throw new Error(`unknown card id: ${cardId}`);
+    throw unknownCard(cardId);
   }
   const id = Number(result.lastInsertRowid ?? 0);
   return { id, cardId, author, body, createdAt: now };
 }
 
-function leaseUntilFrom(now: string): string {
-  return new Date(Date.parse(now) + CARD_LEASE_MS).toISOString();
-}
-
-function assertRunId(runId: number): void {
-  if (!Number.isSafeInteger(runId) || runId <= 0) {
-    throw new Error(`Invalid run id: ${runId} (expected a positive integer)`);
-  }
-}
-
-// A second run that has not ended means a corrupt store; throw rather than guess which run the caller means.
-function isLiveRun(db: DatabaseSyncLike, tenantId: string, cardId: string, runId: number): boolean {
+function liveRunIs(db: DatabaseSyncLike, tenantId: string, cardId: string, runId: number): boolean {
   const rows = cachedStatement(db, `SELECT id FROM card_runs WHERE tenant_id = ? AND card = ? AND ended IS NULL`).all(
     tenantId,
     cardId,
   ) as Array<{ id: number }>;
-  if (rows.length > 1) {
-    throw new Error(`card ${cardId} has ${rows.length} runs that have not ended`);
-  }
-  return rows[0]?.id === runId;
+  return isLiveRun(
+    cardId,
+    rows.map((row) => row.id),
+    runId,
+  );
 }
 
 function closeLiveRun(db: DatabaseSyncLike, tenantId: string, cardId: string, outcome: string, now: string): void {
@@ -203,12 +196,7 @@ function transitionCards(
  * An unknown dependsOn id throws and commits nothing. A repeated dependsOn id is recorded once. */
 function createCard(db: DatabaseSyncLike, tenantId: string, input: CardCreate): Card {
   assertTenantId('createCard', tenantId);
-  if (input.title.trim() === '') {
-    throw new Error('title must not be empty');
-  }
-  if (input.budget !== undefined && !(Number.isSafeInteger(input.budget) && input.budget > 0)) {
-    throw new Error(`Invalid budget: ${input.budget} (expected a positive integer)`);
-  }
+  assertCardCreate(input);
   const dependsOn = [...new Set(input.dependsOn ?? [])];
   let id = '';
 
@@ -261,7 +249,7 @@ function everyParentDone(db: DatabaseSyncLike, tenantId: string, dependsOn: read
   // Pre-check before any write: a typo'd --depends-on can never commit a card row.
   for (const parentId of dependsOn) {
     if (!found.has(parentId)) {
-      throw new Error(`unknown parent card id: ${parentId}`);
+      throw unknownParentCard(parentId);
     }
   }
   return dependsOn.every((pid) => found.get(pid) === 'done');
@@ -349,9 +337,7 @@ function claimCard(
   sessionId?: string,
 ): (Card & { runId: number }) | null {
   assertTenantId('claimCard', tenantId);
-  if (runtime.trim() === '') {
-    throw new Error('runtime must not be empty');
-  }
+  assertFilled('runtime', runtime);
   const runId = withWriteScopeOr(db, 'claim_card', (rollback) => {
     const changes = transitionCard(db, tenantId, id, {
       from: ['ready', 'blocked'],
@@ -360,7 +346,7 @@ function claimCard(
     });
     if (changes === 0) {
       if (!loadCardRow(db, tenantId, id)) {
-        throw new Error(`unknown card id: ${id}`);
+        throw unknownCard(id);
       }
       return rollback(null);
     }
@@ -386,9 +372,9 @@ function heartbeatCard(db: DatabaseSyncLike, tenantId: string, id: string, runId
   const beat = withWriteScopeOr(db, 'heartbeat_card', (rollback) => {
     const card = loadCardRow(db, tenantId, id);
     if (!card) {
-      throw new Error(`unknown card id: ${id}`);
+      throw unknownCard(id);
     }
-    if (card.status !== 'running' || !isLiveRun(db, tenantId, id, runId)) {
+    if (card.status !== 'running' || !liveRunIs(db, tenantId, id, runId)) {
       return rollback(false);
     }
     const now = new Date().toISOString();
@@ -407,12 +393,10 @@ function heartbeatCard(db: DatabaseSyncLike, tenantId: string, id: string, runId
  * card id; returns null for a card not running. When runId is given, returns null unless it is the card's live run. */
 function blockCard(db: DatabaseSyncLike, tenantId: string, id: string, reason: string, runId?: number): Card | null {
   assertTenantId('blockCard', tenantId);
-  if (reason.trim() === '') {
-    throw new Error('reason must not be empty');
-  }
+  assertFilled('reason', reason);
   if (runId !== undefined) assertRunId(runId);
   const blocked = withWriteScopeOr(db, 'block_card', (rollback) => {
-    const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
+    const allowed = runId === undefined || liveRunIs(db, tenantId, id, runId);
     const changes = allowed
       ? transitionCard(db, tenantId, id, {
           from: ['running'],
@@ -422,7 +406,7 @@ function blockCard(db: DatabaseSyncLike, tenantId: string, id: string, reason: s
       : 0;
     if (changes === 0) {
       if (!loadCardRow(db, tenantId, id)) {
-        throw new Error(`unknown card id: ${id}`);
+        throw unknownCard(id);
       }
       return rollback(false);
     }
@@ -442,11 +426,11 @@ function reviewCard(db: DatabaseSyncLike, tenantId: string, id: string, runId?: 
   assertTenantId('reviewCard', tenantId);
   if (runId !== undefined) assertRunId(runId);
   const moved = withWriteScopeOr(db, 'review_card', (rollback) => {
-    const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
+    const allowed = runId === undefined || liveRunIs(db, tenantId, id, runId);
     const changes = allowed ? transitionCard(db, tenantId, id, { from: ['running'], to: 'review' }) : 0;
     if (changes === 0) {
       if (!loadCardRow(db, tenantId, id)) {
-        throw new Error(`unknown card id: ${id}`);
+        throw unknownCard(id);
       }
       return rollback(false);
     }
@@ -466,17 +450,15 @@ function completeCard(
   runId?: number,
 ): { card: Card; promotedChildren: string[] } | null {
   assertTenantId('completeCard', tenantId);
-  if (!isHandoffOutcome(outcome)) {
-    throw new Error(`invalid card outcome: ${String(outcome)}`);
-  }
+  assertCardOutcome(outcome);
   if (runId !== undefined) assertRunId(runId);
   const promoted = withWriteScopeOr(db, 'complete_card', (rollback) => {
     const target: CardStatus = outcome === 'success' ? 'done' : 'shelved';
-    const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
+    const allowed = runId === undefined || liveRunIs(db, tenantId, id, runId);
     const changes = allowed ? transitionCard(db, tenantId, id, { from: ['review'], to: target }) : 0;
     if (changes === 0) {
       if (!loadCardRow(db, tenantId, id)) {
-        throw new Error(`unknown card id: ${id}`);
+        throw unknownCard(id);
       }
       return rollback(null);
     }
@@ -554,9 +536,7 @@ function addCardComment(
   body: string,
 ): CardComment {
   assertTenantId('addCardComment', tenantId);
-  if (body.trim() === '') {
-    throw new Error('body must not be empty');
-  }
+  assertFilled('body', body);
   return insertCardComment(db, tenantId, cardId, author, body);
 }
 

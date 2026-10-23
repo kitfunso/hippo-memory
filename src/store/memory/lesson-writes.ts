@@ -3,32 +3,19 @@ import { CrossTenantIdError, RejectedValueError } from '../../base/errors/api-er
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { ownScopeTouches, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import { errorFields, log } from '../../base/util/log.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { chunked } from '../../base/util/chunked.js';
-import { duplicateKey } from '../../base/util/same-text.js';
 import type { LessonWrites } from '../port/entry-writes.js';
 import type { HeldText } from '../port/types.js';
-import { contentHoldsPhrase } from './fts.js';
+import { contentHoldsPhrase, openingPhrase } from '../rules/fts.js';
 import { bumpCounter } from './rows.js';
 import { put, refusalEvent, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
-// The CLI's actor, which hippo.db's batch write names when its caller gives none.
-const CLI_ACTOR = 'cli';
-
-// As hippo.db's holdingPhrase: letters and digits in every table unicode61 has shipped, so the phrase names a token.
-const SURE_TOKEN_CHAR = new RegExp('[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-я' + 'א-תء-غف-يअ-हก-ะ' + 'ぁ-んァ-ヶ一-龥가-힣]');
-const PHRASE_WORDS = 32;
-
-/** The index phrase a row holding `word` word for word holds; null when it might name no token. */
-function phraseOf(word: string): string | null {
-  const opening = duplicateKey(word).split(' ').slice(0, PHRASE_WORDS).join(' ');
-  return SURE_TOKEN_CHAR.test(opening) ? opening : null;
-}
-
-/** As hippo.db's batches: a row one of a batch's phrases hits that holds one of its words as a case-sensitive
- * substring; a word with no phrase is the substring test alone. */
+/** A row one of a batch's phrases hits that holds one of its words as a case-sensitive substring; a word with no
+ * phrase is the substring test alone. */
 function holdsBatch(entry: MemoryEntry, batch: readonly string[], phrased: boolean): boolean {
-  const hit = !phrased || batch.some((word) => contentHoldsPhrase(entry, phraseOf(word)!));
+  const hit = !phrased || batch.some((word) => contentHoldsPhrase(entry, openingPhrase(word)!));
   return hit && batch.some((word) => entry.content.includes(word));
 }
 
@@ -40,8 +27,8 @@ function textsHoldingIn(t: MemoryTables, tenantId: string, words: readonly strin
   );
   const held = new Map<string, MemoryEntry>();
   const batches = [
-    ...chunked(wanted.filter((w) => phraseOf(w) !== null)).map((batch) => ({ batch, phrased: true })),
-    ...chunked(wanted.filter((w) => phraseOf(w) === null)).map((batch) => ({ batch, phrased: false })),
+    ...chunked(wanted.filter((w) => openingPhrase(w) !== null)).map((batch) => ({ batch, phrased: true })),
+    ...chunked(wanted.filter((w) => openingPhrase(w) === null)).map((batch) => ({ batch, phrased: false })),
   ];
   for (const { batch, phrased } of batches) {
     for (const e of rows) if (holdsBatch(e, batch, phrased)) held.set(e.id, e);

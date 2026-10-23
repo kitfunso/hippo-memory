@@ -78,7 +78,7 @@ function extractClassQueryTokens(queryText: string): string[] {
       .toLowerCase()
       // Strip everything that's not alphanum or whitespace or hyphen / underscore.
       .replace(/[^a-z0-9\s_-]/g, ' ')
-      // Split on whitespace, hyphen and underscore, matching the class-tag split in resolveClassFromTokens.
+      // Split on whitespace, hyphen and underscore, matching the class-tag split in resolveClass.
       .split(/[\s_-]+/)
       .filter((t) => t.length >= 3 && !FORWARD_CLAIM_STOPWORDS.has(t) && !/^\d+$/.test(t))
   );
