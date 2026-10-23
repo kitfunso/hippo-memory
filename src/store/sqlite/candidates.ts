@@ -2,8 +2,6 @@ import {
   type MemoryEntry,
   FALLBACK_HALF_LIFE_DAYS,
   Layer,
-  calculateStrength,
-  confidenceFacets,
   schemaFitFrom,
   type LossAversion,
 } from '../../base/memory/memory.js';
@@ -36,6 +34,8 @@ import type {
 } from '../port/context-reads.js';
 import type { SourceTally } from '../port/sharing.js';
 import type { StatusCounts, StrengthTallies } from '../port/reports.js';
+import { tallyStatus, type StatusInputs } from '../rules/status-tally.js';
+import { SCHEMA_FIT_WINDOW_ROWS } from '../rules/windows.js';
 
 const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
 const AMBIENT_PINNED = 'pinned = 1 AND superseded_by IS NULL';
@@ -408,9 +408,6 @@ function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
   for (const row of rows) yield row.content;
 }
 
-/** How many of a tenant's newest rows schemaFit reads; older rows no longer move the fit. */
-const SCHEMA_FIT_WINDOW_ROWS = 2000;
-
 /** computeSchemaFit against a tenant's newest SCHEMA_FIT_WINDOW_ROWS rows: tag counts come from one aggregate and texts
  * stream one column, so no row is loaded. */
 export function schemaFit(db: DatabaseSyncLike, tenantId: string, content: string, tags: readonly string[]): number {
@@ -518,19 +515,11 @@ const STATUS_ROW_COLUMNS: readonly StatusColumn[] = [
 ];
 
 // Scored in JavaScript, not with strengthSql: SQLite reads fewer date shapes than Date does, so its counts would
-// differ.
-function tallyStatusRows(
-  rows: Iterable<StatusRow>,
-  now: Date,
-  atRiskBelow: number,
-  rules: LossAversion,
-): Omit<StatusCounts, 'openConflicts' | 'embedded'> {
-  const byLayer = { [Layer.Buffer]: 0, [Layer.Episodic]: 0, [Layer.Semantic]: 0, [Layer.Trace]: 0 };
-  const byConfidence = { verified: 0, observed: 0, inferred: 0, stale: 0 };
-  const sums = { total: 0, strength: 0, pinned: 0, atRisk: 0, agedOut: 0 };
+// differ. rowToEntry's defaults for these columns, so a row scores as its loaded entry would.
+function* statusInputs(rows: Iterable<StatusRow>): Iterable<StatusInputs> {
   for (const row of rows) {
-    // rowToEntry's defaults for these columns, so a row scores as its loaded entry would.
-    const entry = {
+    yield {
+      layer: row.layer,
       pinned: Boolean(row.pinned),
       confidence: row.confidence ?? 'observed',
       created: row.created,
@@ -541,18 +530,7 @@ function tallyStatusRows(
       outcomePositive: Number(row.outcome_positive ?? 0),
       outcomeNegative: Number(row.outcome_negative ?? 0),
     };
-    const strength = calculateStrength(entry, now, rules);
-    const facets = confidenceFacets(entry, now);
-    sums.total++;
-    sums.strength += strength;
-    byLayer[row.layer] = (byLayer[row.layer] ?? 0) + 1;
-    byConfidence[facets.tier] = (byConfidence[facets.tier] ?? 0) + 1;
-    if (entry.pinned) sums.pinned++;
-    if (strength < atRiskBelow) sums.atRisk++;
-    if (facets.agedOut) sums.agedOut++;
   }
-  const { total, pinned, atRisk, agedOut } = sums;
-  return { total, byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength: total > 0 ? sums.strength / total : 0 };
 }
 
 /**
@@ -566,7 +544,7 @@ export function statusCounts(db: DatabaseSyncLike, rules: LossAversion, now: Dat
       db,
       `SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`,
     ).iterate() as Iterable<StatusRow>;
-    const tallies = tallyStatusRows(rows, now, atRiskBelow, rules);
+    const tallies = tallyStatus(statusInputs(rows), now, atRiskBelow, rules);
     // SAFETY: scalar subqueries with no FROM always answer one row.
     const counts = cachedStatement(
       db,

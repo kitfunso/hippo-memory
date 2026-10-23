@@ -1,7 +1,7 @@
 // hippo.db's rows for the typed objects: each kind's table, columns, row mapping and, for a kind the shared save
 // writes, its insert values and audit keys. A status column carries a CHECK constraint, so a row declares it as the
 // kind's status union.
-import { isJsonString, type JsonObject } from '../../base/util/json.js';
+import { isJsonString } from '../../base/util/json.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import type { SourceObjectType } from '../port/graph.js';
 import type {
@@ -24,7 +24,6 @@ import type {
   Skill,
   SkillStatus,
 } from '../../base/records/object-types.js';
-import type { AuditOp } from '../../base/records/audit-ops.js';
 
 interface HeadRow {
   id: number;
@@ -201,13 +200,9 @@ const rowToCustomerNote = (row: CustomerNoteRow): CustomerNote => ({
 });
 
 interface RowSpec<K extends ObjectKind> {
-  readonly table: string;
   /** The column list every read selects: exactly the columns the kind's row declares. */
   readonly cols: string;
   readonly rowTo: (row: RowByKind[K]) => ObjectByKind[K];
-  /** The audit metadata key that carries the object id. */
-  readonly idKey: string;
-  readonly closeOp: AuditOp;
   /** The one column a list may filter by equality. */
   readonly filterColumn?: string;
   /**
@@ -220,24 +215,9 @@ interface RowSpec<K extends ObjectKind> {
 export type ColumnValue = string | number | null;
 
 interface InsertSpec<K extends SavableKind> {
-  readonly createOp: AuditOp;
-  readonly supersedeOp: AuditOp;
-  /** A versioned table has `version` and `change_summary`: a successor takes its predecessor's version plus one and the
-   * caller's change note. */
-  readonly versioned: boolean;
   /** The kind's own columns, in the order `values` fills them. */
   readonly columns: readonly string[];
   readonly values: (w: ObjectFields[K]) => readonly ColumnValue[];
-  /** The create audit's keys after the id, in the order they are stored: ids, counts and flags, never the object's
-   * text. */
-  readonly createMeta: (w: ObjectFields[K], version: number) => JsonObject;
-  /** Keys the supersede audit stores after its own. */
-  readonly supersedeMeta?: (w: ObjectFields[K]) => JsonObject;
-}
-
-/** Tells an auto-refresh from a manual write in the audit log without a fourth audit op. */
-function refreshMeta(w: ObjectFields['project_brief']): JsonObject {
-  return w.receiptCount === undefined ? { refreshed: false } : { refreshed: true, receipt_count: w.receiptCount };
 }
 
 type RowSpecs = { readonly [K in ObjectKind]: RowSpec<K> };
@@ -246,132 +226,82 @@ type InsertSpecs = { readonly [K in SavableKind]: { readonly insert: InsertSpec<
 // An incident has no insert entry: it is opened and resolved by its own writes.
 const OBJECT_ROWS: RowSpecs & InsertSpecs = {
   decision: {
-    table: 'decisions',
     cols: `
   id, memory_id, tenant_id, decision_text, context, status,
   superseded_by, superseded_at, closed_at, created_at
 `,
     rowTo: rowToDecision,
-    idKey: 'decision_id',
-    closeOp: 'decision_close',
     graphType: 'decision',
     insert: {
-      createOp: 'decision_create',
-      supersedeOp: 'decision_supersede',
-      versioned: false,
       columns: ['decision_text', 'context'],
       values: (w) => [w.decisionText, w.context ?? null],
-      createMeta: (w) => ({ has_context: w.context !== undefined && w.context !== null && w.context !== '' }),
     },
   },
   incident: {
-    table: 'incidents',
     cols: `
   id, memory_id, tenant_id, incident_text, context, status,
   resolution_text, resolved_at, closed_at, linked_memory_ids, created_at
 `,
     rowTo: rowToIncident,
-    idKey: 'incident_id',
-    closeOp: 'incident_close',
   },
   process: {
-    table: 'processes',
     cols: `
   id, memory_id, tenant_id, process_name, description, steps, version, status,
   superseded_by, superseded_at, change_summary, closed_at, created_at
 `,
     rowTo: rowToProcess,
-    idKey: 'process_id',
-    closeOp: 'process_close',
     insert: {
-      createOp: 'process_create',
-      supersedeOp: 'process_supersede',
-      versioned: true,
       columns: ['process_name', 'description', 'steps'],
       values: (w) => [w.processName, w.description ?? null, JSON.stringify(w.steps)],
-      createMeta: (w, version) => ({
-        version,
-        step_count: w.steps.length,
-        has_description: w.description !== undefined && w.description !== null && w.description !== '',
-      }),
     },
   },
   policy: {
-    table: 'policies',
     cols: `
   id, memory_id, tenant_id, policy_name, policy_text, valid_from, valid_to,
   version, status, superseded_by, superseded_at, change_summary, closed_at, created_at
 `,
     rowTo: rowToPolicy,
-    idKey: 'policy_id',
-    closeOp: 'policy_close',
     graphType: 'policy',
     insert: {
-      createOp: 'policy_create',
-      supersedeOp: 'policy_supersede',
-      versioned: true,
       columns: ['policy_name', 'policy_text', 'valid_from', 'valid_to'],
       values: (w) => [w.policyName, w.policyText, w.validFrom, w.validTo],
-      createMeta: (w, version) => ({ version, open_ended: w.validTo === null }),
     },
   },
   skill: {
-    table: 'skills',
     cols: `
   id, memory_id, tenant_id, skill_name, instructions, trigger_text, version, status,
   superseded_by, superseded_at, change_summary, closed_at, created_at
 `,
     rowTo: rowToSkill,
-    idKey: 'skill_id',
-    closeOp: 'skill_close',
     insert: {
-      createOp: 'skill_create',
-      supersedeOp: 'skill_supersede',
-      versioned: true,
       columns: ['skill_name', 'instructions', 'trigger_text'],
       values: (w) => [w.name, w.instructions, w.trigger],
-      createMeta: (w, version) => ({ version, has_trigger: w.trigger !== null }),
     },
   },
   project_brief: {
-    table: 'project_briefs',
     cols: `
   id, memory_id, tenant_id, repo, summary, version, status,
   superseded_by, superseded_at, change_summary, closed_at, created_at
 `,
     rowTo: rowToProjectBrief,
-    idKey: 'brief_id',
-    closeOp: 'project_brief_close',
     filterColumn: 'repo',
     graphType: 'project',
     insert: {
-      createOp: 'project_brief_create',
-      supersedeOp: 'project_brief_supersede',
-      versioned: true,
       columns: ['repo', 'summary'],
       values: (w) => [w.repo, w.summary],
-      createMeta: (w, version) => ({ repo: w.repo, version, ...refreshMeta(w) }),
-      supersedeMeta: refreshMeta,
     },
   },
   customer_note: {
-    table: 'customer_notes',
     cols: `
   id, memory_id, tenant_id, customer, note, version, status,
   superseded_by, superseded_at, change_summary, closed_at, created_at
 `,
     rowTo: rowToCustomerNote,
-    idKey: 'note_id',
-    closeOp: 'customer_note_close',
     filterColumn: 'customer',
     graphType: 'customer',
     insert: {
-      createOp: 'customer_note_create',
-      supersedeOp: 'customer_note_supersede',
-      versioned: true,
       columns: ['customer', 'note'],
       values: (w) => [w.customer, w.note],
-      createMeta: (w, version) => ({ customer: w.customer, version }),
     },
   },
 };

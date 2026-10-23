@@ -1,6 +1,6 @@
 // The in-memory Compactions group: a caller's items go through the shared item rules and the write gate in one staged
 // write over the memories.
-import { ConflictError } from '../../base/errors/api-errors.js';
+import { otherSessionsRequest } from '../rules/request-ids.js';
 import {
   COMPACTION_MEMORY_TAG,
   COMPACTION_SOURCE_PREFIX,
@@ -17,7 +17,7 @@ import { REPLAY_AFTER_MS } from '../../base/session/compaction-timing.js';
 import { itemWords, restates, writableItemRows } from '../../base/util/compaction-items.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import type { CallerItems, CallerItemsSaved, CompactionStart, Compactions } from '../port/capture.js';
-import { tenantKey } from './rows.js';
+import { ownedRow, tenantKey } from './rows.js';
 import { stage, type Tx } from './staged.js';
 import type { CompactionRecord, MemoryTables } from './tables.js';
 import { newestFirst } from '../rules/order.js';
@@ -72,7 +72,7 @@ function summarize(t: MemoryTables, tenantId: string, req: CallerItems): Compact
   return record;
 }
 
-/** One item through the restatement match and the write gate, as hippo.db runs it inside its transaction. */
+/** One item through the restatement match and the write gate, inside the batch's one staged write. */
 function writeItem({ t, tx, held, tally }: Batch, entry: MemoryEntry, actor: string): void {
   const words = itemWords(entry.content);
   const match = held.find((h) => restates(words, h.words));
@@ -136,8 +136,8 @@ function writeItems(t: MemoryTables, tenantId: string, req: CallerItems, record:
       else writeItem(batch, itemEntry(text, tenantId, req, record.originProject), req.owner);
     }
     for (const id of tally.restated) {
-      const row = tx.rows.get(id);
-      const [marked] = row?.tenantId === tenantId ? markRetrieved([row]) : [];
+      const row = ownedRow(tx.rows, tenantId, id);
+      const [marked] = row ? markRetrieved([row]) : [];
       if (marked) tx.rows.set(id, marked);
     }
   });
@@ -147,7 +147,7 @@ function writeItems(t: MemoryTables, tenantId: string, req: CallerItems, record:
 function saveCallerItemsIn(t: MemoryTables, tenantId: string, req: CallerItems): CallerItemsSaved {
   const notes: string[] = [];
   const earlier = t.compactions.find((r) => r.tenantId === tenantId && r.requestId === req.requestId);
-  if (earlier && earlier.sessionId !== req.sessionId) throw new ConflictError('request id belongs to another session');
+  if (earlier && earlier.sessionId !== req.sessionId) throw otherSessionsRequest();
   if (earlier && earlier.status !== 'summarised') return { written: earlier.itemsWritten, notes };
   const record = earlier ?? summarize(t, tenantId, req);
   const tally = writeItems(

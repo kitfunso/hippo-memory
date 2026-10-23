@@ -540,7 +540,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
   | 50,000 | 179.06 / 224.18 | 8.36 / 11.81 | 104.9 s | 1.6 KB |
 
 - Recall at the new threshold: `MODE=store` (a real store, the store worker's graph against the exact scan, `NOISE=2`) gave recall@10 of 1.000 at 1,000, 2,000 and 5,000 vectors, for all rows and for one tenant of three. Graph p50 at 1,000 was 2.14 ms against 4.11 ms for the scan.
-- `maxVectors` (config `vectorGraph.maxVectors`, default 200,000): from 1,000 to 50,000 vectors the graph held 1.6 to 2.3 KB of heap a vector, so the default is about 400 MB in the server's store worker. Over the cap the store logs one warn line with the count, drops the graph and scans.
+- `maxVectors` (config `vectorGraph.maxVectors`, default 200,000): from 1,000 to 50,000 vectors the graph held 1.6 to 2.3 KB of heap a vector, so the default is about 400 MB in the server's store worker. Over the cap the store logs one warn line with the count and drops the graph; reads then use the saved graph file while it still covers the store, and scan once it does not.
 - The paged scan (`topVectorMatches` in src/db/vector-store.ts): with no graph, a read takes `VECTOR_SCAN_PAGE` (1,024) vectors a statement on the memory_vectors key and keeps the best k in a heap, so memory stays flat as the store grows. Its time still grows with the store, as the table shows.
 - The daemon hop (`askingNearestFirst` in src/store/sqlite/vector-reads.ts, `serverNearestAsk` in src/surface/cli/server-nearest.ts): a CLI or hook store whose hippo.db holds between the threshold and the cap asks a running `hippo serve` on the same store for the nearest ids (`POST /v1/vectors/nearest`), then reads those rows from its own store, so the output is the same as the direct path. A smaller store scans: the scan is as fast as the HTTP hop. A server that does not answer in 1 s costs one warn line, then the local scan.
 
@@ -548,6 +548,18 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `GRAPH_M`, `GRAPH_EF_CONSTRUCTION` (wave 1020 C, slice 4.2): chosen with `benchmarks/vector-index/bench.mjs` in graph mode, 100,000 clustered vectors of length 384, five runs at once on one machine. With `NOISE=2` (two rows of a cluster at cosine about 0.2, the rest at 0 +- 0.05), M 16 and efConstruction 100 give recall@10 0.998 at ef 128 and at ef 200. With `NOISE=2.5` (cosine about 0.14), recall@10 at ef 200 is 0.79 for M 16 and efConstruction 100 (build 255 s), 0.82 for efConstruction 200 (424 s) and 0.83 for M 24 with efConstruction 200 (717 s). More build bought little recall, so the graph keeps the cheaper pair.
 - `EF_FLOOR`: 128. At `NOISE=2` and 100,000 vectors, ef 64 gave recall@10 0.978 and ef 128 gave 0.998, for about 1 ms more a walk.
 - `graphMatches` stops at the first walk that yields k admitted rows. In store mode at `NOISE=2` and 100,000 vectors, walking on until 2k or 4k rows passed the filter raised recall@10 for one tenant of three from 0.978 to 0.980 and 0.988, at 3 and 5 times the time of the read.
+
+### src/db/vector-graph-file.ts
+- The saved graph file (wave 1020j, design in docs/design/vector-graph-file.md): `vector-graph-<length>.bin` beside hippo.db, so a process with no store worker graph searches a graph instead of scanning. `MODE=oneshot NS=10000,50000 node --expose-gc benchmarks/vector-index/bench.mjs` runs each of 50 reads in a fresh process through the store, scan and file reads taking turns query by query, 384-dim clustered vectors at `NOISE=2`, one Windows machine with other test lanes running (2026-10-22), ms:
+
+  | Vectors | Scan p50 / p95 | File p50 / p95 | recall@10 | File size | Build |
+  |---|---|---|---|---|---|
+  | 10,000 | 61.88 / 196.73 | 28.42 / 51.91 | 1.000 | 5.12 MB | 27.9 s |
+  | 50,000 | 199.60 / 232.33 | 29.69 / 36.78 | 1.000 | 25.6 MB | 125.1 s |
+
+- The reader takes the whole file in one read. One positional read for each record the walk reached cost about 2,900 reads a query at 10,000 vectors, and a warm read in one process fell from 28 to 21 ms with one read.
+- The build holds no write lock: in the same bench a writer in another process with `busy_timeout = 0` committed 7,452 times during the 50,000-vector build, with 0 busy errors and a slowest commit of 52.9 ms.
+- The server's sleep child replies first, then builds, and stops 5 s before the sleep's deadline; the sleep queue's turn lasts until the child exits, so one child runs at a time and a stopping server waits for it.
 
 ### benchmarks/a1/p99-recall.ts
 - CI gate (wave 1020h): the checks job runs the 1k store, 5 rounds of 200 queries, and fails when the fastest round's p99 is 40 ms or more. Six CI runs on ubuntu-latest (2026-10-21) gave a fastest-round p99 of 5.7 to 9.3 ms, and no round passed 14.3 ms. Three runs on a Windows 11 box with other test lanes running gave 14.3, 17.2 and 26.9 ms. 40 ms is about 4 times the slowest CI result and 1.5 times the slowest loaded Windows result, so a slow runner passes and a recall that does several times the work fails. The 10k run stays manual.

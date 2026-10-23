@@ -9,7 +9,9 @@ import { chunked } from '../../base/util/chunked.js';
 import { byIdOrder, FRESH_RAW_ORDER, oldestFirst, orderSql } from '../rules/order.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
-import { duplicateKey, longestWord } from '../../base/util/same-text.js';
+import { longestWord } from '../../base/util/same-text.js';
+import { openingPhrase } from '../rules/fts.js';
+import { MAX_FRESH_RAW } from '../rules/windows.js';
 import { tenantAnd } from './tenant.js';
 import {
   afterIdAnd,
@@ -26,8 +28,6 @@ import type { RawRefRow, SessionRawCount, SessionRawQuery, SessionRawWindow } fr
 import type { OriginRows, OriginTally } from '../port/project-tags.js';
 import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../port/sharing.js';
 import type { EntryCursor, EntryPage } from '../port/types.js';
-
-const MAX_FRESH_RAW = 200;
 
 // The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant
 // instead.
@@ -458,17 +458,12 @@ export function selectOriginTallies(db: DatabaseSyncLike, tenantId: string, sour
   ).all(sourcePrefix.length, sourcePrefix, tenantId) as OriginTallyDbRow[];
 }
 
-// Letters and digits in every Unicode table unicode61 has shipped (Latin, Greek, Cyrillic, Hebrew, Arabic, Devanagari,
-// Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
-const SURE_TOKEN_CHAR = new RegExp('[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-я' + 'א-תء-غف-يअ-हก-ะ' + 'ぁ-んァ-ヶ一-龥가-힣]');
-const PHRASE_WORDS = 32;
 export const IN_PHRASE_HITS = 'id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
 
-/** The index query for `text`'s first words, which a row holding the text word for word holds in a row; null when the
- * phrase might name no token, since an empty phrase matches no row. */
+/** The index query for `text`'s first words; null when the phrase might name no token. */
 export function holdingPhrase(text: string): string | null {
-  const opening = duplicateKey(text).split(' ').slice(0, PHRASE_WORDS).join(' ');
-  return SURE_TOKEN_CHAR.test(opening) ? `content : "${opening.replaceAll('"', '""')}"` : null;
+  const opening = openingPhrase(text);
+  return opening === null ? null : `content : "${opening.replaceAll('"', '""')}"`;
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.

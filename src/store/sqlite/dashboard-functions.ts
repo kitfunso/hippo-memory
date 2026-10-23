@@ -98,6 +98,57 @@ function holdsText(id: SqlValue, content: SqlValue, tagsJson: SqlValue, needle: 
   return tags.length > 0 && tags.join('\n').toLowerCase().includes(want) ? 1 : 0;
 }
 
+// The two letters past ASCII that JavaScript lower-cases into ASCII, with the ASCII each yields.
+const ASCII_LOWERED = [
+  [0x130, 'i'],
+  [0x212a, 'k'],
+] as const;
+
+// SQLite's lower() folds ASCII only, so these two letters fold first: every ASCII run in the JavaScript lower-casing
+// of `column` then appears in this one.
+const asciiFolded = (column: string): string =>
+  `lower(${ASCII_LOWERED.reduce((sql, [code, ascii]) => `replace(${sql}, char(${code}), '${ascii}')`, column)})`;
+
+const NOT_ASCII = (column: string): string => `length(CAST(${column} AS BLOB)) <> length(${column})`;
+
+// A tag list with a `\`, a digit, an object or a nested list may not hold its tags' text as written: an escape, or a
+// value String() writes another way.
+const TAGS_NOT_AS_WRITTEN =
+  `instr(tags_json, '\\') > 0 OR tags_json GLOB '*[0-9{]*' ` + `OR instr(substr(tags_json, 2), '[') > 0`;
+
+// A superset of the rows hippo_holds_text holds :text in: those that hold the probe once folded; for a needle with no
+// ASCII, those with a letter past ASCII; else every row.
+const TEXT_ADMITS =
+  `CASE WHEN :probe IS NOT NULL THEN instr(${asciiFolded('content')}, :probe) > 0 ` +
+  `OR instr(${asciiFolded('tags_json')}, :probe) > 0 OR ${TAGS_NOT_AS_WRITTEN} ` +
+  `WHEN :wide THEN ${NOT_ASCII('content')} OR ${NOT_ASCII('tags_json')} OR instr(tags_json, '\\') > 0 ELSE 1 END`;
+
+/** True when :text is null or the row's content or tags hold it, by hippo_holds_text on the rows native SQL admits. */
+export const HOLDS_TEXT =
+  `CASE WHEN :text IS NULL THEN 1 WHEN ${TEXT_ADMITS} ` +
+  `THEN hippo_holds_text(id, content, tags_json, :text) ELSE 0 END`;
+
+// Printable ASCII but `"` and `\`, which a JSON string with no `\` holds as written.
+const PROBE_BREAK = /[^\x20\x21\x23-\x5b\x5d-\x7e]+/;
+const ALL_WIDE = /^[\u0080-\u{10ffff}]+$/u;
+
+/** HOLDS_TEXT's parameters. */
+interface TextBinds {
+  readonly text: string | null;
+  /** The needle's longest run PROBE_BREAK leaves, or null when it leaves none. */
+  readonly probe: string | null;
+  /** 1 when the needle holds no ASCII. */
+  readonly wide: number;
+}
+
+export function holdsTextBinds(text: string | null): TextBinds {
+  if (text === null) return { text, probe: null, wide: 0 };
+  // node:sqlite hands a function text only up to its first NUL, so that is all of the needle the rule tests.
+  const seen = text.split('\0', 1)[0];
+  const probe = seen.split(PROBE_BREAK).reduce((long, run) => (run.length > long.length ? run : long), '');
+  return { text, probe: probe === '' ? null : probe, wide: ALL_WIDE.test(seen) ? 1 : 0 };
+}
+
 /** UTF-16 big-endian bytes, so SQLite's byte order sorts text as JavaScript's `<` does. */
 function utf16Key(value: SqlValue): Uint8Array {
   const bytes = Buffer.from(text(value), 'utf16le');

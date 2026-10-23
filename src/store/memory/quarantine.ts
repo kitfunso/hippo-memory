@@ -1,5 +1,4 @@
 // The in-memory Quarantine group: the review records beside the memories they hold back, decided as the port says.
-import type { MemoryEntry } from '../../base/memory/memory.js';
 import type {
   Quarantine,
   QuarantineApproval,
@@ -10,15 +9,10 @@ import type {
 } from '../port/quarantine.js';
 import { isBelow, newestFirst, type DescendingKeyset } from '../rules/order.js';
 import { QUARANTINE_LIST_LIMIT } from '../port/quarantine.js';
-import { appendAudit } from './rows.js';
+import { appendAudit, ownedRow } from './rows.js';
 import type { MemoryTables } from './tables.js';
 
 const WALK: DescendingKeyset<QuarantineRow> = { key: (row) => row.quarantinedAt, textId: (row) => row.memoryId };
-
-function owned(t: MemoryTables, tenantId: string, id: string): MemoryEntry | undefined {
-  const entry = t.entries.get(id);
-  return entry?.tenantId === tenantId ? entry : undefined;
-}
 
 function pendingOrRefusal(t: MemoryTables, tenantId: string, id: string): QuarantineRow | QuarantineRefusal {
   const row = t.quarantine.find((r) => r.tenantId === tenantId && r.memoryId === id);
@@ -36,13 +30,13 @@ function listIn(t: MemoryTables, tenantId: string, { status, limit, after }: Qua
     (row) =>
       row.tenantId === tenantId &&
       (status === 'all' || row.status === status) &&
-      (status !== 'pending' || owned(t, tenantId, row.memoryId) !== undefined) &&
+      (status !== 'pending' || ownedRow(t.entries, tenantId, row.memoryId) !== undefined) &&
       (!after || isBelow(WALK, row, after)),
   );
   const page = hits.sort(newestFirst(WALK)).slice(0, limit ?? QUARANTINE_LIST_LIMIT);
   const withContent = (row: QuarantineRow): QuarantinedMemory => ({
     ...row,
-    content: owned(t, tenantId, row.memoryId)?.content ?? null,
+    content: ownedRow(t.entries, tenantId, row.memoryId)?.content ?? null,
   });
   return structuredClone(page.map(withContent));
 }
@@ -50,7 +44,7 @@ function listIn(t: MemoryTables, tenantId: string, { status, limit, after }: Qua
 function approveIn(t: MemoryTables, tenantId: string, id: string, actor: string): QuarantineApproval {
   const row = pendingOrRefusal(t, tenantId, id);
   if ('outcome' in row) return row;
-  const memory = owned(t, tenantId, id);
+  const memory = ownedRow(t.entries, tenantId, id);
   if (!memory || memory.scope !== `quarantine:private:${row.originalScope ?? 'unscoped'}`) {
     return { outcome: 'scope_moved' };
   }

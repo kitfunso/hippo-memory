@@ -15,6 +15,7 @@ import {
   wrongRoute,
 } from '../dashboard/dashboard.js';
 import { pageRoute, SECURITY_HEADERS } from '../dashboard/dashboard-page.js';
+import type { StaticFiles } from '../dashboard/static-file.js';
 import type { DashboardReader } from './dashboard-reader.js';
 import { passDashboardSession, type DashboardAccess, type DashboardSession } from './dashboard-session.js';
 import type { DashboardRoute, DashboardRouteRequest } from './dashboard-types.js';
@@ -49,7 +50,7 @@ export interface DashboardServing {
   /** A fresh Context per request, so a config edit shows on the next one. */
   readonly context: () => Context;
   readonly bodyDeadlineMs: number;
-  readonly staticRoot: string | null;
+  readonly staticFiles: StaticFiles | null;
   /** Fences the handlers from hippo.db on the server thread: the store's workers and the reader thread answer. */
   readonly offLoop: <T>(run: () => T) => T;
 }
@@ -68,8 +69,8 @@ function passGate({ req, res, query, serving }: DashboardCall): DashboardSession
 
 function admitted(call: DashboardCall, session: DashboardSession): DashboardRouteRequest {
   const { req, res, query, serving } = call;
-  const { reader, bodyDeadlineMs, staticRoot } = serving;
-  return { req, res, query, session, ctx: serving.context(), reader, bodyDeadlineMs, staticRoot };
+  const { reader, bodyDeadlineMs, staticFiles } = serving;
+  return { req, res, query, session, ctx: serving.context(), reader, bodyDeadlineMs, staticFiles };
 }
 
 /** The row's run, gate first, or null when method or path differ; the path matcher runs first, as for a /v1 row. */

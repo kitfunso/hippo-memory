@@ -3,12 +3,11 @@
 import type { Sessions, WorkingMemoryFilter, WorkingMemoryPush, WorkingMemoryItem } from '../port/sessions.js';
 import { handoffByIdIn, latestHandoffIn, saveHandoffIn, stampOutcomeIn, writeSessionEndIn } from './handoffs.js';
 import { byBytes } from '../rules/order.js';
+import { WM_MAX_ENTRIES } from '../rules/windows.js';
 import { nextId, storedObject, tenantKey } from './rows.js';
 import type { Tenanted } from './session-tables.js';
 import { memorySnapshots } from './snapshots.js';
 import type { MemoryTables } from './tables.js';
-
-const WM_MAX_ENTRIES = 20;
 
 /** Past WM_MAX_ENTRIES in the scope, the lowest importance goes first, then the oldest by created_at and id. */
 function evictOverCapacity(t: MemoryTables, tenantId: string, scope: string): void {

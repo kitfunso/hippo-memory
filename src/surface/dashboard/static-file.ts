@@ -1,9 +1,12 @@
-// The dashboard's static files: the one rule that maps a URL path into the built app's folder, and the asset reply.
+// The dashboard's static files: the built app, read once at listener start into one map from URL path to the bytes it
+// sends, and the reply that serves one with its validators. A path the map does not hold is never read from disk.
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import type * as http from 'http';
 import * as path from 'path';
+import { gzipSync } from 'zlib';
 import { PACKAGE_ROOT } from '../../base/config/package-root.js';
-import { HttpError, sendJson } from '../../base/util/http-util.js';
+import { HttpError } from '../../base/util/http-util.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 
 /** Where the build puts the React app. */
@@ -32,19 +35,76 @@ function isStaticFileExtension(ext: string): ext is StaticFileExtension {
   return Object.hasOwn(MIME_TYPES, ext);
 }
 
-// A relative path, not a prefix test: a sibling folder whose name starts with the root's is outside it.
-function isInside(root: string, target: string): boolean {
-  const rel = path.relative(root, target);
-  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+/** One encoding of a file, with the strong validator of exactly these bytes. */
+interface Encoded {
+  readonly body: Buffer;
+  readonly etag: string;
 }
 
-const OUTSIDE = 'path is outside the dashboard files';
-// EINVAL is a name the file system cannot hold, such as a drive letter mid-path on Windows.
-const NO_SUCH_FILE = new Set(['ENOENT', 'ENOTDIR', 'EINVAL']);
+/** One built file as it is sent. */
+export interface StaticAsset {
+  readonly type: string;
+  readonly cacheControl: string;
+  readonly plain: Encoded;
+  /** Null when gzip would not make the file smaller. */
+  readonly gzip: Encoded | null;
+}
 
-/** The file a URL path names under `root`, or null when there is none; a path that leaves `root`, by `..`, an encoded
- * `..` or a link, is a 403. */
-export function staticFileUnder(root: string, urlPath: string): string | null {
+/** The built app by URL path, such as `/assets/index-3f2a9c1b.js`. */
+export type StaticFiles = ReadonlyMap<string, StaticAsset>;
+
+// Vite names each bundle after a hash of its content, so a changed bundle comes at a new URL.
+const HASHED = /^\/assets\/.+-[\w-]{8}\.\w+$/;
+const IMMUTABLE = 'public, max-age=31536000, immutable';
+
+function assetOf(urlPath: string, body: Buffer, type: string): StaticAsset {
+  const hash = createHash('sha256').update(body).digest('base64url');
+  const gzip = gzipSync(body, { level: 9 });
+  return {
+    type,
+    cacheControl: HASHED.test(urlPath) ? IMMUTABLE : 'no-cache',
+    plain: { body, etag: `"${hash}"` },
+    gzip: gzip.length < body.length ? { body: gzip, etag: `"${hash}-gzip"` } : null,
+  };
+}
+
+// Real folders only: a link is never followed, so no file outside the root can enter the map.
+function* filesUnder(dir: string): Generator<string> {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) yield* filesUnder(full);
+    else if (entry.isFile()) yield full;
+  }
+}
+
+function readAsset(file: string): Buffer | null {
+  try {
+    return fs.readFileSync(file);
+  } catch (err) {
+    log.error(
+      `dashboard: reading ${file} failed (${errorCode(err) || errorMessage(err)}); it will not be served`,
+      errorFields(err),
+    );
+    return null;
+  }
+}
+
+/** Every file under `root` with a type the dashboard serves, read once; null when the app is not built. */
+export function loadStaticFiles(root: string = DASHBOARD_STATIC_ROOT): StaticFiles | null {
+  if (builtStaticRoot(root) === null) return null;
+  const files = new Map<string, StaticAsset>();
+  for (const file of filesUnder(root)) {
+    const ext = path.extname(file).toLowerCase();
+    if (!isStaticFileExtension(ext)) continue;
+    const body = readAsset(file);
+    const urlPath = `/${path.relative(root, file).split(path.sep).join('/')}`;
+    if (body !== null) files.set(urlPath, assetOf(urlPath, body, MIME_TYPES[ext]));
+  }
+  return files;
+}
+
+/** The file a URL path names, else index.html, since the app routes in the browser; undefined when neither is held. */
+export function assetFor(files: StaticFiles, urlPath: string): StaticAsset | undefined {
   let name: string;
   try {
     name = decodeURIComponent(urlPath);
@@ -52,35 +112,37 @@ export function staticFileUnder(root: string, urlPath: string): string | null {
     if (err instanceof URIError) throw new HttpError(400, 'Malformed URL path');
     throw err;
   }
-  if (name.includes('\0')) throw new HttpError(400, 'Malformed URL path');
-  const target = path.join(root, name);
-  if (!isInside(root, target)) throw new HttpError(403, OUTSIDE);
-  let real: string;
-  try {
-    real = fs.realpathSync(target);
-  } catch (err) {
-    if (NO_SUCH_FILE.has(errorCode(err))) return null;
-    throw err;
-  }
-  if (!isInside(fs.realpathSync(root), real)) throw new HttpError(403, OUTSIDE);
-  return fs.statSync(real).isFile() ? real : null;
+  return files.get(name) ?? files.get('/index.html');
 }
 
-/** True once the reply is sent, the file or a 500 for one that exists but will not read; false when there is no such
- * asset, so the next route answers. */
-export function serveStaticFile(res: http.ServerResponse, filePath: string): boolean {
-  const ext = path.extname(filePath).toLowerCase();
-  if (!isStaticFileExtension(ext)) return false;
-  let content: Buffer;
-  try {
-    content = fs.readFileSync(filePath);
-  } catch (err) {
-    if (errorCode(err) === 'ENOENT') return false;
-    log.error(`dashboard: reading ${filePath} failed (${errorCode(err) || errorMessage(err)})`, errorFields(err));
-    sendJson(res, 500, { error: 'Internal error' });
-    return true;
+// A q of 0 refuses a coding.
+function takesGzip(header: string | undefined): boolean {
+  return (header ?? '').split(',').some((part) => {
+    const [coding, ...params] = part.split(';').map((s) => s.trim().toLowerCase());
+    const q = params.find((p) => p.startsWith('q='));
+    return coding === 'gzip' && (q === undefined || Number(q.slice(2)) > 0);
+  });
+}
+
+// If-None-Match compares weakly, so W/"x" names the same bytes as "x".
+function holdsVersion(header: string | undefined, etag: string): boolean {
+  if (header === undefined) return false;
+  return header.split(',').some((tag) => {
+    const t = tag.trim();
+    return t === '*' || t.replace(/^W\//, '') === etag;
+  });
+}
+
+/** Sends `asset` gzipped when the client takes gzip, or a 304 when the client already holds those bytes. */
+export function sendAsset(req: http.IncomingMessage, res: http.ServerResponse, asset: StaticAsset): void {
+  const sent = asset.gzip !== null && takesGzip(req.headers['accept-encoding']) ? asset.gzip : asset.plain;
+  const validators = { ETag: sent.etag, 'Cache-Control': asset.cacheControl, Vary: 'Accept-Encoding' };
+  if (holdsVersion(req.headers['if-none-match'], sent.etag)) {
+    res.writeHead(304, validators);
+    res.end();
+    return;
   }
-  res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] });
-  res.end(content);
-  return true;
+  const encoding = sent === asset.gzip ? { 'Content-Encoding': 'gzip' } : {};
+  res.writeHead(200, { ...validators, ...encoding, 'Content-Type': asset.type, 'Content-Length': sent.body.length });
+  res.end(sent.body);
 }

@@ -6,6 +6,7 @@ export {
   runSqliteBatch as runStoreBatch,
   runSqliteHookRequest as runStoreHookRequest,
   runSqliteRequest as runStoreRequest,
+  saveVectorGraphFile,
   sqliteDashboardReads as defaultDashboardReads,
   sqliteDiagnosticsStore as defaultDiagnostics,
   sqliteImportFiles as defaultImportFiles,

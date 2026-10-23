@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { adminActor } from '../../api/index.js';
 import { configReader } from '../../host/config-file.js';
 import { evalNow } from '../../base/memory/ablation.js';
-import { builtStaticRoot } from '../dashboard/static-file.js';
+import { loadStaticFiles } from '../dashboard/static-file.js';
 import { defaultServerRuntime, type ServerRuntime } from '../open-store.js';
 import { installSignalHandlers } from '../../base/util/crash-handlers.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
@@ -69,7 +69,7 @@ function servingFor(opts: DashboardOpts, { store, offLoop, host }: ServerRuntime
       infra: infra(),
     }),
     bodyDeadlineMs: bodyDeadlineMs(opts.bodyDeadlineMs),
-    staticRoot: builtStaticRoot(),
+    staticFiles: loadStaticFiles(),
     offLoop,
   };
 }
