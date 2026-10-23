@@ -1,6 +1,7 @@
 // hippo.db's vector reads: the nearest-row scan yields between chunks, so its handle stays open until it settles.
 import { loadPhysicsState } from '../../db/physics-state.js';
 import { graphServesStore } from '../../db/vector-graph-index.js';
+import { GraphFileIndex } from '../../db/vector-graph-reader.js';
 import type { VectorIndex } from '../../db/vector-store.js';
 import type { Handles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
@@ -19,8 +20,12 @@ const rowReadsBodies: Bodies<RowReads> = {
   physicsParticles: (db, ids) => loadPhysicsState(db, [...ids]),
 };
 
-/** `index` is the store worker's vector graph, on the one reader thread that holds it. */
-export function sqliteVectorReads({ on, onAsync }: Handles, index?: VectorIndex): VectorReads {
+/** `index` is the store worker's vector graph on the one reader thread that holds it; every other reader searches the
+ * graph file saved beside hippo.db. */
+export function sqliteVectorReads(
+  { on, onAsync, files }: Handles,
+  index: VectorIndex = new GraphFileIndex(files.hippoRoot),
+): VectorReads {
   const reads = bound(on, rowReadsBodies);
   return {
     ...reads,

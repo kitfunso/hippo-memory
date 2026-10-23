@@ -2,7 +2,7 @@
 // date, and the search whose candidates SQL admits and the stored vectors score.
 import type { DatabaseSyncLike } from './sqlite.js';
 import { getMeta } from './meta.js';
-import { createVectorGraph, insertNode, searchGraph, type VectorGraph } from './vector-graph.js';
+import { createVectorGraph, insertNode, searchGraph, type SearchResult, type VectorGraph } from './vector-graph.js';
 import {
   admittedVectorsSql,
   decodeVector,
@@ -13,6 +13,13 @@ import {
   type VectorRow,
 } from './vector-store.js';
 import { cachedStatement } from './statement-cache.js';
+import { placeholders } from './sql.js';
+
+// The graph beat the paged scan at both p50 and p95 from 1,000 vectors on; docs/ARCHITECTURE.md has the bench.
+/** Stored vectors a store holds before its nearest-row reads search a graph. */
+export const VECTOR_GRAPH_THRESHOLD = 1_000;
+/** Share of a graph's nodes that may be stale, or its file's rows new, before it is rebuilt. */
+export const STALE_SHARE = 0.1;
 
 // A larger M or efConstruction cost far more build than it bought recall; docs/ARCHITECTURE.md has the bench.
 const GRAPH_M = 16;
@@ -158,24 +165,53 @@ export function catchUp(db: DatabaseSyncLike, g: GraphRows, inlineRows: number):
   return { kind: 'current' };
 }
 
-function admittedRows(
+/** The rows among `keys` (memory ids or rowids) that pass `where`, with their stored vectors. */
+export function admittedRows(
   db: DatabaseSyncLike,
-  ids: readonly string[],
-  dim: number,
-  where: string,
-  params: readonly (string | number)[],
+  key: 'memory_id' | 'rowid',
+  keys: readonly (string | number)[],
+  { dim, where, params }: { dim: number; where: string; params: readonly (string | number)[] },
 ): VectorRow[] {
-  if (ids.length === 0) return [];
+  if (keys.length === 0) return [];
+  const among = `v.${key} IN (${placeholders(keys.length)}) AND `;
   // SAFETY: node:sqlite returns BLOBs as Uint8Array.
-  const rows = cachedStatement(db, admittedVectorsSql(where, ids.length)).all(...ids, dim, ...params) as Array<{
+  const rows = cachedStatement(db, admittedVectorsSql(where, among)).all(...keys, dim, ...params) as Array<{
     id: string;
     vector: Uint8Array;
   }>;
   return rows.map((row) => ({ id: row.id, vector: decodeVector(row.vector) }));
 }
 
+/** A graph's search for a query: `walk` asks for the `ef` best nodes it may admit, `admit` reads the rows of new ones
+ * that pass the filter, and `nodes` is how many the graph holds. */
+export interface ProposalSearch {
+  readonly nodes: number;
+  readonly walk: (ef: number) => SearchResult;
+  readonly admit: (nodes: readonly number[]) => VectorRow[];
+}
+
 /** The `k` admitted rows nearest `query`, or undefined when the graph cannot find `k`, so the caller scans. Each walk
- * asks twice the candidates of the last; SQL admits the new ones and the stored vectors rank them. */
+ * asks twice the candidates of the last; one that reached every node has seen every row, so it answers with fewer. */
+export function proposedMatches(
+  query: readonly number[],
+  k: number,
+  search: ProposalSearch,
+): VectorMatch[] | undefined {
+  const asked = new Set<number>();
+  const admitted: VectorRow[] = [];
+  for (let ef = Math.max(k * EF_PER_ROW, EF_FLOOR); ; ef *= 2) {
+    const found = search.walk(ef);
+    if (found.aborted) return undefined;
+    const fresh = found.hits.map((hit) => hit.node).filter((node) => !asked.has(node));
+    for (const node of fresh) asked.add(node);
+    admitted.push(...search.admit(fresh));
+    const all = found.hits.length < ef && found.visited >= search.nodes;
+    if (admitted.length >= k || all) return rankVectorRows(query, admitted, k);
+    if (found.hits.length < ef || ef >= EF_CAP) return undefined;
+  }
+}
+
+/** graphMatches on the graph a store worker holds, whose nodes SQL admits by memory id. */
 export function graphMatches(
   db: DatabaseSyncLike,
   g: GraphRows,
@@ -183,15 +219,16 @@ export function graphMatches(
 ): VectorMatch[] | undefined {
   const q = Float32Array.from(query);
   const current = (node: number): boolean => g.nodeOf.get(g.ids[node]) === node;
-  const asked = new Set<string>();
-  const admitted: VectorRow[] = [];
-  for (let ef = Math.max(k * EF_PER_ROW, EF_FLOOR); ; ef *= 2) {
-    const found = searchGraph(g.graph, q, { k: ef, ef, admit: current });
-    if (found.aborted) return undefined;
-    const fresh = found.hits.map((hit) => g.ids[hit.node]).filter((id) => !asked.has(id));
-    for (const id of fresh) asked.add(id);
-    admitted.push(...admittedRows(db, fresh, q.length, where, params));
-    if (admitted.length >= k) return rankVectorRows(query, admitted, k);
-    if (found.hits.length < ef || ef >= EF_CAP) return undefined;
-  }
+  const filter = { dim: q.length, where, params };
+  return proposedMatches(query, k, {
+    nodes: g.ids.length,
+    walk: (ef) => searchGraph(g.graph, q, { k: ef, ef, admit: current }),
+    admit: (nodes) =>
+      admittedRows(
+        db,
+        'memory_id',
+        nodes.map((node) => g.ids[node]),
+        filter,
+      ),
+  });
 }

@@ -9,7 +9,6 @@ import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
 import { chunked } from '../base/util/chunked.js';
-import { placeholders } from './sql.js';
 import { tryParseJson } from '../base/util/json.js';
 import { cachedStatement } from './statement-cache.js';
 
@@ -220,6 +219,10 @@ interface BestMatches {
   top(): VectorMatch[];
   /** Scores `v` at once, so the caller may overwrite it for the next row. */
   offer(id: string, v: Float32Array): void;
+  /** Keeps a match an index already scored with the same arithmetic. */
+  seed(match: VectorMatch): void;
+  /** From now on one match per id, the latest read replacing the one before. */
+  oneEachId(): void;
 }
 
 // One scoring loop for rows in memory and rows paged from the store, so the two can never rank apart.
@@ -233,6 +236,8 @@ function bestMatches(query: readonly number[], k: number): BestMatches | null {
   const kept = new MatchHeap(k);
   return {
     top: () => kept.sorted(),
+    seed: (match) => kept.offer(match),
+    oneEachId: () => kept.oneEachId(),
     offer(id, v) {
       if (v.length !== q.length) return;
       let dot = 0;
@@ -251,18 +256,31 @@ function bestMatches(query: readonly number[], k: number): BestMatches | null {
 class MatchHeap {
   readonly #k: number;
   readonly #heap: VectorMatch[] = [];
+  // Where each id sits, once oneEachId is on: a plain scan reads each id once and skips the lookup.
+  #at: Map<string, number> | undefined;
 
   constructor(k: number) {
     this.#k = k;
   }
 
+  oneEachId(): void {
+    this.#at = new Map(this.#heap.map((m, i) => [m.id, i]));
+  }
+
   offer(m: VectorMatch): void {
     const heap = this.#heap;
-    if (heap.length < this.#k) {
+    const held = this.#at?.get(m.id);
+    if (held !== undefined) {
+      heap[held] = m;
+      this.#siftDown(this.#siftUp(held));
+    } else if (heap.length < this.#k) {
       heap.push(m);
+      this.#at?.set(m.id, heap.length - 1);
       this.#siftUp(heap.length - 1);
     } else if (beats(m.score, m.id, heap[0])) {
+      this.#at?.delete(heap[0].id);
       heap[0] = m;
+      this.#at?.set(m.id, 0);
       this.#siftDown(0);
     }
   }
@@ -278,12 +296,16 @@ class MatchHeap {
   #swap(i: number, j: number): void {
     const heap = this.#heap;
     [heap[i], heap[j]] = [heap[j], heap[i]];
+    this.#at?.set(heap[i].id, i);
+    this.#at?.set(heap[j].id, j);
   }
 
-  #siftUp(i: number): void {
+  /** Answers where the match at `i` came to rest. */
+  #siftUp(i: number): number {
     for (let parent = (i - 1) >> 1; i > 0 && this.#worse(i, parent); i = parent, parent = (i - 1) >> 1) {
       this.#swap(i, parent);
     }
+    return i;
   }
 
   #siftDown(i: number): void {
@@ -308,7 +330,13 @@ function nextTurn(): Promise<void> {
   });
 }
 
-/** Proposes a query's nearest rows from an index in memory; undefined when it cannot answer, so the caller scans. */
+/** An index's nearest admitted rows among those at or below `coveredRowid`; the caller scores the rows above it. */
+export interface ProposedMatches {
+  readonly matches: readonly VectorMatch[];
+  readonly coveredRowid: number;
+}
+
+/** Proposes a query's nearest rows from a graph; undefined when it cannot answer, so the caller scans. */
 export interface VectorIndex {
   matches(
     db: DatabaseSyncLike,
@@ -316,15 +344,14 @@ export interface VectorIndex {
     k: number,
     where: string,
     params: readonly (string | number)[],
-  ): VectorMatch[] | undefined;
+  ): ProposedMatches | undefined;
 }
 
-/** The admitted vectors of length `?` among `memories m` rows passing `where`, limited to `idCount` bound memory ids
- * when given. The scan and the graph's read share it, so the graph can never admit a row the scan would not. */
-export function admittedVectorsSql(where: string, idCount = 0): string {
-  const among = idCount > 0 ? `v.memory_id IN (${placeholders(idCount)}) AND ` : '';
+/** The admitted vectors of length `?` among `memories m` rows passing `where`, narrowed by `among` (SQL ending in AND,
+ * bound first). The scan and the graphs' reads share it, so a graph can never admit a row the scan would not. */
+export function admittedVectorsSql(where: string, among = ''): string {
   // CROSS JOIN keeps memory_vectors the outer loop, so a page walks its key in order instead of sorting every row.
-  return `SELECT v.memory_id AS id, v.vector AS vector
+  return `SELECT v.rowid AS rowid, v.memory_id AS id, v.vector AS vector
     FROM memory_vectors v CROSS JOIN memories m ON m.id = v.memory_id
     WHERE ${among}v.dim = ?${where}`;
 }
@@ -347,17 +374,32 @@ export async function topVectorMatches(db: DatabaseSyncLike, options: TopVectorM
   const { query, k, where, params, index } = options;
   const best = bestMatches(query, k);
   if (!best) return [];
-  // A store worker that holds a graph answers from it; any other read scans every admitted vector, a page at a time.
+  // A graph answers for the rows it covers and the rows above them are scored exactly; with no graph every admitted
+  // vector is scored, a page at a time.
   const proposed = index?.matches(db, query, k, where, params);
-  if (proposed !== undefined) return proposed;
-  // Keyed on memory_id: a vector re-embedded between two pages keeps its id, so no page returns a row twice.
-  const page = cachedStatement(db, `${admittedVectorsSql(where)} AND v.memory_id > ? ORDER BY v.memory_id LIMIT ?`);
+  if (proposed === undefined) return offerPages(db, best, options, { key: 'memory_id', after: '' });
+  for (const match of proposed.matches) best.seed(match);
+  // A re-embed moves a row to a new rowid, so a row may come back above the covered one or on a later page.
+  best.oneEachId();
+  return offerPages(db, best, options, { key: 'rowid', after: proposed.coveredRowid });
+}
+
+// Keyed on memory_id for a whole scan: a vector re-embedded between two pages keeps its id, so no page returns a row
+// twice.
+async function offerPages(
+  db: DatabaseSyncLike,
+  best: BestMatches,
+  { query, where, params }: VectorMatchQuery,
+  from: { readonly key: 'memory_id' | 'rowid'; readonly after: string | number },
+): Promise<VectorMatch[]> {
+  const page = cachedStatement(db, `${admittedVectorsSql(where)} AND v.${from.key} > ? ORDER BY v.${from.key} LIMIT ?`);
   const floats = new Float32Array(query.length);
   const bytes = new Uint8Array(floats.buffer);
-  let after = '';
+  let after = from.after;
   for (;;) {
     // SAFETY: node:sqlite returns BLOBs as Uint8Array.
     const rows = page.all(query.length, ...params, after, VECTOR_SCAN_PAGE) as Array<{
+      rowid: number;
       id: string;
       vector: Uint8Array;
     }>;
@@ -370,7 +412,8 @@ export async function topVectorMatches(db: DatabaseSyncLike, options: TopVectorM
       }
     }
     if (rows.length < VECTOR_SCAN_PAGE) return best.top();
-    after = rows[rows.length - 1].id;
+    const last = rows[rows.length - 1];
+    after = from.key === 'rowid' ? last.rowid : last.id;
     await nextTurn();
   }
 }

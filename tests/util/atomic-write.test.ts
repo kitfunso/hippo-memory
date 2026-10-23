@@ -129,3 +129,28 @@ describe('writeFileAtomic when the platform refuses the rename', () => {
     ]);
   });
 });
+
+describe('writeFileAtomic with bytes, a create mode and no write in place', () => {
+  it.skipIf(WINDOWS)('creates a new file from bytes with the mode it is given', () => {
+    const created = path.join(dir, 'graph.bin');
+
+    writeFileAtomic(created, Uint8Array.from([1, 2, 255]), { durable: false, mode: 0o600 });
+
+    expect([...fs.readFileSync(created)]).toEqual([1, 2, 255]);
+    expect((fs.statSync(created).mode & 0o777).toString(8)).toBe('600');
+  });
+
+  it('throws a refused rename and leaves the old content, no temp file and no log line', () => {
+    vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw Object.assign(new Error('EBUSY: resource busy or locked, rename'), { code: 'EBUSY' });
+    });
+    syncBuiltinESMExports();
+    const logged = captureLog();
+
+    expect(() => writeFileAtomic(file, Uint8Array.from([7]), { inPlace: false })).toThrow(/EBUSY/);
+
+    expect(fs.readFileSync(file, 'utf8')).toBe('old');
+    expect(fs.readdirSync(dir)).toEqual(['settings.json']);
+    expect(logged()).toEqual([]);
+  });
+});
