@@ -43,6 +43,7 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
     "index idx_incidents_memory: CREATE INDEX idx_incidents_memory ON incidents(memory_id) WHERE memory_id IS NOT NULL",
     "index idx_incidents_tenant_status: CREATE INDEX idx_incidents_tenant_status ON incidents(tenant_id, status)",
     "index idx_incidents_tenant_status_created: CREATE INDEX idx_incidents_tenant_status_created ON incidents(tenant_id, status, created_at DESC, id DESC)",
+    "index idx_memories_conflicted: CREATE INDEX idx_memories_conflicted ON memories(id) WHERE conflicts_with_json != '[]'",
     "index idx_memories_created_drift: CREATE INDEX idx_memories_created_drift ON memories(tenant_id) WHERE superseded_by IS NULL AND (length(created) <> 24 OR created NOT LIKE '%Z')",
     "index idx_memories_current: CREATE INDEX idx_memories_current ON memories(layer, created) WHERE superseded_by IS NULL",
     "index idx_memories_dag_parent: CREATE INDEX idx_memories_dag_parent ON memories(dag_parent_id) WHERE dag_parent_id IS NOT NULL",
@@ -223,6 +224,6 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
     "trigger trg_skills_tenant_match_insert: CREATE TRIGGER trg_skills_tenant_match_insert BEFORE INSERT ON skills WHEN NEW.memory_id IS NOT NULL BEGIN SELECT CASE WHEN NEW.tenant_id != (SELECT tenant_id FROM memories WHERE id = NEW.memory_id) THEN RAISE(ABORT, 'skills.tenant_id must match memories.tenant_id for the referenced memory') END; END",
     "trigger trg_skills_tenant_match_update: CREATE TRIGGER trg_skills_tenant_match_update BEFORE UPDATE ON skills WHEN NEW.memory_id IS NOT NULL AND (NEW.memory_id IS NOT OLD.memory_id OR NEW.tenant_id IS NOT OLD.tenant_id) BEGIN SELECT CASE WHEN NEW.tenant_id != (SELECT tenant_id FROM memories WHERE id = NEW.memory_id) THEN RAISE(ABORT, 'skills.tenant_id must match memories.tenant_id for the referenced memory') END; END",
   ],
-  "userVersion": 62,
+  "userVersion": 63,
 }
 `;
