@@ -2,15 +2,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { ContextWith } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
-import { captureSessionTexts, type SessionCaptureRequest } from '../../src/surface/capture/session-texts.js';
+import {
+  captureSessionTexts,
+  type CaptureContext,
+  type SessionCaptureRequest,
+} from '../../src/surface/capture/session-texts.js';
 import { collectSessionTurns, sessionTail } from '../../src/surface/capture/transcript.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { deriveOriginProject } from '../../src/base/scope/project-identity.js';
+import { deriveOriginProject } from '../../src/host/project-identity.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { mergedText } from '../../src/base/util/same-text.js';
@@ -18,7 +21,7 @@ import { initProject, removeScratch, runHippo, scratch } from '../_helpers/compa
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -50,7 +53,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const ctxFor = (hippoRoot: string, tenantId = 'default'): ContextWith<'captures'> => ({
+const ctxFor = (hippoRoot: string, tenantId = 'default'): CaptureContext => ({
   store: sqliteStore(hippoRoot),
   config: loadConfig(hippoRoot),
   tenantId,

@@ -4,7 +4,8 @@ import * as path from 'path';
 import * as os from 'os';
 import fsDefault from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import { configReader, loadConfig, isSharedStore, type HippoConfig } from '../../src/base/config/config.js';
+import { type HippoConfig } from '../../src/base/config/config.js';
+import { configReader, loadConfig, isSharedStore, sharedStoreCheck } from '../../src/host/config-file.js';
 import * as storeKit from '../../src/entry/store-kit.js';
 import { log } from '../../src/base/util/log.js';
 
@@ -199,25 +200,26 @@ describe('config.sharedStore', () => {
     expect(isSharedStore(tmp)).toBe(false);
   });
 
-  it('stays true for the process once seen, so a broken edit cannot turn it off', async () => {
+  it('stays true for its check once seen, so a broken edit cannot turn it off', () => {
+    const check = sharedStoreCheck();
     writeConfig(JSON.stringify({ sharedStore: true }));
-    expect(isSharedStore(tmp)).toBe(true);
+    expect(check(tmp)).toBe(true);
     writeConfig('{not json');
-    expect(isSharedStore(tmp)).toBe(true);
-    // A fresh module graph stands in for the next process, which has not seen the folder.
-    vi.resetModules();
-    const nextProcess = await import('../../src/base/config/config.js');
-    expect(() => nextProcess.isSharedStore(tmp)).toThrow(/config\.json could not be loaded/);
+    expect(check(tmp)).toBe(true);
+    // The free function and a new check, as the next process holds, have not seen the folder.
+    expect(() => isSharedStore(tmp)).toThrow(/config\.json could not be loaded/);
+    expect(() => sharedStoreCheck()(tmp)).toThrow(/config\.json could not be loaded/);
   });
 
-  /** Flags `seen`, breaks its config, then asks through `other`, a second spelling of the same folder. */
+  /** Flags `seen`, breaks its config, then asks the same check through `other`, a second spelling of the folder. */
   function stickyThrough(seen: string, other: string): boolean {
+    const check = sharedStoreCheck();
     writeConfig(JSON.stringify({ sharedStore: true }));
-    expect(isSharedStore(seen)).toBe(true);
+    expect(check(seen)).toBe(true);
     writeConfig('{not json');
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
     try {
-      return isSharedStore(other);
+      return check(other);
     } finally {
       warn.mockRestore();
     }
@@ -360,15 +362,16 @@ describe('config.json is parsed once per file version, per reader', () => {
     }
   });
 
-  it('isSharedStore reads an unchanged not-shared file once, and sees the edit that shares it', () => {
+  it('a shared-store check reads an unchanged not-shared file once, and sees the edit that shares it', () => {
     fs.writeFileSync(file, '{}');
+    const check = sharedStoreCheck();
     const answers: boolean[] = [];
     const reads = configReads(() => {
-      for (let i = 0; i < 5; i++) answers.push(isSharedStore(tmp));
+      for (let i = 0; i < 5; i++) answers.push(check(tmp));
     });
     expect(answers).toEqual([false, false, false, false, false]);
     expect(reads).toBe(1);
     fs.writeFileSync(file, JSON.stringify({ sharedStore: true }));
-    expect(isSharedStore(tmp)).toBe(true);
+    expect(check(tmp)).toBe(true);
   });
 });

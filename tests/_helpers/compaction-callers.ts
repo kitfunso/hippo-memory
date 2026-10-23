@@ -4,14 +4,15 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { loadConfig } from '../../src/base/config/config.js';
-import type { Context, ContextReach } from '../../src/api/types.js';
+import { loadConfig } from '../../src/host/config-file.js';
+import type { ContextReach } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   preCompactForCaller,
   saveCompactionItemsForCaller,
   sessionEndHandoffForCaller,
   type CallerFailureRequest,
+  type Context,
 } from '../../src/server.js';
 import { makeRoot } from './make-root.js';
 import { writeEntry } from './root-forms.js';

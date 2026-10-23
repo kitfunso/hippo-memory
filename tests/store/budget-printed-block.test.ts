@@ -15,7 +15,7 @@ import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
 
@@ -274,6 +274,7 @@ describe('assemble and drill', () => {
   const ctx: Omit<Context, 'hippoRoot' | 'store' | 'config'> = {
     tenantId: 'default',
     actor: { subject: 'test:budget', role: 'admin' },
+    infra: testInfra(),
   };
   const sid = 'sess-budget-window';
   const line = (i: number): string => `Session message m${i}: ${'the rollback runbook step and its owner '.repeat(5)}`;

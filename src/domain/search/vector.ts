@@ -42,7 +42,7 @@ export interface VectorArmOptions extends CurrentnessOptions {
   runtime?: Pick<RuntimeSettings, 'queryEmbedTimeoutMs'>;
 }
 
-// Jev's default budget (domain/rerankers/jev.ts): each is one off-box call that a recall waits on.
+// Jev's default budget (infra/rerankers/jev.ts): each is one off-box call that a recall waits on.
 const QUERY_EMBED_BUDGET_MS = 5_000;
 
 /**

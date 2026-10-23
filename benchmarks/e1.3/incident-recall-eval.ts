@@ -23,7 +23,7 @@ import { fileURLToPath } from 'url';
 import { ingestMessage } from '../../src/entry/eval-scripts.js';
 import { retrieve, adminActor, type Context } from '../../src/entry/eval-scripts.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 
 interface TranscriptMessage {
   user: string;

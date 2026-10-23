@@ -3,21 +3,23 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { findHippoStoreDir, isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { findHippoStoreDir, isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
 import type { StoreHealth } from '../../store/port/diagnostics.js';
 import type { StoreGroups } from '../../store/port.js';
 import { needsNewerHippo } from '../../base/errors/store-open.js';
-import { loadConfig } from '../../base/config/config.js';
+import { loadConfig } from '../../host/config-file.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from '../../base/session/compaction-timing.js';
 import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from '../capture/compaction-spool.js';
 import { isEmbeddingAvailable } from '../../base/embeddings/local.js';
 import { CODEX_TRUST_LINE } from '../hooks-install/json-hooks.js';
 import { isCodexPresent } from '../hooks-install/detect.js';
 import { claudeConfigDir, codexHomeDir } from '../../base/util/agent-homes.js';
+import { processEnv } from '../../base/util/env.js';
 import { globalProjectRepairPlan } from '../../api/objects/projects.js';
 import { currentMachine } from '../../infra/machine.js';
 import { errorMessage, log } from '../../base/util/log.js';
-import { tryReadJsonFile, type JsonValue, isJsonObjectLiteral } from '../../base/util/json.js';
+import { type JsonValue, isJsonObjectLiteral } from '../../base/util/json.js';
+import { tryReadJsonFile } from '../../host/json-file.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { plural } from '../../base/util/format.js';
 
@@ -85,7 +87,7 @@ function readJson(file: string): JsonValue | null {
 
 // Trust lives in Codex's own config.toml rows; doctor reads only the hooks file and reminds.
 function codexCheck(home: string): DoctorCheck {
-  const file = path.join(codexHomeDir(home), 'hooks.json');
+  const file = path.join(codexHomeDir(home, processEnv()), 'hooks.json');
   const parsed = readJson(file);
   // Codex drops every hook in a hooks.json it cannot parse, hippo's included.
   if (fs.existsSync(file) && !isJsonObjectLiteral(parsed)) {
@@ -435,7 +437,7 @@ const CLAUDE_CODE_HOOKS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 function claudeCodeCheck(home: string): DoctorCheck {
-  const claudeDir = claudeConfigDir(home);
+  const claudeDir = claudeConfigDir(home, processEnv());
   if (!fs.existsSync(claudeDir)) {
     return {
       id: 'claude-code',

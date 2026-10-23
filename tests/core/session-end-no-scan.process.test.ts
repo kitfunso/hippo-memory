@@ -4,7 +4,7 @@ import * as path from 'path';
 import { type SpawnSyncReturns } from 'child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { getHippoRoot } from '../../src/base/scope/project-identity.js';
+import { getHippoRoot } from '../../src/host/project-identity.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';

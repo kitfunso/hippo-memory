@@ -3,9 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { PRE_COMPACT_INSTRUCTION } from '../../src/surface/capture/compaction-record.js';
-import type { Context } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   captureFailureForCaller,
@@ -13,6 +12,7 @@ import {
   preCompactForCaller,
   saveCompactionItemsForCaller,
   sessionEndHandoffForCaller,
+  type Context,
 } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';

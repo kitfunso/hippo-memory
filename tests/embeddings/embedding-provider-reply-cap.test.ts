@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { boundPort } from '../_helpers/listen.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

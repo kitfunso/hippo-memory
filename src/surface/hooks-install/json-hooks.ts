@@ -1,24 +1,41 @@
 // Reads and writes each tool's hook settings file; what changes in it is domain/hooks/json-hooks.ts.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { writeFileAtomic } from '../../base/util/atomic-write.js';
-import { type JsonValue, readJsonFile, tryReadJsonFile } from '../../base/util/json.js';
+import { writeFileAtomic } from '../../host/atomic-write.js';
+import { type JsonValue } from '../../base/util/json.js';
+import { readJsonFile, tryReadJsonFile } from '../../host/json-file.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { processHomes } from '../../host/agent-homes.js';
 import {
   canEditHooks,
+  jsonHookPathsOn,
   planCopilotHooks,
   planHookRemoval,
   planJsonHooks,
-  resolveJsonHookPaths,
   settingsText,
   type InstallResult,
+  type JsonHookPaths,
 } from '../../domain/hooks/json-hooks.js';
-import type { JsonHookTarget } from '../../domain/hooks/shared.js';
+import {
+  defaultPreCompactLogPath,
+  defaultSleepLogPath as sleepLogOn,
+  type JsonHookTarget,
+} from '../../domain/hooks/shared.js';
 
-// What a caller of the installer names beside it: the paths it installs to, the Copilot events it adds, the log the
-// SessionStart hook reads and the reminder Codex needs before it runs a new hook.
-export { copilotHookEvents, resolveJsonHookPaths } from '../../domain/hooks/json-hooks.js';
-export { CODEX_TRUST_LINE, defaultSleepLogPath } from '../../domain/hooks/shared.js';
+// What a caller of the installer names beside it: the Copilot events it adds and the reminder Codex needs before it
+// runs a new hook.
+export { copilotHookEvents } from '../../domain/hooks/json-hooks.js';
+export { CODEX_TRUST_LINE } from '../../domain/hooks/shared.js';
+
+/** The paths for `target` under this process's home folder; reads and writes nothing. */
+export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
+  return jsonHookPathsOn(target, processHomes());
+}
+
+/** The log the SessionStart hook reads when a caller passes no --path. */
+export function defaultSleepLogPath(): string {
+  return sleepLogOn(processHomes());
+}
 
 /** Swaps the file in with one rename, so a crash mid-write cannot leave a truncated settings.json that Claude Code
  * cannot parse. */
@@ -40,7 +57,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
   const plan =
     target === 'copilot'
       ? planCopilotHooks(paths.settings, fs.existsSync(paths.settings) ? fs.readFileSync(paths.settings, 'utf8') : null)
-      : planJsonHooks(target, paths, readSettings(paths.settings));
+      : planJsonHooks(target, paths, readSettings(paths.settings), defaultPreCompactLogPath(processHomes()));
   if (plan.write !== null) writeSettingsFile(paths.settings, plan.write);
   return plan.result;
 }

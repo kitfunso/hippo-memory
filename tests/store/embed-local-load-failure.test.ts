@@ -7,7 +7,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memo
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { handleEmbed } from '../../src/surface/cli/maintenance.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';

@@ -22,8 +22,9 @@ import { addWorkspace } from '../../src/surface/connectors/slack/workspaces.js';
 import { replayDlqEntry } from '../../src/surface/connectors/slack/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { testInfra } from '../_helpers/infra.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -179,16 +180,24 @@ describe('connector webhooks', () => {
     await addWorkspace(sqliteStore(root), { teamId: 'T1', tenantId: 'default' });
     expect(
       (
-        await replayDlqEntry({ tenantId: 'default', store: sqliteStore(root), config: loadConfig(root) }, row.id, {
-          signingSecret: SIGNING,
-        })
+        await replayDlqEntry(
+          { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root), infra: testInfra() },
+          row.id,
+          {
+            signingSecret: SIGNING,
+          },
+        )
       ).status,
     ).toBe('sig_missing');
     expect(
       (
-        await replayDlqEntry({ tenantId: 'default', store: sqliteStore(root), config: loadConfig(root) }, row.id, {
-          force: true,
-        })
+        await replayDlqEntry(
+          { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root), infra: testInfra() },
+          row.id,
+          {
+            force: true,
+          },
+        )
       ).ok,
     ).toBe(true);
     expectRedacted(storedContents(), SLACK_TOKEN, 'expires on friday');

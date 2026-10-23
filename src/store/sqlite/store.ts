@@ -68,8 +68,8 @@ import type {
   VectorWrites,
 } from '../port.js';
 import { asHippoDb, isHippoDbStore } from './hippo-db-stores.js';
-import { isSharedStore } from '../../base/config/config.js';
-import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { createHost, type Host } from '../../host/host.js';
+import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
 import { loadRecallEntries } from './search-rows.js';
 import { loadActiveTaskSnapshot } from './task-snapshots.js';
 import { entriesWithoutVector, loadStoredVectorViews, writeVectors } from './vector-index.js';
@@ -211,15 +211,17 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Readiness {
 }
 
 /** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the transport's flag);
- * `openGlobal` builds the global store, read and written, which a server keeps on threads of its own. */
+ * `openGlobal` builds the global store, read and written, which a server keeps on threads of its own. A root that
+ * probes per request passes its own `host`, so a store once shared stays shared for it. */
 export function sqliteReach(
   hippoRoot: string,
   store: HippoStore,
   shared?: boolean,
   openGlobal: (root: string) => HippoStore & StoreGroups = sqliteStore,
+  host: Host = createHost(),
 ): StoreReach {
   const other = isHippoDbStore(store) ? undefined : store;
-  const sharedStore = shared === true || isSharedStore(hippoRoot);
+  const sharedStore = shared === true || host.isSharedStore(hippoRoot);
   const globalRoot = resolveGlobalRootDir();
   const canReadGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
   const globalTarget = other === undefined ? { root: globalRoot, store: openGlobal(globalRoot) } : undefined;

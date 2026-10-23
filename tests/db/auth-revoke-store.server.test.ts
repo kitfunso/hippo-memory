@@ -8,7 +8,8 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { authRevoke, ForbiddenError, NotFoundError, serve, type Actor, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
-import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
+import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { memorySide } from '../_helpers/memory-side.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';

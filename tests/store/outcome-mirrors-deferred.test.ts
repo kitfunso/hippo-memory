@@ -11,7 +11,7 @@ import { applyOutcome, writeEntriesTogether, writeEntryDbOnly } from '../../src/
 import { selectEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { markMirrorsDue } from '../../src/store/sqlite/due-mirrors.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
-import { openStore } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 const open: DatabaseSyncLike[] = [];
@@ -55,14 +55,17 @@ describe('outcome mirrors', () => {
     const db = openStore(root);
     open.push(db);
     const entries = [memory(1, Layer.Episodic), memory(2, Layer.Semantic)];
-    writeEntriesTogether(db, { hippoRoot: root }, entries);
+    writeEntriesTogether(db, storeFilesOf(root), entries);
     const before = entries.map((entry) => mirrorText(root, entry));
     const ids = entries.map((entry) => entry.id);
-    applyOutcome(
-      db,
-      { hippoRoot: root },
-      { tenantId: 'default', actor: 'test', ownScope: null, role: 'admin', ids, good: true },
-    );
+    applyOutcome(db, storeFilesOf(root), {
+      tenantId: 'default',
+      actor: 'test',
+      ownScope: null,
+      role: 'admin',
+      ids,
+      good: true,
+    });
 
     expect(entries.map((entry) => mirrorText(root, entry))).toEqual(before);
     expect(dueKeys(db)).toEqual(ids.map((id) => `mirror_due:${id}`).sort());

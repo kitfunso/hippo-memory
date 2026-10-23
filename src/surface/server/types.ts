@@ -1,11 +1,11 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Context } from '../../api/index.js';
+import type { Context, EntryContext } from '../../api/index.js';
 import type { JsonValue } from '../../base/util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { HippoStore, OptionalGroup, StoreGroup } from '../../store/index.js';
 import type { StoreReach } from '../../store/port.js';
-import type { ConfigReader } from '../../base/config/config.js';
+import type { ConfigReader } from '../../host/config-file.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
@@ -39,7 +39,7 @@ export type AuthResolver = (
 
 /** What an add-on route's handler gets: the caller core authenticated and the parsed JSON body. */
 export interface AddonCall {
-  readonly ctx: Context;
+  readonly ctx: EntryContext;
   readonly body: Readonly<Record<string, JsonValue>>;
 }
 

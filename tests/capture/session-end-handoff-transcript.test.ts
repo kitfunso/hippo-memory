@@ -3,7 +3,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { WORKING_STATE_CAPS, transcriptWorkingState } from '../../src/surface/capture/working-state.js';
+import { WORKING_STATE_CAPS } from '../../src/domain/capture/working-state.js';
+import { transcriptWorkingState } from '../../src/surface/capture/working-state.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import {
   loadActiveTaskSnapshot,

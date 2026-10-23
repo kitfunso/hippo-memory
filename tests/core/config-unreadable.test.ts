@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { chmodSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { configReader, isSharedStore, loadConfig } from '../../src/base/config/config.js';
+import { configReader, isSharedStore, loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 // chmod cannot deny access on win32, and root ignores mode bits.

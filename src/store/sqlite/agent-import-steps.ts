@@ -175,8 +175,8 @@ class ContainerSteps {
   }
 
   private gated(entry: MemoryEntry): GatedWriteResult {
-    const stamped = stampOriginProject(this.files.hippoRoot, entry);
-    const result = gatedWrite(this.db, this.files.hippoRoot, stamped, { actor: SYNC_ACTOR, worthCheck: false });
+    const stamped = stampOriginProject(this.files, entry);
+    const result = gatedWrite(this.db, this.files, stamped, { actor: SYNC_ACTOR, worthCheck: false });
     if (result === 'written') this.mirror.push(stamped);
     return result;
   }

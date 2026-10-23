@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { createMemory } from '../dist/base/memory/memory.js';
 import { initStore, writeEntry, loadAllEntries } from '../dist/entry/testing.js';
 import { embedMemory } from '../dist/domain/search/embed-memories.js';
-import { loadConfig } from '../dist/base/config/config.js';
+import { loadConfig } from '../dist/host/config-file.js';
 import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/base/embeddings/local.js';
 import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
 import { hybridSearch } from '../dist/entry/search.js';

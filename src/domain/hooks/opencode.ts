@@ -1,7 +1,7 @@
 // The OpenCode plugin hippo installs and the hippo hooks it strips from an old opencode.json; surface/hooks-install
 // does the reads and writes.
 import * as path from 'path';
-import { homeDir } from '../../base/util/agent-homes.js';
+import { userHome, type Homes } from '../../base/util/agent-homes.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../../base/util/json.js';
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
@@ -53,12 +53,12 @@ export interface OpencodePluginInstallResult {
   jsonRepairFailed: boolean;
 }
 
-export function resolveOpencodePluginPath(): string {
-  return path.join(homeDir(), '.config', 'opencode', 'plugins', 'hippo.ts');
+export function opencodePluginPathOn(homes: Homes): string {
+  return path.join(userHome(homes), '.config', 'opencode', 'plugins', 'hippo.ts');
 }
 
-export function resolveOpencodeConfigPath(): string {
-  return path.join(homeDir(), '.config', 'opencode', 'opencode.json');
+export function opencodeConfigPathOn(homes: Homes): string {
+  return path.join(userHome(homes), '.config', 'opencode', 'opencode.json');
 }
 
 /**

@@ -7,7 +7,7 @@ import { Layer, ConfidenceLevel, strengthOptionsOf, type MemoryEntry } from '../
 import * as api from '../../api/index.js';
 import { memoryGet, memoryListByIds } from '../../api/memories/memories.js';
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { parseSteps, traceRecord, traceStats } from '../../api/memories/trace.js';
 import { extractPathTags } from '../../api/memories/remember-local.js';

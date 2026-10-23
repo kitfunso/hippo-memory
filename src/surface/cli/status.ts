@@ -18,7 +18,7 @@ import { runDoctor, formatDoctor, type DoctorStore } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
-import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { resolveGlobalRootDir } from '../../host/project-identity.js';
 import * as api from '../../api/index.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import {
@@ -40,7 +40,7 @@ import { type CommandContext, boolFlag, parseCountFlag, stringFlagOrExit } from 
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { isJsonObject } from '../../base/util/json.js';
-import { readPackageVersion } from '../../base/config/package-root.js';
+import { readPackageVersion } from '../../host/package-version.js';
 import { hookStoreRoot } from './hook-runtime.js';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../../base/util/time.js';
 import { CliExit, fail } from './exit.js';

@@ -1,6 +1,6 @@
 // Embedding writes wait on each other per hippo.db: two folders embed at once, two handles on one folder take turns.
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';

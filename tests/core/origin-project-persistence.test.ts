@@ -1,3 +1,4 @@
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -74,13 +75,13 @@ describe('writeEntry origin stamping (v39)', () => {
     writeEntry(storeRoot, legacy);
     expect(loadAllEntries(storeRoot, 'default')[0].originProject).toBeNull();
     // The pure helper preserves null too.
-    expect(stampOriginProject(storeRoot, { ...legacy, originProject: null }).originProject).toBeNull();
+    expect(stampOriginProject(storeFilesOf(storeRoot), { ...legacy, originProject: null }).originProject).toBeNull();
   });
 
   it('stampOriginProject never mutates the input entry', () => {
     const storeRoot = makeProjectStore('proj-a');
     const entry = createMemory('immutability check');
-    const stamped = stampOriginProject(storeRoot, entry);
+    const stamped = stampOriginProject(storeFilesOf(storeRoot), entry);
     expect(entry.originProject).toBeUndefined();
     expect(stamped.originProject).toBe('proj-a');
   });

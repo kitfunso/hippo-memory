@@ -16,7 +16,7 @@ import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detec
 import type { HippoStore } from '../../store/index.js';
 import { isStoreBusy } from '../../store/port.js';
 import { defaultServerRuntime, tenantOfApiKey, type ResolveOptions, type ServerRuntime } from '../open-store.js';
-import { configReader, loadConfig } from '../../base/config/config.js';
+import { configReader, loadConfig } from '../../host/config-file.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { MINUTE_MS } from '../../base/util/time.js';
@@ -546,7 +546,7 @@ function servedOptsFor(
     failedAuthLimiter,
     authResolver: runtime.outsideRouteBlock(opts.authResolver),
     callers: createCallerState(autoSleep),
-    infra: rootInfra(),
+    infra: rootInfra(runtime.host),
     sleeps,
     counts,
   };

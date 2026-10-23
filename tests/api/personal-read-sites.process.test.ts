@@ -1,4 +1,5 @@
 // E10 lane A: every SQL read site admits the caller's own personal row only when handed its owner, and deny-only sites admit none.
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -202,7 +203,7 @@ describe('deny-only read sites', () => {
     };
     const db = openHippoDb(root);
     try {
-      expect(saveItems(db, { hippoRoot: root }, ctx, () => {}, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
+      expect(saveItems(db, storeFilesOf(root), ctx, () => {}, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
       // SAFETY: the SELECT names only the content column.
       const written = db.prepare(`SELECT content FROM memories WHERE source = 'compaction:s1'`).all() as Array<{
         content: string;

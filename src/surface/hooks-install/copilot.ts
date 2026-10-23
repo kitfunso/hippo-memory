@@ -2,8 +2,9 @@
 // home and each VS Code User folder. What goes in them is domain/hooks/copilot.ts.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { writeFileAtomic } from '../../base/util/atomic-write.js';
-import { type JsonValue, readJsonFile } from '../../base/util/json.js';
+import { writeFileAtomic } from '../../host/atomic-write.js';
+import { type JsonValue } from '../../base/util/json.js';
+import { readJsonFile } from '../../host/json-file.js';
 import {
   addHippoServer,
   COPILOT_CLI_MCP,
@@ -28,10 +29,10 @@ import {
   type VscodeInstructionsInstallStatus,
   type VscodeInstructionsRemoveStatus,
 } from '../../domain/hooks/copilot.js';
-import { resolveJsonHookPaths } from '../../domain/hooks/json-hooks.js';
 import { copilotHomeDir } from '../../domain/hooks/shared.js';
+import { processHomes } from '../../host/agent-homes.js';
 import { vscodeUserDirs } from './detect.js';
-import { installJsonHooks, uninstallJsonHooks, writeSettingsFile } from './json-hooks.js';
+import { installJsonHooks, resolveJsonHookPaths, uninstallJsonHooks, writeSettingsFile } from './json-hooks.js';
 
 // The MCP hosts the installer merges into, and the snippet and failure test its caller prints from.
 export { COPILOT_CLI_MCP, VSCODE_MCP, copilotMcpSnippet, isMcpFailure } from '../../domain/hooks/copilot.js';
@@ -47,7 +48,7 @@ function profileDirs(userDir: string): string[] {
 }
 
 export function copilotPaths(): CopilotPaths {
-  const home = copilotHomeDir();
+  const home = copilotHomeDir(processHomes());
   return {
     hooks: resolveJsonHookPaths('copilot').settings,
     mcpConfig: path.join(home, 'mcp-config.json'),
@@ -144,7 +145,7 @@ function removeVscodeInstructions(file: string): VscodeInstructionsRemoveStatus 
 
 /** The CLI's folder holds more than the hooks folder setup makes for VS Code, so a rerun on a VS Code-only machine
  * still finds no CLI. */
-export function isCopilotCliPresent(home: string = copilotHomeDir()): boolean {
+export function isCopilotCliPresent(home: string = copilotHomeDir(processHomes())): boolean {
   if (fs.statSync(home, { throwIfNoEntry: false })?.isDirectory() !== true) return false;
   const entries = fs.readdirSync(home);
   return entries.length !== 1 || entries[0] !== 'hooks';

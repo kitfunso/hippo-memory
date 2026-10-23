@@ -3,7 +3,7 @@ import type { Context } from '../../src/api/types.js';
 
 /** A caller's Context with the folder its store sits in, which these helpers reopen. */
 type RootedContext = Pick<Context, 'tenantId' | 'actor'> & { readonly hippoRoot: string };
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { createSuccessor } from '../../src/base/memory/memory.js';
 import { scopeReaderOf } from '../../src/base/scope/recall-scope.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

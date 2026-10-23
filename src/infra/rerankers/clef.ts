@@ -1,10 +1,11 @@
 import type { ClefSettings } from '../../base/config/config.js';
 import type { Http } from '../../base/ports/http.js';
-import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
+import { buildRelevanceRequest, rankByScores } from './jev.js';
+import { JEV_DEFAULT_TOP_K, type ClefModel } from '../../domain/rerankers/hosted.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from '../../base/ports/reranker.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
-import { createOutageWarning } from './outage-warning.js';
-import { rerankerPost } from './remote.js';
+import { createOutageWarning } from '../../domain/rerankers/outage-warning.js';
+import { postScoring } from './endpoint.js';
 import { readCappedJson } from '../../base/util/capped-json.js';
 import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../../base/util/json.js';
@@ -13,20 +14,11 @@ import { parseOutboundUrl } from '../../base/util/net.js';
 
 const RAY_ID_MAX_CHARS = 64;
 
-/** The two pretrained CLEF decision models served by Cloudflare Workers AI. */
-export type ClefModel = 'clef-flash' | 'clef';
-
-const CLEF_MODELS: readonly ClefModel[] = ['clef-flash', 'clef'];
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_TIMEOUT_MS = 120_000;
 // Workers AI rejects a request with more than 64 questions, one per candidate here.
 const MAX_CANDIDATES = 64;
 const ACCOUNT_ID = /^[0-9a-f]{32}$/i;
-
-/** True when `name` is one of the CLEF reranker names. */
-export function isClefModel(name: string): name is ClefModel {
-  return CLEF_MODELS.some((m) => m === name);
-}
 
 interface ClefRoute {
   url: string;
@@ -130,10 +122,8 @@ async function requestScores(call: ClefCall, query: string, head: SearchResult[]
   const { state, questions } = buildRelevanceRequest(query, head);
   // Node clamps a delay past 2^31-1 to 1 ms.
   const timeoutMs = requested !== undefined && requested <= MAX_TIMEOUT_MS ? requested : DEFAULT_TIMEOUT_MS;
-  const headers = new Headers({ 'content-type': 'application/json' });
-  if (route.token) headers.set('authorization', `Bearer ${route.token}`);
-  const request = { headers, body: JSON.stringify({ state, model, questions }) };
-  const resp = await rerankerPost(http, route.url, request, timeoutMs);
+  const body = { state, model, questions };
+  const resp = await postScoring(http, { url: route.url, token: route.token, body, budgetMs: timeoutMs });
   if (!resp.ok) {
     // A third-party header ends up on stderr, so keep printable ASCII only.
     const ray = resp.headers
@@ -143,8 +133,8 @@ async function requestScores(call: ClefCall, query: string, head: SearchResult[]
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}${ray ? `, ray ${ray}` : ''}`);
   }
-  const body = await readCappedJson(resp, MAX_REPLY_BYTES);
-  const parsed = parseClefReply(body, head.length, model, route.backend === 'cloudflare');
+  const reply = await readCappedJson(resp, MAX_REPLY_BYTES);
+  const parsed = parseClefReply(reply, head.length, model, route.backend === 'cloudflare');
   if (isRejection(parsed)) throw new Error(parsed);
   return parsed;
 }

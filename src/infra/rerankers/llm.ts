@@ -8,8 +8,8 @@ import type { RerankerFn, RerankResult, RerankerOptions } from '../../base/ports
 import type { Http } from '../../base/ports/http.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { createOutageWarning } from './outage-warning.js';
-import { rerankerPost } from './remote.js';
+import { createOutageWarning } from '../../domain/rerankers/outage-warning.js';
+import { postScoring } from './endpoint.js';
 import { readCappedJson } from '../../base/util/capped-json.js';
 import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../../base/util/json.js';
@@ -19,11 +19,6 @@ import { parseOutboundUrl } from '../../base/util/net.js';
 const DEFAULT_LLM_RERANK_TOP_K = 20;
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-
-interface FetchHeaders {
-  'content-type': string;
-  authorization?: string;
-}
 
 /**
  * Track 3 reranker (skeleton): listwise LLM rerank on a customer-supplied OpenAI-compatible endpoint, gated on
@@ -85,26 +80,16 @@ async function requestPermutation(
     `Output format: [<int>, <int>, ...] with all ${head.length} indices.`,
   ].join('\n');
 
-  const headers: FetchHeaders = {
-    'content-type': 'application/json',
-  };
-  if (key) {
-    headers.authorization = `Bearer ${key}`;
-  }
-
-  const resp = await rerankerPost(
-    http,
-    `${url.replace(/\/$/, '')}/chat/completions`,
-    {
-      headers: { ...headers },
-      body: JSON.stringify({
-        model: envLlmRerankerModel() ?? 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0,
-      }),
+  const resp = await postScoring(http, {
+    url: `${url.replace(/\/$/, '')}/chat/completions`,
+    token: key,
+    body: {
+      model: envLlmRerankerModel() ?? 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0,
     },
-    envLlmRerankerTimeoutMs() ?? DEFAULT_TIMEOUT_MS,
-  );
+    budgetMs: envLlmRerankerTimeoutMs() ?? DEFAULT_TIMEOUT_MS,
+  });
   if (!resp.ok) {
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}`);

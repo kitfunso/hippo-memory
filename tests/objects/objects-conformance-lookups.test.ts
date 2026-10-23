@@ -5,7 +5,7 @@ import { objectMirror } from '../../src/domain/objects/lifecycle.js';
 import type { BriefReceipt, ObjectFields, SavableKind } from '../../src/base/records/object-types.js';
 import type { ObjectSave } from '../../src/store/port.js';
 import { TENANT_A, TENANT_B } from '../_helpers/store-conformance.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import {
   T1,
   T2,

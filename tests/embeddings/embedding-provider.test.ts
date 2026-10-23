@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 

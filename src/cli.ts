@@ -6,8 +6,8 @@ import { envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/e
 import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './surface/hooks-install/codex-wrapper.js';
-import { getHippoRoot } from './base/scope/project-identity.js';
-import { readPackageVersion } from './base/config/package-root.js';
+import { getHippoRoot } from './host/project-identity.js';
+import { readPackageVersion } from './host/package-version.js';
 import { printGitHubBackfillUsage } from './surface/cli/github.js';
 import { printError } from './surface/cli/output.js';
 import { exitAfterFlush } from './base/util/crash-handlers.js';

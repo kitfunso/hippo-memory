@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { importForStore } from '../../src/domain/agent-memories/sync.js';
 import type { ImportReport } from '../../src/domain/agent-memories/report.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { setFtsInSync } from '../../src/db/index.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';

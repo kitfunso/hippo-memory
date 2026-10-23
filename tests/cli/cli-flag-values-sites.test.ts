@@ -13,7 +13,7 @@ import type { CliFlags, CommandContext } from '../../src/surface/cli/flag-values
 import { handleGoal } from '../../src/surface/cli/goals.js';
 import { handleRecall } from '../../src/surface/cli/recall.js';
 import { handleRemember, handleTrace } from '../../src/surface/cli/remember.js';
-import { handleCapture } from '../../src/surface/cli/session-hooks.js';
+import { handleCapture } from '../../src/surface/cli/hooks/capture.js';
 import { handleExport, handleImport } from '../../src/surface/cli/transfer.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';

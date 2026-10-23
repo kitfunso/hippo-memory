@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { isContentWorthStoring } from '../../src/base/memory/memory-quality.js';
 import { isSessionDigestRow } from '../../src/base/session/session-digest-row.js';
 import { recordSessionDigest, type DigestEdit } from '../../src/surface/capture/session-digest.js';

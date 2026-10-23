@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import type { DeliveryEventInput } from '../../src/base/session/delivery.js';
 import { writeDeliveryEventOnHandle } from '../../src/store/sqlite/recall-trace.js';
 import { blockHash } from '../../src/base/util/token-text.js';
-import { realpathOrResolve } from '../../src/base/util/real-path.js';
+import { realpathOrResolve } from '../../src/host/real-path.js';
 import { hippoIn, withDb, type Project } from '../_helpers/delivery-boundary.js';
 import { configure, expectVerdict, fireIn } from '../_helpers/host-transcript.js';
 import {

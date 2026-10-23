@@ -12,7 +12,7 @@ import { detectSecret, redactSecretsStrict } from '../../src/base/util/secret-de
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { shareMemory, autoShare } from '../../src/domain/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
-import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
+import { getGlobalRoot } from '../../src/host/global-store.js';
 import { contextGet } from '../../src/api/index.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from '../_helpers/secret-shapes.js';
 import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/scan-watchdog.js';

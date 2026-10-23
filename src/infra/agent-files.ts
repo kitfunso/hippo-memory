@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentFiles, DirListing, TextFile } from '../base/util/agent-files.js';
 import { errorMessage } from '../base/util/log.js';
-import { isFile, realpathOrResolve } from '../base/util/real-path.js';
+import { isFile, realpathOrResolve } from '../host/real-path.js';
 
 const MAX_ITEM_BYTES = 256 * 1024;
 const MAX_DEPTH = 8;

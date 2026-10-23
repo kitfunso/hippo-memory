@@ -1,7 +1,7 @@
 // Writes hippo's block into an agent's instruction file (CLAUDE.md, AGENTS.md and the like). The block's text, and how
 // init recognises one it wrote earlier, are domain/hooks/hook-blocks.ts.
 
-import { writeFileAtomic } from '../../base/util/atomic-write.js';
+import { writeFileAtomic } from '../../host/atomic-write.js';
 import { HOOK_MARKERS, type HookSpec } from '../../domain/hooks/hook-blocks.js';
 
 export { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock, type HookSpec } from '../../domain/hooks/hook-blocks.js';

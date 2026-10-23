@@ -15,7 +15,7 @@ import { PRE_COMPACT_INSTRUCTION } from '../../src/surface/capture/compaction-re
 import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
 import { lessonFromFailure, failureSignature } from '../../src/surface/capture/failure-reading.js';
-import { getHippoRoot } from '../../src/base/scope/project-identity.js';
+import { getHippoRoot } from '../../src/host/project-identity.js';
 import { installJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
 import { runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies } from '../_helpers/cli-stores.js';

@@ -1,5 +1,4 @@
 // The active task snapshot rows and the continuity key that scopes them, for the Sessions group and the handoffs.
-import { isSharedStore } from '../../base/config/config.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
 import { originInSql } from './rule-sql.js';
@@ -22,8 +21,12 @@ export function continuityWhere(key: ContinuityKey): SqlFragment {
 }
 
 // An unkeyed write acts on the tenant's newest or every active row, which on a shared store belong to other owners.
-export function assertKeyedOnSharedStore(fn: string, hippoRoot: string, key: ContinuityKey | null | undefined): void {
-  if (!key && isSharedStore(hippoRoot)) {
+export function assertKeyedOnSharedStore(
+  fn: string,
+  { host, hippoRoot }: StoreFiles,
+  key: ContinuityKey | null | undefined,
+): void {
+  if (!key && host.isSharedStore(hippoRoot)) {
     throw new Error(
       `${fn}: a shared store keeps one task snapshot per owner and project, so this write needs their continuity key`,
     );
@@ -62,13 +65,14 @@ function insertSnapshot(
 
 export function saveActiveTaskSnapshot(
   db: DatabaseSyncLike,
-  { hippoRoot }: StoreFiles,
+  files: StoreFiles,
   tenantId: string,
   snapshot: SnapshotInput,
   key?: ContinuityKey | null,
 ): TaskSnapshot {
+  const { hippoRoot } = files;
   assertTenantId('saveActiveTaskSnapshot', tenantId);
-  assertKeyedOnSharedStore('saveActiveTaskSnapshot', hippoRoot, key);
+  assertKeyedOnSharedStore('saveActiveTaskSnapshot', files, key);
   const stamp = key ? continuityStamp(key) : null;
   const owned = key ? continuityWhere(key) : null;
   const now = new Date().toISOString();

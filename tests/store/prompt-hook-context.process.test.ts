@@ -9,7 +9,7 @@ import { adminActor } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 import { hashArm } from '../../src/base/session/pilot-arm.js';
-import { resolveProjectIdentity } from '../../src/base/scope/project-identity.js';
+import { resolveProjectIdentity } from '../../src/host/project-identity.js';
 import { promptHookContext } from '../../src/api/prompt-hook.js';
 import { HIPPO_PINNED_INJECT_COMMAND } from '../../src/domain/hooks/shared.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

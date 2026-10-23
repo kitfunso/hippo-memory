@@ -12,7 +12,7 @@ import { loadEntryTextKeysPage, iterateEveryTenantEntries } from '../../../src/s
 import * as entryReadsSql from '../../../src/store/sqlite/entry-reads.js';
 import * as entryWritesSql from '../../../src/store/sqlite/entry-writes.js';
 import { waitingOpener } from '../../../src/store/sqlite/open.js';
-import { handlesOf, onHandle, openStore } from '../../../src/store/sqlite/handles.js';
+import { handlesOf, onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/handles.js';
 import type { SqlFragment } from '../../../src/db/sql.js';
 import * as searchRowsSql from '../../../src/store/sqlite/search-rows.js';
 import type { HeldText } from '../../../src/store/port/types.js';
@@ -95,7 +95,7 @@ export function deleteEntry(
   const targets = [{ id, reason: opts?.reason ?? '' }];
   return onHandle(
     hippoRoot,
-    (db) => deleteEntriesInBatches(db, { hippoRoot }, targets, opts ?? {})[0] ?? false,
+    (db) => deleteEntriesInBatches(db, storeFilesOf(hippoRoot), targets, opts ?? {})[0] ?? false,
     openStore,
   );
 }
@@ -186,7 +186,11 @@ export function loadEntryTextKeys(hippoRoot: string, tenantId: TenantId = ALL_TE
 
 export function writeEntriesTogether(hippoRoot: string, entries: readonly MemoryEntry[]): number {
   if (entries.length === 0) return 0;
-  return onHandle(hippoRoot, (db) => entryWritesSql.writeEntriesTogether(db, { hippoRoot }, entries), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => entryWritesSql.writeEntriesTogether(db, storeFilesOf(hippoRoot), entries),
+    openStore,
+  );
 }
 
 export function loadRecallEntries(
@@ -226,5 +230,5 @@ export function writePromotedEntry(
   entry: MemoryEntry,
   opts: Parameters<typeof entryWritesSql.writePromotedEntry>[3],
 ): void {
-  onHandle(hippoRoot, (db) => entryWritesSql.writePromotedEntry(db, { hippoRoot }, entry, opts), openStore);
+  onHandle(hippoRoot, (db) => entryWritesSql.writePromotedEntry(db, storeFilesOf(hippoRoot), entry, opts), openStore);
 }

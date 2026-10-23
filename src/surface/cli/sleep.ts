@@ -12,7 +12,7 @@ import { cliConfig, cliApiContext, cliStore, cliSyncOptions } from './api-contex
 import { saveVectorGraphFile } from '../open-store.js';
 import { sleepResultLines } from './sleep-render.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { teeStdStreams } from '../../base/util/stream-tee.js';
+import { teeStdStreams } from '../../host/stream-tee.js';
 import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit, learnFromRepo, runChurnStaleForRepo, skipLearnOnSharedStore } from './shared.js';
 import { printAgentImport } from './print.js';

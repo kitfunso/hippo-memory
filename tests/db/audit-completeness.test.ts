@@ -20,7 +20,7 @@ function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
 describe('audit log captures every mutation', () => {
   it('remember + recall both logged via CLI flow', async () => {
     // HIPPO_HOME is the global root in --global mode (see getGlobalRoot in
-    // src/domain/sharing/global-store.ts). Same pattern as tests/store/recall-why-envelope.test.ts.
+    // src/host/global-store.ts). Same pattern as tests/store/recall-why-envelope.test.ts.
     const home = makeRoot('audit-cli', { init: false });
     const env = { ...process.env, HIPPO_HOME: home };
     await runCliOut(['init'], { env, cwd: home });

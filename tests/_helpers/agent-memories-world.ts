@@ -15,7 +15,7 @@ import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { DormantMemory } from '../../src/store/port/dormant.js';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
-import { isInitialized } from '../../src/base/scope/project-identity.js';
+import { isInitialized } from '../../src/host/project-identity.js';
 import { apiCtx } from './api-ctx.js';
 import { loadDormantMemories, loadAllEntries } from './root-forms.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';

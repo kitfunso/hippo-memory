@@ -1,14 +1,16 @@
 #!/usr/bin/env node
-// Fails when src/domain or src/api imports fs or child_process, or when domain reaches src/infra, a model or socket
-// adapter, or fetch: those layers get ports from their caller. No file is exempt, and none can be.
+// Fails when src/base, src/domain or src/api imports fs, os or child_process, when domain or api imports src/host at run
+// time, or when domain reaches src/infra, a model or socket adapter, or fetch. No file is exempt, and none can be.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFacts } from './lib/ts-facts.mjs';
 
-const IO_MODULES = new Set(['fs', 'fs/promises', 'child_process']);
-const IO_LAYERS = ['domain', 'api'];
+const IO_MODULES = new Set(['fs', 'fs/promises', 'os', 'child_process']);
+const IO_LAYERS = ['base', 'domain', 'api'];
+// src/host holds the disk and process reads; these layers get its answers from their caller, and may name its types.
+const HOST_BANNED_LAYERS = new Set(['domain', 'api']);
 const PORT_LAYER = 'domain';
 // Matched by name as well as by folder, so moving an adapter back under base cannot reopen the hole.
 const ADAPTER_MODULE =
@@ -17,14 +19,29 @@ const ADAPTER_NAMES = new Set(['fetchWithRetry', 'resolveEmbeddingProvider', 'im
 const FETCH_CALLS = new Set(['fetch', 'globalThis.fetch']);
 
 /**
- * The 1-based lines and specifiers of every fs or child_process import in a source text, `node:` prefix or not.
+ * The 1-based lines and specifiers of every fs, os or child_process import in a source text, `node:` prefix or not.
  * @param {string} text
  * @returns {{ line: number, spec: string }[]}
  */
 export function ioImports(text) {
-  if (!text.includes('fs') && !text.includes('child_process')) return [];
+  if (!/['"](?:node:)?(?:fs|os|child_process)\b/.test(text)) return [];
   return readFacts(text, 'file.ts', ['imports', 'dynamic'])
     .imports.filter((i) => IO_MODULES.has(i.spec.replace(/^node:/, '')))
+    .map((i) => ({ line: i.line, spec: i.spec }));
+}
+
+/**
+ * Every import of src/host in a source text that is not type-only: static, re-exported or dynamic.
+ * @param {string} text
+ * @param {string} file the source's path, to resolve its relative imports
+ * @param {string} srcRoot the src folder whose host is out of reach
+ * @returns {{ line: number, spec: string }[]}
+ */
+export function hostReach(text, file, srcRoot) {
+  if (!text.includes('host/')) return [];
+  const host = join(resolve(srcRoot), 'host') + sep;
+  return readFacts(text, 'file.ts', ['imports', 'dynamic'])
+    .imports.filter((i) => !i.typeOnly && i.spec.startsWith('.') && resolve(dirname(file), i.spec).startsWith(host))
     .map((i) => ({ line: i.line, spec: i.spec }));
 }
 
@@ -58,7 +75,8 @@ function listSourceFiles(dir) {
 }
 
 /**
- * Every fs or child_process import under srcDir's domain and api folders, and every reach past a port under domain.
+ * Every fs, os or child_process import under srcDir's base, domain and api folders, every run-time src/host import
+ * under domain and api, and every reach past a port under domain.
  * @param {string} srcDir
  * @returns {{ file: string, line: number, spec: string }[]}
  */
@@ -72,6 +90,7 @@ export function findDomainIo(srcDir) {
       const file = relative(root, p).replace(/\\/g, '/');
       const text = readFileSync(p, 'utf8');
       hits.push(...ioImports(text).map((f) => ({ file, ...f })));
+      if (HOST_BANNED_LAYERS.has(layer)) hits.push(...hostReach(text, p, root).map((f) => ({ file, ...f })));
       if (layer === PORT_LAYER) hits.push(...adapterReach(text, p, root).map((f) => ({ file, ...f })));
     }
   }
@@ -85,9 +104,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line} reaches ${h.spec}`);
   if (hits.length > 0) {
     console.error(
-      '\nFix: move the read, write, process, model or HTTP call to an infra or surface adapter and pass domain a port.',
+      '\nFix: move the disk, process, model or HTTP call to src/host or an adapter and pass the answer or a port down.',
     );
     process.exit(1);
   }
-  console.log(`No fs or child_process in ${srcDir}/domain or ${srcDir}/api, and no infra or HTTP in domain. OK.`);
+  console.log(`No fs, os or child_process in ${srcDir}/base, domain or api; no run-time host in domain or api. OK.`);
 }

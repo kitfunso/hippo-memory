@@ -4,8 +4,9 @@ import type { Http } from '../../base/ports/http.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from '../../base/ports/reranker.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { createOutageWarning } from './outage-warning.js';
-import { rerankerPost } from './remote.js';
+import { createOutageWarning } from '../../domain/rerankers/outage-warning.js';
+import { JEV_DEFAULT_TOP_K } from '../../domain/rerankers/hosted.js';
+import { JEV_MODEL, postScoring, TYPESAFE_ENDPOINT } from './endpoint.js';
 import { readCappedJson } from '../../base/util/capped-json.js';
 import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
 import { type JsonValue, isJsonNumber, isJsonObject } from '../../base/util/json.js';
@@ -14,14 +15,8 @@ import { errorMessage } from '../../base/util/log.js';
 
 const REQUEST_ID_MAX_CHARS = 64;
 
-const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_TIMEOUT_MS = 5_000;
 const TRUNCATE_CHARS = 1200;
-// Pinned, not `jev-latest`: the eval numbers were measured on this version, and the alias moves whenever the vendor
-// ships a release.
-const DEFAULT_MODEL = 'jev-1.13.0';
-// The pool size the eval numbers were measured at.
-export const JEV_DEFAULT_TOP_K = 40;
 
 // Number.isFinite rejects a string or null without coercing it, which the declared type cannot promise about a
 // third-party payload.
@@ -74,19 +69,12 @@ async function requestScores(http: Http, query: string, head: SearchResult[]): P
 
   const { state, questions } = buildRelevanceRequest(query, head);
 
-  const resp = await rerankerPost(
-    http,
-    ENDPOINT,
-    {
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        state,
-        model: envJevModel() ?? DEFAULT_MODEL,
-        questions,
-      }),
-    },
-    envJevTimeoutMs() ?? DEFAULT_TIMEOUT_MS,
-  );
+  const resp = await postScoring(http, {
+    url: TYPESAFE_ENDPOINT,
+    token: key,
+    body: { state, model: envJevModel() ?? JEV_MODEL, questions },
+    budgetMs: envJevTimeoutMs() ?? DEFAULT_TIMEOUT_MS,
+  });
   if (!resp.ok) {
     // A third-party header ends up on stderr, so keep printable ASCII only.
     const requestId = resp.headers

@@ -4,7 +4,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { importProjectMemories } from '../../src/domain/agent-memories/sync.js';
 import { totalTally } from '../../src/domain/agent-memories/report.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';

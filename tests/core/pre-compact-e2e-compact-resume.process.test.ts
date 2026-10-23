@@ -2,8 +2,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getHippoRoot } from '../../src/base/scope/project-identity.js';
-import { defaultSleepLogPath } from '../../src/domain/hooks/shared.js';
+import { getHippoRoot } from '../../src/host/project-identity.js';
+import { defaultSleepLogPath } from '../../src/surface/hooks-install/json-hooks.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../_helpers/root-forms.js';
 import {
   withScratchEnv,

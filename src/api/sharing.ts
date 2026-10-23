@@ -5,7 +5,7 @@ import type { MemoryEntry } from '../base/memory/memory.js';
 import { ALL_TENANTS } from '../base/util/tenant.js';
 import { syncGlobalToLocal } from '../domain/sharing/global-sync.js';
 import { autoShare, listPeers, shareMemory } from '../domain/sharing/share.js';
-import { globalTargetOf, infraOf } from './infra.js';
+import { globalTargetOf } from './infra.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
 export { AUTO_SHARE_MIN_SCORE, transferScore } from '../domain/sharing/share.js';
@@ -53,6 +53,6 @@ export async function syncFromGlobal(
   ctx: ContextWith<'sharing' | 'folderFiles'>,
   opts: { readonly includeCrossProject: boolean },
 ): Promise<number> {
-  const local = { store: ctx.store, config: ctx.config, embedderFor: infraOf(ctx).embedderFor };
+  const local = { store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor };
   return syncGlobalToLocal(local, requireGlobalTarget(ctx, 'sync'), opts);
 }

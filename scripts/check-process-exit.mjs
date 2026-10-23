@@ -16,8 +16,8 @@ export const ALLOWED = {
     reason: 'ends the process after a crash or a signal, where no command is left to unwind',
   },
   'surface/server/sleep-child.ts': { count: 1, reason: 'ends the forked sleep child once its reply is sent' },
-  'surface/cli/session-hooks.ts': {
-    count: 3,
+  'surface/cli/hooks/codex-run.ts': {
+    count: 2,
     reason: 'child-process event callbacks of the Codex wrapper, where a throw has no caller',
   },
   'surface/cli/shared.ts': { count: 1, reason: OTHER_PR },

@@ -16,9 +16,8 @@ import {
   HIPPO_CAPTURE_ERROR_MARKER,
   HIPPO_POST_COMPACT_MARKER,
   copilotHooksFile,
-  defaultPreCompactLogPath,
 } from './shared.js';
-import { claudeConfigDir, codexHomeDir, homeDir } from '../../base/util/agent-homes.js';
+import { claudeConfigDir, codexHomeDir, userHome, type Homes } from '../../base/util/agent-homes.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral, type JsonObject } from '../../base/util/json.js';
 import { escapeRegex } from '../../base/util/escape.js';
 
@@ -50,26 +49,26 @@ export interface InstallResult {
   invalidJson: boolean;
 }
 
-/** The paths for `target` under the current home directory; reads and writes nothing. */
-export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
-  const home = homeDir();
+/** The paths for `target` under the machine's home folder; reads and writes nothing. */
+export function jsonHookPathsOn(target: JsonHookTarget, homes: Homes): JsonHookPaths {
+  const home = userHome(homes);
   const logsDir = path.join(home, '.hippo', 'logs');
   switch (target) {
     case 'claude-code':
       return {
-        settings: path.join(claudeConfigDir(), 'settings.json'),
+        settings: path.join(claudeConfigDir(homes.home, homes.env), 'settings.json'),
         logFile: path.join(logsDir, 'claude-code-sleep.log'),
         display: 'Claude Code',
       };
     case 'codex':
       return {
-        settings: path.join(codexHomeDir(home), 'hooks.json'),
+        settings: path.join(codexHomeDir(home, homes.env), 'hooks.json'),
         logFile: path.join(logsDir, 'codex-sleep.log'),
         display: 'Codex',
       };
     case 'copilot':
       return {
-        settings: copilotHooksFile(),
+        settings: copilotHooksFile(homes),
         logFile: path.join(logsDir, 'copilot-sleep.log'),
         display: 'Copilot',
       };
@@ -286,17 +285,18 @@ export function planCopilotHooks(settingsPath: string, current: string | null): 
 }
 
 /** Adds hippo's hooks to parsed settings, which it edits in place, and migrates older hippo entries; `settings` is
- * undefined for a file that is not JSON, which stays untouched. */
+ * undefined for a file that is not JSON, which stays untouched. `compactLog` is where the compaction hooks log. */
 export function planJsonHooks(
   target: 'claude-code' | 'codex',
   paths: Pick<JsonHookPaths, 'settings' | 'logFile'>,
   settings: JsonValue | undefined,
+  compactLog: string,
 ): HookInstallPlan {
   const invalid = { result: { ...nothingInstalled(target, paths.settings), invalidJson: true }, write: null };
   if (settings === undefined) return invalid;
   if (target === 'codex') return planCodexHooks(paths.settings, settings);
   if (!isJsonObjectLiteral(settings)) return invalid;
-  return planClaudeCodeHooks(paths.settings, settings, paths.logFile);
+  return planClaudeCodeHooks(paths.settings, settings, paths.logFile, compactLog);
 }
 
 type ClaudeHooks = Record<string, JsonValue[]>;
@@ -382,7 +382,7 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
   return { installedSessionEnd, installedSessionStart, migratedPinnedInjectRecent, installedUserPromptSubmit };
 }
 
-function appendCompactionHooks(hooks: ClaudeHooks) {
+function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
   // PreCompact: fires on manual AND auto compaction (no matcher); records it, asks the summarizer for a "Memories for
   // hippo" list and saves a snapshot. The exit-0 contract lives in the verb itself (preCompactHook,
   // src/surface/capture/compact.ts), not in this install-time wiring.
@@ -390,7 +390,7 @@ function appendCompactionHooks(hooks: ClaudeHooks) {
     hooks,
     'PreCompact',
     HIPPO_PRE_COMPACT_MARKER,
-    claudeCommandGroup(`hippo pre-compact --log-file "${defaultPreCompactLogPath()}"`, 30),
+    claudeCommandGroup(`hippo pre-compact --log-file "${compactLog}"`, 30),
   );
 
   // SessionStart(compact): a second SessionStart entry beside the unmatched last-sleep one. The matcher is an
@@ -409,12 +409,17 @@ function appendCompactionHooks(hooks: ClaudeHooks) {
     hooks,
     'PostCompact',
     HIPPO_POST_COMPACT_MARKER,
-    claudeCommandGroup(`hippo post-compact --log-file "${defaultPreCompactLogPath()}"`, 10),
+    claudeCommandGroup(`hippo post-compact --log-file "${compactLog}"`, 10),
   );
   return { installedPreCompact, installedCompactResume, installedPostCompact };
 }
 
-function planClaudeCodeHooks(settingsPath: string, settings: JsonObject, logFile: string): HookInstallPlan {
+function planClaudeCodeHooks(
+  settingsPath: string,
+  settings: JsonObject,
+  logFile: string,
+  compactLog: string,
+): HookInstallPlan {
   const merge = ensureHooksObject(settings, CLAUDE_APPENDED_EVENTS);
   if (merge === null) {
     return { result: { ...nothingInstalled('claude-code', settingsPath), invalidJson: true }, write: null };
@@ -425,7 +430,10 @@ function planClaudeCodeHooks(settingsPath: string, settings: JsonObject, logFile
 
   const { installedSessionEnd, installedSessionStart, migratedPinnedInjectRecent, installedUserPromptSubmit } =
     appendSessionHooks(hooks, logFile);
-  const { installedPreCompact, installedCompactResume, installedPostCompact } = appendCompactionHooks(hooks);
+  const { installedPreCompact, installedCompactResume, installedPostCompact } = appendCompactionHooks(
+    hooks,
+    compactLog,
+  );
 
   // PostToolUseFailure: a failed tool call becomes an error memory, after `hippo capture-error` drops routine failures
   // (interrupts, declined permissions, empty searches) and repeats. Same hook the plugin ships.

@@ -17,7 +17,7 @@ import type {
   StepFailure,
 } from '../../store/port/capture.js';
 import type { StoreGroups } from '../../store/port.js';
-import { loadConfig } from '../../base/config/config.js';
+import { loadConfig } from '../../host/config-file.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../../base/util/log.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';

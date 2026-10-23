@@ -26,8 +26,9 @@ import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { seeded } from '../_helpers/recall-golden-seed.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { testInfra } from '../_helpers/infra.js';
 
 const ACME = 'acme';
 const SEEDED_AT = '2026-02-01T00:00:00.000Z';
@@ -126,7 +127,14 @@ describe('every api write function answers through a Promise', () => {
       const root = seededRoot();
       const store = open(root);
       stores.push(store);
-      const call = await ready({ hippoRoot: root, tenantId: ACME, actor: HOST, store, config: loadConfig(root) });
+      const call = await ready({
+        hippoRoot: root,
+        tenantId: ACME,
+        actor: HOST,
+        store,
+        config: loadConfig(root),
+        infra: testInfra(),
+      });
       const reply = call();
       expect(reply).toBeInstanceOf(Promise);
       await expect(reply).resolves.toEqual(new Map(Object.entries(REPLIES)).get(fn));

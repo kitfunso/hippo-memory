@@ -1,7 +1,7 @@
 // PostCompact for a caller on another machine: the items it parsed become rows under its owner and project, and a
 // retried request id writes nothing twice.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { Context } from '../../api/types.js';
+import type { EntryContext } from '../../api/types.js';
 import { COMPACTION_ITEM_MAX_CHARS } from '../../base/util/compaction-items.js';
 import { scrubCompactionItems } from './compaction-record.js';
 import { log } from '../../base/util/log.js';
@@ -26,7 +26,7 @@ export interface CallerItemsResult {
  * Busy rejects, for the server's 503: the retry carries the same request id, so nothing is spooled or deferred here.
  */
 export async function saveCompactionItemsForCaller(
-  given: Context,
+  given: EntryContext,
   req: CallerItemsRequest,
 ): Promise<CallerItemsResult> {
   const ctx = withEntryInfra(given);

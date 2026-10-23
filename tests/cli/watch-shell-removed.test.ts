@@ -57,7 +57,7 @@ describe('src', () => {
     .filter(({ text }) => IMPORTS_CHILD_PROCESS.test(text));
 
   it('finds the files that start child processes', () => {
-    expect(spawners.map(({ file }) => file)).toContain(join('base', 'util', 'spawn-argv.ts'));
+    expect(spawners.map(({ file }) => file)).toContain(join('host', 'spawn-argv.ts'));
   });
 
   it('sets no spawn option `shell` to anything but false', () => {

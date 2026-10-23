@@ -4,9 +4,9 @@
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { createMemory, Layer, MemoryEntry } from '../../base/memory/memory.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
-import { getGlobalRoot } from '../../domain/sharing/global-store.js';
+import { getGlobalRoot } from '../../host/global-store.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import { loadConfig } from '../../base/config/config.js';
+import { loadConfig } from '../../host/config-file.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import { log } from '../../base/util/log.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
