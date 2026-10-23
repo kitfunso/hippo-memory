@@ -8,7 +8,7 @@ import { classifyOriginProject } from '../../base/scope/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { isQuarantineScope } from '../../domain/trust/quarantine.js';
 import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
-import { pageLimit } from '../pages.js';
+import { keysetPages, pageLimit } from '../pages.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { requireHostAdmin, type Actor, type Context } from '../types.js';
@@ -154,16 +154,10 @@ export async function conflictList(
   return { conflicts: page.rows.map((row) => row.conflict), next: page.next };
 }
 
-/** Every conflict a paged list returns, read the largest page at a time, for the verbs that print the whole list. */
-export async function conflictListAll(
+/** Each page a paged list answers from `start`, the largest page at a time, for the verbs that print every conflict. */
+export function conflictPages(
   read: (page: ConflictPageOptions) => Promise<ConflictPage>,
-): Promise<MemoryConflict[]> {
-  const all: MemoryConflict[] = [];
-  let after: KeysetPosition | undefined;
-  do {
-    const page = await read({ limit: MAX_LIST_LIMIT, after });
-    all.push(...page.conflicts);
-    after = page.next ?? undefined;
-  } while (after);
-  return all;
+  start?: KeysetPosition,
+): AsyncGenerator<ConflictPage> {
+  return keysetPages((after) => read({ limit: MAX_LIST_LIMIT, after }), start);
 }

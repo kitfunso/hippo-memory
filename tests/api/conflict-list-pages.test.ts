@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
-  conflictListAll,
+  conflictPages,
   conflictGet,
   conflictList,
   conflictListOpen,
@@ -69,7 +69,11 @@ describe('conflict list pages', () => {
     const paged = await walk((page) => conflictList(ctx, 'open', {}, page), 3);
     expect(paged.pages).toBe(3);
     expect(paged.ids).toEqual(whole);
-    expect((await conflictListAll((page) => conflictListOpen(ctx, page))).map((c) => c.id)).toEqual(whole);
+    const all: number[] = [];
+    for await (const page of conflictPages((p) => conflictListOpen(ctx, p))) {
+      all.push(...page.conflicts.map((c) => c.id));
+    }
+    expect(all).toEqual(whole);
   });
 
   it('refuses a limit past the cap or below one', async () => {

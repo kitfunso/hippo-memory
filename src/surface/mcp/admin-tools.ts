@@ -3,7 +3,7 @@
 import { evalNow } from '../../base/memory/ablation.js';
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
-import { conflictListAll, conflictListOpen, conflictResolve } from '../../api/memories/conflicts.js';
+import { conflictListOpen, conflictPages, conflictResolve } from '../../api/memories/conflicts.js';
 import { memoryStatusGet, memoryGetTouchable } from '../../api/memories/memories.js';
 import { mcpApiContext, type LocalToolCall, type ToolCall } from './protocol.js';
 import { sharePeers, shareToGlobal } from '../../api/sharing.js';
@@ -59,11 +59,13 @@ export async function runStatusTool({ ctx, config }: ToolCall): Promise<string> 
 export async function runConflictsTool(call: ToolCall): Promise<string> {
   const { ctx } = call;
   const apiCtx = mcpApiContext(ctx);
-  const conflicts = await conflictListAll((page) => conflictListOpen(apiCtx, { ...page, project: ctx?.project }));
-  if (conflicts.length === 0) return 'No open conflicts.';
-  return conflicts
-    .map((c) => `conflict_${c.id}: ${c.memoryAId} <-> ${c.memoryBId} (score=${c.score.toFixed(2)}) — ${c.reason}`)
-    .join('\n');
+  const lines: string[] = [];
+  for await (const page of conflictPages((p) => conflictListOpen(apiCtx, { ...p, project: ctx?.project }))) {
+    for (const c of page.conflicts) {
+      lines.push(`conflict_${c.id}: ${c.memoryAId} <-> ${c.memoryBId} (score=${c.score.toFixed(2)}) — ${c.reason}`);
+    }
+  }
+  return lines.length === 0 ? 'No open conflicts.' : lines.join('\n');
 }
 
 export async function runResolveTool({ args, ctx }: ToolCall): Promise<string> {

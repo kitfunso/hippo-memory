@@ -325,10 +325,15 @@ async function traceLineage(hippoRoot: string, globalRoot: string, entry: Memory
     return { id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)' };
   });
 
-  const openIn = (root: string) =>
-    api.conflictListAll((page) => api.conflictList(cliApiContext(root, tenantId), 'open', {}, page));
-  const allConflicts = [...(await openIn(hippoRoot)), ...(isInitialized(globalRoot) ? await openIn(globalRoot) : [])];
-  const myConflicts = allConflicts.filter((c) => c.memoryAId === id || c.memoryBId === id);
+  const openIn = async (root: string): Promise<api.ConflictPage['conflicts']> => {
+    const mine: api.ConflictPage['conflicts'] = [];
+    const ctx = cliApiContext(root, tenantId);
+    for await (const page of api.conflictPages((p) => api.conflictList(ctx, 'open', {}, p))) {
+      mine.push(...page.conflicts.filter((c) => c.memoryAId === id || c.memoryBId === id));
+    }
+    return mine;
+  };
+  const myConflicts = [...(await openIn(hippoRoot)), ...(isInitialized(globalRoot) ? await openIn(globalRoot) : [])];
   return { parentPreviews, myConflicts };
 }
 

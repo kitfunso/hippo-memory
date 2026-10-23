@@ -10,11 +10,12 @@ export function pageLimit(limit: number | undefined): number {
   return resolved;
 }
 
-/** Each page `read` answers, in order, until one names no next position: one page in hand at a time. */
+/** Each page `read` answers from `start`, in order, until one names no next position: one page in hand at a time. */
 export async function* keysetPages<P extends { readonly next: KeysetPosition | null }>(
   read: (after: KeysetPosition | undefined) => Promise<P>,
+  start?: KeysetPosition,
 ): AsyncGenerator<P> {
-  let after: KeysetPosition | undefined;
+  let after = start;
   do {
     const page = await read(after);
     yield page;
