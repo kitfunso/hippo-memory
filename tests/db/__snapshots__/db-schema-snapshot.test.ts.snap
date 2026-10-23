@@ -82,6 +82,7 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
     "index idx_recall_trace_outcomes_trace: CREATE INDEX idx_recall_trace_outcomes_trace ON recall_trace_outcomes(trace_id)",
     "index idx_recall_trace_results_tenant_memory: CREATE INDEX idx_recall_trace_results_tenant_memory ON recall_trace_results(tenant_id, memory_id)",
     "index idx_recall_traces_tenant_ts: CREATE INDEX idx_recall_traces_tenant_ts ON recall_traces(tenant_id, ts DESC)",
+    "index idx_recall_traces_ts: CREATE INDEX idx_recall_traces_ts ON recall_traces(ts)",
     "index idx_relations_from: CREATE INDEX idx_relations_from ON relations(from_entity_id)",
     "index idx_relations_memory: CREATE INDEX idx_relations_memory ON relations(memory_id)",
     "index idx_relations_source_object: CREATE INDEX idx_relations_source_object ON relations(source_object_type, source_object_id) WHERE source_object_id IS NOT NULL",

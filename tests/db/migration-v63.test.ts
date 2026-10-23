@@ -1,4 +1,5 @@
-// Schema v63 indexes the memories that hold conflict refs, so the conflict refresh reads those rows, not every memory.
+// Schema v63 indexes the memories that hold conflict refs, so the conflict refresh reads those rows, not every memory,
+// and recall traces by ts for their prune (tests/db/recall-trace-prune.test.ts).
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,6 +17,8 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { readEntry, replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
 
 const CONFLICTED = 'idx_memories_conflicted';
+const TRACES_BY_TS = 'idx_recall_traces_ts';
+const BOTH = [CONFLICTED, TRACES_BY_TS];
 const REFRESH_READ = "conflicts_with_json != '[]'";
 
 function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
@@ -104,9 +107,9 @@ function measureRefresh(size: number): RefreshRead {
 }
 
 describe('schema v63', () => {
-  it('a fresh store has the conflicted-row index', () => {
+  it('a fresh store has both indexes', () => {
     const root = makeRoot('v63-fresh');
-    withDb(root, (db) => expect(indexNames(db)).toContain(CONFLICTED));
+    withDb(root, (db) => expect(indexNames(db)).toEqual(expect.arrayContaining(BOTH)));
   });
 
   it('reads the same statements and rows at 1,000 and 10,000 memories, with no scan of memories', () => {
@@ -151,15 +154,15 @@ describe('schema v63', () => {
     const root = seededStore(20);
     const before = withDb(root, refsOf);
     withDb(root, (db) => {
-      db.exec(`DROP INDEX ${CONFLICTED}`);
+      for (const name of BOTH) db.exec(`DROP INDEX ${name}`);
       db.prepare(`UPDATE meta SET value = '62' WHERE key = 'schema_version'`).run();
       db.exec('PRAGMA user_version = 62');
     });
-    const creates = /CREATE INDEX IF NOT EXISTS idx_memories_conflicted/;
+    const creates = /CREATE INDEX IF NOT EXISTS (idx_memories_conflicted|idx_recall_traces_ts) /;
     const upgrade = recordStatements(() => withDb(root, (db) => [getSchemaVersion(db), indexNames(db)] as const));
-    expect(countMatching(upgrade.statements, creates)).toBe(1);
+    expect(countMatching(upgrade.statements, creates)).toBe(2);
     expect(upgrade.result[0]).toBe(LATEST_SCHEMA_VERSION);
-    expect(upgrade.result[1]).toContain(CONFLICTED);
+    expect(upgrade.result[1]).toEqual(expect.arrayContaining(BOTH));
     const reopen = recordStatements(() => withDb(root, refsOf));
     expect(countMatching(reopen.statements, creates)).toBe(0);
     expect(reopen.result).toEqual(before);
