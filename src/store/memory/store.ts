@@ -1,5 +1,5 @@
-// memoryStore: the second adapter of the store port, every required group over plain tables in this process. It runs
-// the same conformance suite as hippo.db, which is how a third adapter proves it keeps the port's rules.
+// memoryStore: a supported store shipped from hippo-memory/store-kit, every required port group over plain tables in
+// this process. CI runs the server and MCP suites on it, and the store conformance suite holds it to the port.
 import type { LossAversion } from '../../base/memory/memory.js';
 import type { HippoStore } from '../port.js';
 import { memoryAuditLog } from './audit-log.js';

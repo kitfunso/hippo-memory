@@ -1,10 +1,12 @@
 // The HNSW graphs of one store's vectors, one per vector length, held by the store worker thread that answers its
-// nearest-row reads. Built off the request path; until a graph is ready, and whenever it falls behind, reads scan.
+// nearest-row reads. Built off the request path; until a graph is ready, reads search the saved graph file or scan.
 import { DEFAULT_CONFIG } from '../base/config/config.js';
 import { errorFields, log } from '../base/util/log.js';
 import { requestScopes } from '../base/util/request-scope.js';
 import { openHippoDbReadOnly } from './open.js';
 import type { DatabaseSyncLike } from './sqlite.js';
+import { nextTurn, saveGraphIfDrifted, type Turn } from './vector-graph-build.js';
+import { GraphFileIndex } from './vector-graph-reader.js';
 import {
   addRow,
   catchUp,
@@ -12,32 +14,30 @@ import {
   type GraphRows,
   graphMatches,
   ROWS_ABOVE_SQL,
+  STALE_SHARE,
   StagedRows,
   staleNodes,
   type StoredRow,
   storedModel,
+  VECTOR_GRAPH_THRESHOLD,
 } from './vector-graph-rows.js';
-import type { VectorIndex, VectorMatch } from './vector-store.js';
+import type { ProposedMatches, VectorIndex } from './vector-store.js';
 import { cachedStatement } from './statement-cache.js';
-
-// The graph beat the paged scan at both p50 and p95 from 1,000 vectors on; docs/ARCHITECTURE.md has the bench.
-/** Stored vectors a store holds before its nearest-row reads search a graph. */
-const VECTOR_GRAPH_THRESHOLD = 1_000;
 
 // Longest a build holds the thread before a waiting job may run.
 const SLICE_MS = 10;
-// New rows one query inserts itself; past this the graph catches up in the background and queries scan meanwhile.
+// New rows one query inserts itself; past this the graph catches up in the background and answers meanwhile for the
+// rows it holds.
 const INLINE_ROWS = 32;
 // Refreshes between two counts of the stored rows, the only read that sees a deleted vector.
 const RECOUNT_EVERY = 256;
-const STALE_SHARE = 0.1;
 // A build that failed is not tried again for this long, so a broken store logs once a minute, not once a query.
 const RETRY_MS = 60_000;
 
 export interface VectorGraphsOptions {
   /** Stored vectors before reads use a graph; VECTOR_GRAPH_THRESHOLD when omitted. */
   readonly threshold?: number | undefined;
-  /** Stored vectors past which no graph is kept and reads scan; the config default when omitted. */
+  /** Stored vectors past which no graph is kept; the config default when omitted. */
   readonly maxVectors?: number | undefined;
 }
 
@@ -48,18 +48,11 @@ interface Ready {
   seenOn: DatabaseSyncLike | undefined;
   dataVersion: number;
   refreshes: number;
+  /** The rowid a background catch-up reads above; until it ends, reads answer up to it from the graph. */
+  catchingUpFrom: number | undefined;
 }
 
-type Slot =
-  | Ready
-  | { readonly kind: 'building'; readonly done: Promise<void> }
-  | { readonly kind: 'failed'; readonly at: number };
-
-function nextTurn(): Promise<void> {
-  return new Promise((resolve) => {
-    setImmediate(resolve);
-  });
-}
+type Slot = Ready | { readonly kind: 'building' } | { readonly kind: 'failed'; readonly at: number };
 
 function dataVersion(db: DatabaseSyncLike): number {
   // SAFETY: PRAGMA data_version always answers one row.
@@ -88,6 +81,9 @@ export class VectorGraphs implements VectorIndex {
   readonly #threshold: number;
   readonly #maxVectors: number;
   readonly #slots = new Map<number, Slot>();
+  readonly #file: GraphFileIndex;
+  // Builds, catch-ups and the saves after them, so the thread closes its store with none left running.
+  readonly #work = new Set<Promise<void>>();
   #closed = false;
   // Counted under the threshold or over the cap on this connection at this data_version, so not counted again until a
   // write.
@@ -99,6 +95,7 @@ export class VectorGraphs implements VectorIndex {
     this.#hippoRoot = hippoRoot;
     this.#threshold = opts.threshold ?? VECTOR_GRAPH_THRESHOLD;
     this.#maxVectors = opts.maxVectors ?? DEFAULT_CONFIG.vectorGraph.maxVectors;
+    this.#file = new GraphFileIndex(hippoRoot);
   }
 
   matches(
@@ -107,15 +104,19 @@ export class VectorGraphs implements VectorIndex {
     k: number,
     where: string,
     params: readonly (string | number)[],
-  ): VectorMatch[] | undefined {
+  ): ProposedMatches | undefined {
     const dim = query.length;
     const slot = this.#slots.get(dim);
-    if (slot?.kind !== 'ready') {
-      if (this.#mayBuild(db, slot)) this.#start(dim, undefined, 0);
-      return undefined;
+    if (slot?.kind === 'ready') {
+      const covered = this.#covered(db, dim, slot);
+      if (covered !== undefined) {
+        const matches = graphMatches(db, slot.rows, { query, k, where, params });
+        return matches && { matches, coveredRowid: covered };
+      }
+    } else if (this.#mayBuild(db, slot)) {
+      this.#start(dim);
     }
-    if (!this.#refresh(db, dim, slot)) return undefined;
-    return graphMatches(db, slot.rows, { query, k, where, params });
+    return this.#file.matches(db, query, k, where, params);
   }
 
   /** Stops every build at its next turn; each closes its own connection as it stops. */
@@ -123,10 +124,15 @@ export class VectorGraphs implements VectorIndex {
     this.#closed = true;
   }
 
-  /** Settles once no build runs, so the thread closes its store with no build's connection left open. */
+  /** Settles once no build or save runs, so the thread closes its store with no build's connection left open. */
   async idle(): Promise<void> {
-    await Promise.all([...this.#slots.values()].flatMap((slot) => (slot.kind === 'building' ? [slot.done] : [])));
+    await Promise.all(this.#work);
   }
+
+  readonly #turn: Turn = async () => {
+    await nextTurn();
+    return !this.#closed;
+  };
 
   #mayBuild(db: DatabaseSyncLike, slot: Slot | undefined): boolean {
     if (this.#closed || slot?.kind === 'building') return false;
@@ -146,7 +152,7 @@ export class VectorGraphs implements VectorIndex {
     if (over && !this.#overCap) {
       log.warn(
         `the store holds ${stored} vectors, over the vector graph cap of ${this.#maxVectors} ` +
-          `(vectorGraph.maxVectors), so nearest-row reads scan`,
+          `(vectorGraph.maxVectors), so no graph is built`,
         { hippoRoot: this.#hippoRoot, vectors: stored, maxVectors: this.#maxVectors },
       );
     }
@@ -154,59 +160,96 @@ export class VectorGraphs implements VectorIndex {
     return !over;
   }
 
-  // True when the graph matches the store as this connection sees it; false sends the query to the scan.
-  #refresh(db: DatabaseSyncLike, dim: number, slot: Ready): boolean {
+  // The rowid up to which the graph answers for the store as this connection sees it; undefined drops to the file.
+  #covered(db: DatabaseSyncLike, dim: number, slot: Ready): number | undefined {
+    if (slot.catchingUpFrom !== undefined) {
+      return storedModel(db) === slot.rows.model ? slot.catchingUpFrom : undefined;
+    }
     const version = dataVersion(db);
-    if (slot.seenOn === db && slot.dataVersion === version) return true;
+    if (slot.seenOn === db && slot.dataVersion === version) return slot.rows.lastRowid;
     const outcome = catchUp(db, slot.rows, INLINE_ROWS);
-    if (outcome.kind === 'lost') {
-      this.#slots.delete(dim);
-      return false;
-    }
     if (outcome.kind === 'behind') {
-      this.#start(dim, slot.rows, outcome.afterRowid);
-      return false;
+      this.#catchUp(dim, slot, outcome.afterRowid);
+      return outcome.afterRowid;
     }
-    slot.seenOn = db;
-    slot.dataVersion = version;
-    if (++slot.refreshes % RECOUNT_EVERY === 0) {
-      // SAFETY: an aggregate with no GROUP BY always answers one row.
-      slot.rows.live = (cachedStatement(db, 'SELECT count(*) AS n FROM memory_vectors').get() as { n: number }).n;
+    if (outcome.kind === 'current') {
+      slot.seenOn = db;
+      slot.dataVersion = version;
+      if (++slot.refreshes % RECOUNT_EVERY === 0) {
+        // SAFETY: an aggregate with no GROUP BY always answers one row.
+        slot.rows.live = (cachedStatement(db, 'SELECT count(*) AS n FROM memory_vectors').get() as { n: number }).n;
+      }
+      const fresh = staleNodes(slot.rows) <= STALE_SHARE * slot.rows.ids.length;
+      if (this.#underCap(slot.rows.live) && fresh) return slot.rows.lastRowid;
     }
-    if (!this.#underCap(slot.rows.live)) {
-      this.#slots.delete(dim);
-      return false;
-    }
-    if (staleNodes(slot.rows) <= STALE_SHARE * slot.rows.ids.length) return true;
-    // Dropped, so the next read builds a fresh graph without the stale nodes.
+    // Dropped, so the next read builds a fresh graph without the stale nodes or the other model's vectors.
     this.#slots.delete(dim);
-    return false;
+    return undefined;
+  }
+
+  #start(dim: number): void {
+    this.#slots.set(dim, { kind: 'building' });
+    this.#background(dim, async () => {
+      const started = Date.now();
+      const rows = await this.#grow(dim, undefined, 0);
+      if (rows === undefined) {
+        this.#slots.delete(dim);
+        return;
+      }
+      const ready: Ready = {
+        kind: 'ready',
+        rows,
+        seenOn: undefined,
+        dataVersion: 0,
+        refreshes: 0,
+        catchingUpFrom: undefined,
+      };
+      this.#slots.set(dim, ready);
+      this.#ready(rows, started);
+      await saveGraphIfDrifted(this.#hippoRoot, rows, this.#turn);
+    });
+  }
+
+  // The graph keeps answering for the rows up to `afterRowid` while the rows above it are added between turns.
+  #catchUp(dim: number, slot: Ready, afterRowid: number): void {
+    slot.catchingUpFrom = afterRowid;
+    this.#background(dim, async () => {
+      const started = Date.now();
+      const rows = await this.#grow(dim, slot.rows, afterRowid);
+      if (this.#slots.get(dim) !== slot) return;
+      if (rows === undefined) {
+        this.#slots.delete(dim);
+        return;
+      }
+      slot.catchingUpFrom = undefined;
+      slot.seenOn = undefined;
+      this.#ready(rows, started);
+      await saveGraphIfDrifted(this.#hippoRoot, rows, this.#turn);
+    });
+  }
+
+  #ready(rows: GraphRows, started: number): void {
+    log.info(`the vector graph of ${rows.ids.length} vectors of length ${rows.graph.dim} is ready`, {
+      hippoRoot: this.#hippoRoot,
+      buildMs: Date.now() - started,
+    });
   }
 
   // Outside the request scope of the read that started it, so its log lines carry no request's id.
-  #start(dim: number, base: GraphRows | undefined, afterRowid: number): void {
-    const started = Date.now();
-    const done = requestScopes
-      .exit(() => this.#grow(dim, base, afterRowid))
-      .then((rows) => {
-        if (rows === undefined) {
-          this.#slots.delete(dim);
-          return;
-        }
-        this.#slots.set(dim, { kind: 'ready', rows, seenOn: undefined, dataVersion: 0, refreshes: 0 });
-        log.info(`the vector graph of ${rows.ids.length} vectors of length ${dim} is ready`, {
-          hippoRoot: this.#hippoRoot,
-          buildMs: Date.now() - started,
-        });
-      })
+  #background(dim: number, task: () => Promise<void>): void {
+    const done: Promise<void> = requestScopes
+      .exit(task)
       .catch(<E>(err: E) => {
         this.#slots.set(dim, { kind: 'failed', at: Date.now() });
         log.warn(`the vector graph of length ${dim} could not be built, so nearest-row reads scan`, {
           hippoRoot: this.#hippoRoot,
           ...errorFields(err),
         });
+      })
+      .finally(() => {
+        this.#work.delete(done);
       });
-    this.#slots.set(dim, { kind: 'building', done });
+    this.#work.add(done);
   }
 
   // Undefined when the threads close first or the vectors now come from another model, so the next read starts over.
@@ -220,8 +263,7 @@ export class VectorGraphs implements VectorIndex {
     let slice = performance.now();
     for (let i = 0; i < read.staged.length; i++) {
       if (performance.now() - slice >= SLICE_MS) {
-        await nextTurn();
-        if (this.#closed) return undefined;
+        if (!(await this.#turn())) return undefined;
         slice = performance.now();
       }
       addRow(rows, read.staged.rowids[i], read.staged.ids[i], read.staged.vector(i));
@@ -241,8 +283,7 @@ export class VectorGraphs implements VectorIndex {
       for (const row of db.prepare(ROWS_ABOVE_SQL).iterate(afterRowid, dim) as Iterable<StoredRow>) {
         staged.add(row);
         if (performance.now() - slice < SLICE_MS) continue;
-        await nextTurn();
-        if (this.#closed) return undefined;
+        if (!(await this.#turn())) return undefined;
         slice = performance.now();
       }
       return { model, staged };

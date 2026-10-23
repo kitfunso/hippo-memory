@@ -1,7 +1,7 @@
 // The GitHub connector's tables: event log, dead-letter queue, tenant routing and backfill cursors.
 
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
-import { archiveRawMemory } from '../raw-archive.js';
+import { archiveRawMemories } from '../raw-archive.js';
 import type { ConnectorEventRecord } from '../../port.js';
 import { eventMemory, eventRecord, eventSeen, markEventSeen, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
@@ -84,7 +84,7 @@ export function archiveDeletedArtifact(db: DatabaseSyncLike, del: ArtifactDeleti
   }
 
   withWriteScope(db, 'github_delete_all', () => {
-    for (const id of memoryIds) archiveRawMemory(db, id, { reason: del.reason, who: del.who });
+    archiveRawMemories(db, memoryIds, { reason: del.reason, who: del.who });
     markGitHubEventSeen(db, { ...logged, memoryId: memoryIds[0]! });
   });
   return { duplicate: false, archived: memoryIds.length };

@@ -6,7 +6,7 @@ import { autoDetectContext } from '../../api/context-auto.js';
 import { processGit } from '../../infra/git-runner.js';
 import { sharedStoreOf } from '../../api/types.js';
 import { type ProjectIdentity } from '../../base/scope/project-identity.js';
-import { resolveProjectIdentity } from '../../host/project-identity.js';
+import type { Machine } from '../../base/util/agent-homes.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../../api/context-render.js';
 import { mcpApiContext, ownsServerCwd, type ToolCall } from './protocol.js';
 import { resolveClientKey } from '../../api/recall/last-recalled.js';
@@ -87,9 +87,13 @@ export async function runDrillTool({ args, ctx }: ToolCall): Promise<string> {
 
 // The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so only an owner
 // of the server cwd falls back to it.
-function localProject(hippoRoot: string, ownsCwd: boolean): ProjectIdentity {
-  const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
-  return storeProject.name !== '' || !ownsCwd ? storeProject : resolveProjectIdentity(process.cwd());
+function localProject(
+  hippoRoot: string,
+  ownsCwd: boolean,
+  { projectIdentity }: Pick<Machine, 'projectIdentity'>,
+): ProjectIdentity {
+  const storeProject = projectIdentity(path.dirname(path.resolve(hippoRoot)));
+  return storeProject.name !== '' || !ownsCwd ? storeProject : projectIdentity(process.cwd());
 }
 
 export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall): Promise<string> {
@@ -108,7 +112,7 @@ export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall)
     q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(processGit),
     budget,
     exactScope,
-    currentProject: ctx?.project ?? localProject(hippoRoot, ownsCwd),
+    currentProject: ctx?.project ?? localProject(hippoRoot, ownsCwd, ctx.infra.machine),
     cost: contextCost,
   });
   ctx.callers?.lastShown.set(

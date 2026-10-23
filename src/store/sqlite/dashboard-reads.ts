@@ -14,23 +14,12 @@ import { pragmaDataVersion } from '../../db/meta.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { tableExists } from '../../db/tables.js';
 import type { Layer, LossAversion } from '../../base/memory/memory.js';
-import {
-  BAND_AT_RISK,
-  CONFIDENCE_ORDER,
-  LAYER_ORDER,
-  layerIndex,
-  listHead,
-  memoryFacts,
-} from '../../base/memory/memory-facts.js';
+import { layerIndex, LAYER_ORDER } from '../../base/memory/memory-facts.js';
 import {
   SCATTER_POINTS_MAX,
-  type DashboardPageQuery,
   type DashboardReads,
-  type DashboardSortKey,
   type DashboardTotals,
   type ExcludedCounts,
-  type FilterTally,
-  type ListedRow,
   type Origin,
   type ProjectTally,
   type Quad,
@@ -40,44 +29,21 @@ import {
 import { openConflictsNaming } from './conflicts.js';
 import {
   FACT_COLUMNS,
-  factInputs,
-  FILTER_SLOTS,
   GRID_CELLS,
+  HOLDS_TEXT,
+  holdsTextBinds,
   PROJECT_SLOTS,
   tallyOf,
   useDashboardFunctions,
-  type FactRow,
 } from './dashboard-functions.js';
-import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
-import type { StoreFiles } from './open.js';
+import { MemoryLists } from './dashboard-lists.js';
+import { IN_PROJECT, kindIn, LIVE, OPEN_PAIRS, quarantinedIn, supersededIn } from './dashboard-sql.js';
 import { handlesOf, openStore } from './handles.js';
 import { answered, bound } from './bound.js';
-
-// One past the list's cut, so the cut and its truncated flag come out as they would on the whole text.
-const HEAD_READ = 241;
-
-// SQL twins of isQuarantineScope and of the two halves of isLiveMemory, for columns under prefix `t`; substr compares
-// bytes, as startsWith does, where LIKE would fold case.
-const quarantinedIn = (t: string): string =>
-  `(${t}scope IS NOT NULL AND substr(${t}scope, 1, ${QUARANTINE_SCOPE_PREFIX.length}) = '${QUARANTINE_SCOPE_PREFIX}')`;
-const supersededIn = (t: string): string => `(${t}superseded_by IS NOT NULL AND ${t}superseded_by <> '')`;
-const kindIn = (t: string): string => `COALESCE(${t}kind, 'distilled')`;
-const liveIn = (t: string): string =>
-  `NOT ${supersededIn(t)} AND ${kindIn(t)} IN ('raw', 'distilled') AND NOT ${quarantinedIn(t)}`;
-const LIVE = liveIn('');
 
 const EMBEDDED = 'EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)';
 // First-seen order: the project whose first live row comes first by created, then id.
 const SEEN = `MIN(created || char(1) || id) AS seen`;
-// Named parameters bound from one object: Node 22's node:sqlite skips every named slot, ?NNN too, on a positional bind.
-const IN_PROJECT = `tenant_id = :tenant AND origin_project IS :origin AND ${LIVE}`;
-
-// The open conflicts of the tenant bound as :tenant whose members are both live.
-const OPEN_PAIRS =
-  `open_pairs AS (SELECT mc.id AS id, mc.memory_a_id AS a, mc.memory_b_id AS b, ma.origin_project AS pa, ` +
-  `mb.origin_project AS pb FROM memory_conflicts mc JOIN memories ma ON ma.id = mc.memory_a_id JOIN memories mb ` +
-  `ON mb.id = mc.memory_b_id WHERE mc.status = 'open' AND ma.tenant_id = :tenant AND mb.tenant_id = :tenant ` +
-  `AND ${liveIn('ma.')} AND ${liveIn('mb.')})`;
 
 const noneExcluded = (): ExcludedCounts => ({
   superseded: 0,
@@ -221,157 +187,14 @@ function project(
   });
 }
 
-const LAYER_SLOTS = LAYER_ORDER.map((_, i) => `:layer${i}`).join(', ');
-
-// Binds what filterBinds names. LIMIT -1 makes `listed` a co-routine, so each function runs once per row.
-function keptRows(withHead: boolean): string {
-  const head = withHead ? `substr(content, 1, ${HEAD_READ}) AS head, ` : '';
-  return (
-    `WITH ${OPEN_PAIRS}, listed AS (SELECT id, ${FACT_COLUMNS}, scope, ${head}hippo_days(created, :now) AS age, ` +
-    `hippo_strength(${FACT_COLUMNS}, :now) AS strength, ` +
-    `id IN (SELECT a FROM open_pairs UNION ALL SELECT b FROM open_pairs) AS in_conflict FROM memories ` +
-    `WHERE ${IN_PROJECT} AND layer IN (${LAYER_SLOTS}) ` +
-    `AND (:text IS NULL OR hippo_holds_text(id, content, tags_json, :text)) ORDER BY created, id LIMIT -1), ` +
-    `kept AS MATERIALIZED (SELECT * FROM listed WHERE age >= :minAgeDays AND age <= :maxAgeDays ` +
-    `AND strength >= :minStrength AND strength <= :maxStrength)`
-  );
-}
-
-/** keptRows' parameters; a layer the query leaves out binds NULL, which no row's layer equals. */
-function filterBinds(tenantId: string, query: DashboardPageQuery, nowMs: number) {
-  const { origin, text, minAgeDays, maxAgeDays, minStrength, maxStrength } = query;
-  const layers = LAYER_ORDER.map((layer, i) => [`layer${i}`, query.layers.includes(i) ? layer : null]);
-  return {
-    tenant: tenantId,
-    origin,
-    now: nowMs,
-    ...Object.fromEntries(layers),
-    text,
-    minAgeDays,
-    maxAgeDays,
-    minStrength,
-    maxStrength,
-  } satisfies Record<string, SqlValue>;
-}
-
-const rankBy = (column: string, order: readonly string[]): string =>
-  `CASE ${column} ${order.map((v, i) => `WHEN '${v}' THEN ${i}`).join(' ')} ELSE ${order.length} END`;
-
-// Each key orders as the old in-memory sort did: text keys as UTF-16 bytes, so as JavaScript's `<` compares them.
-const SORT_SQL = {
-  content: 'hippo_head_key(head)',
-  layer: rankBy('layer', LAYER_ORDER),
-  strength: 'strength',
-  retrievals: 'COALESCE(retrieval_count, 0)',
-  last: 'hippo_days(last_retrieved, :now)',
-  age: 'age',
-  confidence: rankBy(`COALESCE(confidence, 'observed')`, CONFIDENCE_ORDER),
-  scope: `hippo_text_key(COALESCE(scope, ''))`,
-} satisfies Record<DashboardSortKey, string>;
-
-const CHIP_SQL =
-  `(:chip = 'all' OR (:chip = 'risk' AND hippo_band(${FACT_COLUMNS}, :now) = ${BAND_AT_RISK}) ` +
-  `OR (:chip = 'pinned' AND pinned) OR (:chip = 'conflict' AND in_conflict))`;
-
-const FACT_OF_M = FACT_COLUMNS.split(', ')
-  .map((c) => `m.${c}`)
-  .join(', ');
-
-// Keys only go through the sort, so a deep offset sorts ids, never heads; the page then reads its rows by id. The
-// tally and the page read one materialized `kept`; the LEFT JOIN keeps one row, with a NULL id, on a page past the end.
-function pageSql(sort: DashboardSortKey, descending: boolean): string {
-  const dir = descending ? 'DESC' : 'ASC';
-  return (
-    `${keptRows(sort === 'content')}, ` +
-    `total AS (SELECT hippo_filter_tally(${FACT_COLUMNS}, in_conflict, :now) AS tally FROM kept), ` +
-    `page AS (SELECT id, in_conflict, ${SORT_SQL[sort]} AS sort_key FROM kept ` +
-    `WHERE ${CHIP_SQL} ORDER BY sort_key ${dir}, id ASC LIMIT :limit OFFSET :offset) ` +
-    `SELECT total.tally AS tally, r.* FROM total LEFT JOIN (SELECT m.id AS id, substr(m.content, 1, ${HEAD_READ}) AS ` +
-    `head, ${FACT_OF_M}, m.scope AS scope, p.in_conflict AS in_conflict, p.sort_key AS sort_key FROM page p ` +
-    `JOIN memories m ON m.id = p.id) r ON 1 ORDER BY r.sort_key ${dir}, r.id ASC`
-  );
-}
-
-type PageRow = FactRow & {
-  id: string | null;
-  head: string;
-  scope: string | null;
-  in_conflict: number;
-  tally: SqlValue;
-};
-
-function filterTally(tally: SqlValue): FilterTally {
-  const t = tallyOf(tally);
-  const s = FILTER_SLOTS;
-  const three = (at: number): [number, number, number] => [t[at], t[at + 1], t[at + 2]];
-  return {
-    counts: {
-      all: t[s.all],
-      risk: t[s.risk],
-      pinned: t[s.pinned],
-      conflict: t[s.conflict],
-    },
-    decay: {
-      now: three(s.now),
-      in7d: three(s.in7d),
-      in30d: three(s.in30d),
-      pinned: t[s.pinned],
-    },
-  };
-}
-
-function listedRow(row: PageRow & { id: string }, nowMs: number, rules: LossAversion): ListedRow {
-  const inputs = factInputs(row);
-  const { head, truncated } = listHead(row.head);
-  return {
-    id: row.id,
-    head,
-    truncated,
-    retrievals: inputs.retrievalCount,
-    scope: row.scope ?? null,
-    pinned: inputs.pinned,
-    inConflict: Boolean(row.in_conflict),
-    facts: memoryFacts(inputs, nowMs, rules),
-  };
-}
-
-function memoryPage(
-  db: DatabaseSyncLike,
-  files: StoreFiles,
-  tenantId: string,
-  query: DashboardPageQuery,
-  nowMs: number,
-): { tally: FilterTally; rows: ListedRow[] } | null {
-  const { origin, chip, limit, offset } = query;
-  return withReadSnapshot(db, () => {
-    const any = cachedStatement(db, `SELECT 1 AS hit FROM memories WHERE ${IN_PROJECT} LIMIT 1`).get({
-      tenant: tenantId,
-      origin,
-    });
-    if (any === undefined) return null;
-    // SAFETY: the tally rides on every row and the LEFT JOIN answers one row on an empty page.
-    const rows = cachedStatement(db, pageSql(query.sort, query.descending)).all({
-      ...filterBinds(tenantId, query, nowMs),
-      chip,
-      limit,
-      offset,
-    }) as PageRow[];
-    const listed = rows.filter((row): row is PageRow & { id: string } => row.id !== null);
-    return {
-      tally: filterTally(rows[0].tally),
-      rows: listed.map((row) => listedRow(row, nowMs, files)),
-    };
-  });
-}
-
 function search(db: DatabaseSyncLike, tenantId: string, needle: string): SearchTally[] {
   // SAFETY: one row per origin_project, each a count and a sum.
   const rows = cachedStatement(
     db,
     `SELECT origin_project AS origin, COUNT(*) AS live, ` +
-      `SUM(hippo_holds_text(id, content, tags_json, :needle)) AS hits, ${SEEN} ` +
+      `SUM(${HOLDS_TEXT}) AS hits, ${SEEN} ` +
       `FROM memories WHERE tenant_id = :tenant AND ${LIVE} GROUP BY origin_project ORDER BY seen`,
-  ).all({ tenant: tenantId, needle }) as Array<{
+  ).all({ tenant: tenantId, ...holdsTextBinds(needle) }) as Array<{
     origin: Origin;
     live: number;
     hits: number;
@@ -400,29 +223,47 @@ function dashboardOpener(rules: LossAversion): (root: string) => DatabaseSyncLik
   };
 }
 
-/** Reads run on a fresh writable open, which runs any pending migration and legacy import first and carries the
- * dashboard's functions scored by `rules`; while no hippo.db exists they answer empty and create none. */
-export function sqliteDashboardReads(hippoRoot: string, rules: LossAversion = {}): DashboardReads {
-  const { on, files } = handlesOf(hippoRoot, rules);
-  const open = dashboardOpener(rules);
-  type Scans = Pick<DashboardReads, 'totals' | 'project' | 'memoryPage' | 'search' | 'openConflictsOf'>;
-  const scans = bound<Scans>(
-    on,
-    {
-      totals,
-      project,
-      memoryPage: (db, ...args) => memoryPage(db, files, ...args),
-      search,
-      openConflictsOf: openConflictsNaming,
-    },
-    open,
-  );
-  const stored = (): boolean => fs.existsSync(getHippoDbPath(hippoRoot));
+interface HeldReader {
+  reader(): DatabaseSyncLike | null;
+  listsOn(db: DatabaseSyncLike): MemoryLists;
+  close(): void;
+}
+
+/** One read-only connection, opened once hippo.db exists, and the sorted lists kept on it. */
+function heldReader(hippoRoot: string, rules: LossAversion, migrate: () => void): HeldReader {
   let held: DatabaseSyncLike | null = null;
-  const reader = (): DatabaseSyncLike | null => {
-    if (held === null && stored()) held = openHippoDbReadOnly(hippoRoot);
-    return held;
+  let lists: MemoryLists | null = null;
+  return {
+    reader: () => {
+      if (held === null && fs.existsSync(getHippoDbPath(hippoRoot))) held = openHippoDbReadOnly(hippoRoot);
+      return held;
+    },
+    // The first list runs the open the other reads run, so a pending migration lands before it sorts.
+    listsOn: (db) => {
+      if (lists !== null) return lists;
+      migrate();
+      useDashboardFunctions(db, rules);
+      lists = new MemoryLists(db, rules);
+      return lists;
+    },
+    close: () => {
+      if (held !== null) closeHippoDb(held);
+      held = null;
+      lists = null;
+    },
   };
+}
+
+/** Reads run on a fresh writable open, which runs any pending migration and legacy import first and carries the
+ * dashboard's functions scored by `rules`; memory pages run on the held reader, whose sorted lists outlive a read.
+ * While no hippo.db exists they answer empty and create none. */
+export function sqliteDashboardReads(hippoRoot: string, rules: LossAversion = {}): DashboardReads {
+  const { on } = handlesOf(hippoRoot, rules);
+  const open = dashboardOpener(rules);
+  type Scans = Pick<DashboardReads, 'totals' | 'project' | 'search' | 'openConflictsOf'>;
+  const scans = bound<Scans>(on, { totals, project, search, openConflictsOf: openConflictsNaming }, open);
+  const stored = (): boolean => fs.existsSync(getHippoDbPath(hippoRoot));
+  const { reader, listsOn, close } = heldReader(hippoRoot, rules, () => on(() => undefined, open));
   return {
     commitCount: () =>
       answered(() => {
@@ -435,7 +276,10 @@ export function sqliteDashboardReads(hippoRoot: string, rules: LossAversion = {}
         : Promise.resolve({ projects: [], excluded: noneExcluded(), openConflicts: 0 }),
     project: (tenantId, origin, nowMs) => (stored() ? scans.project(tenantId, origin, nowMs) : Promise.resolve(null)),
     memoryPage: (tenantId, query, nowMs) =>
-      stored() ? scans.memoryPage(tenantId, query, nowMs) : Promise.resolve(null),
+      answered(() => {
+        const db = reader();
+        return db === null ? null : listsOn(db).page(tenantId, query, nowMs);
+      }),
     search: (tenantId, needle) => (stored() ? scans.search(tenantId, needle) : Promise.resolve([])),
     openConflictsOf: scans.openConflictsOf,
     hasVector: (id) =>
@@ -443,10 +287,6 @@ export function sqliteDashboardReads(hippoRoot: string, rules: LossAversion = {}
         const db = reader();
         return db !== null && hasVector(db, id);
       }),
-    close: () =>
-      answered(() => {
-        if (held !== null) closeHippoDb(held);
-        held = null;
-      }),
+    close: () => answered(close),
   };
 }

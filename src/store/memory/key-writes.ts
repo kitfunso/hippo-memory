@@ -21,7 +21,7 @@ function expiryMs(expiresAt: string | null): number {
 
 function listed(row: KeyRow, query: KeyListQuery, nowIso: string): boolean {
   if (query.tenantId !== ALL_TENANTS && row.tenantId !== query.tenantId) return false;
-  // hippo.db compares the stamps as text, which toISOString makes correct.
+  // Stamps compare as text, which toISOString makes correct.
   if (query.active && (row.revokedAt !== null || (row.expiresAt !== null && row.expiresAt <= nowIso))) return false;
   if (query.ownerSubject !== undefined && row.ownerSubject !== query.ownerSubject) return false;
   if (query.keyId !== undefined && row.keyId !== query.keyId) return false;

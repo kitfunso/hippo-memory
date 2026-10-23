@@ -1,6 +1,6 @@
 ### Changed
 
-- **The published `isSharedStore` and `resolveProjectIdentity` read the disk on each call, with no answer kept for the process.** A server, a CLI command, the sleep child and each store object now keep their own project walks and shared-store flag in a `Host` of their own, so a store once read as shared stays shared for that root and two roots in one process never share an answer.
+- **The published `isSharedStore` and `resolveProjectIdentity` read the disk on each call, with no answer kept for the process.** A server, a CLI command or stdio MCP loop, the sleep child, the published entries and each store object now keep their own project walks and shared-store flag in a `Host` of their own, so a store once read as shared stays shared for that root and two roots in one process never share an answer.
 
 ### Internal
 

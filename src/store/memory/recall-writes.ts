@@ -4,7 +4,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { blockHash } from '../../base/util/token-text.js';
 import type { RecallTraceInput, RecallWrites } from '../port/recall-writes.js';
 import { logGoalRecalls } from './goals.js';
-import { appendAudit, nextId } from './rows.js';
+import { appendAudit, nextId, ownedRow } from './rows.js';
 import type { MemoryTables } from './tables.js';
 
 /** The query's hash and length, never its text, with each result ranked from 1. */
@@ -25,10 +25,7 @@ function writeTrace(t: MemoryTables, trace: RecallTraceInput): void {
 /** Each id found once, in the asked tenant, moves as markRetrieved scores it from the row read before any update. */
 function strengthen(t: MemoryTables, { ids, opts }: NonNullable<RecallWrites['strengthen']>, rules: LossAversion) {
   if (ids.length === 0 || opts.recallBoostAblated) return;
-  const live = [...new Set(ids)].flatMap((id) => {
-    const row = t.entries.get(id);
-    return row && row.tenantId === opts.tenantId ? [row] : [];
-  });
+  const live = [...new Set(ids)].flatMap((id) => ownedRow(t.entries, opts.tenantId, id) ?? []);
   for (const entry of markRetrieved(live, undefined, strengthOptionsOf(rules))) t.entries.set(entry.id, entry);
 }
 

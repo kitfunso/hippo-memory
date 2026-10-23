@@ -1,6 +1,6 @@
 // hippo.db's FailureLog group: every failed tool call the capture-error hook sees, stored or not, each call on a handle
 // of its own.
-import { ConflictError } from '../../base/errors/api-errors.js';
+import { otherSessionsRequest } from '../rules/request-ids.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { FailureEvent, FailureOutcome, FailureSummary, FailureLog } from '../port/rejections.js';
 import type { RatedFailure } from '../../base/records/failure-repeats.js';
@@ -48,10 +48,7 @@ export function requestOutcome(
     `SELECT outcome, session_id FROM failure_log WHERE tenant_id = ? AND request_id = ?`,
   ).get(tenantId, requestId) as { outcome: FailureOutcome; session_id: string | null } | undefined;
   if (row === undefined) return null;
-  // Sessions are owner-bound, so this also keeps one owner from reading or settling another's row; compared as stored.
-  if (!sameStoredSession(row.session_id, sessionId)) {
-    throw new ConflictError('request id belongs to another session');
-  }
+  if (!sameStoredSession(row.session_id, sessionId)) throw otherSessionsRequest();
   return row.outcome;
 }
 

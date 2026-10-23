@@ -15,6 +15,7 @@ import type {
 } from '../port/conflicts.js';
 import { isBelow, newestFirst, type DescendingKeyset } from '../rules/order.js';
 import { keepTombstone } from './rejections.js';
+import { ownedRow } from './rows.js';
 import { archiveRow, markParentDirty, stage, type Tx } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
@@ -112,8 +113,8 @@ function settleLoser(t: MemoryTables, tx: Tx, tenantId: string, r: ConflictResol
 }
 
 function dropRef(tx: Tx, tenantId: string, id: string, ref: string): void {
-  const row = tx.rows.get(id);
-  if (row && row.tenantId === tenantId) {
+  const row = ownedRow(tx.rows, tenantId, id);
+  if (row) {
     tx.rows.set(id, { ...row, conflictsWith: row.conflictsWith.filter((c) => c !== ref) });
   }
 }

@@ -5,6 +5,7 @@ import { RejectedValueError } from '../../base/errors/api-errors.js';
 import type { JsonValue } from '../../base/util/json.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
+import { refusalAudit } from '../rules/audit-rows.js';
 
 interface AuditOptions {
   readonly targetId?: string;
@@ -36,10 +37,6 @@ export function audit(db: DatabaseSyncLike, op: AuditOp, options: AuditOptions):
 /** Refusal audit for the rejected-value guard, written by the transaction owner after rollback so the caller's own
  * rollback cannot claw it back. Best-effort like `audit()`: never throws. */
 export function auditRejectionRefusal(db: DatabaseSyncLike, err: RejectedValueError, actor: string): void {
-  audit(db, 'reject_refusal', {
-    targetId: err.entryId,
-    metadata: { digest: err.digest, reason: err.reason },
-    actor,
-    tenantId: err.tenantId,
-  });
+  const row = refusalAudit(err.tenantId, actor, err.entryId, err);
+  audit(db, row.op, row);
 }

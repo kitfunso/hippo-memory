@@ -11,6 +11,7 @@ import { captureToolFailure } from '../capture/capture-error.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { importSessionFolder } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
+import { infraOf } from '../../api/infra.js';
 import { summaryLine } from '../../api/agent-memory-report.js';
 import { type ProjectRef } from '../../base/scope/project-identity.js';
 import { resolveProjectIdentity, isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
@@ -323,7 +324,7 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
       after: (id, file, turns) => turnsAfter(turns, loadTurnPosition(id, file)),
       save: (id, file, turns) => saveTurnPosition(id, file, turns, logLine),
     },
-    currentProject: () => resolveProjectIdentity(process.cwd()),
+    currentProject: () => infraOf(ctx).machine.projectIdentity(process.cwd()),
     // The run writes to this folder's own store, else to the global one in its reach.
     capture: async (into, turns, originProject) => {
       const root = into === ctx ? hippoRoot : ctx.reach?.global?.root;

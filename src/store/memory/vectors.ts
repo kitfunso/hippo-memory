@@ -1,4 +1,4 @@
-// The in-memory VectorReads group: hippo.db's vector bytes and particles, ranked with hippo.db's own code.
+// The in-memory VectorReads group: the stored vector bytes and particles, ranked with the shared ranking code.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
 import { passesScopeFilterForRecall, type RecallScopeFilter } from '../../base/scope/recall-scope.js';
@@ -29,7 +29,7 @@ export function indexState(t: MemoryTables): EmbeddingIndexState {
   return { storedModel: (t.meta.get(EMBEDDING_MODEL_META_KEY) ?? '').trim() || null, hasVectors: t.vectors.size > 0 };
 }
 
-/** Drops the vectors and particles of memories no longer held, as hippo.db's delete trigger and cascade do. */
+/** Drops the vectors and particles of memories no longer held, so none outlives its memory. */
 export function dropOrphanVectors(t: MemoryTables): void {
   for (const id of t.vectors.keys()) if (!t.entries.has(id)) t.vectors.delete(id);
   for (const id of t.particles.keys()) if (!t.entries.has(id)) t.particles.delete(id);
