@@ -21,7 +21,7 @@ import {
 } from '../../src/base/memory/memory.js';
 import { toWire } from '../../src/base/memory/memory-wire.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { mvCandidate, scoreEntries, type MvFeatureVector } from '../../src/domain/consolidate/memory-value.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/domain/consolidate/memory-value-weights.js';

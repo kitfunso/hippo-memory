@@ -7,14 +7,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import { namesFoldedInto } from './project-folds.js';
-import {
-  isGlobalStoreRoot,
-  isInitialized,
-  projectNames,
-  resolveGlobalRootDir,
-  resolveProjectIdentity,
-  type ProjectIdentity,
-} from '../../base/scope/project-identity.js';
+import { projectNames, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { syncContainer, type ContainerOutcome } from './apply.js';
 import type { ContainerWork, StoreSession } from './container-view.js';
 import { handOver, warnUnpurged } from './handover.js';
@@ -82,7 +75,7 @@ interface Pass {
  * global store the user pass only.
  */
 export async function importForStore(hippoRoot: string, opts: SyncOptions): Promise<ImportReport> {
-  if (isGlobalStoreRoot(hippoRoot)) return importUserMemories(hippoRoot, opts);
+  if (opts.machine.isGlobalRoot(hippoRoot)) return importUserMemories(hippoRoot, opts);
   const report = await importProjectMemories(hippoRoot, opts);
   mergeReports(report, await importUserMemories(hippoRoot, opts));
   return report;
@@ -112,7 +105,7 @@ export async function importUserMemories(invokingRoot: string, opts: SyncOptions
   return runPass(
     {
       scope: 'user',
-      target: resolveGlobalRootDir(),
+      target: opts.machine.globalRoot(),
       invoking: invokingRoot,
       list: (a) => a.list(ctx, 'user'),
       legacy: false,
@@ -131,7 +124,7 @@ export async function importAtSessionEnd(
   transcriptPath: string | undefined,
   opts: SyncOptions,
 ): Promise<ImportReport> {
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = opts.machine.globalRoot();
   const ctx = context(opts.machine, { projectRoot: cwd });
   const report = await runPass(
     {
@@ -140,7 +133,7 @@ export async function importAtSessionEnd(
       invoking: globalRoot,
       list: (a) => a.list(ctx, 'project'),
       legacy: false,
-      ...projectOrigins(resolveProjectIdentity(cwd)),
+      ...projectOrigins(opts.machine.projectIdentity(cwd)),
       handover: false,
     },
     opts,
@@ -164,8 +157,9 @@ export async function importSessionFolder(
   if (project === null) return emptyReport();
   // A project store takes its own project's notes; another project's, or home's, go to the global store, which parts
   // them by origin.
-  const own = isGlobalStoreRoot(hippoRoot) || project.name === resolveProjectIdentity(path.dirname(hippoRoot)).name;
-  const target = own ? hippoRoot : resolveGlobalRootDir();
+  const { machine } = opts;
+  const own = machine.isGlobalRoot(hippoRoot) || project.name === machine.projectIdentity(path.dirname(hippoRoot)).name;
+  const target = own ? hippoRoot : machine.globalRoot();
   const ctx = context(opts.machine, {});
   return runPass(
     {
@@ -300,8 +294,8 @@ interface OpenStore {
 /** A store that does not exist yet is created only when there is something to put in it; a dry run plans against an
  * empty stand-in. */
 async function openTarget(target: string, hasItems: boolean, opts: SyncOptions): Promise<OpenStore | null> {
-  const global = isGlobalStoreRoot(target);
-  if (!isInitialized(target)) {
+  const global = opts.machine.isGlobalRoot(target);
+  if (!opts.stores.exists(target)) {
     if (opts.dryRun) return { store: opts.stores.standIn(), root: target, global };
     if (!hasItems) return null;
     await opts.stores.create(target);

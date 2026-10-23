@@ -25,7 +25,7 @@ import { initStore } from '../dist/entry/testing.js';
 import { sqliteStore } from '../dist/store/sqlite/store.js';
 import { ingestEvent, ingestMessage } from '../dist/entry/eval-scripts.js';
 import { adminActor } from '../dist/api/index.js';
-import { loadConfig } from '../dist/base/config/config.js';
+import { loadConfig } from '../dist/host/config-file.js';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, '..');

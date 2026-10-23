@@ -2,7 +2,7 @@
 // migration has run and on the configured default after, with the strength the decay function gives the stored row.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { saveObject } from '../../src/domain/objects/lifecycle.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { saveDecision } from '../../src/domain/objects/decisions.js';

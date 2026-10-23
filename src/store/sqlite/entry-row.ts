@@ -3,7 +3,8 @@ import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { isoInstant } from '../../base/memory/created-stamp.js';
 import { type DatabaseSyncLike, ftsRowCounts, isFtsAvailable, repairFtsDrift, setFtsInSync } from '../../db/index.js';
-import { fallbackOrigin, originFromSource } from '../../base/scope/project-identity.js';
+import { fallbackOrigin, type Host } from '../../host/host.js';
+import { originFromSource } from '../../host/project-identity.js';
 import { CrossTenantIdError } from '../../base/errors/api-errors.js';
 import { checkRejectionGuard } from './rejection.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -205,23 +206,19 @@ export function ftsDrift(db: DatabaseSyncLike, repair: boolean): { memories: num
 /** Stamp origin_project from the store's own location (parent of `<project>/.hippo`; the home store is '' =
  * user-global) when never stamped; returns a copy. NULL is PRESERVED: it means no known project and ambient context
  * denies it, so a writeback must not launder it. */
-export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
+export function stampOriginProject({ host, hippoRoot }: StoreFiles, entry: MemoryEntry): MemoryEntry {
   if (entry.originProject !== undefined) return entry;
-  return { ...entry, originProject: fallbackOrigin(hippoRoot) };
-}
-
-export function stampOriginProjectIn(files: StoreFiles, entry: MemoryEntry): MemoryEntry {
-  return stampOriginProject(files.hippoRoot, entry);
+  return { ...entry, originProject: fallbackOrigin(host, hippoRoot) };
 }
 
 /** Import-time variant for a mirror with no origin field (an explicit null stays null), for rows predating the origin
  * column. Like the v39 backfill, the provenance source (`shared:<project>:` / `promoted:<localRoot>`) wins over the
  * destination store's location. */
-export function stampOriginProjectForImport(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
+export function stampOriginProjectForImport(host: Host, hippoRoot: string, entry: MemoryEntry): MemoryEntry {
   if (entry.originProject !== undefined) return entry;
   const fromSource = originFromSource(entry.source);
   return {
     ...entry,
-    originProject: fromSource ?? fallbackOrigin(hippoRoot),
+    originProject: fromSource ?? fallbackOrigin(host, hippoRoot),
   };
 }

@@ -288,21 +288,20 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     const transcriptOf = (dir: string) => path.join(tmp(), 'projects', claudeFolder(dir), 't.jsonl');
 
     expect(
-      transcriptNotesProject(transcriptOf(launch), repo, { platform: process.platform, env: {}, files: REAL_IO.files })
-        ?.name,
+      transcriptNotesProject(transcriptOf(launch), repo, { platform: process.platform, env: {}, ...REAL_IO })?.name,
     ).toBe('');
     expect(
       transcriptNotesProject(transcriptOf(repo), path.join(repo, 'src'), {
         platform: process.platform,
         env: {},
-        files: REAL_IO.files,
+        ...REAL_IO,
       })?.name,
     ).toBe('repo');
     expect(
-      transcriptNotesProject(transcriptOf(repo), tmp(), { platform: process.platform, env: {}, files: REAL_IO.files }),
+      transcriptNotesProject(transcriptOf(repo), tmp(), { platform: process.platform, env: {}, ...REAL_IO }),
     ).toBeNull();
     expect(
-      transcriptNotesProject(transcriptOf(repo), null, { platform: process.platform, env: {}, files: REAL_IO.files }),
+      transcriptNotesProject(transcriptOf(repo), null, { platform: process.platform, env: {}, ...REAL_IO }),
     ).toBeNull();
   });
 
@@ -319,14 +318,14 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     const gone = path.join(launch, 'gone');
     const goneTranscript = path.join(tmp(), 'projects', claudeFolderName(gone), 't.jsonl');
 
-    expect(
-      transcriptNotesProject(transcript, dash, { platform: process.platform, env: {}, files: REAL_IO.files })?.name,
-    ).toBe('my_repo');
+    expect(transcriptNotesProject(transcript, dash, { platform: process.platform, env: {}, ...REAL_IO })?.name).toBe(
+      'my_repo',
+    );
     expect(
       transcriptNotesProject(goneTranscript, path.join(gone, 'src'), {
         platform: process.platform,
         env: {},
-        files: REAL_IO.files,
+        ...REAL_IO,
       }),
     ).toBeNull();
   });
@@ -338,12 +337,10 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     writeIn(path.dirname(transcript), 't.jsonl', `${JSON.stringify({ cwd: repo })}\n`);
     const env = { CLAUDE_CONFIG_DIR: tmp(), CLAUDE_CODE_PROJECT_DIR_NAME: 'pinned-name' };
 
-    expect(
-      transcriptNotesProject(transcript, tmp(), { platform: process.platform, env, files: REAL_IO.files })?.name,
-    ).toBe('repo');
-    expect(
-      transcriptNotesProject(transcript, tmp(), { platform: process.platform, env: {}, files: REAL_IO.files }),
-    ).toBeNull();
+    expect(transcriptNotesProject(transcript, tmp(), { platform: process.platform, env, ...REAL_IO })?.name).toBe(
+      'repo',
+    );
+    expect(transcriptNotesProject(transcript, tmp(), { platform: process.platform, env: {}, ...REAL_IO })).toBeNull();
   });
 
   it('lists nothing for a project scope without a project root or name', () => {

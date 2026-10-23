@@ -8,7 +8,7 @@ import { handleRemember, handleTrace } from '../../src/surface/cli/remember.js';
 import { runCapture } from '../../src/surface/capture/command.js';
 import { recordSessionDigest } from '../../src/surface/capture/session-digest.js';
 import { captureTarget, hookStore } from '../_helpers/cli-stores.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import {
   ROW_READ,
   SIZES,

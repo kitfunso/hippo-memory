@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { loadConfig } from '../../dist/base/config/config.js';
+import { loadConfig } from '../../dist/host/config-file.js';
 import { embedAll, folderIndex } from '../../dist/entry/eval-scripts.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { loadEmbeddingIndex } from '../../dist/entry/testing.js';

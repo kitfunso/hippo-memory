@@ -20,9 +20,9 @@ import {
 } from './api/prompt-hook.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './base/errors/api-errors.js';
 import { defaultReach } from './surface/open-store.js';
-import { loadConfig } from './base/config/config.js';
+import { loadConfig } from './host/config-file.js';
 import { resolveEmbeddingProvider } from './infra/embedding-provider.js';
-import { withEntryInfra } from './surface/entry-infra.js';
+import { entryHost, withEntryInfra } from './surface/entry-infra.js';
 
 export { serve } from './surface/server/boot.js';
 
@@ -40,7 +40,8 @@ async function promptHookContext(
 async function folderReach(store: HippoStore, opts: PromptHookOptions | undefined): Promise<ContextReach | undefined> {
   if (!hasGroup(store, 'folderFiles')) return undefined;
   const { folder } = await store.folderFiles.home();
-  return contextReach(defaultReach(folder, store, opts?.sharedStore), loadConfig, resolveEmbeddingProvider);
+  const reach = defaultReach(folder, store, opts?.sharedStore, undefined, entryHost);
+  return contextReach(reach, loadConfig, resolveEmbeddingProvider);
 }
 
 // Add-on packages mint and revoke keys through these without importing the whole api surface.

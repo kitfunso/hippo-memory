@@ -1,4 +1,5 @@
 // A cached statement's SQL text is the same for every list length, so three ids and thirty prepare it once.
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -17,7 +18,7 @@ let cards: ReturnType<typeof sqliteCards>;
 beforeEach(() => {
   const root = makeRoot('list-statements');
   db = openHippoDb(root);
-  const on: OnHandle = (fn) => fn(db, { hippoRoot: root });
+  const on: OnHandle = (fn) => fn(db, storeFilesOf(root));
   cards = sqliteCards(on);
 });
 afterEach(() => closeHippoDb(db));

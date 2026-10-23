@@ -12,7 +12,8 @@ import {
 import { join } from 'node:path';
 import { isObjectLike } from '../../base/session/capture-contract.js';
 import { envHealthProbeMs } from '../../base/util/env.js';
-import { isJsonObject, parseJson, tryReadJsonFile } from '../../base/util/json.js';
+import { isJsonObject, parseJson } from '../../base/util/json.js';
+import { tryReadJsonFile } from '../../host/json-file.js';
 import { tryParseUrl } from '../../base/util/net.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 

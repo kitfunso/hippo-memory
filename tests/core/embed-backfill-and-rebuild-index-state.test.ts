@@ -14,7 +14,7 @@ import { embedAll, embedMemory } from '../../src/domain/search/embed-memories.js
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { cliStore } from '../../src/surface/cli/api-context.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import {
   peakRowsRead,

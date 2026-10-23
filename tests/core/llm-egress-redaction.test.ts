@@ -13,7 +13,7 @@ import { createJevReranker } from '../../src/domain/rerankers/jev.js';
 import { processHttp } from '../../src/infra/http.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { refineOne } from '../_helpers/refine-one.js';
 
 const getReranker = realRerankers();

@@ -4,6 +4,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { copilotHomeDir } from '../../domain/hooks/shared.js';
+import { processHomes } from '../../host/agent-homes.js';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 
 /** The envelope fields a Copilot event-log line is read by; any may be absent. */
@@ -39,7 +40,7 @@ const INJECTED_SOURCE_PREFIXES = ['skill-', 'agent-'];
  */
 export function copilotTranscriptFor(sessionId: string): string | null {
   if (!SESSION_ID_RE.test(sessionId)) return null;
-  const file = path.join(copilotHomeDir(), 'session-state', sessionId, 'events.jsonl');
+  const file = path.join(copilotHomeDir(processHomes()), 'session-state', sessionId, 'events.jsonl');
   return fs.existsSync(file) ? file : null;
 }
 

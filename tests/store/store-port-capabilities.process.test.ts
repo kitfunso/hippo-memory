@@ -24,7 +24,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer } from '../../src/base/memory/memory.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { jsonHeaders, keyFor, newRoot, start, undoAll } from '../_helpers/store-worker-server.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { processGit } from '../../src/infra/git-runner.js';
 import { testInfra } from '../_helpers/infra.js';

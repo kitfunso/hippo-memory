@@ -1,24 +1,28 @@
 // Writes and removes hippo's OpenCode plugin, and takes an old JSON hooks block out of opencode.json, which OpenCode's
 // schema rejects.
 import * as fs from 'node:fs';
-import { writeFileAtomic } from '../../base/util/atomic-write.js';
-import { tryReadJsonFile } from '../../base/util/json.js';
+import { writeFileAtomic } from '../../host/atomic-write.js';
+import { tryReadJsonFile } from '../../host/json-file.js';
 import {
   HIPPO_OPENCODE_PLUGIN_MARKER,
   isCurrentPlugin,
   OPENCODE_PLUGIN_SOURCE,
-  resolveOpencodeConfigPath,
-  resolveOpencodePluginPath,
+  opencodeConfigPathOn,
+  opencodePluginPathOn,
   stripLegacyHooks,
   type OpencodePluginInstallResult,
 } from '../../domain/hooks/opencode.js';
+import { processHomes } from '../../host/agent-homes.js';
 
 // The installer module exposes the path it installs to.
-export { resolveOpencodePluginPath } from '../../domain/hooks/opencode.js';
+/** Where hippo's OpenCode plugin lives under this process's home folder. */
+export function resolveOpencodePluginPath(): string {
+  return opencodePluginPathOn(processHomes());
+}
 
 /** `jsonRepairFailed`: opencode.json is there but does not parse, so it was left alone. */
 function migrateLegacyOpencodeHooksBlock() {
-  const configPath = resolveOpencodeConfigPath();
+  const configPath = opencodeConfigPathOn(processHomes());
   if (!fs.existsSync(configPath)) return { migrated: false, jsonRepairFailed: false };
   const settings = tryReadJsonFile(configPath);
   if (settings === undefined) return { migrated: false, jsonRepairFailed: true };

@@ -101,7 +101,7 @@ function auditDormantRestore(
   ]);
 }
 
-function restoreInWriteScope(db: DatabaseSyncLike, hippoRoot: string, restore: DormantRestore): DormantRestoreOutcome {
+function restoreInWriteScope(db: DatabaseSyncLike, files: StoreFiles, restore: DormantRestore): DormantRestoreOutcome {
   return withWriteScopeOr<DormantRestoreOutcome, DormantRestoreOutcome>(db, 'restore_dormant', (rollback) => {
     const snapshot = readDormantSnapshot(db, restore.tenantId, restore.id);
     if (!snapshot || !ownScopeTouches(restore.ownScope, snapshot.entry.scope ?? null)) {
@@ -109,7 +109,7 @@ function restoreInWriteScope(db: DatabaseSyncLike, hippoRoot: string, restore: D
     }
     if (entryIdTaken(db, restore.id)) return rollback({ status: 'active' });
     const now = new Date();
-    const entry = stampOriginProject(hippoRoot, reviveDormant(snapshot, now, restore.revival));
+    const entry = stampOriginProject(files, reviveDormant(snapshot, now, restore.revival));
     writeEntryDbOnly(db, entry, { actor: restore.actor });
     deleteDormantRow(db, restore.tenantId, restore.id);
     // A restore is a labelled "forgot it, then needed it" event, the signal a learned lifecycle trains on.
@@ -123,20 +123,20 @@ function restoreInWriteScope(db: DatabaseSyncLike, hippoRoot: string, restore: D
  * together, then its mirrors are written. */
 function restoreDormantMemory(
   db: DatabaseSyncLike,
-  { hippoRoot }: StoreFiles,
+  files: StoreFiles,
   tenantId: string,
   request: DormantRestoreRequest,
 ): DormantRestoreOutcome {
   const restore: DormantRestore = { ...request, tenantId };
   let outcome: DormantRestoreOutcome;
   try {
-    outcome = restoreInWriteScope(db, hippoRoot, restore);
+    outcome = restoreInWriteScope(db, files, restore);
   } catch (error) {
     // Written after the rollback, so the refusal row outlives it.
     if (error instanceof RejectedValueError) auditRejectionRefusal(db, error, restore.actor);
     throw error;
   }
-  if (outcome.status === 'restored') writeEntryMirrors(hippoRoot, outcome.entry);
+  if (outcome.status === 'restored') writeEntryMirrors(files.hippoRoot, outcome.entry);
   return outcome;
 }
 

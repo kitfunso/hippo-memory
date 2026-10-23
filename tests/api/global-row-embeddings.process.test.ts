@@ -12,7 +12,7 @@ import { isEmbeddingAvailable } from '../../src/base/embeddings/local.js';
 import { skipWithoutEmbeddings } from '../_helpers/embedding-backend.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';

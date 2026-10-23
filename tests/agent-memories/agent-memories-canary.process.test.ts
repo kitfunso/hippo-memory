@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js';
 import { sanitizeCwd } from '../../src/domain/agent-memories/qwen-code.js';
 import { AGENT_MEMORY_TOOLS } from '../../src/base/memory/agent-memory-tools.js';
-import { isInitialized } from '../../src/base/scope/project-identity.js';
+import { isInitialized } from '../../src/host/project-identity.js';
 import {
   closeWorld,
   codexSummary,
@@ -28,7 +28,7 @@ const [, , syncUrl, mode, root, cleanHome, storeless] = process.argv;
 const { importForStore, importAtSessionEnd } = await import(syncUrl);
 const { currentMachine } = await import(new URL('../../infra/machine.js', syncUrl).href);
 const { homedir } = await import('node:os');
-const { loadConfig } = await import(new URL('../../base/config/config.js', syncUrl).href);
+const { loadConfig } = await import(new URL('../../host/config-file.js', syncUrl).href);
 const { sqliteImportStores } = await import(new URL('../../store/sqlite/agent-import-stores.js', syncUrl).href);
 const machine = mode === 'negative' ? { ...currentMachine(), home: cleanHome, env: {} }
   : mode === 'env' ? currentMachine() : { ...currentMachine(), home: homedir(), env: {} };

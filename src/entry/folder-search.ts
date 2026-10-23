@@ -8,7 +8,7 @@ import { defaultStore, loadRecallSearchEntries as loadRecallByOptions } from '..
 import type { TenantId } from '../base/util/tenant.js';
 import { embedMemory as embedInto, folderIndex, type EmbedOutcome } from '../domain/search/embed-memories.js';
 import { hybridSearch as rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../domain/search/hybrid.js';
-import { loadConfig } from '../base/config/config.js';
+import { loadConfig } from '../host/config-file.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { physicsSearch as rankPhysics, type PhysicsSearchOptions } from '../domain/search/physics-search.js';
 import type { VectorSource } from '../domain/search/vector.js';

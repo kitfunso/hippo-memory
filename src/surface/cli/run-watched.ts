@@ -1,6 +1,6 @@
 // Runs a transfer command with its stderr streamed live and bounded, under a deadline.
 import type { ChildProcess, SpawnOptions } from 'child_process';
-import { spawnArgv } from '../../base/util/spawn-argv.js';
+import { spawnArgv } from '../../host/spawn-argv.js';
 
 /** The most stderr `runWatched` returns; the terminal still gets all of it. */
 const STDERR_TAIL_BYTES = 64 * 1024;

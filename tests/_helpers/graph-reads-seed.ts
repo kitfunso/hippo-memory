@@ -8,7 +8,7 @@ import type { EntityType } from '../../src/store/port/graph.js';
 import { insertEntityRow, insertRelationRow } from '../../src/store/sqlite/graph-writes.js';
 import { TENANT_A, TENANT_B } from './store-conformance.js';
 import { objectsAt } from './objects-at.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from './root-forms.js';
 
 const TEAM_SCOPE = null;

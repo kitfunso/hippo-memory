@@ -7,7 +7,7 @@ import { createModelLoads, MODEL_LOAD_POLICY } from '../../src/infra/transformer
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { embedQueryBy } from '../../src/domain/search/vector.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 
 type Pipe = (input: string) => Promise<{ data: number[] }>;
 type PipelineFn = (task: string, model: string) => Promise<Pipe>;

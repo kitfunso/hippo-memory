@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../../dist/entry/testing.js';
-import { loadConfig } from '../../dist/base/config/config.js';
+import { loadConfig } from '../../dist/host/config-file.js';
 import { saveDecision } from '../../dist/domain/objects/decisions.js';
 import { savePolicy } from '../../dist/domain/objects/policies.js';
 import { saveCustomerNote } from '../../dist/domain/objects/customer-notes.js';

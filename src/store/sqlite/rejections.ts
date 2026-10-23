@@ -110,7 +110,7 @@ interface Sweep {
   readonly removal: Removal;
 }
 
-function removeLiveRows(db: DatabaseSyncLike, hippoRoot: string, sweep: Sweep): void {
+function removeLiveRows(db: DatabaseSyncLike, files: StoreFiles, sweep: Sweep): void {
   const { rejection, holdsValue, removal } = sweep;
   const { live } = sweep.holders;
   const { tenantId, actor, reason } = rejection;
@@ -131,7 +131,7 @@ function removeLiveRows(db: DatabaseSyncLike, hippoRoot: string, sweep: Sweep): 
     deleteEntryCore(db, row.id, tenantId, { actor, suppressForgetAudit: true });
     removedIds.push(row.id);
     if (!successor) continue;
-    const kept = stampOriginProject(hippoRoot, successor);
+    const kept = stampOriginProject(files, successor);
     writeEntryDbOnly(db, kept, { actor });
     successors.push(kept);
   }
@@ -178,7 +178,7 @@ function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: R
 /** One short write scope: every found row that still holds the text goes, with one reject_value audit row. */
 function removeHolders(
   db: DatabaseSyncLike,
-  hippoRoot: string,
+  files: StoreFiles,
   rejection: Rejection,
   { digest, holdsValue }: { digest: string; holdsValue: HoldsValue },
   found: string[],
@@ -186,7 +186,7 @@ function removeHolders(
   const removal: Removal = { removedIds: [], removedRawIds: [], successors: [], dormantSuccessorIds: [] };
   withWriteScope(db, 'reject_value', () => {
     const sweep = { rejection, holdsValue, holders: heldUnderLock(db, rejection, holdsValue, found), removal };
-    removeLiveRows(db, hippoRoot, sweep);
+    removeLiveRows(db, files, sweep);
     removeDormantCopies(db, sweep);
     // Still inside the write scope: a failed audit row is reported and the removal commits without it.
     const { tenantId, actor, memoryId } = rejection;
@@ -225,7 +225,7 @@ function applyRejection(db: DatabaseSyncLike, files: StoreFiles, rejection: Reje
   // migration, held until approved.
   const holdsValue: HoldsValue = (text) => rejectionDigest(text) === digest;
   const found = findHolderIds(db, rejection, holdsValue);
-  const removal = removeHolders(db, hippoRoot, rejection, { digest, holdsValue }, found);
+  const removal = removeHolders(db, files, rejection, { digest, holdsValue }, found);
 
   purgeRemovedMirrors(db, hippoRoot, removal);
 

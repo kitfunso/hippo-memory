@@ -24,12 +24,12 @@ import * as sessions from './sessions.js';
 import * as taskSnapshots from './task-snapshots.js';
 import * as vectorIndex from './vector-index.js';
 import { loadRecallEntries } from './search-rows.js';
-import { onHandle, openStore } from './handles.js';
+import { onHandle, openStore, storeFilesOf } from './handles.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 
 /** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'. */
 export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
-  onHandle(hippoRoot, (db) => entryWrites.writeEntry(db, { hippoRoot }, entry, opts), openStore);
+  onHandle(hippoRoot, (db) => entryWrites.writeEntry(db, storeFilesOf(hippoRoot), entry, opts), openStore);
 }
 
 /** Every tenant's entries, oldest first: an eval reads the whole folder it seeded. */
@@ -104,13 +104,17 @@ export function saveActiveTaskSnapshot(
 ): TaskSnapshot {
   return onHandle(
     hippoRoot,
-    (db) => taskSnapshots.saveActiveTaskSnapshot(db, { hippoRoot }, tenantId, snapshot, key),
+    (db) => taskSnapshots.saveActiveTaskSnapshot(db, storeFilesOf(hippoRoot), tenantId, snapshot, key),
     openStore,
   );
 }
 
 export function appendSessionEvent(hippoRoot: string, tenantId: string, event: SessionEventInput): SessionEvent {
-  return onHandle(hippoRoot, (db) => sessions.appendSessionEvent(db, { hippoRoot }, tenantId, event), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => sessions.appendSessionEvent(db, storeFilesOf(hippoRoot), tenantId, event),
+    openStore,
+  );
 }
 
 export function saveSessionHandoff(
@@ -132,7 +136,7 @@ export function batchWriteAndDelete(
   if (toWrite.length === 0 && toDeleteIds.length === 0 && (opts?.dormant ?? []).length === 0) return [];
   return onHandle(
     hippoRoot,
-    (db) => batches.batchWriteAndDelete(db, { hippoRoot }, toWrite, toDeleteIds, opts),
+    (db) => batches.batchWriteAndDelete(db, storeFilesOf(hippoRoot), toWrite, toDeleteIds, opts),
     openStore,
   );
 }

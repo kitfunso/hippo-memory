@@ -6,7 +6,7 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memo
 import { rebuildDirtySummaries, buildDag } from '../../src/domain/consolidate/dag.js';
 import * as dagModule from '../../src/domain/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
-import { configReader } from '../../src/base/config/config.js';
+import { configReader } from '../../src/host/config-file.js';
 import { envRuntimeSettings } from '../../src/base/util/env.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';

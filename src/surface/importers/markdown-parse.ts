@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { realpathOrResolve } from '../../base/util/real-path.js';
+import { realpathOrResolve } from '../../host/real-path.js';
 
 /**
  * Minimal inline frontmatter split (no YAML dep) on a leading `---\n...\n---\n` block; returns the key-value map plus

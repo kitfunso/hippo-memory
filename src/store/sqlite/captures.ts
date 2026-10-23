@@ -24,7 +24,7 @@ function heldKeys(db: DatabaseSyncLike, entries: readonly MemoryEntry[], dedup: 
  * writer stored since that read is skipped; mirrors and stats follow the commit. */
 function writeCapturedEntries(
   db: DatabaseSyncLike,
-  { hippoRoot }: StoreFiles,
+  files: StoreFiles,
   entries: readonly MemoryEntry[],
   opts: CaptureWriteOptions,
 ): CapturedOutcome[] {
@@ -34,16 +34,16 @@ function writeCapturedEntries(
     return entries.map((entry): CapturedOutcome => {
       if (held.has(duplicateKey(entry.content))) return 'skipped';
       // One rejected entry must not abort the rest of this capture's entries.
-      const stamped = stampOriginProject(hippoRoot, entry);
-      const outcome = gatedWrite(db, hippoRoot, stamped, { actor: opts.actor });
+      const stamped = stampOriginProject(files, entry);
+      const outcome = gatedWrite(db, files, stamped, { actor: opts.actor });
       if (outcome === 'skipped:rejected') return 'rejected';
       if (outcome !== 'written') return 'skipped';
       written.push(stamped);
       return 'captured';
     });
   });
-  for (const entry of written) writeEntryMirrors(hippoRoot, entry);
-  if (!opts.lean && written.length > 0) updateStatsOn(db, hippoRoot, { remembered: written.length });
+  for (const entry of written) writeEntryMirrors(files.hippoRoot, entry);
+  if (!opts.lean && written.length > 0) updateStatsOn(db, files.hippoRoot, { remembered: written.length });
   return outcomes;
 }
 

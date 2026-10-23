@@ -1,11 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { TaskSnapshot, Sessions } from '../../store/port/sessions.js';
-import { isInitialized } from '../../base/scope/project-identity.js';
+import { isInitialized } from '../../host/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactions } from './compaction-record.js';
 import type { CompactionHooks, CompactionStart } from '../../store/port/capture.js';
 import { COMPACTION_DB_WAIT_MS } from '../../base/session/compaction-timing.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../../domain/hooks/shared.js';
+import { processHomes } from '../../host/agent-homes.js';
 import {
   readClaudeCodePostCompact,
   readClaudeCodePreCompact,
@@ -118,7 +119,7 @@ async function runPreCompact(
   // With chat.useClaudeHooks on, VS Code runs Claude Code's hooks too; it never sends PostCompact to close a record,
   // nor reads the summarizer text.
   const vscode = runtime === 'claude-code' && isVscodeTranscript(payloadTranscriptPath);
-  if (vscode && fs.existsSync(vscodeUserHooksFile())) {
+  if (vscode && fs.existsSync(vscodeUserHooksFile(processHomes()))) {
     appendPreCompactLog(logFile, 'skip: VS Code payload, hippo.json runs pre-compact for this chat');
     return;
   }
@@ -290,7 +291,7 @@ export async function preCompactHook(
   store: CompactionStore,
   options: PreCompactOptions,
 ): Promise<void> {
-  const logFile = options.logFile ?? defaultPreCompactLogPath();
+  const logFile = options.logFile ?? defaultPreCompactLogPath(processHomes());
   try {
     await runPreCompact(hippoRoot, store, options, logFile);
   } catch (err) {
@@ -320,7 +321,7 @@ export async function postCompactHook(
   store: CompactionStore,
   options: PostCompactOptions,
 ): Promise<string | null> {
-  const logFile = options.logFile ?? defaultPreCompactLogPath();
+  const logFile = options.logFile ?? defaultPreCompactLogPath(processHomes());
   const log = (message: string): void => appendPreCompactLog(logFile, `post-compact: ${message}`);
   const deadline = Date.now() + POST_COMPACT_REPLAY_BUDGET_MS;
   try {

@@ -1,3 +1,4 @@
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -446,9 +447,9 @@ describe('two replayers working the same store', () => {
         cwd: null,
         items: ITEMS,
       };
-      expect(saveItems(db, { hippoRoot: s.hippoRoot }, ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
+      expect(saveItems(db, storeFilesOf(s.hippoRoot), ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
       run(s.hippoRoot, `DELETE FROM memories WHERE instr(tags_json, '"compaction-memory"') > 0`);
-      expect(saveItems(db, { hippoRoot: s.hippoRoot }, ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
+      expect(saveItems(db, storeFilesOf(s.hippoRoot), ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
     } finally {
       closeHippoDb(db);
     }

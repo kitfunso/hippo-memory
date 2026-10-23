@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { blockHash } from '../../src/base/util/token-text.js';
-import { realpathOrResolve } from '../../src/base/util/real-path.js';
+import { realpathOrResolve } from '../../src/host/real-path.js';
 import { hippoIn, type Project } from '../_helpers/delivery-boundary.js';
 import { fireIn, seed, type TurnSpec, type Verdict } from '../_helpers/host-transcript.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';

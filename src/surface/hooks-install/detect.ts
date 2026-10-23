@@ -3,13 +3,14 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { processEnv } from '../../base/util/env.js';
-import { claudeConfigDir, codexHomeDir, homeDir, vscodeDataFolders } from '../../base/util/agent-homes.js';
+import { claudeConfigDir, codexHomeDir, vscodeDataFolders } from '../../base/util/agent-homes.js';
+import { homeDir, processHomes } from '../../host/agent-homes.js';
 import { copilotHomeDir, type ToolDetection } from '../../domain/hooks/shared.js';
 
 /** Codex counts as installed only when its config folder exists: Codex itself refuses a CODEX_HOME that is not a
  * folder. */
 export function isCodexPresent(home: string = homeDir()): boolean {
-  return fs.statSync(codexHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true;
+  return fs.statSync(codexHomeDir(home, processEnv()), { throwIfNoEntry: false })?.isDirectory() === true;
 }
 
 /** The VS Code User folders that exist; Stable and Insiders keep their own, and only an edition the user has run has
@@ -27,7 +28,7 @@ export function vscodeUserDirs(
  * ~/.copilot on a machine with neither. */
 export function isCopilotPresent(home: string = os.homedir()): boolean {
   return (
-    fs.statSync(copilotHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true ||
+    fs.statSync(copilotHomeDir({ home, env: processEnv() }), { throwIfNoEntry: false })?.isDirectory() === true ||
     vscodeUserDirs(processEnv(), home).length > 0
   );
 }
@@ -42,7 +43,7 @@ const COPILOT_NOTES =
 export function detectInstalledTools(): ToolDetection[] {
   const home = homeDir();
   const exists = (...parts: string[]) => fs.existsSync(path.join(home, ...parts));
-  const claudeDir = claudeConfigDir();
+  const claudeDir = claudeConfigDir(os.homedir(), processEnv());
   return [
     { name: 'claude-code', configDir: claudeDir, detected: fs.existsSync(claudeDir), kind: 'json-hook' },
     {
@@ -68,7 +69,7 @@ export function detectInstalledTools(): ToolDetection[] {
     },
     {
       name: 'copilot',
-      configDir: copilotHomeDir(),
+      configDir: copilotHomeDir(processHomes()),
       detected: isCopilotPresent(),
       kind: 'json-hook',
       notes: COPILOT_NOTES,

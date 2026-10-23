@@ -1,7 +1,7 @@
 // What `hippo dashboard` prints at start, and the one line a port that will not open gets.
 import * as fs from 'fs';
 import * as path from 'path';
-import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { resolveGlobalRootDir } from '../../host/project-identity.js';
 import { printError } from './output.js';
 
 const DASHBOARD_URL_FILE = 'dashboard.url';

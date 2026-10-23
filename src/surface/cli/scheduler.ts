@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import { writeFileAtomic } from '../../base/util/atomic-write.js';
+import { writeFileAtomic } from '../../host/atomic-write.js';
 import { isJsonObject, isJsonString, parseJson } from '../../base/util/json.js';
 
 export const DAILY_TASK_NAME = 'hippo-daily-runner';

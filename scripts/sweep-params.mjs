@@ -21,9 +21,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { runEval } from '../dist/domain/eval/eval.js';
-import { isInitialized } from '../dist/base/scope/project-identity.js';
+import { isInitialized } from '../dist/host/project-identity.js';
 import { sqliteStore } from '../dist/store/sqlite/store.js';
-import { loadConfig } from '../dist/base/config/config.js';
+import { loadConfig } from '../dist/host/config-file.js';
 
 const CORPUS_PATH =
   process.argv.find((a) => a.endsWith('.json') && !a.startsWith('--')) ??

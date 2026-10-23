@@ -2,7 +2,7 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
 import { toWire } from '../../base/memory/memory-wire.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { embedCoverage, memoryEmbedMissing } from '../../api/embeddings.js';

@@ -1,3 +1,4 @@
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -18,7 +19,7 @@ import type { RepairProtection } from '../../src/store/port/audit.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { importForStore } from '../../src/domain/agent-memories/sync.js';
 import { closeWorld, note, openWorld, projectNotes } from '../_helpers/agent-memories-world.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -60,7 +61,7 @@ function withDb<T>(fn: (db: InstanceType<typeof DatabaseSync>) => T): T {
 
 const ctx = (): FullContext => apiCtx(root, 'default', { subject: 'test', role: 'admin' });
 const run = async (apply = false, protect: RepairProtection = repairProtection) =>
-  await repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply, protect });
+  await repairAutomaticMemories(storeFilesOf(root), { tenantId: 'default', apply, protect });
 const dispositionOf = async (id: string) => (await run()).issues.find((issue) => issue.id === id)?.disposition;
 
 describe('recoverable automatic memory quality repair', () => {
@@ -352,7 +353,7 @@ describe('recoverable automatic memory quality repair', () => {
       const bad = createMemory('succeeds (inserts or updates)', { source: 'capture', confidence: 'observed' });
       writeEntry(world.local, bad);
       const repair = { tenantId: 'default', apply: true, protect: repairProtection };
-      expect((await repairAutomaticMemories({ hippoRoot: world.local }, repair)).appliedIds).toEqual([bad.id]);
+      expect((await repairAutomaticMemories(storeFilesOf(world.local), repair)).appliedIds).toEqual([bad.id]);
       note(projectNotes(world), 'result.md', bad.content);
       await importForStore(world.local, {
         configAt: loadConfig,

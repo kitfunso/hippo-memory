@@ -13,7 +13,8 @@ import { withSqliteBlocked } from '../../src/db/index.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import type { ConnectorEvent } from '../../src/store/port.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
-import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
+import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { memorySide } from '../_helpers/memory-side.js';
 

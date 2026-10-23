@@ -20,7 +20,7 @@ import {
   objectTable,
   supersedeAudit,
 } from '../rules/objects.js';
-import { stampOriginProjectIn, upsertEntryRow } from './entry-row.js';
+import { stampOriginProject, upsertEntryRow } from './entry-row.js';
 import { auditEntryWrite, writeEntryMirrorsIn, auditingRefusal } from './entry-writes.js';
 import { markGraphDirty } from './graph-queue.js';
 import { removeGraphEntitiesForObject } from './graph-writes.js';
@@ -333,7 +333,7 @@ function withMirror<R extends object, F extends Refused>(
   return on(
     (db, files) =>
       auditingRefusal(db, write.actor, () => {
-        let mirror = stampOriginProjectIn(files, write.mirror);
+        let mirror = stampOriginProject(files, write.mirror);
         const written = withWriteScopeOr(db, 'write_entry', (rollback) => {
           mirror = onStoreHalfLife(db, mirror, files);
           upsertEntryRow(db, mirror);

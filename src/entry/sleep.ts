@@ -4,7 +4,7 @@ import { defaultStore, withSharedStoreHandles } from '../surface/open-store.js';
 import type { SleepStore } from '../store/port.js';
 import { runConsolidation, type ConsolidateOptions } from '../domain/consolidate/sleep.js';
 import { anthropicLlmFromEnv } from '../infra/ports.js';
-import { loadConfig } from '../base/config/config.js';
+import { loadConfig } from '../host/config-file.js';
 import { DEFAULT_TENANT_ID } from '../base/util/tenant.js';
 import type { ConsolidationResult } from '../domain/consolidate/run.js';
 import { sleep as sleepStore, type SleepOpts, type SleepResult } from '../api/sleep/sleep.js';

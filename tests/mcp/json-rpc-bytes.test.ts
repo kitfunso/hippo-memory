@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { NotFoundError } from '../../src/base/errors/api-errors.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../src/base/util/http-util.js';
 import { log } from '../../src/base/util/log.js';

@@ -1,7 +1,8 @@
 import { adminActor, type Actor } from '../../src/api/index.js';
 import { contextReach, type ContextReach, type ContextWith } from '../../src/api/types.js';
-import { loadConfig } from '../../src/base/config/config.js';
-import { resolveProjectIdentity, type ProjectIdentity } from '../../src/base/scope/project-identity.js';
+import { loadConfig } from '../../src/host/config-file.js';
+import { type ProjectIdentity } from '../../src/base/scope/project-identity.js';
+import { resolveProjectIdentity } from '../../src/host/project-identity.js';
 import type { HippoStore, OptionalGroup } from '../../src/store/port.js';
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';

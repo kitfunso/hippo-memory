@@ -4,10 +4,10 @@ import type { ConfiguredFolder } from '../../domain/search/embed-memories.js';
 import type { SyncOptions } from '../../domain/agent-memories/sync.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
-import { configReader, type ConfigReader } from '../../base/config/config.js';
+import { configReader, type ConfigReader } from '../../host/config-file.js';
 import { consolidateStore, logPhaseFailures } from '../../api/sleep/upkeep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
-import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { resolveGlobalRootDir } from '../../host/project-identity.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { ImportFiles } from '../importers/core.js';
 import type { HippoStore, StoreGroups } from '../../store/index.js';
@@ -29,6 +29,7 @@ import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } 
 import type { RerankerFn } from '../../domain/rerankers/index.js';
 import { autoSleepHost, createCallerState, type CallerState } from '../../api/callers.js';
 import { anthropicLlmFromEnv, rootInfra } from '../../infra/ports.js';
+import { createHost } from '../../host/host.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { serverNearestAsk } from './server-nearest.js';
 
@@ -36,8 +37,11 @@ import { serverNearestAsk } from './server-nearest.js';
  * config.json once. */
 export const cliConfig: ConfigReader = configReader(envRuntimeSettings);
 
+/** The CLI process's Host: one command, or one stdio MCP loop, walks each folder and reads each shared flag once. */
+const cliHost = createHost();
+
 /** The CLI process's outside services: one reranker registry for every command and stdio MCP call it runs. */
-export const cliInfra = rootInfra();
+export const cliInfra = rootInfra(cliHost);
 
 /** A registry reranker with the CLEF transport this process's environment names, for a script that reranks outside a
  * recall. */
@@ -105,7 +109,11 @@ export type CliContext = ContextWith<OptionalGroup> & { readonly hippoRoot: stri
 
 /** The stores a CLI call on `hippoRoot` reaches, each global one with its config. */
 function cliReach(hippoRoot: string, store: HippoStore): ContextReach {
-  return contextReach(defaultReach(hippoRoot, store, undefined, cliStore), cliConfig, resolveEmbeddingProvider);
+  return contextReach(
+    defaultReach(hippoRoot, store, undefined, cliStore, cliHost),
+    cliConfig,
+    resolveEmbeddingProvider,
+  );
 }
 
 // The one place the CLI names its audit actor and builds its store; root is a parameter because some verbs target the

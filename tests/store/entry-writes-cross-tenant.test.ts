@@ -11,7 +11,7 @@ import {
   writeEntryDbOnly,
   writePromotedEntry,
 } from '../../src/store/sqlite/entry-writes.js';
-import { onHandle, openStore } from '../../src/store/sqlite/handles.js';
+import { onHandle, openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import type { StoreFiles } from '../../src/store/sqlite/open.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -38,7 +38,7 @@ function withHeldRow(run: (db: DatabaseSyncLike, files: StoreFiles, a: MemoryEnt
     root,
     (db) => {
       writeEntryDbOnly(db, a);
-      run(db, { hippoRoot: root }, a, intruderOf(a));
+      run(db, storeFilesOf(root), a, intruderOf(a));
       expect(rowOf(db, a.id)).toEqual({
         tenant_id: 'tenant-a',
         content: 'tenant a row',

@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { blockHash } from '../../src/base/util/token-text.js';
-import { realpathOrResolve } from '../../src/base/util/real-path.js';
+import { realpathOrResolve } from '../../src/host/real-path.js';
 import { seed, verdictOf, writeHostTranscript, type Verdict } from '../_helpers/host-transcript.js';
 import { dispose, project, type Project } from '../_helpers/delivery-boundary.js';
 import { fire } from '../_helpers/host-transcript.js';

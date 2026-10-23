@@ -2,7 +2,7 @@
 // Two fast replies would otherwise start two workers that both read the dedupe keys before either writes.
 import * as fs from 'fs';
 import * as path from 'path';
-import { homeDir } from '../../base/util/agent-homes.js';
+import { homeDir } from '../../host/agent-homes.js';
 import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
 import { isObjectLike, isStringValue, type ProgressCursor } from '../../base/session/capture-contract.js';
 import { SESSION_ID_RE } from './copilot-transcript.js';

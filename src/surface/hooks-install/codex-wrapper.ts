@@ -2,7 +2,7 @@
 // wrapper. The paths and script text are domain/hooks/codex-wrapper.ts.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { writeFileAtomic } from '../../base/util/atomic-write.js';
+import { writeFileAtomic } from '../../host/atomic-write.js';
 import { envPath } from '../../base/util/env.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -14,7 +14,7 @@ import {
   pathEquals,
   repairRefusal,
   resolveCodexInstallPlan,
-  resolveCodexWrapperPaths,
+  codexWrapperPathsOn,
   resolveHippoCliPath,
   type CodexWrapperInstallResult,
   type CodexWrapperMetadata,
@@ -22,9 +22,13 @@ import {
   type EnsureCodexWrapperResult,
 } from '../../domain/hooks/codex-wrapper.js';
 import { HIPPO_CODEX_WRAPPER_MARKER } from '../../domain/hooks/shared.js';
+import { processHomes } from '../../host/agent-homes.js';
 
 // The installer module exposes the paths it installs to.
-export { resolveCodexWrapperPaths } from '../../domain/hooks/codex-wrapper.js';
+/** Where the wrapper, its metadata and its logs live under this process's home folder. */
+export function resolveCodexWrapperPaths(): CodexWrapperPaths {
+  return codexWrapperPathsOn(processHomes());
+}
 
 function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });

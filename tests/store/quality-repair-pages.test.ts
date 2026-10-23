@@ -1,4 +1,5 @@
 // Quality repair over a tenant larger than one page: the same plan and the same moves as one whole read gave.
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { PROTECTED_ROWS } from '../../src/base/memory/memory-audit.js';
@@ -76,7 +77,7 @@ function bundleOf(parents: string[]): Partial<MemoryEntry> {
 }
 
 const run = async (apply = false) =>
-  await repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply, protect: PROTECTED_ROWS });
+  await repairAutomaticMemories(storeFilesOf(root), { tenantId: 'default', apply, protect: PROTECTED_ROWS });
 
 describe('quality repair across pages', () => {
   it('plans every issue in store order, judging a bundle by parents on other pages and in dormant storage', async () => {

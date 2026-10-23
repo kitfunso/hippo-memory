@@ -9,13 +9,14 @@ import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly } from './entry-writes.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { GatedWriteResult } from '../port/agent-import.js';
+import type { StoreFiles } from './open.js';
 
 /** Runs on the caller's handle so it nests in the caller's transaction (writeEntry would open a second handle and wait
  * on that lock); the caller mirrors after commit with an entry it stamped itself. The rejection audit lands inside that
  * transaction, which is safe because a batch that rolls back stays `summarised` and replay writes the audit again. */
 export function gatedWrite(
   db: DatabaseSyncLike,
-  hippoRoot: string,
+  files: StoreFiles,
   entry: MemoryEntry,
   opts?: { actor?: string; worthCheck?: boolean },
 ): GatedWriteResult {
@@ -23,7 +24,7 @@ export function gatedWrite(
   if (opts?.worthCheck !== false && !isContentWorthStoring(entry.content)) return 'skipped:not-worth-storing';
   if (detectSecret(entry).flagged) return 'skipped:secret';
   try {
-    writeEntryDbOnly(db, stampOriginProject(hippoRoot, entry), opts);
+    writeEntryDbOnly(db, stampOriginProject(files, entry), opts);
     return 'written';
   } catch (err) {
     if (!(err instanceof RejectedValueError)) throw err;

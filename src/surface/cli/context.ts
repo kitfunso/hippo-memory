@@ -6,7 +6,7 @@ import { isSubagentPayload } from '../../base/util/hook-payload.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { autoDetectContext } from '../../api/context-auto.js';
 import { processGit } from '../../infra/git-runner.js';
-import { resolveProjectIdentity } from '../../base/scope/project-identity.js';
+import { resolveProjectIdentity } from '../../host/project-identity.js';
 import { bookLedgerTurn, ledgerReachOf } from '../../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
