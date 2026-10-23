@@ -7,6 +7,7 @@ import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
+import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
 import { listObjects, type ObjectSaveSite, saveObject } from './lifecycle.js';
@@ -22,7 +23,6 @@ export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>
  *  convention. */
 export const MAX_REPO_LEN = 256;
 export const MAX_BRIEF_SUMMARY_LEN = 8192;
-export const MAX_CHANGE_SUMMARY_LEN = 4096;
 /** Bound the receipts gathered per refresh (a refresh reads memories; cap the scan
  *  + the rendered body). Realistic repos have far fewer recent receipts than this. */
 const MAX_BRIEF_RECEIPTS = 50;
@@ -70,8 +70,8 @@ export const PROJECT_BRIEF: SavableDescriptor<'project_brief', SaveProjectBriefO
       required: 'saveProjectBrief: summary is required',
       tooLong: `saveProjectBrief: summary exceeds the ${MAX_BRIEF_SUMMARY_LEN}-char cap`,
     });
-    checkText(opts.changeSummary, MAX_CHANGE_SUMMARY_LEN, {
-      tooLong: `saveProjectBrief: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`,
+    checkText(opts.changeSummary, MAX_SHORT_FIELD_LEN, {
+      tooLong: `saveProjectBrief: changeSummary exceeds the ${MAX_SHORT_FIELD_LEN}-char cap`,
     });
     return {
       fields: { repo, summary: opts.summary, receiptCount: opts.refreshReceiptCount },

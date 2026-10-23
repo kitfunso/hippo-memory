@@ -2,11 +2,8 @@
 // export, a brief built from its repo's receipts, and the memory a new decision replaces.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { Incident, Policy, ProjectBrief } from '../../base/records/object-types.js';
-import {
-  MAX_CHANGE_SUMMARY_LEN as MAX_NOTE_CHANGE_LEN,
-  MAX_CUSTOMER_LEN,
-  MAX_NOTE_LEN,
-} from '../../domain/objects/customer-notes.js';
+import { MAX_CUSTOMER_LEN, MAX_NOTE_LEN } from '../../domain/objects/customer-notes.js';
+import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import { resolveActiveDecisionIdByMemory, weakenSupersededMemory } from '../../domain/objects/decisions.js';
 import { openIncident, resolveOpenIncident, type SaveIncidentOptions } from '../../domain/objects/incidents.js';
 import { policiesAsOf } from '../../domain/objects/policies.js';
@@ -14,7 +11,6 @@ import { MAX_PROCESS_STEP_LEN, MAX_PROCESS_STEPS } from '../../domain/objects/pr
 import {
   briefFromReceipts,
   MAX_BRIEF_SUMMARY_LEN,
-  MAX_CHANGE_SUMMARY_LEN as MAX_BRIEF_CHANGE_LEN,
   MAX_REPO_LEN,
   refreshedBrief,
   type BriefDigest,
@@ -35,10 +31,10 @@ export type { SaveIncidentOptions } from '../../domain/objects/incidents.js';
 export const OBJECT_CAPS = {
   customer: MAX_CUSTOMER_LEN,
   note: MAX_NOTE_LEN,
-  noteChange: MAX_NOTE_CHANGE_LEN,
+  noteChange: MAX_SHORT_FIELD_LEN,
   repo: MAX_REPO_LEN,
   briefSummary: MAX_BRIEF_SUMMARY_LEN,
-  briefChange: MAX_BRIEF_CHANGE_LEN,
+  briefChange: MAX_SHORT_FIELD_LEN,
   processSteps: MAX_PROCESS_STEPS,
   processStep: MAX_PROCESS_STEP_LEN,
   skillName: MAX_SKILL_NAME_LEN,

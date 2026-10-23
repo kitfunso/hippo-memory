@@ -2,7 +2,7 @@
 // profile folder is asked for.
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { userHome, type Homes } from '../base/util/agent-homes.js';
+import { HIPPO_DIR, userHome, type Homes } from '../base/util/agent-homes.js';
 import { envHippoHome, envXdgDataHome, processEnv } from '../base/util/env.js';
 
 /** The profile folder and the environment of this process. */
@@ -21,5 +21,5 @@ export function hippoHomeDir(): string {
   if (hippoHome) return hippoHome;
   const xdgData = envXdgDataHome();
   if (xdgData) return path.join(xdgData, 'hippo');
-  return path.join(os.homedir(), '.hippo');
+  return path.join(os.homedir(), HIPPO_DIR);
 }

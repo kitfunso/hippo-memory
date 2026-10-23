@@ -21,6 +21,7 @@ import { tryParseUrl } from '../../base/util/net.js';
 import { ignoringCodes, PATH_UNREADABLE } from '../../base/util/expected-errors.js';
 import { escapeRegex } from '../../base/util/escape.js';
 import { errorMessage } from '../../base/util/log.js';
+import { HIPPO_DIR } from '../../base/util/agent-homes.js';
 
 export interface SupportBundleOptions extends DoctorOptions {
   readonly cwd: string;
@@ -36,7 +37,7 @@ const TAIL_MAX_LINE_CHARS = 2000;
 // key body.
 const ORPHAN_KEY_END_RE = /^[\s\S]*-----END [A-Z ]*PRIVATE KEY-----/;
 
-// The other env vars hippo reads outside the HIPPO_ prefix (src/base/embeddings/provider.ts, surface/connectors/*).
+// The other env vars hippo reads outside the HIPPO_ prefix (src/infra/embedding-provider.ts, surface/connectors/*).
 const OTHER_ENV_NAMES: readonly string[] = [
   'ANTHROPIC_API_KEY',
   'OPENAI_API_KEY',
@@ -182,7 +183,7 @@ function tailLogFile(file: string): string[] {
 }
 
 function buildLogsSection(opts: SupportBundleOptions): JsonObject {
-  const dir = path.join(opts.home, '.hippo', 'logs');
+  const dir = path.join(opts.home, HIPPO_DIR, 'logs');
   const names = listLogFileNames(dir);
   const files: JsonObject[] = names.map((name) => {
     const stat = fs.statSync(path.join(dir, name));

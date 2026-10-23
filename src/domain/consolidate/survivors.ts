@@ -5,9 +5,6 @@ import type { StoreWith } from '../../store/port.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../../store/port/types.js';
 
-/** Rows per read: one id-list query's worth, so a page is one statement and about a megabyte of rows. */
-export const SLEEP_PAGE_ROWS = 500;
-
 /** The store's rows as this run loaded them: by created then id, with a dry run's half-life preview applied. */
 export class SleepRows {
   /** Ids per keyset read; pageRows may be Infinity, one page of every row, and a LIMIT needs an integer. */
