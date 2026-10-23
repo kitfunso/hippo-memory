@@ -6,6 +6,7 @@ import { isHandoffOutcome } from '../../base/session/handoff.js';
 import { type Card, isCardStatus } from '../../base/records/card.js';
 import type { CardDetail } from '../../store/port/cards.js';
 import { printError } from './output.js';
+import { printJsonList } from './json-list.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -196,19 +197,20 @@ async function cardList(hippoRoot: string, tenantId: string, _args: string[], fl
   if (status !== undefined && !isCardStatus(status)) {
     fail(`Invalid status: "${status}".`);
   }
-  const cards = await cardsApi.cardList(cliApiContext(hippoRoot, tenantId), { status });
+  const pages = cardsApi.cardPages(cliApiContext(hippoRoot, tenantId), status);
   if (boolFlag(flags, 'json')) {
-    console.log(JSON.stringify({ cards }, null, 2));
+    await printJsonList('cards', pages);
     return;
   }
-  if (cards.length === 0) {
-    console.log('No cards found.');
-    return;
+  let none = true;
+  for await (const cards of pages) {
+    for (const card of cards) {
+      const assignee = card.assigneeRuntime ? `\t(${card.assigneeRuntime})` : '';
+      console.log(`${card.id}\t${card.status}\t${card.title}${assignee}`);
+      none = false;
+    }
   }
-  for (const card of cards) {
-    const assignee = card.assigneeRuntime ? `\t(${card.assigneeRuntime})` : '';
-    console.log(`${card.id}\t${card.status}\t${card.title}${assignee}`);
-  }
+  if (none) console.log('No cards found.');
 }
 
 async function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {

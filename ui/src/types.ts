@@ -215,4 +215,6 @@ export interface CardDetail {
 
 export interface CardList {
   cards: Card[];
+  /** Present only when another page of cards follows; pass it back as `?cursor=`. */
+  next_cursor?: string;
 }

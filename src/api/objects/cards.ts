@@ -2,7 +2,10 @@
 
 import type { Card, CardComment, CardRun, CardStatus } from '../../base/records/card.js';
 import type { HandoffOutcome } from '../../base/session/handoff.js';
-import type { CardDetail, CardCreate } from '../../store/port/cards.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
+import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
+import type { CardDetail, CardCreate, CardPage } from '../../store/port/cards.js';
+import { keysetPages, pageLimit } from '../pages.js';
 import type { Context } from '../types.js';
 
 /** Create a card in the caller's tenant. Throws on an empty title or an unknown dependency. */
@@ -20,9 +23,23 @@ export function cardDetail(ctx: Context, id: string): Promise<CardDetail | null>
   return ctx.store.cards.detail(ctx.tenantId, id);
 }
 
-/** The caller's cards, newest-updated first, optionally filtered to one status. */
-export function cardList(ctx: Context, opts: { status?: CardStatus } = {}): Promise<Card[]> {
-  return ctx.store.cards.list(ctx.tenantId, opts);
+export interface CardPageOptions {
+  status?: CardStatus;
+  limit?: number;
+  after?: KeysetPosition;
+}
+
+/** One page of the caller's cards, newest-updated first, optionally of one status. */
+export function cardList(ctx: Context, opts: CardPageOptions = {}): Promise<CardPage> {
+  const { status, after } = opts;
+  return ctx.store.cards.list(ctx.tenantId, { status, limit: pageLimit(opts.limit), after });
+}
+
+/** Every page of the caller's cards in list order, the largest page at a time, for the verbs that print them all. */
+export async function* cardPages(ctx: Context, status?: CardStatus): AsyncGenerator<Card[]> {
+  for await (const page of keysetPages((after) => cardList(ctx, { status, limit: MAX_LIST_LIMIT, after }))) {
+    yield page.cards;
+  }
 }
 
 /** Every run of a card, newest first. */

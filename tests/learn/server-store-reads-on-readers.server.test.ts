@@ -153,7 +153,7 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   ),
   read('cards.load', (s) => s.cards.load(TENANT, made.cardId), 'cut the eu release'),
   read('cards.detail', (s) => s.cards.detail(TENANT, made.cardId), 'cut the eu release'),
-  read('cards.list', (s) => s.cards.list(TENANT, {}), 'cut the eu release'),
+  read('cards.list', (s) => s.cards.list(TENANT, { limit: 10 }), 'cut the eu release'),
   read('cards.runs', (s) => s.cards.runs(TENANT, made.cardId), 'codex'),
   read('goals.sessionGoals', (s) => s.goals.sessionGoals(TENANT, SESSION), 'goal-alpha'),
   read(

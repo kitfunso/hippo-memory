@@ -17,7 +17,8 @@ import {
   unknownParentCard,
 } from '../rules/cards.js';
 import { placeholders } from '../../db/sql.js';
-import type { CardDetail, CardCreate, Cards } from '../port/cards.js';
+import type { CardDetail, CardCreate, CardListQuery, CardPage, Cards } from '../port/cards.js';
+import { keysetPage } from '../../base/util/keyset.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
@@ -261,22 +262,25 @@ function loadCard(db: DatabaseSyncLike, tenantId: string, id: string): Card | nu
   return loadCardRow(db, tenantId, id);
 }
 
-/** Lists cards for this tenant, optionally filtered to one status, newest-updated first. */
-function listCards(db: DatabaseSyncLike, tenantId: string, opts: { status?: CardStatus } = {}): Card[] {
+/** One page of the tenant's cards, optionally of one status, newest-updated first. */
+function listCards(db: DatabaseSyncLike, tenantId: string, { status, limit, after }: CardListQuery): CardPage {
   assertTenantId('listCards', tenantId);
   const conditions = ['tenant_id = ?'];
-  const params: unknown[] = [tenantId];
-  if (opts.status) {
+  const params: Array<string | number> = [tenantId];
+  if (status) {
     conditions.push('status = ?');
-    params.push(opts.status);
+    params.push(status);
+  }
+  if (after) {
+    conditions.push('(updated_at, id) < (?, ?)');
+    params.push(after.key, after.id);
   }
   const rows = cachedStatement(
     db,
-    `
-    SELECT ${CARD_COLUMNS} FROM cards WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC, id DESC
-  `,
-  ).all(...params) as CardRow[];
-  return rows.map(rowToCard);
+    `SELECT ${CARD_COLUMNS} FROM cards WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC, id DESC LIMIT ?`,
+  ).all(...params, limit + 1) as CardRow[];
+  const page = keysetPage(rows.map(rowToCard), limit, (card) => ({ key: card.updatedAt, id: card.id }));
+  return { cards: page.rows, next: page.next };
 }
 
 function loadCardDeps(db: DatabaseSyncLike, tenantId: string, id: string) {

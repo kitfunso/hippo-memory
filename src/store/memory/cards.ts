@@ -4,7 +4,8 @@ import { assertCardTransition, type Card, type CardStatus } from '../../base/rec
 import type { CardComment, CardRun } from '../../base/records/card.js';
 import { rowToSessionHandoff, type HandoffOutcome } from '../../base/session/handoff.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import type { CardDetail, CardCreate, Cards } from '../port/cards.js';
+import type { CardDetail, CardCreate, CardListQuery, CardPage, Cards } from '../port/cards.js';
+import { keysetPage } from '../../base/util/keyset.js';
 import {
   assertCardCreate,
   assertCardOutcome,
@@ -15,7 +16,7 @@ import {
   unknownCard,
   unknownParentCard,
 } from '../rules/cards.js';
-import { byBytes, newestFirst } from '../rules/order.js';
+import { byBytes, isBelow, newestFirst, type DescendingKeyset } from '../rules/order.js';
 import { nextId, ownedRow } from './rows.js';
 import type { MemoryTables } from './tables.js';
 
@@ -214,10 +215,16 @@ function reclaimIn(t: MemoryTables, tenantId: string): string[] {
   return ids;
 }
 
-function listIn(t: MemoryTables, tenantId: string, status?: CardStatus): Card[] {
+const WALK: DescendingKeyset<Card> = { key: (c) => c.updatedAt, textId: (c) => c.id };
+
+function listIn(t: MemoryTables, tenantId: string, { status, limit, after }: CardListQuery): CardPage {
   assertTenantId('listCards', tenantId);
-  const cards = [...t.cards.values()].filter((c) => c.tenantId === tenantId && (!status || c.status === status));
-  return cards.sort(newestFirst<Card>({ key: (c) => c.updatedAt, textId: (c) => c.id })).map((c) => ({ ...c }));
+  const cards = [...t.cards.values()].filter(
+    (c) => c.tenantId === tenantId && (!status || c.status === status) && (!after || isBelow(WALK, c, after)),
+  );
+  const sorted = cards.sort(newestFirst(WALK)).slice(0, limit + 1);
+  const page = keysetPage(sorted, limit, (card) => ({ key: card.updatedAt, id: card.id }));
+  return { cards: page.rows.map((c) => ({ ...c })), next: page.next };
 }
 
 export function memoryCards(t: MemoryTables): Cards {
@@ -229,7 +236,7 @@ export function memoryCards(t: MemoryTables): Cards {
       return card ? { ...card } : null;
     },
     detail: async (tenantId, id) => detailIn(t, tenantId, id),
-    list: async (tenantId, { status }) => listIn(t, tenantId, status),
+    list: async (tenantId, query) => listIn(t, tenantId, query),
     runs: async (tenantId, id) => runsOf(t, tenantId, id),
     claim: async (tenantId, id, runtime, sessionId) => claimIn(t, tenantId, id, runtime, sessionId),
     heartbeat: async (tenantId, id, runId) => heartbeatIn(t, tenantId, id, runId),

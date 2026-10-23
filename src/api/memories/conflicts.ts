@@ -7,7 +7,8 @@ import { conflictLoserFate } from '../../domain/consolidate/conflicts.js';
 import { classifyOriginProject } from '../../base/scope/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { isQuarantineScope } from '../../domain/trust/quarantine.js';
-import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, resolveListLimit } from '../../base/util/limits.js';
+import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
+import { pageLimit } from '../pages.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { requireHostAdmin, type Actor, type Context } from '../types.js';
@@ -54,12 +55,6 @@ function isLive(member: ConflictMember | null): boolean {
 /** A row the caller could not read hides its whole pair. */
 function touchable(actor: Actor, row: ConflictRow): boolean {
   return [row.a, row.b].every((member) => member !== null && canReadScope(actor, member.scope));
-}
-
-function pageLimit(limit: number | undefined): number {
-  const resolved = resolveListLimit(limit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
-  if (resolved === undefined) throw new BadRequestError(`limit must be a positive integer <= ${MAX_LIST_LIMIT}`);
-  return resolved;
 }
 
 async function touchableConflict(ctx: Context, conflictId: number): Promise<ConflictRow | null> {
