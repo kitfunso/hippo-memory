@@ -274,6 +274,7 @@ describe('assemble and drill', () => {
   const ctx: Omit<Context, 'hippoRoot' | 'store' | 'config'> = {
     tenantId: 'default',
     actor: { subject: 'test:budget', role: 'admin' },
+    infra: testInfra(),
   };
   const sid = 'sess-budget-window';
   const line = (i: number): string => `Session message m${i}: ${'the rollback runbook step and its owner '.repeat(5)}`;

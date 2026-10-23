@@ -306,7 +306,7 @@
       "checked": "2026-10-07",
       "names": ["VS Code"],
       "integration": ["native-hooks", "instruction-file", "mcp-recipe"],
-      "sources": ["src/domain/hooks/copilot.ts", "src/domain/hooks/json-hooks.ts", "src/surface/cli/session-hooks.ts", "src/surface/capture/session-worker.ts", "integrations/copilot.md", "extensions/mcp"],
+      "sources": ["src/domain/hooks/copilot.ts", "src/domain/hooks/json-hooks.ts", "src/surface/cli/hooks/session-end.ts", "src/surface/capture/session-worker.ts", "integrations/copilot.md", "extensions/mcp"],
       "claims": ["extensions/mcp/README.md", "integrations/copilot.md"],
       "routes": {
         "promptContext": "sessionStart in ~/.copilot/hooks/hippo.json runs hippo context --pinned-only --format copilot; <User>/prompts/hippo.instructions.md asks the agent to call hippo_recall at the start of each task, through the hippo server in <User>/mcp.json",

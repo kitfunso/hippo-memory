@@ -1,13 +1,19 @@
 // The functions eval and benchmark scripts call by name, with the real embedder, models, HTTP and ports wired in: a
 // frozen script re-points its import line here and keeps every call as written.
 import { folderIndex as targetOf, type ConfiguredFolder, type EmbedTarget } from '../domain/search/embed-memories.js';
-import { judgeAll as judgeOver, type JudgeOptions, type Judgment } from '../domain/eval/judgment.js';
+import { judgeAll as judgeOver, type JudgeOptions, type Judgment } from '../infra/judgment.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { httpOver } from '../infra/http.js';
-import { realRerankers } from '../infra/rerankers.js';
+import { realRerankers } from '../infra/rerankers/index.js';
 import * as api from '../api/index.js';
-import type { Context, GatedRememberOptions, RememberOptions, RememberResult, RememberSkipped } from '../api/index.js';
-import type { InfraPorts } from '../base/ports/infra.js';
+import type {
+  Context,
+  EntryContext,
+  GatedRememberOptions,
+  RememberOptions,
+  RememberResult,
+  RememberSkipped,
+} from '../api/index.js';
 import { ingestEvent as ingestGithubEvent } from '../surface/connectors/github/ingest.js';
 import { ingestMessage as ingestSlackMessage } from '../surface/connectors/slack/ingest.js';
 import { withEntryInfra } from '../surface/entry-infra.js';
@@ -34,16 +40,14 @@ export function judgeAll(contents: readonly string[], opts: JudgeConnection): Pr
 }
 
 /** `fn` with the entry's real ports filled into a Context its script built without them. */
-function filled<C extends { readonly infra?: InfraPorts }, A extends unknown[], R>(
-  fn: (ctx: C, ...args: A) => R,
-): (ctx: C, ...args: A) => R {
+function filled<A extends unknown[], R>(fn: (ctx: Context, ...args: A) => R): (ctx: EntryContext, ...args: A) => R {
   return (ctx, ...args) => fn(withEntryInfra(ctx), ...args);
 }
 
-export function remember(ctx: Context, opts: GatedRememberOptions): Promise<RememberResult | RememberSkipped>;
-export function remember(ctx: Context, opts: RememberOptions): Promise<RememberResult>;
+export function remember(ctx: EntryContext, opts: GatedRememberOptions): Promise<RememberResult | RememberSkipped>;
+export function remember(ctx: EntryContext, opts: RememberOptions): Promise<RememberResult>;
 export function remember(
-  ctx: Context,
+  ctx: EntryContext,
   opts: RememberOptions | GatedRememberOptions,
 ): Promise<RememberResult | RememberSkipped> {
   // A plain RememberOptions is a GatedRememberOptions with the gate off.
@@ -55,4 +59,4 @@ export const retrieveWithCliCore = filled(api.retrieveWithCliCore);
 export const ingestEvent = filled(ingestGithubEvent);
 export const ingestMessage = filled(ingestSlackMessage);
 export { adminActor, goalPush, outcome } from '../api/index.js';
-export type { Context } from '../api/index.js';
+export type { EntryContext as Context } from '../api/index.js';

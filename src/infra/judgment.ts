@@ -2,15 +2,14 @@
  *  Regex picks WHAT is a candidate; it cannot say what is worth keeping, so every captured memory currently lands on a
  *  flat schema_fit of 0.5. */
 
-import { ConfidenceLevel, EmotionalValence } from '../../base/memory/memory.js';
-import type { Http } from '../../base/ports/http.js';
-import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { readCappedJson, readCappedText } from '../../base/util/capped-json.js';
-import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
-import { type JsonValue, isJsonNumber, isJsonObject, isJsonString } from '../../base/util/json.js';
+import { ConfidenceLevel, EmotionalValence } from '../base/memory/memory.js';
+import type { Http } from '../base/ports/http.js';
+import { errorFields, errorMessage, log } from '../base/util/log.js';
+import { readCappedJson, readCappedText } from '../base/util/capped-json.js';
+import { MAX_REPLY_BYTES } from '../base/util/limits.js';
+import { type JsonValue, isJsonNumber, isJsonObject, isJsonString } from '../base/util/json.js';
+import { JEV_MODEL, postScoring, TYPESAFE_ENDPOINT } from './rerankers/endpoint.js';
 
-const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
-const DEFAULT_MODEL = 'jev-1.13.0';
 const MAX_CONCURRENCY = 8;
 
 export type JudgedKind = 'error' | 'decision' | 'convention' | 'preference' | 'trivia';
@@ -93,28 +92,18 @@ function toConfidenceTier(kindConfidence: number): ConfidenceLevel {
   return 'inferred';
 }
 
-/** Capture-time judging must not hold a write for long: one budget per attempt, shorter than the LLM calls. */
+/** Capture-time judging must not hold a write for long: one budget for the call, shorter than the LLM calls. */
 const JUDGE_TIMEOUT_MS = 15_000;
 
 async function post(content: string, opts: JudgeOptions): Promise<Response | null> {
   let res: Response;
   try {
-    res = await opts.http.send(
-      ENDPOINT,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${opts.apiKey}`,
-        },
-        body: JSON.stringify({
-          state: content,
-          model: opts.model ?? DEFAULT_MODEL,
-          questions: QUESTIONS,
-        }),
-      },
-      { timeoutMs: JUDGE_TIMEOUT_MS },
-    );
+    res = await postScoring(opts.http, {
+      url: TYPESAFE_ENDPOINT,
+      token: opts.apiKey,
+      body: { state: content, model: opts.model ?? JEV_MODEL, questions: QUESTIONS },
+      budgetMs: JUDGE_TIMEOUT_MS,
+    });
   } catch (err) {
     log.warn(`judge: request failed: ${errorMessage(err)}`, errorFields(err));
     return null;

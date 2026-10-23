@@ -10,7 +10,7 @@ import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extr
 import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import type { Context, SleepContext } from '../types.js';
 import { auditRemoveErrors } from '../auth/audit.js';
-import { globalTargetOf, infraOf } from '../infra.js';
+import { globalTargetOf } from '../infra.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -101,7 +101,7 @@ async function runSleepPhases(
     dryRun,
     config: ctx.config,
     tenantId: ctx.tenantId,
-    llm: infraOf(ctx).llm,
+    llm: ctx.infra.llm,
   });
   counts.consolidation = consolidateResult.semanticCreated + consolidateResult.merged;
   const result = sleepResultFrom(consolidateResult, dryRun);

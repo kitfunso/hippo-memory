@@ -4,11 +4,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import {
-  WORKING_STATE_CAPS,
-  transcriptWorkingState,
-  truncateKeepNewest,
-} from '../../src/surface/capture/working-state.js';
+import { WORKING_STATE_CAPS, truncateKeepNewest } from '../../src/domain/capture/working-state.js';
+import { transcriptWorkingState } from '../../src/surface/capture/working-state.js';
 import { collectHandoffEvidence } from '../../src/surface/capture/handoff-evidence.js';
 
 const made: string[] = [];

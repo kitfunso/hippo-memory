@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
-import { realRerankers } from '../../src/infra/rerankers.js';
-import { createClefReranker, parseClefReply, type ClefModel } from '../../src/domain/rerankers/clef.js';
+import { realRerankers } from '../../src/infra/rerankers/index.js';
+import { createClefReranker, parseClefReply } from '../../src/infra/rerankers/clef.js';
+import type { ClefModel } from '../../src/domain/rerankers/hosted.js';
 import { processHttp } from '../../src/infra/http.js';
 import type { RerankerFn } from '../../src/base/ports/reranker.js';
 import { cliReranker } from '../../src/surface/cli/api-context.js';

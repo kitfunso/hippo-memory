@@ -8,7 +8,7 @@ import { loadConfig } from '../host/config-file.js';
 import { DEFAULT_TENANT_ID } from '../base/util/tenant.js';
 import type { ConsolidationResult } from '../domain/consolidate/run.js';
 import { sleep as sleepStore, type SleepOpts, type SleepResult } from '../api/sleep/sleep.js';
-import type { SleepContext } from '../api/types.js';
+import type { EntrySleepContext as SleepContext } from '../api/types.js';
 import { withEntryInfra } from '../surface/entry-infra.js';
 
 export { ConsolidationResult } from '../domain/consolidate/run.js';

@@ -16,6 +16,7 @@ import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { memorySide } from '../_helpers/memory-side.js';
 import { OWNER, seedOwnedKeys, type OwnedKeys } from '../_helpers/owned-keys.js';
+import { testInfra } from '../_helpers/infra.js';
 
 let fixture: TwoTenantFixture;
 let owned: OwnedKeys;
@@ -87,7 +88,14 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
   it('mints through keyWrites, creates no hippo.db in hippoRoot, and stores only the hash', async () => {
     const hippoRoot = markedFolder();
     const memory = memorySide(copyOf());
-    const ctx = { hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store, config: loadConfig(hippoRoot) };
+    const ctx = {
+      hippoRoot,
+      tenantId: TENANT_A,
+      actor: admin,
+      store: memory.store,
+      config: loadConfig(hippoRoot),
+      infra: testInfra(),
+    };
     const minted = await authCreate(ctx, { label: 'ci', role: 'member' });
     expect(minted).toMatchObject({ tenantId: TENANT_A, role: 'member' });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
@@ -175,7 +183,10 @@ describe('authListRows with ctx.store', () => {
       const onHippoDb = await authListRows(apiCtx(root, TENANT_A, actor), { active });
       expect(onHippoDb.length > 0).toBe(listsAny);
       expect(
-        await authListRows({ tenantId: TENANT_A, actor, store: memory.store, config: DEFAULT_CONFIG }, { active }),
+        await authListRows(
+          { tenantId: TENANT_A, actor, store: memory.store, config: DEFAULT_CONFIG, infra: testInfra() },
+          { active },
+        ),
       ).toEqual(onHippoDb);
     }
   });

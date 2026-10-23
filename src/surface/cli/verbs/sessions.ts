@@ -251,7 +251,7 @@ export const SESSION_VERBS = {
     --format <fmt>         Output format: json (default) or markdown`,
     ],
   }),
-  capture: verb(() => import('../session-hooks.js'), 'handleCapture', {
+  capture: verb(() => import('../hooks/capture.js'), 'handleCapture', {
     repairsCodexWrapper: true,
     flags: { switches: ['dry-run', 'global', 'last-session', 'stdin'], values: ['file', 'log-file', 'transcript'] },
     usage: [
@@ -294,7 +294,7 @@ export const SESSION_VERBS = {
     --keep                 Print without clearing`,
     ],
   }),
-  'session-end': verb(() => import('../session-hooks.js'), 'handleSessionEnd', {
+  'session-end': verb(() => import('../hooks/session-end.js'), 'handleSessionEnd', {
     // Its sleep step reads --dry-run, but the capture after it writes for real.
     dryRun: false,
     flags: {
@@ -315,14 +315,14 @@ export const SESSION_VERBS = {
                            nothing for any other payload`,
     ],
   }),
-  '__session-end-worker': verb(() => import('../session-hooks.js'), 'handleSessionEndWorker', {
+  '__session-end-worker': verb(() => import('../hooks/session-end-worker.js'), 'handleSessionEndWorker', {
     dryRun: false,
     flags: {
       switches: ['dry-run', 'no-learn', 'no-share', 'turn'],
       values: ['log-file', 'session-id', 'transcript'],
     },
   }),
-  'pre-compact': verb(() => import('../session-hooks.js'), 'handlePreCompact', {
+  'pre-compact': verb(() => import('../hooks/pre-compact.js'), 'handlePreCompact', {
     flags: { values: ['format', 'log-file', 'runtime'] },
     usage: [
       `
@@ -333,14 +333,14 @@ export const SESSION_VERBS = {
                            the snapshot only (Copilot has no PostCompact hook to close a record)`,
     ],
   }),
-  'compact-resume': verb(() => import('../session-hooks.js'), 'handleCompactResume', {
+  'compact-resume': verb(() => import('../hooks/compact-resume.js'), 'handleCompactResume', {
     flags: {},
     usage: [
       `
   compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old`,
     ],
   }),
-  'post-compact': verb(() => import('../session-hooks.js'), 'handlePostCompact', {
+  'post-compact': verb(() => import('../hooks/post-compact.js'), 'handlePostCompact', {
     flags: { values: ['log-file'] },
     usage: [
       `
@@ -349,16 +349,20 @@ export const SESSION_VERBS = {
     --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)`,
     ],
   }),
-  'codex-run': verb(() => import('../session-hooks.js'), 'handleCodexRun', {
+  'codex-run': verb(() => import('../hooks/codex-run.js'), 'handleCodexRun', {
     flags: {},
     usage: [
       `
   codex-run [-- ...args]   Launch real Codex behind Hippo's session-end wrapper`,
     ],
   }),
-  '__codex-session-end-worker': verb(() => import('../session-hooks.js'), 'handleCodexSessionEndWorker', {
-    flags: { values: ['codex-home', 'history-path', 'log-file', 'start-offset', 'started-at'] },
-  }),
+  '__codex-session-end-worker': verb(
+    () => import('../hooks/codex-session-end-worker.js'),
+    'handleCodexSessionEndWorker',
+    {
+      flags: { values: ['codex-home', 'history-path', 'log-file', 'start-offset', 'started-at'] },
+    },
+  ),
   hook: verb(() => import('../setup.js'), 'handleHook', {
     flags: {},
     usage: [

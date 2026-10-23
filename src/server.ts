@@ -8,41 +8,12 @@ import {
   type AuthCreateSelfResult,
   authRevoke,
   type AuthRevokeResult,
-  type Context,
-  type ContextReach,
-  contextReach,
+  type EntryContext as Context,
 } from './api/index.js';
-import { hasGroup, type HippoStore } from './store/port.js';
-import {
-  promptHookContext as renderPromptHook,
-  type PromptHookOptions,
-  type PromptHookRequest,
-} from './api/prompt-hook.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './base/errors/api-errors.js';
-import { defaultReach } from './surface/open-store.js';
-import { loadConfig } from './host/config-file.js';
-import { resolveEmbeddingProvider } from './infra/embedding-provider.js';
-import { entryHost, withEntryInfra } from './surface/entry-infra.js';
 
 export { serve } from './surface/server/boot.js';
-
-async function promptHookContext(
-  ctx: Context,
-  req: PromptHookRequest,
-  opts?: PromptHookOptions,
-): ReturnType<typeof renderPromptHook> {
-  const reach = ctx.reach ?? (await folderReach(ctx.store, opts));
-  return renderPromptHook(withEntryInfra({ ...ctx, reach }), req, opts);
-}
-
-/** The reach every root probes for a store kept in a folder, from the folder its port names; a store without
- * folderFiles keeps the Context's default, one project and no global store. */
-async function folderReach(store: HippoStore, opts: PromptHookOptions | undefined): Promise<ContextReach | undefined> {
-  if (!hasGroup(store, 'folderFiles')) return undefined;
-  const { folder } = await store.folderFiles.home();
-  const reach = defaultReach(folder, store, opts?.sharedStore, undefined, entryHost);
-  return contextReach(reach, loadConfig, resolveEmbeddingProvider);
-}
+export { promptHookContext } from './surface/server/prompt-hook-context.js';
 
 // Add-on packages mint and revoke keys through these without importing the whole api surface.
 export {
@@ -53,7 +24,6 @@ export {
   ConflictError,
   ForbiddenError,
   NotFoundError,
-  promptHookContext,
   type AuthCreateSelfOpts,
   type AuthCreateSelfResult,
   type AuthRevokeResult,
@@ -117,4 +87,4 @@ export {
   type CallerSessionEndRequest,
   type CallerSessionEndResult,
 } from './surface/capture/session-end-caller.js';
-export type { WorkingState } from './surface/capture/working-state.js';
+export type { WorkingState } from './domain/capture/working-state.js';

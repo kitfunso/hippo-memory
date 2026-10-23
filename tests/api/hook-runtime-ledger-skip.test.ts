@@ -9,6 +9,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { testInfra } from '../_helpers/infra.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -31,6 +32,7 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
       actor: adminActor('cli'),
       reach: { hasLocal: true, isGlobal: false, shared: false },
       config: { ...DEFAULT_CONFIG, deliveryLedger: { enabled: true } },
+      infra: testInfra(),
     };
     expect(
       await startDeliveryRecorder(ctx, { stdinText: undefined, runtime: 'claude-code', envSessionId: undefined }),
