@@ -40,7 +40,7 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { createMemory, Layer } from '../../dist/base/memory/memory.js';
+import { createMemory, Layer } from '../../dist/entry/memory.js';
 import { initStore, writeEntry, loadAllEntries } from '../../dist/entry/testing.js';
 import { hybridSearch } from '../../dist/domain/search/hybrid.js';
 import { isEmbeddingAvailable } from '../../dist/base/embeddings/local.js';

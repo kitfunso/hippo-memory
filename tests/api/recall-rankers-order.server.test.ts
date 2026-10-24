@@ -2,25 +2,19 @@
 // change to how any of them picks its search engine shows up as a moved row.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { retrieve, retrieveRanking } from '../../src/api/recall/recall.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { adminActor, type RecallOptions } from '../../src/api/index.js';
 import type { RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { setMeta } from '../../src/db/index.js';
-import { resetAllPhysicsState } from '../../src/db/physics-state.js';
-import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
-import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
-import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
-import { onDb } from '../_helpers/store-worker-server.js';
+import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
+import { seedVectors } from '../_helpers/recall-vector-seed.js';
 import {
   CLEARED_ENV,
   FAKE_NOW,
   freshStore,
   SESSION,
-  seedPortBranches,
   seedTemplates,
   TENANT,
   type Store,
@@ -28,40 +22,6 @@ import {
 } from '../_helpers/recall-golden-seed.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadEntriesByIds } from '../_helpers/root-forms.js';
-
-const MODEL = 'hashed-16';
-// Rows with a vector and no particle rank in physics' classic pool, so both physics pools are pinned.
-const NO_PARTICLE = new Set(['mem_p_fill0', 'mem_p_noise']);
-
-/** Vectors for every local row and particles for most, so the vector arm and physics scoring both change the order. */
-async function seedVectors(root: string, url: string): Promise<void> {
-  await seedPortBranches(root);
-  // SAFETY: the SELECT names one column, id, so each row has it.
-  const ids = onDb(root, (db) =>
-    db
-      .prepare('SELECT id FROM memories ORDER BY id')
-      .all()
-      .map((r) => String((r as { id: unknown }).id)),
-  );
-  const entries = loadEntriesByIds(root, ids);
-  const index = Object.fromEntries(entries.map((e): [string, number[]] => [e.id, hashedVector(e.content)]));
-  const identity = embeddingIndexIdentity(`openai:${MODEL}`);
-  onDb(root, (db) => {
-    upsertVectors(db, Object.entries(index), identity);
-    setMeta(db, EMBEDDING_MODEL_META_KEY, identity);
-    resetAllPhysicsState(
-      db,
-      entries.filter((e) => !NO_PARTICLE.has(e.id)),
-      index,
-      new Date(FAKE_NOW),
-    );
-  });
-  writeFileSync(
-    join(root, 'config.json'),
-    JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: url }, physics: { enabled: true } }),
-  );
-}
 
 type BandCase = readonly [string, RecallOptions, readonly string[]];
 interface CoreSetup {

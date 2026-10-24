@@ -1,21 +1,21 @@
 // The in-memory EntryWrites group: each write runs staged, so a refused or failed one leaves the rows as they were.
 import { ConflictError } from '../../base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
-import { entryAfterOutcome, type MemoryEntry } from '../../base/memory/memory.js';
+import { entryAfterOutcome, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
 import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';
 import type { EntryRemoval, EntryWrites, OutcomeWrite, PinWrite, SupersedeWrite } from '../port/entry-writes.js';
 import { bumpCounter } from './rows.js';
 import { archiveOne, inReach, markParentDirty, put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
-function applyOutcomeIn(t: MemoryTables, outcome: OutcomeWrite): string[] {
+function applyOutcomeIn(t: MemoryTables, outcome: OutcomeWrite, rules: LossAversion): string[] {
   const { tenantId, actor, ids, good } = outcome;
   return stage(t, actor, (tx) => {
     const applied: string[] = [];
     for (const id of ids) {
       const row = tx.rows.get(id);
       if (!row || row.tenantId !== tenantId || !readerReaches(targetReader(outcome), row.scope)) continue;
-      put(t, tx, entryAfterOutcome(row, good), actor);
+      put(t, tx, entryAfterOutcome(row, good, rules), actor);
       tx.audit.push({ tenantId, actor, op: 'outcome', targetId: id, metadata: { good } });
       applied.push(id);
     }
@@ -58,10 +58,10 @@ function forgetIn(t: MemoryTables, removal: EntryRemoval): void {
   bumpCounter(t, 'total_forgotten', 1);
 }
 
-export function memoryEntryWrites(t: MemoryTables): EntryWrites {
+export function memoryEntryWrites(t: MemoryTables, rules: LossAversion): EntryWrites {
   return {
     writeEntry: async ({ entry, actor }) => stage(t, actor, (tx) => put(t, tx, entry, actor)),
-    applyOutcome: async (outcome) => applyOutcomeIn(t, outcome),
+    applyOutcome: async (outcome) => applyOutcomeIn(t, outcome, rules),
     setPinned: async (pin) => pinIn(t, pin),
     supersede: async (write) => supersedeIn(t, write),
     archiveRaw: async (archive) => archiveOne(t, archive, () => undefined),

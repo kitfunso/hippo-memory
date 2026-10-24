@@ -143,7 +143,9 @@ export function memoryGraphReads(t: MemoryTables): GraphReads {
         );
         for (const r of touching.sort(newestCreated).slice(0, limit)) found.set(r.id, r);
       }
-      return structuredClone([...found.values()]);
+      const merged = [...found.values()];
+      if (merged.length > limit) merged.sort(newestCreated).length = limit;
+      return structuredClone(merged);
     },
     graphDelta: async (tenantId, desired) =>
       structuredClone(diffGraph(storedGraphIn(t, tenantId, memoryIdsOf(desired)), desired)),

@@ -11,6 +11,7 @@ import {
   graphFilePath,
   idHash,
   isReplaced,
+  RECORD_AT,
   RECORD_HEAD,
   readStamp,
   type GraphStamp,
@@ -100,14 +101,19 @@ class GraphFileView implements GraphView {
     const { nodes, recordsAt, recordBytes, highRowid, maxLevel, m, dim, upperBytes } = this.stamp;
     if (!Number.isInteger(node) || node < 0 || node >= nodes) throw this.#bad(`node ${node} is out of range`);
     const buf = this.#read(recordsAt + node * recordBytes, recordBytes);
-    const rowid = buf.readDoubleLE(0);
-    const [level, flags, count, upperOffset] = [buf[12], buf[13], buf.readUInt16LE(14), buf.readUInt32LE(16)];
+    const rowid = buf.readDoubleLE(RECORD_AT.rowid);
+    const [level, flags, count, upperOffset] = [
+      buf[RECORD_AT.level],
+      buf[RECORD_AT.flags],
+      buf.readUInt16LE(RECORD_AT.linkCount),
+      buf.readUInt32LE(RECORD_AT.upperOffset),
+    ];
     const upperFits = level === 0 || (upperOffset % 4 === 0 && upperOffset + level * upperLevelBytes(m) <= upperBytes);
     const fits = Number.isSafeInteger(rowid) && rowid >= 1 && rowid <= highRowid && level <= maxLevel && flags <= 1;
     if (!fits || count > 2 * m || !upperFits) throw this.#bad(`node ${node} has a value out of bounds`);
     const record: NodeRecord = {
       rowid,
-      idHash: buf.readUInt32LE(8),
+      idHash: buf.readUInt32LE(RECORD_AT.idHash),
       level,
       replaced: isReplaced(flags),
       links: this.#links(buf, RECORD_HEAD, count, node),

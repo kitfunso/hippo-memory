@@ -7,6 +7,7 @@ import { errorFields, errorMessage, log, type LogFields } from '../../base/util/
 import type { RuntimeSettings } from '../../base/config/config.js';
 import type { HippoStore, VectorReads } from '../../store/index.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
+import { withRequestSignal } from '../../base/util/request-scope.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
 import type { VectorCandidateSpec } from '../../store/port/vectors.js';
 
@@ -55,7 +56,7 @@ function queryEmbedBudgetMs(configured: number | undefined): number {
 
 /** One deadline for every query embedding a recall makes, so two stores or a physics fallback share the budget. */
 export function startQueryEmbedDeadline(configuredMs?: number): AbortSignal {
-  return AbortSignal.timeout(queryEmbedBudgetMs(configuredMs));
+  return withRequestSignal(AbortSignal.timeout(queryEmbedBudgetMs(configuredMs)));
 }
 
 /**

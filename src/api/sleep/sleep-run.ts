@@ -4,6 +4,7 @@ import { auditMemories, type AuditIssue } from '../../base/memory/memory-audit.j
 import { AUTO_SHARE_MIN_SCORE, autoShare } from '../../domain/sharing/share.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { deduplicateStore } from '../../domain/consolidate/dedupe.js';
+import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
 import { evalNow } from '../../base/memory/ablation.js';
 import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../base/memory/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';
@@ -72,14 +73,12 @@ export async function runSleep(
   // Phase counters for the consolidate audit emit (in finally), accumulated per phase so a partial failure still
   // reports what got done.
   const counts: SleepCounts = { consolidation: 0, dedup: 0, auditDeleted: 0, ambient: 0 };
-  let phaseError: Error | null = null;
+  let phaseError: { thrown: unknown } | null = null;
 
   try {
     return await runSleepPhases(ctx, opts, phases, counts);
   } catch (err) {
-    // SAFETY: phaseError is only read via phaseError.message / (phaseError !== null) below, safe even if a non-Error
-    // was thrown; this mirrors the lenient (err as Error) pattern used through this catch chain.
-    phaseError = err as Error;
+    phaseError = { thrown: err };
     throw err;
   } finally {
     await emitSleepAudit(ctx, opts, dryRun, counts, phaseError);
@@ -175,14 +174,12 @@ function sleepResultFrom(consolidateResult: ConsolidateOutcome, dryRun: boolean)
 }
 
 function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['deduped']> {
-  const semDups = dedupResult.pairs.filter((p) => p.keptLayer === 'semantic' && p.removedLayer === 'semantic').length;
-  const epiDups = dedupResult.pairs.filter((p) => p.keptLayer === 'episodic' && p.removedLayer === 'episodic').length;
-  const crossDups = dedupResult.pairs.filter((p) => p.keptLayer !== p.removedLayer).length;
+  const groups = groupDedupPairs(dedupResult.pairs);
   return {
     removed: dedupResult.removed,
-    semDups,
-    epiDups,
-    crossDups,
+    semDups: groups.semantic.length,
+    epiDups: groups.episodic.length,
+    crossDups: groups.cross.length,
   };
 }
 
@@ -368,7 +365,7 @@ async function emitSleepAudit(
   opts: SleepOpts,
   dryRun: boolean,
   counts: SleepCounts,
-  phaseError: Error | null,
+  phaseError: { thrown: unknown } | null,
 ): Promise<void> {
   try {
     // Tagged '__host__' because sleep is host-wide; the actor still names the operator who ran it.
@@ -382,10 +379,10 @@ async function emitSleepAudit(
       partial: phaseError !== null,
       triggeredByTenant: ctx.tenantId, // preserve for audit forensics
     };
-    if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
+    if (phaseError) sleepAuditMetadata.errorMessage = errorMessage(phaseError.thrown);
     // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can
     // be found.
-    const nextUnitIds = failedUnitOf(phaseError);
+    const nextUnitIds = failedUnitOf(phaseError?.thrown instanceof Error ? phaseError.thrown : null);
     if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
     await ctx.store.appendAuditEvents([
       {

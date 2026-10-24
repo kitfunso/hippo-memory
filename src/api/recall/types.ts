@@ -7,7 +7,7 @@ import type {
   PlanningFallacyHint,
   PlanningFallacyOutput,
   PlanningFallacyWatching,
-} from '../../domain/predictions/planning-fallacy.js';
+} from '../../base/records/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from './finish.js';
 import type { AvailabilityHint } from '../availability.js';
 import type { LastRecall } from '../../store/port.js';
@@ -100,7 +100,7 @@ export interface RecallOptions {
   trace?: RecallTraceOptions;
 }
 
-/** MCP recall's presenter: `retrieveRanking` hands it the whole-store ranking and strengthens and traces (pipeline
+/** MCP recall's presenter: `retrieveRanking` hands it the full MCP_RECALL ranking and strengthens and traces (pipeline
  * 'mcp') just the ids it returns; `results` stays the top window of that ranking. */
 export type ShowRanking = (ranking: StoreRanking, result: RecallResult) => ShownRanking;
 

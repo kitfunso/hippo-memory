@@ -9,6 +9,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { rankRecall } from '../../src/api/recall/pipeline.js';
+import { CLI_RECALL } from '../../src/api/recall/profiles.js';
 import { handoffText, snapshotText } from '../../src/api/context-render.js';
 import {
   recallRowOrigin,
@@ -60,6 +61,7 @@ async function rankDeploy() {
         explain: false,
       },
     },
+    CLI_RECALL,
   );
 }
 
@@ -184,6 +186,7 @@ describe('recallStoreSetting and recallRowOrigin', () => {
           explain: false,
         },
       },
+      CLI_RECALL,
     );
     const origin = recallRowOrigin(ctx(), recallStoreSetting(ctx(), null));
     const byId = new Map(ranked.results.map((r) => [r.entry.id, origin.isGlobal(r)]));

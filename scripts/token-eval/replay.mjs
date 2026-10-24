@@ -33,7 +33,7 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { createMemory, Layer } from '../../dist/base/memory/memory.js';
+import { createMemory, Layer } from '../../dist/entry/memory.js';
 import { initStore, writeEntry } from '../../dist/entry/testing.js';
 import { estimateTokens } from '../../dist/base/util/token-text.js';
 import { uncachedEquivalentInput, DEFAULT_CACHE_RATIOS } from '../../dist/domain/eval/eval-stats.js';

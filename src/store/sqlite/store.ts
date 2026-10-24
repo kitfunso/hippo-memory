@@ -74,7 +74,8 @@ import type {
 } from '../port.js';
 import { asHippoDb, isHippoDbStore } from './hippo-db-stores.js';
 import { createHost, type Host } from '../../host/host.js';
-import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
+import { isGlobalStoreRoot, isInitialized } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { listRecallEntries } from './search-rows.js';
 import { readActiveTaskSnapshot } from './task-snapshots.js';
 import { entriesWithoutVector, readStoredVectorViews, writeVectors } from './vector-index.js';
@@ -227,7 +228,7 @@ export function sqliteReach(
 ): StoreReach {
   const other = isHippoDbStore(store) ? undefined : store;
   const sharedStore = shared === true || host.isSharedStore(hippoRoot);
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = hippoHomeDir();
   const canReadGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
   const globalTarget = other === undefined ? { root: globalRoot, store: openGlobal(globalRoot) } : undefined;
   const reach: StoreReach = {

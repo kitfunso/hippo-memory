@@ -35,7 +35,7 @@ export function finishRecall(db: DatabaseSyncLike, rules: LossAversion, writes: 
   // alone.
   return withWriteScope(db, 'finish_recall', () => {
     writeGoalRecallLog(db, localGoalRecallRows(db, writes.goalLog));
-    for (const event of writes.audit) appendAuditEvents(db, [event]);
+    appendAuditEvents(db, writes.audit);
     return traceAndStrengthen();
   });
 }

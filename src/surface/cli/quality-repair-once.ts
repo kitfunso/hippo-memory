@@ -2,7 +2,7 @@
 
 import * as path from 'path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import { resolveGlobalRootDir } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { memoryQualityRepairOnce } from '../../api/auth/audit.js';
 import { cliApiContext } from './api-context.js';
 
@@ -16,7 +16,7 @@ export async function repairQualityOnce(root: string, tenantId: string): Promise
       return;
     }
     // A sleep run from a folder with no project store can resolve to the global store too.
-    const scope = path.resolve(root) === path.resolve(resolveGlobalRootDir()) ? ' --global' : '';
+    const scope = path.resolve(root) === path.resolve(hippoHomeDir()) ? ' --global' : '';
     const moved = result.appliedIds.length;
     if (moved > 0) {
       console.log(

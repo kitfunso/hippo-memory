@@ -47,7 +47,8 @@ import {
   isMcpFailure,
   uninstallCopilot,
 } from '../hooks-install/copilot.js';
-import { isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
+import { isInitialized } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { importUserMemories } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
 import { cliApiContext, cliStore, cliSyncOptions } from './api-context.js';
@@ -438,7 +439,7 @@ export async function handleSetup({ tenantId, flags }: CommandContext): Promise<
   const dryRun = boolFlag(flags, 'dry-run');
   const forceAll = boolFlag(flags, 'all');
   const tools = detectInstalledTools();
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = hippoHomeDir();
 
   console.log('Hippo setup -- configuring SessionEnd + SessionStart hooks');
   console.log('');
@@ -568,7 +569,7 @@ function dailyStepFailure<E>(err: E, timeoutMs: number): string {
 }
 
 export async function handleDailyRunner({ tenantId }: CommandContext): Promise<void> {
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = hippoHomeDir();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {
     const warn = (message: string): void => log.warn(`compaction replay: ${message}`);

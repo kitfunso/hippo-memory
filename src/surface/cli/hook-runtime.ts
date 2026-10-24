@@ -13,7 +13,8 @@ import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../.
 import { importAtSessionEnd } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
 import { summaryLine } from '../../base/memory/agent-memory-report.js';
-import { getHippoRoot, isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
+import { getHippoRoot, isInitialized } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { type CliFlags, stringFlag } from './flag-values.js';
@@ -110,7 +111,7 @@ export async function resetHookInjection(
  * Pre-compact and compact-resume must agree, or a snapshot is looked for in the other store. */
 export function hookStoreRoot(hippoRoot: string): string {
   if (isInitialized(hippoRoot)) return hippoRoot;
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = hippoHomeDir();
   return isInitialized(globalRoot) ? globalRoot : hippoRoot;
 }
 

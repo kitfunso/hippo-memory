@@ -81,9 +81,13 @@ export function addAmbientTallies(a: AmbientTallies, b: AmbientTallies): Ambient
   };
 }
 
+/** The tags that mark a memory as an error, and the prefix of a family of them. */
+export const ERROR_TAGS: readonly string[] = ['error', 'critical'];
+export const ERROR_TAG_PREFIX = 'error:';
+
 /** Whether a tag list marks its memory as an error for errorDensity. */
 export function isErrorTagged(tags: readonly string[]): boolean {
-  return tags.some((tag) => tag === 'error' || tag === 'critical' || tag.startsWith('error:'));
+  return tags.some((tag) => ERROR_TAGS.includes(tag) || tag.startsWith(ERROR_TAG_PREFIX));
 }
 
 /** Tallies over loaded entries; superseded rows count toward the total only, as they always have here. */

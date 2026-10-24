@@ -115,4 +115,22 @@ describe('hippo eval output (in process)', () => {
 
     expect(transcript.join('\n')).toMatchSnapshot();
   });
+
+  it('names the file and the missing field when the corpus or baseline has the wrong shape', async () => {
+    const run = (corpus: string, flags: Flags = {}) =>
+      runInProcess(() => handleEval({ hippoRoot: store, tenantId: 'default', args: [corpus], flags }));
+    const noQuery = join(root, 'no-query.json');
+    writeFileSync(noQuery, JSON.stringify([{ id: 'a', expectedIds: ['m1'] }]));
+    const corpusReply = await run(noQuery);
+    expect(corpusReply.status).toBe(1);
+    expect(corpusReply.stderr).toContain(`${noQuery}: case 0 is missing "query (string)"`);
+
+    const good = join(root, 'good-corpus.json');
+    writeFileSync(good, JSON.stringify([{ id: 'a', query: 'deploy', expectedIds: ['m1'] }]));
+    const noMeans = join(root, 'no-means.json');
+    writeFileSync(noMeans, JSON.stringify({ cases: [] }));
+    const baselineReply = await run(good, { compare: noMeans });
+    expect(baselineReply.status).toBe(1);
+    expect(baselineReply.stderr).toContain(`${noMeans}: missing "meanMrr" (number)`);
+  });
 });

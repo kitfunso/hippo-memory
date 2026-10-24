@@ -3,7 +3,7 @@ import { isFtsAvailable, isFtsInSync, withReadSnapshot, type DatabaseSyncLike } 
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
-import { scopeAdmitSql } from './rule-sql.js';
+import { bareTextSql, scopeAdmitSql } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import { byIdOrder, FRESH_RAW_ORDER, oldestFirst, orderSql } from '../rules/order.js';
@@ -391,25 +391,40 @@ export function listTenantTextsPage(db: DatabaseSyncLike, tenantId: string, page
   return { texts: rows, next };
 }
 
-/** A page of the live rows whose source starts with `prefix`, in loadAllEntries' order, on the caller's handle; LIKE
- * folds case, so the prefix is checked again exactly and a page may hold fewer than `limit`. */
+/** The least string above every string that starts with `prefix` in byte order, or null when none is. */
+export function prefixUpperBound(prefix: string): string | null {
+  const points = Array.from(prefix);
+  while (points.at(-1) === '\u{10FFFF}') points.pop();
+  const last = points.pop();
+  if (last === undefined) return null;
+  const next = last.codePointAt(0)! + 1;
+  // The surrogate block holds no code point, so the next one up is U+E000.
+  return points.join('') + String.fromCodePoint(next === 0xd800 ? 0xe000 : next);
+}
+
+/** A page of the live rows whose source starts with `prefix`, case-sensitively, in loadAllEntries' order, on the
+ * caller's handle; a BINARY range on `source` is what idx_memories_source_tenant_created can seek. */
 export function listLiveEntriesBySourcePrefix(
   db: DatabaseSyncLike,
-  tenantId: string,
+  tenantId: TenantId,
   prefix: string,
   page: EntryPageRequest,
 ): EntryPage {
-  const { entries, next } = entriesPage(
+  const upper = prefixUpperBound(prefix);
+  const range = upper === null ? 'source >= ?' : 'source >= ? AND source < ?';
+  // Without the hint the planner takes the tenant index for its created order and filters every row of the tenant;
+  // the all-tenant read already pins its own index inside its subquery.
+  const index = tenantId === ALL_TENANTS ? '' : ' INDEXED BY idx_memories_source_tenant_created';
+  return entriesPage(
     tenantId,
     page,
     (within, limit) =>
       cachedStatement(
         db,
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-          `WHERE ${within.match("superseded_by IS NULL AND source LIKE ? ESCAPE '\\'")} ${ENTRY_PAGE_ORDER}`,
-      ).all(`${escapeLike(prefix)}%`, ...within.params, limit) as MemoryRow[],
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${index} ` +
+          `WHERE ${within.match(`superseded_by IS NULL AND ${range}`)} ${ENTRY_PAGE_ORDER}`,
+      ).all(...(upper === null ? [prefix] : [prefix, upper]), ...within.params, limit) as MemoryRow[],
   );
-  return { entries: entries.filter((entry) => entry.source.startsWith(prefix)), next };
 }
 
 /** A page of a tenant's rows tagged `rows.origin`, in loadAllEntries' order, narrowed as `rows` asks. */
@@ -601,14 +616,8 @@ export function liveContentsBySourceAndTag(
 
 const CURRENT_DISTILLED = "COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''";
 
-/** Every code point JavaScript's \s matches; tests/store/dedupe-candidates.test.ts pins it to the engine. */
-const JS_SPACE_CODE_POINTS = [
-  0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007,
-  0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff,
-] as const;
-
 // Texts equal apart from spacing are equal with all of it gone, so a group of these keys holds every duplicate group.
-const SPACELESS_CONTENT = JS_SPACE_CODE_POINTS.reduce((sql, cp) => `replace(${sql}, char(${cp}), '')`, 'content');
+const SPACELESS_CONTENT = bareTextSql('content');
 
 /** The current distilled rows that may be another's duplicate, and the partitions in the order they first appear. */
 export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidates {

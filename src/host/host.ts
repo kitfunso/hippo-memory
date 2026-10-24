@@ -3,7 +3,8 @@
 import * as path from 'node:path';
 import type { ProjectIdentity } from '../base/scope/project-identity.js';
 import { configReader, sharedStoreCheck } from './config-file.js';
-import { resolveGlobalRootDir, walkIdentity, type RemoteRule } from './project-identity.js';
+import { walkIdentity, type RemoteRule } from './project-identity.js';
+import { hippoHomeDir } from './agent-homes.js';
 
 export interface Host {
   /** The project `dir` belongs to; each path is walked once while the global remote rule stays as it was. */
@@ -18,7 +19,7 @@ const IDENTITY_CACHE_MAX = 1_000;
 /** A root's Host: a CLI command, a server, an MCP host or a store object each build one and drop it with themselves. */
 export function createHost(): Host {
   const globalConfig = configReader();
-  const remoteOn: RemoteRule = () => globalConfig(resolveGlobalRootDir()).projectIdentity.remote;
+  const remoteOn: RemoteRule = () => globalConfig(hippoHomeDir()).projectIdentity.remote;
   const walks = new Map<string, { readonly identity: ProjectIdentity; readonly remote: boolean | null }>();
   return {
     projectIdentity: (dir) => {

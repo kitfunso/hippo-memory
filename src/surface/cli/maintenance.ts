@@ -2,6 +2,7 @@
 
 import { anthropicLlmFromEnv } from '../../infra/ports.js';
 import { dedupWholeStore, type DedupResult } from '../../api/sleep/dedup.js';
+import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { embedCoverage, memoryEmbedMissing, resetPhysicsFromVectors, storedVectorCount } from '../../api/embeddings.js';
@@ -84,9 +85,7 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
 
 function printDedupGroups(result: DedupResult, dryRun: boolean): void {
   // Group by reason
-  const sameLayerSem = result.pairs.filter((p) => p.keptLayer === 'semantic' && p.removedLayer === 'semantic');
-  const sameLayerEpi = result.pairs.filter((p) => p.keptLayer === 'episodic' && p.removedLayer === 'episodic');
-  const crossLayer = result.pairs.filter((p) => p.keptLayer !== p.removedLayer);
+  const { semantic: sameLayerSem, episodic: sameLayerEpi, cross: crossLayer } = groupDedupPairs(result.pairs);
 
   console.log(`${dryRun ? 'Would remove' : 'Removed'} ${result.removed} duplicates:`);
   if (sameLayerSem.length > 0) {

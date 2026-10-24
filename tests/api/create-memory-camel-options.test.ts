@@ -39,4 +39,12 @@ describe('public createMemory camelCase options', () => {
     expect(entry.traceOutcome).toBeNull();
     expect(entry.sourceSessionId).toBeNull();
   });
+
+  it('gives an absent or undefined half-life base the default, as 2.x did', () => {
+    const absent = createMemory('no half-life base');
+    expect(createMemory('undefined half-life base', { baseHalfLifeDays: undefined }).halfLifeDays).toBe(
+      absent.halfLifeDays,
+    );
+    expect(Number.isFinite(absent.halfLifeDays)).toBe(true);
+  });
 });

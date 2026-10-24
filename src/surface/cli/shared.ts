@@ -4,7 +4,8 @@
 import { envApiKey, envRequireServer } from '../../base/util/env.js';
 import { isSharedStore } from '../../host/config-file.js';
 import { markChurnStale, type ChurnStaleResult } from '../../api/sleep/churn.js';
-import { isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
+import { isInitialized } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { learn, CLI_LEARN } from '../../api/index.js';
@@ -30,7 +31,7 @@ export async function runChurnStaleForRepo(
   tenantId: string,
   dryRun: boolean,
 ): Promise<{ root: string; result: ChurnStaleResult }[]> {
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = hippoHomeDir();
   const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
   const stores = roots.map((root) => ({ root, store: cliStore(root) }));
   return markChurnStale({ tenantId, infra: cliInfra() }, stores, { repoDir: process.cwd(), dryRun });
@@ -141,7 +142,7 @@ export async function learnFromRepo(
 export function resolveAuthRoot(hippoRoot: string, flags: CliFlags): string {
   if (boolFlag(flags, 'global')) {
     cliInitGlobal();
-    return resolveGlobalRootDir();
+    return hippoHomeDir();
   }
   requireInit(hippoRoot);
   return hippoRoot;

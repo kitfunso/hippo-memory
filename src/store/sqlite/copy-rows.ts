@@ -6,9 +6,10 @@ import { isFtsAvailable, isFtsInSync, type DatabaseSyncLike } from '../../db/ind
 import type { SqlFragment } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { EntryTextKey } from '../port/sharing.js';
-import { bareText, mayHoldCopy, SPACE_CODES } from '../rules/copies.js';
+import { bareText, mayHoldCopy } from '../rules/copies.js';
 import { openingPhrase } from '../rules/fts.js';
 import { originAnd, TENANT_IS } from './entry-reads.js';
+import { bareTextSql } from './rule-sql.js';
 import { tenantAnd } from './tenant.js';
 
 const IN_PHRASE_HITS = 'id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
@@ -19,13 +20,10 @@ function holdingPhrase(text: string): string | null {
   return opening === null ? null : `content : "${opening.replaceAll('"', '""')}"`;
 }
 
-const bareSql = (column: string): string =>
-  SPACE_CODES.reduce((sql, code) => `replace(${sql}, char(${code}), '')`, column);
-
 // mayHoldCopy over `memories` columns; binds the JSON list of bare texts twice.
 const MAY_HOLD_COPY_SQL =
-  `(${bareSql('content')} IN (SELECT value FROM json_each(?)) OR (source = 'consolidation' AND ` +
-  `EXISTS (SELECT 1 FROM json_each(?) WHERE instr(${bareSql('content')}, value) > 0)))`;
+  `(${bareTextSql('content')} IN (SELECT value FROM json_each(?)) OR (source = 'consolidation' AND ` +
+  `EXISTS (SELECT 1 FROM json_each(?) WHERE instr(${bareTextSql('content')}, value) > 0)))`;
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 export type CopyDbRow = {

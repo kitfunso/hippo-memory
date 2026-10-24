@@ -8,7 +8,7 @@ import { parseOlderThanFlag } from './audit-prune.js';
 import { cliApiContext } from './api-context.js';
 import { type CliFlags, type CommandContext, boolFlag, parseListLimit, stringFlag } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
-import { resolveGlobalRootDir } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
@@ -127,7 +127,7 @@ async function printAuditLog(hippoRoot: string, tenantId: string, args: string[]
 async function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const apply = boolFlag(flags, 'apply') && !boolFlag(flags, 'dry-run');
   const result = await api.memoryQualityRepair(
-    cliApiContext(boolFlag(flags, 'global') ? resolveGlobalRootDir() : hippoRoot, tenantId),
+    cliApiContext(boolFlag(flags, 'global') ? hippoHomeDir() : hippoRoot, tenantId),
     apply,
   );
   if (boolFlag(flags, 'json')) {

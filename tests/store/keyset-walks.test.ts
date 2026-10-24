@@ -133,6 +133,11 @@ describe('a full walk', () => {
           expect(reads.length, name).toBeGreaterThan(0);
           for (const sql of reads) {
             const detail = plan(db, sql);
+            // A source prefix seeks its own range and sorts only the rows that match it, never the tenant.
+            if (name === 'sourcePrefix') {
+              expect(detail, sql).toMatch(/SEARCH memories USING INDEX idx_memories_source_tenant_created/);
+              continue;
+            }
             expect(sortsAtMostPickedRows(detail), `${name}: ${sql}\n${detail}`).toBe(true);
           }
         }

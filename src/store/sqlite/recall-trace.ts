@@ -347,8 +347,8 @@ export function deliveryPruneSchedule(): DeliveryPruneSchedule {
   };
 }
 
-/** Old traces one prune deletes at most, so the first prune after an upgrade holds the hook's write lock briefly; the
- * rest of a backlog goes on the next prunes. */
+/** Old traces, and old delivery events, one prune deletes at most each, so the first prune after an upgrade holds the
+ * hook's write lock briefly; the rest of a backlog goes on the next prunes. */
 const TRACE_PRUNE_BATCH = 1000;
 
 /** Traces before `cutoff` that no outcome names and that are not the last recall's, with their results through the
@@ -369,7 +369,10 @@ function pruneRecallTraces(db: DatabaseSyncLike, cutoff: string): void {
 
 function pruneExpired(db: DatabaseSyncLike, eventTs: string, nowMs: number): void {
   const cutoff = deliveryCutoff(eventTs, nowMs);
-  cachedStatement(db, `DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
+  cachedStatement(
+    db,
+    `DELETE FROM delivery_events WHERE id IN (SELECT id FROM delivery_events WHERE ts < ? ORDER BY ts LIMIT ?)`,
+  ).run(cutoff, TRACE_PRUNE_BATCH);
   pruneRecallTraces(db, cutoff);
 }
 

@@ -1,7 +1,7 @@
 // What `hippo dashboard` prints at start, and the one line a port that will not open gets.
 import * as fs from 'fs';
 import * as path from 'path';
-import { resolveGlobalRootDir } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { printError } from './output.js';
 
 const DASHBOARD_URL_FILE = 'dashboard.url';
@@ -9,7 +9,7 @@ const DASHBOARD_URL_FILE = 'dashboard.url';
 /** Node ignores a file mode on Windows, so there the file goes under the profile's global hippo folder, which the user
  * profile already makes user-only; elsewhere mode 0600 does the job in the store folder. */
 function dashboardUrlFile(hippoRoot: string, platform: NodeJS.Platform): string {
-  return path.join(platform === 'win32' ? resolveGlobalRootDir() : hippoRoot, DASHBOARD_URL_FILE);
+  return path.join(platform === 'win32' ? hippoHomeDir() : hippoRoot, DASHBOARD_URL_FILE);
 }
 
 /** Writes the URL with its token to an owner-only file and prints where it is; a terminal, like a captured log, never

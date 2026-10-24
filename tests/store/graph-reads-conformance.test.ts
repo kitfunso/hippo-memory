@@ -400,7 +400,7 @@ describe('GraphReads walk reads', () => {
     expect(none).toEqual([]);
   });
 
-  it('reads the newest limit relations touching each 400 ids, keeping a repeat in its first place', async () => {
+  it('reads the newest limit relations touching the ids across all their 400-id batches, keeping a repeat in its first place', async () => {
     const { e, many } = g;
     const first = many[0]!;
     const last = many[MANY - 1]!;
@@ -429,11 +429,8 @@ describe('GraphReads walk reads', () => {
       [e.hub, e.spoke2],
       [e.hub, e.spoke1],
     ]);
-    // The limit holds per 400: the newer TailB relation still comes back, after the first batch's.
-    expect(perBatch).toEqual([
-      [first, e.tailA],
-      [last, e.tailB],
-    ]);
+    // The limit holds for the whole call: of the two batches' newest relations, the newer TailB one is kept.
+    expect(perBatch).toEqual([[last, e.tailB]]);
     expect(repeated).toEqual([[first, e.tailA]]);
     expect([otherTenant, zero, none]).toEqual([[], [], []]);
   });

@@ -7,7 +7,7 @@ import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
 import { configReader, type ConfigReader } from '../../host/config-file.js';
 import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
-import { resolveGlobalRootDir } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { ImportFiles } from '../importers/core.js';
 import type { HippoStore, StoreGroups } from '../../store/index.js';
@@ -73,7 +73,7 @@ export function cliImportFiles(hippoRoot: string): ImportFiles {
 
 /** Creates the global store, or finishes one that was partly made: what a first share needs of it. */
 export function cliInitGlobal(): void {
-  cliImportFiles(resolveGlobalRootDir()).ensure();
+  cliImportFiles(hippoHomeDir()).ensure();
 }
 
 /** One handle per store at the hook's lock wait; a store still busy after it skips the hook's work and answers

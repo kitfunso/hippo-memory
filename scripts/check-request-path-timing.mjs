@@ -30,7 +30,7 @@ process.chdir(tmp);
 
 // Windows dynamic import() needs a file:// URL, not a raw drive path.
 const load = (rel) => import(pathToFileURL(path.join(REPO, 'dist', rel)).href);
-const { createMemory } = await load('base/memory/memory.js');
+const { createMemory } = await load('entry/memory.js');
 const { initStore } = await load('entry/testing.js');
 const { writeEntryDbOnly } = await load('store/sqlite/entry-writes.js');
 const { countAmbientInFolder: loadAmbientTallies } = await load('store/sqlite/fixtures.js');

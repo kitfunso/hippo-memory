@@ -1,53 +1,9 @@
 import type { RuntimeSettings } from '../../base/config/config.js';
 import { detectForwardClaim, type ForwardClaimMatch } from '../learn/forward-claim-detector.js';
 import type { AppendAuditOpts, PlanningFallacyEvidence } from '../../store/port/types.js';
+import type { PlanningFallacyOutput, PlanningFallacyWatching } from '../../base/records/planning-fallacy.js';
 
 const TARGET_ID_CHARS = 100;
-
-/**
- * Surface delivered on `RecallResult.planningFallacyHint` when a recall query carries a forward-prediction phrase and
- * the closest class has closed history, so the agent sees its own track record at the moment of forecasting. */
-export interface PlanningFallacyHint {
-  classTag: string;
-  /** Verbatim PredictionBaserate.summary, e.g. "Last 5 estimates in class migration-effort averaged 2.10x actual (MAE
-   *  1.40)." */
-  baserateSummary: string;
-  /** Discriminator vs hypothetical future manual-override hints. */
-  source: 'j3.2-auto';
-  /**
-   * The regex match snippet that triggered detection, so the agent sees WHY the hint appeared and can self-correct if
-   * detection misfired.
-   */
-  detectedPhrase: string;
-  nClosed: number;
-  /** Null only when every closed-row had estimate_value=0 (ratio undefined). */
-  meanRatio: number | null;
-}
-
-/**
- * "Watching" variant emitted when the forward-claim regex matched but no baserate hint was returned (no prediction
- * class tag overlaps the query's tokens).
- * It surfaces the detection plus a one-line suggestion so the agent can re-tag the prediction or pass the suggestion to
- * the user.
- */
-export interface PlanningFallacyWatching {
-  /** The forward-claim phrase the detector matched (verbatim regex match snippet). */
-  detectedPhrase: string;
-  /**
-   * Why hippo could not produce a baserate hint despite the match: 'no_class_match' (no class scored >=1 on token
-   * overlap) or 'tiebreak' (>=2 classes tied at the best score; silent on ambiguity). */
-  reason: 'no_class_match' | 'tiebreak';
-  /** One-line agent-facing suggestion for how the user can give hippo enough signal to produce a baserate next time. */
-  suggestion: string;
-}
-
-/**
- * What `decidePlanningFallacy` hands to recall: EITHER `hint` (baserate available) OR `watching` (regex fired, no
- * baserate), or NEITHER (mode=off, no queryText, no regex match, or nClosed=0). Never both. */
-export interface PlanningFallacyOutput {
-  hint?: PlanningFallacyHint;
-  watching?: PlanningFallacyWatching;
-}
 
 export type AutodebiasMode = 'off' | 'regex';
 

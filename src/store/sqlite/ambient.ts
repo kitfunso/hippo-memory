@@ -2,12 +2,22 @@ import type { DatabaseSyncLike } from '../../db/index.js';
 import { originInSql, strengthSql } from './rule-sql.js';
 import { SECRET_TAGS } from '../../base/util/secret-detect.js';
 import { contextRowsWhere, jsonList } from './candidates.js';
-import { AMBIENT_FRESH_WINDOW_MS, type AmbientTallies } from '../../base/memory/ambient.js';
+import {
+  AMBIENT_FRESH_WINDOW_MS,
+  ERROR_TAGS,
+  ERROR_TAG_PREFIX,
+  type AmbientTallies,
+} from '../../base/memory/ambient.js';
 import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT, type LossAversion } from '../../base/memory/memory.js';
 import { placeholders, type SqlFragment } from '../../db/sql.js';
 import type { AmbientStoreFilter } from '../port/context-reads.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { isJsonNumber, isJsonString, parseJson } from '../../base/util/json.js';
+
+// The SQL form of isErrorTagged, built from its constants; the values are fixed words, never input.
+const ERROR_TAG_SQL =
+  `value IN (${ERROR_TAGS.map((tag) => `'${tag}'`).join(', ')}) ` +
+  `OR substr(value, 1, ${ERROR_TAG_PREFIX.length}) = '${ERROR_TAG_PREFIX}'`;
 
 /**
  * A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot match.
@@ -59,7 +69,6 @@ export function countAmbient(
   const scopeParams = [...rows.params, ...filter.currentProject, ...secret.params];
   const strength = strengthSql(filter.now, rules);
   const args = [...strength.params, freshAfter, HIGH_SCHEMA_FIT, ...scopeParams];
-  // A row is an error when one of its tags is `error`, `critical` or starts with `error:`, as isErrorTagged says.
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = cachedStatement(
     db,
@@ -70,7 +79,7 @@ export function countAmbient(
     COALESCE(SUM(emotional_valence IN ('negative', 'critical')), 0) AS negative,
     COALESCE(SUM(COALESCE(schema_fit, ${DEFAULT_SCHEMA_FIT}) > ?), 0) AS highSchemaFit,
     COALESCE(SUM(EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')})
-      WHERE value IN ('error', 'critical') OR substr(value, 1, 6) = 'error:')), 0) AS errors,
+      WHERE ${ERROR_TAG_SQL})), 0) AS errors,
     COALESCE(SUM(layer = 'semantic'), 0) AS semantic,
     COALESCE(SUM(layer = 'episodic'), 0) AS episodic,
     COALESCE(SUM(json_array_length(${jsonList('conflicts_with_json')})), 0) AS conflicts,

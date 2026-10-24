@@ -22,7 +22,7 @@ const P50_BOUND_MS = 15;
 const P95_BOUND_MS = 30;
 
 const load = (file) => import(pathToFileURL(path.join(REPO, 'dist', file)));
-const { createMemory } = await load('base/memory/memory.js');
+const { createMemory } = await load('entry/memory.js');
 const { initStore, writeEntry } = await load('entry/testing.js');
 const api = await load('api/index.js');
 const { sqliteStore } = await load('store/sqlite/store.js');

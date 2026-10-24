@@ -7,7 +7,8 @@ import { Layer, ConfidenceLevel, strengthOptionsOf, type MemoryEntry } from '../
 import * as api from '../../api/index.js';
 import { memoryGet, memoryListByIds } from '../../api/memories/memories.js';
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import { isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
+import { isInitialized } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { parseSteps, traceRecord, traceStats } from '../../api/memories/trace.js';
 import { extractPathTags } from '../../api/memories/remember-local.js';
@@ -106,7 +107,7 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
 
 async function writeMemory(hippoRoot: string, tenantId: string, text: string, flags: CliFlags): Promise<void> {
   const useGlobal = boolFlag(flags, 'global');
-  const targetRoot = useGlobal ? resolveGlobalRootDir() : hippoRoot;
+  const targetRoot = useGlobal ? hippoHomeDir() : hippoRoot;
 
   if (useGlobal) {
     cliInitGlobal();
@@ -281,7 +282,7 @@ async function printTrace(hippoRoot: string, tenantId: string, id: string, flags
   // Look in local store first, then global.
   let entry = await memoryGet(cliApiContext(hippoRoot, tenantId), id);
   let sourceLabel: 'local' | 'global' = 'local';
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = hippoHomeDir();
   if (!entry && isInitialized(globalRoot)) {
     entry = await memoryGet(cliApiContext(globalRoot, tenantId), id);
     sourceLabel = 'global';

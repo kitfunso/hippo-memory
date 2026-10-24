@@ -182,6 +182,43 @@ describe('the recall trace prune', () => {
   });
 });
 
+describe('the delivery event prune', () => {
+  /** `n` events stamped `ts` on one statement, with no turn number so no unique index applies. */
+  function events(n: number, ts: string): void {
+    db.prepare(
+      `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?) ` +
+        `INSERT INTO delivery_events (ts, ledger_version, runtime, event_type, surface, store_hash, write_store, ` +
+        `session_state, block_state) SELECT ?, 1, 'claude-code', 'prompt-submit', 'hook', 'h', 'local', 'missing', ` +
+        `'sent' FROM n`,
+    ).run(n, ts);
+  }
+
+  it('deletes at most 1,000 old events a prune, oldest first, and the next prune takes the rest', () => {
+    events(5, daysAgo(300));
+    events(1000, daysAgo(200));
+    const log = recordStatements(() => writeDeliveryEventOnHandle(db, event()));
+    expect(countMatching(log.statements, /^\s*DELETE FROM delivery_events/)).toBe(1);
+    // The five oldest go with 995 of the next; five of the 200-day events are left, and the fresh one.
+    expect(count('delivery_events')).toBe(6);
+    expect(ids(`SELECT COUNT(*) AS id FROM delivery_events WHERE ts < '${daysAgo(250)}'`)).toEqual([0]);
+    writeDeliveryEventOnHandle(db, event());
+    expect(count('delivery_events')).toBe(2);
+  });
+
+  it('finds its rows through the ts index', () => {
+    events(3, daysAgo(200));
+    const log = recordStatements(() => writeDeliveryEventOnHandle(db, event()));
+    const prune = log.statements.find((sql) => /^\s*DELETE FROM delivery_events/.test(sql));
+    if (prune === undefined) throw new Error('the write did not prune delivery events');
+    // SAFETY: EXPLAIN QUERY PLAN rows carry a TEXT `detail` column.
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${prune}`).all() as Array<{ detail: string }>)
+      .map((r) => r.detail)
+      .join(' | ');
+    expect(plan).toMatch(/idx_delivery_events_ts/);
+    expect(plan).not.toMatch(/SCAN delivery_events/);
+  });
+});
+
 describe('the memory store', () => {
   afterEach(() => {
     vi.useRealTimers();

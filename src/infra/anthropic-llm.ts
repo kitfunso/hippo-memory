@@ -2,6 +2,7 @@
 
 import type { Llm, LlmReply, LlmRequest } from '../base/ports/llm.js';
 import { envLlmTimeoutMs } from '../base/util/env.js';
+import { withRequestSignal } from '../base/util/request-scope.js';
 import { fetchWithRetry, llmTimeoutMs, llmTotalMs } from './http-retry.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { readCappedJson, readCappedText } from '../base/util/capped-json.js';
@@ -66,6 +67,7 @@ async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Pr
           max_tokens: req.maxTokens,
           messages: [{ role: 'user', content: req.prompt }],
         }),
+        signal: withRequestSignal(),
       },
       { timeoutMs, totalMs: llmTotalMs(timeoutMs), fetchFn: connection.fetcher ?? fetch },
     );

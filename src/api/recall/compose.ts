@@ -27,6 +27,7 @@ import type {
   ContinuityBlock,
 } from './types.js';
 import type { Context } from '../types.js';
+import type { RecallProfile } from './profiles.js';
 import {
   anchoringRows,
   availabilityRows,
@@ -112,6 +113,7 @@ export function planRecall(
   opts: RecallOptions,
   all: MemoryEntry[],
   personalScope: string | undefined,
+  profile: RecallProfile,
 ): RecallPlan {
   const limit = opts.window?.limit ?? DEFAULT_RECALL_LIMIT;
   const window = admitCandidates(opts, all, limit, personalScope);
@@ -120,7 +122,7 @@ export function planRecall(
     limit,
     window,
     personalScope,
-    goalBoost: sessionId && !goalTag ? { sessionId, tenantId: ctx.tenantId, limit } : null,
+    goalBoost: profile.goalBoost.band && sessionId && !goalTag ? { sessionId, tenantId: ctx.tenantId, limit } : null,
     overflow:
       (opts.window?.summarizeOverflow ?? true) && window.entries.length > limit
         ? overflowGroups(window, limit)
