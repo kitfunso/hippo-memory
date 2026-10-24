@@ -1,5 +1,4 @@
-// Runs the adapters for one pass and routes each container to its store; src/api/agent-memories.ts picks the
-// passes (plan designs 2, 8, 11).
+// Runs the adapters for one pass and routes each container to its store; src/api/agent-memories.ts picks the passes.
 import path from 'node:path';
 import { plural } from '../../base/util/format.js';
 import type { Machine } from '../../base/util/agent-homes.js';
