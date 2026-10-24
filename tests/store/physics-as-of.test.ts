@@ -10,6 +10,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
+import { CLI_RECALL } from '../../src/api/recall/profiles.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
@@ -164,6 +165,7 @@ describe('rankRecall in physics mode with asOf', () => {
       await rankRecall(
         { store: sqliteStore(root), config: loadConfig(root), tenantId: TENANT, embedderFor: resolveEmbeddingProvider },
         opts(explain, usePhysics),
+        CLI_RECALL,
       )
     ).results.map((r) => r.entry.id);
 

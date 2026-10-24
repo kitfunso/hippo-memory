@@ -1,19 +1,9 @@
-// Read path: one typed entry per recall ranker (retrieve, retrieveRanking; the CLI core is in request.ts).
+// Read path: the HTTP and MCP recall entries. Each ranks with rankRecall under its profile, then composes the band and
+// writes the recall; the CLI's entry is in request.ts.
 
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
-import { boostByGoals } from '../../domain/search/goal-boost.js';
-import type { RecallSearchArgs, RecallWrites } from '../../store/port.js';
-import { searchByEngine } from '../../domain/search/engine.js';
-import { vectorSourceOf } from '../../domain/search/hybrid.js';
-import type { HybridVectorCandidates } from '../../domain/search/vector.js';
-import type { PhysicsConfig } from '../../base/rank/physics-config.js';
-import {
-  passesScopeFilterForRecall,
-  assertScopeRequestAllowed,
-  personalScopeOf,
-  recallScopeFilter,
-} from '../../base/scope/recall-scope.js';
+import type { SearchResult } from '../../base/rank/search-types.js';
+import { assertScopeRequestAllowed, personalScopeOf } from '../../base/scope/recall-scope.js';
 import type { RecallOptions, RecallResult, RecallWindowOptions, ShowRanking, StoreRanking } from './types.js';
 import { type Context, ownerOrSubject, RecallContractError, sharedStoreOf } from '../types.js';
 import {
@@ -33,18 +23,16 @@ import {
   type RecallPlan,
   type RecallReads,
 } from './compose.js';
+import { rankCtxOf, rankRecall, withMissing, type RankRecallOptions, type RankRecallResult } from './pipeline.js';
+import { HTTP_RECALL, MCP_RECALL } from './profiles.js';
 import type { ActiveGoals, ContinuityKey } from '../../store/port/types.js';
 import type { GoalRecallLogRow } from '../../store/port/recall-writes.js';
+import type { RecallWrites } from '../../store/port.js';
 
 const CONTINUITY_EVENT_LIMIT = 5;
-// Tag, pin and recency boosts can lift a row from deep in the BM25 order, so MCP ranks a wide lexical window.
-const WHOLE_STORE_LEXICAL_WINDOW = 1000;
 
-type EngineSearchOptions = Parameters<typeof searchByEngine>[4];
-type RankedResults = Awaited<ReturnType<typeof searchByEngine>>;
-
-/** The default ranker: the SQL BM25 window, reordered by hybrid or physics search when `mode` asks, then the recall's
- * write; a surface that sets `recordAs` also has the recall recorded in full. */
+/** HTTP recall: ranks under HTTP_RECALL, composes the band, then writes the recall; a surface that sets `recordAs`
+ * also has the recall recorded in full. */
 export async function retrieve(ctx: Context, opts: RecallOptions): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.filter?.scope);
   const windowSize = recallWindowSize(ctx, opts.window);
@@ -59,25 +47,27 @@ export async function retrieve(ctx: Context, opts: RecallOptions): Promise<Recal
   return result;
 }
 
-/** The MCP ranker: ranks the whole scoped store, hands the ranking to `show`, and audits, strengthens and traces the
- * ids `show` returns. `results` stays the top window of that ranking. `recordAs` is not read here. */
+/** MCP recall: ranks under MCP_RECALL, hands the ranking to `show`, and audits, strengthens and traces the ids `show`
+ * returns. `results` stays the top window of that ranking. `recordAs` is not read here. */
 export async function retrieveRanking(ctx: Context, opts: RecallOptions, show: ShowRanking): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.filter?.scope);
   const windowSize = recallWindowSize(ctx, opts.window);
   const personalScope = personalScopeOf(ctx.actor) ?? undefined;
-  const whole = await rankWholeStore(ctx, opts, windowSize, personalScope);
+  const ranking = await rankRecall(rankCtxOf(ctx), rankRequestOf(ctx, opts, windowSize, personalScope), MCP_RECALL);
+  const window = ranking.results.slice(0, windowSize).map((r) => r.entry);
   // The caller traces and audits the rows it shows, so the window writes neither.
   const windowOpts = { ...opts, trace: { ...opts.trace, suppressRecallTrace: true } };
-  const plan = planRecall(ctx, windowOpts, whole.window, personalScope);
-  const reads = await readRecall(ctx, windowOpts, plan, whole.goals);
+  const plan = planRecall(ctx, windowOpts, window, personalScope, MCP_RECALL);
+  const reads = await readRecall(ctx, windowOpts, plan, ranking.goals);
   const composed = composeRecall(ctx, windowOpts, {
     windowSize,
-    all: whole.window,
+    all: window,
     plan,
     reads,
     auditWindow: false,
   });
-  await finishShownRecall(ctx, opts, { show, ranking: whole.ranking, goalLog: whole.goalLog }, composed);
+  const cut = { show, ranking: storeRankingOf(ranking), goalLog: ranking.goalRecallLog };
+  await finishShownRecall(ctx, opts, cut, composed);
   return composed.result;
 }
 
@@ -102,9 +92,10 @@ async function recallFromWindow(
   windowSize: number,
   personalScope: string | undefined,
 ): Promise<RecallResult> {
-  const candidates = await lexicalWindow(ctx, opts, windowSize, personalScope);
-  const plan = planRecall(ctx, opts, candidates, personalScope);
-  const reads = await readRecall(ctx, opts, plan);
+  const ranking = await rankRecall(rankCtxOf(ctx), rankRequestOf(ctx, opts, windowSize, personalScope), HTTP_RECALL);
+  const candidates = ranking.results.map((r) => r.entry);
+  const plan = planRecall(ctx, opts, candidates, personalScope, HTTP_RECALL);
+  const reads = await readRecall(ctx, opts, plan, ranking.goals);
   const composed = composeRecall(ctx, opts, { windowSize, all: candidates, plan, reads });
   await finishRecall(
     ctx,
@@ -115,27 +106,32 @@ async function recallFromWindow(
   return composed.result;
 }
 
-/** The SQL BM25 window, reordered by hybrid or physics search when `mode` asks. */
-async function lexicalWindow(
+/** What an API recall asks the ranker for: its exact scope and own scope, its project, and the engine `mode` names. */
+function rankRequestOf(
   ctx: Context,
   opts: RecallOptions,
   windowSize: number,
   personalScope: string | undefined,
-): Promise<MemoryEntry[]> {
-  const candidates = await ctx.store.searchRecallEntries(
-    opts.query,
-    recallSearchArgs(ctx, opts, windowSize, personalScope),
-  );
-  if (opts.mode !== 'hybrid' && opts.mode !== 'physics') return candidates;
-  const ranked = await rankByEngine(ctx, opts, candidates, {
-    budget: Infinity,
-    scope: opts.filter?.scope ?? null,
-    vectorCandidates: recallVectorSpec(ctx, opts, personalScope),
-  });
-  return withMissing(
-    ranked.map((r) => r.entry),
-    candidates,
-  );
+): RankRecallOptions {
+  const { sessionId, goalTag } = opts.boost ?? {};
+  return {
+    query: opts.query,
+    window: { scorerWindow: windowSize },
+    includeSuperseded: false,
+    explicitScope: opts.filter?.scope ?? null,
+    scopeMode: 'exact',
+    ownScope: personalScope,
+    originProjects: recallOrigin(opts),
+    // An API goal tag only turns the session boost off, where the CLI's --goal boosts the tag instead.
+    boost: goalTag ? {} : { sessionId },
+    search: {
+      usePhysics: opts.mode === 'physics',
+      engineNamed: opts.mode === 'hybrid' || opts.mode === 'physics',
+      physicsConfig: ctx.config.physics,
+      multihop: false,
+      explain: false,
+    },
+  };
 }
 
 /** The one recall write: the caller's leading audit rows go first, and the ids shown are the ones strengthened. */
@@ -152,109 +148,17 @@ async function finishRecall(
   });
 }
 
-/** `mode` names the engine: physics with the store's config, hybrid otherwise. */
-function physicsFor(ctx: Context, opts: RecallOptions): PhysicsConfig | null {
-  return opts.mode === 'physics' ? ctx.config.physics : null;
-}
-
-/** Ranks `pool` with the engine `mode` names, over the store's vector arm. */
-function rankByEngine(
-  ctx: Context,
-  opts: RecallOptions,
-  pool: MemoryEntry[],
-  searchOpts: EngineSearchOptions,
-): Promise<RankedResults> {
-  const source = vectorSourceOf({
-    store: ctx.store,
-    config: ctx.config,
-    onHippoDb: ctx.reach?.isHippoDb,
-    embedderFor: ctx.infra.embedderFor,
-  });
-  return searchByEngine(source, opts.query, pool, physicsFor(ctx, opts), {
-    runtime: ctx.config.runtime,
-    cwd: ctx.infra.machine.cwd,
-    ...searchOpts,
-  });
-}
-
-/** `first`, then the rows of `second` that `first` does not hold. */
-function withMissing(first: MemoryEntry[], second: MemoryEntry[]): MemoryEntry[] {
-  const held = new Set(first.map((e) => e.id));
-  return [...first, ...second.filter((e) => !held.has(e.id))];
-}
-
-/** The recall load's arguments: exact scope, current rows only, the caller's project and personal scope. */
-function recallSearchArgs(
-  ctx: Context,
-  opts: RecallOptions,
-  limit: number,
-  personalScope: string | undefined,
-): RecallSearchArgs {
+/** The ranking the MCP presenter cuts its list from: every ranked row, and the scope-filtered pool for its hints. */
+function storeRankingOf(ranking: RankRecallResult): StoreRanking {
+  const rankedEntries = ranking.results.map((r) => r.entry);
   return {
-    limit,
-    tenantId: ctx.tenantId,
-    requestedScope: opts.filter?.scope,
-    explicitScopeMode: 'exact',
-    includeSuperseded: false,
-    originProjects: recallOrigin(opts),
-    ownScope: personalScope,
+    ranked: ranking.results,
+    pool: withMissing(ranking.localEntries, rankedEntries),
+    droppedByScope: ranking.droppedPreRank,
   };
 }
 
-/** api.retrieve's vector arm: the recall load's exact-scope rule, current rows only. */
-function recallVectorSpec(
-  ctx: Context,
-  opts: RecallOptions,
-  personalScope: string | undefined,
-): HybridVectorCandidates {
-  return {
-    tenantId: ctx.tenantId,
-    scope: recallScopeFilter(opts.filter?.scope, 'exact', personalScope),
-    includeSuperseded: false,
-    origin: recallOrigin(opts),
-    admit: (e) => passesScopeFilterForRecall(e.scope ?? null, opts.filter?.scope, personalScope),
-  };
-}
-
-/** The ranking `retrieveRanking` ranks, with the window planned from it and the goals its boost read. */
-interface WholeStoreRanking {
-  readonly window: MemoryEntry[];
-  readonly goals: ActiveGoals | null;
-  readonly ranking: StoreRanking;
-  readonly goalLog: GoalRecallLogRow[];
-}
-
-/** Physics when `mode` says so, hybrid otherwise, over a wide lexical window plus the nearest vectors, goal boost
- * applied; the window is the top `windowSize` rows of that ranking. */
-async function rankWholeStore(
-  ctx: Context,
-  opts: RecallOptions,
-  windowSize: number,
-  personalScope: string | undefined,
-): Promise<WholeStoreRanking> {
-  const loaded = await ctx.store.searchRecallEntries(
-    opts.query,
-    recallSearchArgs(ctx, opts, Math.max(windowSize, WHOLE_STORE_LEXICAL_WINDOW), personalScope),
-  );
-  const pool = loaded.filter((e) => passesScopeFilterForRecall(e.scope ?? null, opts.filter?.scope, personalScope));
-  // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
-  const searched = await rankByEngine(ctx, opts, pool, {
-    budget: Infinity,
-    vectorCandidates: recallVectorSpec(ctx, opts, personalScope),
-  });
-  const { ranked, goals, rankedLog } = await boostRankedByGoals(ctx, opts, searched);
-  const ranking = {
-    ranked,
-    pool: withMissing(
-      pool,
-      ranked.map((r) => r.entry),
-    ),
-    droppedByScope: loaded.length - pool.length,
-  };
-  return { window: ranked.slice(0, windowSize).map((r) => r.entry), goals, ranking, goalLog: rankedLog };
-}
-
-/** What the caller cuts its list from: its presenter, the whole-store ranking and the goal log rows it earned. */
+/** What the caller cuts its list from: its presenter, the full ranking and the goal log rows it earned. */
 interface CallerCut {
   readonly show: ShowRanking;
   readonly ranking: StoreRanking;
@@ -283,21 +187,7 @@ async function finishShownRecall(
   );
 }
 
-// One goal read serves both boosts; the ranked list's log rows come first, so its scores win the log's first-write.
-async function boostRankedByGoals(ctx: Context, opts: RecallOptions, ranked: RankedResults) {
-  const noLog: GoalRecallLogRow[] = [];
-  const { sessionId, goalTag } = opts.boost ?? {};
-  const goals = sessionId && !goalTag ? await ctx.store.activeGoals({ sessionId, tenantId: ctx.tenantId }) : null;
-  if (!goals || !sessionId) return { ranked, goals, rankedLog: noLog };
-  const boost = boostByGoals(ranked, goals, {
-    sessionId,
-    tenantId: ctx.tenantId,
-    limit: ranked.length,
-  });
-  return { ranked: boost.results, goals, rankedLog: boost.log };
-}
-
-function shownAuditAndTrace(ctx: Context, opts: RecallOptions, shownIds: readonly string[], ranked: RankedResults) {
+function shownAuditAndTrace(ctx: Context, opts: RecallOptions, shownIds: readonly string[], ranked: SearchResult[]) {
   const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));
   const shownRow = recallAuditRow(callerOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, shownIds.length));
   const trace = opts.trace?.suppressRecallTrace

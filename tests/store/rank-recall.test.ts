@@ -8,6 +8,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
+import { CLI_RECALL } from '../../src/api/recall/profiles.js';
 import type { RerankerFn } from '../../src/base/ports/reranker.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
@@ -94,7 +95,7 @@ describe('rankRecall', () => {
 
   // Private and superseded rows are excluded in SQL, so they are pre-candidate: neither counted nor dropped.
   it('ranks the admitted pool and leaves out private and superseded rows', async () => {
-    const rank = await rankRecall(ctx(), opts());
+    const rank = await rankRecall(ctx(), opts(), CLI_RECALL);
     expect(ids(rank.results).sort()).toEqual(['mem_rank_goal', 'mem_rank_plain', 'mem_rank_trace']);
     expect(rank.droppedPreRank).toBe(0);
     expect(rank.totalCandidates).toBe(3);
@@ -102,23 +103,23 @@ describe('rankRecall', () => {
   });
 
   it('an explicit scope unlocks that private scope on top of the default set', async () => {
-    const rank = await rankRecall(ctx(), opts({ explicitScope: 'slack:private:C1' }));
+    const rank = await rankRecall(ctx(), opts({ explicitScope: 'slack:private:C1' }), CLI_RECALL);
     expect(ids(rank.results)).toContain('mem_rank_private');
     expect(ids(rank.results)).toContain('mem_rank_plain');
   });
 
   it('returns the goal-stack log rows and writes none of them', async () => {
     await pushGoal(hippoRoot, { sessionId: 's-rank', tenantId: 'default', goalName: 'goal-alpha' });
-    const rank = await rankRecall(ctx(), opts({ boost: { sessionId: 's-rank' } }));
+    const rank = await rankRecall(ctx(), opts({ boost: { sessionId: 's-rank' } }), CLI_RECALL);
     expect(rank.goalRecallLog.map((r) => r.memoryId)).toEqual(['mem_rank_goal']);
     expect(ids(rank.results)[0]).toBe('mem_rank_goal');
     expect(goalLogCount()).toBe(0);
   });
 
   it('haltBefore stops ahead of the named stage', async () => {
-    const full = await rankRecall(ctx(), opts({ layer: Layer.Trace }));
+    const full = await rankRecall(ctx(), opts({ layer: Layer.Trace }), CLI_RECALL);
     expect(ids(full.results)).toEqual(['mem_rank_trace']);
-    const halted = await rankRecall(ctx(), opts({ layer: Layer.Trace, haltBefore: 'layer' }));
+    const halted = await rankRecall(ctx(), opts({ layer: Layer.Trace, haltBefore: 'layer' }), CLI_RECALL);
     expect(halted.halted).toBe(true);
     expect(ids(halted.results)).toHaveLength(3);
   });
@@ -128,7 +129,7 @@ describe('rankRecall re-rank stages', () => {
   const put = (id: string, content: string, extra: Partial<MemoryEntry> = {}): void => {
     writeEntry(hippoRoot, { ...createMemory(content), id, strength: 1, ...extra });
   };
-  const rank = (extra: Partial<RankRecallOptions> = {}) => rankRecall(ctx(), opts(extra));
+  const rank = (extra: Partial<RankRecallOptions> = {}) => rankRecall(ctx(), opts(extra), CLI_RECALL);
 
   beforeEach(() => {
     ({ root: hippoRoot } = makeStore('rank-rerank'));
