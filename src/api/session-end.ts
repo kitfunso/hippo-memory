@@ -63,6 +63,7 @@ async function writeEndHandoff(ctx: Context, sessionId: string, close: SessionCl
     );
   } catch (err) {
     close.log(`handoff write failed: ${errorMessage(err)}`);
+    log.error('session-end: handoff write failed', errorFields(err));
   }
 }
 
@@ -77,6 +78,7 @@ async function closeSnapshot(ctx: Context, sessionId: string | null, line: (mess
     }
   } catch (err) {
     line(`snapshot close failed: ${errorMessage(err)}`);
+    log.error('session-end: snapshot close failed', errorFields(err));
   }
 }
 

@@ -14,7 +14,7 @@ Corpus file not found: <root>/nope.json
 $ eval (bad corpus) -> 1
 --- stdout
 --- stderr
-Failed to read corpus: Corpus JSON must be an array or { cases: [...] }
+Failed to read corpus <root>/bad.json: Corpus JSON must be an array or { cases: [...] }
 
 $ eval corpus -> 0
 --- stdout
@@ -278,7 +278,7 @@ NDCG@10:      0.5377
 1 case(s) returned zero relevant results:
   [miss] "quantum chromodynamics"
 --- stderr
-Failed to parse baseline: Unexpected token 'o', "not json" is not valid JSON
+Failed to parse baseline <root>/corpus.txt: Unexpected token 'o', "not json" is not valid JSON
 
 $ eval --bootstrap -> 0
 --- stdout

@@ -72,6 +72,15 @@ export function currentSignal(): AbortSignal | undefined {
   return requestScopes.getStore()?.signal;
 }
 
+/** `own` ended by the current request's abort as well, so an outbound call stops when its caller has gone. */
+export function withRequestSignal(own: AbortSignal): AbortSignal;
+export function withRequestSignal(own?: AbortSignal): AbortSignal | undefined;
+export function withRequestSignal(own?: AbortSignal): AbortSignal | undefined {
+  const request = currentSignal();
+  if (request === undefined) return own;
+  return own === undefined ? request : AbortSignal.any([own, request]);
+}
+
 /** Runs `fn` with `requestId` on every log line it writes, including the ones from timers and promises it starts.
  * `deadline` reaches every store call made inside, and `signal` every check of `currentSignal`.
  */

@@ -27,12 +27,12 @@ targetRules = ["generic-api-key"]
 
 [[allowlists]]
 description = "agent-memories-sync test: synthetic JWT in a note body"
-paths = ['''^tests/agent-memories/agent-memories-sync-edges\.test\.ts$''']
+paths = ['''^tests/agent-memories/agent-memories-sync-edges\.process\.test\.ts$''']
 targetRules = ["jwt"]
 
 [[allowlists]]
 description = "pre-compact e2e test: dummy RSA private key header with no key body"
-paths = ['''^tests/core/pre-compact-e2e-regressions\.test\.ts$''']
+paths = ['''^tests/core/pre-compact-e2e-regressions\.process\.test\.ts$''']
 targetRules = ["private-key"]
 
 [[allowlists]]
@@ -42,5 +42,5 @@ targetRules = ["generic-api-key", "stripe-access-token"]
 
 [[allowlists]]
 description = "server-hardening test: made-up Slack signing secret"
-paths = ['''^tests/server/server-hardening\.test\.ts$''']
+paths = ['''^tests/server/server-hardening\.server\.test\.ts$''']
 targetRules = ["generic-api-key"]

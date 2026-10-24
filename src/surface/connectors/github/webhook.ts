@@ -87,7 +87,8 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, ports: 
   const rawBody = await readSignedBody(request, secret, sigStr);
 
   // Signature OK from here on. Everything else is ACK-200; bad envelopes go to the DLQ and a human can replay later.
-  const replayKey = deliveryId ?? sigStr;
+  // The delivery id header is unsigned, so a captured body resent under a fresh id must still hit the same hold.
+  const replayKey = sigStr;
   await claimOrRefuse(ports.store, replayKey);
   try {
     await routeSignedDelivery({

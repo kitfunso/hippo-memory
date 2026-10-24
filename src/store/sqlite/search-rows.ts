@@ -161,7 +161,7 @@ function listFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredi
     const message = errorMessage(err);
     if (!FTS_QUERY_SYNTAX_RE.test(message)) {
       const failure = `FTS search failed, using the slower LIKE match: ${message}`;
-      log.once('fts-match-fallback', 'warn', failure, errorFields(err));
+      log.warnThenSample('fts-match-fallback', failure, errorFields(err));
     }
     return [];
   }
