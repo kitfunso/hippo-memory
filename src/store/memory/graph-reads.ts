@@ -6,6 +6,7 @@ import {
   type GraphReads,
   type GraphRows,
   type GraphViewQuery,
+  type GraphWalkQuery,
   type Relation,
 } from '../port/graph.js';
 import { diffGraph, memoryIdsOf, type StoredGraph } from '../rules/graph-delta.js';
@@ -124,29 +125,26 @@ function entitiesWhere<K>(t: MemoryTables, keys: readonly K[], holds: (e: Entity
   return structuredClone(batches(keys).flatMap((batch) => t.entities.filter((e) => holds(e, batch)).sort(byId)));
 }
 
+// The view's own walk serves the neighbor read too: each batch's newest `limit`, without repeats, then capped whole.
+function walkRowsIn(t: MemoryTables, tenantId: string, query: GraphWalkQuery): GraphRows {
+  const none: GraphRows = { entities: [], relations: [], truncated: false };
+  if (query.by === 'neighbor') {
+    const own = t.relations.filter((r) => r.tenantId === tenantId);
+    const joined = joinedFrom(own, query.ids, query.limit);
+    if (joined.length > query.limit) joined.sort(newestCreated).length = query.limit;
+    return { ...none, relations: structuredClone(joined) };
+  }
+  const holds = (e: Entity, batch: (string | number)[]): boolean => {
+    const key = query.by === 'entity' ? e.id : e.memoryId;
+    return e.tenantId === tenantId && key !== null && batch.includes(key);
+  };
+  return { ...none, entities: entitiesWhere<string | number>(t, query.ids, holds) };
+}
+
 export function memoryGraphReads(t: MemoryTables): GraphReads {
   return {
-    graphRows: async (tenantId, query) => graphRowsIn(t, tenantId, query),
-    entitiesForMemories: async (tenantId, memoryIds) =>
-      entitiesWhere(
-        t,
-        memoryIds,
-        (e, batch) => e.tenantId === tenantId && e.memoryId !== null && batch.includes(e.memoryId),
-      ),
-    entitiesByIds: async (tenantId, ids) =>
-      entitiesWhere(t, ids, (e, batch) => e.tenantId === tenantId && batch.includes(e.id)),
-    async neighborRelations(tenantId, entityIds, { limit }) {
-      const found = new Map<number, Relation>();
-      for (const batch of batches(entityIds)) {
-        const touching = t.relations.filter(
-          (r) => r.tenantId === tenantId && (batch.includes(r.fromEntityId) || batch.includes(r.toEntityId)),
-        );
-        for (const r of touching.sort(newestCreated).slice(0, limit)) found.set(r.id, r);
-      }
-      const merged = [...found.values()];
-      if (merged.length > limit) merged.sort(newestCreated).length = limit;
-      return structuredClone(merged);
-    },
+    graphRows: async (tenantId, query) =>
+      'by' in query ? walkRowsIn(t, tenantId, query) : graphRowsIn(t, tenantId, query),
     graphDelta: async (tenantId, desired) =>
       structuredClone(diffGraph(storedGraphIn(t, tenantId, memoryIdsOf(desired)), desired)),
   };

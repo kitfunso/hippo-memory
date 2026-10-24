@@ -91,9 +91,8 @@ async function walkRelations(
 
   for (let depth = 1; depth <= hops && frontier.length > 0; depth++) {
     const frontierSet = new Set(frontier);
-    const rels = await store.graphReads.neighborRelations(tenantId, frontier, {
-      limit: Math.max(maxNeighbors, maxNeighbors * frontier.length),
-    });
+    const limit = Math.max(maxNeighbors, maxNeighbors * frontier.length);
+    const { relations: rels } = await store.graphReads.graphRows(tenantId, { by: 'neighbor', ids: frontier, limit });
     const nextFrontier: number[] = [];
     for (const rel of rels) {
       const fromIn = frontierSet.has(rel.fromEntityId);
@@ -170,16 +169,19 @@ async function produceHitsForStore(
   const { hops, maxNeighbors, tenantId, asOfDate } = opts;
 
   // Seeds = graph entities (in THIS store) whose source memory is a base result.
-  const seedEntities = await store.graphReads.entitiesForMemories(
-    tenantId,
-    baseResults.map((r) => r.entry.id),
-  );
+  const { entities: seedEntities } = await store.graphReads.graphRows(tenantId, {
+    by: 'memory',
+    ids: baseResults.map((r) => r.entry.id),
+  });
   if (seedEntities.length === 0) return;
 
   const { reached, originMemByEntityId } = await walkRelations(store, tenantId, seedEntities, hops, maxNeighbors);
   if (reached.size === 0) return;
 
-  const reachedEntities = await store.graphReads.entitiesByIds(tenantId, [...reached.keys()]);
+  const { entities: reachedEntities } = await store.graphReads.graphRows(tenantId, {
+    by: 'entity',
+    ids: [...reached.keys()],
+  });
   const loadedById = await loadReachedMemories(store, tenantId, reachedEntities, seenMemoryIds);
   const successorValidFrom = await loadSuccessorValidFrom(store, tenantId, loadedById, asOfDate);
 

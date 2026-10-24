@@ -211,7 +211,7 @@ async function oneshotRead() {
   const query = JSON.parse(fs.readFileSync(path.join(root, 'queries.json'), 'utf8'))[q];
   const { vectors } = sqliteStore(root);
   // Opens the store first, so the timing holds the read alone.
-  await vectors.storedVectors(['none']);
+  await vectors.stored('vectors', ['none']);
   const { out, took } = await timed(() => vectors.nearestEntries(query, spec(ALL_TENANTS)));
   console.log(JSON.stringify({ took, ids: out.slice(0, K).map((e) => e.id) }));
 }

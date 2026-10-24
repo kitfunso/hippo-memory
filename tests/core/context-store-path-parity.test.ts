@@ -137,7 +137,7 @@ const CASES: readonly Case[] = [
     },
     physicsOn: true,
     reaches: (p) => expect(p.result.entries).toHaveLength(13),
-    storeReads: ['searchRecallEntries', 'physicsParticles'],
+    storeReads: ['searchRecallEntries', 'stored:particles'],
   },
   {
     name: 'query without physics',
@@ -496,7 +496,7 @@ describe('contextGet on a store held in memory, with hippo.db blocked', () => {
     // The last-recall ids feed only POST /v1/outcome, which no other store serves, so the store path leaves them as seeded.
     expect(inMemory.lastRecall).toEqual(seededLastRecall);
     expect(memory?.calls).toEqual(expect.arrayContaining([...(c.storeReads ?? [])]));
-    if (c.storeReads?.includes('physicsParticles') || c.storeReads?.includes('nearestEntries')) {
+    if (c.storeReads?.includes('stored:particles') || c.storeReads?.includes('nearestEntries')) {
       expect(embeddings.requests()).toBeGreaterThan(before);
     }
   });

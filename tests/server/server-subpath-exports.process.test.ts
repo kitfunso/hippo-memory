@@ -164,6 +164,8 @@ const STORE_KIT_TYPES = [
   'StoreGroup',
   'StoreGroups',
   'StoredGraph',
+  'StoredPart',
+  'StoredParts',
   'StrengthenOptions',
   'SupersedeWrite',
   'TaskSnapshot',

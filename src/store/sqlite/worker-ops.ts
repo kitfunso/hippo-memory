@@ -31,12 +31,8 @@ export const WORKER_OPS = {
   },
   vectors: {
     embeddingIndexState: 'read',
-    storedVectors: 'read',
+    stored: 'read',
     nearestEntries: 'pinned-read',
-    physicsParticles: 'read',
-  },
-  vectorViews: {
-    storedVectorViews: 'read',
   },
   keyAudit: {
     revokeApiKey: 'write',
@@ -90,9 +86,6 @@ export const WORKER_OPS = {
   },
   graphReads: {
     graphRows: 'read',
-    entitiesForMemories: 'read',
-    entitiesByIds: 'read',
-    neighborRelations: 'read',
     graphDelta: 'read',
   },
   objects: {
@@ -236,27 +229,10 @@ export const WORKER_OPS = {
     pilotArm: 'write',
     replaceRereads: 'write',
   },
-  // A rebuild's staged vectors sit on the connection that began it, so every rebuild call goes to the writer.
+  // A session's lock token and staged vectors sit on the thread that opened it, so every index call goes to the writer.
   embeddingIndex: {
-    requiresReindex: 'read',
-    saveModel: 'write',
-    entryCount: 'read',
-    entryIdsById: 'read',
-    summary: 'read',
-    coverage: 'read',
-    particleStats: 'read',
-    saveVectors: 'write',
-    beginRebuild: 'write',
-    stageRebuild: 'write',
-    commitRebuild: 'write',
-    closeRebuild: 'write',
-    pruneOrphans: 'write',
-    pendingIds: 'read',
-    resetParticles: 'write',
-    seedParticle: 'write',
-    lockKey: 'read',
-    tryLock: 'write',
-    unlock: 'write',
+    open: 'write',
+    step: 'write',
   },
   promotion: {
     writeCopy: 'write',
