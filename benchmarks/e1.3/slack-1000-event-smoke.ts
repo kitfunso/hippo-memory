@@ -15,7 +15,7 @@
  */
 
 import { ingestMessage } from '../../src/entry/eval-scripts.js';
-import { loadTenantEntries as loadAllEntries } from '../../src/store/sqlite/folder-forms.js';
+import { loadAllEntries } from '../../src/entry/testing.js';
 import { adminActor } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -77,8 +77,8 @@ export async function runSlackSmoke(opts: SmokeOpts): Promise<SmokeResult> {
     globalThis.fetch = origFetch;
   }
 
-  const uniqueMemories = loadAllEntries(opts.hippoRoot, 'default').filter((e) =>
-    e.tags.includes('source:slack'),
+  const uniqueMemories = loadAllEntries(opts.hippoRoot).filter(
+    (e) => e.tenantId === 'default' && e.tags.includes('source:slack'),
   ).length;
   return {
     uniqueMemories,

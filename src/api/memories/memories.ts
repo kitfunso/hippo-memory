@@ -1,6 +1,5 @@
 // Memory reads for the CLI verbs: one row by id, the tenant's rows, or with a host admin every tenant's.
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { StrengthTallies } from '../../store/port/reports.js';
 import { NotFoundError } from '../../base/errors/api-errors.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
 import type { HippoStore } from '../../store/port.js';
@@ -19,16 +18,6 @@ export async function memoryGetTouchable(ctx: Context, id: string): Promise<Memo
   const entry = await memoryGet(ctx, id);
   if (!canReadScope(ctx.actor, entry?.scope ?? null)) throw new NotFoundError(`Memory not found: ${id}`);
   return entry;
-}
-
-export interface MemoryStatus extends StrengthTallies {
-  openConflicts: number;
-}
-
-/** Tenant-wide counts behind the status verbs: strength tallies at `now` (at risk is under `atRiskBelow`) and open
- * conflicts. */
-export function memoryStatusGet(ctx: Context, now: Date, atRiskBelow: number): Promise<MemoryStatus> {
-  return ctx.store.reports.memoryStatus(ctx.tenantId, now, atRiskBelow);
 }
 
 /** Which rows a read covers: the caller's tenant, or with `everyTenant` the whole store. */

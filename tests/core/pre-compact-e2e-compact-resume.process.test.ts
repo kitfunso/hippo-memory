@@ -39,7 +39,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
       source: 'pre-compact',
       sessionId: 'sess-resume-1',
     });
-    appendSessionEvent(hippoRoot, 'default', {
+    await appendSessionEvent(hippoRoot, 'default', {
       sessionId: 'sess-resume-1',
       eventType: 'note',
       content: 'decided to use PostgreSQL for the backend',
@@ -152,7 +152,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
       sessionId: 'sess-long-event',
     });
     const longContent = 'E'.repeat(1000);
-    appendSessionEvent(hippoRoot, 'default', {
+    await appendSessionEvent(hippoRoot, 'default', {
       sessionId: 'sess-long-event',
       eventType: 'note',
       content: longContent,

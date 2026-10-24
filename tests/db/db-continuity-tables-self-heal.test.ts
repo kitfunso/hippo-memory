@@ -158,7 +158,7 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     }
   });
 
-  it('is a no-op on a healthy store', () => {
+  it('is a no-op on a healthy store', async () => {
     saveActiveTaskSnapshot(root, 'default', {
       task: 'Sample task',
       summary: 'Sample summary',
@@ -166,7 +166,7 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
       sessionId: 'sess-healthy',
       source: 'test',
     });
-    appendSessionEvent(root, 'default', {
+    await appendSessionEvent(root, 'default', {
       sessionId: 'sess-healthy',
       eventType: 'note',
       content: 'Sample event content',

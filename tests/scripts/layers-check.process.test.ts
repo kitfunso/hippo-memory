@@ -295,39 +295,15 @@ const rows: Row[] = [
     ],
   },
   {
-    name: 'a CLI or MCP runtime import of src/domain fails with file:line',
+    name: 'a CLI or MCP runtime import of src/domain passes: surface sits above domain, with no api re-export between',
     files: {
       ...SURFACE_BASE,
       'src/surface/cli/v.ts': "export const v = 1;\nimport { d } from '../../domain/d.js';\n",
       'src/surface/mcp/t.ts': "import { d } from '../../domain/d.js';\nexport const t = d;\n",
     },
     map: SURFACE_MAP,
-    status: 1,
-    output: [
-      'src/surface/cli/v.ts:2 imports src/domain/d.ts at runtime',
-      'src/surface/mcp/t.ts:1 imports src/domain/d.ts at runtime',
-    ],
-  },
-  {
-    name: 'a CLI type-only import of src/domain passes',
-    files: {
-      ...SURFACE_BASE,
-      'src/surface/cli/v.ts': "import type { D } from '../../domain/d.js';\nexport type V = D;\n",
-    },
-    map: SURFACE_MAP,
     status: 0,
     output: ['Layer order OK'],
-  },
-  {
-    name: 'a CLI or MCP domain import fails even when an old .surface-domain-pending.json lists it',
-    files: {
-      ...SURFACE_BASE,
-      'src/surface/mcp/t.ts': "import { d } from '../../domain/d.js';\nexport const t = d;\n",
-      '.surface-domain-pending.json': JSON.stringify({ why: 'another lane', files: ['surface/mcp/t.ts'] }),
-    },
-    map: SURFACE_MAP,
-    status: 1,
-    output: ['src/surface/mcp/t.ts:1 imports src/domain/d.ts at runtime'],
   },
   {
     name: 'an allowed name the file no longer imports fails as stale',

@@ -159,7 +159,7 @@ function recentSessionEventsOldestFirst(
   return recentRows.map(rowToSessionEvent).reverse();
 }
 
-export function appendSessionEvent(
+function appendSessionEvent(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
   tenantId: string,

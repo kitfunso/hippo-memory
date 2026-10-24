@@ -27,7 +27,7 @@ import {
   type VectorCandidateSpec,
 } from '../../src/entry/store-kit.js';
 import { loadLatestHandoff } from '../../src/store/sqlite/handoffs.js';
-import { loadRecallSearchEntries } from '../../src/store/sqlite/folder-forms.js';
+import { loadRecallSearchEntries } from '../../src/store/sqlite/fixtures.js';
 import { listSessionEvents } from '../../src/store/sqlite/sessions.js';
 import { loadActiveTaskSnapshot } from '../../src/store/sqlite/task-snapshots.js';
 import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../../src/db/vector-store.js';
@@ -155,7 +155,7 @@ const ALICE_SCOPE = 'personal:private:alice';
 const ALICE_A: ContinuityKey = { owner: 'alice', project: ['proj-a'] };
 
 /** A second tenant where alice and bob share proj-a and alice also works in proj-b, so each narrowed read has rows to skip. */
-function seedTeam(root: string): void {
+async function seedTeam(root: string): Promise<void> {
   const team = (content: string, id: string, created: string, extra: Partial<MemoryEntry>) =>
     seeded(content, id, created, { tenantId: TEAM, ...extra });
   const rows = [
@@ -203,7 +203,11 @@ function seedTeam(root: string): void {
       { version: 1, sessionId, summary: `${owner} hands off ${project}`, nextAction: 'merge' },
       key,
     );
-    appendSessionEvent(root, TEAM, { sessionId: sessionId, eventType: 'note', content: `${owner} noted ${project}` });
+    await appendSessionEvent(root, TEAM, {
+      sessionId: sessionId,
+      eventType: 'note',
+      content: `${owner} noted ${project}`,
+    });
   }
   // Newest on alice's session id, so only the key keeps bob's handoff out.
   saveSessionHandoff(
@@ -218,7 +222,7 @@ function seedTeam(root: string): void {
 beforeAll(async () => {
   templates = await seedTemplates(async (root) => {
     await seedPortBranches(root);
-    seedTeam(root);
+    await seedTeam(root);
     // A goal with a retrieval policy, so activeGoals has a policy row to read.
     await pushGoal(root, {
       sessionId: SESSION,

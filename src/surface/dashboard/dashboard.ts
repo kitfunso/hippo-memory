@@ -2,7 +2,6 @@
 // here.
 import type * as http from 'http';
 import type { Context } from '../../api/index.js';
-import { cardDetail, cardList } from '../../api/objects/cards.js';
 import type { DashboardRouteRequest } from '../server/dashboard-types.js';
 import { readBody, sendJson } from '../../base/util/http-util.js';
 import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
@@ -55,13 +54,13 @@ export async function searchRoute(r: DashboardRouteRequest): Promise<void> {
 // next_cursor rides only a page with more after it, so a board that fits one page gets its old reply byte for byte.
 export async function cardsRoute(r: DashboardRouteRequest): Promise<void> {
   const after = parseCursor(r.query.get('cursor'), 'string', 'string');
-  const { cards, next } = await cardList(r.ctx, { limit: MAX_LIST_LIMIT, after });
+  const { cards, next } = await r.ctx.store.cards.list(r.ctx.tenantId, { limit: MAX_LIST_LIMIT, after });
   sendJson(r.res, 200, next === null ? { cards } : { cards, next_cursor: encodeCursor(next) });
 }
 
 export async function cardRoute(r: DashboardRouteRequest, { id }: Params): Promise<void> {
   // The Board has always answered 404, not 400, for an id that does not fit the pattern.
-  sendOrNotFound(r.res, CARD_ID.test(id!) ? await cardDetail(r.ctx, id!) : null);
+  sendOrNotFound(r.res, CARD_ID.test(id!) ? await r.ctx.store.cards.detail(r.ctx.tenantId, id!) : null);
 }
 
 type Action = (ctx: Context, body: ActionBody) => Promise<ActionResult>;

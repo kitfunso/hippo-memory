@@ -18,7 +18,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { Handles, StoreFiles } from './open.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';
-import { writeEntryMirrorsIn } from './entry-writes.js';
+import { writeEntryMirrors } from './entry-writes.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 export { QUARANTINE_SCOPE_PREFIX };
@@ -195,7 +195,7 @@ function rejectQuarantined(db: DatabaseSyncLike, tenantId: string, id: string, a
 function rewriteMirror(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, id: string): void {
   try {
     const restored = readEntry(db, id, tenantId);
-    if (restored) writeEntryMirrorsIn(files, restored);
+    if (restored) writeEntryMirrors(files.hippoRoot, restored);
   } catch (err) {
     log.error(`quarantine: mirror rewrite failed for ${id}: ${errorMessage(err)}`, errorFields(err));
   }

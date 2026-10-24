@@ -26,7 +26,7 @@ async function printed(run: () => Promise<void>): Promise<string> {
   return JSON.stringify(JSON.parse(stdout)).replace(/"\d{4}-\d{2}-\d{2}[T ][^"]*"/g, '"<at>"');
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   root = makeRoot('continuity-json', { config: { embeddings: { enabled: false } } });
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   vi.stubEnv('HIPPO_TENANT', '');
@@ -37,7 +37,7 @@ beforeEach(() => {
     sessionId: 'sess-wire',
     source: 'test',
   });
-  appendSessionEvent(root, 'default', {
+  await appendSessionEvent(root, 'default', {
     sessionId: 'sess-wire',
     eventType: 'note',
     content: 'a trail',

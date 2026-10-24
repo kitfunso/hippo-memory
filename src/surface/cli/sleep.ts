@@ -2,9 +2,9 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { isGitRepo } from '../../api/repo-learning.js';
+import { isGitRepo } from '../../domain/learn/autolearn.js';
 import { processGit } from '../../infra/git-runner.js';
-import { importForStore } from '../../api/agent-memories.js';
+import { importForStore } from '../../domain/agent-memories/sync.js';
 import { currentMachine } from '../../infra/machine.js';
 import { replayCompactions } from '../capture/compaction-record.js';
 import * as api from '../../api/index.js';

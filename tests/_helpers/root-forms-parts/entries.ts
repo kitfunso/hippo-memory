@@ -28,18 +28,17 @@ import { ALL_TENANTS, type TenantId } from '../../../src/base/util/tenant.js';
 import type { EntryCursor } from '../../../src/store/port/types.js';
 
 export {
-  appendSessionEvent,
   batchWriteAndDelete,
   loadAmbientTallies,
   loadEmbeddingIndex,
-  loadEntities,
-  loadRelations,
-  loadTenantEntries as loadAllEntries,
-  saveActiveTaskSnapshot,
-  saveSessionHandoff,
-  strengthenRetrieved,
   writeEntry,
-} from '../../../src/store/sqlite/folder-forms.js';
+} from '../../../src/store/sqlite/fixtures.js';
+export { strengthenRetrieved } from '../../../src/store/sqlite/entry-writes.js';
+
+/** One tenant's entries, oldest first. */
+export function loadAllEntries(hippoRoot: string, tenantId: string): MemoryEntry[] {
+  return onHandle(hippoRoot, (db) => entryReadsSql.loadAllEntries(db, tenantId), openStore);
+}
 
 export function loadAmbientCandidates(
   hippoRoot: string,

@@ -426,7 +426,7 @@ describe('writeSessionEndHandoff', () => {
     }
   });
 
-  it('6f: copies a valid outcome from the newest session_complete event, null when invalid', () => {
+  it('6f: copies a valid outcome from the newest session_complete event, null when invalid', async () => {
     initTestStore(root);
     saveActiveTaskSnapshot(root, 'default', {
       task: 'task',
@@ -434,7 +434,11 @@ describe('writeSessionEndHandoff', () => {
       nextStep: 'next',
       sessionId: 'sess-f1',
     });
-    appendSessionEvent(root, 'default', { sessionId: 'sess-f1', eventType: 'session_complete', content: 'success' });
+    await appendSessionEvent(root, 'default', {
+      sessionId: 'sess-f1',
+      eventType: 'session_complete',
+      content: 'success',
+    });
     const withOutcome = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-f1', evidence: null });
     expect(withOutcome!.outcome).toBe('success');
 
@@ -444,7 +448,7 @@ describe('writeSessionEndHandoff', () => {
       nextStep: 'next',
       sessionId: 'sess-f2',
     });
-    appendSessionEvent(root, 'default', {
+    await appendSessionEvent(root, 'default', {
       sessionId: 'sess-f2',
       eventType: 'session_complete',
       content: 'not-a-real-outcome',

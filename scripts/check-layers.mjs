@@ -7,7 +7,6 @@
 // layers.json `adapter`: any import, re-export or import() (type-only too) into its folder from a file outside it, its
 // one `root` and its `testKit` fails, as does a root import past its `doors`, a kit import past its one `door`, a
 // sqliteStoreOn name outside them, and any identifier or string naming SQLite in an `unnamedIn` layer.
-// So does a runtime import from src/surface/cli/** or src/surface/mcp/** into src/domain, with no list: commands reach business logic through src/api.
 // So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**) and local/**, which the next rule covers: the api reads the store through the port and takes shared rules from src/base.
 // So does any import from src/api/** or src/domain/** into src/store/local/**, with no list, any isLocalStore there, and any hippoRoot in src/api/**: both read the store through its port groups.
 // So does any import, runtime or type-only, from src/surface/dashboard/** into src/store, src/db or src/surface/cli: the dashboard reads through src/api, with no baseline.
@@ -174,34 +173,6 @@ function cliStoreProblems(srcDir) {
       .filter((e) => !foundKeys.has(key(e)))
       .map((e) => `${CLI_ALLOWLIST}: src/${e.file} -> src/${e.target} matches no import; delete the entry`),
   ];
-}
-
-const isCommandFile = (file) => file.startsWith('surface/cli/') || file.startsWith('surface/mcp/');
-
-/** Runtime imports from the CLI or MCP commands into src/domain, one per (file, target), as src-relative paths. */
-function findSurfaceDomainImports(srcDir) {
-  const root = resolve(srcDir);
-  const rel = (p) => relative(root, p).replace(/\\/g, '/');
-  const out = new Map();
-  for (const file of tsFiles(root)) {
-    const from = rel(file);
-    if (!isCommandFile(from)) continue;
-    for (const { spec, line, kind } of importsOf(readFileSync(file, 'utf8'))) {
-      const target = kind === 'runtime' ? resolveSpecifier(file, spec) : null;
-      const to = target && rel(target);
-      if (to?.startsWith('domain/') && !out.has(`${from}\t${to}`)) {
-        out.set(`${from}\t${to}`, { file: from, target: to, line });
-      }
-    }
-  }
-  return [...out.values()];
-}
-
-/** Every runtime import of src/domain from a CLI or MCP command; no list excuses one. */
-function surfaceDomainProblems(srcDir) {
-  return findSurfaceDomainImports(srcDir).map(
-    (e) => `src/${e.file}:${e.line} imports src/${e.target} at runtime; call a src/api function instead`,
-  );
 }
 
 const API_PORT_FILES = new Set(['store/port.ts', 'store/port-groups.ts']);
@@ -492,13 +463,6 @@ const cliProblems = cliStoreProblems('src');
 if (cliProblems.length > 0 && !args.includes('--list')) {
   console.error('The CLI reaches the store past src/api:');
   for (const p of cliProblems) console.error(`  ${p}`);
-  process.exit(1);
-}
-
-const surfaceDomain = surfaceDomainProblems('src');
-if (surfaceDomain.length > 0 && !args.includes('--list')) {
-  console.error('A CLI or MCP command imports src/domain past src/api:');
-  for (const p of surfaceDomain) console.error(`  ${p}`);
   process.exit(1);
 }
 

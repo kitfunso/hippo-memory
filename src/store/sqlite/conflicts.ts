@@ -171,12 +171,14 @@ function readConflictRefresh(db: DatabaseSyncLike, detected: readonly DetectedCo
   // rebuild, and a stale cross-tenant row can neither persist nor leak a foreign id.
   const tenantById = new Map<string, string>();
   const storedRefs = new Map<string, string | null>();
+  // A UNION, not one OR: SQLite plans that OR as a scan of every memory, while each arm here reads an index.
   const rows = cachedStatement(
     db,
     `
+    SELECT id, tenant_id, conflicts_with_json FROM memories WHERE conflicts_with_json != '[]'
+    UNION
     SELECT id, tenant_id, conflicts_with_json FROM memories
-    WHERE conflicts_with_json != '[]'
-      OR id IN (SELECT memory_a_id FROM memory_conflicts WHERE status = 'open')
+    WHERE id IN (SELECT memory_a_id FROM memory_conflicts WHERE status = 'open')
       OR id IN (SELECT memory_b_id FROM memory_conflicts WHERE status = 'open')
   `,
   ).all() as Array<{ id: string; tenant_id: string; conflicts_with_json: string | null }>;

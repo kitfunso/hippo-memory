@@ -92,7 +92,7 @@ function buildResumeScorecard(hippoRoot: string, sessionId: string): ResumeScore
   };
 }
 
-function appendVerboseTrail(hippoRoot: string, sessionId: string): void {
+async function appendVerboseTrail(hippoRoot: string, sessionId: string): Promise<void> {
   const steps = [
     'Read the production deploy notes, compared the current branch state, and traced the failing path through the session continuity code while checking whether the latest snapshot should replace the stale branch summary.',
     'Confirmed that the current task is to ship the measurement-first plan, identified the open blocker around handoff visibility, and noted that the raw event trail is too noisy to replay verbatim for a fresh agent.',
@@ -102,22 +102,22 @@ function appendVerboseTrail(hippoRoot: string, sessionId: string): void {
     'Captured that the likely follow-up implementation slice is continuity-first context assembly rather than broad ingestion or graph work because the repo can measure continuity now.',
   ];
 
-  steps.forEach((content, index) => {
-    appendSessionEvent(hippoRoot, 'default', {
+  for (const [index, content] of steps.entries()) {
+    await appendSessionEvent(hippoRoot, 'default', {
       sessionId: sessionId,
       eventType: index === 0 ? 'session_start' : 'note',
       content,
       source: 'test',
     });
-  });
+  }
 }
 
 describe('Company Brain continuity scorecard scaffold', () => {
-  it('shows full resume coverage only after continuity objects are present', () => {
+  it('shows full resume coverage only after continuity objects are present', async () => {
     initTestStore(tmpDir);
     const sessionId = 'sess-company-brain';
 
-    appendVerboseTrail(tmpDir, sessionId);
+    await appendVerboseTrail(tmpDir, sessionId);
 
     const baseline = buildResumeScorecard(tmpDir, sessionId);
     expect(baseline.coverage).toBeLessThan(1);
@@ -153,7 +153,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
     initTestStore(tmpDir);
     const sessionId = 'sess-recall-scorecard';
 
-    appendVerboseTrail(tmpDir, sessionId);
+    await appendVerboseTrail(tmpDir, sessionId);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Continuity-first recall scorecard regression',
       summary: 'Validate that recall path matches the scorecard helper.',
@@ -227,11 +227,11 @@ describe('Company Brain continuity scorecard scaffold', () => {
     expect(onResult.continuityTokens!).toBeGreaterThan(distilledTokens);
   });
 
-  it('uses the matching session handoff instead of a stale one from another session', () => {
+  it('uses the matching session handoff instead of a stale one from another session', async () => {
     initTestStore(tmpDir);
     const currentSession = 'sess-current';
 
-    appendVerboseTrail(tmpDir, currentSession);
+    await appendVerboseTrail(tmpDir, currentSession);
 
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Resume the current branch cleanly',

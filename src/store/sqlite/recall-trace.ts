@@ -3,18 +3,19 @@
  * outcome) triple the learned components train on. All writes are fail-soft: a failed trace write is logged to stderr
  * and swallowed, never breaking the surrounding call. */
 
-import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { getMeta, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { OnHandle } from './open.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
 import { DELIVERY_LEDGER_VERSION, isBoundaryEvent } from '../../base/session/delivery.js';
 import type { DeliveryEventInput } from '../../base/session/delivery.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { DAY_MS } from '../../base/util/time.js';
 import { blockHash } from '../../base/util/token-text.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { RecallTraceInput } from '../port/recall-writes.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { deliveryCutoff } from '../rules/recall-traces.js';
+import { parseLastTraceId } from './rows.js';
 
 /** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the CLI goal-boost step
  * embeds goal tag text) and would leak user content into `rerank_json`; an allowlist, so any future free-form field is
@@ -130,9 +131,6 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
   }
 }
 
-/** Pruned by a write when the store's schedule is due, counted back from the event's ts capped at the real clock, so a
- * far-future fake time spares real rows. */
-const DELIVERY_LEDGER_RETENTION_DAYS = 90;
 /** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the hook. */
 const DELIVERY_LEDGER_WAIT_MS = 50;
 /** Two prompt-identical events without a host turn id, or two boundary events of one type, this close are one fire
@@ -327,7 +325,8 @@ function insertDeliveryCandidates(db: DatabaseSyncLike, eventId: number, input: 
   }
 }
 
-/** How often a store prunes its delivery ledger: each prune scans for expired rows, so a busy server skips most. */
+/** How often a store prunes its delivery ledger and old recall traces: each prune walks the expired rows, so a busy
+ * server skips most. */
 const DELIVERY_PRUNE_EVERY_MS = 60_000;
 
 /** When a store last pruned its delivery ledger; each store holds its own, so the minute is counted per store. */
@@ -348,10 +347,30 @@ export function deliveryPruneSchedule(): DeliveryPruneSchedule {
   };
 }
 
-function pruneDeliveryEvents(db: DatabaseSyncLike, eventTs: string, nowMs: number): void {
-  const pruneFrom = Math.min(Date.parse(eventTs), nowMs);
-  const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
+/** Old traces one prune deletes at most, so the first prune after an upgrade holds the hook's write lock briefly; the
+ * rest of a backlog goes on the next prunes. */
+const TRACE_PRUNE_BATCH = 1000;
+
+/** Traces before `cutoff` that no outcome names and that are not the last recall's, with their results through the
+ * v40 cascade; a trace with an outcome is training data, and the last one may still get its outcome. */
+function pruneRecallTraces(db: DatabaseSyncLike, cutoff: string): void {
+  const last = parseLastTraceId(getMeta(db, 'last_trace_id'));
+  cachedStatement(
+    db,
+    `
+    DELETE FROM recall_traces WHERE id IN (
+      SELECT id FROM recall_traces t
+      WHERE ts < ? AND id IS NOT ? AND NOT EXISTS (SELECT 1 FROM recall_trace_outcomes o WHERE o.trace_id = t.id)
+      ORDER BY ts LIMIT ?
+    )
+  `,
+  ).run(cutoff, last === null ? null : Number(last), TRACE_PRUNE_BATCH);
+}
+
+function pruneExpired(db: DatabaseSyncLike, eventTs: string, nowMs: number): void {
+  const cutoff = deliveryCutoff(eventTs, nowMs);
   cachedStatement(db, `DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
+  pruneRecallTraces(db, cutoff);
 }
 
 /** One event plus its candidates in one write transaction, then a prune when `prune` is due; fail-soft. The caller must
@@ -380,7 +399,7 @@ function writeDeliveryEvent(
         ).run(...values).lastInsertRowid,
       );
       insertDeliveryCandidates(db, id, input);
-      if (pruning) pruneDeliveryEvents(db, input.ts, now);
+      if (pruning) pruneExpired(db, input.ts, now);
       return id;
     });
     // Only after the commit, so a rolled-back prune leaves the next write due.

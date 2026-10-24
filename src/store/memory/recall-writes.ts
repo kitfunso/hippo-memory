@@ -3,15 +3,19 @@ import { markRetrieved, strengthOptionsOf, type LossAversion } from '../../base/
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { blockHash } from '../../base/util/token-text.js';
 import type { RecallTraceInput, RecallWrites } from '../port/recall-writes.js';
+import { byBytes } from '../rules/order.js';
+import { deliveryCutoff } from '../rules/recall-traces.js';
 import { logGoalRecalls } from './goals.js';
 import { appendAudit, nextId, ownedRow } from './rows.js';
 import type { MemoryTables } from './tables.js';
 
-/** The query's hash and length, never its text, with each result ranked from 1. */
+/** The query's hash and length, never its text, with each result ranked from 1; then every trace past the retention
+ * window goes, since this store links no outcome to a trace and the newest is never past it. */
 function writeTrace(t: MemoryTables, trace: RecallTraceInput): void {
+  const ts = new Date().toISOString();
   t.recallTraces.push({
     id: nextId(t, 'recall_traces'),
-    ts: new Date().toISOString(),
+    ts,
     tenantId: trace.tenantId,
     sessionId: trace.sessionId ?? null,
     pipeline: trace.pipeline,
@@ -20,6 +24,8 @@ function writeTrace(t: MemoryTables, trace: RecallTraceInput): void {
     queryLength: trace.query.length,
     results: trace.results.map((r, i) => ({ memoryId: r.memoryId, rank: i + 1, score: r.score })),
   });
+  const cutoff = deliveryCutoff(ts, Date.now());
+  t.recallTraces = t.recallTraces.filter((row) => byBytes(row.ts, cutoff) >= 0);
 }
 
 /** Each id found once, in the asked tenant, moves as markRetrieved scores it from the row read before any update. */

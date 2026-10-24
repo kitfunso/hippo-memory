@@ -17,7 +17,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
-import { loadRecallSearchEntries } from '../../src/store/sqlite/folder-forms.js';
+import { loadRecallSearchEntries } from '../../src/store/sqlite/fixtures.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { handleExplain } from '../../src/surface/cli/explain.js';

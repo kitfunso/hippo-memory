@@ -154,12 +154,12 @@ describe('scope filtering on the continuity read paths', () => {
       sessionId: 'sess-mix',
       scope: 'proj:private:x',
     });
-    appendSessionEvent(root, 'default', {
+    await appendSessionEvent(root, 'default', {
       sessionId: 'sess-mix',
       eventType: 'note',
       content: 'public event',
     });
-    appendSessionEvent(root, 'default', {
+    await appendSessionEvent(root, 'default', {
       sessionId: 'sess-mix',
       eventType: 'note',
       content: 'private event',

@@ -2,8 +2,7 @@
 // handle.
 import { type DatabaseSyncLike, withWriteScope } from '../../db/index.js';
 import { appendAuditEvents } from './audit.js';
-import { strengthenRetrievedInOwnTx, applyOutcome } from './entry-writes.js';
-import { strengthenRetrieved } from './folder-forms.js';
+import { strengthenRetrieved, strengthenRetrievedInOwnTx, applyOutcome } from './entry-writes.js';
 import { localGoalRecallRows, writeGoalRecallLog } from './goals.js';
 import { saveIndex } from './index-and-stats.js';
 import { readLastRecall } from './mirrors.js';

@@ -60,7 +60,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyOutcome } from '../../dist/base/memory/memory.js';
 import { writeEntry, loadAllEntries } from '../../dist/entry/testing.js';
-import { readEntry } from '../../dist/store/sqlite/folder-forms.js';
+import { readEntry } from '../../dist/store/sqlite/fixtures.js';
 import { hybridSearch } from '../../dist/domain/search/hybrid.js';
 import { buildCorpus } from '../../dist/domain/search/bm25.js';
 import { markRetrieved } from '../../dist/base/memory/memory.js';

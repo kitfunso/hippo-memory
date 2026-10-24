@@ -118,9 +118,9 @@ describe('a memory row with a damaged JSON column', () => {
 });
 
 describe('a session event with damaged metadata', () => {
-  it('reads with empty metadata and is named once at warn', () => {
+  it('reads with empty metadata and is named once at warn', async () => {
     const root = newRoot();
-    const event = appendSessionEvent(root, TENANT, {
+    const event = await appendSessionEvent(root, TENANT, {
       sessionId: 'sess-1',
       eventType: 'note',
       content: 'x',

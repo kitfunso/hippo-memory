@@ -12,7 +12,8 @@ import {
   VALUE_MULT_MIN,
   VALUE_MULT_SLOPE,
 } from '../../../base/rank/search-types.js';
-import { DEFAULT_EMBEDDING_WEIGHT, DEFAULT_GRAPH_HOPS, DEFAULT_GRAPH_SEED_COUNT } from '../../../api/recall/explain.js';
+import { DEFAULT_EMBEDDING_WEIGHT } from '../../../domain/search/hybrid.js';
+import { DEFAULT_GRAPH_HOPS, DEFAULT_GRAPH_SEED_COUNT } from '../../../domain/graph/stream.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 
 const VALUE_CLIP = `clip(1 + ${VALUE_MULT_SLOPE}*tanh(pos - neg), ${VALUE_MULT_MIN}, ${VALUE_MULT_MAX})`;
