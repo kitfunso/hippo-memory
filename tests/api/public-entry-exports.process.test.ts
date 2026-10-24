@@ -286,7 +286,7 @@ describe('published runtime exports', () => {
         PROTECTED_ROWS
         RECALL_DEFAULT_DENY_SCOPES RejectedValueError
         SECRET_TAGS StoreBusyError
-        ambientRefusal
+        ambientRefusal assertWriteRight
         bufferToFloat32
         decodeVector descendantAdmits diffGraph
         encodeVector entryAfterOutcome
@@ -298,7 +298,7 @@ describe('published runtime exports', () => {
         normalizeValueForRejection
         ownScopeTouches
         passesScopeFilterForRecall physicsSearch
-        rankVectorRows rarestFtsQuery readerReaches rejectionDigest repairKeeps replacesIndex requireGroup
+        rankVectorRows rarestFtsQuery readerMayChange readerReaches rejectionDigest repairKeeps replacesIndex requireGroup
         sqliteStore
         tallyAmbientEntries targetReader",
           "./testing": "ambientSecretAdmit ambientSecretAdmitWire
