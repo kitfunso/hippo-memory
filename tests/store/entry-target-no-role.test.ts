@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
-import { NotFoundError } from '../../src/server.js';
+import { ForbiddenError, NotFoundError } from '../../src/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -44,7 +44,9 @@ describe('an EntryTarget with no role', () => {
 
   it('forgets an unrestricted row its owner wrote, and refuses one with no owner', async () => {
     const { entryWrites } = sqliteStore(root);
-    await expect(entryWrites.forget({ ...target, owner: OWNER, id: unowned.id })).rejects.toBeInstanceOf(NotFoundError);
+    const refusal = entryWrites.forget({ ...target, owner: OWNER, id: unowned.id });
+    await expect(refusal).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(refusal).rejects.toThrow(`memory ${unowned.id} records no writer: change it with an admin key`);
     await entryWrites.forget({ ...target, owner: OWNER, id: open.id });
     expect(kept()).toEqual([restricted.id, unowned.id].sort());
   });

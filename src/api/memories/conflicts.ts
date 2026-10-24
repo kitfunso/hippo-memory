@@ -1,10 +1,10 @@
 // Conflict listing and resolution for every front end, so the reach, status, pair and liveness rules live here.
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import {
+  assertWriteRight,
   canReadScope,
   passesScopeFilterForRecall,
   personalScopeOf,
-  readerMayChange,
   scopeReaderOf,
 } from '../../base/scope/recall-scope.js';
 import type { MemoryConflict } from '../../store/port/conflicts.js';
@@ -74,8 +74,8 @@ export async function conflictGet(ctx: Context, conflictId: number): Promise<Mem
 }
 
 /** Keeps `keepId` and weakens, deletes or rejects the other side, auditing as `ctx.actor`. NotFound: missing,
- * untouchable, no longer live, or a loser to remove the caller may not change. Conflict: already resolved. BadRequest:
- * `keepId` outside the pair. */
+ * untouchable or no longer live. Forbidden: a loser to remove the caller may not change. Conflict: already resolved.
+ * BadRequest: `keepId` outside the pair. */
 export async function conflictResolve(
   ctx: Context,
   conflictId: number,
@@ -106,12 +106,10 @@ export async function conflictResolve(
   return { conflictId, keptId: keep.id, loserId: loser.id };
 }
 
-/** Removing the loser is a forget, so it takes forget's write rights; a refusal reads as a missing conflict. */
+/** Removing the loser is a forget, so it takes forget's write rights; a loser out of reach is a missing conflict. */
 async function assertMayRemove(ctx: Context, conflictId: number, loserId: string): Promise<void> {
   const [loser] = await ctx.store.entriesByIds([loserId], ctx.tenantId);
-  if (!loser || !readerMayChange(scopeReaderOf(ctx.actor), loser)) {
-    throw new NotFoundError(`conflict not found: ${conflictId}`);
-  }
+  assertWriteRight(scopeReaderOf(ctx.actor), loser, loserId, `conflict not found: ${conflictId}`);
 }
 
 interface ResolveSides {

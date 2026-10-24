@@ -270,6 +270,7 @@ entry/store-kit.d.ts: WorkingMemoryItem re-export
 entry/store-kit.d.ts: WorkingMemoryPush re-export
 entry/store-kit.d.ts: WrittenRow re-export
 entry/store-kit.d.ts: ambientRefusal re-export
+entry/store-kit.d.ts: assertWriteRight re-export
 entry/store-kit.d.ts: bufferToFloat32 re-export
 entry/store-kit.d.ts: decodeVector re-export
 entry/store-kit.d.ts: descendantAdmits re-export

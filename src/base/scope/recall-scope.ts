@@ -4,7 +4,7 @@
  * back-compat (`api.isPrivateScope`, tests importing `passesScopeFilterForRecall`).
  */
 
-import { BadRequestError, ForbiddenError } from '../errors/api-errors.js';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api-errors.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 
 /**
@@ -203,6 +203,22 @@ export function readerMayChange(reader: ScopeReader, row: WrittenRow): boolean {
   if (isPersonalScope(row.scope) || reader.role === 'admin') return true;
   return Boolean(reader.owner) && row.owner === reader.owner;
 }
+
+/** Absent or out of reach throws NotFoundError(`missing`), as for a missing id. A reached row the reader may not change
+ * throws a 403 naming the key that can: the caller already sees the row, so saying so leaks nothing. */
+export function assertWriteRight(
+  reader: ScopeReader,
+  row: WrittenRow | undefined,
+  id: string,
+  missing: string,
+): asserts row is WrittenRow {
+  if (!row || !readerReaches(reader, row.scope)) throw new NotFoundError(missing);
+  if (readerMayChange(reader, row)) return;
+  const fix = row.owner === null ? 'records no writer: change it with an admin key' : WRITTEN_BY_ANOTHER;
+  throw new ForbiddenError(`memory ${id} ${fix}`);
+}
+
+const WRITTEN_BY_ANOTHER = 'was written by someone else: change it with the key that wrote it or an admin key';
 
 /** A by-id write's target as a reader: with no role it reads as a member key, so it fails closed on restricted rows. */
 export function targetReader(target: Omit<ScopeReader, 'role'> & { readonly role?: ScopeReader['role'] }): ScopeReader {

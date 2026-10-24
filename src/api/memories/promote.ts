@@ -8,10 +8,10 @@ import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embe
 import { globalTargetOf } from '../infra.js';
 import { sharedStoreOf, type Context, type ContextWith } from '../types.js';
 import {
+  assertWriteRight,
   canReadScope,
   isPersonalScope,
   isQuarantineScope,
-  readerMayChange,
   scopeReaderOf,
 } from '../../base/scope/recall-scope.js';
 
@@ -119,18 +119,17 @@ export async function supersede(
   return { ok: true, oldId, newId: successor.id };
 }
 
-/** The tenant-scoped row to supersede; another tenant's id, or a row the caller may not change, reads as not found. */
+/** The tenant-scoped row to supersede; another tenant's id, or a row out of reach, reads as not found. */
 function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null): MemoryEntry {
-  if (!old || !readerMayChange(scopeReaderOf(ctx.actor), old)) {
-    throw new NotFoundError(`Memory not found: ${oldId}`);
-  }
+  const row = old ?? undefined;
+  assertWriteRight(scopeReaderOf(ctx.actor), row, oldId, `Memory not found: ${oldId}`);
   // The CAS UPDATE closes the race; this check only gives a clearer error in the common single-writer case.
-  if (old.supersededBy) {
+  if (row.supersededBy) {
     throw new ConflictError(
-      `Memory ${oldId} is already superseded by ${old.supersededBy}. Supersede that one instead.`,
+      `Memory ${oldId} is already superseded by ${row.supersededBy}. Supersede that one instead.`,
     );
   }
-  return old;
+  return row;
 }
 
 /** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is deleted. The store writes the one

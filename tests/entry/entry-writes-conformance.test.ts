@@ -564,14 +564,14 @@ describe('write rights on a team row', () => {
     supersede(row.id, fresh(`${row.content}, revised`), null, reader),
     (g) => g.forget(target(row.id, null, TENANT_A, reader)),
   ];
-  const refused = (row: MemoryEntry, raw: MemoryEntry) => [
-    { error: `NotFoundError: memory not found: ${row.id}` },
-    { error: `NotFoundError: memory not found: ${raw.id}` },
-    { error: `NotFoundError: memory not found: ${row.id}` },
-    { error: `NotFoundError: memory not found: ${row.id}` },
-  ];
+  const refused = (row: MemoryEntry, raw: MemoryEntry) => {
+    const why = row.owner
+      ? 'was written by someone else: change it with the key that wrote it or an admin key'
+      : 'records no writer: change it with an admin key';
+    return [row.id, raw.id, row.id, row.id].map((id) => ({ error: `ForbiddenError: memory ${id} ${why}` }));
+  };
 
-  it("refuses a member key on another person's row and on a row with no owner, as if missing", async () => {
+  it("refuses a member key on another person's row and on a row with no owner, naming the key that can", async () => {
     const carolKey: Reader = { role: 'member', owner: 'user:carol' };
     const side = await conforms([
       seedTeam,

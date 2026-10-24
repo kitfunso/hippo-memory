@@ -1,5 +1,5 @@
-// A member key forgets, archives, supersedes or resolves away a team memory only when the row's owner is its own; an
-// admin key and the CLI operator keep every right. Real server, real hippo.db, over HTTP and MCP.
+// A member key forgets, archives, supersedes or resolves away a team memory only when the row's owner is its own, else
+// 403 naming the key that can; an admin key and the CLI operator keep every right. Real server, over HTTP and MCP.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
@@ -65,24 +65,30 @@ async function writes(key: string, content: string, extra: { [k: string]: JsonVa
 }
 
 const missing = (id: string): [number, JsonValue] => [404, { error: `memory not found: ${id}` }];
+const notTheirs = (id: string): [number, JsonValue] => [
+  403,
+  { error: `memory ${id} was written by someone else: change it with the key that wrote it or an admin key` },
+];
+const noWriter = (id: string): [number, JsonValue] => [
+  403,
+  { error: `memory ${id} records no writer: change it with an admin key` },
+];
 
 describe('write rights on a team memory over HTTP', () => {
-  it("answers a member key 404 on another person's row and on a row with no owner, and changes nothing", async () => {
+  it("answers a member key 403 on another person's row and on a row with no owner, and changes nothing", async () => {
     const owned = await writes(keys.bob, 'the staging cluster restarts at noon', { owner: BOB });
     const ownedRaw = await writes(keys.bob, 'raw standup note about the staging cluster', { owner: BOB, kind: 'raw' });
     const unowned = await writes(keys.bob, 'the release train leaves on thursdays');
     const supersede = { content: 'it restarts at one' };
 
-    expect(await call(keys.carol, 'DELETE', `/v1/memories/${owned}`)).toEqual(missing(owned));
+    expect(await call(keys.carol, 'DELETE', `/v1/memories/${owned}`)).toEqual(notTheirs(owned));
     expect(await call(keys.carol, 'POST', `/v1/memories/${ownedRaw}/archive`, { reason: 'r' })).toEqual(
-      missing(ownedRaw),
+      notTheirs(ownedRaw),
     );
-    expect(await call(keys.carol, 'POST', `/v1/memories/${owned}/supersede`, supersede)).toEqual([
-      404,
-      { error: `Memory not found: ${owned}` },
-    ]);
+    expect(await call(keys.carol, 'POST', `/v1/memories/${owned}/supersede`, supersede)).toEqual(notTheirs(owned));
     // Bob wrote it, but nothing on the row records him.
-    expect(await call(keys.bob, 'DELETE', `/v1/memories/${unowned}`)).toEqual(missing(unowned));
+    expect(await call(keys.bob, 'DELETE', `/v1/memories/${unowned}`)).toEqual(noWriter(unowned));
+    expect(await call(keys.carol, 'DELETE', '/v1/memories/mem_missing')).toEqual(missing('mem_missing'));
     for (const id of [owned, ownedRaw, unowned]) expect(readEntry(root, id)?.supersededBy).toBeNull();
   });
 
@@ -97,7 +103,7 @@ describe('write rights on a team memory over HTTP', () => {
     // SAFETY: a 200 from the supersede route is a SupersedeResult.
     const { newId } = reply as { newId: string };
     expect(readEntry(root, newId)?.owner).toBe(BOB);
-    expect(await call(keys.carol, 'DELETE', `/v1/memories/${newId}`)).toEqual(missing(newId));
+    expect(await call(keys.carol, 'DELETE', `/v1/memories/${newId}`)).toEqual(notTheirs(newId));
     expect(await call(keys.bob, 'DELETE', `/v1/memories/${newId}`)).toEqual([200, { ok: true, id: newId }]);
     expect(await call(keys.admin, 'DELETE', `/v1/memories/${unowned}`)).toEqual([200, { ok: true, id: unowned }]);
     expect([readEntry(root, ownedRaw), readEntry(root, newId), readEntry(root, unowned)]).toEqual([null, null, null]);
@@ -134,7 +140,7 @@ describe('write rights on a team memory over MCP', () => {
     return res.text();
   }
 
-  it("refuses hippo_resolve forget of another person's loser, and lets a member forget its own", async () => {
+  it("refuses hippo_resolve forget of another person's loser with the 403 text, and lets a member forget its own", async () => {
     const bobs = await writes(keys.bob, 'deploys run from the main branch', { owner: BOB });
     const carols = await writes(keys.carol, 'deploys never run from the main branch', { owner: CAROL });
     replaceDetectedConflicts(root, [{ memory_a_id: bobs, memory_b_id: carols, reason: 'deploy advice', score: 0.9 }]);
@@ -142,7 +148,7 @@ describe('write rights on a team memory over MCP', () => {
     const conflictId = conflict!.id;
 
     expect(await resolve(keys.carol, { conflict_id: conflictId, keep: carols, forget: true })).toContain(
-      'Could not resolve. Check the conflict ID and --keep value.',
+      `memory ${bobs} was written by someone else: change it with the key that wrote it or an admin key`,
     );
     expect(readEntry(root, bobs)?.content).toBe('deploys run from the main branch');
     expect(await resolve(keys.carol, { conflict_id: conflictId, keep: bobs, forget: true })).toContain(

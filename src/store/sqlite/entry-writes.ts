@@ -31,7 +31,7 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { RenameSourceOptions } from '../port/agent-import.js';
 import type { StrengthenOptions } from '../port/recall-writes.js';
 import { archiveRawMemory, type ArchiveOptions } from './raw-archive.js';
-import { readerMayChange, readerReaches, targetReader } from '../../base/scope/recall-scope.js';
+import { assertWriteRight, readerReaches, targetReader } from '../../base/scope/recall-scope.js';
 import { recordTraceOutcome } from './recall-trace.js';
 import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite } from '../port.js';
 import type { PinWrite } from '../port/entry-writes.js';
@@ -469,10 +469,11 @@ function notFound(id: string): NotFoundError {
   return new NotFoundError(`memory not found: ${id}`);
 }
 
-/** Another tenant's row, or one the caller may not change, answers as missing, so a caller learns nothing about it. */
+/** Another tenant's row, or one out of reach, answers as missing, so a caller learns nothing about it. */
 function assertMayChange(db: DatabaseSyncLike, target: EntryTarget, id: string): void {
   const reach = readMemoryReach(db, id);
-  if (reach?.tenantId !== target.tenantId || !readerMayChange(targetReader(target), reach)) throw notFound(id);
+  const own = reach?.tenantId === target.tenantId ? reach : undefined;
+  assertWriteRight(targetReader(target), own, id, `memory not found: ${id}`);
 }
 
 /** The refusal row lands after `write` has rolled back, in a fresh implicit transaction the aborted one cannot undo. */

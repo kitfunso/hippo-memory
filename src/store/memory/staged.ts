@@ -1,14 +1,9 @@
 // A staged write on the memories: a copy of the rows and the audit rows to append, committed together only when the
 // write returns, so a write lands whole or not at all; with the rules every memory write applies to a row it puts.
-import {
-  BadRequestError,
-  CrossTenantIdError,
-  NotFoundError,
-  RejectedValueError,
-} from '../../base/errors/api-errors.js';
+import { BadRequestError, CrossTenantIdError, RejectedValueError } from '../../base/errors/api-errors.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
-import { readerMayChange, targetReader } from '../../base/scope/recall-scope.js';
+import { assertWriteRight, targetReader } from '../../base/scope/recall-scope.js';
 import type { EntryTarget, RawArchive } from '../port/entry-writes.js';
 import type { AppendAuditOpts } from '../port/types.js';
 import { appendAudit, bumpCounter, hippoDbNow, tenantKey } from './rows.js';
@@ -85,13 +80,12 @@ export function markParentDirty(tx: Tx, parentId: string, tenantId: string, acto
   tx.audit.push(summaryDirtyAudit(parentId, tenantId, actor, parent.dagLevel));
 }
 
-/** The row `id` when the target's tenant holds it and the target may change it; NotFoundError otherwise. */
+/** The row `id` when the target's tenant holds it and the target may change it; it throws as assertWriteRight does. */
 export function changeable(tx: Tx, target: EntryTarget, id: string): MemoryEntry {
   const row = tx.rows.get(id);
-  if (!row || row.tenantId !== target.tenantId || !readerMayChange(targetReader(target), row)) {
-    throw new NotFoundError(`memory not found: ${id}`);
-  }
-  return row;
+  const own = row?.tenantId === target.tenantId ? row : undefined;
+  assertWriteRight(targetReader(target), own, id, `memory not found: ${id}`);
+  return own;
 }
 
 /** The tombstone that refuses `entry`, unless the row it replaces already holds the same value. */
