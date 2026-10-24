@@ -8,7 +8,8 @@ import type { AgentFiles } from '../../base/util/agent-files.js';
 import { expandHome, frontmatterField, itemTime, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
 import { gitLayout, type GitLayout } from './git.js';
-import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
+import type { Adapter, AdapterContext, Container, Listing } from './types.js';
+import type { Scope } from '../../base/memory/agent-memory-tools.js';
 import { isJsonObjectLiteral, isJsonString, parseJson, tryParseJson } from '../../base/util/json.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 

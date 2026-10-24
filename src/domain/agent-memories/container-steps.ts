@@ -4,7 +4,7 @@ import type { ImportStep, StepOutcome } from '../../store/port/agent-import.js';
 import type { DormantSnapshot } from '../../store/port/types.js';
 import type { ContainerWork, StoreSession } from './container-view.js';
 import type { ContainerPlan } from './plan.js';
-import type { Tally } from './report.js';
+import type { Tally } from '../../base/memory/agent-memory-report.js';
 import { itemSource, splitSource, storedText } from './source.js';
 import type { MemoryItem } from './types.js';
 

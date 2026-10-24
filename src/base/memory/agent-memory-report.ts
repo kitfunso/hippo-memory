@@ -1,7 +1,6 @@
 // What a sync did, per tool, and the one line a command prints about it.
-import { AGENT_MEMORY_TOOLS, type ToolId } from '../../base/memory/agent-memory-tools.js';
-import { plural } from '../../base/util/format.js';
-import type { Scope } from './types.js';
+import { AGENT_MEMORY_TOOLS, type Scope, type ToolId } from './agent-memory-tools.js';
+import { plural } from '../util/format.js';
 
 export interface Tally {
   imported: number;

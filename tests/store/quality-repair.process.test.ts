@@ -17,7 +17,7 @@ import { memoryQualityRepair, dormantRestore } from '../../src/api/index.js';
 import { PROTECTED_ROWS as repairProtection } from '../../src/base/memory/memory-audit.js';
 import type { RepairProtection } from '../../src/store/port/audit.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
-import { importForStore } from '../../src/domain/agent-memories/sync.js';
+import { importForStore } from '../../src/api/agent-memories.js';
 import { closeWorld, note, openWorld, projectNotes } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';

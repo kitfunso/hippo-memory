@@ -4,8 +4,8 @@ import { confidenceLabel } from '../../base/memory/memory.js';
 import type { TaskSnapshot, SessionEvent } from '../../store/port/sessions.js';
 import type { SessionHandoff } from '../../base/session/handoff.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
-import { explainMatch } from '../../domain/search/explain.js';
-import { type ImportReport, summaryLine } from '../../domain/agent-memories/report.js';
+import { recallJsonRow } from '../../api/recall/rows.js';
+import { type ImportReport, summaryLine } from '../../base/memory/agent-memory-report.js';
 import { snapshotText, sessionTrailText, handoffText } from '../../api/context-render.js';
 import { printError } from './output.js';
 
@@ -28,12 +28,12 @@ export function recallEntryText(r: SearchResult, query: string, showWhy: boolean
       `${e.retrievalCount}x`,
   ];
   if (showWhy) {
-    const explanation = explainMatch(query, r);
+    // The row --json prints carries the same reason and envelope, so the two outputs never explain a match apart.
+    const { reason, envelope: env } = recallJsonRow(r, query, true, isGlobal);
     lines.push(
       `    source:${isGlobal ? ' [global]' : ' [local]'} | layer: [${e.layer}] | confidence: [${label.text}]`,
-      `    reason: ${explanation.reason}`,
+      `    reason: ${reason}`,
     );
-    const env = explanation.envelope;
     if (env) {
       lines.push(`    kind: ${env.kind}`);
       if (env.scope) lines.push(`    scope: ${env.scope}`);

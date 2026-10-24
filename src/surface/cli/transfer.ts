@@ -7,18 +7,18 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import { toWire } from '../../base/memory/memory-wire.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { embedCoverage, memoryEmbedMissing } from '../../api/embeddings.js';
-import { captureError } from '../../domain/learn/autolearn.js';
 import { DEFAULT_LEARN_DAYS } from '../../base/util/limits.js';
 import { runWatched } from './run-watched.js';
-import { importAtSessionEnd, importForStore } from '../../domain/agent-memories/sync.js';
+import { importAtSessionEnd, importForStore } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
-import { detailLines } from '../../domain/agent-memories/report.js';
+import { detailLines } from '../../base/memory/agent-memory-report.js';
 import { importChatGPTInto, importClaudeInto, importCursorInto, importGenericFileInto } from '../importers/sources.js';
 import { importMarkdownInto } from '../importers/markdown.js';
 import { importVaultInto } from '../importers/vault.js';
 import type { ImportOptions, ImportResult, TargetedImport } from '../importers/core.js';
 import * as api from '../../api/index.js';
 import { memoryGet, memoryList } from '../../api/memories/memories.js';
+import { rememberFailedCommand } from '../../api/memories/remember-local.js';
 import * as client from './client.js';
 import {
   cliApiContext,
@@ -82,19 +82,10 @@ export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext)
     throw new CliExit(exitCode);
   }
 
-  const failure = captureError(exitCode, stderr, command, tenantId);
   // A rejection-guard refusal of a failed command's output must not crash the watcher: skip with the message below and
   // still exit with the wrapped command's real exit code.
   try {
-    await api.rememberLocally(cliApiContext(hippoRoot, tenantId), {
-      content: failure.content,
-      tags: failure.tags,
-      layer: failure.layer,
-      source: failure.source,
-      confidence: failure.confidence,
-      // A failure is stored each time it happens: watch has never put it to the salience gate.
-      force: true,
-    });
+    await rememberFailedCommand(cliApiContext(hippoRoot, tenantId), { command, exitCode, stderr });
 
     const preview = stderr.trim().slice(0, STDERR_PREVIEW_CHARS);
     printError(`\nHippo learned from failure: "${preview}"`);

@@ -40,6 +40,16 @@ export interface PostCompactInput extends CaptureInput {
   readonly compactSummary: string | null;
 }
 
+/** A PostCompact payload as the hook handler and the spool carry it, with every field the host may omit as null. */
+export interface PostCompactPayload {
+  sessionId: string;
+  trigger: string | null;
+  cwd: string | null;
+  transcriptPath: string | null;
+  /** null when Claude Code sent none; the transcript fills the record later. */
+  compactSummary: string | null;
+}
+
 /** Working state saved before the host drops context, so the session can resume; it is not a lesson. */
 export interface Checkpoint {
   readonly runtime: string;

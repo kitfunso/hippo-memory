@@ -3,8 +3,7 @@ import type { Machine } from '../../base/util/agent-homes.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { maskEmails } from '../../base/util/secret-detect.js';
 import { itemHash, sha256Hex } from './keys.js';
-import { toolSourcePrefix, type ToolId } from '../../base/memory/agent-memory-tools.js';
-import type { Scope } from './types.js';
+import { toolSourcePrefix, type Scope, type ToolId } from '../../base/memory/agent-memory-tools.js';
 import { ID_SUFFIX_CHARS } from '../../base/util/token-text.js';
 
 export const CONTENT_CAP = 1500;

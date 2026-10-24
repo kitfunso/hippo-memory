@@ -10,6 +10,9 @@ export const AGENT_MEMORY_TOOLS = [
 ] as const;
 
 export type AgentMemoryTool = (typeof AGENT_MEMORY_TOOLS)[number];
+
+/** Where an agent keeps a memory: under one project, or as the user's own across projects. */
+export type Scope = 'project' | 'user';
 export type ToolId = AgentMemoryTool['id'];
 
 export const AGENT_MEMORY_SOURCE_PREFIX = 'agent-memory:';

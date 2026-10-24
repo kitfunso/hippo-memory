@@ -21,7 +21,7 @@ import { storeExtractedFacts } from '../../src/domain/learn/extract.js';
 import { importGenericFile, importVault } from '../../src/entry/importers.js';
 import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
-import { importProjectMemories } from '../../src/domain/agent-memories/sync.js';
+import { importProjectMemories } from '../../src/api/agent-memories.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { runCli } from '../../src/cli.js';
