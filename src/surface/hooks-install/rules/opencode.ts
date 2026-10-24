@@ -7,8 +7,8 @@ import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../../../base
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 
 /**
- * The opencode plugin installed at ~/.config/opencode/plugins/hippo.ts: session.idle runs `hippo session-end`,
- * session.created runs `hippo last-sleep`.
+ * The opencode plugin installed at ~/.config/opencode/plugins/hippo.ts: session.idle runs `hippo session-end`, whose
+ * `--runtime opencode` logs to the file session.created's `hippo last-sleep` reads.
  * No `@opencode-ai/plugin` type import (unresolved, it would crash the loader); `$` is guarded and `.nothrow()` keeps a
  * missing hippo binary from throwing.
  */
@@ -26,7 +26,7 @@ export const HippoPlugin = async ({ $ }) => {
       if (typeof $ !== "function") return;
       try {
         if (event.type === "session.idle") {
-          const r = await $\`hippo session-end\`.quiet().nothrow();
+          const r = await $\`hippo session-end --runtime opencode\`.quiet().nothrow();
           if (r && r.exitCode !== 0) console.error("[hippo] session-end exited " + r.exitCode);
         } else if (event.type === "session.created") {
           const r = await $\`hippo last-sleep\`.quiet().nothrow();

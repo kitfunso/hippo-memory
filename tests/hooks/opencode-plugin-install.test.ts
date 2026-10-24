@@ -50,6 +50,11 @@ describe('the installed opencode plugin source', () => {
     expect(source).toContain('session.created');
   });
 
+  it('runs session-end as the opencode runtime, so its worker logs where the session start reads', () => {
+    expect(source).toContain('$`hippo session-end --runtime opencode`.quiet().nothrow()');
+    expect(source).toContain('$`hippo last-sleep`.quiet().nothrow()');
+  });
+
   it('guards against non-Bun runtimes (typeof $ check)', () => {
     // Critic-mandated defense: opencode runs in Bun in practice but a future
     // Node-mode deployment would have $ undefined; fail closed instead of

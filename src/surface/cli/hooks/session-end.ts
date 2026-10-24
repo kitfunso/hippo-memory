@@ -1,7 +1,7 @@
 // The SessionEnd hook: reads the payload inline, then hands the slow work to a detached worker before the host exits.
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import { resolveJsonHookPaths } from '../../hooks-install/json-hooks.js';
+import { defaultSleepLogPath, resolveJsonHookPaths } from '../../hooks-install/json-hooks.js';
 import { copilotTranscriptFor, SESSION_ID_RE } from '../../capture/copilot-transcript.js';
 import {
   readSessionEnd,
@@ -18,15 +18,20 @@ import { type CliFlags, type CommandContext, boolFlag, stringFlag } from '../fla
 import { hookRuntime, hookStoreRoot, hostSessionId, payloadCwdRoot } from '../hook-runtime.js';
 import { handleSessionEndWorker } from './session-end-worker.js';
 
+/** Copilot's hook command and OpenCode's plugin carry no path, since one quoted into them would need escaping for each
+ * shell: Copilot's log goes where its hook table used to point, OpenCode's where its plugin's last-sleep reads. */
+function runtimeLogFile(flags: CliFlags): string | null {
+  const runtime = stringFlag(flags, 'runtime');
+  if (runtime === 'copilot') return resolveJsonHookPaths('copilot').logFile;
+  return runtime === 'opencode' ? defaultSleepLogPath() : null;
+}
+
 /** SessionEnd entry: TUI teardown kills children still running, so read stdin inline, spawn a detached child that runs
  * sleep then capture, and exit. The child logs to a file that the next SessionStart reads via `hippo last-sleep`. */
 export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const runtime = hookRuntime(flags);
   const turn = boolFlag(flags, 'turn');
-  // Copilot's hook command carries no path, since one quoted into it would need escaping for each shell; the log goes
-  // where the hook table used to point.
-  const logFile =
-    stringFlag(flags, 'log-file') ?? (runtime === 'copilot' ? resolveJsonHookPaths('copilot').logFile : null);
+  const logFile = stringFlag(flags, 'log-file') ?? runtimeLogFile(flags);
 
   // Bounded read: extracts transcript_path + session_id for the detached worker's argv.
   const raw = await readStdinBounded();

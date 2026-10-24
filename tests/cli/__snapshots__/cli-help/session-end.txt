@@ -5,6 +5,8 @@
     --runtime copilot      The payload came from a Copilot hook: use the store of its cwd and find
                            the Copilot CLI session log by session id; with no --log-file, log to
                            ~/.hippo/logs/copilot-sleep.log
+    --runtime opencode     The OpenCode plugin's run: with no --log-file, log to
+                           ~/.hippo/logs/last-sleep.log, which its next session start shows
     --turn                 VS Code Stop hook, after each reply: capture only the new turns, sleep
                            only at the auto-sleep threshold, and keep the session's snapshot; does
                            nothing for any other payload
