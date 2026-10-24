@@ -23,7 +23,7 @@ const newestFirst =
     byBytes(a.content, b.content) ||
     byBytes(a.id, b.id);
 
-/** The whole-word tier: best bm25 first, then updated_at newest first, content and id; each row keeps its score. */
+/** The whole-word tier: best bm25 first, then updated_at newest first, content and id. */
 function wholeWordMatches(t: MemoryTables, admitted: readonly MemoryEntry[], terms: readonly string[], limit: number) {
   const byUpdated = (a: MemoryEntry, b: MemoryEntry): number => byBytes(updatedOf(t, b), updatedOf(t, a));
   const matches = ftsMatches(t.entries.values(), admitted, terms).sort(
@@ -33,7 +33,7 @@ function wholeWordMatches(t: MemoryTables, admitted: readonly MemoryEntry[], ter
       byBytes(a.entry.content, b.entry.content) ||
       byBytes(a.entry.id, b.entry.id),
   );
-  return matches.slice(0, limit).map(({ entry, bm25 }): MemoryEntry => ({ ...entry, bm25Score: bm25 }));
+  return matches.slice(0, limit).map(({ entry }) => entry);
 }
 
 /** Substrings of the content or tags JSON among the newest admitted rows: the part-word tier's window. */

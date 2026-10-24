@@ -72,9 +72,6 @@ export interface MemoryRow {
   last_rebuilt_at: string | null;
   rebuild_count: number | null;
   dag_level_3_built_at: string | null;
-  // Present only on rows from MEMORY_SEARCH_COLUMNS (FTS path).
-  // Other paths SELECT MEMORY_SELECT_COLUMNS, which does not include this.
-  bm25_score?: number;
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
@@ -175,10 +172,7 @@ const MEMORY_COLUMN_NAMES = [...MEMORY_ROW_COLUMNS, 'summary_dirty', 'last_rebui
 
 // FTS-join columns for loadSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified reads working.
 export const MEMORY_SELECT_COLUMNS = MEMORY_COLUMN_NAMES.join(', ');
-export const MEMORY_SEARCH_COLUMNS = [
-  ...MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`),
-  'bm25(memories_fts) AS bm25_score',
-].join(', ');
+export const MEMORY_SEARCH_COLUMNS = MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`).join(', ');
 
 /** The row in MemoryEntry's names, its JSON lists parsed; storedEntry fills each default. */
 function storedColumnsOf(row: MemoryRow): StoredColumns {
@@ -230,13 +224,7 @@ function storedColumnsOf(row: MemoryRow): StoredColumns {
 }
 
 export function rowToEntry(row: MemoryRow): MemoryEntry {
-  const entry = storedEntry(storedColumnsOf(row));
-  // Preserve bm25_score from the FTS path; `'bm25_score' in row` tells an absent column (non-FTS path) from a present
-  // one.
-  if ('bm25_score' in row && row.bm25_score !== undefined && row.bm25_score !== null) {
-    entry.bm25Score = Number(row.bm25_score);
-  }
-  return entry;
+  return storedEntry(storedColumnsOf(row));
 }
 
 /** A column that is not JSON reads as empty. With `site` the row is named at warn once; without it no row is known and

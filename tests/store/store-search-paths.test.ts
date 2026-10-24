@@ -1,17 +1,5 @@
-/**
- * F1 (v1.7.0): `MemoryEntry.bm25Score` populated on the FTS path of
- * `loadSearchEntries` and `undefined` everywhere else.
- *
- * loadSearchRows in src/store/search-rows.ts has FOUR query paths:
- *   1. No-terms path (empty query)            → no FTS, score undefined
- *   2. FTS path (terms + FTS available)        → bm25_score populated
- *   3. LIKE fallback (terms + FTS unavailable) → no FTS, score undefined
- *   4. Full-store fallback (LIKE returns 0)    → no FTS, score undefined
- *
- * Tests cover all four. The LIKE-fallback test forces
- * `fts5_available=0` via setMeta to reach the branch deterministically
- * (codex P2-2: don't rely on a "miss" to fall through).
- */
+// loadSearchRows (src/store/sqlite/search-rows.ts) answers through one of four paths: no terms, FTS5, LIKE, then
+// every row. FTS5's bm25 only orders the rows; no row carries a search score.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
@@ -38,50 +26,34 @@ function makeRaw(text: string): MemoryEntry {
   });
 }
 
-describe('loadSearchEntries bm25_score', () => {
+describe('loadSearchEntries paths', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('f1');
   });
   afterEach(() => removeAfterRequest(root));
 
-  it('FTS path: every returned entry has finite numeric bm25_score, sorted ascending (best first)', () => {
-    writeEntry(root, makeRaw('alpha beta gamma delta epsilon'));
+  it('FTS path: a match in a shorter row ranks first, and no row carries a score', () => {
+    // Written first and sorting later by content, so only bm25 can put it first.
     writeEntry(root, makeRaw('alpha beta'));
+    writeEntry(root, makeRaw('alpha ant beta gamma delta'));
     writeEntry(root, makeRaw('zeta eta theta'));
     const results = loadSearchEntries(root, 'alpha beta', 200, 'default');
-    // FTS path returns rows that match the OR of terms; we expect at least
-    // the two alpha rows but tolerate any matching set sized 1+.
-    const matched = results.filter((e) => e.bm25Score !== undefined);
-    expect(matched.length).toBeGreaterThanOrEqual(1);
-    for (const e of matched) {
-      expect(e.bm25Score).toEqual(expect.any(Number));
-      expect(Number.isFinite(e.bm25Score!)).toBe(true);
-    }
-    // Ascending bm25_score (FTS5: lower = better).
-    for (let i = 1; i < matched.length; i++) {
-      expect(matched[i - 1]!.bm25Score!).toBeLessThanOrEqual(matched[i]!.bm25Score!);
-    }
+    expect(results.map((e) => e.content)).toEqual(['alpha beta', 'alpha ant beta gamma delta']);
+    expect(results.filter((e) => 'bm25Score' in e)).toEqual([]);
   });
 
-  it('FTS path: two-term match scores LOWER (better) than one-term match', () => {
+  it('FTS path: a two-term match ranks before a one-term match', () => {
     writeEntry(root, makeRaw('alpha beta'));
-    writeEntry(root, makeRaw('alpha by itself'));
+    writeEntry(root, makeRaw('alpha alone'));
     const results = loadSearchEntries(root, 'alpha beta', 200, 'default');
-    const both = results.find((e) => e.content === 'alpha beta');
-    const one = results.find((e) => e.content === 'alpha by itself');
-    expect(both?.bm25Score).toBeTypeOf('number');
-    expect(one?.bm25Score).toBeTypeOf('number');
-    expect(both!.bm25Score!).toBeLessThan(one!.bm25Score!);
+    expect(results.map((e) => e.content)).toEqual(['alpha beta', 'alpha alone']);
   });
 
-  it('No-terms path: empty query returns entries with bm25_score undefined', () => {
+  it('No-terms path: an empty query returns every row', () => {
     writeEntry(root, makeRaw('any content'));
     const results = loadSearchEntries(root, '', 200, 'default');
     expect(results.map((e) => e.content)).toEqual(['any content']);
-    for (const e of results) {
-      expect(e.bm25Score).toBeUndefined();
-    }
   });
 
   it('No-terms path: honours the LIMIT parameter', async () => {
@@ -93,9 +65,6 @@ describe('loadSearchEntries bm25_score', () => {
     });
     const results = loadSearchEntries(root, '', 10, 'default');
     expect(results.length).toBe(10);
-    for (const e of results) {
-      expect(e.bm25Score).toBeUndefined();
-    }
   });
 
   it('No-terms path: returns rows ordered by created ASC then id ASC, with stamped created surviving writeEntry', async () => {
@@ -135,25 +104,22 @@ describe('loadSearchEntries bm25_score', () => {
     expect(got).toEqual(expectedOrder);
   });
 
-  it('LIKE fallback path: a part-word query reaches LIKE; bm25_score undefined; expected row anchored', () => {
+  it('LIKE fallback path: a part-word query reaches LIKE; expected row anchored', () => {
     // FTS5 matches whole tokens, so a part-word is the only route to LIKE that leaves the FTS index untouched.
     writeEntry(root, makeRaw('alphabet soup contents'));
     const results = loadSearchEntries(root, 'alphab', 200, 'default');
     expect(results).toHaveLength(1);
     // Anchor: the expected row must come back via the LIKE branch.
     expect(results.some((e) => e.content === 'alphabet soup contents')).toBe(true);
-    // No FTS path → no bm25_score on any returned row.
-    for (const e of results) {
-      expect(e.bm25Score).toBeUndefined();
-    }
   });
 
   it('the environment cannot force the LIKE route: with the old variable set, a term query still comes back through FTS', () => {
     writeEntry(root, makeRaw('alphabet soup contents'));
+    writeEntry(root, makeRaw('alphabetical order'));
     vi.stubEnv('HIPPO_FORCE_LIKE_PATH', '1');
+    // LIKE would also match the substring in 'alphabetical'; FTS5 matches the whole token only.
     const results = loadSearchEntries(root, 'alphabet', 200, 'default');
     expect(results.map((e) => e.content)).toEqual(['alphabet soup contents']);
-    expect(results[0]!.bm25Score).toEqual(expect.any(Number));
   });
 
   // Seeds 6,000 rows, in two transactions, since store size is the thing it varies.
@@ -185,22 +151,11 @@ describe('loadSearchEntries bm25_score', () => {
     }
   }, 30_000);
 
-  it('Full-store fallback path: terms with no match → no FTS hit, no LIKE hit → fallback returns all rows with bm25_score undefined', () => {
+  it('Full-store fallback path: terms that match nothing in FTS5 or LIKE return every row', () => {
     writeEntry(root, makeRaw('one row'));
     writeEntry(root, makeRaw('another row'));
-    // Use a very rare token combination that should miss FTS and LIKE both
-    // (FTS will return 0 rows, LIKE will too, and the fallback returns
-    // all tenant rows). Even if FTS returns a row, it'd score < 0 and
-    // populate bm25_score; we explicitly assert undefined ONLY when no
-    // FTS row was returned, then assert against the fallback.
     const results = loadSearchEntries(root, 'zzzznonexistenttokenxxxxxx qqqqqqq', 200, 'default');
     expect(results.map((e) => e.content).sort()).toEqual(['another row', 'one row']);
-    // None of the returned rows should carry bm25_score because we did
-    // not enter the FTS path (FTS returned 0 → fell through to LIKE → 0
-    // → full-store fallback).
-    for (const e of results) {
-      expect(e.bm25Score).toBeUndefined();
-    }
   });
 
   it('Full-store fallback path: honours LIMIT (regression: it was once uncapped)', () => {
@@ -215,8 +170,5 @@ describe('loadSearchEntries bm25_score', () => {
     );
     const results = loadSearchEntries(root, 'zzzznonexistenttokenxxxxxx qqqqqqq', 10, 'default');
     expect(results.length).toBe(10);
-    for (const e of results) {
-      expect(e.bm25Score).toBeUndefined();
-    }
   });
 });

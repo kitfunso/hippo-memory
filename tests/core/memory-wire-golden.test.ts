@@ -83,7 +83,6 @@ describe('memory wire goldens', () => {
       lastRebuiltAt: undefined,
       rebuildCount: undefined,
       dagLevel3BuiltAt: undefined,
-      bm25Score: undefined,
     };
     expect(deserializeEntry(file)).toEqual(expected);
   });

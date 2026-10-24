@@ -47,7 +47,6 @@ export function everyFieldEntry(): MemoryEntry {
     lastRebuiltAt: '2026-01-12T00:00:00.000Z',
     rebuildCount: 2,
     dagLevel3BuiltAt: '2026-01-13T00:00:00.000Z',
-    bm25Score: -3.25,
   };
 }
 

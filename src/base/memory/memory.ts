@@ -89,11 +89,6 @@ export interface MemoryEntry {
    * denied by ambient context.
    * Stamped at write time by stampOriginProject (sqlite/entry-row.ts); undefined only before the first write. */
   originProject?: string | null;
-  /**
-   * Raw FTS5 bm25() from the search path (negative, lower = better); set only for a non-empty query the FTS join
-   * answered.
-   * Not comparable to the JS scorer in src/domain/search/bm25.ts, so read it as rank metadata only. */
-  bm25Score?: number;
 }
 
 /** Named dag_level values; level 0 is a raw leaf. */

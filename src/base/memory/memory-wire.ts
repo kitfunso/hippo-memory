@@ -44,6 +44,8 @@ export interface MemoryWire {
   last_rebuilt_at?: string | null;
   rebuild_count?: number;
   dag_level_3_built_at?: string | null;
+  /** 2.x wrote a search row's FTS5 rank here; kept so such a wire object still types, though 3.0 never writes or reads
+   * it. A hit's score is on `SearchResult`. */
   bm25_score?: number;
 }
 
@@ -90,7 +92,6 @@ export function toWire(entry: MemoryEntry): MemoryWire {
     last_rebuilt_at: entry.lastRebuiltAt,
     rebuild_count: entry.rebuildCount,
     dag_level_3_built_at: entry.dagLevel3BuiltAt,
-    bm25_score: entry.bm25Score,
   };
 }
 
@@ -137,6 +138,5 @@ export function fromWire(wire: MemoryWire): MemoryEntry {
     lastRebuiltAt: wire.last_rebuilt_at,
     rebuildCount: wire.rebuild_count,
     dagLevel3BuiltAt: wire.dag_level_3_built_at,
-    bm25Score: wire.bm25_score,
   };
 }

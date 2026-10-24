@@ -7,6 +7,7 @@ hippo 3.0 removes names that 2.1 marked `@deprecated` and the raw store function
 | `openHippoDb`, `openHippoDbReadOnly`, `closeHippoDb` and the `DatabaseSyncLike` type on the package root. | `sqliteStore(hippoRoot)` from `hippo-memory/store-kit`. No package entry hands out a raw SQLite handle. |
 | The snake_case option keys of `createMemory`: `emotional_valence`, `schema_fit`, `trace_outcome`, `source_session_id`, `valid_from`, `extracted_from`, `dag_level`, `dag_parent_id` and `artifact_ref`. | The camelCase keys 2.1 added: `emotionalValence`, `schemaFit`, `traceOutcome`, `sourceSessionId`, `validFrom`, `extractedFrom`, `dagLevel`, `dagParentId` and `artifactRef`. A snake_case key is now a type error and is ignored at run time. The entry that comes back names its fields in camelCase too (next row). |
 | The snake_case field names of `MemoryEntry`, such as `entry.tenant_id`, `entry.last_retrieved` and `entry.superseded_by`. | The camelCase names in [MemoryEntry field names](#memoryentry-field-names), such as `entry.tenantId`. Files and wire formats keep their snake_case keys: `hippo export`, the markdown mirrors, dormant snapshots, `hippo trace --json`, `hippo recall --json` and the HTTP and MCP answers read as before. A store write of an entry with `tenant_id` and no `tenantId` throws `TypeError: tenant_id was renamed to tenantId in 3.0`, so a 2.x caller's row cannot land in the default tenant. An eval script that reads snake_case keys can import the `*Wire` forms from `hippo-memory/testing`, such as `loadAllEntriesWire`; they take and return `MemoryWire`, the snake_case shape. Store-kit shapes built from an entry follow it: `descendantAdmits` reads `originProject`, the patch a store's `consolidation.applyRebuild` gets names `descendantCount`, `earliestAt` and `latestAt`, and `consolidation.childrenOfSummaries` and the `sharing` text keys carry `tenantId`. |
+| `MemoryEntry.bm25_score`: the raw FTS5 `bm25()` rank a row from a store search carried, such as a row `loadRecallSearchEntries` on `hippo-memory/testing` answers. | Nothing replaces it on the row: the rank still orders those rows, and no row carries it. A hit's score is on `SearchResult`, from `search` and `hybridSearch` on `hippo-memory/search`: `score`, and `bm25`, which hippo's own BM25 scorer gives on a different scale from FTS5. `MemoryWire` keeps the optional `bm25_score` key, so a 2.x wire object still type-checks; 3.0 never writes or reads it. |
 | The snake_case field names of `MemoryConflict` from `hippo-memory/store-kit`: `memory_a_id`, `memory_b_id`, `detected_at` and `updated_at`. | `memoryAId`, `memoryBId`, `detectedAt` and `updatedAt`; `id`, `reason`, `score` and `status` keep their names. A store you build returns conflicts with the camelCase names from `conflicts.list` and `conflicts.get`. Files and wire formats keep their snake_case keys: `hippo conflicts --json`, the `open_conflicts` of `hippo trace --json` and the conflict markdown mirrors print as before. |
 | The snake_case fields of `HippoConfig['physics']`, such as `config.physics.G_query`. | The camelCase names `gQuery`, `gMemory`, `kRepulsion`, `interferenceGain`, `momentumWeight`, `maxVelocity`, `feedbackAlpha`, `temperatureDecay`, `clusterThreshold` and `clusterTopK`. A `config.json` keeps its keys, so `"physics": { "G_query": 3 }` still sets `gQuery`. `hippo support-bundle` shows the effective config under the new names. |
 | `physicsSearch` on the package root. | `physicsSearch` from `hippo-memory/store-kit`, with the same signature. To rank recall by physics without calling it, set `physics.enabled` to `'auto'` or `true` in config. |
@@ -116,7 +117,7 @@ hippo 3.0 removes names that 2.1 marked `@deprecated` and the raw store function
 
 ## MemoryEntry field names
 
-These 27 fields of `MemoryEntry` are renamed in 3.0. The other fields keep their names. The snake_case names stay the keys of every file and wire format.
+These 26 fields of `MemoryEntry` are renamed in 3.0. The other fields keep their names. The snake_case names stay the keys of every file and wire format.
 
 | 2.x field | 3.0 field |
 | --- | --- |
@@ -146,4 +147,3 @@ These 27 fields of `MemoryEntry` are renamed in 3.0. The other fields keep their
 | `artifact_ref` | `artifactRef` |
 | `tenant_id` | `tenantId` |
 | `origin_project` | `originProject` |
-| `bm25_score` | `bm25Score` |
