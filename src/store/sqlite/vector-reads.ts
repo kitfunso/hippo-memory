@@ -5,19 +5,28 @@ import { GraphFileIndex } from '../../db/vector-graph-reader.js';
 import type { VectorIndex } from '../../db/vector-store.js';
 import type { Handles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
-import { bound, skipEmpty, type Bodies } from './bound.js';
+import { bound, type Bodies } from './bound.js';
 import { rethrowInPortTerms } from './port-errors.js';
-import type { VectorReads } from '../port.js';
+import type { DatabaseSyncLike } from '../../db/index.js';
+import type { StoredPart, StoredParts, VectorReads } from '../port.js';
 import type { NearestIdsAsk } from '../port/vectors.js';
 import { entriesInOrder, listVectorCandidateEntries } from './search-rows.js';
-import { readStoredVectors, storedIndexState } from './vector-index.js';
+import { readStoredVectorViews, storedIndexState } from './vector-index.js';
 
 type RowReads = Omit<VectorReads, 'nearestEntries'>;
 
+type PartReads = {
+  readonly [P in StoredPart]: (db: DatabaseSyncLike, ids: readonly string[]) => Map<string, StoredParts[P]>;
+};
+
+const storedBodies: PartReads = {
+  vectors: readStoredVectorViews,
+  particles: (db, ids) => loadPhysicsState(db, [...ids]),
+};
+
 const rowReadsBodies: Bodies<RowReads> = {
   embeddingIndexState: storedIndexState,
-  storedVectors: readStoredVectors,
-  physicsParticles: (db, ids) => loadPhysicsState(db, [...ids]),
+  stored: (db, part, ids) => storedBodies[part](db, ids),
 };
 
 /** `index` is the store worker's vector graph on the one reader thread that holds it; every other reader searches the
@@ -29,8 +38,8 @@ export function sqliteVectorReads(
   const reads = bound(on, rowReadsBodies);
   return {
     ...reads,
-    // loadPhysicsState reads every row for an empty list.
-    physicsParticles: skipEmpty(reads.physicsParticles, () => new Map()),
+    // An empty list opens no handle, and loadPhysicsState would read every row for one.
+    stored: (part, ids) => (ids.length === 0 ? Promise.resolve(new Map()) : reads.stored(part, ids)),
     // The scan reads a page per event-loop turn, so the handle stays open until the promise settles.
     nearestEntries: (queryVector, spec) =>
       onAsync((db) => listVectorCandidateEntries(db, queryVector, spec, index), openStore).catch(rethrowInPortTerms),

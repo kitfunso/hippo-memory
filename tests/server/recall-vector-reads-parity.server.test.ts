@@ -3,7 +3,14 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../../src/entry/store-kit.js';
+import {
+  sqliteStore,
+  type HippoStore,
+  type StoredPart,
+  type StoredParts,
+  type VectorCandidateSpec,
+  type VectorReads,
+} from '../../src/entry/store-kit.js';
 import { folderVectorSource, hybridSearch } from '../../src/entry/folder-search.js';
 import { resolveVectorArm } from '../../src/domain/search/vector.js';
 import { shareRoot } from '../_helpers/share-root.js';
@@ -46,6 +53,8 @@ const ORPHAN = 'mem_x_orphan';
 const VECTOR_ONLY = 'mem_v_redeploy';
 // A shared store refuses an MCP recall that names no project; the seeded rows are user-global, so any project reaches them.
 const PROJECT = 'golden';
+
+type PartsRead = { readonly [P in StoredPart]: (ids: readonly string[]) => Promise<Map<string, StoredParts[P]>> };
 
 interface SeedRow {
   readonly entry: MemoryEntry;
@@ -245,9 +254,9 @@ afterEach(() => {
 describe.skipIf(needsHippoDb('parity'))('recall through the vector reads of a store other than hippo.db', () => {
   it.each([
     ['GET /v1/memories mode=hybrid', [http('hybrid')], false, 'nearestEntries'],
-    ['GET /v1/memories mode=physics', [http('physics')], true, 'physicsParticles'],
+    ['GET /v1/memories mode=physics', [http('physics')], true, 'stored:particles'],
     ['MCP hippo_recall, hybrid', [MCP], false, 'nearestEntries'],
-    ['MCP hippo_recall, physics', [MCP], true, 'physicsParticles'],
+    ['MCP hippo_recall, physics', [MCP], true, 'stored:particles'],
   ] as const)(
     '%s: same ids in the same order, same rows written, same provider calls',
     async (_name, calls, physics, read) => {
@@ -382,7 +391,13 @@ describe('the in-memory vector reads answer as sqliteStore does', () => {
     });
     const entries = rows.map((r) => r.entry);
     const views = sqliteStore(root);
-    const copies: HippoStore = { ...views, vectorViews: undefined };
+    // A store may answer number[] vectors where it holds no Float32 bytes.
+    const copied: PartsRead = {
+      vectors: async (ids) =>
+        new Map([...(await views.vectors.stored('vectors', ids))].map(([id, v]) => [id, Array.from(v)])),
+      particles: (ids) => views.vectors.stored('particles', ids),
+    };
+    const copies: HippoStore = { ...views, vectors: { ...views.vectors, stored: (part, ids) => copied[part](ids) } };
     const ranked = async (store: HippoStore): Promise<[string, number, number][]> =>
       (await hybridSearch(QUERY, entries, { hippoRoot: root, store, budget: 1_000_000, now: new Date(FAKE_NOW) })).map(
         (r) => [r.entry.id, r.score, r.cosine],
@@ -403,12 +418,13 @@ describe('the in-memory vector reads answer as sqliteStore does', () => {
     ).toBeInstanceOf(Array);
   });
 
-  it('storedVectors, embeddingIndexState and physicsParticles', async () => {
+  it('stored vectors and particles, and embeddingIndexState', async () => {
     const some = ['mem_l_8d', 'mem_l_api', 'mem_l_zero', ORPHAN, 'mem_missing'];
-    expect(await memory.storedVectors(some)).toEqual(await sqlite.storedVectors(some));
-    expect((await sqlite.storedVectors(some)).get('mem_l_8d')).toHaveLength(8);
+    expect(await memory.stored('vectors', some)).toEqual(await sqlite.stored('vectors', some));
+    expect((await sqlite.stored('vectors', some)).get('mem_l_8d')).toHaveLength(8);
     expect(await memory.embeddingIndexState()).toEqual(await sqlite.embeddingIndexState());
-    expect(await memory.physicsParticles(some)).toEqual(await sqlite.physicsParticles(some));
-    expect([(await sqlite.physicsParticles([])).size, (await memory.physicsParticles([])).size]).toEqual([0, 0]);
+    expect(await memory.stored('particles', some)).toEqual(await sqlite.stored('particles', some));
+    const none = [(await sqlite.stored('particles', [])).size, (await memory.stored('particles', [])).size];
+    expect(none).toEqual([0, 0]);
   });
 });

@@ -17,6 +17,16 @@ export interface GraphViewQuery {
   readonly reader?: ScopeActor;
 }
 
+/** One read of a recall walk: ids go GRAPH_ID_BATCH at a time, rows come back in that order per batch, and
+ * `truncated` is false. */
+export type GraphWalkQuery =
+  /** The entities whose memory is among `ids`, id ascending per batch. */
+  | { readonly by: 'memory'; readonly ids: readonly string[] }
+  /** The entities among `ids`. */
+  | { readonly by: 'entity'; readonly ids: readonly number[] }
+  /** The newest `limit` relations with either end among `ids`; `limit`, a non-negative integer, caps the whole read. */
+  | { readonly by: 'neighbor'; readonly ids: readonly number[]; readonly limit: number };
+
 export interface GraphRows {
   readonly entities: Entity[];
   /** May name an entity `entities` lacks; the caller drops such a relation. */
@@ -26,19 +36,11 @@ export interface GraphRows {
   readonly truncated: boolean;
 }
 
-/** The rows behind GET /v1/graph. */
+/** The rows behind GET /v1/graph and recall's graph walk. */
 export interface GraphReads {
-  /** Every read from one snapshot, then rows that do not show are dropped. Whole graph: the tenant's newest `limit`
-   * entities and relations. From a name: the entities of the ids held (id ascending, GRAPH_ID_BATCH at a time) and the
-   * newest `limit` relations with both ends among those ids. */
-  graphRows(tenantId: string, query: GraphViewQuery): Promise<GraphRows>;
-  entitiesForMemories(tenantId: string, memoryIds: readonly string[]): Promise<Entity[]>;
-  entitiesByIds(tenantId: string, ids: readonly number[]): Promise<Entity[]>;
-  neighborRelations(
-    tenantId: string,
-    entityIds: readonly number[],
-    opts: { readonly limit: number },
-  ): Promise<Relation[]>;
+  /** A view reads one snapshot, then drops rows that do not show: whole graph, the newest `limit` entities and
+   * relations; from a name, its held entities and the newest `limit` relations among them. A walk fills one list. */
+  graphRows(tenantId: string, query: GraphViewQuery | GraphWalkQuery): Promise<GraphRows>;
   /** The ops that turn the tenant's stored graph into `desired`, as store/rules/graph-delta.ts diffGraph plans them.
    * Read outside any write lock, so the apply re-checks each op against what changed since. */
   graphDelta(tenantId: string, desired: DesiredGraph): Promise<GraphOp[]>;

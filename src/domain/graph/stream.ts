@@ -119,9 +119,8 @@ async function reachedEntityScores(
 
   for (let depth = 1; depth <= hops && frontier.length > 0; depth++) {
     const frontierSet = new Set(frontier);
-    const rels = await store.graphReads.neighborRelations(tenantId, frontier, {
-      limit: Math.max(maxNeighbors, maxNeighbors * frontier.length),
-    });
+    const limit = Math.max(maxNeighbors, maxNeighbors * frontier.length);
+    const { relations: rels } = await store.graphReads.graphRows(tenantId, { by: 'neighbor', ids: frontier, limit });
     const hopFactor = Math.pow(decay, depth);
     const bestStrengthThisDepth = bestStrengthAtDepth(rels, frontierSet, visited, frontierStrength, originStrength);
     // Pass 2: commit strongest-first (then id asc, so deterministic), so the per-hop fanout cap keeps the
@@ -176,7 +175,8 @@ async function accumulateForStore(
     const memId = entries[s.index].id;
     strengthByMemId.set(memId, Math.max(strengthByMemId.get(memId) ?? 0, s.strength));
   }
-  const seedEntities = await store.graphReads.entitiesForMemories(tenantId, [...strengthByMemId.keys()]);
+  const seedIds = [...strengthByMemId.keys()];
+  const { entities: seedEntities } = await store.graphReads.graphRows(tenantId, { by: 'memory', ids: seedIds });
   if (seedEntities.length === 0) return;
 
   // entityId -> origin seed strength. Seeds load by memory id so memoryId is non-null here; the guard keeps the widened
@@ -198,7 +198,8 @@ async function accumulateForStore(
   if (reachedScore.size === 0) return;
 
   // Reached entity ids -> source memory ids -> in-pool entry indices.
-  const reachedEntities = await store.graphReads.entitiesByIds(tenantId, [...reachedScore.keys()]);
+  const reachedIds = [...reachedScore.keys()];
+  const { entities: reachedEntities } = await store.graphReads.graphRows(tenantId, { by: 'entity', ids: reachedIds });
   for (const ent of reachedEntities) {
     if (ent.memoryId === null) continue; // mirror-less node: no pool memory to re-rank
     const idx = memIdToIndex.get(ent.memoryId);

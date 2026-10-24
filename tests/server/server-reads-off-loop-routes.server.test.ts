@@ -288,12 +288,6 @@ describe("the server-thread block of a `loop: 'off'` route this file covers", ()
       false,
     ],
     ['GET /v1/memories, by its vector reads', (p) => ({ vectors: p.vectors }), recall('q=deploy&mode=hybrid'), true],
-    [
-      'GET /v1/memories, by its vector views',
-      (p) => ({ vectorViews: p.vectorViews }),
-      recall('q=deploy&mode=hybrid'),
-      true,
-    ],
   ];
 
   it.each(ROUTES)(
