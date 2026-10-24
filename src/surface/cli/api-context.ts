@@ -5,7 +5,8 @@ import type { SyncOptions } from '../../domain/agent-memories/sync.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
 import { configReader, type ConfigReader } from '../../host/config-file.js';
-import { consolidateStore, logPhaseFailures } from '../../api/sleep/upkeep.js';
+import { logPhaseFailures } from '../../domain/consolidate/run.js';
+import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
 import { resolveGlobalRootDir } from '../../host/project-identity.js';
 import type { McpHost } from '../mcp/protocol.js';
@@ -154,7 +155,7 @@ export function cliStdioHost(): McpHost {
     if (callers === undefined) {
       const run = (): Promise<void> =>
         runDetachedStoreRequest(() =>
-          consolidateStore(cliStore(root), {
+          runConsolidation(cliStore(root), {
             config: cliConfig(root),
             tenantId: hostTenantId,
             llm: anthropicLlmFromEnv(),

@@ -3,8 +3,7 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { type Actor, type SleepOpts, type SleepResult, type Context } from '../../api/index.js';
-import { logPhaseFailures } from '../../api/sleep/upkeep.js';
-import type { ConsolidationResult } from '../../domain/consolidate/run.js';
+import { logPhaseFailures, type ConsolidationResult } from '../../domain/consolidate/run.js';
 import { StoreBusyError } from '../../store/port.js';
 import { envSleepTimeoutMs } from '../../base/util/env.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/util/http-util.js';

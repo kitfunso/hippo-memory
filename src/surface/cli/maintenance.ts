@@ -1,7 +1,7 @@
 // Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
 
 import { anthropicLlmFromEnv } from '../../infra/ports.js';
-import { dedupeStore, type DedupResult } from '../../api/sleep/upkeep.js';
+import { deduplicateStore, type DedupResult } from '../../domain/consolidate/dedupe.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { embedCoverage, memoryEmbedMissing, resetPhysicsFromVectors, storedVectorCount } from '../../api/embeddings.js';
@@ -71,7 +71,7 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
     `Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`,
   );
 
-  const result = await dedupeStore(cliStore(hippoRoot), dryRun);
+  const result = await deduplicateStore(cliStore(hippoRoot), { dryRun });
 
   if (result.removed === 0) {
     console.log('No duplicates found.');
