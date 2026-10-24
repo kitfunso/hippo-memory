@@ -41,7 +41,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createMemory } from '../../dist/base/memory/memory.js';
+import { createMemory } from '../../dist/entry/memory.js';
 import { initStore, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../../dist/entry/testing.js';
 import { embedMemory } from '../../dist/entry/testing.js';
 import { isEmbeddingAvailable } from '../../dist/base/embeddings/local.js';

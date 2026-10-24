@@ -49,7 +49,7 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
-import { createMemory, applyOutcome } from '../../dist/base/memory/memory.js';
+import { createMemory, applyOutcome } from '../../dist/entry/memory.js';
 import { initStore, writeEntry, loadAllEntries } from '../../dist/entry/testing.js';
 import { withSharedStoreHandles } from '../../dist/db/index.js';
 import { hybridSearch } from '../../dist/domain/search/hybrid.js';

@@ -4,7 +4,7 @@
  *
  * Per-turn chunking (one MemoryEntry per non-empty haystack turn), matching
  * the plan's "chunk-per-turn precedent". Uses hippo's REAL entry-creation
- * path (createMemory + writeEntry from dist/base/memory/memory.js + dist/store.js —
+ * path (createMemory + writeEntry from dist/entry/memory.js + dist/store.js —
  * the same low-level building blocks scripts/e1-lifecycle/run.mjs uses, so
  * `created`/`last_retrieved`/`half_life_days` are stamped exactly as
  * production would). No api.ts / Context layer needed: remember() is a thin
@@ -45,7 +45,7 @@
  */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createMemory, computeSchemaFit } from '../../dist/base/memory/memory.js';
+import { createMemory, computeSchemaFit } from '../../dist/entry/memory.js';
 import { initStore, writeEntry } from '../../dist/entry/testing.js';
 import {
   parseLmeDate,
