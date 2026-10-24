@@ -13,6 +13,7 @@ import { bodyDeadlineMs } from '../../base/util/http-util.js';
 import { answerRequest, listenOn } from './boot.js';
 import { startDashboardReader } from './dashboard-reader.js';
 import { answerDashboard, type DashboardServing } from './dashboard-routes.js';
+import { dashboardTickets } from './dashboard-session.js';
 import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
 import { createListener } from './tls.js';
 import type { ServerHandle } from './types.js';
@@ -28,7 +29,7 @@ export interface DashboardOpts {
   /** The tenant the CLI root resolved; the dashboard reads and writes as it. */
   readonly tenantId: string;
   readonly port: number;
-  /** The per-start secret the printed URL carries. */
+  /** The per-start secret that keys the session cookies; no URL or file carries it. */
   readonly token: string;
   /** Dates the strength projections; the eval clock when unset. */
   readonly now?: () => number;
@@ -38,6 +39,12 @@ export interface DashboardOpts {
   readonly handleSignals?: boolean;
   /** The HIPPO_BODY_TIMEOUT_MS value the CLI read; 30 s when unset. */
   readonly bodyDeadlineMs?: number;
+}
+
+/** A running dashboard, which hands out the one-time tickets its URL carries. */
+export interface DashboardHandle extends ServerHandle {
+  /** A fresh ticket: it opens the dashboard once, within ten minutes. */
+  readonly ticket: () => string;
 }
 
 /** The listener failed to bind, so the CLI can tell a busy port from any other failure. */
@@ -58,7 +65,7 @@ function servingFor(opts: DashboardOpts, { store, offLoop, host }: ServerRuntime
   const configAt = configReader(envRuntimeSettings);
   const infra = rootInfra(host);
   return {
-    access: { token: opts.token, port: opts.port },
+    access: { token: opts.token, port: opts.port, tickets: dashboardTickets() },
     reader: startDashboardReader({ hippoRoot, tenantId }, { now, cacheClock: opts.cacheClock ?? Date.now }),
     context: () => ({
       hippoRoot,
@@ -74,9 +81,9 @@ function servingFor(opts: DashboardOpts, { store, offLoop, host }: ServerRuntime
   };
 }
 
-/** Serves the dashboard on 127.0.0.1 behind the per-start `token`; it never claims the API server's pidfile, so both
- * can serve one store. */
-export async function serveDashboard(opts: DashboardOpts): Promise<ServerHandle> {
+/** Serves the dashboard on 127.0.0.1 behind its tickets and the cookies they buy; it never claims the API server's
+ * pidfile, so both can serve one store. */
+export async function serveDashboard(opts: DashboardOpts): Promise<DashboardHandle> {
   const runtime = defaultServerRuntime(opts.hippoRoot, { lossAversionRatio: envLossAversionRatio() });
   const serving = servingFor(opts, runtime);
   const inflight = new Set<ServerResponse>();
@@ -114,5 +121,6 @@ export async function serveDashboard(opts: DashboardOpts): Promise<ServerHandle>
   }
   // SAFETY: listenOn bound a TCP port, so address() is an AddressInfo.
   const { port } = server.address() as AddressInfo;
-  return { port, url: `http://${DASHBOARD_HOST}:${port}`, stop, server };
+  const ticket = (): string => serving.access.tickets.mint(Date.now());
+  return { port, url: `http://${DASHBOARD_HOST}:${port}`, stop, server, ticket };
 }
