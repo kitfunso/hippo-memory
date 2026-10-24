@@ -88,7 +88,7 @@ export function memoryStore(tables: MemoryTables = emptyTables(), rules: LossAve
     keyWrites: memoryKeyWrites(t),
     keyGrants: memoryKeyGrants(t),
     vectorWrites: memoryVectorWrites(t),
-    entryWrites: memoryEntryWrites(t),
+    entryWrites: memoryEntryWrites(t, rules),
     contextReads: memoryContextReads(t),
     predictions: memoryPredictions(t),
     dagReads: memoryDagReads(t),
