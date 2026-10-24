@@ -59,10 +59,11 @@ async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]>
     SESSION_DIGEST_TAG,
     key,
   );
-  const handoff = await ctx.store.sessions.latestHandoff(
+  const handoff = await ctx.store.sessions.read(
     ctx.tenantId,
-    null,
+    'handoff',
     {
+      sessionId: null,
       unfinishedOnly: true,
       maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
       scopeFilter: 'default-deny',

@@ -14,8 +14,8 @@ export async function continuityLatest(
   opts: { sessionId?: string; limit: number },
 ): Promise<LatestContinuity> {
   const { sessions } = ctx.store;
-  const snapshot = await sessions.loadSnapshot(ctx.tenantId, null);
-  const events = await sessions.listEvents(ctx.tenantId, {
+  const snapshot = await sessions.loadSnapshot(ctx.tenantId, {}, null);
+  const events = await sessions.read(ctx.tenantId, 'event', {
     sessionId: opts.sessionId || snapshot?.sessionId || undefined,
     limit: opts.limit,
   });

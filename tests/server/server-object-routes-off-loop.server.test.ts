@@ -487,12 +487,9 @@ describe('an object write waiting for the write lock', () => {
       storedRows(root).filter((row) => row.includes('behind the lock') && row.startsWith('customer_notes ')),
     ).toHaveLength(1);
     expect([...new Set(ops.filter((op) => op.startsWith('objects.')))].sort()).toEqual([
-      'objects.activeSkillsByName',
       'objects.briefReceipts',
       'objects.listObjects',
       'objects.objectById',
-      'objects.openIncident',
-      'objects.policiesInForce',
       'objects.saveObject',
     ]);
   });

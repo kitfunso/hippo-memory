@@ -516,7 +516,7 @@ describe("the server-thread block of a moved `loop: 'off'` route", () => {
     ['GET /v1/auth/keys', (p) => ({ keyWrites: p.keyWrites }), (s, made) => get(s, '/v1/auth/keys', made.token)],
     [
       'DELETE /v1/auth/keys/:keyId',
-      (p) => ({ keyAudit: p.keyAudit }),
+      (p) => ({ keyWrites: p.keyWrites }),
       (s, made) => del(s, `/v1/auth/keys/${made.keyId}`, made.token),
     ],
     ['GET /v1/audit', (p) => ({ auditLog: p.auditLog }), (s, made) => get(s, '/v1/audit', made.token)],
@@ -672,11 +672,11 @@ describe("a store worker's wal_autocheckpoint", () => {
     cleanups.push(() => store.close());
     const save = (n: number) => {
       const saved = { classTag: 'release', claimText: `claim ${n}` };
-      return store.predictions.savePrediction(
-        'default',
-        { ...saved, mirror: predictionMirror('default', saved, 30) },
-        'test',
-      );
+      return store.objects.saveObject('default', 'prediction', {
+        ...saved,
+        mirror: predictionMirror('default', saved, 30),
+        actor: 'test',
+      });
     };
 
     for (let n = 0; n < 60; n++) await save(n);

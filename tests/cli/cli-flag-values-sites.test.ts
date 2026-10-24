@@ -29,10 +29,10 @@ async function stored() {
   const ctx = cliApiContext(root, 'default');
   const { sessions } = ctx.store;
   return {
-    snapshot: Boolean(await sessions.loadSnapshot('default', null)),
-    events: (await sessions.listEvents('default', { limit: 50 })).length,
-    handoff: Boolean(await sessions.latestHandoff('default', null, {}, null)),
-    working: (await sessions.readWorkingMemory('default', { limit: 50 })).length,
+    snapshot: Boolean(await sessions.loadSnapshot('default', {}, null)),
+    events: (await sessions.read('default', 'event', { limit: 50 })).length,
+    handoff: Boolean(await sessions.read('default', 'handoff', { sessionId: null }, null)),
+    working: (await sessions.read('default', 'working_memory', { limit: 50 })).length,
     memories: (await memoryList(ctx)).length,
   };
 }
@@ -112,7 +112,7 @@ describe('a text flag with a value', () => {
       handleSnapshot(c(['save'], { task: 'ship', summary: 'half done', 'next-step': 'merge', source: 'test' })),
     );
     expect(result.status).toBe(0);
-    expect(await sessionsOf(root).loadSnapshot('default', null)).toMatchObject({
+    expect(await sessionsOf(root).loadSnapshot('default', {}, null)).toMatchObject({
       task: 'ship',
       summary: 'half done',
       nextStep: 'merge',
@@ -125,14 +125,14 @@ describe('a text flag with a value', () => {
       handleSession(c(['log'], { id: 's1', content: 'tried the fix', type: 'attempt' })),
     );
     expect(log.status).toBe(0);
-    expect(await sessionsOf(root).listEvents('default', { limit: 5 })).toMatchObject([
+    expect(await sessionsOf(root).read('default', 'event', { limit: 5 })).toMatchObject([
       { sessionId: 's1', content: 'tried the fix', eventType: 'attempt' },
     ]);
     const made = await runInProcess(() =>
       handleHandoff(c(['create'], { summary: 'stopped at step 2', next: 'run the suite', session: 's1' })),
     );
     expect(made.status).toBe(0);
-    expect(await sessionsOf(root).latestHandoff('default', 's1', {}, null)).toMatchObject({
+    expect(await sessionsOf(root).read('default', 'handoff', { sessionId: 's1' }, null)).toMatchObject({
       summary: 'stopped at step 2',
       nextAction: 'run the suite',
     });
@@ -141,7 +141,7 @@ describe('a text flag with a value', () => {
   it('wm push stores the scope and content it was given', async () => {
     const result = await runInProcess(() => handleWm(c(['push'], { scope: 'plan', content: 'check the lease' })));
     expect(result.status).toBe(0);
-    expect(await sessionsOf(root).readWorkingMemory('default', { limit: 5 })).toMatchObject([
+    expect(await sessionsOf(root).read('default', 'working_memory', { limit: 5 })).toMatchObject([
       { scope: 'plan', content: 'check the lease' },
     ]);
   });

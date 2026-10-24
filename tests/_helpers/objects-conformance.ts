@@ -375,13 +375,13 @@ export const openIncident =
   (o: Opening): Call =>
   (g) => {
     vi.setSystemTime(new Date(o.open.at));
-    return g.openIncident(o.tenantId, o.open);
+    return g.saveObject(o.tenantId, 'incident', o.open);
   };
 export const resolve =
   (id: number, at: string, text: string, tenantId = TENANT_A): Call =>
   (g) => {
     vi.setSystemTime(new Date(at));
-    return g.resolveIncident(tenantId, id, { text, actor: ACTOR, at });
+    return g.closeObject(tenantId, 'incident', id, { text, actor: ACTOR, at });
   };
 
 /** The row an open made, as it reads after the writes `state` names. */

@@ -92,9 +92,31 @@ const TAG_CLUSTERS: ReadonlyArray<{ tag: string; words: ReadonlyArray<string> }>
 ];
 
 const FILLER_WORDS: ReadonlyArray<string> = [
-  'the', 'a', 'is', 'on', 'in', 'at', 'for', 'with', 'about', 'reference',
-  'note', 'context', 'detail', 'fact', 'value', 'config', 'setting', 'flag',
-  'option', 'parameter', 'data', 'record', 'entry', 'item', 'thing',
+  'the',
+  'a',
+  'is',
+  'on',
+  'in',
+  'at',
+  'for',
+  'with',
+  'about',
+  'reference',
+  'note',
+  'context',
+  'detail',
+  'fact',
+  'value',
+  'config',
+  'setting',
+  'flag',
+  'option',
+  'parameter',
+  'data',
+  'record',
+  'entry',
+  'item',
+  'thing',
 ];
 
 function makeRng(seed: number): () => number {
@@ -149,12 +171,26 @@ function loadTier1Queries(): string[] {
   }
   if (queries.length === 0) {
     return [
-      'auth migration', 'oauth token', 'production deployment', 'database schema',
-      'API rate limit', 'Python deployment', 'Bob coffee', 'Alice tea',
-      'standup time', 'prod db', 'login session', 'kubernetes rollout',
-      'react component', 'nginx certificate', 'changelog entry',
-      'requirements wheel', 'jwt bearer', 'postgres index',
-      'staging container', 'team manager',
+      'auth migration',
+      'oauth token',
+      'production deployment',
+      'database schema',
+      'API rate limit',
+      'Python deployment',
+      'Bob coffee',
+      'Alice tea',
+      'standup time',
+      'prod db',
+      'login session',
+      'kubernetes rollout',
+      'react component',
+      'nginx certificate',
+      'changelog entry',
+      'requirements wheel',
+      'jwt bearer',
+      'postgres index',
+      'staging container',
+      'team manager',
     ];
   }
   return queries;
@@ -215,7 +251,7 @@ async function main(): Promise<void> {
   initStore(home);
 
   console.log(`[p99-recall-continuity] seeding ${args.storeSize} memories…`);
-  const rng = makeRng(0xC0FFEE);
+  const rng = makeRng(0xc0ffee);
   const seedStart = Date.now();
   const config = loadConfig(home);
   for (let i = 0; i < args.storeSize; i++) {
@@ -243,7 +279,7 @@ async function main(): Promise<void> {
     sessionId: sessionId,
     source: 'bench',
   };
-  await sessions.saveSnapshot('default', snapshot, null);
+  await sessions.save('default', 'snapshot', snapshot, null);
   const handoff = {
     version: 1 as const,
     sessionId,
@@ -251,9 +287,9 @@ async function main(): Promise<void> {
     nextAction: 'Land Task 6 of the continuity-first plan.',
     artifacts: ['benchmarks/a1/p99-recall-continuity.ts'],
   };
-  await sessions.saveHandoff('default', handoff, null);
+  await sessions.save('default', 'handoff', { handoff }, null);
   for (let i = 0; i < 5; i++) {
-    await sessions.appendEvent('default', {
+    await sessions.save('default', 'event', {
       sessionId: sessionId,
       eventType: 'note',
       content: `Bench event ${i}: a small trail row to exercise listSessionEvents.`,
@@ -306,8 +342,12 @@ async function main(): Promise<void> {
   console.log('━━━ p99 recall continuity delta ━━━');
   console.log(`  store size:     ${args.storeSize}`);
   console.log(`  iterations:     ${args.queries} (per run)`);
-  console.log(`  baseline p50/p95/p99:  ${baseline.p50.toFixed(3)} / ${baseline.p95.toFixed(3)} / ${baseline.p99.toFixed(3)} ms`);
-  console.log(`  continuity p50/p95/p99: ${continuity.p50.toFixed(3)} / ${continuity.p95.toFixed(3)} / ${continuity.p99.toFixed(3)} ms`);
+  console.log(
+    `  baseline p50/p95/p99:  ${baseline.p50.toFixed(3)} / ${baseline.p95.toFixed(3)} / ${baseline.p99.toFixed(3)} ms`,
+  );
+  console.log(
+    `  continuity p50/p95/p99: ${continuity.p50.toFixed(3)} / ${continuity.p95.toFixed(3)} / ${continuity.p99.toFixed(3)} ms`,
+  );
   console.log(`  delta p99:      ${delta.toFixed(3)} ms`);
   console.log(`  gate (<${gateThreshold}ms):  ${gatePass ? 'PASS' : 'FAIL'}`);
   console.log(`  output:         ${outPath}`);

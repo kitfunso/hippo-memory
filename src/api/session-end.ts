@@ -43,7 +43,7 @@ export async function closeEndedSession(ctx: Context, close: SessionClose): Prom
 async function writeEndHandoff(ctx: Context, sessionId: string, close: SessionClose): Promise<void> {
   const { sessions } = ctx.store;
   try {
-    const ownSnapshot = (await sessions.loadSnapshot(ctx.tenantId, null))?.sessionId === sessionId;
+    const ownSnapshot = (await sessions.loadSnapshot(ctx.tenantId, {}, null))?.sessionId === sessionId;
     // A never-compacted session has no snapshot; read even when it has one, as another session's PreCompact can take
     // the slot before the write.
     const state = close.workingState();
@@ -52,12 +52,8 @@ async function writeEndHandoff(ctx: Context, sessionId: string, close: SessionCl
       close.log('skip: no snapshot or transcript for session');
       return;
     }
-    const handoff = await sessions.writeSessionEndHandoff(ctx.tenantId, {
-      sessionId,
-      evidence: close.evidence(),
-      derived,
-      inPlace: close.turn,
-    });
+    const sessionEnd = { sessionId, evidence: close.evidence(), derived, inPlace: close.turn };
+    const handoff = await sessions.save(ctx.tenantId, 'handoff', { sessionEnd }, null);
     close.log(
       handoff ? `wrote handoff for session ${sessionId}` : `skip: kept the existing handoff for session ${sessionId}`,
     );
@@ -67,11 +63,12 @@ async function writeEndHandoff(ctx: Context, sessionId: string, close: SessionCl
   }
 }
 
-// If session-end never fires (crash, kill -9), the freshness bound in readFreshActiveTaskSnapshot is the backstop.
+// If session-end never fires (crash, kill -9), the freshness bound of an ambient snapshot load is the backstop.
 async function closeSnapshot(ctx: Context, sessionId: string | null, line: (message: string) => void): Promise<void> {
   try {
     if (sessionId) {
-      const closed = await ctx.store.sessions.closeSessionSnapshots(ctx.tenantId, sessionId, 'session-ended', null);
+      const close = { status: 'session-ended', sessionId };
+      const closed = await ctx.store.sessions.clear(ctx.tenantId, 'snapshot', close, null);
       line(`closed ${closed} active snapshot(s) for session ${sessionId}`);
     } else {
       line('skip: no session_id in SessionEnd payload, active snapshot left untouched');
@@ -125,7 +122,8 @@ export async function bookSessionRereads(
  * snapshot. */
 export async function compactResumeBlock(ctx: Context, payloadSessionId: string | null): Promise<string | null> {
   const { sessions } = ctx.store;
-  const snapshot = await sessions.loadFreshSnapshot(ctx.tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS }, null);
+  const ambient = { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS };
+  const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, null);
   // Concurrent sessions must not cross-restore: only when both ids are present and differ, so a manual run with no
   // payload id still prints.
   if (!snapshot) return null;
@@ -136,7 +134,7 @@ export async function compactResumeBlock(ctx: Context, payloadSessionId: string 
   let events: SessionEvent[] = [];
   try {
     if (snapshot.sessionId) {
-      events = (await sessions.listEvents(ctx.tenantId, { sessionId: snapshot.sessionId })).map((e) => ({
+      events = (await sessions.read(ctx.tenantId, 'event', { sessionId: snapshot.sessionId })).map((e) => ({
         ...e,
         content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP),
       }));

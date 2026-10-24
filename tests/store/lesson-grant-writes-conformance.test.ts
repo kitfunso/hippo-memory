@@ -1,4 +1,4 @@
-// LessonWrites' word read and batch writes, and KeyGrants, answer alike on hippo.db and on a store held in memory,
+// LessonWrites' word read and batch writes, and KeyWrites' scope change, answer alike on hippo.db and on a store held in memory,
 // with the same refusal, remember and grant audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -55,7 +55,7 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 afterEach(() => vi.useRealTimers());
 
 /** Each call one second after the one before. */
-async function conforms<G extends 'lessonWrites' | 'keyGrants'>(group: G, calls: readonly GroupCall<G, unknown>[]) {
+async function conforms<G extends 'lessonWrites' | 'keyWrites'>(group: G, calls: readonly GroupCall<G, unknown>[]) {
   const timed = calls.map((call, i): GroupCall<G, unknown> => (methods, store) => {
     vi.setSystemTime(START + i * 1000);
     return call(methods, store);
@@ -132,7 +132,7 @@ describe('LessonWrites', () => {
   });
 });
 
-describe('KeyGrants', () => {
+describe('KeyWrites scope change', () => {
   it('grants and ungrants a scope with one audit row each, and refuses a revoked key and another tenant', async () => {
     const { keys } = fixture;
     const change = (keyId: string, scope: string, op: 'auth_grant' | 'auth_ungrant', tenantId = TENANT_A) => ({
@@ -142,16 +142,16 @@ describe('KeyGrants', () => {
       op,
       actor: 'cli',
     });
-    const { outcomes, audit } = await conforms('keyGrants', [
-      (g) => g.changeScopeGrant(change(keys.memberA, 'team:ops', 'auth_grant')),
-      (g) => g.changeScopeGrant(change(keys.memberA, 'team:eng', 'auth_grant')),
-      (g) => g.changeScopeGrant(change(keys.memberA, 'team:ops', 'auth_grant')),
-      (g) => g.changeScopeGrant(change(keys.memberA, 'team:eng', 'auth_ungrant')),
-      (g) => g.changeScopeGrant(change(keys.memberA, 'team:none', 'auth_ungrant')),
-      (g) => g.changeScopeGrant(change(keys.revokedA, 'team:ops', 'auth_grant')),
-      (g) => g.changeScopeGrant(change(keys.revokedA, 'team:ops', 'auth_ungrant')),
-      (g) => g.changeScopeGrant(change(keys.memberB, 'team:ops', 'auth_grant')),
-      (g) => g.changeScopeGrant(change('key_nope', 'team:ops', 'auth_grant')),
+    const { outcomes, audit } = await conforms('keyWrites', [
+      (g) => g.changeApiKey('scope', change(keys.memberA, 'team:ops', 'auth_grant')),
+      (g) => g.changeApiKey('scope', change(keys.memberA, 'team:eng', 'auth_grant')),
+      (g) => g.changeApiKey('scope', change(keys.memberA, 'team:ops', 'auth_grant')),
+      (g) => g.changeApiKey('scope', change(keys.memberA, 'team:eng', 'auth_ungrant')),
+      (g) => g.changeApiKey('scope', change(keys.memberA, 'team:none', 'auth_ungrant')),
+      (g) => g.changeApiKey('scope', change(keys.revokedA, 'team:ops', 'auth_grant')),
+      (g) => g.changeApiKey('scope', change(keys.revokedA, 'team:ops', 'auth_ungrant')),
+      (g) => g.changeApiKey('scope', change(keys.memberB, 'team:ops', 'auth_grant')),
+      (g) => g.changeApiKey('scope', change('key_nope', 'team:ops', 'auth_grant')),
       (_g, s) => s.findApiKey(keys.memberA),
       (_g, s) => s.findApiKey(keys.revokedA),
     ]);
