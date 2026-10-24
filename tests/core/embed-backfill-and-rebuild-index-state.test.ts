@@ -10,7 +10,7 @@ import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.j
 import { initializeParticle } from '../../src/base/rank/physics.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
-import { embedAll, embedMemory } from '../../src/domain/search/embed-memories.js';
+import { embedAll, embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { cliStore } from '../../src/surface/cli/api-context.js';
@@ -271,7 +271,7 @@ describe('a model identity change on hippo.db', () => {
     useHashedServer(viaAll);
     useHashedServer(viaOne);
     const before = indexOn(viaOne);
-    await embedMemory(localIndex(viaOne), loadEveryTenantEntries(viaOne)[7]);
+    await embedMemoryInto(localIndex(viaOne), loadEveryTenantEntries(viaOne)[7]);
     expect(indexOn(viaOne)).toEqual(before);
     expect(await embedAll(localIndex(viaAll))).toBe(ROWS);
     expect(indexOn(viaAll)).toEqual(rebuiltState(viaAll, HASHED_ID, hashedServerVector));

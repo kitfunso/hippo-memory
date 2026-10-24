@@ -10,7 +10,7 @@ import { VectorGraphs } from '../../src/db/vector-graph-index.js';
 import { GraphFileIndex } from '../../src/db/vector-graph-reader.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors, type VectorIndex } from '../../src/db/vector-store.js';
 import type { VectorCandidateSpec } from '../../src/store/port/vectors.js';
-import { loadVectorCandidateEntries } from '../../src/store/sqlite/search-rows.js';
+import { listVectorCandidateEntries } from '../../src/store/sqlite/search-rows.js';
 import { log } from '../../src/base/util/log.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -93,11 +93,11 @@ function elsewhere<T>(root: string, write: (db: DatabaseSyncLike) => T): T {
 }
 
 async function nearest(f: Fixture, q: readonly number[], s: VectorCandidateSpec, index = f.index): Promise<string[]> {
-  return (await loadVectorCandidateEntries(f.db, q, s, index)).map((e) => e.id);
+  return (await listVectorCandidateEntries(f.db, q, s, index)).map((e) => e.id);
 }
 
 async function scanned(f: Fixture, q: readonly number[], s: VectorCandidateSpec): Promise<string[]> {
-  return (await loadVectorCandidateEntries(f.db, q, s)).map((e) => e.id);
+  return (await listVectorCandidateEntries(f.db, q, s)).map((e) => e.id);
 }
 
 /** recall@10 against the scan over 20 queries near stored rows. */

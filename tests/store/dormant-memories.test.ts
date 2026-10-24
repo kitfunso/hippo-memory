@@ -19,7 +19,7 @@ import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
 import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { consolidate } from '../../src/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -68,7 +68,7 @@ const ctxFor = (home: string, tenantId = 'default'): FullContext =>
 function auditRows(home: string, op: AuditOp): AuditEvent[] {
   const db = openHippoDb(home);
   try {
-    return queryAuditEvents(db, { tenantId: 'default', op });
+    return listAuditEvents(db, { tenantId: 'default', op });
   } finally {
     closeHippoDb(db);
   }
@@ -415,7 +415,7 @@ describe('with dormant memories enabled', () => {
       ),
     );
 
-    const result = await api.sleep(ctxFor(home), { noShare: true });
+    const result = await api.sleepWholeStore(ctxFor(home), { noShare: true });
 
     expect(result.dormant).toBe(1);
     expect(result.removed).toBe(0);

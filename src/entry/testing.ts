@@ -1,7 +1,7 @@
 // Test seams for add-ons and hippo's own suite. Not for production code; no semver guarantee beyond the major version.
 import { fromWire, toWire, type MemoryWire } from '../base/memory/memory-wire.js';
 import {
-  batchWriteAndDelete,
+  batchWriteAndDeleteInFolder,
   loadAllEntries,
   upsertEntryRow,
   writeEntry,
@@ -31,7 +31,7 @@ export {
 export { resolveTenantId } from '../surface/server/boot.js';
 export {
   buildIndexFromDb,
-  loadVectorCandidateEntries as loadVectorCandidateEntriesAt,
+  listVectorCandidateEntries as loadVectorCandidateEntriesAt,
   recordTokenUse,
   tokensBySession,
   upsertEntryRow,
@@ -54,5 +54,5 @@ export function upsertEntryRowWire(db: Parameters<typeof upsertEntryRow>[0], ent
 }
 
 export function batchWriteAndDeleteWire(hippoRoot: string, toWrite: MemoryWire[], toDeleteIds: string[]): string[] {
-  return batchWriteAndDelete(hippoRoot, toWrite.map(fromWire), toDeleteIds);
+  return batchWriteAndDeleteInFolder(hippoRoot, toWrite.map(fromWire), toDeleteIds);
 }

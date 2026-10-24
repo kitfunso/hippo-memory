@@ -16,7 +16,7 @@ import type {
 } from '../port/reports.js';
 import type { EntryCursor, EntryPage } from '../port/types.js';
 import { openConflictsIn } from './conflicts.js';
-import { failureSummary } from './failure-log.js';
+import { failureSummaryIn } from './failure-log.js';
 import { byBytes, oldestFirst } from '../rules/order.js';
 import { tallyStatus } from '../rules/status-tally.js';
 import { counter } from './rows.js';
@@ -131,7 +131,7 @@ function createdSinceLastSleepIn(t: MemoryTables, tenantId: string, now: Date): 
 export function memoryReports(t: MemoryTables, rules: LossAversion): Reports {
   return {
     tokenUse: async (tenantId, sinceIso) => tokenUseIn(t, tenantId, sinceIso),
-    failures: async (tenantId, sinceIso) => failureSummary(t, tenantId, sinceIso),
+    failures: async (tenantId, sinceIso) => failureSummaryIn(t, tenantId, sinceIso),
     memoryStatus: async (tenantId, now, atRiskBelow) => ({
       ...strengthTallies(t, rules, tenantId, now, atRiskBelow),
       openConflicts: openConflictsIn(t, tenantId),

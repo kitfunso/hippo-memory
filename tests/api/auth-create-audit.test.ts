@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { authCreate, authRevoke, adminActor } from '../../src/api/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 
@@ -40,7 +40,7 @@ function getAuditRows(
 }> {
   const db = openHippoDb(hippoRoot);
   try {
-    return queryAuditEvents(db, { tenantId, op, limit: 50 }).map((r) => ({
+    return listAuditEvents(db, { tenantId, op, limit: 50 }).map((r) => ({
       actor: r.actor,
       targetId: r.targetId,
       // SAFETY: see the AuditMetadataValue comment above -- auth_create/auth_revoke

@@ -19,7 +19,7 @@ import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
 import { auditMemory } from '../../src/base/memory/memory-audit.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { NO_MERGE_TAGS } from '../../src/domain/sharing/share.js';
-import { forget, dormantList, sleep, supersede } from '../../src/api/index.js';
+import { forget, dormantList, sleepWholeStore, supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -30,7 +30,7 @@ import {
   writeEntriesTogether,
   loadAllEntries,
   readEntry,
-  batchWriteAndDelete,
+  batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
@@ -249,7 +249,7 @@ describe('the store refuses an automatic removal of a kept row', () => {
       dormantAt: new Date().toISOString(),
     };
 
-    expect(batchWriteAndDelete(root, [], [kept.id, plain.id], { dormant: [move] })).toEqual([plain.id]);
+    expect(batchWriteAndDeleteInFolder(root, [], [kept.id, plain.id], { dormant: [move] })).toEqual([plain.id]);
     expect(readEntry(root, kept.id)).not.toBeNull();
     expect(readEntry(root, plain.id)).toBeNull();
   });
@@ -357,7 +357,7 @@ describe('dedupe and audit leave a kept row alone', () => {
     expect(auditMemory(kept)).toMatchObject({ severity: 'warning', reason: expect.stringContaining('keep rule') });
     expect(auditMemory(merged)?.severity).toBe('error');
 
-    const result = await sleep(ctxFor(root), { noShare: true });
+    const result = await sleepWholeStore(ctxFor(root), { noShare: true });
 
     expect(readEntry(root, kept.id)).not.toBeNull();
     expect(result.audit?.errorsRemoved ?? 0).toBe(0);

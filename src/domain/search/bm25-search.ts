@@ -45,7 +45,7 @@ function corpusFor(entries: MemoryEntry[], pool: MemoryEntry[]): Corpus {
 /**
  * Synchronous BM25 search: relevance * strength * recency and the rank boosts, without embeddings or the outcome nudge.
  */
-export function search(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {
+export function rankBm25(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const pool = currentEntries(entries, options);
   if (pool.length === 0) return [];

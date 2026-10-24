@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { forget, remember, HttpResponseError } from '../../src/surface/cli/client.js';
+import { postForget, postRemember, HttpResponseError } from '../../src/surface/cli/client.js';
 
 let server: Server | undefined;
 
@@ -43,7 +43,7 @@ describe('thin client under a busy store', () => {
   // Each busy answer ends its connection, so the three requests each open a new one to the fake server.
   it('remember retries two busy 503s and returns the 200', async () => {
     const fake = await startFake(2);
-    const result = await remember(fake.url, undefined, { content: 'held lock clears', force: true });
+    const result = await postRemember(fake.url, undefined, { content: 'held lock clears', force: true });
     expect(result.id).toBe('m1');
     expect(fake.hits()).toBe(3);
   }, 7_000);
@@ -56,7 +56,7 @@ describe('thin client under a busy store', () => {
       // SAFETY: the client's pause passes a callback and a delay, the one overload this stands in for.
       ((handler: () => void, ms?: number) => realSetTimeout(handler, ms === 1_000 ? 0 : ms)) as typeof setTimeout,
     );
-    const err = await remember(fake.url, undefined, { content: 'lock never clears' }).catch((e: Error) => e);
+    const err = await postRemember(fake.url, undefined, { content: 'lock never clears' }).catch((e: Error) => e);
     expect(err).toBeInstanceOf(HttpResponseError);
     expect(err).toMatchObject({ status: 503, message: expect.stringMatching(/store busy/) });
     expect(fake.hits()).toBe(5);
@@ -66,7 +66,7 @@ describe('thin client under a busy store', () => {
 
   it('forget retries a busy 503 too, since a routed write commits nothing before it answers busy', async () => {
     const fake = await startFake(1);
-    await expect(forget(fake.url, undefined, 'm1')).resolves.toEqual({ ok: true, id: 'm1' });
+    await expect(postForget(fake.url, undefined, 'm1')).resolves.toEqual({ ok: true, id: 'm1' });
     expect(fake.hits()).toBe(2);
   });
 });

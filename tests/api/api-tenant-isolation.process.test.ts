@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember, promote, supersede } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
@@ -104,7 +104,7 @@ describe('api tenant isolation', () => {
       // The loser's transaction rolled back whole: no successor row and no supersede row of its own.
       const rows = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM memories WHERE tenant_id = 'alpha'`);
       expect(Number(rows?.c)).toBe(2);
-      expect(queryAuditEvents(db, { tenantId: 'alpha', op: 'supersede' }).map((e) => e.targetId)).toEqual([created.id]);
+      expect(listAuditEvents(db, { tenantId: 'alpha', op: 'supersede' }).map((e) => e.targetId)).toEqual([created.id]);
     } finally {
       closeHippoDb(db);
     }
@@ -143,13 +143,13 @@ describe('api tenant isolation', () => {
     // Audit log: 'supersede' op with newId metadata + 'remember' for the new row.
     const db = openHippoDb(home);
     try {
-      const supersedeEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'supersede' });
+      const supersedeEvents = listAuditEvents(db, { tenantId: 'alpha', op: 'supersede' });
       const supersedeRow = supersedeEvents.find((e) => e.targetId === created.id);
       // SAFETY: supersede() writes its audit_log row with metadata={ newId }
       // (see api.ts supersede()), so newId is present on this row.
       expect((supersedeRow!.metadata as { newId?: string }).newId).toBe(result.newId);
 
-      const rememberEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'remember' });
+      const rememberEvents = listAuditEvents(db, { tenantId: 'alpha', op: 'remember' });
       const rememberRow = rememberEvents.find((e) => e.targetId === result.newId);
       expect(rememberRow?.targetId).toBe(result.newId);
     } finally {

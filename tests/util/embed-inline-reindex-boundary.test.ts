@@ -4,12 +4,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { isJsonObject, type JsonValue } from '../../src/base/util/json.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
-import { embedMemory } from '../../src/domain/search/embed-memories.js';
+import { embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { saveStoredVectors, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { saveStoredVectors, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -50,7 +50,7 @@ function seed(rows: number): MemoryEntry {
   const entries = Array.from({ length: rows }, (_row, i) =>
     createMemory(`inline reindex boundary row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
   );
-  batchWriteAndDelete(root, entries, []);
+  batchWriteAndDeleteInFolder(root, entries, []);
   const last = entries[rows - 1]!;
   saveStoredVectors(root, [[last.id, [0, 1]]], embeddingIndexIdentity('old-m'));
   saveStoredEmbeddingModel(handlesOf(root).on, 'old-m');
@@ -59,10 +59,10 @@ function seed(rows: number): MemoryEntry {
 
 describe('inline reindex row cap', () => {
   it('rebuilds inline at 256 rows', async () => {
-    await expect(embedMemory(localIndex(root), seed(256))).resolves.toBe('indexed');
+    await expect(embedMemoryInto(localIndex(root), seed(256))).resolves.toBe('indexed');
   });
 
   it('leaves the rebuild to hippo embed at 257 rows', async () => {
-    await expect(embedMemory(localIndex(root), seed(257))).resolves.toBe('failed');
+    await expect(embedMemoryInto(localIndex(root), seed(257))).resolves.toBe('failed');
   });
 });

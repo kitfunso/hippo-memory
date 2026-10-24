@@ -173,7 +173,7 @@ export function loadVectorViews(db: DatabaseSyncLike, ids: readonly string[]): M
 }
 
 /** Stored vectors, orphans of deleted memories included. */
-export function storedVectorCount(db: DatabaseSyncLike): number {
+export function countStoredVectors(db: DatabaseSyncLike): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   return (cachedStatement(db, 'SELECT count(*) AS n FROM memory_vectors').get() as { n: number }).n;
 }

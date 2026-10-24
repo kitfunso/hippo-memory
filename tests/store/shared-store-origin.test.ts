@@ -19,7 +19,13 @@ import { summaryWith } from '../_helpers/compaction-hooks.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { compactionFolder } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { copyToGlobal, writeEntry, readEntry, loadAllEntries, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import {
+  copyToGlobal,
+  writeEntry,
+  readEntry,
+  loadAllEntries,
+  batchWriteAndDeleteInFolder,
+} from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -89,7 +95,7 @@ describe('shared store origin stamp', () => {
 
   it('the batch write path stamps NULL on a flagged store', () => {
     for (const { store } of layouts(true)) {
-      batchWriteAndDelete(store, [createMemory('a consolidated summary of the release notes')], []);
+      batchWriteAndDeleteInFolder(store, [createMemory('a consolidated summary of the release notes')], []);
       const [entry] = loadAllEntries(store, 'default');
       expect(entry?.originProject).toBeNull();
     }

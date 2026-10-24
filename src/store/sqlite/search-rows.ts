@@ -63,7 +63,7 @@ interface SearchRowsOptions {
   readonly originProjects?: OriginFilter;
 }
 
-function loadSearchRows(
+function listSearchRows(
   db: DatabaseSyncLike,
   query: string,
   limit: number,
@@ -76,20 +76,20 @@ function loadSearchRows(
   const terms = Array.from(new Set(tokenize(query)));
   if (terms.length === 0) {
     // LIMIT here too, so every candidate path honours the caller's cap.
-    return selectAllCandidates(db, p, limit);
+    return listAllCandidates(db, p, limit);
   }
 
   if (isFtsAvailable(db)) {
-    const rows = selectFtsCandidates(db, terms, p, limit);
+    const rows = listFtsCandidates(db, terms, p, limit);
     if (rows.length > 0) return rows;
   }
 
-  const rows = selectLikeCandidates(db, terms, p, limit);
+  const rows = listLikeCandidates(db, terms, p, limit);
   if (rows.length > 0) return rows;
 
   // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an unbounded fallback would misstate
   // the candidate-pool size.
-  return selectAllCandidates(db, p, limit);
+  return listAllCandidates(db, p, limit);
 }
 
 function searchPredicates(
@@ -132,7 +132,7 @@ function searchPredicates(
 }
 
 /** Every admitted row, oldest first; the no-terms path and the last-resort fallback share it. */
-function selectAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: number): MemoryRow[] {
+function listAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: number): MemoryRow[] {
   const sql =
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}` +
     `${p.plainScope.sql}${p.currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
@@ -140,7 +140,7 @@ function selectAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: n
 }
 
 /** FTS5 bm25 matches; empty when none match or FTS5 cannot run the query. */
-function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
+function listFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
   try {
     const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
     // memories_fts has no tenant_id column, so the joined memories row filters by tenant.
@@ -169,7 +169,7 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
 
 /** Substring matches in content or tags among the newest admitted rows: the lexical path without FTS5, and the catch
  * for a part-word that FTS5 tokens miss. */
-function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
+function listLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
   const where = terms
     .map(() => `(LOWER(content) LIKE ? ESCAPE '\\' OR LOWER(tags_json) LIKE ? ESCAPE '\\')`)
     .join(' OR ');
@@ -200,19 +200,19 @@ function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPr
 }
 
 /** Load likely search candidates: FTS5 when available, else LIKE, then full-store fallback. */
-export function loadSearchEntries(
+export function listSearchEntries(
   db: DatabaseSyncLike,
   query: string,
   limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
   tenantId: TenantId,
 ): MemoryEntry[] {
-  return loadSearchRows(db, query, limit, tenantId).map(rowToEntry);
+  return listSearchRows(db, query, limit, tenantId).map(rowToEntry);
 }
 
 /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies
  * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot
  * starve admitted ones; `passesScopeFilterForRecall` is the exact post-filter. */
-export function loadRecallEntries(
+export function listRecallEntries(
   db: DatabaseSyncLike,
   query: string,
   options: RecallSearchEntriesOptions,
@@ -227,11 +227,11 @@ export function loadRecallEntries(
     ownScope,
   } = options;
   const scopeFilter = recallScopeFilter(requestedScope, explicitScopeMode, ownScope);
-  return loadSearchRows(db, query, limit, tenantId, { scopeFilter, includeSuperseded, originProjects }).map(rowToEntry);
+  return listSearchRows(db, query, limit, tenantId, { scopeFilter, includeSuperseded, originProjects }).map(rowToEntry);
 }
 
 /** The rows nearest `queryVector` that pass `spec`, nearest first; `index` proposes them when it can. */
-export async function loadVectorCandidateEntries(
+export async function listVectorCandidateEntries(
   db: DatabaseSyncLike,
   queryVector: readonly number[],
   spec: VectorCandidateSpec,

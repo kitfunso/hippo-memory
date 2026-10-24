@@ -19,7 +19,7 @@ import { failureTarget } from '../_helpers/failure-target.js';
 import { captureError, partitionLessons } from '../../src/domain/learn/autolearn.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { addWorkspace } from '../../src/surface/connectors/slack/workspaces.js';
-import { replayDlqEntry } from '../../src/surface/connectors/slack/dlq.js';
+import { replaySlackDlqEntry } from '../../src/surface/connectors/slack/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -180,7 +180,7 @@ describe('connector webhooks', () => {
     await addWorkspace(sqliteStore(root), { teamId: 'T1', tenantId: 'default' });
     expect(
       (
-        await replayDlqEntry(
+        await replaySlackDlqEntry(
           { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root), infra: testInfra() },
           row.id,
           {
@@ -191,7 +191,7 @@ describe('connector webhooks', () => {
     ).toBe('sig_missing');
     expect(
       (
-        await replayDlqEntry(
+        await replaySlackDlqEntry(
           { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root), infra: testInfra() },
           row.id,
           {

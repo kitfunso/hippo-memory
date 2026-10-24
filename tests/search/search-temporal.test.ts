@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { search } from '../../src/domain/search/bm25-search.js';
+import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -31,7 +31,7 @@ describe('temporal-aware search', () => {
     writeEntry(hippoRoot, recent);
 
     const entries = loadAllEntries(hippoRoot, 'default');
-    const results = search('John recently scored points', entries, { budget: 4000 });
+    const results = rankBm25('John recently scored points', entries, { budget: 4000 });
 
     expect(results.length).toBeGreaterThanOrEqual(2);
     // Recent entry should rank first when "recently" cue is present
@@ -53,7 +53,7 @@ describe('temporal-aware search', () => {
     writeEntry(hippoRoot, recent);
 
     const entries = loadAllEntries(hippoRoot, 'default');
-    const results = search('John scored points', entries, { budget: 4000 });
+    const results = rankBm25('John scored points', entries, { budget: 4000 });
 
     // Without temporal cue, both should appear but temporal boost should not dominate
     expect(results.length).toBeGreaterThanOrEqual(2);

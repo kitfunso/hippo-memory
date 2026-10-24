@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { resolveListLimit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../../src/base/util/limits.js';
 import { pct } from '../../src/base/util/format.js';
-import { parseListLimit as parseHttpLimit } from '../../src/surface/server/validation.js';
+import { parseLimitParam as parseHttpLimit } from '../../src/surface/server/validation.js';
 import { parseListLimit as parseCliLimit } from '../../src/surface/cli/flag-values.js';
 import { CliExit } from '../../src/surface/cli/exit.js';
 

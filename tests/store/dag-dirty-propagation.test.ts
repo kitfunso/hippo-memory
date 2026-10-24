@@ -16,7 +16,7 @@ import { supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { deleteEntry, loadAllDirtySummaries, writeEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { deleteEntry, loadAllDirtySummaries, writeEntry, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -268,7 +268,7 @@ describe('child-write dirty-flag propagation', () => {
       dagLevel: 1,
       dagParentId: summary.id,
     });
-    batchWriteAndDelete(hippoRoot, [newBatchChild], [childToDelete.id]);
+    batchWriteAndDeleteInFolder(hippoRoot, [newBatchChild], [childToDelete.id]);
 
     // Parent should now be dirty from EITHER the write or the delete path.
     expect((await dirtyFor(hippoRoot, 'default')).map((m) => m.id)).toContain(summary.id);

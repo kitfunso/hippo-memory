@@ -5,7 +5,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember } from '../../src/api/index.js';
 import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -140,7 +140,7 @@ describe('POST /v1/outcome', () => {
 
     const db = openHippoDb(home);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'outcome' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'outcome' });
       expect(events.length).toBe(2);
       const targets = events.map((e) => e.targetId).sort();
       expect(targets).toEqual([m1.id, m2.id].sort());
@@ -168,8 +168,8 @@ describe('POST /v1/outcome', () => {
 
     const db = openHippoDb(home);
     try {
-      const eventsDefault = queryAuditEvents(db, { tenantId: 'default', op: 'outcome' });
-      const eventsB = queryAuditEvents(db, { tenantId: 'tenant_b', op: 'outcome' });
+      const eventsDefault = listAuditEvents(db, { tenantId: 'default', op: 'outcome' });
+      const eventsB = listAuditEvents(db, { tenantId: 'tenant_b', op: 'outcome' });
       expect(eventsDefault.length).toBe(0);
       expect(eventsB.length).toBe(0);
     } finally {

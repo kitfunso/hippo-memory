@@ -17,7 +17,7 @@ import {
   storedModel,
   VECTOR_GRAPH_THRESHOLD,
 } from './vector-graph-rows.js';
-import { storedVectorCount } from './vector-store.js';
+import { countStoredVectors } from './vector-store.js';
 
 const PAGE_ROWS = 1024;
 // Longest a build or an encode holds the thread before it gives a turn back.
@@ -112,7 +112,7 @@ async function buildIfDue(
     | { dim: number }
     | undefined;
   if (newest === undefined) return undefined;
-  const stored = storedVectorCount(db);
+  const stored = countStoredVectors(db);
   if (stored < VECTOR_GRAPH_THRESHOLD || stored > maxVectors || !fileDrifted(db, hippoRoot, newest.dim)) {
     return undefined;
   }

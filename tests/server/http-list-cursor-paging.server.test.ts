@@ -8,7 +8,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
 import * as api from '../../src/api/index.js';
 import { loadDecisions, saveDecision } from '../../src/domain/objects/decisions.js';
@@ -224,7 +224,7 @@ describe('no paging params: the body a small store got before cursors existed', 
     const page = await getPage(ROUTES[2]!);
     const db = openHippoDb(home);
     try {
-      expect(page.body).toEqual(json(queryAuditEvents(db, { tenantId: 'default' })));
+      expect(page.body).toEqual(json(listAuditEvents(db, { tenantId: 'default' })));
     } finally {
       closeHippoDb(db);
     }

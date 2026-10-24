@@ -1,6 +1,6 @@
 import type { JsonValue } from '../util/json.js';
 
-/** Runtime guard for tenant id args: an older JS caller can pass a `sessionId` as the tenant (`loadLatestHandoff(root,
+/** Runtime guard for tenant id args: an older JS caller can pass a `sessionId` as the tenant (`readLatestHandoff(root,
  * 'sess-abc')`) and silently get null. Rejects values starting `sess-` / `sess_`; a tenant literally named `sess-...`
  * is refused, an accepted tradeoff. */
 export function assertTenantId(fnName: string, value: JsonValue): asserts value is string {

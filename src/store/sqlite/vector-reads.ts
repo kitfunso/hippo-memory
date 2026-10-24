@@ -9,14 +9,14 @@ import { bound, skipEmpty, type Bodies } from './bound.js';
 import { rethrowInPortTerms } from './port-errors.js';
 import type { VectorReads } from '../port.js';
 import type { NearestIdsAsk } from '../port/vectors.js';
-import { entriesInOrder, loadVectorCandidateEntries } from './search-rows.js';
-import { loadStoredVectors, storedIndexState } from './vector-index.js';
+import { entriesInOrder, listVectorCandidateEntries } from './search-rows.js';
+import { readStoredVectors, storedIndexState } from './vector-index.js';
 
 type RowReads = Omit<VectorReads, 'nearestEntries'>;
 
 const rowReadsBodies: Bodies<RowReads> = {
   embeddingIndexState: storedIndexState,
-  storedVectors: loadStoredVectors,
+  storedVectors: readStoredVectors,
   physicsParticles: (db, ids) => loadPhysicsState(db, [...ids]),
 };
 
@@ -33,7 +33,7 @@ export function sqliteVectorReads(
     physicsParticles: skipEmpty(reads.physicsParticles, () => new Map()),
     // The scan reads a page per event-loop turn, so the handle stays open until the promise settles.
     nearestEntries: (queryVector, spec) =>
-      onAsync((db) => loadVectorCandidateEntries(db, queryVector, spec, index), openStore).catch(rethrowInPortTerms),
+      onAsync((db) => listVectorCandidateEntries(db, queryVector, spec, index), openStore).catch(rethrowInPortTerms),
   };
 }
 

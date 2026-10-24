@@ -7,7 +7,7 @@ import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntriesTogether, readEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { writeEntriesTogether, readEntry, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -80,7 +80,7 @@ describe('batchWriteAndDelete full-text upkeep', () => {
       .map((entry) => ({ entry, strength: 0.01, reason: 'decay' as const, dormantAt: new Date().toISOString() }));
 
     const { statements } = recordStatements(() =>
-      batchWriteAndDelete(
+      batchWriteAndDeleteInFolder(
         root,
         [...rows.slice(0, 30).map(edited), ...inserts],
         rows.slice(30, 40).map((e) => e.id),
@@ -96,7 +96,7 @@ describe('batchWriteAndDelete full-text upkeep', () => {
   it('a write whose text and tags match the stored row touches no full-text row', () => {
     const [row] = seedRows(1);
 
-    const { statements } = recordStatements(() => batchWriteAndDelete(root, [{ ...row!, strength: 0.5 }], []));
+    const { statements } = recordStatements(() => batchWriteAndDeleteInFolder(root, [{ ...row!, strength: 0.5 }], []));
 
     expect(countMatching(statements, FTS_WRITE)).toBe(0);
   });
@@ -107,7 +107,7 @@ describe('batchWriteAndDelete full-text upkeep', () => {
     const inserts = [createMemory('a brand new row one'), createMemory('a brand new row two')];
 
     await withSharedStoreHandles(() => {
-      batchWriteAndDelete(root, [...rows.map(edited), ...inserts], []);
+      batchWriteAndDeleteInFolder(root, [...rows.map(edited), ...inserts], []);
     });
 
     const fts = idsOf('SELECT id FROM memories_fts');
@@ -121,7 +121,7 @@ describe('batchWriteAndDelete full-text upkeep', () => {
     const [row] = seedRows(1);
     const move = { entry: row!, strength: 0.01, reason: 'decay' as const, dormantAt: new Date().toISOString() };
 
-    expect(batchWriteAndDelete(root, [], [], { dormant: [move, { ...move }] })).toEqual([row!.id]);
+    expect(batchWriteAndDeleteInFolder(root, [], [], { dormant: [move, { ...move }] })).toEqual([row!.id]);
 
     expect(readEntry(root, row!.id)).toBeNull();
     expect(dormantRows(row!.id)).toBe(1);
@@ -130,7 +130,7 @@ describe('batchWriteAndDelete full-text upkeep', () => {
   it('an id written and deleted in one call keeps no full-text row', () => {
     const [row] = seedRows(1);
 
-    batchWriteAndDelete(root, [edited(row!)], [row!.id]);
+    batchWriteAndDeleteInFolder(root, [edited(row!)], [row!.id]);
 
     expect(idsOf('SELECT id FROM memories')).toEqual([]);
     expect(idsOf('SELECT id FROM memories_fts')).toEqual([]);

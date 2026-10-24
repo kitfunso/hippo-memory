@@ -66,7 +66,7 @@ async function writeEndHandoff(ctx: Context, sessionId: string, close: SessionCl
   }
 }
 
-// If session-end never fires (crash, kill -9), the freshness bound in loadFreshActiveTaskSnapshot is the backstop.
+// If session-end never fires (crash, kill -9), the freshness bound in readFreshActiveTaskSnapshot is the backstop.
 async function closeSnapshot(ctx: Context, sessionId: string | null, line: (message: string) => void): Promise<void> {
   try {
     if (sessionId) {

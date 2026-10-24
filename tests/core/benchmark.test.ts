@@ -11,7 +11,7 @@
  *   MRR         - 1/rank of first correct result (0 if none in top-10)
  */
 import { describe, it, expect } from 'vitest';
-import { search } from '../../src/domain/search/bm25-search.js';
+import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { tmpDir, seedIds, useBenchmarkCorpus } from '../_helpers/benchmark-corpus.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -31,7 +31,7 @@ interface QueryCase {
 
 function runQuery(query: string, n = 10): string[] {
   const entries = loadAllEntries(tmpDir, 'default');
-  const results = search(query, entries, { budget: 8000 });
+  const results = rankBm25(query, entries, { budget: 8000 });
   return results.slice(0, n).map((r) => r.entry.id);
 }
 

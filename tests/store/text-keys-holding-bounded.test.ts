@@ -7,7 +7,7 @@ import { chunked } from '../../src/base/util/chunked.js';
 import { duplicateKey, heldTextKeys, mergedText } from '../../src/base/util/same-text.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb, setFtsInSync, type DatabaseSyncLike } from '../../src/db/index.js';
-import { selectRowsHoldingOutsideSourcePrefix, selectTextKeysHolding } from '../../src/store/sqlite/copy-rows.js';
+import { listRowsHoldingOutsideSourcePrefix, listTextKeysHolding } from '../../src/store/sqlite/copy-rows.js';
 import { countMatching, peakRowsRead, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -72,7 +72,7 @@ describe('copy reads by whole text', () => {
 
   it.each([true, false])('textKeysHolding reads only the copies a whole scan finds, index in sync: %s', (inSync) => {
     withDb(root, (db) => setFtsInSync(db, inSync));
-    const { result, reads } = recordStatements(() => withDb(root, (db) => selectTextKeysHolding(db, 'default', TEXTS)));
+    const { result, reads } = recordStatements(() => withDb(root, (db) => listTextKeysHolding(db, 'default', TEXTS)));
     const whole = wholeScan(root, (r) => r.tenant_id === 'default');
     const found = TEXTS.map((text) =>
       result
@@ -91,7 +91,7 @@ describe('copy reads by whole text', () => {
     (inSync) => {
       withDb(root, (db) => setFtsInSync(db, inSync));
       const held = withDb(root, (db) =>
-        selectRowsHoldingOutsideSourcePrefix(db, 'default', TEXTS, AGENT_MEMORY_SOURCE_PREFIX, null),
+        listRowsHoldingOutsideSourcePrefix(db, 'default', TEXTS, AGENT_MEMORY_SOURCE_PREFIX, null),
       );
       const live = (r: ScanRow) =>
         r.tenant_id === 'default' && r.superseded_by === null && !r.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX);
@@ -111,11 +111,9 @@ describe('copy reads statements', () => {
     writeEntriesTogether(root, [row('lesson 3 of the batch')]);
     withDb(root, (db) => setFtsInSync(db, inSync));
     const texts = Array.from({ length: n }, (_, i) => `lesson ${i} of the batch`);
-    const keys = recordStatements(() => withDb(root, (db) => selectTextKeysHolding(db, ALL_TENANTS, texts)));
+    const keys = recordStatements(() => withDb(root, (db) => listTextKeysHolding(db, ALL_TENANTS, texts)));
     const outside = recordStatements(() =>
-      withDb(root, (db) =>
-        selectRowsHoldingOutsideSourcePrefix(db, 'default', texts, AGENT_MEMORY_SOURCE_PREFIX, null),
-      ),
+      withDb(root, (db) => listRowsHoldingOutsideSourcePrefix(db, 'default', texts, AGENT_MEMORY_SOURCE_PREFIX, null)),
     );
     expect(countMatching(keys.statements, 'json_each')).toBe(chunked(texts).length);
     expect(countMatching(outside.statements, 'json_each')).toBe(chunked(texts).length);

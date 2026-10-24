@@ -107,17 +107,17 @@ async function readReply<T>(
 }
 
 /** The server gates every write, so a reply may be a skip; `force: true` stores it anyway. */
-export async function remember(
+export async function postRemember(
   serverUrl: string,
   apiKey: string | undefined,
   opts: RememberOptions & { force: true },
 ): Promise<RememberResult>;
-export async function remember(
+export async function postRemember(
   serverUrl: string,
   apiKey: string | undefined,
   opts: RememberOptions,
 ): Promise<RememberResult | RememberSkipped>;
-export async function remember(
+export async function postRemember(
   serverUrl: string,
   apiKey: string | undefined,
   opts: RememberOptions & { force?: boolean },
@@ -131,7 +131,7 @@ export async function remember(
   return readReply<RememberResult | RememberSkipped>(res, 'POST /v1/memories');
 }
 
-export async function forget(
+export async function postForget(
   serverUrl: string,
   apiKey: string | undefined,
   id: string,
@@ -144,7 +144,7 @@ export async function forget(
   return readReply<{ ok: true; id: string }>(res, 'DELETE /v1/memories/:id', (b) => isJsonString(b.id));
 }
 
-export async function promote(
+export async function postPromote(
   serverUrl: string,
   apiKey: string | undefined,
   id: string,
@@ -161,7 +161,7 @@ export async function promote(
   );
 }
 
-export async function archiveRaw(
+export async function postArchiveRaw(
   serverUrl: string,
   apiKey: string | undefined,
   id: string,

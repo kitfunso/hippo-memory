@@ -105,7 +105,7 @@ export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRec
 }
 
 /** One full check against the store: shape, row, revocation, expiry, then scrypt. Null for any failure. */
-function lookupApiKey(db: DatabaseSyncLike, plaintext: string, now: number): VerifiedApiKey | null {
+function verifyApiKey(db: DatabaseSyncLike, plaintext: string, now: number): VerifiedApiKey | null {
   const keyId = mintedKeyId(plaintext);
   if (keyId === null) return null;
   const record = readApiKeyRecord(db, keyId);
@@ -113,7 +113,7 @@ function lookupApiKey(db: DatabaseSyncLike, plaintext: string, now: number): Ver
 }
 
 export function validateApiKey(db: DatabaseSyncLike, plaintext: string): ValidateResult {
-  const found = lookupApiKey(db, plaintext, Date.now());
+  const found = verifyApiKey(db, plaintext, Date.now());
   return found ? { valid: true, ...found } : { valid: false };
 }
 

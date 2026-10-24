@@ -9,7 +9,7 @@ import type { SqlFragment } from '../../db/sql.js';
 import type { CorrectionLinkPage, RawProvenancePage, ReportPage, Reports, StrengthTallies } from '../port/reports.js';
 import { statusCounts, strengthTallies } from './candidates.js';
 import { countOpenConflicts } from './conflicts.js';
-import { countAllEntries, loadEntriesPage } from './entry-reads.js';
+import { countAllEntries, listEntriesPage } from './entry-reads.js';
 import { createdSinceLastSleep } from './index-and-stats.js';
 import { buildStatsFromDb } from './mirrors.js';
 import type { Handles, StoreFiles } from './open.js';
@@ -119,7 +119,7 @@ function scoredReadsBodies(files: StoreFiles): Bodies<Pick<Reports, Scored>> {
 }
 
 const reportReadsBodies: Bodies<Omit<Reports, 'tokenUse' | 'failures' | Scored>> = {
-  entriesPage: loadEntriesPage,
+  entriesPage: listEntriesPage,
   countEntries: countAllEntries,
   stats: buildStatsFromDb,
   correctionLinks: correctionLinks,

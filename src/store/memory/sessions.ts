@@ -49,7 +49,11 @@ function matcher(tenantId: string, { scope, sessionId }: WorkingMemoryFilter) {
     w.tenantId === tenantId && (!scope || w.row.scope === scope) && (!sessionId || w.row.sessionId === sessionId);
 }
 
-function readIn(t: MemoryTables, tenantId: string, filter: WorkingMemoryFilter & { readonly limit?: number }) {
+function listWorkingMemoryIn(
+  t: MemoryTables,
+  tenantId: string,
+  filter: WorkingMemoryFilter & { readonly limit?: number },
+) {
   const limit = Math.max(1, Math.trunc(filter.limit ?? WM_MAX_ENTRIES));
   const items = t.workingMemory.filter(matcher(tenantId, filter));
   items.sort(
@@ -87,7 +91,7 @@ export function memorySessions(t: MemoryTables): Sessions {
     stampHandoffOutcome: async (tenantId, sessionId, outcome) => stampOutcomeIn(t, tenantId, sessionId, outcome),
     writeSessionEndHandoff: async (tenantId, request) => writeSessionEndIn(t, tenantId, request),
     pushWorkingMemory: async (tenantId, item) => pushIn(t, tenantId, item),
-    readWorkingMemory: async (tenantId, filter) => readIn(t, tenantId, filter),
+    readWorkingMemory: async (tenantId, filter) => listWorkingMemoryIn(t, tenantId, filter),
     clearWorkingMemory: async (tenantId, filter) => clearIn(t, tenantId, filter),
     bindSessionOwner: async (tenantId, sessionId, owner, retentionMs) =>
       bindOwnerIn(t, tenantId, sessionId, owner, retentionMs),

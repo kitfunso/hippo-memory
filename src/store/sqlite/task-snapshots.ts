@@ -107,13 +107,13 @@ export function saveActiveTaskSnapshot(
   return loaded;
 }
 
-export function loadActiveTaskSnapshot(
+export function readActiveTaskSnapshot(
   db: DatabaseSyncLike,
   { hippoRoot }: StoreFiles,
   tenantId: string,
   key?: ContinuityKey | null,
 ): TaskSnapshot | null {
-  assertTenantId('loadActiveTaskSnapshot', tenantId);
+  assertTenantId('readActiveTaskSnapshot', tenantId);
   const owned = key ? continuityWhere(key) : null;
   const row = cachedStatement(
     db,

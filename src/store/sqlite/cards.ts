@@ -64,7 +64,7 @@ function rowToCard(row: CardRow): Card {
   };
 }
 
-function loadCardRow(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
+function readCardRow(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
   const row = cachedStatement(db, `SELECT ${CARD_COLUMNS} FROM cards WHERE id = ? AND tenant_id = ?`).get(
     id,
     tenantId,
@@ -235,7 +235,7 @@ function createCard(db: DatabaseSyncLike, tenantId: string, input: CardCreate): 
     );
     for (const parentId of dependsOn) insertDep.run(parentId, id, tenantId, now);
   });
-  return loadCardRow(db, tenantId, id)!;
+  return readCardRow(db, tenantId, id)!;
 }
 
 /** Whether every dependsOn card is done, true for none; throws on an id that is no card of the tenant. Call inside the
@@ -257,9 +257,9 @@ function everyParentDone(db: DatabaseSyncLike, tenantId: string, dependsOn: read
 }
 
 /** Returns the card row for id, or null if it does not exist under this tenant. */
-function loadCard(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
-  assertTenantId('loadCard', tenantId);
-  return loadCardRow(db, tenantId, id);
+function readCard(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
+  assertTenantId('readCard', tenantId);
+  return readCardRow(db, tenantId, id);
 }
 
 /** One page of the tenant's cards, optionally of one status, newest-updated first. */
@@ -283,7 +283,7 @@ function listCards(db: DatabaseSyncLike, tenantId: string, { status, limit, afte
   return { cards: page.rows, next: page.next };
 }
 
-function loadCardDeps(db: DatabaseSyncLike, tenantId: string, id: string) {
+function listCardDeps(db: DatabaseSyncLike, tenantId: string, id: string) {
   const parents = (
     cachedStatement(db, `SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, id) as Array<{
       parent: string;
@@ -297,7 +297,7 @@ function loadCardDeps(db: DatabaseSyncLike, tenantId: string, id: string) {
   return { parents, children };
 }
 
-function loadCardRuns(db: DatabaseSyncLike, tenantId: string, id: string): CardRun[] {
+function listCardRuns(db: DatabaseSyncLike, tenantId: string, id: string): CardRun[] {
   const rows = cachedStatement(
     db,
     `
@@ -308,7 +308,7 @@ function loadCardRuns(db: DatabaseSyncLike, tenantId: string, id: string): CardR
   return rows.map(rowToCardRun);
 }
 
-function loadCardComments(db: DatabaseSyncLike, tenantId: string, id: string): CardComment[] {
+function listCardComments(db: DatabaseSyncLike, tenantId: string, id: string): CardComment[] {
   const rows = cachedStatement(
     db,
     `
@@ -319,7 +319,7 @@ function loadCardComments(db: DatabaseSyncLike, tenantId: string, id: string): C
   return rows.map(rowToCardComment);
 }
 
-function loadLatestHandoffForCard(db: DatabaseSyncLike, tenantId: string, cardId: string): SessionHandoff | null {
+function readLatestHandoffForCard(db: DatabaseSyncLike, tenantId: string, cardId: string): SessionHandoff | null {
   const row = cachedStatement(
     db,
     `
@@ -349,7 +349,7 @@ function claimCard(
       extra: { setSql: 'assignee_runtime = ?', whereSql: 'assignee_runtime IS NULL', params: [runtime] },
     });
     if (changes === 0) {
-      if (!loadCardRow(db, tenantId, id)) {
+      if (!readCardRow(db, tenantId, id)) {
         throw unknownCard(id);
       }
       return rollback(null);
@@ -364,7 +364,7 @@ function claimCard(
     ).run(id, runtime, sessionId ?? null, now, now, now, tenantId);
     return Number(insert.lastInsertRowid ?? 0);
   });
-  return runId === null ? null : { ...loadCardRow(db, tenantId, id)!, runId };
+  return runId === null ? null : { ...readCardRow(db, tenantId, id)!, runId };
 }
 
 /** Moves a running card's lease to CARD_LEASE_MS from now and records the heartbeat; updated_at is left alone. Throws
@@ -374,7 +374,7 @@ function heartbeatCard(db: DatabaseSyncLike, tenantId: string, id: string, runId
   assertTenantId('heartbeatCard', tenantId);
   assertRunId(runId);
   const beat = withWriteScopeOr(db, 'heartbeat_card', (rollback) => {
-    const card = loadCardRow(db, tenantId, id);
+    const card = readCardRow(db, tenantId, id);
     if (!card) {
       throw unknownCard(id);
     }
@@ -390,7 +390,7 @@ function heartbeatCard(db: DatabaseSyncLike, tenantId: string, id: string, runId
     );
     return true;
   });
-  return beat ? loadCardRow(db, tenantId, id) : null;
+  return beat ? readCardRow(db, tenantId, id) : null;
 }
 
 /** Requires the card be running; closes the live run as blocked and files reason as a comment. Throws on an unknown
@@ -409,7 +409,7 @@ function blockCard(db: DatabaseSyncLike, tenantId: string, id: string, reason: s
         })
       : 0;
     if (changes === 0) {
-      if (!loadCardRow(db, tenantId, id)) {
+      if (!readCardRow(db, tenantId, id)) {
         throw unknownCard(id);
       }
       return rollback(false);
@@ -420,7 +420,7 @@ function blockCard(db: DatabaseSyncLike, tenantId: string, id: string, reason: s
     insertCardComment(db, tenantId, id, 'system', reason);
     return true;
   });
-  return blocked ? loadCardRow(db, tenantId, id) : null;
+  return blocked ? readCardRow(db, tenantId, id) : null;
 }
 
 /** Requires the card be running; moves it to review, clearing its lease and heartbeat and keeping its live run. When
@@ -433,14 +433,14 @@ function reviewCard(db: DatabaseSyncLike, tenantId: string, id: string, runId?: 
     const allowed = runId === undefined || liveRunIs(db, tenantId, id, runId);
     const changes = allowed ? transitionCard(db, tenantId, id, { from: ['running'], to: 'review' }) : 0;
     if (changes === 0) {
-      if (!loadCardRow(db, tenantId, id)) {
+      if (!readCardRow(db, tenantId, id)) {
         throw unknownCard(id);
       }
       return rollback(false);
     }
     return true;
   });
-  return moved ? loadCardRow(db, tenantId, id) : null;
+  return moved ? readCardRow(db, tenantId, id) : null;
 }
 
 /** Closes the live run of a card in review: 'success' moves it to done and promotes children whose parents are all
@@ -461,7 +461,7 @@ function completeCard(
     const allowed = runId === undefined || liveRunIs(db, tenantId, id, runId);
     const changes = allowed ? transitionCard(db, tenantId, id, { from: ['review'], to: target }) : 0;
     if (changes === 0) {
-      if (!loadCardRow(db, tenantId, id)) {
+      if (!readCardRow(db, tenantId, id)) {
         throw unknownCard(id);
       }
       return rollback(null);
@@ -473,7 +473,7 @@ function completeCard(
     // un-evaluated child.
     return target === 'done' ? promoteUnblockedChildren(db, tenantId, id) : [];
   });
-  return promoted === null ? null : { card: loadCardRow(db, tenantId, id)!, promotedChildren: promoted };
+  return promoted === null ? null : { card: readCardRow(db, tenantId, id)!, promotedChildren: promoted };
 }
 
 /** Moves to ready each backlog child of `parentId` whose parents are all done, and returns their ids. Call inside the
@@ -546,29 +546,29 @@ function addCardComment(
 
 /** Loads the detail behind `hippo card show` and `GET /api/cards/:id` (null when the tenant has no such card), the five
  * reads on one snapshot. */
-function loadCardDetail(db: DatabaseSyncLike, tenantId: string, id: string): CardDetail | null {
-  assertTenantId('loadCardDetail', tenantId);
+function readCardDetail(db: DatabaseSyncLike, tenantId: string, id: string): CardDetail | null {
+  assertTenantId('readCardDetail', tenantId);
   return withReadSnapshot(db, () => cardDetail(db, tenantId, id));
 }
 
 function cardDetail(db: DatabaseSyncLike, tenantId: string, id: string): CardDetail | null {
-  const card = loadCardRow(db, tenantId, id);
+  const card = readCardRow(db, tenantId, id);
   if (!card) return null;
   return {
     card,
-    deps: loadCardDeps(db, tenantId, id),
-    runs: loadCardRuns(db, tenantId, id),
-    comments: loadCardComments(db, tenantId, id),
-    handoff: loadLatestHandoffForCard(db, tenantId, id),
+    deps: listCardDeps(db, tenantId, id),
+    runs: listCardRuns(db, tenantId, id),
+    comments: listCardComments(db, tenantId, id),
+    handoff: readLatestHandoffForCard(db, tenantId, id),
   };
 }
 
 const cardsBodies: Bodies<Cards> = {
   create: createCard,
-  load: loadCard,
-  detail: loadCardDetail,
+  load: readCard,
+  detail: readCardDetail,
   list: listCards,
-  runs: loadCardRuns,
+  runs: listCardRuns,
   claim: claimCard,
   heartbeat: heartbeatCard,
   block: blockCard,

@@ -21,7 +21,7 @@ export interface AmbientRefusal {
   readonly reason: AmbientRefusalReason;
 }
 
-/** An ambient load and the rows it refused, in the order `loadAmbientCandidates` read them. */
+/** An ambient load and the rows it refused, in the order `listAmbientCandidates` read them. */
 export interface AmbientCandidates extends AmbientLoadResult {
   refused: AmbientRefusal[];
 }
@@ -30,17 +30,17 @@ export interface AmbientCandidates extends AmbientLoadResult {
  *  contextGet with a query under an embedding provider needs `vectors` too, and answers 501 without it. */
 export interface ContextReads {
   /** The newest handoff of the last `maxAgeMs` that is its session's highest id, has no outcome or a partial or failed
-   * one, and passes recall's default scope deny, as `loadLatestHandoff` with `unfinishedOnly` and `scopeFilter:
+   * one, and passes recall's default scope deny, as `readLatestHandoff` with `unfinishedOnly` and `scopeFilter:
    * 'default-deny'`. Rejects an empty tenant id. */
   unfinishedHandoff(tenantId: string, maxAgeMs: number, key: ContinuityKey | null): Promise<SessionHandoff | null>;
-  /** As `loadAmbientCandidates` with `ambientRefusal` as its admit; `recall` searches with the query `rarestFtsQuery`
+  /** As `listAmbientCandidates` with `ambientRefusal` as its admit; `recall` searches with the query `rarestFtsQuery`
    * builds from full-text document counts over every tenant's rows, and finds nothing when no term is indexed. Core
    * keeps only `tenantId`'s rows that the admission passes, whatever the store returns. */
   ambientCandidates(tenantId: string, request: AmbientCandidateRequest): Promise<AmbientCandidates>;
-  /** As `loadContextCandidates`: at most `filter.cap` live rows, pins and then the least decayed first, returned by
+  /** As `listContextCandidates`: at most `filter.cap` live rows, pins and then the least decayed first, returned by
    * created, then id. */
   contextCandidates(tenantId: string, filter: ContextCandidateFilter): Promise<MemoryEntry[]>;
-  /** As `loadAmbientTallies`: one aggregate over the live, unarchived rows `filter` admits, less other projects'
+  /** As `countAmbient`: one aggregate over the live, unarchived rows `filter` admits, less other projects'
    * secret-tagged rows. */
   ambientTallies(tenantId: string, filter: AmbientStoreFilter): Promise<AmbientTallies>;
   /** The tenant's `limit` newest rows, oldest first. */
@@ -157,7 +157,7 @@ export interface SummaryDescendants {
 /** The reads behind session assembly and summary drill-down. None writes an audit row. */
 export interface DagReads {
   /** The newest `cap` rows by created then id, returned oldest first (created, then id, ascending) as
-   * `loadSessionRawMemories` does; an empty session id reads nothing. */
+   * `listSessionRawMemories` does; an empty session id reads nothing. */
   sessionRawEntries(query: SessionRawWindow): Promise<MemoryEntry[]>;
   /** How many rows the session holds with no cap, under the scope rule `passesScopeFilterForRecall` applies, so the
    * count never tells of a row the caller could not read. */

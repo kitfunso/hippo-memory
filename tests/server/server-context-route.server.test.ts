@@ -23,7 +23,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember } from '../../src/api/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { ServerHandle } from '../../src/server.js';
@@ -274,7 +274,7 @@ describe('GET /v1/context', () => {
 
     // Snapshot audit_log count BEFORE the request.
     const db1 = openHippoDb(home);
-    const before = queryAuditEvents(db1, { tenantId: 'default', op: 'recall' });
+    const before = listAuditEvents(db1, { tenantId: 'default', op: 'recall' });
     closeHippoDb(db1);
 
     const res = await fetch(`${handle.url}/v1/context?q=foo&budget=1000`);
@@ -282,7 +282,7 @@ describe('GET /v1/context', () => {
 
     // Assert EXACTLY one new 'recall' row from THIS request.
     const db2 = openHippoDb(home);
-    const after = queryAuditEvents(db2, { tenantId: 'default', op: 'recall' });
+    const after = listAuditEvents(db2, { tenantId: 'default', op: 'recall' });
     closeHippoDb(db2);
     expect(after.length).toBe(before.length + 1);
   });

@@ -342,7 +342,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     // Since v1.25.0 the private exclusion runs in SQL BEFORE the candidate
     // window (codex review P2: post-window filtering let private rows starve
     // admitted candidates). Consequence: a query whose only lexical matches
-    // are denied now behaves exactly like a no-match query — loadSearchRows'
+    // are denied now behaves exactly like a no-match query; listSearchRows'
     // full-store fallback may return unrelated PUBLIC rows instead of a
     // distinguishable empty set. That closes a side channel (an empty result
     // no longer reveals "something private matches this query"), so the

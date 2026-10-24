@@ -1,6 +1,6 @@
 // Entry of the process that runs one POST /v1/sleep or MCP auto-sleep; sleep-offload.ts starts it and nothing imports
 // it. The sleep modules alone: the api barrel loads far more than one sleep needs, and every sleep pays for the start.
-import { sleep } from '../../api/sleep/sleep.js';
+import { sleepWholeStore } from '../../api/sleep/sleep.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { anthropicLlmFromEnv, rootInfra } from '../../infra/ports.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
@@ -44,7 +44,10 @@ function sleepJob({ hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>): 
     resolveEmbeddingProvider,
   );
   const config = loadConfig(hippoRoot);
-  return sleep({ tenantId: job.tenantId, actor: job.actor, store, reach, config, infra: childInfra() }, job.opts);
+  return sleepWholeStore(
+    { tenantId: job.tenantId, actor: job.actor, store, reach, config, infra: childInfra() },
+    job.opts,
+  );
 }
 
 /** A sleep that changed the store saves its vector graph file, so a store whose server holds no graph gets one. */

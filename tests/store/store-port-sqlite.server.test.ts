@@ -26,10 +26,10 @@ import {
   type RecallWrites,
   type VectorCandidateSpec,
 } from '../../src/entry/store-kit.js';
-import { loadLatestHandoff } from '../../src/store/sqlite/handoffs.js';
-import { loadRecallSearchEntries } from '../../src/store/sqlite/fixtures.js';
+import { readLatestHandoff } from '../../src/store/sqlite/handoffs.js';
+import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
 import { listSessionEvents } from '../../src/store/sqlite/sessions.js';
-import { loadActiveTaskSnapshot } from '../../src/store/sqlite/task-snapshots.js';
+import { readActiveTaskSnapshot } from '../../src/store/sqlite/task-snapshots.js';
 import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../../src/db/vector-store.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from '../_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
@@ -281,7 +281,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
 
   it.each(SEARCHES)('searchRecallEntries: %s', async (_name, query, args, kind, reached) => {
     const { direct, port } = await parity(
-      (s) => loadRecallSearchEntries(s.root, query, args),
+      (s) => listRecallEntriesInFolder(s.root, query, args),
       (store) => store.searchRecallEntries(query, args),
       kind,
     );
@@ -365,11 +365,11 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     const { direct, port } = await parity(
       (s) =>
         handlesOf(s.root).on((db, files) => {
-          const activeSnapshot = loadActiveTaskSnapshot(db, files, tenantId, key ?? undefined);
+          const activeSnapshot = readActiveTaskSnapshot(db, files, tenantId, key ?? undefined);
           const sessionId = activeSnapshot?.sessionId ?? undefined;
           return {
             activeSnapshot,
-            sessionHandoff: sessionId ? loadLatestHandoff(db, tenantId, sessionId, {}, key ?? undefined) : null,
+            sessionHandoff: sessionId ? readLatestHandoff(db, tenantId, sessionId, {}, key ?? undefined) : null,
             recentSessionEvents: sessionId ? listSessionEvents(db, tenantId, { session_id: sessionId, limit: 5 }) : [],
           };
         }, openStore),

@@ -17,9 +17,9 @@ import {
 } from '../../src/base/memory/memory.js';
 import { readerReaches, targetReader } from '../../src/base/scope/recall-scope.js';
 import { writeEntriesTogether, writeEntryDbOnly, writeEntryMirrors } from '../../src/store/sqlite/entry-writes.js';
-import { selectEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
+import { readEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
-import { applyOutcome, auditingRefusal } from '../../src/store/sqlite/entry-writes.js';
+import { writeOutcome, auditingRefusal } from '../../src/store/sqlite/entry-writes.js';
 import type { OutcomeWrite } from '../../src/store/port/entry-writes.js';
 import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
@@ -43,7 +43,7 @@ afterEach(() => {
 function applyOutcomePerId(db: DatabaseSyncLike, root: string, outcome: OutcomeWrite): string[] {
   const applied = auditingRefusal(db, outcome.actor, () =>
     withWriteScope(db, 'apply_outcome', () => {
-      const live = selectEntriesByIds(db, outcome.ids, outcome.tenantId);
+      const live = readEntriesByIds(db, outcome.ids, outcome.tenantId);
       const out: MemoryEntry[] = [];
       for (const id of outcome.ids) {
         const entry = live.get(id);
@@ -164,7 +164,7 @@ describe('outcome over 200 ids', () => {
     const before = seeded('outcome-pin-old', entries);
     const after = seeded('outcome-pin-new', entries);
     const expected = applyOutcomePerId(before.db, before.root, outcomeOf(ids, good));
-    const got = applyOutcome(after.db, storeFilesOf(after.root), outcomeOf(ids, good));
+    const got = writeOutcome(after.db, storeFilesOf(after.root), outcomeOf(ids, good));
     flushHeldMirrors(after.root);
     expect(got).toEqual(expected);
     expect(got.length).toBeGreaterThan(190);
@@ -182,7 +182,7 @@ describe('outcome statement count', () => {
       const { entries } = fixture(n);
       const ids = entries.filter((e) => e.tenantId === 'default' && e.scope === null).map((e) => e.id);
       const { root, db } = seeded(`outcome-count-${n}`, entries);
-      const { statements } = recordStatements(() => applyOutcome(db, storeFilesOf(root), outcomeOf(ids, false)));
+      const { statements } = recordStatements(() => writeOutcome(db, storeFilesOf(root), outcomeOf(ids, false)));
       return statements.length;
     });
     expect(counts[0]).toBe(counts[1]);
@@ -221,7 +221,7 @@ describe('outcome that fails mid-batch', () => {
   ])('leaves no row, audit row or mirror when %s fails', (_label, trigger) => {
     const { root, db, ids } = failingStore(trigger);
     const before = snapshot(root, db);
-    expect(() => applyOutcome(db, storeFilesOf(root), outcomeOf(ids, true))).toThrow(/refused/);
+    expect(() => writeOutcome(db, storeFilesOf(root), outcomeOf(ids, true))).toThrow(/refused/);
     expect(snapshot(root, db)).toEqual(before);
   });
 });

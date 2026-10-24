@@ -3,7 +3,7 @@ import { appendAuditEvents } from './audit.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { keysetAfter } from '../../db/sql.js';
-import { selectEntriesByIds, readEntry } from './entry-reads.js';
+import { readEntriesByIds, readEntry } from './entry-reads.js';
 import type {
   QuarantineApproval,
   QuarantineListQuery,
@@ -51,7 +51,7 @@ function fromDbRow(row: QuarantineDbRow): QuarantineRow {
   };
 }
 
-function getQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string): QuarantineRow | null {
+function readQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string): QuarantineRow | null {
   const row = cachedStatement(
     db,
     `SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND memory_id = ?`,
@@ -138,7 +138,7 @@ function listQuarantined(
   { status, limit, after }: QuarantineListQuery,
 ): QuarantinedMemory[] {
   const rows = listQuarantineRows(db, tenantId, status, limit, after);
-  const entries = selectEntriesByIds(
+  const entries = readEntriesByIds(
     db,
     rows.map((row) => row.memoryId),
     tenantId,
@@ -148,7 +148,7 @@ function listQuarantined(
 
 /** The pending record, or why a decision on `id` is refused. */
 function pendingOrRefusal(db: DatabaseSyncLike, tenantId: string, id: string): QuarantineRow | QuarantineRefusal {
-  const row = getQuarantineRow(db, tenantId, id);
+  const row = readQuarantineRow(db, tenantId, id);
   if (!row) return { outcome: 'not_quarantined' };
   if (row.status !== 'pending') return { outcome: 'already_decided', status: row.status };
   return row;

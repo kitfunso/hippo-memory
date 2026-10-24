@@ -62,7 +62,7 @@ function listDlqRows(
   ).all(tenantId, limit) as DlqRawRow[];
 }
 
-function getDlqRow(
+function readDlqRow(
   db: DatabaseSyncLike,
   table: DlqTable,
   selectColumns: string,
@@ -138,7 +138,7 @@ export function dlqAccess<Item, Insert extends object>(
     },
     list: (db, tenantId, limit) => listDlqRows(db, table, selectColumns, tenantId, limit).map(toItem),
     get: (db, tenantId, id) => {
-      const row = getDlqRow(db, table, selectColumns, tenantId, id);
+      const row = readDlqRow(db, table, selectColumns, tenantId, id);
       return row ? toItem(row) : null;
     },
     markRetried: (db, tenantId, id) => markDlqRetried(db, table, tenantId, id),

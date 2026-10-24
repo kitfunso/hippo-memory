@@ -122,7 +122,7 @@ export function lastConsolidation(db: DatabaseSyncLike): string | undefined {
 }
 
 /** Load the session decay context; session intervals come from consolidation_runs timestamps. */
-export function loadSessionDecayContext(db: DatabaseSyncLike): SessionDecayContext {
+export function readSessionDecayContext(db: DatabaseSyncLike): SessionDecayContext {
   // Get recent consolidation timestamps (last 20)
   const rows = cachedStatement(
     db,

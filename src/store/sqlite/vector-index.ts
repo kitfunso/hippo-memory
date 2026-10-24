@@ -32,11 +32,11 @@ import {
   openVectorStaging,
   replaceVectorsWithStaged,
   stageVectors,
-  storedVectorCount,
+  countStoredVectors,
   storedVectorDims,
   upsertVectors,
 } from '../../db/vector-store.js';
-import { countAllEntries, loadEntryIdsById, selectEntriesByIds } from './entry-reads.js';
+import { countAllEntries, listEveryTenantEntryIds, readEntriesByIds } from './entry-reads.js';
 import { afterIdAnd, idPageOf } from './keyset.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
@@ -61,7 +61,7 @@ function saveIndexIdentity(db: DatabaseSyncLike, identity: string): void {
   setMeta(db, EMBEDDING_MODEL_META_KEY, identity);
 }
 
-function loadStoredEmbeddingModel(on: OnHandle): string | null {
+function readStoredEmbeddingModel(on: OnHandle): string | null {
   try {
     return on(storedIndexState).storedModel;
   } catch (err) {
@@ -79,7 +79,7 @@ export function saveStoredEmbeddingModel(on: OnHandle, model: string): void {
 }
 
 function resolveIndexedEmbeddingModel(on: OnHandle, index?: Record<string, number[]>): string | null {
-  const storedModel = loadStoredEmbeddingModel(on);
+  const storedModel = readStoredEmbeddingModel(on);
   if (storedModel) return storedModel;
   return indexedModel({
     storedModel,
@@ -92,25 +92,25 @@ export function embeddingModelRequiresReindex(on: OnHandle, model: string, index
 }
 
 /**
- * Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via `loadStoredVectors`.
+ * Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via `readStoredVectors`.
  */
-export function loadEmbeddingIndex(db: DatabaseSyncLike): Record<string, number[]> {
+export function listAllVectors(db: DatabaseSyncLike): Record<string, number[]> {
   return Object.fromEntries(loadVectors(db));
 }
 
 /** How many vectors are stored and the float count of the first row, with no vector decoded. */
 export function storedVectorSummary(db: DatabaseSyncLike): StoredVectorSummary {
-  return { vectors: storedVectorCount(db), dims: storedVectorDims(db) };
+  return { vectors: countStoredVectors(db), dims: storedVectorDims(db) };
 }
 
 /** Stored vectors for `ids` only. */
-export function loadStoredVectors(db: DatabaseSyncLike, ids: readonly string[]): Map<string, number[]> {
+export function readStoredVectors(db: DatabaseSyncLike, ids: readonly string[]): Map<string, number[]> {
   if (ids.length === 0) return new Map();
   return loadVectors(db, ids);
 }
 
-/** `loadStoredVectors` as Float32 views, for a caller that only scores them. */
-export function loadStoredVectorViews(db: DatabaseSyncLike, ids: readonly string[]): Map<string, Float32Array> {
+/** `readStoredVectors` as Float32 views, for a caller that only scores them. */
+export function readStoredVectorViews(db: DatabaseSyncLike, ids: readonly string[]): Map<string, Float32Array> {
   if (ids.length === 0) return new Map();
   return loadVectorViews(db, ids);
 }
@@ -234,7 +234,7 @@ export function writeVectors(db: DatabaseSyncLike, write: VectorWrite): VectorWr
 }
 
 /** Every particle stored under `hippoRoot`. */
-function loadStoredParticles(db: DatabaseSyncLike): PhysicsParticle[] {
+function listStoredParticles(db: DatabaseSyncLike): PhysicsParticle[] {
   return Array.from(loadPhysicsState(db).values());
 }
 
@@ -243,12 +243,12 @@ function loadStoredParticles(db: DatabaseSyncLike): PhysicsParticle[] {
 export function particleStats(db: DatabaseSyncLike, fullUpTo: number): ParticleStats {
   return withReadSnapshot(db, () => {
     const { count, speedSum } = physicsSpeedSum(db);
-    const particles = count > 0 && count <= fullUpTo ? loadStoredParticles(db) : null;
+    const particles = count > 0 && count <= fullUpTo ? listStoredParticles(db) : null;
     return { count, meanSpeed: count > 0 ? speedSum / count : 0, particles };
   });
 }
 
-/** The memory id of every stored particle in loadStoredParticles's order, so a caller reads only the particles it
+/** The memory id of every stored particle in listStoredParticles's order, so a caller reads only the particles it
  * keeps. */
 export function storedParticleIds(db: DatabaseSyncLike): string[] {
   const rows = cachedStatement(db, 'SELECT memory_id FROM memory_physics ORDER BY rowid').all() as Array<{
@@ -277,10 +277,10 @@ const RESET_ID_PAGE = 1000;
 function* storedSeeds(db: DatabaseSyncLike): Generator<ParticleSeed> {
   let afterId: string | undefined;
   do {
-    const page = loadEntryIdsById(db, { limit: RESET_ID_PAGE, afterId });
+    const page = listEveryTenantEntryIds(db, { limit: RESET_ID_PAGE, afterId });
     for (const ids of chunked(page.ids, PARTICLE_PAGE)) {
       const vectors = loadVectors(db, ids);
-      const rows = selectEntriesByIds(db, [...vectors.keys()], ALL_TENANTS);
+      const rows = readEntriesByIds(db, [...vectors.keys()], ALL_TENANTS);
       for (const id of ids) {
         const entry = rows.get(id);
         const vector = vectors.get(id);

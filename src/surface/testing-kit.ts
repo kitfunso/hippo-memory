@@ -1,13 +1,13 @@
 // The ./testing entry's hippo.db seams, the one door into the adapter besides the composition root: evals seed and read
 // a store folder, and benchmarks a handle they open themselves. Production code takes its store from open-store.ts.
 export {
-  batchWriteAndDelete,
+  batchWriteAndDeleteInFolder,
   buildIndexFromDb,
   initStore,
   loadAllEntries,
   loadEmbeddingIndex,
-  loadRecallSearchEntries,
-  loadVectorCandidateEntries,
+  listRecallEntriesInFolder,
+  listVectorCandidateEntries,
   recordTokenUse,
   tokensBySession,
   upsertEntryRow,

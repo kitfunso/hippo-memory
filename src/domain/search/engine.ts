@@ -5,7 +5,7 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsConfig } from '../../base/rank/physics-config.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { hybridSearch, type HybridSearchOptions } from './hybrid.js';
-import { physicsSearch } from './physics-search.js';
+import { rankPhysics } from './physics-search.js';
 import type { VectorSource } from './vector.js';
 
 /**
@@ -20,6 +20,6 @@ export function searchByEngine(
   options: Omit<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings' | 'source'>,
 ): Promise<SearchResult[]> {
   return physics
-    ? physicsSearch(query, pool, { ...options, physicsConfig: physics, source })
+    ? rankPhysics(query, pool, { ...options, physicsConfig: physics, source })
     : hybridSearch(query, pool, { ...options, source });
 }

@@ -692,7 +692,7 @@ describe('package surface', () => {
       "const url = import.meta.resolve('hippo-memory/server');",
       "const srv = await import('hippo-memory/server');",
       "const idx = await import('hippo-memory');",
-      "const names = ['appendAuditEvent','queryAuditEvents','AUDIT_OPS'];",
+      "const names = ['appendAuditEvent','listAuditEvents','AUDIT_OPS'];",
       'console.log(JSON.stringify({ url, serve: typeof srv.serve, authRevoke: typeof srv.authRevoke, authCreateSelf: typeof srv.authCreateSelf, isReservedActor: typeof srv.isReservedActor, forbidden: typeof srv.ForbiddenError, leaked: names.filter((n) => idx[n] !== undefined), indexServe: "serve" in idx }));',
     ].join('\n');
     // cwd is the checkout because self-reference resolves from the nearest package.json.

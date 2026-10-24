@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { Rejection } from '../../src/store/port/rejections.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
@@ -27,7 +27,7 @@ beforeEach(() => {
 function auditRows(tenantId: string, op: AuditOp): AuditEvent[] {
   const db = openHippoDb(root);
   try {
-    return queryAuditEvents(db, { tenantId, op });
+    return listAuditEvents(db, { tenantId, op });
   } finally {
     closeHippoDb(db);
   }

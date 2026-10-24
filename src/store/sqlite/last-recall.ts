@@ -2,7 +2,7 @@
 // handle.
 import { type DatabaseSyncLike, withWriteScope } from '../../db/index.js';
 import { appendAuditEvents } from './audit.js';
-import { strengthenRetrieved, strengthenRetrievedInOwnTx, applyOutcome } from './entry-writes.js';
+import { strengthenRetrieved, strengthenRetrievedInOwnTx, writeOutcome } from './entry-writes.js';
 import { localGoalRecallRows, writeGoalRecallLog } from './goals.js';
 import { saveIndex } from './index-and-stats.js';
 import { readLastRecall } from './mirrors.js';
@@ -44,7 +44,7 @@ export function finishRecall(db: DatabaseSyncLike, rules: LossAversion, writes: 
 function applyOutcomeToLast(db: DatabaseSyncLike, files: StoreFiles, target: EntryTarget, good: boolean): string[] {
   const { last_retrieval_ids: ids, last_trace_id: trace } = readLastRecall(db);
   if (ids.length === 0) return [];
-  return applyOutcome(db, files, { ...target, ids, good }, trace === null ? undefined : Number(trace));
+  return writeOutcome(db, files, { ...target, ids, good }, trace === null ? undefined : Number(trace));
 }
 
 export function sqliteLastRecall({ on, files }: Handles): LastRecall {

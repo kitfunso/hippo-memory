@@ -177,7 +177,7 @@ const DELIVERY_EVENT_COLUMNS = [
   'failure_id',
 ] as const;
 
-function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+function readDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   const rows = cachedStatement(
     db,
     `
@@ -190,7 +190,7 @@ function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput):
   return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
 }
 
-function findDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+function readDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   // Without a call id a time window would merge parallel failures, so two such fires stay two rows.
   if (input.toolUseId === undefined || input.toolUseId === null) return null;
   const row = cachedStatement(
@@ -204,10 +204,10 @@ function findDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInpu
   return row?.id ?? null;
 }
 
-function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
-  if (input.eventType === 'tool-failure') return findDuplicateToolFailure(db, input);
+function readDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  if (input.eventType === 'tool-failure') return readDuplicateToolFailure(db, input);
   // A boundary has no prompt, and two compactions of one session never start within the window, so time alone decides.
-  if (isBoundaryEvent(input.eventType)) return findDuplicateBoundary(db, input);
+  if (isBoundaryEvent(input.eventType)) return readDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
     const row = cachedStatement(
       db,
@@ -386,7 +386,7 @@ function writeDeliveryEvent(
     const eventId = withWriteScope(db, 'write_delivery_event', () => {
       // Missing-session and sub-agent events are not turns of a session, so they get no number and no duplicate check.
       const isTurn = input.sessionId !== null && (input.sessionState === 'payload' || input.sessionState === 'env');
-      const duplicateOf = isTurn ? findDuplicateTurn(db, input) : null;
+      const duplicateOf = isTurn ? readDuplicateTurn(db, input) : null;
       const turnSeq = isTurn && duplicateOf === null ? nextTurnSeq(db, input) : null;
       const values = deliveryEventValues(input, turnSeq, duplicateOf);
       const id = Number(

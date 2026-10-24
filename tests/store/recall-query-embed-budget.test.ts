@@ -4,7 +4,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
-import { embedMemory } from '../../src/domain/search/embed-memories.js';
+import { embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { retrieve } from '../../src/api/index.js';
@@ -244,7 +244,7 @@ describe('the write-side embedding', () => {
     });
     writeEntry(root, entry);
 
-    await embedMemory(localIndex(root), entry);
+    await embedMemoryInto(localIndex(root), entry);
 
     expect(loadEmbeddingIndex(root)[entry.id]).toHaveLength(16);
     expect(await recall(root, 50)).not.toContain(VECTOR_ONLY);

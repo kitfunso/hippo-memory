@@ -1,7 +1,7 @@
 /**
  * v1.7.1 INFO #5 — scorerWindow does not leak across tenants.
  *
- * The store-side LIMIT inside loadSearchRows is applied AFTER the tenant
+ * The store-side LIMIT inside listSearchRows is applied AFTER the tenant
  * predicate (`WHERE tenant_id = ?`). A future refactor that moved the LIMIT
  * before the tenant filter would silently surface cross-tenant rows when
  * scorerWindow > tenant row count. Pin the contract on id-set, not on
@@ -39,7 +39,7 @@ describe('scorerWindow tenant isolation', () => {
   });
   afterEach(() => removeAfterRequest(root));
 
-  // The scope+tenant SQL clauses are appended to FOUR paths in loadSearchRows
+  // The scope+tenant SQL clauses are appended to FOUR paths in listSearchRows
   // (no-terms, FTS, LIKE fallback, full-store fallback). Cover three of the
   // four explicitly via the recall path: the FTS branch (terms match), the
   // no-terms branch (empty query), and the LIKE-fallback branch

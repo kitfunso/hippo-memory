@@ -86,7 +86,7 @@ export function bootstrapLegacyStore(db: DatabaseSyncLike, hippoRoot: string): b
   // and duplicate consolidation_runs; this meta flag settles it.
   if (getMeta(db, 'legacy_bootstrap_completed', '0') === '1') return false;
 
-  const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot);
+  const legacyEntries = readLegacyMarkdownEntries(hippoRoot);
   if (legacyEntries.length === 0) return false;
 
   withWriteScope(db, 'bootstrap_legacy_store', () => {
@@ -135,14 +135,14 @@ function importLegacyEntries(
 }
 
 function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): void {
-  const legacyIndex = loadLegacyIndexFile(hippoRoot);
+  const legacyIndex = readLegacyIndexFile(hippoRoot);
   setMeta(db, 'last_retrieval_ids', JSON.stringify(legacyIndex.last_retrieval_ids ?? []));
   // Legacy index.json predates last_trace_id, so '' is normal; accept only a clean digit string rather than trusting a
   // hand-edited or corrupt index.json.
   const legacyTraceId = String(legacyIndex.last_trace_id ?? '');
   setMeta(db, 'last_trace_id', /^\d+$/.test(legacyTraceId) ? legacyTraceId : '');
 
-  const legacyStats = loadLegacyStatsFile(hippoRoot);
+  const legacyStats = readLegacyStatsFile(hippoRoot);
   setMeta(db, 'total_remembered', String(Number(legacyStats.total_remembered ?? 0)));
   setMeta(db, 'total_recalled', String(Number(legacyStats.total_recalled ?? 0)));
   setMeta(db, 'total_forgotten', String(Number(legacyStats.total_forgotten ?? 0)));
@@ -165,7 +165,7 @@ function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): voi
   pruneConsolidationRuns(db);
 }
 
-function loadLegacyEntriesFromMarkdown(hippoRoot: string): MemoryEntry[] {
+function readLegacyMarkdownEntries(hippoRoot: string): MemoryEntry[] {
   const entries: MemoryEntry[] = [];
   for (const layer of [Layer.Buffer, Layer.Episodic, Layer.Semantic]) {
     const dir = layerDir(hippoRoot, layer);
@@ -199,7 +199,7 @@ function readLegacyJsonObject(file: string): { [key: string]: JsonValue } | null
   return parsed;
 }
 
-function loadLegacyIndexFile(hippoRoot: string): HippoIndex {
+function readLegacyIndexFile(hippoRoot: string): HippoIndex {
   const indexPath = path.join(hippoRoot, 'index.json');
   const empty: HippoIndex = { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
   if (!fs.existsSync(indexPath)) return empty;
@@ -208,7 +208,7 @@ function loadLegacyIndexFile(hippoRoot: string): HippoIndex {
   return (readLegacyJsonObject(indexPath) as HippoIndex | null) ?? empty;
 }
 
-function loadLegacyStatsFile(hippoRoot: string): LegacyStats {
+function readLegacyStatsFile(hippoRoot: string): LegacyStats {
   const statsPath = path.join(hippoRoot, 'stats.json');
   const empty: LegacyStats = { total_remembered: 0, total_recalled: 0, total_forgotten: 0, consolidation_runs: [] };
   if (!fs.existsSync(statsPath)) return empty;

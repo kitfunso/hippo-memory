@@ -4,12 +4,12 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { tallyAmbientEntries } from '../../src/base/memory/ambient.js';
 import { type MemoryEntry } from '../../src/base/memory/memory.js';
 import {
-  loadEntriesMentioning,
-  loadEntryIdsPage,
-  selectEntriesFromOrigin,
-  selectLiveEntriesBySourcePrefix,
+  listEntriesMentioning,
+  listEntryIdsPage,
+  listEntriesFromOrigin,
+  listLiveEntriesBySourcePrefix,
 } from '../../src/store/sqlite/entry-reads.js';
-import { loadAmbientTallies } from '../../src/store/sqlite/ambient.js';
+import { countAmbient } from '../../src/store/sqlite/ambient.js';
 import { pendingVectorIds, pruneOrphanVectors } from '../../src/store/sqlite/vector-index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
@@ -42,14 +42,14 @@ describe('rows that may mention a target', () => {
     seeded(root, 11);
     const db = openHippoDb(root);
     try {
-      const all = loadEntriesMentioning(db, ['quuxlib'], 'quuxlib', 'default', { limit: 100 });
+      const all = listEntriesMentioning(db, ['quuxlib'], 'quuxlib', 'default', { limit: 100 });
       expect(all.entries).toHaveLength(11);
       expect(all.next).toBeNull();
       const ids: string[] = [];
       let after;
       let pages = 0;
       do {
-        const page = loadEntriesMentioning(db, ['quuxlib'], 'quuxlib', 'default', { limit: 4, after });
+        const page = listEntriesMentioning(db, ['quuxlib'], 'quuxlib', 'default', { limit: 4, after });
         ids.push(...page.entries.map((e) => e.id));
         after = page.next ?? undefined;
         pages++;
@@ -69,7 +69,7 @@ describe('the FTS check on a read', () => {
     const db = openHippoDb(root);
     try {
       const { statements } = recordStatements(() =>
-        loadEntriesMentioning(db, ['quuxlib'], 'ops', 'default', { limit: 100 }),
+        listEntriesMentioning(db, ['quuxlib'], 'ops', 'default', { limit: 100 }),
       );
       expect(countMatching(statements, /COUNT\(\*\)/i)).toBe(0);
     } finally {
@@ -115,7 +115,7 @@ describe('walks of every row a read names', () => {
         const ids: string[] = [];
         let after: EntryCursor | undefined;
         do {
-          const page = loadEntryIdsPage(db, ALL_TENANTS, { limit: 3, after });
+          const page = listEntryIdsPage(db, ALL_TENANTS, { limit: 3, after });
           ids.push(...page.ids);
           after = page.next ?? undefined;
         } while (after);
@@ -155,14 +155,14 @@ describe('walks of every row a read names', () => {
     try {
       const imported = recordStatements(() => [
         ...rowsInPages((after?: EntryCursor) =>
-          selectLiveEntriesBySourcePrefix(db, tenant, 'agent-memory:', { limit: 2, after }),
+          listLiveEntriesBySourcePrefix(db, tenant, 'agent-memory:', { limit: 2, after }),
         ),
       ]);
       expect(imported.result.map((e) => e.id)).toEqual(rows.filter((_, i) => i % 3 !== 0).map((r) => r.id));
       expect(peakRowsRead(imported.reads, MEMORY_SELECT_COLUMNS)).toBe(3);
       const alpha = recordStatements(() => [
         ...rowsInPages((after?: EntryCursor) =>
-          selectEntriesFromOrigin(db, tenant, { origin: 'alpha' }, { limit: 2, after }),
+          listEntriesFromOrigin(db, tenant, { origin: 'alpha' }, { limit: 2, after }),
         ),
       ]);
       expect(alpha.result.map((e) => e.id)).toEqual(rows.filter((_, i) => i !== 5).map((r) => r.id));
@@ -196,7 +196,7 @@ describe('ambient tag tallies', () => {
     const now = new Date(Date.UTC(2026, 0, 2));
     const db = openHippoDb(root);
     try {
-      const sql = loadAmbientTallies(db, {}, 'default', { currentProject: [], now });
+      const sql = countAmbient(db, {}, 'default', { currentProject: [], now });
       const js = tallyAmbientEntries(rows, now);
       expect(Object.fromEntries(sql.tagCounts)).toEqual(Object.fromEntries(js.tagCounts));
       expect(sql.errors).toBe(js.errors);

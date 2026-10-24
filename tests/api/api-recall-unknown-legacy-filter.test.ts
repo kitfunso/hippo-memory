@@ -7,7 +7,7 @@
  * Continuity, drillDown, assemble already honour it. The BM25 base path at
  * src/api/index.ts:393 only filtered isPrivateScope, missing 'unknown:legacy'.
  *
- * v1.7.1 fixes this at the producer: SQL predicate in loadSearchRows via
+ * v1.7.1 fixes this at the producer: SQL predicate in listSearchRows via
  * a new loadRecallSearchEntries helper. Test fires red on master, green
  * after the producer-layer fix.
  */
@@ -62,7 +62,7 @@ describe('recall: default-deny on unknown:legacy', () => {
   });
 
   it('explicit scope=unknown:legacy DOES surface the row (operator opt-in for the quarantine bucket)', async () => {
-    // The SQL exact-match branch in loadSearchRows must still admit
+    // The SQL exact-match branch in listSearchRows must still admit
     // `m.scope = 'unknown:legacy'` when the caller asks for it. A regression
     // that hardcoded `scope != 'unknown:legacy'` in BOTH SQL branches would
     // pass the unscoped test but fail this one.

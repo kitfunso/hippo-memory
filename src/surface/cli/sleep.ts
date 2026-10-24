@@ -37,7 +37,7 @@ export async function handleSleep({ hippoRoot, tenantId, flags }: CommandContext
   }
 
   try {
-    await runSleep(hippoRoot, tenantId, flags);
+    await runSleepCommand(hippoRoot, tenantId, flags);
     if (logFile) console.log('[hippo] sleep complete');
   } catch (err) {
     if (logFile) printError(`[hippo] sleep failed: ${errorMessage(err)}`);
@@ -97,7 +97,7 @@ async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliF
   }
 }
 
-async function runSleep(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function runSleepCommand(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
 
   await learnBeforeSleep(hippoRoot, tenantId, flags);
@@ -115,7 +115,7 @@ async function runSleep(hippoRoot: string, tenantId: string, flags: CliFlags): P
 
   // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).
   const ctx = cliApiContext(hippoRoot, tenantId);
-  const result = await api.sleep(ctx, {
+  const result = await api.sleepWholeStore(ctx, {
     dryRun: boolFlag(flags, 'dry-run'),
     noShare: boolFlag(flags, 'no-share'),
   });

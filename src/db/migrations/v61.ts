@@ -6,9 +6,9 @@ const MEMORIES_ORIGIN = 'idx_memories_tenant_origin_created ON memories(tenant_i
 export const v61: Migration = {
   version: 61,
   up: (db) => {
-    // Sort keys in the page's own direction, so loadAllPredictions reads a page without sorting the tenant.
+    // Sort keys in the page's own direction, so listAllPredictions reads a page without sorting the tenant.
     db.exec(`CREATE INDEX IF NOT EXISTS ${PREDICTIONS_PAGE}`);
-    // The (created, id) order of selectEntriesFromOrigin; the origin tally's GROUP BY reads the same index.
+    // The (created, id) order of listEntriesFromOrigin; the origin tally's GROUP BY reads the same index.
     db.exec(`CREATE INDEX IF NOT EXISTS ${MEMORIES_ORIGIN}`);
   },
 };

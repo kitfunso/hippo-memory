@@ -8,7 +8,7 @@ import {
   type CreateMemoryOptions,
 } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { saveEmbeddingIndex, loadVectorCandidateEntries, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { saveEmbeddingIndex, loadVectorCandidateEntries, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -37,7 +37,7 @@ function seed(
     if ('origin' in r) entry.originProject = r.origin;
     return entry;
   });
-  batchWriteAndDelete(root, entries, []);
+  batchWriteAndDeleteInFolder(root, entries, []);
   saveEmbeddingIndex(root, Object.fromEntries(entries.map((e, i) => [e.id, rows[i]!.vector])));
   return entries;
 }

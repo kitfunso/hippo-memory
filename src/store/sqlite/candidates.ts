@@ -14,7 +14,7 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import { originInSql, rewardFactorSql, scopeAdmitSql } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
-import { pickRarestFtsQuery, loadRecallEntries } from './search-rows.js';
+import { pickRarestFtsQuery, listRecallEntries } from './search-rows.js';
 import type { HeldText } from '../port/types.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import { oldestFirst } from '../rules/order.js';
@@ -54,7 +54,7 @@ interface RecentRowsOptions {
   readonly origins?: RecentOrigins;
 }
 
-// `id DESC` mirrors contextGet's comparator, not loadFreshRawMemories' cross-ingest-stable order: that would change
+// `id DESC` mirrors contextGet's comparator, not listFreshRawMemories' cross-ingest-stable order: that would change
 // what the hook injects.
 const NEWEST = 'ORDER BY created DESC, id DESC';
 const AFTER = 'AND created <= ? AND (created < ? OR id < ?) ';
@@ -112,7 +112,7 @@ function readByInstant(run: RunSql, drifted: Map<string, MemoryEntry[]>): ReadNe
 
 // The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still sees, and the delivery
 // ledger still counts, the other-project rows it refuses; past it, the reads narrow to the caller's origins.
-function loadRecentRows(read: ReadNewest, tenantId: string, options: RecentRowsOptions): MemoryEntry[] {
+function listRecentRows(read: ReadNewest, tenantId: string, options: RecentRowsOptions): MemoryEntry[] {
   const { needed, admit, origins } = options;
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
   const window = Math.max(needed * 4, 32);
@@ -189,7 +189,7 @@ function pinnedEntries(db: DatabaseSyncLike, tenantId: TenantId): Generator<Memo
 // The pins plus the `recentNeeded` newest rows `judge` keeps, for ambient injection, with each refusal in the order the
 // rows were read. One connection; `recall` piggybacks the prompt-recall FTS query on it too. `origins` narrows the
 // recent rows past the first window.
-export function loadAmbientCandidates(
+export function listAmbientCandidates(
   db: DatabaseSyncLike,
   tenantId: string,
   { recentNeeded, judge, recall, origins }: AmbientLoad,
@@ -212,7 +212,7 @@ export function loadAmbientCandidates(
   if (needed > 0) {
     const drifted = newestDrifted(run, { sql: AMBIENT_SCOPED, params: [tenantId] });
     const read = drifted.length === 0 ? readByText(run) : readByInstant(run, new Map([[AMBIENT_SCOPED, drifted]]));
-    for (const e of loadRecentRows(read, tenantId, { needed, admit, origins })) byId.set(e.id, e);
+    for (const e of listRecentRows(read, tenantId, { needed, admit, origins })) byId.set(e.id, e);
   }
 
   // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort is stable, so input order is load-bearing
@@ -221,7 +221,7 @@ export function loadAmbientCandidates(
   if (!recall) return { entries, refused };
   const ftsQuery = pickRarestFtsQuery(db, recall.terms);
   const recallEntries = ftsQuery
-    ? loadRecallEntries(db, ftsQuery, {
+    ? listRecallEntries(db, ftsQuery, {
         limit: recall.limit,
         tenantId,
         includeSuperseded: false,
@@ -290,7 +290,7 @@ function decayKeySubsetRows(db: DatabaseSyncLike, rows: SqlFragment, cap: number
 }
 
 /** Live tenant rows passing `filter`, at most `filter.cap`, in loadAllEntries' order; below the cap, every such row. */
-export function loadContextCandidates(
+export function listContextCandidates(
   db: DatabaseSyncLike,
   tenantId: string,
   filter: ContextCandidateFilter,
@@ -329,8 +329,8 @@ const TEAM_VISIBLE = scopeAdmitSql('');
 
 /** Tenant rows that may hold one of `texts` and that `admit` passes (default: team-visible): equal to a text apart from
  * spacing, or a sleep-merged row holding one. With `project`, only rows carrying one of those names plus user-global
- * rows, as loadContextCandidates' filter. A superset the caller checks again with heldTextKeys. */
-export function loadTextsHolding(
+ * rows, as listContextCandidates' filter. A superset the caller checks again with heldTextKeys. */
+export function listTextsHolding(
   db: DatabaseSyncLike,
   tenantId: TenantId,
   texts: readonly string[],

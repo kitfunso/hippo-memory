@@ -58,12 +58,12 @@ const COLUMNS =
   'summarised_at, summary, ' +
   'items_json, items_written, status';
 
-function selectRows(db: DatabaseSyncLike, where: string, ...params: Array<string | number>): CompactionRow[] {
+function listRows(db: DatabaseSyncLike, where: string, ...params: Array<string | number>): CompactionRow[] {
   return cachedStatement(db, `SELECT ${COLUMNS} FROM compactions WHERE ${where}`).all(...params) as CompactionRow[];
 }
 
 export function compactionRowsByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string): CompactionRow[] {
-  return selectRows(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId);
+  return listRows(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId);
 }
 
 /** The session's newest `started` row with a start in [`notBefore`, `notAfter`], both ISO strings. */
@@ -74,7 +74,7 @@ export function latestStartedRows(
   notAfter: string,
   notBefore: string,
 ): CompactionRow[] {
-  return selectRows(
+  return listRows(
     db,
     `tenant_id = ? AND session_id = ? AND status = 'started' AND started_at <= ? AND started_at >= ? ORDER BY ` +
       `started_at DESC, id DESC LIMIT 1`,
@@ -91,7 +91,7 @@ export function stalledSummarizedRows(
   tenantId: string,
   summarizedBefore: string,
 ): CompactionRow[] {
-  return selectRows(db, `tenant_id = ? AND status = 'summarised' AND summarised_at < ?`, tenantId, summarizedBefore);
+  return listRows(db, `tenant_id = ? AND status = 'summarised' AND summarised_at < ?`, tenantId, summarizedBefore);
 }
 
 /** `started` rows with a transcript whose start lies between `startedAfter` and `startedBefore`, oldest first. */
@@ -101,7 +101,7 @@ export function openTranscriptRows(
   startedBefore: string,
   startedAfter: string,
 ): CompactionRow[] {
-  return selectRows(
+  return listRows(
     db,
     `tenant_id = ? AND status = 'started' AND started_at < ? AND started_at > ? AND transcript_path IS NOT NULL ` +
       `ORDER BY started_at`,

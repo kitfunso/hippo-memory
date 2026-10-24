@@ -93,7 +93,7 @@ function distinctRowsHolding(db: DatabaseSyncLike, read: CopyRead, texts: readon
 const NO_FILTER: SqlFragment = { sql: '', params: [] };
 
 /** The rows of `tenantId` that may hold one of `texts` word for word, spacing aside. Callers check each again. */
-export function selectTextKeysHolding(
+export function listTextKeysHolding(
   db: DatabaseSyncLike,
   tenantId: TenantId,
   texts: readonly string[],
@@ -109,7 +109,7 @@ export function selectTextKeysHolding(
 /** Per text, in order: the tenant's live rows whose source does not start with `sourcePrefix` that may hold it word for
  * word, spacing aside. `origins` (global store only) limits them to user-global rows and those projects. A superset:
  * the caller checks each again. */
-export function selectRowsHoldingOutsideSourcePrefix(
+export function listRowsHoldingOutsideSourcePrefix(
   db: DatabaseSyncLike,
   tenantId: string,
   texts: readonly string[],

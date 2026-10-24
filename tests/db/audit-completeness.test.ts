@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { archiveRawMemory } from '../../src/store/sqlite/raw-archive.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
@@ -30,7 +30,7 @@ describe('audit log captures every mutation', () => {
 
     const db = openHippoDb(home);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default' });
+      const events = listAuditEvents(db, { tenantId: 'default' });
       const ops = events.map((e) => e.op);
       expect(ops).toContain('remember');
       expect(ops).toContain('recall');
@@ -64,7 +64,7 @@ describe('audit log captures every mutation', () => {
     // promote audit lands on the global store (HIPPO_HOME).
     const dbGlobal = openHippoDb(home);
     try {
-      const events = queryAuditEvents(dbGlobal, { tenantId: 'default', op: 'promote' });
+      const events = listAuditEvents(dbGlobal, { tenantId: 'default', op: 'promote' });
       expect(events).toHaveLength(1);
       const meta = events[0]!.metadata;
       expect(meta.sourceId).toBe(localId);
@@ -96,7 +96,7 @@ describe('audit log captures every mutation', () => {
 
     const db2 = openHippoDb(localRoot);
     try {
-      const events = queryAuditEvents(db2, { tenantId: 'default', op: 'supersede' });
+      const events = listAuditEvents(db2, { tenantId: 'default', op: 'supersede' });
       const match = events.find((e) => e.targetId === oldId);
       expect(match?.targetId, `expected supersede event for ${oldId}`).toBe(oldId);
       const meta = match!.metadata;
@@ -119,7 +119,7 @@ describe('audit log captures every mutation', () => {
 
       archiveRawMemory(db, 'raw1', { reason: 'GDPR', who: 'user:42' });
 
-      const events = queryAuditEvents(db, { tenantId: 'tenant_x', op: 'archive_raw' });
+      const events = listAuditEvents(db, { tenantId: 'tenant_x', op: 'archive_raw' });
       expect(events.length).toBe(1);
       expect(events[0]!.targetId).toBe('raw1');
       expect(events[0]!.actor).toBe('user:42');
@@ -127,7 +127,7 @@ describe('audit log captures every mutation', () => {
       expect(meta.reason).toBe('GDPR');
 
       // And nothing leaks into the default tenant.
-      const defaultEvents = queryAuditEvents(db, { tenantId: 'default', op: 'archive_raw' });
+      const defaultEvents = listAuditEvents(db, { tenantId: 'default', op: 'archive_raw' });
       expect(defaultEvents.length).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -159,7 +159,7 @@ describe('audit log captures every mutation', () => {
 
     const db2 = openHippoDb(localRoot);
     try {
-      const events = queryAuditEvents(db2, { tenantId: 'default', op: 'forget' });
+      const events = listAuditEvents(db2, { tenantId: 'default', op: 'forget' });
       const ids = events.map((e) => e.targetId);
       expect(ids).toContain(rememberedId);
     } finally {

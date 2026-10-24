@@ -7,7 +7,7 @@ import type { HookRuntime } from '../../base/session/capture-contract.js';
 import { bookTokenUse } from '../../api/ledger-db.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';
 import { cliFolder, cliLedgerReach, cliSyncOptions } from './api-context.js';
-import { folderIndex } from '../../api/embeddings.js';
+import { folderEmbedTarget } from '../../api/embeddings.js';
 import type { CaptureTarget } from '../capture/command.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../../base/util/hook-payload.js';
 import { importAtSessionEnd } from '../../domain/agent-memories/sync.js';
@@ -159,5 +159,5 @@ export async function inPilotHoldout(
 /** What capture writes into for a store folder: its port, its config and the index that embeds the new rows. */
 export function captureTarget(root: string): CaptureTarget {
   const folder = cliFolder(root);
-  return { root, store: folder.store, config: folder.config, index: folderIndex(folder) };
+  return { root, store: folder.store, config: folder.config, index: folderEmbedTarget(folder) };
 }

@@ -8,10 +8,10 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
-import { sleep, supersede } from '../../src/api/index.js';
+import { sleepWholeStore, supersede } from '../../src/api/index.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { sleepResultLines } from '../../src/surface/cli/sleep-render.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -22,7 +22,7 @@ import {
   loadAllDirtySummaries,
   writeEntry,
   readEntry,
-  batchWriteAndDelete,
+  batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
@@ -93,7 +93,7 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
     const plain = createMemory7('nope');
     for (const e of [raw, pinned, plain]) writeEntry(root, e);
 
-    const result = await sleep(ctxFor(root), { noShare: true });
+    const result = await sleepWholeStore(ctxFor(root), { noShare: true });
 
     expect(readEntry(root, raw.id)).not.toBeNull();
     expect(readEntry(root, pinned.id)).not.toBeNull();
@@ -101,7 +101,7 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
     expect(result.audit).toEqual({ errorsRemoved: 1, warningCount: 2 });
     const db = openHippoDb(root);
     try {
-      const forgets = queryAuditEvents(db, { tenantId: 'default', op: 'forget' });
+      const forgets = listAuditEvents(db, { tenantId: 'default', op: 'forget' });
       expect(forgets.map((f) => f.targetId)).toEqual([plain.id]);
       expect(forgets[0]!.actor).toBe('sleep-test');
       expect(String(forgets[0]!.metadata.reason)).toMatch(/^sleep-audit: /);
@@ -158,7 +158,7 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
     const rows = [createMemory7('nope'), createMemory7(CACHE_FACT), { ...createMemory(CACHE_FACT), strength: 0.5 }];
     for (const e of rows) writeEntry(root, e);
 
-    const result = await sleep(ctxFor(root), { dryRun: true, noShare: true });
+    const result = await sleepWholeStore(ctxFor(root), { dryRun: true, noShare: true });
 
     expect(result.deduped?.removed).toBe(1);
     expect(result.audit).toEqual({ errorsRemoved: 1, warningCount: 0 });
@@ -269,7 +269,7 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
     const [loaded] = loadEveryTenantEntries(root);
     const snapshot = new Map([[loaded!.id, structuredClone(loaded!)]]);
 
-    batchWriteAndDelete(
+    batchWriteAndDeleteInFolder(
       root,
       [
         { ...loaded!, strength: 0.5 },

@@ -23,8 +23,8 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
-import { insertRejectedValue, findRejectedValue } from '../../src/store/sqlite/rejection.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { insertRejectedValue, readRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest, normalizeValueForRejection } from '../../src/base/records/rejection-digest.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { runCapture } from '../../src/surface/capture/command.js';
@@ -98,7 +98,7 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
 
     const db = openHippoDb(home);
     try {
-      const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+      const refusals = listAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
       expect(refusals.length).toBe(1);
     } finally {
       closeHippoDb(db);
@@ -146,7 +146,7 @@ describe('case 2: refused supersede audit surface', () => {
 
     const db = openHippoDb(home);
     try {
-      const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+      const refusals = listAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
       expect(refusals.length).toBe(1);
       expect(refusals[0]!.metadata.digest).toBe(rejectionDigest(yContent));
     } finally {
@@ -211,7 +211,7 @@ describe('case 4: legacy-mirror resurrection pin', () => {
     const dbBefore = openHippoDb(home);
     let refusalsBefore: number;
     try {
-      refusalsBefore = queryAuditEvents(dbBefore, { tenantId: 'default', op: 'reject_refusal' }).length;
+      refusalsBefore = listAuditEvents(dbBefore, { tenantId: 'default', op: 'reject_refusal' }).length;
     } finally {
       closeHippoDb(dbBefore);
     }
@@ -223,7 +223,7 @@ describe('case 4: legacy-mirror resurrection pin', () => {
 
     const dbAfter = openHippoDb(home);
     try {
-      const refusalsAfter = queryAuditEvents(dbAfter, { tenantId: 'default', op: 'reject_refusal' });
+      const refusalsAfter = listAuditEvents(dbAfter, { tenantId: 'default', op: 'reject_refusal' });
       expect(refusalsAfter.length).toBe(refusalsBefore + 1);
     } finally {
       closeHippoDb(dbAfter);
@@ -257,7 +257,7 @@ describe('case 5: migration v41 idempotence', () => {
     const db2 = openHippoDb(home);
     try {
       expect(getSchemaVersion(db2)).toBe(LATEST_SCHEMA_VERSION);
-      const row = findRejectedValue(db2, 'default', digest);
+      const row = readRejectedValue(db2, 'default', digest);
       expect(row).not.toBeNull();
       expect(row!.reason).toBe('idempotence check');
     } finally {
@@ -403,7 +403,7 @@ describe('consolidation-loop fix: merge tombstone check', () => {
 
     const dbAfter = openHippoDb(home);
     try {
-      const refusals = queryAuditEvents(dbAfter, { tenantId: 'default', op: 'reject_refusal' });
+      const refusals = listAuditEvents(dbAfter, { tenantId: 'default', op: 'reject_refusal' });
       expect(refusals.length).toBe(1);
     } finally {
       closeHippoDb(dbAfter);
@@ -554,7 +554,7 @@ describe('auto-promoted trace tombstone check', () => {
 
     const db = openHippoDb(home);
     try {
-      const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+      const refusals = listAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
       expect(refusals.length).toBe(1);
       expect(refusals[0]!.metadata.sourceSessionId).toBe(sid);
     } finally {
@@ -615,7 +615,7 @@ describe('merge tombstone check uses the destination tenant', () => {
 
     const dbAfter = openHippoDb(home);
     try {
-      const refusals = queryAuditEvents(dbAfter, { tenantId: 'tenant-a', op: 'reject_refusal' });
+      const refusals = listAuditEvents(dbAfter, { tenantId: 'tenant-a', op: 'reject_refusal' });
       expect(refusals.length).toBe(1);
     } finally {
       closeHippoDb(dbAfter);

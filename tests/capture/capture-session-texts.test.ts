@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 import {
   captureSessionTexts,
@@ -89,7 +89,7 @@ function reject(text: string): void {
 function auditActors(op: 'remember' | 'reject_refusal', tenantId = 'default'): string[] {
   const db = openHippoDb(root);
   try {
-    return queryAuditEvents(db, { tenantId, op }).map((e) => e.actor);
+    return listAuditEvents(db, { tenantId, op }).map((e) => e.actor);
   } finally {
     closeHippoDb(db);
   }

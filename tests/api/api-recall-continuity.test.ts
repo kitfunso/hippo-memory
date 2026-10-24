@@ -151,10 +151,10 @@ describe('api.recall continuity flag', () => {
     expect(scopedResult.continuity!.activeSnapshot?.task).toBe('private task');
   });
 
-  // codex v1.2 round 2 P1: loadLatestHandoff SELECTs were missing the scope
+  // codex v1.2 round 2 P1: readLatestHandoff SELECTs were missing the scope
   // column even after the writer set it. Without scope on the loaded row,
   // a private handoff would surface to no-scope callers.
-  it('loadLatestHandoff returns scope on the row, default-deny rejects private', async () => {
+  it('readLatestHandoff returns scope on the row, default-deny rejects private', async () => {
     initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Public anchor',

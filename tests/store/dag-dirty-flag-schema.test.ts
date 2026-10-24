@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { markSummaryDirtyInTx } from '../../src/store/sqlite/summary-dirty.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -213,7 +213,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     markDirty(hippoRoot, summary.id, 'default', 'test-actor');
     const db = openHippoDb(hippoRoot);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'summary_marked_dirty' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'summary_marked_dirty' });
       expect(events).toHaveLength(1);
       expect(events[0]!.targetId).toBe(summary.id);
       expect(events[0]!.actor).toBe('test-actor');

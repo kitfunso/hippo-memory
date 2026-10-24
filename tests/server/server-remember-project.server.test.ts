@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { adminActor } from '../../src/api/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { promptHookContext } from '../../src/api/prompt-hook.js';
+import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import type { ServerHandle } from '../../src/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -62,7 +62,7 @@ async function hookText(project: string): Promise<string> {
     project: { name: project, legacyName: project },
     payload: { prompt: PROMPT },
   };
-  return (await promptHookContext(ctx, req, { sharedStore: true })).stdout;
+  return (await buildPromptHookContext(ctx, req, { sharedStore: true })).stdout;
 }
 
 beforeEach(() => {

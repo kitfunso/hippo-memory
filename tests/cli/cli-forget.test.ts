@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { runCli as runCliEntry } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -79,7 +79,7 @@ describe('cli forget: raw memory archive', () => {
       const db = openHippoDb(join(home, '.hippo'));
       try {
         expect(db.prepare(`SELECT id FROM memories WHERE id = 'mem_rawa3b'`).get()).toBeUndefined();
-        const events = queryAuditEvents(db, { tenantId: 'default', op: 'archive_raw', limit: 10 });
+        const events = listAuditEvents(db, { tenantId: 'default', op: 'archive_raw', limit: 10 });
         expect(events).toHaveLength(1);
       } finally {
         closeHippoDb(db);
@@ -134,7 +134,7 @@ describe('cli forget --dry-run', () => {
       expect(hasRow(home, 'mem_rawdry2')).toBe(true);
       const db = openHippoDb(join(home, '.hippo'));
       try {
-        expect(queryAuditEvents(db, { tenantId: 'default', op: 'archive_raw', limit: 10 })).toHaveLength(0);
+        expect(listAuditEvents(db, { tenantId: 'default', op: 'archive_raw', limit: 10 })).toHaveLength(0);
       } finally {
         closeHippoDb(db);
       }

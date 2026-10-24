@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -41,7 +41,7 @@ function storeWithTombstone(): string {
 function refusals(root: string, tenantId: string) {
   const db = openHippoDb(root);
   try {
-    return queryAuditEvents(db, { tenantId, op: 'reject_refusal' });
+    return listAuditEvents(db, { tenantId, op: 'reject_refusal' });
   } finally {
     closeHippoDb(db);
   }

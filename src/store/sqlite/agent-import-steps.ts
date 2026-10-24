@@ -13,7 +13,7 @@ import {
   replaceDormantEntry,
 } from './dormant-rows.js';
 import { stampOriginProject } from './entry-row.js';
-import { entryIdTaken, loadEntriesByIds, selectLiveEntriesBySourcePrefix } from './entry-reads.js';
+import { entryIdTaken, readEntriesInIdOrder, listLiveEntriesBySourcePrefix } from './entry-reads.js';
 import { renameEntrySourceAndOrigin, renameEntrySource, setEntryTagsInTx, supersedeEntry } from './entry-writes.js';
 import { gatedWrite } from './gated-write.js';
 import type { StoreFiles } from './open.js';
@@ -41,7 +41,7 @@ interface StepsRun {
 export function liveUnder(db: DatabaseSyncLike, tenantId: string, prefix: string): MemoryEntry[] {
   return [
     ...rowsInPages((after?: EntryCursor) =>
-      selectLiveEntriesBySourcePrefix(db, tenantId, prefix, { limit: READ_PAGE_ROWS, after }),
+      listLiveEntriesBySourcePrefix(db, tenantId, prefix, { limit: READ_PAGE_ROWS, after }),
     ),
   ];
 }
@@ -64,7 +64,7 @@ function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, M
   }
   const outside = [...new Set(plan.steps.flatMap(namedIds))].filter((id) => !rows.has(id));
   for (const ids of chunked(outside)) {
-    for (const row of loadEntriesByIds(db, ids, plan.tenantId)) rows.set(row.id, row);
+    for (const row of readEntriesInIdOrder(db, ids, plan.tenantId)) rows.set(row.id, row);
   }
   const adoptable = plan.steps.every(
     (step) => step.kind !== 'adopt' || (rows.get(step.id)?.source === step.from && !rows.get(step.id)?.supersededBy),

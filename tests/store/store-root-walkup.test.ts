@@ -6,7 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { adminActor, retrieve } from '../../src/api/index.js';
 import { findHippoStoreDir, getHippoRoot, isInitialized } from '../../src/host/project-identity.js';
 import { findHippoRoot } from '../../src/surface/mcp/server.js';
@@ -179,7 +179,7 @@ describe('CLI end to end', () => {
     expect(readEntry(globalStore, entry.id)!.retrievalCount).toBe(before + 1);
     const db = openHippoDb(globalStore);
     try {
-      const contextAudits = queryAuditEvents(db, { tenantId: 'default', op: 'recall' }).filter(
+      const contextAudits = listAuditEvents(db, { tenantId: 'default', op: 'recall' }).filter(
         (e) => e.metadata?.mode === 'context',
       );
       expect(contextAudits).toHaveLength(1);
@@ -193,7 +193,7 @@ describe('CLI end to end', () => {
     expect(await runCliOut(['context', 'absentxylophonezzq'], opts)).toBe('');
     const missedDb = openHippoDb(globalStore);
     try {
-      const audits = queryAuditEvents(missedDb, { tenantId: 'default', op: 'recall' }).filter(
+      const audits = listAuditEvents(missedDb, { tenantId: 'default', op: 'recall' }).filter(
         (e) => e.metadata?.mode === 'context',
       );
       expect(audits).toHaveLength(2);

@@ -2,7 +2,7 @@
  * E3 graph observability + visualization - tests.
  * Docs: docs/plans/2026-06-02-graph-observability.md
  *
- * READ-ONLY over the graph: buildGraphModel (loadEntities/loadRelations), the
+ * READ-ONLY over the graph: buildGraphModel (listEntities/listRelations), the
  * deterministic layout, the self-contained HTML viewer (XSS-escaped), the JSON
  * Canvas export, and the GET /v1/graph route. Real SQLite, no mocks.
  */

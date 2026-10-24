@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { embedMemory } from '../../src/domain/search/embed-memories.js';
+import { embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import { sharedLocalEmbedder } from '../../src/infra/local-embedder.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -24,6 +24,6 @@ describe('embedMemory when the provider availability probe throws', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const entry = createMemory('a memory whose provider probe throws', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, entry);
-    await expect(embedMemory(localIndex(root), entry)).resolves.toBe('failed');
+    await expect(embedMemoryInto(localIndex(root), entry)).resolves.toBe('failed');
   });
 });

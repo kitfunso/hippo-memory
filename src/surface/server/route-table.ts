@@ -30,7 +30,7 @@ import {
   handleForgetMemory,
   handleGetGraph,
   handlePromoteMemory,
-  handleSleep,
+  handleRunSleep,
   handleSupersedeMemory,
 } from './routes/memories.js';
 import { kindRows } from './routes/kind-routes.js';
@@ -157,7 +157,7 @@ export const V1_ROUTES: readonly Route[] = [
     path: '/v1/sleep',
     auth: 'host-admin-local',
     storeReady: 'consolidation',
-    handler: handleSleep,
+    handler: handleRunSleep,
   },
   {
     method: 'POST',

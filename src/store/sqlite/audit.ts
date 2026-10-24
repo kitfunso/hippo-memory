@@ -51,7 +51,7 @@ function auditRowValues(opts: AppendAuditOpts): [string, string, string, string 
   ];
 }
 
-export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions): AuditEvent[] {
+export function listAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions): AuditEvent[] {
   const where: string[] = ['tenant_id = ?'];
   const params: unknown[] = [opts.tenantId];
   if (opts.op) {
@@ -88,7 +88,7 @@ function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: strin
   return Number(result.changes ?? 0);
 }
 
-/** Latest time each target got a good outcome at or after `since`, from the audit rows; unlike queryAuditEvents it has
+/** Latest time each target got a good outcome at or after `since`, from the audit rows; unlike listAuditEvents it has
  * no row cap, and the ts range rides the (tenant_id, ts) index so older rows are never read. */
 export function confirmedOutcomeTimes(db: DatabaseSyncLike, tenantId: string, since: string): Map<string, string> {
   const rows = cachedStatement(

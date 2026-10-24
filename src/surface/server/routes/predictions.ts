@@ -14,7 +14,7 @@ import { parseCursor } from '../../../api/cursor.js';
 import { byCreatedAt, pageOf } from '../cursor.js';
 import type { AuthedRouteRequest } from '../types.js';
 import type { KindRoutes } from './kind-routes.js';
-import { getString, isSetMember, parseJsonBody, parseListLimit, requiredString } from '../validation.js';
+import { getString, isSetMember, parseJsonBody, parseLimitParam, requiredString } from '../validation.js';
 import { isJsonString, isJsonNumber } from '../../../base/util/json.js';
 
 // Routes: /v1/predictions (create, list, show, close), Bearer-authed and tenant-scoped; closure_state is validated
@@ -62,7 +62,7 @@ function listFilter(classTag: string | undefined, status: string): PredictionFil
 async function handleListPredictions({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const classTag = query.get('class') || undefined;
   const status = query.get('status') ?? 'all';
-  const limit = parseListLimit(query.get('limit'));
+  const limit = parseLimitParam(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
   const predictions = await predictionList(ctx, { ...listFilter(classTag, status), limit: limit + 1, after });
   const page = pageOf(predictions, limit, byCreatedAt);

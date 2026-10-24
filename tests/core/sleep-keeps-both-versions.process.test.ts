@@ -11,7 +11,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import * as api from '../../src/api/index.js';
@@ -332,7 +332,7 @@ describe('merge caps', () => {
     );
     const db = openHippoDb(root);
     try {
-      expect(queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' })[0].metadata.sourceIds).toEqual(
+      expect(listAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' })[0].metadata.sourceIds).toEqual(
         rows.slice(0, 5).map((e) => e.id),
       );
     } finally {

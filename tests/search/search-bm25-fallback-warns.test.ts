@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'v
 import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { embedMemory } from '../../src/domain/search/embed-memories.js';
+import { embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -52,7 +52,7 @@ describe('hybridSearch BM25 fallback', () => {
     );
     const entry = createMemory('the deploy runs on fridays');
     writeEntry(root, entry);
-    await embedMemory(localIndex(root), entry);
+    await embedMemoryInto(localIndex(root), entry);
     useModel('another-model');
 
     const entries = loadAllEntries(root, 'default');
@@ -71,7 +71,7 @@ describe('hybridSearch BM25 fallback', () => {
     );
     const entry = createMemory('the deploy runs on fridays');
     writeEntry(root, entry);
-    await embedMemory(localIndex(root), entry);
+    await embedMemoryInto(localIndex(root), entry);
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response('upstream down', { status: 500 })),

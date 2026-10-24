@@ -7,7 +7,7 @@ import { archiveRawMemory } from './raw-archive.js';
 import { MEMORY_CONFLICT_COLUMNS, type MemoryConflictRow, parseJsonArray, rowToMemoryConflict } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
-import { selectEntriesByIds } from './entry-reads.js';
+import { readEntriesByIds } from './entry-reads.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ownScopeTouches } from '../../base/scope/recall-scope.js';
 import type { Handles, StoreFiles } from './open.js';
@@ -154,7 +154,7 @@ export function replaceDetectedConflicts(
   detectedAt: string = new Date().toISOString(),
 ): void {
   const changedIds = writeConflictRefresh(db, readConflictRefresh(db, detected), detected, detectedAt);
-  syncChangedMirrors(files.hippoRoot, db, [...selectEntriesByIds(db, changedIds, ALL_TENANTS).values()]);
+  syncChangedMirrors(files.hippoRoot, db, [...readEntriesByIds(db, changedIds, ALL_TENANTS).values()]);
 }
 
 /** The tenant of every memory the refresh can compare, and each stored conflicts_with_json other than '[]', read before
@@ -369,7 +369,7 @@ function resolveConflict(
   });
   if (removal === null) return false;
   const { keep, loser } = resolution;
-  syncChangedMirrors(files.hippoRoot, db, [...selectEntriesByIds(db, [keep.id, loser.id], tenantId).values()]);
+  syncChangedMirrors(files.hippoRoot, db, [...readEntriesByIds(db, [keep.id, loser.id], tenantId).values()]);
   if (removal.loserRemoved) purgeRemovedLoserMirrors(files.hippoRoot, db, loser.id, removal);
   return true;
 }

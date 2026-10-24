@@ -12,7 +12,7 @@ import {
   type CreateMemoryOptions,
   type MemoryEntry,
 } from '../../src/base/memory/memory.js';
-import { loadRecallSearchEntries } from '../../src/store/sqlite/fixtures.js';
+import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   canReadScope,
@@ -35,8 +35,8 @@ import {
   loadLatestHandoff,
   loadVectorCandidateEntries,
   writeEntry,
-  batchWriteAndDelete,
-  loadAmbientTallies,
+  batchWriteAndDeleteInFolder,
+  countAmbientInFolder,
   loadAllEntries,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
@@ -62,7 +62,7 @@ function seed(): void {
   const rows = Object.entries(SCOPES).map(([k, scope]) =>
     mem(`zebrafish note ${k} keeps the build cache warm`, { scope, tags: [`who:${k}`, 'path:hippo'] }),
   );
-  batchWriteAndDelete(root, rows, []);
+  batchWriteAndDeleteInFolder(root, rows, []);
   saveEmbeddingIndex(root, Object.fromEntries(rows.map((e) => [e.id, QUERY])));
   for (const k of ['a', 'b', 'team'] as const) {
     writeEntry(
@@ -92,7 +92,7 @@ describe('owner-taking read sites', () => {
   it('lexical recall: A sees its row, B and no-owner do not', () => {
     const load = (own?: string): string[] =>
       keysOf(
-        loadRecallSearchEntries(root, 'zebrafish', {
+        listRecallEntriesInFolder(root, 'zebrafish', {
           limit: 50,
           tenantId: T,
           explicitScopeMode: 'exact',
@@ -108,7 +108,7 @@ describe('owner-taking read sites', () => {
   it("additive recall: a personal scope adds only the caller's own row, a connector scope adds its rows", () => {
     const load = (scope: string, own?: string): string[] =>
       keysOf(
-        loadRecallSearchEntries(root, 'zebrafish', {
+        listRecallEntriesInFolder(root, 'zebrafish', {
           limit: 50,
           tenantId: T,
           requestedScope: scope,
@@ -154,7 +154,7 @@ describe('owner-taking read sites', () => {
 
   it('ambient tallies: A counts its row, B and no-owner do not', () => {
     const tags = (ownScope?: string): string[] =>
-      [...loadAmbientTallies(root, T, { ownScope, currentProject: [], now }).tagCounts.keys()]
+      [...countAmbientInFolder(root, T, { ownScope, currentProject: [], now }).tagCounts.keys()]
         .filter((t) => t.startsWith('who:'))
         .sort();
     expect(tags(OWN_A)).toEqual(['who:a', 'who:team']);

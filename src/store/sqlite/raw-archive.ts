@@ -33,7 +33,7 @@ export function markMirrorCleaned(db: DatabaseSyncLike, memoryId: string, at: st
 const IDS = 'SELECT value FROM json_each(?)';
 
 /** The rows behind `ids`, in their order; throws for the first one that is missing or not raw. */
-function loadRawRows(db: DatabaseSyncLike, ids: readonly string[]): ArchivedMemoryRow[] {
+function readRawRows(db: DatabaseSyncLike, ids: readonly string[]): ArchivedMemoryRow[] {
   // SAFETY: the four selected columns are the interface's keys, each a memories column.
   const rows = cachedStatement(db, `SELECT id, kind, tenant_id, dag_parent_id FROM memories WHERE id IN (${IDS})`).all(
     JSON.stringify(ids),
@@ -109,7 +109,7 @@ function markParentsDirty(db: DatabaseSyncLike, rows: readonly ArchivedMemoryRow
 /** archiveRawMemory for every row in `ids` in one write scope, in the same few statements for one row or many; throws,
  * archiving none, if any is missing or not raw. Returns the archived_at. */
 export function archiveRawMemories(db: DatabaseSyncLike, ids: readonly string[], opts: ArchiveOptions): string {
-  const rows = loadRawRows(db, [...new Set(ids)]);
+  const rows = readRawRows(db, [...new Set(ids)]);
   // A SAVEPOINT when already inside a transaction (e.g. batchWriteAndDelete), so a throw here rolls back only this
   // archive.
   return withWriteScope(db, 'archive_raw', () => {

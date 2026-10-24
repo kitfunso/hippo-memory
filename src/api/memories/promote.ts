@@ -4,7 +4,7 @@ import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors
 import type { ConnectorEvent, StoreHome } from '../../store/port.js';
 import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
-import { embedMemoryDetached, folderIndex } from '../../domain/search/embed-memories.js';
+import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';
 import { globalTargetOf } from '../infra.js';
 import { sharedStoreOf, type Context, type ContextWith } from '../types.js';
 import { canReadScope, isPersonalScope, isQuarantineScope, scopeReaderOf } from '../../base/scope/recall-scope.js';
@@ -34,7 +34,7 @@ export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Prom
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
   // A promote may create the global store, which only the write target names before it exists.
-  embedMemoryDetached(folderIndex(target), globalEntry);
+  embedMemoryDetached(folderEmbedTarget(target), globalEntry);
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 

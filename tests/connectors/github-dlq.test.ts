@@ -1,7 +1,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { parkInDlq, listDlq } from '../../src/surface/connectors/dlq.js';
-import { githubDlq, replayDlqEntry, type DlqBucket } from '../../src/surface/connectors/github/dlq.js';
+import { githubDlq, replayGithubDlqEntry, type DlqBucket } from '../../src/surface/connectors/github/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -128,15 +128,15 @@ describe('github DLQ', () => {
     expect((await events.deadLetter('github', 'default', id))?.retryCount).toBe(0);
   });
 
-  it('replayDlqEntry returns not_found for unknown ids', async () => {
-    const result = await replayDlqEntry(ctx, 9999);
+  it('replayGithubDlqEntry returns not_found for unknown ids', async () => {
+    const result = await replayGithubDlqEntry(ctx, 9999);
     expect(result.ok).toBe(false);
     expect(result.status).toBe('not_found');
     expect(result.memoryId).toBeNull();
     expect(result.retryCount).toBe(0);
   });
 
-  it('replayDlqEntry on parse-error payload bumps retry_count and reports parse_error', async () => {
+  it('replayGithubDlqEntry on parse-error payload bumps retry_count and reports parse_error', async () => {
     const id = await parkInDlq(githubDlq, sqliteStore(root), {
       tenantId: 'default',
       rawPayload: 'not-json{{{',
@@ -144,7 +144,7 @@ describe('github DLQ', () => {
       bucket: 'parse_error',
     });
 
-    const result = await replayDlqEntry(ctx, id);
+    const result = await replayGithubDlqEntry(ctx, id);
     expect(result.ok).toBe(false);
     expect(result.status).toBe('parse_error');
     expect(result.retryCount).toBe(1);
@@ -154,14 +154,14 @@ describe('github DLQ', () => {
     expect(after!.retriedAt).not.toBeNull();
   });
 
-  it("replayDlqEntry finds an unroutable row and counts the retry on it, but answers not_found for another tenant's row", async () => {
+  it("replayGithubDlqEntry finds an unroutable row and counts the retry on it, but answers not_found for another tenant's row", async () => {
     const store = sqliteStore(root);
     const unroutable = await parkInDlq(githubDlq, store, { tenantId: null, rawPayload: 'x{', error: 'no tenant' });
     const acmes = await parkInDlq(githubDlq, store, { tenantId: 'acme', rawPayload: 'x{', error: 'acme row' });
 
-    expect(await replayDlqEntry(ctx, unroutable)).toMatchObject({ status: 'parse_error', retryCount: 1 });
+    expect(await replayGithubDlqEntry(ctx, unroutable)).toMatchObject({ status: 'parse_error', retryCount: 1 });
     expect((await store.connectorEvents.deadLetter('github', '__unroutable__', unroutable))?.retryCount).toBe(1);
-    expect(await replayDlqEntry(ctx, acmes)).toMatchObject({ status: 'not_found', retryCount: 0 });
+    expect(await replayGithubDlqEntry(ctx, acmes)).toMatchObject({ status: 'not_found', retryCount: 0 });
     expect((await store.connectorEvents.deadLetter('github', 'acme', acmes))?.retryCount).toBe(0);
   });
 });

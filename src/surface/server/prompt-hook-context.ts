@@ -2,7 +2,7 @@
 // entry's real ports, so the add-on renders what the hippo server would.
 import { contextReach, type ContextReach, type EntryContext } from '../../api/index.js';
 import {
-  promptHookContext as renderPromptHook,
+  buildPromptHookContext as renderPromptHook,
   type PromptHookOptions,
   type PromptHookRequest,
 } from '../../api/prompt-hook.js';

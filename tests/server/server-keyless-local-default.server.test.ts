@@ -5,7 +5,7 @@ import { request } from 'node:http';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { ServerHandle } from '../../src/server.js';
 import { presentConnectionsAsRemote } from '../_helpers/listen.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -91,7 +91,7 @@ function remember(content: string, headers: Readonly<Record<string, string>> = {
 function rememberActors(): string[] {
   const db = openHippoDb(home);
   try {
-    return queryAuditEvents(db, { tenantId: 'default', op: 'remember' }).map((event) => event.actor);
+    return listAuditEvents(db, { tenantId: 'default', op: 'remember' }).map((event) => event.actor);
   } finally {
     closeHippoDb(db);
   }

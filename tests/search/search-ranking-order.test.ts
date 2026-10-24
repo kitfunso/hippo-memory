@@ -9,7 +9,7 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
-import { search } from '../../src/domain/search/bm25-search.js';
+import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import type { ScoreBreakdown, SearchResult } from '../../src/base/rank/search-types.js';
 import type { RerankerFn } from '../../src/base/ports/reranker.js';
@@ -107,13 +107,13 @@ describe('sync BM25 search', () => {
   const base = { now: NOW, budget: 100_000 };
 
   it('ranks by matched terms, adds a summary child with no shared word, and drops the superseded row', () => {
-    const res = search('deploy pipeline', clone(), base);
+    const res = rankBm25('deploy pipeline', clone(), base);
     expectRanked(res, ['x1', 'd1', 's1', 'c1', 'n1', 'd5', 'd2', 'd6', 'd3', 'd4']);
     expect(res.find((r) => r.entry.id === 'c1')!.bm25).toBe(0);
   });
 
   it('a temporal cue lifts the newer rows', () => {
-    expectRanked(search('latest deploy pipeline', clone(), base), [
+    expectRanked(rankBm25('latest deploy pipeline', clone(), base), [
       'x1',
       'd1',
       's1',
@@ -125,19 +125,19 @@ describe('sync BM25 search', () => {
       'd4',
       'd3',
     ]);
-    expectRanked(search('first deploy', clone(), base), ['d2', 'x1', 'd1', 's1', 'n1', 'c1', 'd3', 'd5', 'd6']);
+    expectRanked(rankBm25('first deploy', clone(), base), ['d2', 'x1', 'd1', 's1', 'n1', 'c1', 'd3', 'd5', 'd6']);
   });
 
   it('a query that names the summary and its child returns the summary first', () => {
-    expectRanked(search('weekend freeze summary topic', clone(), base), ['s1', 'c1']);
+    expectRanked(rankBm25('weekend freeze summary topic', clone(), base), ['s1', 'c1']);
   });
 
   it('asOf before the successor took over returns the old row alone', () => {
-    expectRanked(search('deploy pipeline', clone(), { ...base, asOf: ago(50) }), ['o1']);
+    expectRanked(rankBm25('deploy pipeline', clone(), { ...base, asOf: ago(50) }), ['o1']);
   });
 
   it('includeSuperseded keeps the old row in the list', () => {
-    expectRanked(search('deploy pipeline', clone(), { ...base, includeSuperseded: true }), [
+    expectRanked(rankBm25('deploy pipeline', clone(), { ...base, includeSuperseded: true }), [
       'x1',
       'd1',
       's1',
@@ -153,7 +153,7 @@ describe('sync BM25 search', () => {
   });
 
   it('a small budget still returns minResults rows', () => {
-    expectRanked(search('deploy pipeline', clone(), { now: NOW, budget: 20, minResults: 2 }), ['x1', 'd1']);
+    expectRanked(rankBm25('deploy pipeline', clone(), { now: NOW, budget: 20, minResults: 2 }), ['x1', 'd1']);
   });
 });
 
@@ -347,7 +347,7 @@ describe('hybrid and physics with a store', () => {
   it('physics with no provider falls back to the BM25 order', async () => {
     vi.stubEnv('OPENAI_API_KEY', undefined);
     const res = await physicsSearch('deploy pipeline', clone(), opts());
-    expectRanked(res, ids(search('deploy pipeline', clone(), { now: NOW, budget: 100_000 })));
+    expectRanked(res, ids(rankBm25('deploy pipeline', clone(), { now: NOW, budget: 100_000 })));
     expect(res.every((r) => r.cosine === 0)).toBe(true);
     expect(new Set(res.flatMap((r) => r.breakdown?.mode ?? []))).toEqual(new Set(['bm25-only']));
   });

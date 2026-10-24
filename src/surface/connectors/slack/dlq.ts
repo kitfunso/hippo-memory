@@ -36,7 +36,7 @@ export interface ReplayDlqOptions {
 
 /** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`), re-verifying the signature
  * with the CURRENT secret unless forced. A NULL signature needs --force; replays use today's routing. */
-export async function replayDlqEntry(
+export async function replaySlackDlqEntry(
   ctx: Pick<Context, 'tenantId' | 'store' | 'config' | 'infra'>,
   id: number,
   opts: ReplayDlqOptions = {},

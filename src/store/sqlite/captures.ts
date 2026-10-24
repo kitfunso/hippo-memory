@@ -8,7 +8,7 @@ import { gatedWrite } from './gated-write.js';
 import { updateStatsOn } from './index-and-stats.js';
 import type { Handles, StoreFiles } from './open.js';
 import type { CaptureDedup, CaptureWriteOptions, CapturedOutcome, Captures } from '../port/capture.js';
-import { loadTextsHolding } from './candidates.js';
+import { listTextsHolding } from './candidates.js';
 import { EVERY_SCOPE } from './rule-sql.js';
 import { openStore } from './handles.js';
 import { bound, skipEmpty, type Bodies } from './bound.js';
@@ -17,7 +17,7 @@ import { bound, skipEmpty, type Bodies } from './bound.js';
 function heldKeys(db: DatabaseSyncLike, entries: readonly MemoryEntry[], dedup: CaptureDedup): Set<string> {
   const texts = entries.map((entry) => entry.content);
   const admit = dedup.everyScope ? EVERY_SCOPE : undefined;
-  return storedTextKeys(loadTextsHolding(db, dedup.tenantId, texts, dedup.project, admit));
+  return storedTextKeys(listTextsHolding(db, dedup.tenantId, texts, dedup.project, admit));
 }
 
 /** One outcome per entry, in order, in one transaction that reads the caller's dedup again first, so a text another
@@ -49,7 +49,7 @@ function writeCapturedEntries(
 
 const capturedTextsBodies: Bodies<Pick<Captures, 'textsHolding'>> = {
   textsHolding: (db, tenantId, texts, { project, everyScope } = {}) =>
-    loadTextsHolding(db, tenantId, texts, project, everyScope ? EVERY_SCOPE : undefined),
+    listTextsHolding(db, tenantId, texts, project, everyScope ? EVERY_SCOPE : undefined),
 };
 
 export function sqliteCaptures({ on, files }: Handles): Captures {

@@ -43,7 +43,7 @@ export type IngestHook = (
 
 /** Replay a DLQ row through the normal ingest path; a failed signature, parse or envelope check bumps retry_count.
  * No `ingestHook` (dry-run): bumps retry_count, returns `replayed` with memoryId=null. Replays use today's routing. */
-export async function replayDlqEntry(
+export async function replayGithubDlqEntry(
   ctx: Context,
   id: number,
   opts: ReplayDlqOptions & { ingestHook?: IngestHook } = {},

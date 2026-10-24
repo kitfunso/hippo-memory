@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import type { Rejection } from '../../src/store/port/rejections.js';
@@ -145,7 +145,7 @@ describe('rejections.apply across pages', () => {
         mergedText('[Consolidated from 1 related memory, newest first]', [OTHER]),
       );
       expect(readDormantSnapshot(db, 'default', dormant.unrelated)).not.toBeNull();
-      expect(queryAuditEvents(db, { tenantId: 'default', op: 'reject_value' })).toMatchObject([
+      expect(listAuditEvents(db, { tenantId: 'default', op: 'reject_value' })).toMatchObject([
         { metadata: { digest: rejectionDigest(VALUE), removedIds: removed, count: removed.length } },
       ]);
     });

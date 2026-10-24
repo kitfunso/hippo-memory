@@ -104,7 +104,7 @@ function idByMemory<K extends ObjectKind>(
   return row ? row.id : null;
 }
 
-function selectRow<K extends ObjectKind>(
+function readRow<K extends ObjectKind>(
   db: DatabaseSyncLike,
   kind: K,
   tenantId: string,
@@ -124,7 +124,7 @@ function rowById<K extends ObjectKind>(
   kind: K,
   id: number,
 ): ObjectByKind[K] | null {
-  const row = selectRow(db, kind, tenantId, id);
+  const row = readRow(db, kind, tenantId, id);
   return row ? rowSpec(kind).rowTo(row) : null;
 }
 
@@ -185,7 +185,7 @@ function closeRow<K extends ObjectKind>(
         existing ? { refused: 'status', status: existing.status } : { refused: 'missing' },
       );
     }
-    const row = selectRow(db, kind, tenantId, id);
+    const row = readRow(db, kind, tenantId, id);
     if (!row) return rollback<ObjectRefusal>({ refused: 'vanished' });
     appendAuditEvents(db, [{ tenantId, actor: close.actor, ...closeAudit(kind, id) }]);
     return spec.rowTo(row);
@@ -293,7 +293,7 @@ function writeObjectRow<K extends SavableKind>(
   const row: NewRow<K> = { tenantId, kind, memoryId, save, version: next.version };
   const id = insertRow(db, row);
   if (replaced !== undefined && !supersedeRow(db, row, replaced, id)) return { refused: 'raced' };
-  const saved = selectRow(db, kind, tenantId, id);
+  const saved = readRow(db, kind, tenantId, id);
   if (!saved) return { refused: 'vanished' };
   appendAuditEvents(db, [{ tenantId, actor: save.actor, ...createAudit(kind, id, save.fields, next.version) }]);
   return saved;
@@ -398,7 +398,7 @@ function openIncidentRow(
   `,
   ).run(memoryId, tenantId, incidentText, context ?? null, JSON.stringify(linkedMemoryIds), open.at);
   const id = Number(result.lastInsertRowid ?? 0);
-  const row = selectRow(db, 'incident', tenantId, id);
+  const row = readRow(db, 'incident', tenantId, id);
   if (!row) return { refused: 'vanished' };
   appendAuditEvents(db, [{ tenantId, actor: open.actor, ...incidentOpenAudit(id, open.fields) }]);
   return row;
@@ -437,7 +437,7 @@ function resolveRow(
         existing ? { refused: 'status', status: existing.status } : { refused: 'missing' },
       );
     }
-    const row = selectRow(db, 'incident', tenantId, id);
+    const row = readRow(db, 'incident', tenantId, id);
     if (!row) return rollback<ObjectRefusal>({ refused: 'vanished' });
     appendAuditEvents(db, [
       {

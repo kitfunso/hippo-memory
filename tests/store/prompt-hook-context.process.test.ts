@@ -10,7 +10,7 @@ import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 import { hashArm } from '../../src/base/session/pilot-arm.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';
-import { promptHookContext } from '../../src/api/prompt-hook.js';
+import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { HIPPO_PINNED_INJECT_COMMAND } from '../../src/domain/hooks/shared.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
@@ -165,12 +165,12 @@ describe('promptHookContext', () => {
     expect(project).toMatchObject({ name: 'acme-proj', legacyName: 'proj', aliases: ['github.com/acme/proj', 'proj'] });
     const ctx = ctxFor(srvStore);
     const staticHash = expect.stringMatching(BLOCK_HASH_RE);
-    expect(await promptHookContext(ctx, { sessionId: 'parity', project, payload: withPrompt })).toEqual({
+    expect(await buildPromptHookContext(ctx, { sessionId: 'parity', project, payload: withPrompt })).toEqual({
       arm: null,
       stdout: expected[0],
       staticHash,
     });
-    expect(await promptHookContext(ctx, { sessionId: 'parity-recent', project, payload: noPrompt })).toEqual({
+    expect(await buildPromptHookContext(ctx, { sessionId: 'parity-recent', project, payload: noPrompt })).toEqual({
       arm: null,
       stdout: expected[1],
       staticHash,
@@ -187,7 +187,7 @@ describe('promptHookContext', () => {
       sessionId: 'state-only',
     });
     const payload: HookPayload = { session_id: 'state-only', hook_event_name: 'UserPromptSubmit' };
-    const out = await promptHookContext(ctxFor(store), { sessionId: 'state-only', project: PROJECT_P, payload });
+    const out = await buildPromptHookContext(ctxFor(store), { sessionId: 'state-only', project: PROJECT_P, payload });
     expect(out.stdout).toContain('Active Task Snapshot');
     expect(localHook(dir, { ...payload, session_id: 'state-only-cli' })).toContain('Active Task Snapshot');
   });
@@ -195,7 +195,7 @@ describe('promptHookContext', () => {
   it('rate 10000: books a holdout arm row and prints nothing, as the local holdout does', async () => {
     const store = makeProject(path.join(tmp, 'p'), 10000);
     pin(store, 'PINNED: always check the rollback plan', 'p');
-    expect(await promptHookContext(ctxFor(store), { sessionId: 'h1', project: PROJECT_P })).toEqual({
+    expect(await buildPromptHookContext(ctxFor(store), { sessionId: 'h1', project: PROJECT_P })).toEqual({
       arm: 'holdout',
       ...NOTHING,
     });
@@ -208,7 +208,7 @@ describe('promptHookContext', () => {
   it('books the holdout arm row under the caller tenant, never the default one', async () => {
     const store = makeProject(path.join(tmp, 'p'), 10000);
     const ctx: FullContext = apiCtx(store, 't1', adminActor('prompt-hook-test'));
-    expect(await promptHookContext(ctx, { sessionId: 'h-t1', project: PROJECT_P })).toEqual({
+    expect(await buildPromptHookContext(ctx, { sessionId: 'h-t1', project: PROJECT_P })).toEqual({
       arm: 'holdout',
       ...NOTHING,
     });
@@ -219,7 +219,7 @@ describe('promptHookContext', () => {
     const store = makeProject(path.join(tmp, 'p'), 5000);
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const id = sessionFor('hippo', 5000);
-    const reply = await promptHookContext(ctxFor(store), { sessionId: id, project: PROJECT_P });
+    const reply = await buildPromptHookContext(ctxFor(store), { sessionId: id, project: PROJECT_P });
     expect(reply.arm).toBe('hippo');
     expect(reply.stdout).toContain('rollback plan');
     expect(ledger(store, `event = 'arm'`).map((r) => [r.session_id, r.block_hash, r.items])).toEqual([
@@ -230,7 +230,7 @@ describe('promptHookContext', () => {
   it('rate 0: arm is null and no arm row is booked', async () => {
     const store = makeProject(path.join(tmp, 'p'), 0);
     pin(store, 'PINNED: always check the rollback plan', 'p');
-    const reply = await promptHookContext(ctxFor(store), { sessionId: 'z0', project: PROJECT_P });
+    const reply = await buildPromptHookContext(ctxFor(store), { sessionId: 'z0', project: PROJECT_P });
     expect(reply.arm).toBeNull();
     expect(reply.stdout).toContain('rollback plan');
     expect(ledger(store, `event = 'arm'`)).toEqual([]);
@@ -240,14 +240,14 @@ describe('promptHookContext', () => {
     const store = makeProject(path.join(tmp, 'p'), 10000);
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const ctx = ctxFor(store);
-    await promptHookContext(ctx, { sessionId: 'parent', project: PROJECT_P });
-    const sub = await promptHookContext(ctx, {
+    await buildPromptHookContext(ctx, { sessionId: 'parent', project: PROJECT_P });
+    const sub = await buildPromptHookContext(ctx, {
       sessionId: 'parent',
       project: PROJECT_P,
       payload: { session_id: 'parent', agent_id: 'a1' },
     });
     expect(sub).toEqual({ arm: 'holdout', ...NOTHING });
-    const lonely = await promptHookContext(ctx, {
+    const lonely = await buildPromptHookContext(ctx, {
       sessionId: 'lonely',
       project: PROJECT_P,
       payload: { session_id: 'lonely', agent_id: 'a2' },
@@ -260,11 +260,11 @@ describe('promptHookContext', () => {
     const store = makeProject(path.join(tmp, 'p'));
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const ctx = ctxFor(store);
-    const first = await promptHookContext(ctx, { sessionId: 'again', project: PROJECT_P });
+    const first = await buildPromptHookContext(ctx, { sessionId: 'again', project: PROJECT_P });
     expect(first.stdout).toContain('rollback plan');
     expect(first.staticHash).toMatch(BLOCK_HASH_RE);
     const printedHash = first.staticHash ?? undefined;
-    expect(await promptHookContext(ctx, { sessionId: 'again', project: PROJECT_P, printedHash })).toEqual({
+    expect(await buildPromptHookContext(ctx, { sessionId: 'again', project: PROJECT_P, printedHash })).toEqual({
       arm: null,
       ...NOTHING,
     });
@@ -275,9 +275,9 @@ describe('promptHookContext', () => {
     const store = makeProject(path.join(tmp, 'p'));
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const ctx = ctxFor(store);
-    const first = await promptHookContext(ctx, { sessionId: 'lost', project: PROJECT_P });
+    const first = await buildPromptHookContext(ctx, { sessionId: 'lost', project: PROJECT_P });
     // A reply lost on the way, or a compaction the server never saw: the caller has no hash to send.
-    const second = await promptHookContext(ctx, { sessionId: 'lost', project: PROJECT_P });
+    const second = await buildPromptHookContext(ctx, { sessionId: 'lost', project: PROJECT_P });
     expect(second).toEqual(first);
     expect(ledger(store, `event = 'inject' AND surface = 'hook'`).map((r) => r.block_hash)).toEqual([
       first.staticHash,
@@ -290,9 +290,9 @@ describe('promptHookContext', () => {
     const store = makeProject(path.join(tmp, 'p'));
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const ctx = ctxFor(store);
-    const first = await promptHookContext(ctx, { sessionId: 'old', project: PROJECT_P });
+    const first = await buildPromptHookContext(ctx, { sessionId: 'old', project: PROJECT_P });
     pin(store, 'PINNED: the canary runs for an hour before the full rollout', 'p');
-    const second = await promptHookContext(ctx, {
+    const second = await buildPromptHookContext(ctx, {
       sessionId: 'old',
       project: PROJECT_P,
       printedHash: first.staticHash ?? undefined,
@@ -307,9 +307,9 @@ describe('promptHookContext', () => {
     const store = makeProject(path.join(tmp, 'p'));
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const ctx = ctxFor(store);
-    const first = await promptHookContext(ctx, { sessionId: 'wrong', project: PROJECT_P });
+    const first = await buildPromptHookContext(ctx, { sessionId: 'wrong', project: PROJECT_P });
     const printedHash = first.staticHash === '0123456789abcdef' ? 'fedcba9876543210' : '0123456789abcdef';
-    expect(await promptHookContext(ctx, { sessionId: 'wrong', project: PROJECT_P, printedHash })).toEqual(first);
+    expect(await buildPromptHookContext(ctx, { sessionId: 'wrong', project: PROJECT_P, printedHash })).toEqual(first);
     expect(ledger(store, `event = 'skip'`)).toEqual([]);
   });
 
@@ -318,12 +318,12 @@ describe('promptHookContext', () => {
     fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ pinnedInject: { refreshTurns: 2 } }));
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const ctx = ctxFor(store);
-    const first = await promptHookContext(ctx, { sessionId: 'refresh', project: PROJECT_P });
+    const first = await buildPromptHookContext(ctx, { sessionId: 'refresh', project: PROJECT_P });
     const printedHash = first.staticHash ?? undefined;
     const sent: boolean[] = [];
     for (let i = 0; i < 4; i++) {
       sent.push(
-        (await promptHookContext(ctx, { sessionId: 'refresh', project: PROJECT_P, printedHash })).stdout !== '',
+        (await buildPromptHookContext(ctx, { sessionId: 'refresh', project: PROJECT_P, printedHash })).stdout !== '',
       );
     }
     expect(sent).toEqual([false, false, true, false]);
@@ -337,14 +337,14 @@ describe('promptHookContext', () => {
   ])('rejects a printed hash in %s as a bad request', async (_name, printedHash) => {
     const store = makeProject(path.join(tmp, 'p'));
     await expect(
-      promptHookContext(ctxFor(store), { sessionId: 's', project: PROJECT_P, printedHash }),
+      buildPromptHookContext(ctxFor(store), { sessionId: 's', project: PROJECT_P, printedHash }),
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
   it('gives a sub-agent the block but no hash to record', async () => {
     const store = makeProject(path.join(tmp, 'p'), 0);
     pin(store, 'PINNED: always check the rollback plan', 'p');
-    const sub = await promptHookContext(ctxFor(store), {
+    const sub = await buildPromptHookContext(ctxFor(store), {
       sessionId: 'parent',
       project: PROJECT_P,
       payload: { session_id: 'parent', agent_id: 'a1' },
@@ -357,7 +357,7 @@ describe('promptHookContext', () => {
     const store = makeProject(path.join(tmp, 'p'), 10000);
     for (const tenantId of ['t-a', 't-b']) {
       const ctx: FullContext = apiCtx(store, tenantId, adminActor('prompt-hook-test'));
-      expect((await promptHookContext(ctx, { sessionId: 'same-id', project: PROJECT_P })).arm).toBe('holdout');
+      expect((await buildPromptHookContext(ctx, { sessionId: 'same-id', project: PROJECT_P })).arm).toBe('holdout');
     }
     expect(ledger(store, `event = 'arm'`).map((r) => r.tenant_id)).toEqual(['t-a', 't-b']);
   });
@@ -372,7 +372,7 @@ describe('promptHookContext', () => {
     ],
   ])('rejects %s as a bad request', async (_name, req) => {
     const store = makeProject(path.join(tmp, 'p'));
-    await expect(promptHookContext(ctxFor(store), req)).rejects.toBeInstanceOf(BadRequestError);
+    await expect(buildPromptHookContext(ctxFor(store), req)).rejects.toBeInstanceOf(BadRequestError);
   });
 
   it('takes ten aliases at the length cap', async () => {
@@ -380,7 +380,7 @@ describe('promptHookContext', () => {
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const aliases = Array.from({ length: 10 }, (_, i) => `${i}`.padEnd(MAX_ID_LEN, 'a'));
     expect(
-      (await promptHookContext(ctxFor(store), { sessionId: 's', project: { ...PROJECT_P, aliases } })).stdout,
+      (await buildPromptHookContext(ctxFor(store), { sessionId: 's', project: { ...PROJECT_P, aliases } })).stdout,
     ).toContain('rollback plan');
   });
 });
@@ -388,7 +388,7 @@ describe('promptHookContext', () => {
 describe('promptHookContext on a shared store', () => {
   const SHARED = { sharedStore: true } as const;
   const ask = (store: string, sessionId: string, shared: boolean): Promise<{ arm: string | null; stdout: string }> =>
-    promptHookContext(ctxFor(store), { sessionId, project: PROJECT_P }, shared ? SHARED : undefined);
+    buildPromptHookContext(ctxFor(store), { sessionId, project: PROJECT_P }, shared ? SHARED : undefined);
 
   it('keeps only the caller project rows in the recent tail; pins are unchanged', async () => {
     const store = makeProject(path.join(tmp, 'p'));
@@ -432,7 +432,11 @@ describe('promptHookContext on a shared store', () => {
     );
     expect((await ask(store, 'someone-else', false)).stdout).toContain('Active Task Snapshot');
     const otherCtx: FullContext = { ...ctxFor(store), actor: { subject: 'api_key:hk_other', role: 'member' } };
-    const other = await promptHookContext(otherCtx, { sessionId: 'someone-else-shared', project: PROJECT_P }, SHARED);
+    const other = await buildPromptHookContext(
+      otherCtx,
+      { sessionId: 'someone-else-shared', project: PROJECT_P },
+      SHARED,
+    );
     expect(other.stdout).toContain('rollback plan');
     expect(other.stdout).not.toContain('Active Task Snapshot');
     expect((await ask(store, 'owner-next-session', true)).stdout).toContain('Active Task Snapshot');

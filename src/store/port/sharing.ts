@@ -35,7 +35,7 @@ export interface SourceTally {
   first: string;
 }
 
-/** Row traits any one of which lets a row through loadEntriesWithSignals. */
+/** Row traits any one of which lets a row through listEntriesWithSignals. */
 export interface EntrySignals {
   tags: readonly string[];
   sourcePrefix: string;

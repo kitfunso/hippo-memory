@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { writeEntry, loadAllEntries, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -76,7 +76,7 @@ describe('batchWriteAndDelete', () => {
     const toWrite1 = createMemory('batch written 1');
     const toWrite2 = createMemory('batch written 2');
 
-    batchWriteAndDelete(tmpDir, [toWrite1, toWrite2], [toDelete1.id, toDelete2.id]);
+    batchWriteAndDeleteInFolder(tmpDir, [toWrite1, toWrite2], [toDelete1.id, toDelete2.id]);
 
     const all = loadAllEntries(tmpDir, 'default');
     const ids = all.map((e) => e.id);
@@ -92,7 +92,7 @@ describe('batchWriteAndDelete', () => {
     const entry = createMemory('existing');
     writeEntry(tmpDir, entry);
 
-    batchWriteAndDelete(tmpDir, [], []);
+    batchWriteAndDeleteInFolder(tmpDir, [], []);
 
     const all = loadAllEntries(tmpDir, 'default');
     expect(all.length).toBe(1);

@@ -2,13 +2,19 @@ import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest, normalizeValueForRejection } from '../../src/base/records/rejection-digest.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { deleteEntry, applyRebuildResult, writeEntry, readEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import {
+  deleteEntry,
+  applyRebuildResult,
+  writeEntry,
+  readEntry,
+  batchWriteAndDeleteInFolder,
+} from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -103,12 +109,12 @@ describe('rejection guard', () => {
     const digest = reject(home, raceText, 'rejected mid-race, between producer check and batch commit');
     expect(readEntry(home, entry.id)).toBeNull();
 
-    expect(() => batchWriteAndDelete(home, [queuedRePersist], [])).not.toThrow();
+    expect(() => batchWriteAndDeleteInFolder(home, [queuedRePersist], [])).not.toThrow();
     expect(readEntry(home, entry.id)).toBeNull(); // stays gone — not resurrected
 
     const db = openHippoDb(home);
     try {
-      const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+      const refusals = listAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
       expect(refusals.length).toBe(1);
       expect(refusals[0]!.targetId).toBe(entry.id);
       expect(refusals[0]!.metadata.digest).toBe(digest);
@@ -140,7 +146,7 @@ describe('rejection guard', () => {
 
     const db = openHippoDb(home);
     try {
-      const rows = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+      const rows = listAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
       expect(rows.length).toBe(1);
       expect(rows[0]!.targetId).toBe(entry.id);
       expect(rows[0]!.metadata.digest).toBe(digest);
@@ -195,7 +201,7 @@ describe('rejection guard', () => {
 
     const db = openHippoDb(home);
     try {
-      const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+      const refusals = listAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
       expect(refusals.length).toBe(1);
       expect(refusals[0]!.targetId).toBe(summary.id);
     } finally {
@@ -222,7 +228,7 @@ describe('rejection guard', () => {
 
     const db2 = openHippoDb(home);
     try {
-      const refusals2 = queryAuditEvents(db2, { tenantId: 'default', op: 'reject_refusal' });
+      const refusals2 = listAuditEvents(db2, { tenantId: 'default', op: 'reject_refusal' });
       expect(refusals2.length).toBe(1); // still just one — no loop
     } finally {
       closeHippoDb(db2);

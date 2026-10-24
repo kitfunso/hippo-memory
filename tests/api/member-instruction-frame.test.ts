@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { adminActor, remember, type Actor } from '../../src/api/index.js';
 import { INSTRUCTION_LIKE_TAG } from '../../src/api/instruction-detect.js';
-import { promptHookContext } from '../../src/api/prompt-hook.js';
+import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -38,7 +38,7 @@ afterEach(() => {
 async function hookText(prompt: string): Promise<string> {
   const ctx = apiCtx(store, 'default', adminActor('prompt-hook'));
   const payload = { session_id: 's1', prompt };
-  return (await promptHookContext(ctx, { sessionId: 's1', project: PROJECT, payload })).stdout;
+  return (await buildPromptHookContext(ctx, { sessionId: 's1', project: PROJECT, payload })).stdout;
 }
 
 describe('a flagged member write to a shared scope', () => {

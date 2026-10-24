@@ -30,7 +30,7 @@ function setFts(root: string, flag: '0' | '1'): void {
   }
 }
 
-describe('loadEntriesMentioning on the FTS path', () => {
+describe('listEntriesMentioning on the FTS path', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('mentions');

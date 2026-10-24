@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { search } from '../../src/domain/search/bm25-search.js';
+import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import { churnStaleFactor } from '../../src/domain/search/boosts.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -89,7 +89,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       tags: ['sometag', CHURN_STALE_TAG],
     });
 
-    const results = search('widget factory configuration', [plain, stale]);
+    const results = rankBm25('widget factory configuration', [plain, stale]);
     const plainResult = results.find((r) => r.entry.id === plain.id)!;
     const staleResult = results.find((r) => r.entry.id === stale.id)!;
     expect(staleResult.score).toBeLessThan(plainResult.score * 0.6);
@@ -203,7 +203,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
     });
     child.dagParentId = parent.id;
     for (const results of [
-      search('quasar ledger', [parent, child]),
+      rankBm25('quasar ledger', [parent, child]),
       await hybridSearch('quasar ledger', [parent, child]),
     ]) {
       const p = results.find((r) => r.entry.id === parent.id)!;

@@ -30,7 +30,7 @@ function activeIn(t: MemoryTables, tenantId: string, key: ContinuityKey | null |
   return active.sort(newestSnapshot);
 }
 
-export function loadSnapshotIn(t: MemoryTables, tenantId: string, key: ContinuityKey | null | undefined) {
+export function readSnapshotIn(t: MemoryTables, tenantId: string, key: ContinuityKey | null | undefined) {
   const newest = activeIn(t, tenantId, key)[0];
   return newest ? { ...newest.row } : null;
 }
@@ -137,8 +137,8 @@ type SnapshotMethods = Pick<
 export function memorySnapshots(t: MemoryTables): SnapshotMethods {
   return {
     saveSnapshot: async (tenantId, snapshot, key) => saveSnapshotIn(t, tenantId, snapshot, key),
-    loadSnapshot: async (tenantId, key) => loadSnapshotIn(t, tenantId, key),
-    loadFreshSnapshot: async (tenantId, opts, key) => freshActiveSnapshot(loadSnapshotIn(t, tenantId, key), opts),
+    loadSnapshot: async (tenantId, key) => readSnapshotIn(t, tenantId, key),
+    loadFreshSnapshot: async (tenantId, opts, key) => freshActiveSnapshot(readSnapshotIn(t, tenantId, key), opts),
     clearSnapshot: async (tenantId, clearedStatus) => clearIn(t, tenantId, clearedStatus),
     closeSessionSnapshots: async (tenantId, sessionId, status, key) => closeIn(t, tenantId, sessionId, status, key),
     appendEvent: async (tenantId, event) => appendEventIn(t, tenantId, event),

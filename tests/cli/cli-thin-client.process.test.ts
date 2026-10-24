@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_process';
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { detectServer, type ServerInfo } from '../../src/surface/server/server-detect.js';
 import { boundPort } from '../_helpers/listen.js';
@@ -156,7 +156,7 @@ function runCliAsync(workspace: string, ...cliArgs: string[]): Promise<CliResult
 function getActorForContent(workspace: string, contentNeedle: string): string | null {
   const db = openHippoDb(join(workspace, '.hippo'));
   try {
-    const events = queryAuditEvents(db, { tenantId: 'default', op: 'remember', limit: 200 });
+    const events = listAuditEvents(db, { tenantId: 'default', op: 'remember', limit: 200 });
     for (const ev of events) {
       const target = ev.targetId;
       if (!target) continue;
@@ -181,7 +181,7 @@ function getActorForContent(workspace: string, contentNeedle: string): string | 
 function getActorForId(workspace: string, memoryId: string): string | null {
   const db = openHippoDb(join(workspace, '.hippo'));
   try {
-    const events = queryAuditEvents(db, { tenantId: 'default', op: 'forget', limit: 200 });
+    const events = listAuditEvents(db, { tenantId: 'default', op: 'forget', limit: 200 });
     // The row itself is gone after a forget, so match on the audit target id.
     return events.find((ev) => ev.targetId === memoryId)?.actor ?? null;
   } finally {
@@ -379,7 +379,7 @@ describe('cli thin-client mode', () => {
       const db2 = openHippoDb(hippoRoot);
       try {
         expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_rawthin'`).get()).toBeUndefined();
-        const events = queryAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
+        const events = listAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
         expect(events).toHaveLength(1);
         expect(events[0].actor).toBe('localhost:cli');
         // The counter lives in api.rawArchive so the routed path reaches it;
@@ -615,7 +615,7 @@ describe('cli thin-client mode', () => {
       const db2 = openHippoDb(hippoRoot);
       try {
         expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_racearchive'`).get()).toBeUndefined();
-        const events = queryAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
+        const events = listAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
         expect(events[0]?.actor).toBe('cli');
       } finally {
         closeHippoDb(db2);

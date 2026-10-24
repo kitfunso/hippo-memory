@@ -14,7 +14,7 @@ import { byBytes, newestFirst } from '../rules/order.js';
 import { sessionEndHandoff, sessionEndSource } from '../rules/session-end.js';
 import { nextId } from './rows.js';
 import type { Owned } from './session-tables.js';
-import { keyMatches, loadSnapshotIn, sessionCompletion, stampOf } from './snapshots.js';
+import { keyMatches, readSnapshotIn, sessionCompletion, stampOf } from './snapshots.js';
 import type { MemoryTables } from './tables.js';
 
 type Handoff = Omit<SessionHandoff, 'updatedAt'>;
@@ -134,7 +134,7 @@ export function writeSessionEndIn(
   const { sessionId, key = null, inPlace } = request;
   if (key) stampOf(key);
   const existing = latestHandoffIn(t, tenantId, sessionId, {}, key);
-  const source = sessionEndSource(loadSnapshotIn(t, tenantId, key), existing, request);
+  const source = sessionEndSource(readSnapshotIn(t, tenantId, key), existing, request);
   if (!source) return null;
   const done = sessionCompletion(t, tenantId, sessionId);
   const handoff = sessionEndHandoff(sessionId, source, existing, isHandoffOutcome(done) ? done : null);

@@ -6,7 +6,7 @@ import { adminActor, type Context } from '../../api/index.js';
 import { backfillRepo } from '../connectors/github/backfill.js';
 import { realGitHubFetcher } from '../connectors/github/octokit-client.js';
 import { listDlq } from '../connectors/dlq.js';
-import { githubDlq, replayDlqEntry, type IngestHook } from '../connectors/github/dlq.js';
+import { githubDlq, replayGithubDlqEntry, type IngestHook } from '../connectors/github/dlq.js';
 import { ingestEvent, type IngestEvent } from '../connectors/github/ingest.js';
 import { handleCommentDeleted } from '../connectors/github/deletion.js';
 import { computeDeletionKey } from '../connectors/github/signature.js';
@@ -164,7 +164,7 @@ export async function replayGitHubDlq(
   const ctx: Context = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-dlq-replay') };
   // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook re-runs ingest.
   await runDlqReplay('github', args[0], flags, (id, force) =>
-    replayDlqEntry(ctx, id, {
+    replayGithubDlqEntry(ctx, id, {
       force,
       webhookSecret: envGitHubWebhookSecret(),
       previousSecret: githubPreviousSecret(),

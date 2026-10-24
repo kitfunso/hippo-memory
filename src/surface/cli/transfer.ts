@@ -12,9 +12,9 @@ import { runWatched } from './run-watched.js';
 import { importAtSessionEnd, importForStore } from '../../domain/agent-memories/sync.js';
 import { currentMachine } from '../../infra/machine.js';
 import { detailLines } from '../../domain/agent-memories/report.js';
-import { importChatGPT, importClaude, importCursor, importGenericFile } from '../importers/sources.js';
-import { importMarkdown } from '../importers/markdown.js';
-import { importVault } from '../importers/vault.js';
+import { importChatGPTInto, importClaudeInto, importCursorInto, importGenericFileInto } from '../importers/sources.js';
+import { importMarkdownInto } from '../importers/markdown.js';
+import { importVaultInto } from '../importers/vault.js';
 import type { ImportOptions, ImportResult, TargetedImport } from '../importers/core.js';
 import * as api from '../../api/index.js';
 import { memoryGet, memoryList } from '../../api/memories/memories.js';
@@ -209,7 +209,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
   importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun, tenantId });
 }
 
-type FileImporter = (fp: string, opts: TargetedImport) => ReturnType<typeof importChatGPT>;
+type FileImporter = (fp: string, opts: TargetedImport) => ReturnType<typeof importChatGPTInto>;
 
 interface PickedImporter {
   filePath: string | undefined;
@@ -220,22 +220,22 @@ interface PickedImporter {
 // Determine which importer to use based on flag
 function pickImporter(args: string[], flags: CliFlags): PickedImporter {
   if (boolFlag(flags, 'chatgpt')) {
-    return { filePath: stringFlagOrExit(flags, 'chatgpt'), importer: importChatGPT, importerName: 'ChatGPT' };
+    return { filePath: stringFlagOrExit(flags, 'chatgpt'), importer: importChatGPTInto, importerName: 'ChatGPT' };
   }
   if (boolFlag(flags, 'claude')) {
-    return { filePath: stringFlagOrExit(flags, 'claude'), importer: importClaude, importerName: 'Claude' };
+    return { filePath: stringFlagOrExit(flags, 'claude'), importer: importClaudeInto, importerName: 'Claude' };
   }
   if (boolFlag(flags, 'cursor')) {
-    return { filePath: stringFlagOrExit(flags, 'cursor'), importer: importCursor, importerName: 'Cursor' };
+    return { filePath: stringFlagOrExit(flags, 'cursor'), importer: importCursorInto, importerName: 'Cursor' };
   }
   if (boolFlag(flags, 'file')) {
-    return { filePath: stringFlagOrExit(flags, 'file'), importer: importGenericFile, importerName: 'File' };
+    return { filePath: stringFlagOrExit(flags, 'file'), importer: importGenericFileInto, importerName: 'File' };
   }
   if (boolFlag(flags, 'markdown')) {
-    return { filePath: stringFlagOrExit(flags, 'markdown'), importer: importMarkdown, importerName: 'Markdown' };
+    return { filePath: stringFlagOrExit(flags, 'markdown'), importer: importMarkdownInto, importerName: 'Markdown' };
   }
   // Positional: try to auto-detect from extension
-  if (args[0]) return { filePath: args[0], importer: importGenericFile, importerName: 'File' };
+  if (args[0]) return { filePath: args[0], importer: importGenericFileInto, importerName: 'File' };
   return { filePath: undefined, importer: undefined, importerName: '' };
 }
 
@@ -336,7 +336,7 @@ async function importVaultFolder(options: VaultFolderOptions): Promise<void> {
     name: nonEmptyStringFlag(flags, 'name'),
     scope: nonEmptyStringFlag(flags, 'scope'),
   };
-  const vaultResult = await importVault(folderPath, vaultOptions, {
+  const vaultResult = await importVaultInto(folderPath, vaultOptions, {
     store: cliStore(hippoRoot),
     batch: cliRequest,
     infra: cliInfra(),
@@ -418,7 +418,7 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
   }
   const promoted = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
     try {
-      const result = await client.promote(info.url, apiKey, id);
+      const result = await client.postPromote(info.url, apiKey, id);
       console.log(`Promoted ${id} to global store as ${result.globalId}`);
     } catch (err) {
       fail(`Failed to promote: ${errorMessage(err)}`);

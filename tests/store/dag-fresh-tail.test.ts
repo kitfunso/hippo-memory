@@ -49,7 +49,7 @@ describe('fresh-tail recall', () => {
   });
 
   it('2. freshTailCount=3 stamps isFreshTail on the 3 most recent raw rows', async () => {
-    // Five raw rows with sequential timestamps. loadSearchEntries returns
+    // Five raw rows with sequential timestamps. listSearchEntries returns
     // all tenant-scoped rows scored by BM25, so the recent rows ALSO surface
     // as BM25 hits. The fresh-tail logic stamps `isFreshTail=true` on the
     // top-3 recent ids regardless of whether they came in via BM25 or via

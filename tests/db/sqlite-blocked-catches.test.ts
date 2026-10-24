@@ -44,8 +44,8 @@ const ROWS: readonly Row[] = [
     'found 0',
   ],
   [
-    'embeddings.ts loadStoredEmbeddingModel',
-    /loadStoredEmbeddingModel/,
+    'embeddings.ts readStoredEmbeddingModel',
+    /readStoredEmbeddingModel/,
     async (root) => String(embeddingModelRequiresReindex(handlesOf(root).on, 'm', {})),
     'false',
   ],

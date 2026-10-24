@@ -263,7 +263,7 @@ function writeListedMirror(hippoRoot: string, entry: MemoryEntry, listed: LayerL
 
 /** Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge with no reaper to retry it
  * can name the stuck file. */
-function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
+function listEntryMirrorPaths(hippoRoot: string, id: string): string[] {
   return MIRROR_LAYERS.map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`)).filter((file) =>
     fs.existsSync(file),
   );
@@ -292,7 +292,7 @@ export function purgeMirrorBestEffort(hippoRoot: string, id: string, isRaw: bool
           errorFields(secondErr),
         );
       } else {
-        const leftover = getExistingEntryMirrorPaths(hippoRoot, id);
+        const leftover = listEntryMirrorPaths(hippoRoot, id);
         const pathsNote = leftover.length > 0 ? leftover.join(', ') : `${id}.md (path unresolved)`;
         log.error(
           `${logPrefix}: mirror cleanup failed for ${id} - no automatic retry exists for this file, ` +
