@@ -3,7 +3,7 @@
 // Matched line by line, since the tail readers start mid-file and never see the session.start line.
 import * as fs from 'fs';
 import * as path from 'path';
-import { copilotHomeDir } from '../../domain/hooks/shared.js';
+import { copilotHomeDir } from '../hooks-install/rules/shared.js';
 import { processHomes } from '../../host/agent-homes.js';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 

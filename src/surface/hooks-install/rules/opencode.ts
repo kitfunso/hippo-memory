@@ -1,20 +1,20 @@
 // The OpenCode plugin hippo installs and the hippo hooks it strips from an old opencode.json; surface/hooks-install
 // does the reads and writes.
 import * as path from 'path';
-import { userHome, type Homes } from '../../base/util/agent-homes.js';
-import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../../base/util/json.js';
+import { userHome, type Homes } from '../../../base/util/agent-homes.js';
+import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../../../base/util/json.js';
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 
 /**
- * The opencode plugin installed at ~/.config/opencode/plugins/hippo.ts: session.idle runs `hippo session-end`,
- * session.created runs `hippo last-sleep`.
+ * The opencode plugin installed at ~/.config/opencode/plugins/hippo.ts: session.idle runs `hippo session-end`, whose
+ * `--runtime opencode` logs to the file session.created's `hippo last-sleep` reads.
  * No `@opencode-ai/plugin` type import (unresolved, it would crash the loader); `$` is guarded and `.nothrow()` keeps a
  * missing hippo binary from throwing.
  */
 export const OPENCODE_PLUGIN_SOURCE = `// ${HIPPO_OPENCODE_PLUGIN_MARKER}
 // hippo-memory opencode plugin. DO NOT EDIT — regenerated on every
-// \`hippo hook install opencode\` from src/domain/hooks/opencode.ts OPENCODE_PLUGIN_SOURCE
+// \`hippo hook install opencode\` from src/surface/hooks-install/rules/opencode.ts OPENCODE_PLUGIN_SOURCE
 // in https://github.com/kitfunso/hippo-memory. Local changes will be lost.
 
 export const HippoPlugin = async ({ $ }) => {
@@ -26,7 +26,7 @@ export const HippoPlugin = async ({ $ }) => {
       if (typeof $ !== "function") return;
       try {
         if (event.type === "session.idle") {
-          const r = await $\`hippo session-end\`.quiet().nothrow();
+          const r = await $\`hippo session-end --runtime opencode\`.quiet().nothrow();
           if (r && r.exitCode !== 0) console.error("[hippo] session-end exited " + r.exitCode);
         } else if (event.type === "session.created") {
           const r = await $\`hippo last-sleep\`.quiet().nothrow();

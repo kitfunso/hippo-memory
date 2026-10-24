@@ -1,11 +1,7 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { rrfFuse } from './rrf.js';
-import {
-  graphRankStream,
-  selectGraphSeeds,
-  DEFAULT_GRAPH_SEED_COUNT,
-  type GraphRankStreamOptions,
-} from '../graph/stream.js';
+import { graphRankStream, selectGraphSeeds, type GraphRankStreamOptions } from '../graph/stream.js';
+import { DEFAULT_GRAPH_SEED_COUNT } from '../../base/rank/recall-defaults.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
 import type { DenseScores } from './vector.js';
 

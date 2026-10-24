@@ -11,7 +11,7 @@ import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 import { hashArm } from '../../src/base/session/pilot-arm.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';
 import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
-import { HIPPO_PINNED_INJECT_COMMAND } from '../../src/domain/hooks/shared.js';
+import { HIPPO_PINNED_INJECT_COMMAND } from '../../src/surface/hooks-install/rules/shared.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

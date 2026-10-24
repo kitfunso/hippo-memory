@@ -1,7 +1,7 @@
 // GitHub Copilot: what hippo writes in its hooks file, its MCP server key and its instructions, under the Copilot home
 // and each VS Code User folder; surface/hooks-install/copilot.ts reads and writes the files.
 import { isDeepStrictEqual } from 'node:util';
-import { type JsonValue, isJsonObjectLiteral, type JsonObject } from '../../base/util/json.js';
+import { type JsonValue, isJsonObjectLiteral, type JsonObject } from '../../../base/util/json.js';
 import { HOOK_MARKERS, hippoBlock } from './hook-blocks.js';
 
 const MCP_KEY = 'hippo';

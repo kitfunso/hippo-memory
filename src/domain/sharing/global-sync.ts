@@ -7,7 +7,8 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { classifyOriginProject, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
-import { embedAll, folderEmbedTarget, type ConfiguredFolder } from '../search/embed-memories.js';
+import { embedAll, folderEmbedTarget } from '../search/embed-memories.js';
+import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { log } from '../../base/util/log.js';
 import type { EntryTextKey, Sharing } from '../../store/port.js';
 import { logEmbedAllFailure } from './search-both.js';
@@ -128,7 +129,7 @@ async function copyMissingRows(into: ConfiguredFolder<SharingStore>, from: Shari
   return written.length;
 }
 
-function finishSyncDown(into: ConfiguredFolder, count: number, rejected: number): void {
+function finishSyncDown(into: ConfiguredFolder<SharingStore>, count: number, rejected: number): void {
   if (rejected > 0) {
     log.warn(
       `syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`,

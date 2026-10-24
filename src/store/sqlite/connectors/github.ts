@@ -1,17 +1,10 @@
 // The GitHub connector's tables: event log, dead-letter queue, tenant routing and backfill cursors.
 
-import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
-import { archiveRawMemories } from '../raw-archive.js';
+import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { ConnectorEventRecord } from '../../port.js';
 import { eventMemory, eventRecord, eventSeen, markEventSeen, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
-import type {
-  GitHubRouting,
-  GitHubDlqInsert,
-  GitHubDlqItem as DlqItem,
-  StoredCursors,
-  HwmColumn,
-} from '../../port/connectors.js';
+import type { TenantRoute, GitHubDlqInsert, GitHubDlqItem as DlqItem, GitHubStream } from '../../port/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */
@@ -50,46 +43,6 @@ export function githubEventRecord(db: DatabaseSyncLike, idempotencyKey: string):
   return eventRecord(db, GITHUB_LOG, idempotencyKey);
 }
 
-interface ArtifactDeletion {
-  tenantId: string;
-  artifactRef: string;
-  idempotencyKey: string;
-  deliveryId: string;
-  eventName: string;
-  reason: string;
-  who: string;
-}
-
-interface ArtifactDeletionOutcome {
-  duplicate: boolean;
-  archived: number;
-}
-
-/** Archives every active raw row of one tenant's artifact and logs the delete event; a failed archive rolls back the
- * batch and the log row. */
-export function archiveDeletedArtifact(db: DatabaseSyncLike, del: ArtifactDeletion): ArtifactDeletionOutcome {
-  if (githubEventSeen(db, del.idempotencyKey)) return { duplicate: true, archived: 0 };
-  const logged = { idempotencyKey: del.idempotencyKey, deliveryId: del.deliveryId, eventName: del.eventName };
-
-  const rows = cachedStatement(
-    db,
-    `SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`,
-  ).all(del.artifactRef, del.tenantId) as Array<{ id: string }>;
-  const memoryIds = rows.map((r) => r.id);
-
-  if (memoryIds.length === 0) {
-    // Still logged, so a retry of the same delete answers 'duplicate'.
-    markGitHubEventSeen(db, { ...logged, memoryId: null });
-    return { duplicate: false, archived: 0 };
-  }
-
-  withWriteScope(db, 'github_delete_all', () => {
-    archiveRawMemories(db, memoryIds, { reason: del.reason, who: del.who });
-    markGitHubEventSeen(db, { ...logged, memoryId: memoryIds[0]! });
-  });
-  return { duplicate: false, archived: memoryIds.length };
-}
-
 export const GITHUB_DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
   { field: 'id', column: 'id', kind: 'int' },
   { field: 'tenantId', column: 'tenant_id', kind: 'text', insert: true },
@@ -106,82 +59,68 @@ export const GITHUB_DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
   { field: 'bucket', column: 'bucket', kind: 'bucket', insert: true },
 ]);
 
-export function githubRouting(
+/** The installation's tenant when one is named, else the repository's first to register it; with no match, how many
+ * rows it could have come from. */
+export function githubRoute(
   db: DatabaseSyncLike,
-  args: { installationId?: string | null; repoFullName?: string | null },
-): GitHubRouting {
-  // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const instCount = (
-    cachedStatement(db, `SELECT COUNT(*) AS c FROM github_installations`).get() as { c: number | bigint }
-  ).c;
-  // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const repoCount = (
-    cachedStatement(db, `SELECT COUNT(*) AS c FROM github_repositories`).get() as { c: number | bigint }
-  ).c;
-  const counts = { installations: Number(instCount), repositories: Number(repoCount) };
-
-  if (args.installationId) {
+  { installationId, repoFullName }: { installationId?: string | null; repoFullName?: string | null },
+): TenantRoute {
+  if (installationId) {
     const row = cachedStatement(db, `SELECT tenant_id FROM github_installations WHERE installation_id = ?`).get(
-      args.installationId,
+      installationId,
     ) as { tenant_id?: string } | undefined;
-    return { ...counts, tenant: row?.tenant_id ?? null };
+    return row?.tenant_id ? { tenantId: row.tenant_id } : { tenantId: null, routes: rowCount(db, 'installations') };
   }
-  if ((counts.installations === 0 && counts.repositories === 0) || !args.repoFullName) {
-    return { ...counts, tenant: null };
-  }
-  const row = cachedStatement(
-    db,
-    `SELECT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY added_at, tenant_id LIMIT 1`,
-  ).get(args.repoFullName) as { tenant_id?: string } | undefined;
-  return { ...counts, tenant: row?.tenant_id ?? null };
+  const row = repoFullName
+    ? (cachedStatement(
+        db,
+        `SELECT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY added_at, tenant_id LIMIT 1`,
+      ).get(repoFullName) as { tenant_id?: string } | undefined)
+    : undefined;
+  if (row?.tenant_id) return { tenantId: row.tenant_id };
+  return { tenantId: null, routes: rowCount(db, 'installations') + rowCount(db, 'repositories') };
 }
 
-export function githubCursors(db: DatabaseSyncLike, tenantId: string, repo: string): StoredCursors {
-  const row = cachedStatement(
-    db,
-    `SELECT issues_hwm, issue_comments_hwm, pr_review_comments_hwm
-       FROM github_cursors WHERE tenant_id = ? AND repo_full_name = ?`,
-  ).get(tenantId, repo) as
-    | {
-        issues_hwm?: string | null;
-        issue_comments_hwm?: string | null;
-        pr_review_comments_hwm?: string | null;
-      }
-    | undefined;
-  return {
-    issues: row?.issues_hwm ?? null,
-    issueComments: row?.issue_comments_hwm ?? null,
-    prReviewComments: row?.pr_review_comments_hwm ?? null,
-  };
+function rowCount(db: DatabaseSyncLike, table: 'installations' | 'repositories'): number {
+  // SAFETY: an aggregate with no GROUP BY always answers one row.
+  const row = cachedStatement(db, `SELECT COUNT(*) AS c FROM github_${table}`).get() as { c: number | bigint };
+  return Number(row.c);
 }
 
-export function saveGitHubHwm(
+const HWM_COLUMN = {
+  issues: 'issues_hwm',
+  issueComments: 'issue_comments_hwm',
+  prReviewComments: 'pr_review_comments_hwm',
+} as const satisfies Record<GitHubStream, string>;
+
+export function githubCursor(
   db: DatabaseSyncLike,
   tenantId: string,
   repo: string,
-  column: HwmColumn,
+  stream: GitHubStream,
+): string | null {
+  const column = HWM_COLUMN[stream];
+  const row = cachedStatement(
+    db,
+    `SELECT ${column} AS hwm FROM github_cursors WHERE tenant_id = ? AND repo_full_name = ?`,
+  ).get(tenantId, repo) as { hwm?: string | null } | undefined;
+  return row?.hwm ?? null;
+}
+
+/** `keepSaved` leaves a mark already saved as it is, as a first run's `--since` seed needs. */
+export function saveGitHubCursor(
+  db: DatabaseSyncLike,
+  { tenantId, repo, stream }: { tenantId: string; repo: string; stream: GitHubStream },
   value: string,
+  keepSaved: boolean,
 ): void {
+  const column = HWM_COLUMN[stream];
+  const kept = keepSaved ? `COALESCE(github_cursors.${column}, excluded.${column})` : `excluded.${column}`;
   cachedStatement(
     db,
     `INSERT INTO github_cursors (tenant_id, repo_full_name, ${column}, updated_at)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(tenant_id, repo_full_name)
-     DO UPDATE SET ${column} = excluded.${column}, updated_at = excluded.updated_at`,
+     DO UPDATE SET ${column} = ${kept}, updated_at = excluded.updated_at`,
   ).run(tenantId, repo, value, new Date().toISOString());
-}
-
-/** Sets all three HWMs to `since` for a first run; COALESCE keeps any HWM a stream has already saved. */
-export function seedGitHubCursors(db: DatabaseSyncLike, tenantId: string, repo: string, since: string): void {
-  cachedStatement(
-    db,
-    `INSERT INTO github_cursors (tenant_id, repo_full_name, issues_hwm, issue_comments_hwm, ` +
-      `pr_review_comments_hwm, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(tenant_id, repo_full_name) DO UPDATE SET
-         issues_hwm = COALESCE(github_cursors.issues_hwm, excluded.issues_hwm),
-         issue_comments_hwm = COALESCE(github_cursors.issue_comments_hwm, excluded.issue_comments_hwm),
-         pr_review_comments_hwm = COALESCE(github_cursors.pr_review_comments_hwm, excluded.pr_review_comments_hwm),
-         updated_at = excluded.updated_at`,
-  ).run(tenantId, repo, since, since, since, new Date().toISOString());
 }

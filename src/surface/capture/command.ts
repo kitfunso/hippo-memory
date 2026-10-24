@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
-import { embedMemoryDetached, type EmbedTarget } from '../../domain/search/embed-memories.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { projectId, projectNames, type ProjectRef } from '../../base/scope/project-identity.js';
@@ -45,8 +44,8 @@ export interface CaptureTarget {
   readonly root: string;
   readonly config: HippoConfig;
   readonly store: Pick<StoreGroups, 'captures' | 'folderFiles' | 'rejections'>;
-  /** Where each captured row's vector goes. */
-  readonly index: EmbedTarget;
+  /** Embeds each captured row, off the capture's path. */
+  readonly embed: (entry: MemoryEntry) => void;
 }
 
 export async function runCapture(target: CaptureTarget, options: CaptureOptions): Promise<void> {
@@ -124,7 +123,7 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
 }
 
 async function captureFromCli(
-  { store, config, index }: CaptureTarget,
+  { store, config, embed }: CaptureTarget,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
@@ -135,7 +134,7 @@ async function captureFromCli(
     lean: false,
     dedup: captureDedup(options),
   };
-  if (!options.dryRun) return captureExtractedItems({ store, config, index }, writeOpts, extracted, keys);
+  if (!options.dryRun) return captureExtractedItems({ store, config, embed }, writeOpts, extracted, keys);
   return previewCapture(store, writeOpts, extracted, keys, config.defaultHalfLifeDays);
 }
 
@@ -243,7 +242,7 @@ export interface CaptureWriteOptions {
 export interface ConfiguredStore {
   readonly store: Pick<StoreGroups, 'captures'>;
   readonly config: HippoConfig;
-  readonly index: EmbedTarget;
+  readonly embed: (entry: MemoryEntry) => void;
 }
 
 /** The entries to write, and per item the entry whose outcome it takes, or -1 for a text the store already holds. */
@@ -276,7 +275,7 @@ function planCapture(
 
 /** Writes each new text once; a repeat of a captured text in the same batch counts as skipped, as a held one does. */
 export async function captureExtractedItems(
-  { store, config, index }: ConfiguredStore,
+  { store, config, embed }: ConfiguredStore,
   options: CaptureWriteOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
@@ -294,7 +293,7 @@ export async function captureExtractedItems(
   outcomes.forEach((outcome, i) => {
     if (outcome !== 'captured') return;
     keys.add(plan.keys[i]);
-    if (!options.lean) embedMemoryDetached(index, plan.entries[i]);
+    if (!options.lean) embed(plan.entries[i]);
   });
   return tally;
 }

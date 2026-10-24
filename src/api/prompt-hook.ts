@@ -100,7 +100,7 @@ export function takeDelivery(rec: DeliveryRecorder | null): DeliveryEventInput |
 /** Writes the recorder's event on a connection of its own; a second flush is a no-op. */
 export async function flushDeliveryRecorder(rec: DeliveryRecorder | null): Promise<void> {
   const event = takeDelivery(rec);
-  if (rec !== null && event !== undefined) await rec.ledger.writeDeliveryEvent(event);
+  if (rec !== null && event !== undefined) await rec.ledger.recordTurn({ uses: [], delivery: event });
 }
 
 /** What one render needs once api.contextGet has answered. */

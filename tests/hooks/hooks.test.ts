@@ -10,7 +10,7 @@ import {
   uninstallJsonHooks,
 } from '../../src/surface/hooks-install/json-hooks.js';
 import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
-import { defaultPreCompactLogPath } from '../../src/domain/hooks/shared.js';
+import { defaultPreCompactLogPath } from '../../src/surface/hooks-install/rules/shared.js';
 import { processHomes } from '../../src/host/agent-homes.js';
 import { withFakeHome as withFakeHomeShared } from '../_helpers/with-fake-home.js';
 import { trySymlink } from '../_helpers/symlink.js';

@@ -3,7 +3,8 @@
 import { auditMemories, type AuditIssue } from '../../base/memory/memory-audit.js';
 import { AUTO_SHARE_MIN_SCORE, autoShare } from '../../domain/sharing/share.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
-import { deduplicateStore, groupDedupPairs } from '../../domain/consolidate/dedupe.js';
+import { deduplicateStore } from '../../domain/consolidate/dedupe.js';
+import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
 import { evalNow } from '../../base/memory/ablation.js';
 import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../base/memory/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';

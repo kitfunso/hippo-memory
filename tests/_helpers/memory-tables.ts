@@ -5,7 +5,8 @@ import { loadPhysicsState } from '../../src/db/physics-state.js';
 import type { SessionHandoffRow } from '../../src/base/session/handoff.js';
 import type { FailureOutcome, RoutineRule, RejectedValueRow } from '../../src/store/port/rejections.js';
 import type { QuarantineRow, QuarantineStatus } from '../../src/store/port/quarantine.js';
-import type { SlackWorkspace } from '../../src/store/port/connectors.js';
+import type { GitHubStream, SlackWorkspace } from '../../src/store/port/connectors.js';
+import { cursorSlot } from '../../src/store/memory/connector-events.js';
 import type { Prediction } from '../../src/store/port/objects.js';
 import { auditRowsOn } from './audit-rows.js';
 import { readApiKeyRecord } from '../../src/store/sqlite/auth.js';
@@ -242,6 +243,8 @@ const CURSORS_SQL = `SELECT tenant_id AS tenantId, repo_full_name AS repo, issue
 const REPOSITORIES_SQL = `SELECT repo_full_name AS repoFullName, tenant_id AS tenantId, added_at AS addedAt
   FROM github_repositories ORDER BY added_at, tenant_id`;
 
+const GITHUB_STREAMS: readonly GitHubStream[] = ['issues', 'issueComments', 'prReviewComments'];
+
 interface GithubCursorRow {
   tenantId: string;
   repo: string;
@@ -258,10 +261,13 @@ function copyConnectors(db: DatabaseSyncLike, t: MemoryTables): void {
   const slackCursors =
     'SELECT tenant_id AS tenantId, channel_id AS channelId, latest_ts AS latestTs FROM slack_cursors';
   for (const row of rows<{ tenantId: string; channelId: string; latestTs: string }>(db, slackCursors)) {
-    t.slackCursors.set(key(row.tenantId, row.channelId), row.latestTs);
+    t.cursors.set(cursorSlot({ connector: 'slack', tenantId: row.tenantId, channelId: row.channelId }), row.latestTs);
   }
-  for (const { tenantId, repo, ...cursors } of rows<GithubCursorRow>(db, CURSORS_SQL)) {
-    t.githubCursors.set(key(tenantId, repo), cursors);
+  for (const { tenantId, repo, ...marks } of rows<GithubCursorRow>(db, CURSORS_SQL)) {
+    for (const stream of GITHUB_STREAMS) {
+      const mark = marks[stream];
+      if (mark !== null) t.cursors.set(cursorSlot({ connector: 'github', tenantId, repo, stream }), mark);
+    }
   }
   const installations = 'SELECT installation_id AS id, tenant_id AS tenantId FROM github_installations';
   for (const row of rows<{ id: string; tenantId: string }>(db, installations)) {

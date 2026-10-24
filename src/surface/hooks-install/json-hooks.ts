@@ -1,4 +1,4 @@
-// Reads and writes each tool's hook settings file; what changes in it is domain/hooks/json-hooks.ts.
+// Reads and writes each tool's hook settings file; what changes in it is rules/json-hooks.ts.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../../host/atomic-write.js';
@@ -15,13 +15,13 @@ import {
   settingsText,
   type InstallResult,
   type JsonHookPaths,
-} from '../../domain/hooks/json-hooks.js';
-import { defaultPreCompactLogPath, sleepLogPathOn, type JsonHookTarget } from '../../domain/hooks/shared.js';
+} from './rules/json-hooks.js';
+import { defaultPreCompactLogPath, sleepLogPathOn, type JsonHookTarget } from './rules/shared.js';
 
 // What a caller of the installer names beside it: the Copilot events it adds and the reminder Codex needs before it
 // runs a new hook.
-export { copilotHookEvents } from '../../domain/hooks/json-hooks.js';
-export { CODEX_TRUST_LINE } from '../../domain/hooks/shared.js';
+export { copilotHookEvents } from './rules/json-hooks.js';
+export { CODEX_TRUST_LINE } from './rules/shared.js';
 
 /** The paths for `target` under this process's home folder; reads and writes nothing. */
 export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {

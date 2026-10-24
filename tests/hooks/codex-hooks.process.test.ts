@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { CODEX_TRUST_LINE } from '../../src/domain/hooks/shared.js';
+import { CODEX_TRUST_LINE } from '../../src/surface/hooks-install/rules/shared.js';
 import { installJsonHooks, uninstallJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
 import { formatDoctor, runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies } from '../_helpers/cli-stores.js';

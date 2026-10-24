@@ -1,7 +1,7 @@
 // `hippo last-sleep`: the previous session's sleep log for the debug log, and one problems line for the user.
 import * as fs from 'fs';
 import { REPLAY_AFTER_MS } from '../../base/session/compaction-timing.js';
-import { SPOOL_PROBLEM, spoolCounts } from '../capture/compaction-spool.js';
+import { SPOOL_PROBLEM, spoolCounts } from '../../infra/compaction-spool.js';
 import { defaultSleepLogPath } from '../hooks-install/json-hooks.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { ignoringCodes, PATH_UNREADABLE } from '../../base/util/expected-errors.js';

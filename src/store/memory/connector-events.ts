@@ -1,13 +1,18 @@
 // The in-memory ConnectorEvents group: tenant routing, both dead-letter queues, the backfill cursors and delivery
 // holds, sharing the event log with ConnectorWrites.
 import type {
-  ArtifactArchive,
+  ArtifactDeletion,
+  ArtifactLookup,
   ConnectorDeadLetter,
+  ConnectorEvent,
   ConnectorEvents,
+  CursorKey,
   DeadLetterConnector,
   DeadLetterRows,
   DeliveryClaim,
-  StoredCursors,
+  EventMarked,
+  RouteQuery,
+  TenantRoute,
 } from '../port/connectors.js';
 import { NotFoundError } from '../../base/errors/api-errors.js';
 import { byBytes } from '../rules/order.js';
@@ -16,12 +21,12 @@ import { eventSlot, logOnce } from './connector-writes.js';
 import type { MemoryTables, ParkedLetter } from './tables.js';
 
 const key = (...parts: string[]): string => parts.join('\u0000');
-const HWM_FIELD = {
-  issues_hwm: 'issues',
-  issue_comments_hwm: 'issueComments',
-  pr_review_comments_hwm: 'prReviewComments',
-} as const;
-const NO_CURSORS: StoredCursors = { issues: null, issueComments: null, prReviewComments: null };
+
+/** The cursors table's key: one key space per connector, then tenant, then the channel or the repository's stream. */
+export const cursorSlot = (at: CursorKey): string =>
+  at.connector === 'slack'
+    ? key(at.connector, at.tenantId, at.channelId)
+    : key(at.connector, at.tenantId, at.repo, at.stream);
 
 function parked(letter: ConnectorDeadLetter, id: number): ParkedLetter {
   const slack = letter.connector === 'slack' ? letter : null;
@@ -66,21 +71,21 @@ function rowOf<C extends DeadLetterConnector>(letter: ParkedLetter): DeadLetterR
 }
 
 /** The ids of the raw rows the tenant holds under the ref, in the order they were written. */
-function rawIdsFor(t: MemoryTables, artifactRef: string, tenantId: string): string[] {
+function rawIdsFor(t: MemoryTables, { artifactRef, tenantId }: ArtifactLookup): string[] {
   return [...t.entries.values()]
     .filter((e) => e.artifactRef === artifactRef && e.tenantId === tenantId && e.kind === 'raw')
     .map((e) => e.id);
 }
 
 /** Every raw row of the artifact in one staged write with the log row: no reach check, one failed id drops them all. */
-function archiveArtifactIn(t: MemoryTables, archive: ArtifactArchive) {
-  const { tenantId, actor, artifactRef, reason, event } = archive;
+function markSeenIn(t: MemoryTables, event: ConnectorEvent, deleted?: ArtifactDeletion): EventMarked {
   if (t.connectorLog.has(eventSlot(event))) return { duplicate: true, archived: 0 };
-  const ids = rawIdsFor(t, artifactRef, tenantId);
-  if (ids.length === 0) {
+  const ids = deleted === undefined ? [] : rawIdsFor(t, deleted);
+  if (deleted === undefined || ids.length === 0) {
     logOnce(t, event, null);
     return { duplicate: false, archived: 0 };
   }
+  const { actor, reason } = deleted;
   const rows = stage(t, actor, (tx) => {
     const done = ids.map((id) => {
       const row = tx.rows.get(id);
@@ -102,24 +107,26 @@ function claimIn(t: MemoryTables, { connector, key: deliveryKey, nowMs, ttlMs }:
   return true;
 }
 
-type Routing = Pick<
-  ConnectorEvents,
-  'slackTeamRoute' | 'githubRouting' | 'slackWorkspaces' | 'registerSlackWorkspace' | 'removeSlackWorkspace'
->;
+function routeIn(t: MemoryTables, query: RouteQuery): TenantRoute {
+  if (query.connector === 'slack') {
+    const tenantId = t.slackWorkspaces.get(query.teamId)?.tenantId;
+    return tenantId ? { tenantId } : { tenantId: null, routes: t.slackWorkspaces.size };
+  }
+  const { installationId, repoFullName } = query;
+  if (installationId) {
+    const tenantId = t.githubInstallations.get(installationId);
+    return tenantId ? { tenantId } : { tenantId: null, routes: t.githubInstallations.size };
+  }
+  // The rows are held oldest first, then by tenant, so a repo two tenants installed routes to the first.
+  const match = repoFullName ? t.githubRepositories.find((row) => row.repoFullName === repoFullName) : undefined;
+  if (match?.tenantId) return { tenantId: match.tenantId };
+  return { tenantId: null, routes: t.githubInstallations.size + t.githubRepositories.length };
+}
 
-function routingOn(t: MemoryTables): Routing {
+type Workspaces = Pick<ConnectorEvents, 'slackWorkspaces' | 'registerSlackWorkspace' | 'removeSlackWorkspace'>;
+
+function workspacesOn(t: MemoryTables): Workspaces {
   return {
-    async slackTeamRoute(teamId) {
-      const tenantId = t.slackWorkspaces.get(teamId)?.tenantId;
-      return tenantId ? { tenantId } : { tenantId: null, workspaceCount: t.slackWorkspaces.size };
-    },
-    async githubRouting({ installationId, repoFullName }) {
-      const counts = { installations: t.githubInstallations.size, repositories: t.githubRepositories.length };
-      if (installationId) return { ...counts, tenant: t.githubInstallations.get(installationId) ?? null };
-      // The rows are held oldest first, then by tenant, so a repo two tenants installed routes to the first.
-      const match = repoFullName ? t.githubRepositories.find((row) => row.repoFullName === repoFullName) : undefined;
-      return { ...counts, tenant: match?.tenantId || null };
-    },
     slackWorkspaces: async () =>
       [...t.slackWorkspaces.values()].sort((a, b) => byBytes(a.teamId, b.teamId)).map((w) => ({ ...w })),
     async registerSlackWorkspace(teamId, tenantId) {
@@ -131,7 +138,7 @@ function routingOn(t: MemoryTables): Routing {
   };
 }
 
-type Letters = Pick<ConnectorEvents, 'parkDeadLetter' | 'deadLetters' | 'deadLetter' | 'markDeadLetterRetried'>;
+type Letters = Pick<ConnectorEvents, 'parkDeadLetter' | 'deadLetters' | 'markDeadLetterRetried'>;
 
 function lettersOn(t: MemoryTables): Letters {
   const find = (connector: DeadLetterConnector, tenantId: string, id: number): ParkedLetter | undefined =>
@@ -143,14 +150,14 @@ function lettersOn(t: MemoryTables): Letters {
       t.deadLetters.push(parked(letter, id));
       return id;
     },
-    async deadLetters(connector, tenantId, limit) {
+    async deadLetters(connector, tenantId, which) {
+      if ('id' in which) {
+        const row = find(connector, tenantId, which.id);
+        return row ? [rowOf(row)] : [];
+      }
       const rows = t.deadLetters.filter((row) => row.connector === connector && row.tenantId === tenantId);
       const ordered = rows.sort((a, b) => byBytes(a.receivedAt, b.receivedAt) || a.id - b.id);
-      return ordered.slice(0, limit).map((row) => rowOf(row));
-    },
-    async deadLetter(connector, tenantId, id) {
-      const row = find(connector, tenantId, id);
-      return row ? rowOf(row) : null;
+      return ordered.slice(0, which.limit).map((row) => rowOf(row));
     },
     async markDeadLetterRetried(connector, tenantId, id) {
       const row = find(connector, tenantId, id);
@@ -161,53 +168,24 @@ function lettersOn(t: MemoryTables): Letters {
   };
 }
 
-type Cursors = Pick<
-  ConnectorEvents,
-  'slackCursor' | 'saveSlackCursor' | 'githubCursors' | 'saveGitHubHwm' | 'seedGitHubCursors'
->;
-
-function cursorsOn(t: MemoryTables): Cursors {
-  const held = (tenantId: string, repo: string): StoredCursors =>
-    t.githubCursors.get(key(tenantId, repo)) ?? NO_CURSORS;
-  return {
-    slackCursor: async (tenantId, channelId) => t.slackCursors.get(key(tenantId, channelId)) ?? null,
-    async saveSlackCursor(tenantId, channelId, latestTs) {
-      t.slackCursors.set(key(tenantId, channelId), latestTs);
-    },
-    githubCursors: async (tenantId, repo) => ({ ...held(tenantId, repo) }),
-    async saveGitHubHwm(tenantId, repo, column, value) {
-      t.githubCursors.set(key(tenantId, repo), { ...held(tenantId, repo), [HWM_FIELD[column]]: value });
-    },
-    async seedGitHubCursors(tenantId, repo, since) {
-      const { issues, issueComments, prReviewComments } = held(tenantId, repo);
-      const seeded = {
-        issues: issues ?? since,
-        issueComments: issueComments ?? since,
-        prReviewComments: prReviewComments ?? since,
-      };
-      t.githubCursors.set(key(tenantId, repo), seeded);
-    },
-  };
-}
-
 export function memoryConnectorEvents(t: MemoryTables): ConnectorEvents {
   return {
-    async eventRecord(event) {
+    async eventRecord(event, artifact) {
       const row = t.connectorLog.get(eventSlot(event));
-      return row ? { seen: true, memoryId: row.memoryId } : { seen: false };
+      if (row) return { seen: true, memoryId: row.memoryId };
+      return artifact ? { seen: false, memoryId: rawIdsFor(t, artifact)[0] ?? null } : { seen: false };
     },
-    markEventSeen: async (event) => logOnce(t, event, null),
+    markEventSeen: async (event, deleted) => markSeenIn(t, event, deleted),
     claimDelivery: async (claim) => claimIn(t, claim),
     async releaseDelivery(connector, deliveryKey) {
       t.deliveryClaims.delete(key(connector, deliveryKey));
     },
-    async deletionTarget({ event, artifactRef, tenantId }) {
-      if (t.connectorLog.has(eventSlot(event))) return { seen: true };
-      return { seen: false, memoryId: rawIdsFor(t, artifactRef, tenantId)[0] ?? null };
+    route: async (query) => routeIn(t, query),
+    cursor: async (at) => t.cursors.get(cursorSlot(at)) ?? null,
+    async saveCursor(at, value, opts) {
+      if (opts?.keepSaved !== true || !t.cursors.has(cursorSlot(at))) t.cursors.set(cursorSlot(at), value);
     },
-    archiveDeletedArtifact: async (archive) => archiveArtifactIn(t, archive),
-    ...routingOn(t),
+    ...workspacesOn(t),
     ...lettersOn(t),
-    ...cursorsOn(t),
   };
 }

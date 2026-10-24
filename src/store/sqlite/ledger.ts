@@ -147,7 +147,8 @@ function recordTurnVia(on: OnHandle, turn: LedgerTurn, prune: DeliveryPruneSched
       if (delivery !== undefined) recordDelivery(db, delivery, prune);
     });
   } catch (error) {
-    noteLedgerRowSkipped(error);
+    // With no rows tried, the event's own failure line is the only one true.
+    if (turn.uses.length > 0) noteLedgerRowSkipped(error);
     if (!opened && delivery !== undefined) writeDeliveryEventVia(on, delivery, prune);
   }
 }
@@ -176,8 +177,8 @@ function pilotArm(
     : (readPilotArm(db, sessionId, ownTenantOnly ? tenantId : ALL_TENANTS) ?? hashArm(sessionId, rateBp));
 }
 
-/** Each call runs on the request's handle or a short-lived one. The delivery write takes the opener, since it is
- * fail-soft on an open that fails. */
+/** Each call runs on the request's handle or a short-lived one. A turn takes the opener, since its delivery event is
+ * tried again on its own when the open fails. */
 export function sqliteLedger(on: OnHandle): Ledger {
   // One schedule per store, so a long-lived server prunes the delivery ledger once a minute, not on every event.
   const prune = deliveryPruneSchedule();
@@ -197,7 +198,6 @@ export function sqliteLedger(on: OnHandle): Ledger {
           () => hashArm(sessionId, rateBp),
         ),
       ),
-    writeDeliveryEvent: (input) => answered(() => writeDeliveryEventVia(on, input, prune)),
     ...bound<Pick<Ledger, 'replaceRereads'>>(on, { replaceRereads: recordRereads }),
   };
 }
