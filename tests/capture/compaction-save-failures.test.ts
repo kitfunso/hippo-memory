@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { saveCompaction, type PostCompactPayload } from '../../src/surface/capture/compaction-record.js';
+import type { PostCompactPayload } from '../../src/base/session/capture-contract.js';
+import { saveCompaction } from '../../src/surface/capture/compaction-record.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { log as logger } from '../../src/base/util/log.js';
 import { removeScratch, scratch, summaryWith, type Scratch } from '../_helpers/compaction-hooks.js';

@@ -15,7 +15,7 @@ import { parkInDlq } from '../dlq.js';
 import { errorFields, log } from '../../../base/util/log.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
-import { resolveTenantForSlackTeam, type SlackFallback } from './tenant-routing.js';
+import { resolveTenant, type RouteFallback } from '../tenant-route.js';
 import type { Context } from '../../../api/index.js';
 import {
   HttpError,
@@ -165,11 +165,11 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     return;
   }
   if (answerUrlVerification(res, body)) return;
-  // Fail closed: resolveTenantForSlackTeam returns null for an unknown team on a non-empty slack_workspaces; park it in
+  // Fail closed: resolveTenant returns null for an unknown team on a non-empty slack_workspaces; park it in
   // slack_dlq (bucket='unroutable') and still ACKs 200 so Slack stops retrying; never call ingest.
   let resolvedTenant: string | null = null;
   if (isSlackEventEnvelope(body)) {
-    resolvedTenant = await resolveTenantForSlackTeam(d.store, body.team_id, hostFallback());
+    resolvedTenant = await resolveTenant(d.store, { connector: 'slack', teamId: body.team_id }, hostFallback());
     if (resolvedTenant === null) {
       await parkAndAck(d, {
         tenantId: null, // unroutable - stored as '__unroutable__'
@@ -202,7 +202,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   await dispatchSlackEvent(d, ctx, body);
 }
 
-const hostFallback = (): SlackFallback => ({
+const hostFallback = (): RouteFallback => ({
   hostTenant: envTenant(),
   allowUnknown: envSlackAllowUnknownTeamFallback(),
 });
@@ -211,7 +211,9 @@ async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | nu
   // Attribute the parse failure to the originating workspace via the regex-extracted team_id; a null or unknown team
   // writes tenantId=null, which lands as '__unroutable__'.
   const parseFailTenant =
-    teamIdFromRaw !== null ? await resolveTenantForSlackTeam(d.store, teamIdFromRaw, hostFallback()) : null;
+    teamIdFromRaw !== null
+      ? await resolveTenant(d.store, { connector: 'slack', teamId: teamIdFromRaw }, hostFallback())
+      : null;
   await parkAndAck(d, {
     tenantId: parseFailTenant, // null → '__unroutable__' sentinel
     teamId: teamIdFromRaw,

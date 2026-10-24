@@ -10,7 +10,7 @@ import {
   type Context,
 } from '../../src/server.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { snapshotFields } from '../../src/domain/capture/working-state.js';
+import { snapshotFields } from '../../src/base/session/working-state.js';
 import {
   ALICE,
   BOB,

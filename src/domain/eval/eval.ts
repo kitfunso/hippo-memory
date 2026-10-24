@@ -7,7 +7,7 @@ import type { EmbedderFor } from '../../base/ports/embedder.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { searchBothHybrid } from '../sharing/search-both.js';
 import type { VectorSource } from '../search/vector.js';
-import type { ConfiguredFolder } from '../search/embed-memories.js';
+import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { SharingStore } from '../sharing/text-keys.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 

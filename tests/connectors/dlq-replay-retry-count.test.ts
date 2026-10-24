@@ -20,9 +20,19 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
   const countOf = (items: { id: number; retryCount: number }[], id: number): number =>
     items.find((i) => i.id === id)?.retryCount ?? -1;
   const githubCount = async (id: number): Promise<number> =>
-    countOf(await sqliteStore(root).connectorEvents.deadLetters('github', 'default', 100), id);
+    countOf(
+      await sqliteStore(root).connectorEvents.deadLetters('github', 'default', {
+        limit: 100,
+      }),
+      id,
+    );
   const slackCount = async (id: number): Promise<number> =>
-    countOf(await sqliteStore(root).connectorEvents.deadLetters('slack', 'default', 100), id);
+    countOf(
+      await sqliteStore(root).connectorEvents.deadLetters('slack', 'default', {
+        limit: 100,
+      }),
+      id,
+    );
 
   it('unparseable payload', async () => {
     const g = await parkInDlq(githubDlq, sqliteStore(root), {
@@ -43,7 +53,12 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
     });
     const gr = await replayGitHub(apiCtx(root, 'default', { subject: 'cli', role: 'admin' }), g);
     const sr = await replaySlack(
-      { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root), infra: testInfra() },
+      {
+        tenantId: 'default',
+        store: sqliteStore(root),
+        config: loadConfig(root),
+        infra: testInfra(),
+      },
       s,
       {
         force: true,
@@ -76,7 +91,12 @@ describe('failed replay bumps retry_count by exactly one, for both connectors', 
       webhookSecret: 'real',
     });
     const sr = await replaySlack(
-      { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root), infra: testInfra() },
+      {
+        tenantId: 'default',
+        store: sqliteStore(root),
+        config: loadConfig(root),
+        infra: testInfra(),
+      },
       s,
       {
         signingSecret: 'real',

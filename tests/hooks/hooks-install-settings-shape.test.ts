@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../../src/cli.js';
 import { COMMANDS } from '../../src/surface/cli/verbs.js';
 import { undeclaredFlags, type VerbFlags } from '../../src/surface/cli/flags.js';
-import { HOOKS } from '../../src/domain/hooks/hook-blocks.js';
+import { HOOKS } from '../../src/surface/hooks-install/rules/hook-blocks.js';
 import { installJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
 import { resolveJsonHookPaths } from '../../src/surface/hooks-install/json-hooks.js';
 import { installOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';

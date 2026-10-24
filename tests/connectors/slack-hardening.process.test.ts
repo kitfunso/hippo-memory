@@ -5,7 +5,7 @@ import { remember } from '../../src/api/index.js';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../../src/db/index.js';
-import { resolveTenantForSlackTeam, type SlackFallback } from '../../src/surface/connectors/slack/tenant-routing.js';
+import { resolveTenant, type RouteFallback } from '../../src/surface/connectors/tenant-route.js';
 import { ingestMessage, type IngestInput } from '../../src/surface/connectors/slack/ingest.js';
 import type { IngestResult } from '../../src/surface/connectors/ingest.js';
 import { messageToRememberOpts } from '../../src/surface/connectors/slack/transform.js';
@@ -26,7 +26,10 @@ import { envTenant } from '../../src/base/util/env.js';
 import { testInfra } from '../_helpers/infra.js';
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
-const fallback = (allowUnknown = false): SlackFallback => ({ hostTenant: envTenant(), allowUnknown });
+const fallback = (allowUnknown = false): RouteFallback => ({
+  hostTenant: envTenant(),
+  allowUnknown,
+});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -66,7 +69,9 @@ describe('Slack hardening + migration v19', () => {
     try {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: PRAGMA table_info() always returns rows with a name column.
-      const cols = db.prepare(`PRAGMA table_info(slack_dlq)`).all() as Array<{ name: string }>;
+      const cols = db.prepare(`PRAGMA table_info(slack_dlq)`).all() as Array<{
+        name: string;
+      }>;
       const names = cols.map((c) => c.name);
       expect(names).toContain('team_id');
       expect(names).toContain('bucket');
@@ -79,11 +84,13 @@ describe('Slack hardening + migration v19', () => {
   });
 
   // 2. Unknown team + empty workspaces → fallback.
-  it('resolveTenantForSlackTeam: empty slack_workspaces → env fallback', async () => {
+  it('resolveTenant: empty slack_workspaces → env fallback', async () => {
     const restore = withEnv('HIPPO_TENANT', 'env-tenant-A');
     const db = openHippoDb(root);
     try {
-      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN', fallback())).toBe('env-tenant-A');
+      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TUNKNOWN' }, fallback())).toBe(
+        'env-tenant-A',
+      );
     } finally {
       closeHippoDb(db);
       restore();
@@ -91,7 +98,7 @@ describe('Slack hardening + migration v19', () => {
   });
 
   // 3. Unknown team + non-empty workspaces → fail closed (null).
-  it('resolveTenantForSlackTeam: non-empty workspaces + unknown team → null (fail closed)', async () => {
+  it('resolveTenant: non-empty workspaces + unknown team → null (fail closed)', async () => {
     const restore = withEnv('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK', undefined);
     const db = openHippoDb(root);
     try {
@@ -100,7 +107,7 @@ describe('Slack hardening + migration v19', () => {
         'tenant-known',
         new Date().toISOString(),
       );
-      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN', fallback())).toBeNull();
+      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TUNKNOWN' }, fallback())).toBeNull();
     } finally {
       closeHippoDb(db);
       restore();
@@ -108,7 +115,7 @@ describe('Slack hardening + migration v19', () => {
   });
 
   // 4. Escape hatch SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK=1.
-  it('resolveTenantForSlackTeam: escape hatch returns env tenant when both flag and workspaces non-empty', async () => {
+  it('resolveTenant: escape hatch returns env tenant when both flag and workspaces non-empty', async () => {
     const r2 = withEnv('HIPPO_TENANT', 'env-fallback');
     const db = openHippoDb(root);
     try {
@@ -117,7 +124,9 @@ describe('Slack hardening + migration v19', () => {
         'tenant-known',
         new Date().toISOString(),
       );
-      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN', fallback(true))).toBe('env-fallback');
+      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TUNKNOWN' }, fallback(true))).toBe(
+        'env-fallback',
+      );
     } finally {
       closeHippoDb(db);
       r2();
@@ -196,13 +205,22 @@ describe('Slack hardening + migration v19', () => {
 
   // The fast pre-check answers a replay; a second worker whose pre-check ran too early is caught by the event-log insert inside its own write.
   it('ingest race: duplicate event_id yields exactly one memory + skipped_duplicate via afterWrite throw', async () => {
-    const ctx: FullContext = apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
+    const ctx: FullContext = apiCtx(root, 'default', {
+      subject: 'connector:slack',
+      role: 'admin',
+    });
 
     // First call: ordinary ingest succeeds and writes to slack_event_log.
     const r1 = await ingestMessage(ctx, {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
-      message: { type: 'message', channel: 'C1', user: 'U1', text: 'race-msg', ts: '1700.000099' },
+      message: {
+        type: 'message',
+        channel: 'C1',
+        user: 'U1',
+        text: 'race-msg',
+        ts: '1700.000099',
+      },
       eventId: 'EvRace',
     });
     expect(r1.status).toBe('ingested');
@@ -214,7 +232,13 @@ describe('Slack hardening + migration v19', () => {
     const r2 = await ingestMessage(ctx, {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
-      message: { type: 'message', channel: 'C1', user: 'U1', text: 'race-msg', ts: '1700.000099' },
+      message: {
+        type: 'message',
+        channel: 'C1',
+        user: 'U1',
+        text: 'race-msg',
+        ts: '1700.000099',
+      },
       eventId: 'EvRace',
     });
     expect(r2.status).toBe('duplicate');
@@ -224,7 +248,13 @@ describe('Slack hardening + migration v19', () => {
     const raced: IngestInput = {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
-      message: { type: 'message', channel: 'C1', user: 'U1', text: 'second race-msg', ts: '1700.000100' },
+      message: {
+        type: 'message',
+        channel: 'C1',
+        user: 'U1',
+        text: 'second race-msg',
+        ts: '1700.000100',
+      },
       eventId: 'EvRaceB',
     };
     const racedEventId = raced.eventId;
@@ -235,19 +265,30 @@ describe('Slack hardening + migration v19', () => {
     const scratch = makeRoot('slack-winner');
     let settled: IngestResult[];
     let loser: IngestResult;
-    const winnerCtx = apiCtx(scratch, 'default', { subject: 'connector:slack', role: 'admin' });
+    const winnerCtx = apiCtx(scratch, 'default', {
+      subject: 'connector:slack',
+      role: 'admin',
+    });
     const w = await remember(winnerCtx, {
       ...racedOpts,
       untrusted: true,
       event: { connector: 'slack', eventId: racedEventId },
     });
-    settled = [{ status: w.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: w.id }];
+    settled = [
+      {
+        status: w.duplicate ? 'skipped_duplicate' : 'ingested',
+        memoryId: w.id,
+      },
+    ];
     const staged = await stageScratchWinner(root, scratch, ['memories', 'slack_event_log']);
     loser = await ingestMessage(ctx, raced);
     await staged.committed;
 
     expect(settled.map((w) => w.status)).toEqual(['ingested']);
-    expect(loser).toEqual({ status: 'skipped_duplicate', memoryId: settled[0].memoryId });
+    expect(loser).toEqual({
+      status: 'skipped_duplicate',
+      memoryId: settled[0].memoryId,
+    });
     // One new memory row, the winner's: the loser's write rolled back.
     expect(loadAllEntries(root, 'default').length).toBe(memBefore + 1);
 
@@ -330,7 +371,7 @@ describe('Slack hardening + migration v19', () => {
     const ts = String(Math.floor(Date.now() / 1000));
     const sigVal = sign(SECRET, ts, body);
 
-    // Pre-register the workspace so resolveTenantForSlackTeam succeeds on replay.
+    // Pre-register the workspace so resolveTenant succeeds on replay.
     {
       const db = openHippoDb(root);
       try {
@@ -358,7 +399,12 @@ describe('Slack hardening + migration v19', () => {
     // Replay using the current secret. Use a wide skew override so the test is
     // not flaky against the now/skew check inside verifySlackSignature.
     const result = await replaySlackDlqEntry(
-      { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root), infra: testInfra() },
+      {
+        tenantId: 'default',
+        store: sqliteStore(root),
+        config: loadConfig(root),
+        infra: testInfra(),
+      },
       dlqId,
       { signingSecret: SECRET, now: Number(ts), skewSeconds: 60 },
     );
@@ -401,7 +447,11 @@ describe('Slack hardening + migration v19', () => {
     const fetcher = slackHistoryFetcher('xoxb-fake', fakeFetch);
 
     // First page (resume): caller passes oldest.
-    await fetcher({ channelId: 'C1', cursor: null, oldest: '1700000000.000001' });
+    await fetcher({
+      channelId: 'C1',
+      cursor: null,
+      oldest: '1700000000.000001',
+    });
     // Second page: caller passes cursor only, no oldest.
     await fetcher({ channelId: 'C1', cursor: 'NEXT_TOKEN' });
 

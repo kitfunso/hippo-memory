@@ -14,7 +14,6 @@ import type {
   ConnectorEventRecord,
   ConnectorWriteOutcome,
   DeadLetterRows,
-  DeletionTarget,
 } from '../../src/store/port.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
@@ -28,7 +27,7 @@ import {
   expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { markGitHubEventSeen, markSlackEventSeen, writeEntry } from '../_helpers/root-forms.js';
-import type { GitHubRouting, StoredCursors, SlackTeamRoute, SlackWorkspace } from '../../src/store/port/connectors.js';
+import type { CursorKey, GitHubStream, SlackWorkspace, TenantRoute } from '../../src/store/port/connectors.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { memorySide } from '../_helpers/memory-side.js';
 import { sqliteConnectorEventsSide, type ConnectorEventsSide } from '../_helpers/connector-sides.js';
@@ -48,10 +47,8 @@ type Archived = { readonly duplicate: boolean; readonly archived: number };
 type Letter = DeadLetterRows['slack'] | DeadLetterRows['github'];
 type Value =
   | ConnectorEventRecord
-  | DeletionTarget
   | Archived
-  | SlackTeamRoute
-  | GitHubRouting
+  | TenantRoute
   | ConnectorWriteOutcome
   | Row[]
   | number
@@ -60,7 +57,6 @@ type Value =
   | Letter[]
   | null
   | string
-  | StoredCursors
   | SlackWorkspace
   | SlackWorkspace[]
   | boolean;
@@ -104,7 +100,10 @@ function seed(dir: string): Seeded {
       kind: 'raw',
       artifactRef: ONLY_B_REF,
     }),
-    note: createMemory('a distilled note under the comment ref', { tenantId: TENANT_A, artifactRef: COMMENT_REF }),
+    note: createMemory('a distilled note under the comment ref', {
+      tenantId: TENANT_A,
+      artifactRef: COMMENT_REF,
+    }),
     commentB: createMemory('globex raw comment under the comment ref', {
       tenantId: TENANT_B,
       kind: 'raw',
@@ -114,7 +113,12 @@ function seed(dir: string): Seeded {
   for (const entry of Object.values(rows)) writeEntry(dir, entry, { actor: 'cli' });
   markSlackEventSeen(dir, 'Ev_empty', null);
   markSlackEventSeen(dir, 'Ev_stored', rows.message.id);
-  markGitHubEventSeen(dir, { idempotencyKey: 'key-empty', deliveryId: 'd-seed', eventName: 'issues', memoryId: null });
+  markGitHubEventSeen(dir, {
+    idempotencyKey: 'key-empty',
+    deliveryId: 'd-seed',
+    eventName: 'issues',
+    memoryId: null,
+  });
   markGitHubEventSeen(dir, {
     idempotencyKey: 'key-stored',
     deliveryId: 'd-seed',
@@ -155,7 +159,12 @@ async function runSide(side: ConnectorEventsSide, calls: readonly Call[], guard:
   const outcomes: Outcome<Value>[] = [];
   for (const call of calls) outcomes.push(await outcomeOf(() => guard(() => call(group, side.store))));
   await side.store.close();
-  return { outcomes, audit: side.auditRows(), events: side.events(), letters: side.letters() };
+  return {
+    outcomes,
+    audit: side.auditRows(),
+    events: side.events(),
+    letters: side.letters(),
+  };
 }
 
 /** The other store's calls run with hippo.db blocked, so a method that falls back to it throws instead of matching by accident. */
@@ -170,9 +179,17 @@ async function conforms(
   return sqlite;
 }
 
-const slack = (eventId: string): ConnectorEvent => ({ connector: 'slack', eventId });
+const slack = (eventId: string): ConnectorEvent => ({
+  connector: 'slack',
+  eventId,
+});
 const github = (idempotencyKey: string, deliveryId = 'd-1') =>
-  ({ connector: 'github', idempotencyKey, deliveryId, eventName: 'issue_comment' }) as const;
+  ({
+    connector: 'github',
+    idempotencyKey,
+    deliveryId,
+    eventName: 'issue_comment',
+  }) as const;
 const record =
   (event: ConnectorEvent): Call =>
   (g) =>
@@ -184,11 +201,16 @@ const mark =
 const target =
   (event: ConnectorEvent, artifactRef: string, tenantId: string): Call =>
   (g) =>
-    g.deletionTarget({ event, artifactRef, tenantId });
+    g.eventRecord(event, { artifactRef, tenantId });
 const archive =
   (event: ReturnType<typeof github>, artifactRef: string): Call =>
   (g) =>
-    g.archiveDeletedArtifact({ tenantId: TENANT_A, actor: ACTOR, artifactRef, reason: REASON, event });
+    g.markEventSeen(event, {
+      tenantId: TENANT_A,
+      actor: ACTOR,
+      artifactRef,
+      reason: REASON,
+    });
 const park =
   (letter: ConnectorDeadLetter): Call =>
   (g) =>
@@ -200,7 +222,11 @@ const writeRaw =
 const readBack =
   (tenantId: string, ...ids: string[]): Call =>
   async (_g, store) =>
-    (await store.entriesByIds(ids, tenantId)).map((e) => ({ id: e.id, tenantId: e.tenantId, kind: e.kind }));
+    (await store.entriesByIds(ids, tenantId)).map((e) => ({
+      id: e.id,
+      tenantId: e.tenantId,
+      kind: e.kind,
+    }));
 const values = (side: Side): unknown[] => side.outcomes.map((o) => ('value' in o ? o.value : o));
 
 /** The audit rows a run added, without the ids and times both sides already matched on. */
@@ -218,7 +244,14 @@ function newEvents(side: Side): LoggedEvent[] {
 }
 const loggedRow = (event: ConnectorEvent, memoryId: string | null): LoggedEvent =>
   event.connector === 'slack'
-    ? { connector: 'slack', eventKey: event.eventId, memoryId, deliveryId: null, eventName: null, loggedAt: NOW }
+    ? {
+        connector: 'slack',
+        eventKey: event.eventId,
+        memoryId,
+        deliveryId: null,
+        eventName: null,
+        loggedAt: NOW,
+      }
     : {
         connector: 'github',
         eventKey: event.idempotencyKey,
@@ -292,13 +325,17 @@ describe('ConnectorEvents.markEventSeen', () => {
       record(slack('Ev_stored')),
       record(github('key-stored')),
     ]);
+    const [logged, duplicate] = [false, true].map((d) => ({
+      duplicate: d,
+      archived: 0,
+    }));
     expect(values(side)).toEqual([
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
+      logged,
+      duplicate,
+      logged,
+      duplicate,
+      duplicate,
+      duplicate,
       { seen: true, memoryId: null },
       { seen: true, memoryId: message.id },
       { seen: true, memoryId: message.id },
@@ -311,7 +348,7 @@ describe('ConnectorEvents.markEventSeen', () => {
   });
 });
 
-describe('ConnectorEvents.deletionTarget', () => {
+describe('ConnectorEvents.eventRecord with an artifact', () => {
   it("answers the tenant's own raw row under the ref and never another tenant's, seen for an event logged before, and writes nothing", async () => {
     const { message, messageB } = seeded;
     const side = await conforms([
@@ -330,16 +367,20 @@ describe('ConnectorEvents.deletionTarget', () => {
       none,
       none,
       none,
-      { seen: true },
-      { seen: true },
+      { seen: true, memoryId: null },
+      { seen: true, memoryId: message.id },
     ]);
     expect([newEvents(side), added(side)]).toEqual([[], []]);
   });
 });
 
-describe('ConnectorEvents.archiveDeletedArtifact', () => {
+describe('ConnectorEvents.markEventSeen with a deletion', () => {
   const fresh = (content: string): MemoryEntry =>
-    createMemory(content, { tenantId: TENANT_A, kind: 'raw', artifactRef: COMMENT_REF });
+    createMemory(content, {
+      tenantId: TENANT_A,
+      kind: 'raw',
+      artifactRef: COMMENT_REF,
+    });
   const remembered = (e: MemoryEntry) => ({
     tenantId: TENANT_A,
     actor: ACTOR,
@@ -394,15 +435,15 @@ describe('ConnectorEvents.archiveDeletedArtifact', () => {
   });
 });
 
-describe('ConnectorEvents.slackTeamRoute and githubRouting', () => {
+describe('ConnectorEvents.route', () => {
   const team =
     (teamId: string): Call =>
     (g) =>
-      g.slackTeamRoute(teamId);
+      g.route({ connector: 'slack', teamId });
   const routing =
     (query: { installationId?: string | null; repoFullName?: string | null }): Call =>
     (g) =>
-      g.githubRouting(query);
+      g.route({ connector: 'github', ...query });
   const CALLS = [
     team('T_ACME'),
     team('T_OTHER'),
@@ -414,34 +455,24 @@ describe('ConnectorEvents.slackTeamRoute and githubRouting', () => {
     routing({}),
   ];
 
-  it('answer the registered tenant, an installation ahead of a repository and the first tenant to register a repository, else the table sizes', async () => {
+  it('answers the registered tenant, an installation ahead of a repository and the first tenant to register a repository, else the rows a match could have come from', async () => {
     const side = await conforms(CALLS, registerRoutes);
-    const sized = (tenant: string | null) => ({ installations: 1, repositories: 3, tenant });
+    const routes = (n: number) => ({ tenantId: null, routes: n });
     expect(values(side)).toEqual([
       { tenantId: TENANT_A },
-      { tenantId: null, workspaceCount: 1 },
-      sized(TENANT_A),
-      sized(null),
-      sized(TENANT_A),
-      sized(TENANT_B),
-      sized(null),
-      sized(null),
+      routes(1),
+      { tenantId: TENANT_A },
+      routes(1),
+      { tenantId: TENANT_A },
+      { tenantId: TENANT_B },
+      routes(4),
+      routes(4),
     ]);
   });
 
-  it('with nothing registered answer no tenant and empty tables', async () => {
+  it('with nothing registered answers no tenant and no rows', async () => {
     const side = await conforms(CALLS);
-    const empty = { installations: 0, repositories: 0, tenant: null };
-    expect(values(side)).toEqual([
-      { tenantId: null, workspaceCount: 0 },
-      { tenantId: null, workspaceCount: 0 },
-      empty,
-      empty,
-      empty,
-      empty,
-      empty,
-      empty,
-    ]);
+    expect(values(side)).toEqual(CALLS.map(() => ({ tenantId: null, routes: 0 })));
   });
 });
 
@@ -455,7 +486,13 @@ describe('ConnectorEvents.parkDeadLetter', () => {
       signature: null,
     } as const;
     const side = await conforms([
-      park({ connector: 'slack', ...common, teamId: 'T_ACME', signature: 'v0=abc', slackTimestamp: '1700000000' }),
+      park({
+        connector: 'slack',
+        ...common,
+        teamId: 'T_ACME',
+        signature: 'v0=abc',
+        slackTimestamp: '1700000000',
+      }),
       park({
         connector: 'github',
         ...common,
@@ -482,7 +519,14 @@ describe('ConnectorEvents.parkDeadLetter', () => {
       retriedAt: null,
     };
     expect(side.letters).toEqual([
-      { ...row, connector: 'slack', id: 1, teamId: 'T_ACME', signature: 'v0=abc', slackTimestamp: '1700000000' },
+      {
+        ...row,
+        connector: 'slack',
+        id: 1,
+        teamId: 'T_ACME',
+        signature: 'v0=abc',
+        slackTimestamp: '1700000000',
+      },
       { ...row, connector: 'slack', id: 2, tenantId: '__unroutable__' },
       {
         ...row,
@@ -501,11 +545,26 @@ describe('ConnectorEvents.parkDeadLetter', () => {
 });
 
 describe('ConnectorEvents dead-letter reads', () => {
-  const common = { rawPayload: '{"half":', error: 'invalid JSON', bucket: 'parse_error', signature: null } as const;
+  const common = {
+    rawPayload: '{"half":',
+    error: 'invalid JSON',
+    bucket: 'parse_error',
+    signature: null,
+  } as const;
   const LETTERS = [
-    park({ connector: 'slack', ...common, tenantId: TENANT_A, teamId: 'T_ACME' }),
+    park({
+      connector: 'slack',
+      ...common,
+      tenantId: TENANT_A,
+      teamId: 'T_ACME',
+    }),
     park({ connector: 'slack', ...common, tenantId: TENANT_B }),
-    park({ connector: 'github', ...common, tenantId: TENANT_A, eventName: 'issues' }),
+    park({
+      connector: 'github',
+      ...common,
+      tenantId: TENANT_A,
+      eventName: 'issues',
+    }),
     park({ connector: 'slack', ...common, tenantId: TENANT_A }),
   ];
 
@@ -514,20 +573,20 @@ describe('ConnectorEvents dead-letter reads', () => {
       ...LETTERS,
       (g) => g.markDeadLetterRetried('slack', TENANT_A, 1),
       (g) => g.markDeadLetterRetried('github', TENANT_A, 9),
-      (g) => g.deadLetters('slack', TENANT_A, 10),
-      (g) => g.deadLetters('slack', TENANT_A, 1),
-      (g) => g.deadLetters('github', TENANT_B, 10),
-      (g) => g.deadLetter('github', TENANT_A, 1),
-      (g) => g.deadLetter('slack', TENANT_B, 2),
-      (g) => g.deadLetter('slack', TENANT_A, 9),
+      (g) => g.deadLetters('slack', TENANT_A, { limit: 10 }),
+      (g) => g.deadLetters('slack', TENANT_A, { limit: 1 }),
+      (g) => g.deadLetters('github', TENANT_B, { limit: 10 }),
+      (g) => g.deadLetters('github', TENANT_A, { id: 1 }),
+      (g) => g.deadLetters('slack', TENANT_B, { id: 2 }),
+      (g) => g.deadLetters('slack', TENANT_A, { id: 9 }),
     ]);
-    // SAFETY: calls 6 to 10 are the three lists and two found rows, in that order.
-    const [slackA, retried, , github, slackB] = values(side).slice(6) as [Letter[], Letter[], Letter[], Letter, Letter];
+    // SAFETY: calls 6 to 10 are the three lists and two reads by id, in that order.
+    const [slackA, retried, , [github], [slackB]] = values(side).slice(6) as Letter[][];
     expect(slackA.map((r) => [r.id, r.retryCount, r.retriedAt])).toEqual([
       [1, 1, NOW],
       [3, 0, null],
     ]);
-    expect([retried.length, values(side)[8], values(side)[11]]).toEqual([1, [], null]);
+    expect([retried.length, values(side)[8], values(side)[11]]).toEqual([1, [], []]);
     expect([github, slackB]).toMatchObject([
       { id: 1, tenantId: TENANT_A, eventName: 'issues', retryCount: 0 },
       { id: 2, tenantId: TENANT_B, teamId: null },
@@ -537,37 +596,53 @@ describe('ConnectorEvents dead-letter reads', () => {
 });
 
 describe('ConnectorEvents backfill cursors', () => {
+  const channel = (tenantId: string): CursorKey => ({
+    connector: 'slack',
+    tenantId,
+    channelId: 'C1',
+  });
+  const STREAMS: readonly GitHubStream[] = ['issues', 'issueComments', 'prReviewComments'];
+  const hwm = (tenantId: string, stream: GitHubStream): CursorKey => ({
+    connector: 'github',
+    tenantId,
+    repo: 'acme/demo',
+    stream,
+  });
+  const marks = (tenantId: string): Call[] => STREAMS.map((stream) => (g) => g.cursor(hwm(tenantId, stream)));
+  const seed = (since: string): Call[] =>
+    STREAMS.map((stream) => (g) => g.saveCursor(hwm(TENANT_A, stream), since, { keepSaved: true }));
+
   it("keep each tenant's Slack channel cursor and GitHub high-water marks, and a seed fills only the marks not yet saved", async () => {
     const side = await conforms([
-      (g) => g.slackCursor(TENANT_A, 'C1'),
-      (g) => g.saveSlackCursor(TENANT_A, 'C1', '1700.1'),
-      (g) => g.saveSlackCursor(TENANT_A, 'C1', '1700.2'),
-      (g) => g.slackCursor(TENANT_A, 'C1'),
-      (g) => g.slackCursor(TENANT_B, 'C1'),
-      (g) => g.githubCursors(TENANT_A, 'acme/demo'),
-      (g) => g.saveGitHubHwm(TENANT_A, 'acme/demo', 'issue_comments_hwm', '2026-02-01T00:00:00Z'),
-      (g) => g.seedGitHubCursors(TENANT_A, 'acme/demo', '2026-01-01T00:00:00Z'),
-      (g) => g.seedGitHubCursors(TENANT_A, 'acme/demo', '2025-01-01T00:00:00Z'),
-      (g) => g.githubCursors(TENANT_A, 'acme/demo'),
-      (g) => g.githubCursors(TENANT_B, 'acme/demo'),
+      (g) => g.cursor(channel(TENANT_A)),
+      (g) => g.saveCursor(channel(TENANT_A), '1700.1'),
+      (g) => g.saveCursor(channel(TENANT_A), '1700.2'),
+      (g) => g.saveCursor(channel(TENANT_A), '1700.0', { keepSaved: true }),
+      (g) => g.cursor(channel(TENANT_A)),
+      (g) => g.cursor(channel(TENANT_B)),
+      ...marks(TENANT_A),
+      (g) => g.saveCursor(hwm(TENANT_A, 'issueComments'), '2026-02-01T00:00:00Z'),
+      ...seed('2026-01-01T00:00:00Z'),
+      ...seed('2025-01-01T00:00:00Z'),
+      ...marks(TENANT_A),
+      ...marks(TENANT_B),
     ]);
-    const none = { issues: null, issueComments: null, prReviewComments: null };
+    const none = [null, null, null];
     expect(values(side)).toEqual([
       null,
       undefined,
       undefined,
+      undefined,
       '1700.2',
       null,
-      none,
+      ...none,
       undefined,
-      undefined,
-      undefined,
-      {
-        issues: '2026-01-01T00:00:00Z',
-        issueComments: '2026-02-01T00:00:00Z',
-        prReviewComments: '2026-01-01T00:00:00Z',
-      },
-      none,
+      ...STREAMS.map(() => undefined),
+      ...STREAMS.map(() => undefined),
+      '2026-01-01T00:00:00Z',
+      '2026-02-01T00:00:00Z',
+      '2026-01-01T00:00:00Z',
+      ...none,
     ]);
     expect([newEvents(side), added(side)]).toEqual([[], []]);
   });
@@ -580,7 +655,7 @@ describe('ConnectorEvents Slack workspace registry', () => {
         (g) => g.registerSlackWorkspace('T_ZED', TENANT_B),
         (g) => g.registerSlackWorkspace('T_ACME', TENANT_B),
         (g) => g.slackWorkspaces(),
-        (g) => g.slackTeamRoute('T_ACME'),
+        (g) => g.route({ connector: 'slack', teamId: 'T_ACME' }),
         (g) => g.removeSlackWorkspace('T_ZED'),
         (g) => g.removeSlackWorkspace('T_ZED'),
         (g) => g.slackWorkspaces(),

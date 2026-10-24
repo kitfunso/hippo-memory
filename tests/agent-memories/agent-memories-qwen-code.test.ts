@@ -6,7 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { qwenCodeAdapter, sanitizeCwd } from '../../src/domain/agent-memories/qwen-code.js';
-import type { AdapterContext, Scope } from '../../src/domain/agent-memories/types.js';
+import type { AdapterContext } from '../../src/domain/agent-memories/types.js';
+import type { Scope } from '../../src/base/memory/agent-memory-tools.js';
 import { REAL_IO } from '../_helpers/real-io.js';
 
 let tmp: string;

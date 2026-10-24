@@ -2,20 +2,18 @@
 // This module must never import cli.ts.
 
 import { envApiKey, envRequireServer } from '../../base/util/env.js';
-import { execFileSync } from 'child_process';
 import { isSharedStore } from '../../host/config-file.js';
-import { type ChurnStaleResult, detectChurnStale } from '../../domain/learn/invalidation.js';
-import { resolveProjectIdentity, isInitialized } from '../../host/project-identity.js';
+import { markChurnStale, type ChurnStaleResult } from '../../api/sleep/churn.js';
+import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { learn, CLI_LEARN } from '../../api/index.js';
 import { processGit } from '../../infra/git-runner.js';
-import { cliApiContext, cliInitGlobal, cliStore } from './api-context.js';
-import { errorMessage, log, errorFields } from '../../base/util/log.js';
+import { cliApiContext, cliInfra, cliInitGlobal, cliStore } from './api-context.js';
+import { log, errorFields } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { printError } from './output.js';
-import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
 import { type CliFlags, boolFlag } from './flag-values.js';
 
 export function requireInit(hippoRoot: string): void {
@@ -27,39 +25,16 @@ export function requireInit(hippoRoot: string): void {
   }
 }
 
-/** Runs detectChurnStale against every store this repo's memories can live in. */
+/** Runs churn staleness for the repo this process runs in, against every store its memories can live in. */
 export async function runChurnStaleForRepo(
   hippoRoot: string,
   tenantId: string,
   dryRun: boolean,
 ): Promise<{ root: string; result: ChurnStaleResult }[]> {
-  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-    timeout: GIT_CALL_TIMEOUT_MS,
-    windowsHide: true,
-  }).trim();
-  const { name: projectName, legacyName } = resolveProjectIdentity(process.cwd());
   const globalRoot = hippoHomeDir();
   const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
-  const results: { root: string; result: ChurnStaleResult }[] = [];
-  for (const root of roots) {
-    // One store failing must not abort sleep's later phases or skip the other store.
-    try {
-      const opts = { tenantId, projectName, legacyName, dryRun };
-      results.push({
-        root,
-        result: await detectChurnStale(cliStore(root), { root: repoRoot, git: processGit }, opts),
-      });
-    } catch (err) {
-      const message = errorMessage(err);
-      results.push({
-        root,
-        result: { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned: [], dryRun, preview: [], error: message },
-      });
-    }
-  }
-  return results;
+  const stores = roots.map((root) => ({ root, store: cliStore(root) }));
+  return markChurnStale({ tenantId, infra: cliInfra() }, stores, { repoDir: process.cwd(), dryRun });
 }
 
 /**

@@ -7,12 +7,12 @@ import type { HookRuntime } from '../../base/session/capture-contract.js';
 import { bookTokenUse } from '../../api/ledger-db.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';
 import { cliFolder, cliLedgerReach, cliSyncOptions } from './api-context.js';
-import { folderEmbedTarget } from '../../api/embeddings.js';
+import { detachedEmbedder } from '../../api/embeddings.js';
 import type { CaptureTarget } from '../capture/command.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../../base/util/hook-payload.js';
-import { importAtSessionEnd } from '../../domain/agent-memories/sync.js';
+import { importAtSessionEnd } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
-import { summaryLine } from '../../domain/agent-memories/report.js';
+import { summaryLine } from '../../base/memory/agent-memory-report.js';
 import { getHippoRoot, isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
@@ -157,8 +157,8 @@ export async function inPilotHoldout(
   return (await sessionPilotArm(tenantId, sessionId, opts.write, { reach })) === 'holdout';
 }
 
-/** What capture writes into for a store folder: its port, its config and the index that embeds the new rows. */
+/** What capture writes into for a store folder: its port, its config and what embeds the new rows. */
 export function captureTarget(root: string): CaptureTarget {
   const folder = cliFolder(root);
-  return { root, store: folder.store, config: folder.config, index: folderEmbedTarget(folder) };
+  return { root, store: folder.store, config: folder.config, embed: detachedEmbedder(folder) };
 }

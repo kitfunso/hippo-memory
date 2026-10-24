@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { serve } from '../../src/server.js';
 import { removeScratch, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
-import { sessionCookie, startDashboard } from '../_helpers/dashboard-fixture.js';
+import { startDashboard } from '../_helpers/dashboard-fixture.js';
 import { boundPort } from '../_helpers/listen.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
@@ -133,14 +133,18 @@ describe('hippo dashboard listener', () => {
     });
     children.push(child);
     const watched = watch(child);
-    // The token is never on stdout; the banner names the URL file that holds it.
+    // The ticket is never on stdout; the banner names the URL file that holds it.
     const [, port, urlFile] = await watched.printed(
       /Hippo Dashboard running at http:\/\/localhost:(\d+)\/ \(open the URL with its token from (.+)\)/,
     );
-    const token = /\?token=(\S+)/.exec(readFileSync(urlFile!.trim(), 'utf8'))?.[1];
+    const ticket = /\?token=(\S+)/.exec(readFileSync(urlFile!.trim(), 'utf8'))?.[1];
+    const ticketUrl = `http://127.0.0.1:${port}/?token=${ticket}`;
+    const signIn = await fetch(ticketUrl, { redirect: 'manual' });
+    expect(signIn.status).toBe(303);
+    expect((await fetch(ticketUrl, { redirect: 'manual' })).status).toBe(401);
     // A read wakes the reader thread, and the reply's kept-alive socket is one the stop has to close.
     const overview = await fetch(`http://127.0.0.1:${port}/api/overview`, {
-      headers: { cookie: sessionCookie(Number(port), token ?? '') },
+      headers: { cookie: (signIn.headers.get('set-cookie') ?? '').split(';')[0]! },
     });
     expect(overview.status, await overview.text()).toBe(200);
 

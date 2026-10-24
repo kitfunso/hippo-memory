@@ -12,12 +12,12 @@ function dashboardUrlFile(hippoRoot: string, platform: NodeJS.Platform): string 
   return path.join(platform === 'win32' ? hippoHomeDir() : hippoRoot, DASHBOARD_URL_FILE);
 }
 
-/** Writes the URL with its token to an owner-only file and prints where it is; a terminal, like a captured log, never
- * shows the token, since anyone who reads it can read every memory. */
+/** Writes the URL with its one-time ticket to an owner-only file and prints where it is; a terminal, like a captured
+ * log, never shows the ticket, since whoever spends it first can read every memory. */
 export function printDashboardBanner(
   hippoRoot: string,
   port: number,
-  token: string,
+  ticket: string,
   staticRoot: string | null,
   platform: NodeJS.Platform = process.platform,
 ): void {
@@ -25,7 +25,7 @@ export function printDashboardBanner(
   fs.mkdirSync(path.dirname(file), { recursive: true });
   // Created fresh, so its mode holds even where an older file had a wider one.
   fs.rmSync(file, { force: true });
-  fs.writeFileSync(file, `http://localhost:${port}/?token=${token}\n`, { flag: 'wx', mode: 0o600 });
+  fs.writeFileSync(file, `http://localhost:${port}/?token=${ticket}\n`, { flag: 'wx', mode: 0o600 });
   // The banner is the command's printed result, so it stays on stdout.
   console.log(`Hippo Dashboard running at http://localhost:${port}/ (open the URL with its token from ${file})`);
   if (staticRoot !== null) console.log(`Serving React UI from ${staticRoot}`);

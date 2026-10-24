@@ -11,7 +11,7 @@ import {
   opencodePluginPathOn,
   stripLegacyHooks,
   type OpencodePluginInstallResult,
-} from '../../domain/hooks/opencode.js';
+} from './rules/opencode.js';
 import { processHomes } from '../../host/agent-homes.js';
 
 // The installer module exposes the path it installs to.

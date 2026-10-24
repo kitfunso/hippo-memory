@@ -6,7 +6,7 @@ import { projectNames } from '../../base/scope/project-identity.js';
 import type { ContainerApply, ImportStep, MirrorFailure } from '../../store/port/agent-import.js';
 import type { ContainerWork } from './container-view.js';
 import { namesFoldedInto } from './project-folds.js';
-import { toolReport, type ImportReport } from './report.js';
+import { toolReport, type ImportReport } from '../../base/memory/agent-memory-report.js';
 import { containerId, containerPrefix, splitSource, type ContainerMachine } from './source.js';
 import type { SyncOptions } from './sync.js';
 import type { ImportStore } from './types.js';

@@ -2,9 +2,9 @@
 // `hippo learn`, init, sleep and MCP hippo_learn share it.
 
 import { ForbiddenError } from '../../base/errors/api-errors.js';
-import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../../domain/learn/autolearn.js';
+import { fetchGitLog, extractLessons, partitionLessons } from '../../domain/learn/autolearn.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import type { GitRunner } from '../../base/ports/git.js';
+import { isGitRepo, type GitRunner } from '../../base/ports/git.js';
 import { embedMemoryDetached } from '../../domain/search/embed-memories.js';
 import {
   extractInvalidationTarget,

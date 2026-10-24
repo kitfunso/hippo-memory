@@ -41,7 +41,7 @@ describe('light subpath import closures', () => {
         'base/util/home-path.ts',
         'base/util/secret-detect.ts',
         'surface/capture/working-state.ts',
-        'domain/capture/working-state.ts',
+        'base/session/working-state.ts',
         'surface/capture/failure-reading.ts',
         'surface/capture/handoff-evidence.ts',
         'base/util/compaction-items.ts',

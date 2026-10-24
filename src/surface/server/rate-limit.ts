@@ -48,12 +48,16 @@ function spend(b: Bucket): boolean {
   return allowed;
 }
 
-/** Frees one slot: the oldest bucket that has refilled to full, else the oldest that can still spend, else (every
- * bucket is throttled) the oldest. A throttled caller therefore keeps its bucket while others can be dropped. */
+// A request from an unseen key at the cap reads this many buckets at most, not the whole table.
+const EVICTION_SCAN = 64;
+
+/** Frees one slot from the EVICTION_SCAN oldest buckets: the oldest that has refilled to full, else the oldest that can
+ * still spend, else the oldest. A throttled caller therefore keeps its bucket while others can be dropped. */
 function makeRoom(buckets: Map<string, Bucket>, now: number, opts: RateLimiterOptions): void {
   if (buckets.size < opts.maxKeys) return;
   let spendable: string | undefined;
   let oldest: string | undefined;
+  let read = 0;
   for (const [key, b] of buckets) {
     oldest ??= key;
     const tokens = tokensAt(b, now, opts.ratePerSec, opts.burst);
@@ -62,16 +66,14 @@ function makeRoom(buckets: Map<string, Bucket>, now: number, opts: RateLimiterOp
       return;
     }
     if (tokens >= 1) spendable ??= key;
+    if (++read >= EVICTION_SCAN) break;
   }
   const victim = spendable ?? oldest;
   if (victim !== undefined) buckets.delete(victim);
 }
 
-/**
- * Token-bucket limiter with bounded memory: a sweep (at most once per `idleEvictMs`) drops idle buckets and a `maxKeys`
- * cap bounds the map. At the cap a full bucket goes first and a throttled one stays, so a flood of new keys cannot
- * reset a throttled caller unless every tracked key is throttled.
- */
+/** Token-bucket limiter with bounded memory: an idle sweep at most once per `idleEvictMs`, and a `maxKeys` cap. A flood
+ * of new keys cannot reset a throttled caller unless the EVICTION_SCAN oldest buckets are all throttled. */
 export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
   const { ratePerSec, burst, idleEvictMs } = opts;
   // Every request reaches these buckets because serve() holds the store's pidfile lock (claimPidfile).

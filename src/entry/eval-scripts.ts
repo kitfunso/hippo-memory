@@ -1,6 +1,8 @@
 // The functions eval and benchmark scripts call by name, with the real embedder, models, HTTP and ports wired in: a
 // frozen script re-points its import line here and keeps every call as written.
-import { folderEmbedTarget, type ConfiguredFolder, type EmbedTarget } from '../domain/search/embed-memories.js';
+import { folderEmbedTarget, type EmbedTarget } from '../domain/search/embed-memories.js';
+import type { ConfiguredFolder } from '../base/config/configured-folder.js';
+import type { HippoStore } from '../store/port.js';
 import { judgeOver, type JudgeOptions, type Judgment } from '../infra/judgment.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { httpOver } from '../infra/http.js';
@@ -26,7 +28,7 @@ const scriptRerankers = realRerankers();
 export { scriptRerankers as getReranker };
 
 /** A folder's embedding target, embedding with the real provider its config names. */
-export function folderIndex(folder: Omit<ConfiguredFolder, 'embedderFor'>): EmbedTarget {
+export function folderIndex(folder: Omit<ConfiguredFolder<HippoStore>, 'embedderFor'>): EmbedTarget {
   return folderEmbedTarget({ ...folder, embedderFor: resolveEmbeddingProvider });
 }
 

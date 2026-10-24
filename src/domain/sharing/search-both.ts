@@ -10,7 +10,7 @@ import {
   recallScopeFilter,
 } from '../../base/scope/recall-scope.js';
 import { hybridSearch, vectorSourceOf } from '../search/hybrid.js';
-import type { ConfiguredFolder } from '../search/embed-memories.js';
+import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { fitBudget } from '../search/finalize.js';
 import {
   DEFAULT_LOCAL_BUMP,
@@ -137,7 +137,7 @@ export async function searchBothHybrid(
 }
 
 /** The store's own vectors, with the embedding provider its folder's config names. */
-function folderVectorSource({ store, config }: ConfiguredFolder, embedderFor: EmbedderFor): VectorSource {
+function folderVectorSource({ store, config }: ConfiguredFolder<SharingStore>, embedderFor: EmbedderFor): VectorSource {
   return vectorSourceOf({ store, config, onHippoDb: true, embedderFor });
 }
 

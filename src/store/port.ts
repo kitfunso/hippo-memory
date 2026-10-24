@@ -139,7 +139,7 @@ export function requireGroup<G extends OptionalGroup>(store: HippoStore, group: 
 /** A store that sets the optional groups `G`, as a surface proves once before it calls in. */
 export type StoreWith<G extends OptionalGroup> = HippoStore & Pick<StoreGroups, G>;
 
-export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from './port/busy.js';
+export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../base/util/store-blocked.js';
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an await, since a lock wait
  * blocks the event loop; a lock timeout throws `StoreBusyError`. */
@@ -202,9 +202,6 @@ export type {
   ConnectorWrites,
   ConnectorEventRecord,
   DeliveryClaim,
-  DeletionLookup,
-  DeletionTarget,
-  ArtifactArchive,
   ConnectorDeadLetter,
   ConnectorEvents,
   DeadLetterConnector,

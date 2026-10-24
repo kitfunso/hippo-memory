@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { processEnv } from '../../base/util/env.js';
 import { claudeConfigDir, codexHomeDir, vscodeDataFolders } from '../../base/util/agent-homes.js';
 import { homeDir, processHomes } from '../../host/agent-homes.js';
-import { copilotHomeDir, type ToolDetection } from '../../domain/hooks/shared.js';
+import { copilotHomeDir, type ToolDetection } from './rules/shared.js';
 
 /** Codex counts as installed only when its config folder exists: Codex itself refuses a CODEX_HOME that is not a
  * folder. */

@@ -7,7 +7,8 @@ import { markdownNotes, readFolderStore, type FolderRules } from './folder-store
 import { gitLayout } from './git.js';
 import { textItemKeys } from './keys.js';
 import { splitMarkdownItems } from './markdown.js';
-import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
+import type { Adapter, AdapterContext, Container, Listing } from './types.js';
+import type { Scope } from '../../base/memory/agent-memory-tools.js';
 import { type JsonValue, isJsonObjectLiteral, parseJson, type JsonObject } from '../../base/util/json.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 

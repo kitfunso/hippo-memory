@@ -1,5 +1,5 @@
 // Installs and removes the Codex launcher wrapper on disk: reads its metadata, moves the launcher aside and writes the
-// wrapper. The paths and script text are domain/hooks/codex-wrapper.ts.
+// wrapper. The paths and script text are rules/codex-wrapper.ts.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../../host/atomic-write.js';
@@ -20,8 +20,8 @@ import {
   type CodexWrapperMetadata,
   type CodexWrapperPaths,
   type EnsureCodexWrapperResult,
-} from '../../domain/hooks/codex-wrapper.js';
-import { HIPPO_CODEX_WRAPPER_MARKER } from '../../domain/hooks/shared.js';
+} from './rules/codex-wrapper.js';
+import { HIPPO_CODEX_WRAPPER_MARKER } from './rules/shared.js';
 import { processHomes } from '../../host/agent-homes.js';
 
 // The installer module exposes the paths it installs to.

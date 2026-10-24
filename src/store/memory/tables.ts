@@ -3,7 +3,7 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
 import type { ObjectByKind, ObjectKind } from '../../base/records/object-types.js';
-import type { ConnectorDeadLetter, ConnectorEvent, SlackWorkspace, StoredCursors } from '../port/connectors.js';
+import type { ConnectorDeadLetter, ConnectorEvent, SlackWorkspace } from '../port/connectors.js';
 import type { Entity, Relation } from '../port/graph.js';
 import type { NewApiKey } from '../port/keys.js';
 import type { FailureOutcome, RoutineRule, RejectedValueRow } from '../port/rejections.js';
@@ -128,9 +128,8 @@ export interface MemoryTables extends SessionTables {
   readonly quarantine: QuarantineRow[];
   readonly deadLetters: ParkedLetter[];
   readonly slackWorkspaces: Map<string, SlackWorkspace>;
-  /** Latest timestamps by tenant and channel. */
-  readonly slackCursors: Map<string, string>;
-  readonly githubCursors: Map<string, StoredCursors>;
+  /** Backfill positions by cursorSlot: a Slack channel's newest timestamp, a GitHub stream's high-water mark. */
+  readonly cursors: Map<string, string>;
   /** Tenant by installation id. */
   readonly githubInstallations: Map<string, string>;
   /** Oldest first, then by tenant. */
@@ -176,8 +175,7 @@ export function emptyTables(): MemoryTables {
     quarantine: [],
     deadLetters: [],
     slackWorkspaces: new Map(),
-    slackCursors: new Map(),
-    githubCursors: new Map(),
+    cursors: new Map(),
     githubInstallations: new Map(),
     githubRepositories: [],
     deliveryClaims: new Map(),

@@ -19,6 +19,7 @@ import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { cliStdioHost } from './api-context.js';
 import { DEFAULT_DASHBOARD_PORT, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../server/defaults.js';
+import type { DashboardHandle } from '../server/dashboard-listener.js';
 
 export async function handleDashboard({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
@@ -27,15 +28,15 @@ export async function handleDashboard({ hippoRoot, tenantId, flags }: CommandCon
   const { builtStaticRoot } = await import('../dashboard/static-file.js');
   const token = randomBytes(32).toString('base64url');
   const opts = { hippoRoot, tenantId, port, token, handleSignals: true, bodyDeadlineMs: envBodyTimeoutMs() };
-  let bound: number;
+  let dashboard: DashboardHandle;
   try {
-    bound = (await serveDashboard(opts)).port;
+    dashboard = await serveDashboard(opts);
   } catch (err) {
     if (!(err instanceof DashboardListenError) || !(err.cause instanceof Error)) throw err;
     reportListenFailure(port, err.cause);
     return;
   }
-  printDashboardBanner(hippoRoot, bound, token, builtStaticRoot());
+  printDashboardBanner(hippoRoot, dashboard.port, dashboard.ticket(), builtStaticRoot());
   // A later throw ends in one log line and exit 1, as it does for serve and mcp.
   installCrashHandlers('dashboard');
   await new Promise(() => {}); // run until Ctrl+C

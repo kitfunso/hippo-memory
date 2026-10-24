@@ -226,7 +226,7 @@ const httpTool =
 // The dashboard builds its snapshot on a reader thread, so a statement on this thread during one of its reads fails here.
 const dashboardToken = randomBytes(16).toString('hex');
 const dashboard = await serveDashboard({ hippoRoot: localRoot, port: 0, token: dashboardToken, tenantId: 'default' });
-const minted = await fetch(`${dashboard.url}/api/overview?token=${dashboardToken}`);
+const minted = await fetch(`${dashboard.url}/api/overview?token=${dashboard.ticket()}`);
 const dashboardCookie = (minted.headers.get('set-cookie') ?? '').split(';')[0];
 const dashboardRead = (pathAndQuery) => async () => {
   const res = await fetch(`${dashboard.url}${pathAndQuery}`, { headers: { cookie: dashboardCookie } });

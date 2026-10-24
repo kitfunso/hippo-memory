@@ -5,7 +5,7 @@ import { isInitialized } from '../../host/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactions } from './compaction-record.js';
 import type { CompactionHooks, CompactionStart } from '../../store/port/capture.js';
 import { COMPACTION_DB_WAIT_MS } from '../../base/session/compaction-timing.js';
-import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../../domain/hooks/shared.js';
+import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks-install/rules/shared.js';
 import { processHomes } from '../../host/agent-homes.js';
 import {
   readClaudeCodePostCompact,
@@ -16,7 +16,7 @@ import {
 import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
-import { mergeWorkingState, type WorkingState } from '../../domain/capture/working-state.js';
+import { mergeWorkingState, type WorkingState } from '../../base/session/working-state.js';
 import { transcriptWorkingState } from './working-state.js';
 import type { StoreGroups } from '../../store/port.js';
 

@@ -1,5 +1,5 @@
 // The hippo-memory/json-hooks subpath: only what the changelog publishes, so the module's other exports stay internal.
-export { type InstallResult, type JsonHookPaths } from '../domain/hooks/json-hooks.js';
+export { type InstallResult, type JsonHookPaths } from '../surface/hooks-install/rules/json-hooks.js';
 export {
   installJsonHooks,
   resolveJsonHookPaths,
