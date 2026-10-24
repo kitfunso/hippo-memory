@@ -40,6 +40,7 @@ function listIn(t: MemoryTables, tenantId: string, ownScope: string | null, opts
   const hits = [...t.dormant.values()].filter(
     (s) =>
       s.entry.tenantId === tenantId &&
+      (opts.id === undefined || s.entry.id === opts.id) &&
       ownScopeTouches(ownScope, s.entry.scope ?? null) &&
       terms.every((term) => asciiFolded(s.entry.content).includes(term)),
   );
@@ -70,7 +71,6 @@ function restoreIn(t: MemoryTables, tenantId: string, request: DormantRestoreReq
 export function memoryDormant(t: MemoryTables): Dormant {
   return {
     list: async (tenantId, ownScope, opts) => listIn(t, tenantId, ownScope, opts),
-    holds: async (tenantId, ownScope, id) => inReach(t, tenantId, ownScope, id) !== undefined,
     restore: async (tenantId, request) => restoreIn(t, tenantId, request),
     async forget(tenantId, ownScope, id, actor) {
       if (!inReach(t, tenantId, ownScope, id)) return false;

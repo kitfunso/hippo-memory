@@ -103,19 +103,17 @@ function recallIds(outcome: Outcome<unknown> | undefined): string[] {
   return (result.recall ?? []).map((e) => e.id);
 }
 
-describe("the context's unfinished handoff, through Sessions.latestHandoff", () => {
+describe("the context's unfinished handoff, through Sessions.read 'handoff'", () => {
   it('reads alike under every key and age', async () => {
-    const unfinished = (maxAgeMs: number) => ({ unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' }) as const;
+    const unfinished = (maxAgeMs: number) =>
+      ({ sessionId: null, unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' }) as const;
     const calls: (readonly [string, GroupCall<'sessions', unknown>])[] = [];
     for (const [k, key] of KEYS) {
       for (const hours of [72, 2, 1000]) {
-        calls.push([
-          `unfinished ${k} ${hours}h`,
-          (g) => g.latestHandoff(TENANT_A, null, unfinished(hours * HOUR), key),
-        ]);
+        calls.push([`unfinished ${k} ${hours}h`, (g) => g.read(TENANT_A, 'handoff', unfinished(hours * HOUR), key)]);
       }
     }
-    calls.push(['unfinished globex', (g) => g.latestHandoff(TENANT_B, null, unfinished(72 * HOUR), null)]);
+    calls.push(['unfinished globex', (g) => g.read(TENANT_B, 'handoff', unfinished(72 * HOUR), null)]);
     const out = await conformsOn('sessions', calls);
 
     expect(out.get('unfinished no key 72h')).toMatchObject({ value: { summary: 'partial handoff for session b' } });

@@ -11,8 +11,8 @@ import type { HippoIndex } from './rows.js';
 import { writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import type { StoreFiles } from './open.js';
 import { DAY_MS } from '../../base/util/time.js';
-import type { SessionDecayContext } from '../port/consolidation.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import type { SleepStart } from '../port/consolidation.js';
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit
  * in one transaction, as callers rely on both moving together. No hippo path writes index.json. */
@@ -121,30 +121,13 @@ export function lastConsolidation(db: DatabaseSyncLike): string | undefined {
   return row?.timestamp;
 }
 
-/** Load the session decay context; session intervals come from consolidation_runs timestamps. */
-export function readSessionDecayContext(db: DatabaseSyncLike): SessionDecayContext {
-  // Get recent consolidation timestamps (last 20)
+/** The stored sleep count (0 when none) and the newest 20 run times, newest first. */
+export function readSleepHistory(db: DatabaseSyncLike): Pick<SleepStart, 'sleepCount' | 'recentRuns'> {
   const rows = cachedStatement(
     db,
     `SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`,
   ).all() as Array<{ timestamp: string }>;
-
-  const sleepCount = Number(getMeta(db, 'sleep_count', '0')) || rows.length;
-
-  if (rows.length < 2) {
-    return { sleepCount, avgSessionIntervalDays: 0 };
-  }
-
-  // Compute average interval between consecutive sessions
-  const timestamps = rows.map((r) => new Date(r.timestamp).getTime()).reverse();
-  let totalInterval = 0;
-  for (let i = 1; i < timestamps.length; i++) {
-    totalInterval += timestamps[i] - timestamps[i - 1];
-  }
-  const avgMs = totalInterval / (timestamps.length - 1);
-  const avgDays = avgMs / DAY_MS;
-
-  return { sleepCount, avgSessionIntervalDays: Math.max(0, avgDays) };
+  return { sleepCount: Number(getMeta(db, 'sleep_count', '0')) || 0, recentRuns: rows.map((r) => r.timestamp) };
 }
 
 /** Increment the sleep counter after each consolidation run. */

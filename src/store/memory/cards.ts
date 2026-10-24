@@ -230,14 +230,8 @@ function listIn(t: MemoryTables, tenantId: string, { status, limit, after }: Car
 export function memoryCards(t: MemoryTables): Cards {
   return {
     create: async (tenantId, input) => createIn(t, tenantId, input),
-    async load(tenantId, id) {
-      assertTenantId('readCard', tenantId);
-      const card = cardOf(t, tenantId, id);
-      return card ? { ...card } : null;
-    },
     detail: async (tenantId, id) => detailIn(t, tenantId, id),
     list: async (tenantId, query) => listIn(t, tenantId, query),
-    runs: async (tenantId, id) => runsOf(t, tenantId, id),
     claim: async (tenantId, id, runtime, sessionId) => claimIn(t, tenantId, id, runtime, sessionId),
     heartbeat: async (tenantId, id, runId) => heartbeatIn(t, tenantId, id, runId),
     block: async (tenantId, id, reason, runId) => blockIn(t, tenantId, id, reason, runId),

@@ -115,7 +115,11 @@ function markFtsDrifted(db: DatabaseSyncLike): void {
   }
 }
 
-export function syncFtsRow(db: DatabaseSyncLike, entry: MemoryEntry, isNewRow = false): void {
+export function syncFtsRow(
+  db: DatabaseSyncLike,
+  entry: Pick<MemoryEntry, 'id' | 'content' | 'tags'>,
+  isNewRow = false,
+): void {
   if (!isFtsAvailable(db)) return;
   try {
     if (!isNewRow) db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(entry.id);

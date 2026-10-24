@@ -41,12 +41,10 @@ export interface CardCreate {
 
 export interface Cards {
   create(tenantId: string, input: CardCreate): Promise<Card>;
-  load(tenantId: string, id: string): Promise<Card | null>;
   /** The card with its runs and comments, read together. */
   detail(tenantId: string, id: string): Promise<CardDetail | null>;
   /** One page of the tenant's cards, newest change first. */
   list(tenantId: string, query: CardListQuery): Promise<CardPage>;
-  runs(tenantId: string, id: string): Promise<CardRun[]>;
   claim(tenantId: string, id: string, runtime: string, sessionId?: string): Promise<(Card & { runId: number }) | null>;
   heartbeat(tenantId: string, id: string, runId: number): Promise<Card | null>;
   block(tenantId: string, id: string, reason: string, runId?: number): Promise<Card | null>;

@@ -66,7 +66,7 @@ async function seedSessionAndAdmin(root: string): Promise<void> {
   });
   await s.connectorEvents.saveCursor(SLACK_CURSOR, '1700000000.000100');
   await s.connectorEvents.saveCursor(GITHUB_CURSOR, '2026-01-01T00:00:00Z');
-  await s.sessions.pushWorkingMemory(TENANT, {
+  await s.sessions.save(TENANT, 'working_memory', {
     scope: 'deploy',
     content: 'watch the canary error rate',
     sessionId: SESSION,
@@ -184,22 +184,29 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     (s) => s.lessonWrites.contentsWithTag(TENANT, 'goal-alpha', undefined),
     'migrate the rollout scripts',
   ),
-  read('sessions.listEvents', (s) => s.sessions.listEvents(TENANT, { sessionId: SESSION, limit: 5 }), 'canary passed'),
   read(
-    'sessions.latestHandoff',
-    (s) => s.sessions.latestHandoff(TENANT, SESSION, {}, null),
+    'sessions.read events',
+    (s) => s.sessions.read(TENANT, 'event', { sessionId: SESSION, limit: 5 }),
+    'canary passed',
+  ),
+  read(
+    'sessions.read latest handoff',
+    (s) => s.sessions.read(TENANT, 'handoff', { sessionId: SESSION }, null),
     'handoff after the canary',
   ),
-  read('sessions.handoffById', (s) => s.sessions.handoffById(TENANT, made.handoffId), 'handoff after the canary'),
   read(
-    'sessions.readWorkingMemory',
-    (s) => s.sessions.readWorkingMemory(TENANT, { sessionId: SESSION }),
+    'sessions.read handoff by id',
+    (s) => s.sessions.read(TENANT, 'handoff', { id: made.handoffId }),
+    'handoff after the canary',
+  ),
+  read(
+    'sessions.read working memory',
+    (s) => s.sessions.read(TENANT, 'working_memory', { sessionId: SESSION }),
     'watch the canary error rate',
   ),
-  read('cards.load', (s) => s.cards.load(TENANT, made.cardId), 'cut the eu release'),
   read('cards.detail', (s) => s.cards.detail(TENANT, made.cardId), 'cut the eu release'),
+  read('cards.detail runs', async (s) => (await s.cards.detail(TENANT, made.cardId))?.runs, 'codex'),
   read('cards.list', (s) => s.cards.list(TENANT, { limit: 10 }), 'cut the eu release'),
-  read('cards.runs', (s) => s.cards.runs(TENANT, made.cardId), 'codex'),
   read('goals.sessionGoals', (s) => s.goals.sessionGoals(TENANT, SESSION), 'goal-alpha'),
   read(
     'conflicts.list',
@@ -208,7 +215,6 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   ),
   read('conflicts.get', (s) => s.conflicts.get(TENANT, 1), 'seeded contradiction'),
   read('dormant.list', (s) => s.dormant.list(TENANT, null, {}), 'stg-1'),
-  read('dormant.holds', (s) => s.dormant.holds(TENANT, null, 'mem_d_faded'), /^true$/),
   read('reports.tokenUse', (s) => s.reports.tokenUse(TENANT, '2000-01-01T00:00:00.000Z'), /120/),
   read('reports.failures', (s) => s.reports.failures(TENANT, '2000-01-01T00:00:00.000Z'), /stored/),
   read('reports.memoryStatus', (s) => s.reports.memoryStatus(TENANT, NOW, 0.1), /openConflicts: 1/),
@@ -345,8 +351,12 @@ const READS: readonly Read[] = [
     /tagCounts: Map\(\d+\) \{/,
   ),
   read('contextReads.schemaFit', (s) => s.contextReads.schemaFit(TENANT, PLAIN, ['deploy']), /^(0(\.\d+)?|1)$/),
-  read('predictions.predictionById', (s) => s.predictions.predictionById(TENANT, 1), 'deploy-duration'),
-  read('predictions.listPredictions', (s) => s.predictions.listPredictions(TENANT, { limit: 5 }), 'deploy-duration'),
+  read('objects.objectById prediction', (s) => s.objects.objectById(TENANT, 'prediction', 1), 'deploy-duration'),
+  read(
+    'objects.listObjects predictions',
+    (s) => s.objects.listObjects(TENANT, 'prediction', { limit: 5 }),
+    'deploy-duration',
+  ),
   read('dagReads.sessionRawCount', (s) => s.dagReads.sessionRawCount({ tenantId: TENANT, sessionId: SESSION }), /^1$/),
   read(
     'dagReads.summaryWithDescendants',
@@ -408,26 +418,23 @@ const READS: readonly Read[] = [
   read('objects.listObjects', (s) => s.objects.listObjects(TENANT, 'decision', { limit: 5 }), 'We adopt RetryPolicy'),
   read('objects.objectById', (s) => s.objects.objectById(TENANT, 'policy', 1), 'retry up to 3x'),
   read(
-    'objects.objectIdByMemory',
-    async (s) =>
-      s.objects.objectIdByMemory(
-        TENANT,
-        'decision',
-        'active',
-        (await s.objects.listObjects(TENANT, 'decision', { limit: 1 }))[0]?.memoryId ?? '',
-      ),
+    'objects.listObjects by memory id',
+    async (s) => {
+      const memoryId = (await s.objects.listObjects(TENANT, 'decision', { limit: 1 }))[0]?.memoryId ?? '';
+      return (await s.objects.listObjects(TENANT, 'decision', { status: 'active', memoryId, limit: 1 }))[0]?.id;
+    },
     /^[1-9][0-9]*$/,
   ),
   read(
-    'objects.policiesInForce',
-    (s) =>
-      s.objects.policiesInForce(TENANT, {
-        asOf: '9999-12-31T23:59:59.999Z',
-        limit: 5,
-      }),
+    'objects.listObjects policies in force',
+    (s) => s.objects.listObjects(TENANT, 'policy', { asOf: '9999-12-31T23:59:59.999Z', limit: 5 }),
     'RetryPolicy',
   ),
-  read('objects.activeSkillsByName', (s) => s.objects.activeSkillsByName(TENANT, 5), 'page the owner, then revert'),
+  read(
+    'objects.listObjects active skills by name',
+    (s) => s.objects.listObjects(TENANT, 'skill', { byName: true, status: 'active', limit: 5 }),
+    'page the owner, then revert',
+  ),
   read('objects.briefReceipts', (s) => s.objects.briefReceipts(TENANT, 'deploy', 5), 'mem_p_plain'),
   read('readiness.ping', (s) => s.readiness.ping(), /^undefined$/),
   ...SESSION_AND_ADMIN_READS,
@@ -539,13 +546,13 @@ const WRITES: readonly Write[] = [
     ['vectors {"memory_id":"mem_p_pinned"'],
   ),
   write(
-    'quarantine.approveQuarantined',
-    (s, seed) => s.quarantine.approveQuarantined(TENANT, seed.held[0] ?? '', ACTOR),
+    'quarantine.decideQuarantined approve',
+    (s, seed) => s.quarantine.decideQuarantined(TENANT, seed.held[0] ?? '', 'approve', ACTOR),
     ['"status":"approved"', '"op":"quarantine_approve"'],
   ),
   write(
-    'quarantine.rejectQuarantined',
-    (s, seed) => s.quarantine.rejectQuarantined(TENANT, seed.held[1] ?? '', ACTOR),
+    'quarantine.decideQuarantined reject',
+    (s, seed) => s.quarantine.decideQuarantined(TENANT, seed.held[1] ?? '', 'reject', ACTOR),
     ['"status":"rejected"', '"op":"quarantine_reject"'],
   ),
   write(

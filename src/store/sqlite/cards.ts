@@ -256,12 +256,6 @@ function everyParentDone(db: DatabaseSyncLike, tenantId: string, dependsOn: read
   return dependsOn.every((pid) => found.get(pid) === 'done');
 }
 
-/** Returns the card row for id, or null if it does not exist under this tenant. */
-function readCard(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
-  assertTenantId('readCard', tenantId);
-  return readCardRow(db, tenantId, id);
-}
-
 /** One page of the tenant's cards, optionally of one status, newest-updated first. */
 function listCards(db: DatabaseSyncLike, tenantId: string, { status, limit, after }: CardListQuery): CardPage {
   assertTenantId('listCards', tenantId);
@@ -565,10 +559,8 @@ function cardDetail(db: DatabaseSyncLike, tenantId: string, id: string): CardDet
 
 const cardsBodies: Bodies<Cards> = {
   create: createCard,
-  load: readCard,
   detail: readCardDetail,
   list: listCards,
-  runs: listCardRuns,
   claim: claimCard,
   heartbeat: heartbeatCard,
   block: blockCard,

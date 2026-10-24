@@ -37,14 +37,14 @@ export async function closePrediction(
   hippoRoot: string,
   tenantId: string,
   id: number,
-  close: PredictionClose,
+  close: Omit<PredictionClose, 'actor'>,
   actor: string = CLI_ACTOR,
 ): Promise<Prediction> {
-  return await sqliteStore(hippoRoot).predictions.closePrediction(tenantId, id, close, actor);
+  return await sqliteStore(hippoRoot).objects.closeObject(tenantId, 'prediction', id, { ...close, actor });
 }
 
 export async function loadPredictionById(hippoRoot: string, tenantId: string, id: number): Promise<Prediction | null> {
-  return await sqliteStore(hippoRoot).predictions.predictionById(tenantId, id);
+  return await sqliteStore(hippoRoot).objects.objectById(tenantId, 'prediction', id);
 }
 
 export async function loadPredictionsByClass(
@@ -59,8 +59,9 @@ export async function loadPredictionsByClass(
 ): Promise<Prediction[]> {
   const { closureState, after } = opts;
   const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
-  return await sqliteStore(hippoRoot).predictions.listPredictions(
+  return await sqliteStore(hippoRoot).objects.listObjects(
     tenantId,
+    'prediction',
     closureState === undefined ? { classTag, limit, after } : { classTag, closureState, limit, after },
   );
 }
@@ -70,7 +71,7 @@ export async function loadAllPredictions(
   tenantId: string,
   opts: { limit?: number; after?: KeysetPosition } = {},
 ): Promise<Prediction[]> {
-  return await sqliteStore(hippoRoot).predictions.listPredictions(tenantId, {
+  return await sqliteStore(hippoRoot).objects.listObjects(tenantId, 'prediction', {
     limit: opts.limit ?? DEFAULT_LIST_LIMIT,
     after: opts.after,
   });
@@ -95,7 +96,7 @@ export async function loadOpenPredictions(
 ): Promise<Prediction[]> {
   const { classTag, after } = opts;
   const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
-  return await sqliteStore(hippoRoot).predictions.listPredictions(tenantId, {
+  return await sqliteStore(hippoRoot).objects.listObjects(tenantId, 'prediction', {
     classTag,
     closureState: 'open',
     limit,

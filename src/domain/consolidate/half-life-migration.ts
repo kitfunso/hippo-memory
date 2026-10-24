@@ -1,6 +1,7 @@
 // Moves a store's memories still on an old default half-life base to a new one, once, audit-logged; the plan is
-// src/base/memory/half-life-plan.ts, which the store runs inside the move's own transaction.
+// src/base/memory/half-life-plan.ts, which the store runs inside the move's own transaction as a sleep begins.
 import type { StoreWith } from '../../store/port.js';
+import type { SleepBegin, SleepStart } from '../../store/port/consolidation.js';
 
 /** What {@link migrateDefaultHalfLife} did, or would do under `dryRun`. */
 export interface HalfLifeMigrationResult {
@@ -15,17 +16,21 @@ export interface HalfLifeMigrationResult {
   dryRun: boolean;
   /** New half-life per moved id, so a dry run can preview decay at the new base. */
   halfLives: ReadonlyMap<string, number>;
+  /** The rest of what the sleep's opening read, for the sleep that ran the move. */
+  start: SleepStart;
 }
 
-/** Move the store's memories, and those of objects on the old flat 90 days, from their recorded base to `to`, once;
- * `dryRun` writes nothing. */
+/** Move the store's memories, and those of objects on the old flat 90 days, from their recorded base to `to`, once,
+ * as the store's sleep upkeep begins; `dryRun` writes nothing. */
 export async function migrateDefaultHalfLife(
   store: StoreWith<'consolidation'>,
   to: number,
-  opts: { dryRun?: boolean; actor?: string } = {},
+  opts: { dryRun?: boolean; actor?: string; traces?: SleepBegin['traces'] } = {},
 ): Promise<HalfLifeMigrationResult> {
   const dryRun = opts.dryRun ?? false;
-  const { from, outcome } = await store.consolidation.moveHalfLives(to, { dryRun, actor: opts.actor ?? 'system' });
+  const actor = opts.actor ?? 'system';
+  const start = await store.consolidation.begin(to, { dryRun, actor, traces: opts.traces });
+  const { from, outcome } = start;
   const moved = outcome ?? { rescaled: 0, typed: 0, kept: 0, halfLives: new Map<string, number>() };
   return {
     from,
@@ -35,5 +40,6 @@ export async function migrateDefaultHalfLife(
     kept: moved.kept,
     dryRun,
     halfLives: moved.halfLives,
+    start,
   };
 }

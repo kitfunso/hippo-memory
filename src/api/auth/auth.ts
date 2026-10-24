@@ -46,7 +46,7 @@ export async function authCreate(ctx: EntryContext, opts: AuthCreateOpts): Promi
   // The key and its auth_create row commit together on every store, so a failed audit write leaves no key.
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = adminKeyMint(ctx, opts);
-  await keyWrites.createApiKey(mint);
+  await keyWrites.changeApiKey('create', mint);
   return createResult(mint, plaintext);
 }
 
@@ -135,7 +135,7 @@ function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
 export async function authCreateSelf(ctx: EntryContext, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = selfKeyMint(ctx, opts);
-  await keyWrites.createSelfApiKey(mint);
+  await keyWrites.changeApiKey('create_self', mint);
   return selfResult(mint, plaintext);
 }
 
@@ -236,12 +236,11 @@ export interface AuthRevokeResult {
  *  The revoke and its auth_revoke row commit together on either store, so a failed audit write leaves the key live. */
 export async function authRevoke(ctx: EntryContext, keyId: string): Promise<AuthRevokeResult> {
   const store = ctx.store;
-  const keyAudit = store.keyAudit;
   assertMemberKeyRevokesSelf(ctx, keyId);
   const record = await store.findApiKey(keyId);
   assertMayRevoke(ctx, keyId, keyOwnerOf(record));
   const revoke = { tenantId: ctx.tenantId, keyId, actor: ctx.actor.subject, at: new Date().toISOString() };
-  return { ok: true, revokedAt: await keyAudit.revokeApiKey(revoke) };
+  return { ok: true, revokedAt: await store.keyWrites.changeApiKey('revoke', revoke) };
 }
 
 function assertMemberKeyRevokesSelf(ctx: EntryContext, keyId: string): void {
@@ -301,7 +300,7 @@ async function changeGrant(
     throw new BadRequestError(`${scope} is not a restricted scope; it is already readable by default`);
   }
   const change = { tenantId: ctx.tenantId, keyId, scope, op, actor: ctx.actor.subject };
-  await ctx.store.keyGrants.changeScopeGrant(change);
+  await ctx.store.keyWrites.changeApiKey('scope', change);
 
   return { ok: true };
 }

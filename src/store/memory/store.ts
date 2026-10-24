@@ -10,6 +10,7 @@ import { memoryCompactions } from './compactions.js';
 import { memoryConflicts } from './conflicts.js';
 import { memoryConnectorEvents } from './connector-events.js';
 import { memoryConnectorWrites } from './connector-writes.js';
+import { memoryConsolidation } from './consolidation.js';
 import { memoryContextReads } from './context-reads.js';
 import { memoryDagReads } from './dag-reads.js';
 import { memoryDormant } from './dormant.js';
@@ -17,12 +18,9 @@ import { memoryEntryWrites } from './entry-writes.js';
 import { memoryFailureLog } from './failure-log.js';
 import { activeGoalsIn, memoryGoals } from './goals.js';
 import { memoryGraphReads } from './graph-reads.js';
-import { memoryKeyAudit } from './key-audit.js';
-import { memoryKeyGrants } from './key-grants.js';
 import { apiKeyRecord, memoryKeyWrites } from './key-writes.js';
 import { memoryLessonWrites } from './lesson-writes.js';
 import { memoryObjects } from './objects.js';
-import { memoryPredictions } from './predictions.js';
 import { memoryQuarantine } from './quarantine.js';
 import { finishRecallIn } from './recall-writes.js';
 import { memoryRejections } from './rejections.js';
@@ -66,7 +64,8 @@ function baseMethods(t: MemoryTables, rules: LossAversion): Pick<HippoStore, Bas
   };
 }
 
-/** A store of every required group over `tables`, which the caller may seed and read; optional groups stay unset. */
+/** A store of every required group over `tables`, which the caller may seed and read, and the consolidation group a
+ * sleep runs on; the other optional groups stay unset. */
 export function memoryStore(tables: MemoryTables = emptyTables(), rules: LossAversion = {}): HippoStore {
   const t = tables;
   return {
@@ -84,13 +83,10 @@ export function memoryStore(tables: MemoryTables = emptyTables(), rules: LossAve
     lessonWrites: memoryLessonWrites(t),
     auditMaintenance: memoryAuditMaintenance(t, rules),
     vectors: memoryVectors(t),
-    keyAudit: memoryKeyAudit(t),
     keyWrites: memoryKeyWrites(t),
-    keyGrants: memoryKeyGrants(t),
     vectorWrites: memoryVectorWrites(t),
     entryWrites: memoryEntryWrites(t, rules),
     contextReads: memoryContextReads(t),
-    predictions: memoryPredictions(t),
     dagReads: memoryDagReads(t),
     auditLog: memoryAuditLog(t),
     quarantine: memoryQuarantine(t),
@@ -98,5 +94,6 @@ export function memoryStore(tables: MemoryTables = emptyTables(), rules: LossAve
     connectorWrites: memoryConnectorWrites(t),
     objects: memoryObjects(t),
     connectorEvents: memoryConnectorEvents(t),
+    consolidation: memoryConsolidation(t),
   };
 }

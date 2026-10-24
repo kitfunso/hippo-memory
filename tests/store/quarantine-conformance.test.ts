@@ -82,11 +82,11 @@ const ids =
 const approve =
   (id: string, tenantId = TENANT_A): Call =>
   (g) =>
-    g.approveQuarantined(tenantId, id, ACTOR);
+    g.decideQuarantined(tenantId, id, 'approve', ACTOR);
 const reject =
   (id: string, tenantId = TENANT_A): Call =>
   (g) =>
-    g.rejectQuarantined(tenantId, id, ACTOR);
+    g.decideQuarantined(tenantId, id, 'reject', ACTOR);
 const scopeOf =
   (id: string, tenantId = TENANT_A): Call =>
   async (_g, store) =>
@@ -276,7 +276,7 @@ describe('Quarantine.listQuarantined', () => {
   });
 });
 
-describe('Quarantine.approveQuarantined', () => {
+describe('Quarantine.decideQuarantined approve', () => {
   it('puts the memory back under its original scope, a null one included, marks the record and appends one quarantine_approve row each', async () => {
     const side = await conforms([
       at(T1, approve(HELD.a1)),
@@ -361,7 +361,7 @@ describe('Quarantine.approveQuarantined', () => {
   });
 });
 
-describe('Quarantine.rejectQuarantined', () => {
+describe('Quarantine.decideQuarantined reject', () => {
   it('marks the record, leaves the memory under its quarantine scope and appends one quarantine_reject row, with or without a memory row', async () => {
     const side = await conforms([
       at(T1, reject(HELD.a1)),
@@ -467,7 +467,7 @@ describe('on hippo.db, a decision whose audit row is refused', () => {
       scope: ALPHA_HELD,
       auditId: nextAuditId - 1,
     });
-    await expect(sqliteStore(root).quarantine.approveQuarantined(TENANT_A, HELD.a1, ACTOR)).rejects.toThrow(
+    await expect(sqliteStore(root).quarantine.decideQuarantined(TENANT_A, HELD.a1, 'approve', ACTOR)).rejects.toThrow(
       /audit table unwritable/,
     );
     expect(stored()).toEqual(before);
@@ -475,7 +475,7 @@ describe('on hippo.db, a decision whose audit row is refused', () => {
 
   it('reject rejects and leaves the record pending', async () => {
     const before = stored();
-    await expect(sqliteStore(root).quarantine.rejectQuarantined(TENANT_A, HELD.a1, ACTOR)).rejects.toThrow(
+    await expect(sqliteStore(root).quarantine.decideQuarantined(TENANT_A, HELD.a1, 'reject', ACTOR)).rejects.toThrow(
       /audit table unwritable/,
     );
     expect(stored()).toEqual(before);

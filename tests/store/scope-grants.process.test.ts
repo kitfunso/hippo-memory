@@ -20,6 +20,14 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
+import type {
+  KeyChangeArgs,
+  KeyMint,
+  KeyRevoke,
+  KeyWrites,
+  ScopeGrantChange,
+  SelfKeyMint,
+} from '../../src/store/port/keys.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
@@ -30,6 +38,20 @@ const PRIVATE_TEXT = 'kowalski payroll rollout starts thursday in the private ch
 // Seeded memories carry no origin_project; isolation would hide them from
 // hippo_context regardless of scope grants, which is not what this suite tests.
 const ISOLATION_OFF = { config: { contextProjectIsolation: false } };
+
+/** `keys` with `before` run ahead of each scope change; these tests send it no other change. */
+function beforeScopeChange(keys: KeyWrites, before: (change: ScopeGrantChange) => void): KeyWrites {
+  function changeApiKey(change: 'create', mint: KeyMint): Promise<void>;
+  function changeApiKey(change: 'create_self', mint: SelfKeyMint): Promise<string[]>;
+  function changeApiKey(change: 'revoke', revoke: KeyRevoke): Promise<string>;
+  function changeApiKey(change: 'scope', grant: ScopeGrantChange): Promise<void>;
+  function changeApiKey(...[change, payload]: KeyChangeArgs): Promise<void | string[] | string> {
+    if (change !== 'scope') throw new Error(`unexpected ${change} change`);
+    before(payload);
+    return keys.changeApiKey(change, payload);
+  }
+  return { ...keys, changeApiKey };
+}
 
 function mintKey(home: string, role: 'admin' | 'member', tenantId = 'default'): { plaintext: string; keyId: string } {
   const db = openHippoDb(home);
@@ -222,16 +244,15 @@ describe('authGrant / authUngrant validation (api layer)', () => {
   it('refuses a grant on a key another connection revokes after the api checks and before the write', async () => {
     const member = mintKey(home, 'member');
     const base: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
-    const changeScopeGrant: typeof base.store.keyGrants.changeScopeGrant = (change) => {
+    const keyWrites = beforeScopeChange(base.store.keyWrites, () => {
       const other = openHippoDb(home);
       try {
         revokeApiKey(other, member.keyId);
       } finally {
         closeHippoDb(other);
       }
-      return base.store.keyGrants.changeScopeGrant(change);
-    };
-    const racing: FullContext = { ...base, store: { ...base.store, keyGrants: { changeScopeGrant } } };
+    });
+    const racing: FullContext = { ...base, store: { ...base.store, keyWrites } };
 
     const err = await api.authGrant(racing, member.keyId, PRIVATE_SCOPE).catch((e: Error) => e);
     expect(err).toBeInstanceOf(api.ConflictError);
@@ -249,11 +270,8 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     const member = mintKey(home, 'member');
     const base: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
     const asked: string[] = [];
-    const changeScopeGrant: typeof base.store.keyGrants.changeScopeGrant = (change) => {
-      asked.push(change.scope);
-      return base.store.keyGrants.changeScopeGrant(change);
-    };
-    const counting: FullContext = { ...base, store: { ...base.store, keyGrants: { changeScopeGrant } } };
+    const keyWrites = beforeScopeChange(base.store.keyWrites, (change) => asked.push(change.scope));
+    const counting: FullContext = { ...base, store: { ...base.store, keyWrites } };
 
     await expect(api.authGrant(counting, member.keyId, 'team:eng')).rejects.toThrow(api.BadRequestError);
     await expect(api.authGrant(counting, member.keyId, 'personal:private:alice')).rejects.toThrow(api.BadRequestError);

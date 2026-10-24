@@ -1,4 +1,5 @@
-// The in-memory Objects group: the typed-object rows, each save landing with its mirror memory in one staged write.
+// The in-memory Objects group: the typed-object and prediction rows, each save landing with its mirror memory in one
+// staged write.
 import type {
   BriefReceipt,
   Incident,
@@ -9,8 +10,19 @@ import type {
   SavableKind,
 } from '../../base/records/object-types.js';
 import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
-import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave, Objects } from '../port/objects.js';
-import type { PoliciesInForceQuery } from '../port/objects.js';
+import type {
+  IncidentOpen,
+  IncidentOpenRefusal,
+  ObjectCalls,
+  ObjectCloseArgs,
+  ObjectListArgs,
+  ObjectListQuery,
+  ObjectSave,
+  ObjectSaveArgs,
+  Objects,
+  PoliciesInForceQuery,
+  SkillsByNameQuery,
+} from '../port/objects.js';
 import type { AppendAuditOpts } from '../port/types.js';
 import { filterValue, rowOf } from './object-rules.js';
 import {
@@ -25,6 +37,7 @@ import { byBytes, type DescendingKeyset, isBelow, newestFirst } from '../rules/o
 import { appendAudit, asciiFolded, nextId, ownedRow, peekId } from './rows.js';
 import { put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
+import { closePredictionIn, listPredictionsIn, predictionBaserateIn, savePredictionIn } from './predictions.js';
 
 const tableOf = <K extends ObjectKind>(t: MemoryTables, kind: K): Map<number, ObjectByKind[K]> => t.objects[kind];
 
@@ -46,6 +59,7 @@ function listIn<K extends ObjectKind>(t: MemoryTables, tenantId: string, kind: K
   const hits = [...tableOf(t, kind).values()].filter((row) => {
     if (row.tenantId !== tenantId || (query.status !== undefined && row.status !== query.status)) return false;
     if (query.filter !== undefined && column && column(row) !== query.filter) return false;
+    if (query.memoryId !== undefined && row.memoryId !== query.memoryId) return false;
     return !after || isBelow(BY_CREATED_AT, row, after);
   });
   return structuredClone(hits.sort(newestFirst(BY_CREATED_AT)).slice(0, query.limit));
@@ -197,25 +211,44 @@ function resolveIn(
   return structuredClone(resolved);
 }
 
+function skillsIn(t: MemoryTables, tenantId: string, query: SkillsByNameQuery) {
+  const hits = [...t.objects.skill.values()].filter((s) => s.tenantId === tenantId && s.status === query.status);
+  return structuredClone(hits.sort((a, b) => byBytes(a.skillName, b.skillName) || a.id - b.id).slice(0, query.limit));
+}
+
+function listAnyIn(t: MemoryTables, ...[tenantId, kind, query]: ObjectListArgs) {
+  if (kind === 'prediction') return listPredictionsIn(t, tenantId, query);
+  if ('asOf' in query) return inForceIn(t, tenantId, query);
+  if ('byName' in query) return skillsIn(t, tenantId, query);
+  return listIn(t, tenantId, kind, query);
+}
+
+function closeAnyIn(t: MemoryTables, ...[tenantId, kind, id, change]: ObjectCloseArgs) {
+  if (kind === 'prediction') return closePredictionIn(t, tenantId, id, change);
+  if ('text' in change) return resolveIn(t, tenantId, id, change);
+  return closeIn(t, tenantId, kind, id, change);
+}
+
+function saveAnyIn(t: MemoryTables, ...[tenantId, kind, object]: ObjectSaveArgs) {
+  if (kind === 'prediction') return savePredictionIn(t, tenantId, object);
+  if (kind === 'incident') return openIn(t, tenantId, object);
+  return saveIn(t, tenantId, kind, object);
+}
+
 export function memoryObjects(t: MemoryTables): Objects {
-  return {
-    listObjects: async (tenantId, kind, query) => listIn(t, tenantId, kind, query),
-    objectById: async (tenantId, kind, id) => structuredClone(ownedRow(tableOf(t, kind), tenantId, id) ?? null),
-    closeObject: async (tenantId, kind, id, close) => closeIn(t, tenantId, kind, id, close),
-    saveObject: async (tenantId, kind, save) => saveIn(t, tenantId, kind, save),
-    openIncident: async (tenantId, open) => openIn(t, tenantId, open),
-    resolveIncident: async (tenantId, id, resolve) => resolveIn(t, tenantId, id, resolve),
-    policiesInForce: async (tenantId, query) => inForceIn(t, tenantId, query),
-    activeSkillsByName: async (tenantId, limit) => {
-      const hits = [...t.objects.skill.values()].filter((s) => s.tenantId === tenantId && s.status === 'active');
-      return structuredClone(hits.sort((a, b) => byBytes(a.skillName, b.skillName) || a.id - b.id).slice(0, limit));
-    },
+  const objects: ObjectCalls = {
+    listObjects: async (...args) => listAnyIn(t, ...args),
+    objectById: async (tenantId, kind, id) =>
+      structuredClone(
+        (kind === 'prediction' ? ownedRow(t.predictions, tenantId, id) : ownedRow(tableOf(t, kind), tenantId, id)) ??
+          null,
+      ),
+    closeObject: async (...args) => closeAnyIn(t, ...args),
+    saveObject: async (...args) => saveAnyIn(t, ...args),
     briefReceipts: async (tenantId, tag, limit) => receiptsIn(t, tenantId, tag, limit),
-    async objectIdByMemory(tenantId, kind, status, memoryId) {
-      const hits = [...tableOf(t, kind).values()].filter(
-        (r) => r.tenantId === tenantId && r.status === status && r.memoryId === memoryId,
-      );
-      return hits.reduce<number | null>((best, r) => (best === null || r.id > best ? r.id : best), null);
-    },
+    predictionBaserate: async (tenantId, classTag, actor) => predictionBaserateIn(t, tenantId, classTag, actor),
   };
+  // SAFETY: each body picks its rows from the kind and the payload's shape, the pairs the port's overloads name, so
+  // every overload gets the row its kind declares.
+  return objects as Objects;
 }

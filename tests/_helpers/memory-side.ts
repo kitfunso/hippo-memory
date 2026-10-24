@@ -33,7 +33,7 @@ function logged(store: HippoStore, calls: string[]): HippoStore {
     ...store,
     continuity: log('continuity', store.continuity),
     searchRecallEntries: log('searchRecallEntries', store.searchRecallEntries),
-    sessions: { ...sessions, latestHandoff: log('latestHandoff', sessions.latestHandoff) },
+    sessions: { ...sessions, read: log('sessions.read', sessions.read) as HippoStore['sessions']['read'] },
     contextReads: {
       ambientCandidates: log('ambientCandidates', c.ambientCandidates),
       contextCandidates: log('contextCandidates', c.contextCandidates),

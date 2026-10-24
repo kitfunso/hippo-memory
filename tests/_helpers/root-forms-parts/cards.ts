@@ -20,12 +20,12 @@ export async function createCard(
 }
 
 export async function loadCard(hippoRoot: string, tenantId: string, id: string): Promise<Card | null> {
-  return await sqliteStore(hippoRoot).cards.load(tenantId, id);
+  return (await sqliteStore(hippoRoot).cards.detail(tenantId, id))?.card ?? null;
 }
 
 export async function loadCardRuns(hippoRoot: string, tenantId: string, id: string): Promise<CardRun[]> {
   assertTenantId('loadCardRuns', tenantId);
-  return await sqliteStore(hippoRoot).cards.runs(tenantId, id);
+  return (await sqliteStore(hippoRoot).cards.detail(tenantId, id))?.runs ?? [];
 }
 
 export async function claimCard(

@@ -1,12 +1,29 @@
 // The in-memory Sessions group: snapshots, events and handoffs from their own files, with working memory and the
 // session-owner binding here.
-import type { Sessions, WorkingMemoryFilter, WorkingMemoryPush, WorkingMemoryItem } from '../port/sessions.js';
+import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
+import type {
+  SessionCalls,
+  SessionClearArgs,
+  SessionReadArgs,
+  Sessions,
+  SessionSaveArgs,
+  WorkingMemoryFilter,
+  WorkingMemoryPush,
+  WorkingMemoryItem,
+} from '../port/sessions.js';
 import { handoffByIdIn, latestHandoffIn, saveHandoffIn, stampOutcomeIn, writeSessionEndIn } from './handoffs.js';
 import { byBytes } from '../rules/order.js';
 import { WM_MAX_ENTRIES } from '../rules/windows.js';
 import { nextId, storedObject, tenantKey } from './rows.js';
 import type { Tenanted } from './session-tables.js';
-import { memorySnapshots } from './snapshots.js';
+import {
+  appendEventIn,
+  clearSnapshotIn,
+  closeSnapshotsIn,
+  listEventsIn,
+  readSnapshotIn,
+  saveSnapshotIn,
+} from './snapshots.js';
 import type { MemoryTables } from './tables.js';
 
 /** Past WM_MAX_ENTRIES in the scope, the lowest importance goes first, then the oldest by created_at and id. */
@@ -82,18 +99,41 @@ function bindOwnerIn(t: MemoryTables, tenantId: string, sessionId: string, owner
   return t.sessionOwners.get(slot)?.owner ?? null;
 }
 
+function saveAnyIn(t: MemoryTables, ...[tenantId, kind, row, key = null]: SessionSaveArgs) {
+  if (kind === 'snapshot') return saveSnapshotIn(t, tenantId, row, key);
+  if (kind === 'event') return appendEventIn(t, tenantId, row);
+  if (kind === 'working_memory') return pushIn(t, tenantId, row);
+  if ('handoff' in row) return saveHandoffIn(t, tenantId, row.handoff, key);
+  if ('sessionEnd' in row) return writeSessionEndIn(t, tenantId, row.sessionEnd, key);
+  return stampOutcomeIn(t, tenantId, row.sessionId, row.outcome);
+}
+
+function readAnyIn(t: MemoryTables, ...[tenantId, kind, query, key = null]: SessionReadArgs) {
+  if (kind === 'event') return listEventsIn(t, tenantId, query);
+  if (kind === 'working_memory') return listWorkingMemoryIn(t, tenantId, query);
+  if ('id' in query) return handoffByIdIn(t, tenantId, query.id);
+  return latestHandoffIn(t, tenantId, query.sessionId, query, key);
+}
+
+function clearAnyIn(t: MemoryTables, ...[tenantId, kind, close, key]: SessionClearArgs) {
+  if (kind === 'working_memory') return clearIn(t, tenantId, close);
+  if (close.sessionId === undefined) return clearSnapshotIn(t, tenantId, close.status);
+  return closeSnapshotsIn(t, tenantId, close.sessionId, close.status, key);
+}
+
 export function memorySessions(t: MemoryTables): Sessions {
-  return {
-    ...memorySnapshots(t),
-    saveHandoff: async (tenantId, handoff, key) => saveHandoffIn(t, tenantId, handoff, key),
-    latestHandoff: async (tenantId, sessionId, filter, key) => latestHandoffIn(t, tenantId, sessionId, filter, key),
-    handoffById: async (tenantId, id) => handoffByIdIn(t, tenantId, id),
-    stampHandoffOutcome: async (tenantId, sessionId, outcome) => stampOutcomeIn(t, tenantId, sessionId, outcome),
-    writeSessionEndHandoff: async (tenantId, request) => writeSessionEndIn(t, tenantId, request),
-    pushWorkingMemory: async (tenantId, item) => pushIn(t, tenantId, item),
-    readWorkingMemory: async (tenantId, filter) => listWorkingMemoryIn(t, tenantId, filter),
-    clearWorkingMemory: async (tenantId, filter) => clearIn(t, tenantId, filter),
+  const sessions: SessionCalls = {
+    save: async (...args) => saveAnyIn(t, ...args),
+    read: async (...args) => readAnyIn(t, ...args),
+    clear: async (...args) => clearAnyIn(t, ...args),
+    async loadSnapshot(tenantId, { ambient }, key) {
+      const active = readSnapshotIn(t, tenantId, key);
+      return ambient ? freshActiveSnapshot(active, ambient) : active;
+    },
     bindSessionOwner: async (tenantId, sessionId, owner, retentionMs) =>
       bindOwnerIn(t, tenantId, sessionId, owner, retentionMs),
   };
+  // SAFETY: each body picks its rows from the kind and the payload's shape, the pairs the port's overloads name, so
+  // every overload gets the answer its kind declares.
+  return sessions as Sessions;
 }

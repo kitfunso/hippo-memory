@@ -34,25 +34,30 @@ describe('sessions group', () => {
     const sync = sqliteStore(r).sessions;
     const served = sqliteStore(r).sessions;
     const snap = { task: 'ship', summary: 'half done', nextStep: 'merge', sessionId: 's1' };
-    expect((await sync.saveSnapshot(T, snap, null)).task).toBe('ship');
-    expect((await served.loadSnapshot(T, null))?.nextStep).toBe('merge');
-    await served.appendEvent(T, { sessionId: 's1', eventType: 'note', content: 'hello' });
-    expect((await served.listEvents(T, { sessionId: 's1' })).map((e) => e.content)).toEqual(['hello']);
-    expect(await sync.listEvents(T, { sessionId: 's1' })).toHaveLength(1);
-    const handoff = await served.saveHandoff(T, { version: 1, sessionId: 's1', summary: 'carry on' }, null);
+    expect((await sync.save(T, 'snapshot', snap, null)).task).toBe('ship');
+    expect((await served.loadSnapshot(T, {}, null))?.nextStep).toBe('merge');
+    await served.save(T, 'event', { sessionId: 's1', eventType: 'note', content: 'hello' });
+    expect((await served.read(T, 'event', { sessionId: 's1' })).map((e) => e.content)).toEqual(['hello']);
+    expect(await sync.read(T, 'event', { sessionId: 's1' })).toHaveLength(1);
+    const handoff = await served.save(
+      T,
+      'handoff',
+      { handoff: { version: 1, sessionId: 's1', summary: 'carry on' } },
+      null,
+    );
     expect(handoff.summary).toBe('carry on');
-    expect((await served.latestHandoff(T, 's1', {}, null))?.summary).toBe('carry on');
-    expect(await served.clearSnapshot(T, 'done')).toBe(true);
+    expect((await served.read(T, 'handoff', { sessionId: 's1' }, null))?.summary).toBe('carry on');
+    expect(await served.clear(T, 'snapshot', { status: 'done' })).toBe(1);
   });
 
   it('pushes, reads and clears working memory', async () => {
     const r = root();
     const served = sqliteStore(r).sessions;
-    await served.pushWorkingMemory(T, { scope: 'task', content: 'note one' });
-    expect((await served.readWorkingMemory(T, { scope: 'task', limit: 10 })).map((i) => i.content)).toEqual([
+    await served.save(T, 'working_memory', { scope: 'task', content: 'note one' });
+    expect((await served.read(T, 'working_memory', { scope: 'task', limit: 10 })).map((i) => i.content)).toEqual([
       'note one',
     ]);
-    expect(await served.clearWorkingMemory(T, { scope: 'task' })).toBe(1);
+    expect(await served.clear(T, 'working_memory', { scope: 'task' })).toBe(1);
   });
 });
 
@@ -62,7 +67,7 @@ describe('cards group', () => {
     const sync = sqliteStore(r).cards;
     const served = sqliteStore(r).cards;
     const card = await sync.create(T, { title: 'wire the port' });
-    expect((await served.load(T, card.id))?.title).toBe('wire the port');
+    expect((await served.detail(T, card.id))?.card.title).toBe('wire the port');
     const claimed = await served.claim(T, card.id, 'claude');
     // The first row in a fresh store's AUTOINCREMENT card_runs table.
     expect(claimed?.runId).toBe(1);
@@ -71,7 +76,7 @@ describe('cards group', () => {
     expect(detail?.comments).toHaveLength(1);
     expect(detail?.runs).toHaveLength(1);
     expect((await sync.list(T, { limit: 10 })).cards.map((c) => c.id)).toContain(card.id);
-    expect(await served.load(T, 'nope')).toBeNull();
+    expect(await served.detail(T, 'nope')).toBeNull();
     await expect(sync.create(T, { title: '' })).rejects.toThrow();
     await expect(served.create(T, { title: '' })).rejects.toThrow();
   });
@@ -144,8 +149,8 @@ describe('dormant group', () => {
     const sync = sqliteStore(r).dormant;
     const served = sqliteStore(r).dormant;
     expect((await sync.list(T, null, {})).map((m) => m.id)).toEqual([row.id]);
-    expect(await served.holds(T, null, row.id)).toBe(true);
-    expect(await served.holds('other', null, row.id)).toBe(false);
+    expect((await served.list(T, null, { id: row.id })).map((m) => m.id)).toEqual([row.id]);
+    expect(await served.list('other', null, { id: row.id })).toEqual([]);
     const outcome = await served.restore(T, {
       id: row.id,
       actor: 'me',

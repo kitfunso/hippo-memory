@@ -67,9 +67,9 @@ describe('Objects, the policies in force at an instant', () => {
   const inForce =
     (asOf: string, more: { name?: string; limit?: number; tenantId?: string } = {}): Call =>
     async (g) =>
-      (await g.policiesInForce(more.tenantId ?? TENANT_A, { asOf, name: more.name, limit: more.limit ?? 10 })).map(
-        (p) => p.id,
-      );
+      (
+        await g.listObjects(more.tenantId ?? TENANT_A, 'policy', { asOf, name: more.name, limit: more.limit ?? 10 })
+      ).map((p) => p.id);
   /** Ids 1 to 7: 1 is replaced by 2 from June, 3 and 6 share a start, 4 is closed, 5 is the other tenant's and 7 starts in May under the name 3 holds. */
   const seed = (): Call[] => [
     policy('retention', '01-01', null),
@@ -132,7 +132,7 @@ describe('Objects, the policies in force at an instant', () => {
       inForce(day('03-01'), { name: 'export' }),
       inForce(day('03-01'), { name: 'Access' }),
       inForce(day('03-01'), { name: '' }),
-      (g) => g.policiesInForce(TENANT_A, { asOf: day('07-01'), name: 'retention', limit: 10 }),
+      (g) => g.listObjects(TENANT_A, 'policy', { asOf: day('07-01'), name: 'retention', limit: 10 }),
     ]);
     expect(side.outcomes.slice(SEEDED, -1)).toEqual([
       { value: [6, 3, 1] },
@@ -171,7 +171,9 @@ describe('Objects, the active skills by name', () => {
   const names =
     (limit: number, tenantId = TENANT_A): Call =>
     async (g) =>
-      (await g.activeSkillsByName(tenantId, limit)).map((s) => `${s.id} ${s.skillName}`);
+      (await g.listObjects(tenantId, 'skill', { byName: true, status: 'active', limit })).map(
+        (s) => `${s.id} ${s.skillName}`,
+      );
 
   it('orders names by their bytes, then by id, under, at and over the cap, and leaves out a replaced, a closed and a foreign skill', async () => {
     // U+FF5A sorts below U+1F600 by bytes and above it by UTF-16 code unit, so the pair tells the two orders apart.
@@ -191,7 +193,7 @@ describe('Objects, the active skills by name', () => {
       names(3),
       names(1),
       names(10, TENANT_B),
-      (g) => g.activeSkillsByName(TENANT_A, 1),
+      (g) => g.listObjects(TENANT_A, 'skill', { byName: true, status: 'active', limit: 1 }),
     ]);
     const ordered = ['2 Zebra', '3 alpha', '5 alpha', '9 triage', '7 ｚ wide', '6 \u{1F600} wide'];
     expect(side.outcomes.slice(10, -1)).toEqual([

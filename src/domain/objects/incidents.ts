@@ -82,7 +82,8 @@ export async function openIncident(
   opts: SaveIncidentOptions,
   actor: string,
 ): Promise<Incident> {
-  return opened(tenantId, await objects.openIncident(tenantId, incidentOpen(baseHalfLifeDays, tenantId, opts, actor)));
+  const open = incidentOpen(baseHalfLifeDays, tenantId, opts, actor);
+  return opened(tenantId, await objects.saveObject(tenantId, 'incident', open));
 }
 
 function resolving(tenantId: string, resolutionText: string, actor: string): IncidentResolve {
@@ -116,6 +117,6 @@ export async function resolveOpenIncident(
   return resolved(
     tenantId,
     id,
-    await objects.resolveIncident(tenantId, id, resolving(tenantId, resolutionText, actor)),
+    await objects.closeObject(tenantId, 'incident', id, resolving(tenantId, resolutionText, actor)),
   );
 }

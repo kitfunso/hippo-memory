@@ -60,10 +60,11 @@ async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]>
     ctx.store.reports.entriesWhere(filter, { limit: READ_PAGE_ROWS, after }),
   );
   const digests = rows.filter((e) => !e.extractedFrom && e.sourceSessionId !== key).map((e) => e.content);
-  const handoff = await ctx.store.sessions.latestHandoff(
+  const handoff = await ctx.store.sessions.read(
     ctx.tenantId,
-    null,
+    'handoff',
     {
+      sessionId: null,
       unfinishedOnly: true,
       maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
       scopeFilter: 'default-deny',

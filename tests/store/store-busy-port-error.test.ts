@@ -56,7 +56,9 @@ describe('a busy hippo.db in the port terms', () => {
   it('a served store call rejects with StoreBusyError, the driver text and the driver error as its cause', async () => {
     const store = sqliteStore(root);
     const err = await whileHeld(() =>
-      rejection(runWithRequestStores(() => store.sessions.saveSnapshot('default', SNAPSHOT, null), { busyWaitMs: 50 })),
+      rejection(
+        runWithRequestStores(() => store.sessions.save('default', 'snapshot', SNAPSHOT, null), { busyWaitMs: 50 }),
+      ),
     );
     expect(err).toBeInstanceOf(StoreBusyError);
     expect(err).toMatchObject({ message: 'database is locked' });

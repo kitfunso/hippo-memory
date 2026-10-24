@@ -1,15 +1,13 @@
-// The in-memory Predictions group: forward claims and their closes, each save landing with its mirror memory.
-import {
-  predictionBaserateOf,
-  type Prediction,
-  type PredictionClose,
-  type PredictionListQuery,
-  type PredictionSave,
-  type Predictions,
-} from '../port/objects.js';
+// The in-memory prediction rows: forward claims and their closes, each save landing with its mirror memory.
+import type { Prediction, PredictionClose, PredictionListQuery, PredictionSave } from '../port/objects.js';
 import type { PredictionBaserate } from '../port/types.js';
 import { isBelow, newestFirst } from '../rules/order.js';
-import { closeMissError, predictionCloseMetadata, predictionCreateMetadata } from '../rules/predictions.js';
+import {
+  closeMissError,
+  predictionBaserateOf,
+  predictionCloseMetadata,
+  predictionCreateMetadata,
+} from '../rules/predictions.js';
 import { appendAudit, nextId, ownedRow, peekId } from './rows.js';
 import { put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
@@ -17,8 +15,8 @@ import type { MemoryTables } from './tables.js';
 const predictionWalk = { key: (p: Prediction) => p.createdAt, intId: (p: Prediction) => p.id };
 const newestPrediction = newestFirst<Prediction>(predictionWalk);
 
-function saveIn(t: MemoryTables, tenantId: string, input: PredictionSave, actor: string): Prediction {
-  const { mirror } = input;
+export function savePredictionIn(t: MemoryTables, tenantId: string, input: PredictionSave): Prediction {
+  const { mirror, actor } = input;
   const id = peekId(t, 'predictions');
   const row: Prediction = {
     id,
@@ -45,7 +43,7 @@ function saveIn(t: MemoryTables, tenantId: string, input: PredictionSave, actor:
   });
 }
 
-function closeIn(t: MemoryTables, tenantId: string, id: number, close: PredictionClose, actor: string): Prediction {
+export function closePredictionIn(t: MemoryTables, tenantId: string, id: number, close: PredictionClose): Prediction {
   const row = ownedRow(t.predictions, tenantId, id);
   if (!row || row.closureState !== 'open') throw closeMissError(tenantId, id, row?.closureState ?? null);
   const closed: Prediction = {
@@ -56,12 +54,16 @@ function closeIn(t: MemoryTables, tenantId: string, id: number, close: Predictio
     closureNote: close.closureNote ?? null,
   };
   const metadata = predictionCloseMetadata(id, close);
-  appendAudit(t, [{ tenantId, actor, op: 'predict_close', targetId: String(id), metadata }]);
+  appendAudit(t, [{ tenantId, actor: close.actor, op: 'predict_close', targetId: String(id), metadata }]);
   t.predictions.set(id, closed);
   return structuredClone(closed);
 }
 
-function listIn(t: MemoryTables, tenantId: string, { classTag, closureState, limit, after }: PredictionListQuery) {
+export function listPredictionsIn(
+  t: MemoryTables,
+  tenantId: string,
+  { classTag, closureState, limit, after }: PredictionListQuery,
+): Prediction[] {
   const hits = [...t.predictions.values()].filter(
     (row) =>
       row.tenantId === tenantId &&
@@ -88,17 +90,15 @@ export function baserateIn(t: MemoryTables, tenantId: string, classTag: string):
   return predictionBaserateOf(classTag, closed);
 }
 
-export function memoryPredictions(t: MemoryTables): Predictions {
-  return {
-    savePrediction: async (tenantId, input, actor) => saveIn(t, tenantId, input, actor),
-    closePrediction: async (tenantId, id, close, actor) => closeIn(t, tenantId, id, close, actor),
-    predictionById: async (tenantId, id) => structuredClone(ownedRow(t.predictions, tenantId, id) ?? null),
-    listPredictions: async (tenantId, query) => listIn(t, tenantId, query),
-    async predictionBaserate(tenantId, classTag, actor) {
-      const baserate = baserateIn(t, tenantId, classTag);
-      const metadata = { class_tag: classTag, n_closed: baserate.nClosed };
-      appendAudit(t, [{ tenantId, actor, op: 'predict_baserate', targetId: classTag, metadata }]);
-      return baserate;
-    },
-  };
+/** The baserate with its predict_baserate row, which an empty class gets too. */
+export function predictionBaserateIn(
+  t: MemoryTables,
+  tenantId: string,
+  classTag: string,
+  actor: string,
+): PredictionBaserate {
+  const baserate = baserateIn(t, tenantId, classTag);
+  const metadata = { class_tag: classTag, n_closed: baserate.nClosed };
+  appendAudit(t, [{ tenantId, actor, op: 'predict_baserate', targetId: classTag, metadata }]);
+  return baserate;
 }

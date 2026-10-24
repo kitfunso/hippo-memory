@@ -11,7 +11,7 @@ import type { MemoryTables } from './tables.js';
 import { indexState } from './vectors.js';
 
 // Positions and velocities are stored as Float32, so a particle reads back rounded the same under either store.
-function storedParticle(p: PhysicsParticle, memoryId: string): PhysicsParticle {
+export function storedParticle(p: PhysicsParticle, memoryId: string): PhysicsParticle {
   const position = bufferToFloat32(float32ToBuffer(p.position));
   return { ...p, memoryId, position, velocity: bufferToFloat32(float32ToBuffer(p.velocity)) };
 }

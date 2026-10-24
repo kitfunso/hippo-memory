@@ -373,11 +373,12 @@ async function loadRawTaskState(ctx: Context, opts: ContextOptions, plan: Contex
   if (snapshot?.sessionId) return { snapshot, handoff: block.sessionHandoff, events: block.recentSessionEvents };
   // An unfinished handoff's scope is admitted in the read, so a newer denied row can't hide an older eligible one.
   const unfinished = {
+    sessionId: null,
     unfinishedOnly: true,
     maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
     scopeFilter: 'default-deny',
   } as const;
-  return { snapshot, handoff: await store.sessions.latestHandoff(ctx.tenantId, null, unfinished, key), events: [] };
+  return { snapshot, handoff: await store.sessions.read(ctx.tenantId, 'handoff', unfinished, key), events: [] };
 }
 
 // Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry

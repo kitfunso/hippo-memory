@@ -17,7 +17,7 @@ import { savePolicy } from '../../src/domain/objects/policies.js';
 import { PROCESS } from '../../src/domain/objects/processes.js';
 import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
-import { TYPED_HALF_LIFE_META_KEY } from '../../src/store/sqlite/open.js';
+import { TYPED_HALF_LIFE_META_KEY } from '../../src/store/rules/half-life.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';

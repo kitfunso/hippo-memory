@@ -192,7 +192,6 @@ entry/store-kit.d.ts: HandoffFilter re-export
 entry/store-kit.d.ts: HandoffOutcome re-export
 entry/store-kit.d.ts: HippoConfig re-export
 entry/store-kit.d.ts: HippoStore re-export
-entry/store-kit.d.ts: KeyAudit re-export
 entry/store-kit.d.ts: KeyListQuery re-export
 entry/store-kit.d.ts: KeyMint re-export
 entry/store-kit.d.ts: KeyRevoke re-export
