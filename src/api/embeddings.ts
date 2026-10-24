@@ -4,7 +4,7 @@
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { MemoryEntry } from '../base/memory/memory.js';
 import type { EmbeddingProvider } from '../base/ports/embedder.js';
-import { embedAll, embedMemoryDetached, folderEmbedTarget } from '../domain/search/embed-memories.js';
+import { embedAll, embedMemoryDetached, folderEmbedTarget, indexStep } from '../domain/search/embed-memories.js';
 import type { HippoStore, VectorCoverage } from '../store/port.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
@@ -29,11 +29,11 @@ export async function storedVectorCount(ctx: ContextWith<'embeddingIndex'>): Pro
 /** Memories against vectors, counted in the store, for the embed status and backfill lines. */
 export async function embedCoverage(ctx: ContextWith<'embeddingIndex'>): Promise<VectorCoverage> {
   requireHostAdmin(ctx, 'Reading the vector index');
-  return ctx.store.embeddingIndex.coverage();
+  return indexStep(ctx.store.embeddingIndex, { kind: 'coverage' });
 }
 
 /** Re-seed every memory's physics particle from its vector; returns how many it reset. */
 export async function resetPhysicsFromVectors(ctx: ContextWith<'embeddingIndex'>): Promise<number> {
   requireHostAdmin(ctx, 'Resetting physics');
-  return ctx.store.embeddingIndex.resetParticles();
+  return indexStep(ctx.store.embeddingIndex, { kind: 'reset' });
 }

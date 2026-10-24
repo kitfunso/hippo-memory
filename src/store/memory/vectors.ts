@@ -1,11 +1,16 @@
 // The in-memory VectorReads group: the stored vector bytes and particles, ranked with the shared ranking code.
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { PhysicsParticle } from '../../base/rank/physics.js';
 import { passesScopeFilterForRecall, type RecallScopeFilter } from '../../base/scope/recall-scope.js';
 import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { decodeVector, EMBEDDING_MODEL_META_KEY, rankVectorRows } from '../../db/vector-store.js';
-import { VECTOR_CANDIDATE_LIMIT, type VectorCandidateSpec, type VectorReads } from '../port/vectors.js';
+import {
+  VECTOR_CANDIDATE_LIMIT,
+  type StoredPart,
+  type StoredParts,
+  type VectorCandidateSpec,
+  type VectorReads,
+} from '../port/vectors.js';
 import type { MemoryTables } from './tables.js';
 
 function passesScope(scope: string | null, filter: RecallScopeFilter | undefined): boolean {
@@ -46,23 +51,28 @@ function nearestIn(t: MemoryTables, queryVector: readonly number[], spec: Vector
   });
 }
 
+type PartCopies = { readonly [P in StoredPart]: (t: MemoryTables, id: string) => StoredParts[P] | undefined };
+
+/** A copy of each stored part, so a caller never holds the tables' own bytes or particles. */
+const storedIn: PartCopies = {
+  vectors: (t, id) => {
+    const v = t.vectors.get(id);
+    return v && decodeVector(v.bytes).slice();
+  },
+  particles: (t, id) => structuredClone(t.particles.get(id)),
+};
+
 export function memoryVectors(t: MemoryTables): VectorReads {
   return {
     embeddingIndexState: async () => indexState(t),
-    async storedVectors(ids) {
-      const found = ids.flatMap((id): [string, number[]][] => {
-        const v = t.vectors.get(id);
-        return v ? [[id, Array.from(decodeVector(v.bytes))]] : [];
-      });
-      return new Map(found);
+    async stored(part, ids) {
+      const found = new Map<string, StoredParts[typeof part]>();
+      for (const id of ids) {
+        const value = storedIn[part](t, id);
+        if (value !== undefined) found.set(id, value);
+      }
+      return found;
     },
     nearestEntries: async (queryVector, spec) => nearestIn(t, queryVector, spec),
-    async physicsParticles(ids) {
-      const found = ids.flatMap((id): [string, PhysicsParticle][] => {
-        const p = t.particles.get(id);
-        return p ? [[id, structuredClone(p)]] : [];
-      });
-      return new Map(found);
-    },
   };
 }

@@ -3,11 +3,11 @@
 import { existsSync } from 'node:fs';
 import { getHippoDbPath } from '../../db/index.js';
 import { currentDeadline, currentRequestId, currentSignal } from '../../base/util/request-scope.js';
-import type { HippoStore, Readiness, StoreGroups, VectorReads } from '../port.js';
+import type { HippoStore, Readiness, StoreGroups, StoredPart, StoredParts, VectorReads } from '../port.js';
 import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from './executor.js';
 import { sqliteStore } from './store.js';
 import type { LossAversion } from '../../base/memory/memory.js';
-import { vectorCopiesOf, type VectorPack, vectorViewsOf } from './vector-pack.js';
+import { type VectorPack, vectorViewsOf } from './vector-pack.js';
 import { type OpPlaces, type OpRoute, type WorkerBase, type WorkerGroup, WORKER_OPS } from './worker-ops.js';
 import { asHippoDb } from './hippo-db-stores.js';
 
@@ -41,23 +41,21 @@ function onWorkers<G>(executor: SqliteExecutor, group: WorkerGroup, places: OpPl
   return { ...inProcess, ...Object.fromEntries(moved) };
 }
 
-// The two reads that return vectors: the worker answers with one moved buffer, and the port's Map is rebuilt here. No
-// ids reads nothing, as in process.
-function vectorGroups(executor: SqliteExecutor, inProcess: VectorReads): Pick<StoreGroups, 'vectors' | 'vectorViews'> {
-  const { vectors, vectorViews } = WORKER_OPS;
-  const pack = (op: string, ids: readonly string[], mode: OpRoute): Promise<VectorPack> =>
-    send(executor, op, [ids], mode);
+type SentParts = { readonly [P in StoredPart]: (ids: readonly string[]) => Promise<Map<string, StoredParts[P]>> };
+
+// Stored vectors come back as one moved buffer, and the port's Map of views is rebuilt here. No ids reads nothing,
+// as in process.
+function vectorGroups(executor: SqliteExecutor, inProcess: VectorReads): Pick<StoreGroups, 'vectors'> {
+  const { vectors } = WORKER_OPS;
+  const sent: SentParts = {
+    vectors: async (ids) =>
+      vectorViewsOf(await send<VectorPack>(executor, 'vectors.stored', ['vectors', ids], vectors.stored)),
+    particles: (ids) => send(executor, 'vectors.stored', ['particles', ids], vectors.stored),
+  };
   return {
     vectors: {
       ...onWorkers(executor, 'vectors', vectors, inProcess),
-      storedVectors: async (ids) =>
-        ids.length === 0 ? new Map() : vectorCopiesOf(await pack('vectors.storedVectors', ids, vectors.storedVectors)),
-    },
-    vectorViews: {
-      storedVectorViews: async (ids) =>
-        ids.length === 0
-          ? new Map()
-          : vectorViewsOf(await pack('vectorViews.storedVectorViews', ids, vectorViews.storedVectorViews)),
+      stored: async (part, ids) => (ids.length === 0 ? new Map() : sent[part](ids)),
     },
   };
 }

@@ -91,9 +91,8 @@ export function embeddingModelRequiresReindex(on: OnHandle, model: string, index
   return indexNeedsRebuild(resolveIndexedEmbeddingModel(on, index), model);
 }
 
-/**
- * Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via `readStoredVectors`.
- */
+/** Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via
+ * `readStoredVectorViews`. */
 export function listAllVectors(db: DatabaseSyncLike): Record<string, number[]> {
   return Object.fromEntries(loadVectors(db));
 }
@@ -103,13 +102,7 @@ export function storedVectorSummary(db: DatabaseSyncLike): StoredVectorSummary {
   return { vectors: countStoredVectors(db), dims: storedVectorDims(db) };
 }
 
-/** Stored vectors for `ids` only. */
-export function readStoredVectors(db: DatabaseSyncLike, ids: readonly string[]): Map<string, number[]> {
-  if (ids.length === 0) return new Map();
-  return loadVectors(db, ids);
-}
-
-/** `readStoredVectors` as Float32 views, for a caller that only scores them. */
+/** Stored vectors for `ids` only, as Float32 views with no copy. */
 export function readStoredVectorViews(db: DatabaseSyncLike, ids: readonly string[]): Map<string, Float32Array> {
   if (ids.length === 0) return new Map();
   return loadVectorViews(db, ids);

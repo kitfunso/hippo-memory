@@ -1,6 +1,7 @@
 // The status verbs read only the rows their report needs, and the report is the one the whole-store read gave.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { indexStep } from '../../src/domain/search/embed-memories.js';
 import { buildCorrectionLatency } from '../../src/api/correction-latency.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import { physicsEnergyText } from '../../src/surface/cli/status.js';
@@ -144,13 +145,21 @@ describe('physics status stats', () => {
     const index = sqliteStore(root).embeddingIndex;
     const whole = loadStoredParticles(root);
     const mean = whole.reduce((sum, p) => sum + vecNorm(p.velocity), 0) / whole.length;
-    expect(await index.particleStats(3)).toEqual({ count: 3, meanSpeed: mean, particles: whole });
-    expect(await index.particleStats(2)).toEqual({ count: 3, meanSpeed: mean, particles: null });
+    expect(await indexStep(index, { kind: 'particles', fullUpTo: 3 })).toEqual({
+      count: 3,
+      meanSpeed: mean,
+      particles: whole,
+    });
+    expect(await indexStep(index, { kind: 'particles', fullUpTo: 2 })).toEqual({
+      count: 3,
+      meanSpeed: mean,
+      particles: null,
+    });
   });
 
   it('reads one column past the limit, whatever the particle count', async () => {
     await seedParticles(4);
-    const stats = async () => await sqliteStore(root).embeddingIndex.particleStats(2);
+    const stats = async () => await indexStep(sqliteStore(root).embeddingIndex, { kind: 'particles', fullUpTo: 2 });
     const reads = (await recordStatementsAsync(stats)).reads.filter((r) => r.sql.includes('memory_physics'));
     expect(reads.map((r) => r.sql)).toEqual(['SELECT velocity_blob FROM memory_physics ORDER BY rowid']);
   });

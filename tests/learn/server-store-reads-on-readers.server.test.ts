@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { packVectors, vectorCopiesOf, vectorViewsOf } from '../../src/store/sqlite/vector-pack.js';
+import { packVectors, vectorViewsOf } from '../../src/store/sqlite/vector-pack.js';
 import { WORKER_OPS } from '../../src/store/sqlite/worker-ops.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
@@ -237,16 +237,8 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('sharing.sourceTallies', (s) => s.sharing.sourceTallies(TENANT), /count: [1-9]/),
 ];
 
-/** The groups that were the local files: the index sleep and `hippo embed` fill, the ledger, the folder and sharing. */
+/** The groups that were the local files: the ledger, the folder and sharing; the index's sessions run on the writer. */
 const FOLDER_GROUP_READS: readonly Read[] = [
-  read('embeddingIndex.requiresReindex', (s) => s.embeddingIndex.requiresReindex('another-provider'), /^true$/),
-  read('embeddingIndex.entryCount', (s) => s.embeddingIndex.entryCount(), /^[1-9]\d*$/),
-  read('embeddingIndex.lockKey', (s) => s.embeddingIndex.lockKey(), /\S/),
-  read('embeddingIndex.entryIdsById', (s) => s.embeddingIndex.entryIdsById({ limit: 3 }), /ids: \[ 'mem_/),
-  read('embeddingIndex.summary', (s) => s.embeddingIndex.summary(), /vectors: [1-9]/),
-  read('embeddingIndex.coverage', (s) => s.embeddingIndex.coverage(), /memories: [1-9]/),
-  read('embeddingIndex.particleStats', (s) => s.embeddingIndex.particleStats(1_000), 'mem_p_noise'),
-  read('embeddingIndex.pendingIds', (s) => s.embeddingIndex.pendingIds({ limit: 50 }), 'mem_p_fill0'),
   read('folderFiles.home', (s) => s.folderFiles.home(), /folderName: '/),
   read('ledger.lastSent', (s) => s.ledger.lastSent(TENANT, SESSION, 'http_recall'), "hash: 'block-seeded'"),
   read(
@@ -293,9 +285,9 @@ const READS: readonly Read[] = [
   ),
   read('vectors.embeddingIndexState', (s) => s.vectors.embeddingIndexState(), VECTOR_IDENTITY),
   read(
-    'vectors.storedVectors',
-    (s) => s.vectors.storedVectors(VECTOR_IDS),
-    /'mem_p_noise' => \[\s+1, 0, 0, 0,\s+0, 0, 0, 0\s+\]/,
+    'vectors.stored vectors',
+    (s) => s.vectors.stored('vectors', VECTOR_IDS),
+    /'mem_p_noise' => Float32Array\(8\) \[\s+1, 0, 0, 0,\s+0, 0, 0, 0\s+\]/,
   ),
   read(
     'vectors.nearestEntries',
@@ -307,12 +299,7 @@ const READS: readonly Read[] = [
       }),
     'mem_p_plain',
   ),
-  read('vectors.physicsParticles', (s) => s.vectors.physicsParticles(VECTOR_IDS), 'mem_p_noise'),
-  read(
-    'vectorViews.storedVectorViews',
-    (s) => s.vectorViews.storedVectorViews(VECTOR_IDS),
-    /'mem_p_noise' => Float32Array\(8\) \[\s+1, 0, 0, 0,\s+0, 0, 0, 0\s+\]/,
-  ),
+  read('vectors.stored particles', (s) => s.vectors.stored('particles', VECTOR_IDS), 'mem_p_noise'),
   read('keyWrites.listApiKeys', (s) => s.keyWrites.listApiKeys({ tenantId: TENANT, active: true }), "role: 'member'"),
   read(
     'vectorWrites.entriesWithoutVector',
@@ -399,31 +386,23 @@ const READS: readonly Read[] = [
   ),
   read('graphReads.graphRows', (s) => s.graphReads.graphRows(TENANT, { limit: 50 }), 'RetryPolicy'),
   read(
-    'graphReads.entitiesForMemories',
+    'graphReads.graphRows by memory',
     async (s) =>
-      s.graphReads.entitiesForMemories(
-        TENANT,
-        (await graphEntities(s)).flatMap((e) => (e.memoryId === null ? [] : [e.memoryId])),
-      ),
+      s.graphReads.graphRows(TENANT, {
+        by: 'memory',
+        ids: (await graphEntities(s)).flatMap((e) => (e.memoryId === null ? [] : [e.memoryId])),
+      }),
     /memoryId: '[^']+'/,
   ),
   read(
-    'graphReads.entitiesByIds',
-    (s) =>
-      s.graphReads.entitiesByIds(
-        TENANT,
-        Array.from({ length: 50 }, (_, i) => i + 1),
-      ),
+    'graphReads.graphRows by entity',
+    (s) => s.graphReads.graphRows(TENANT, { by: 'entity', ids: Array.from({ length: 50 }, (_, i) => i + 1) }),
     'RetryPolicy',
   ),
   read(
-    'graphReads.neighborRelations',
+    'graphReads.graphRows by neighbor',
     async (s) =>
-      s.graphReads.neighborRelations(
-        TENANT,
-        (await graphEntities(s)).map((e) => e.id),
-        { limit: 50 },
-      ),
+      s.graphReads.graphRows(TENANT, { by: 'neighbor', ids: (await graphEntities(s)).map((e) => e.id), limit: 50 }),
     /relType: '[^']+'/,
   ),
   read(
@@ -659,7 +638,7 @@ describe('a read the op table places on a reader thread', () => {
         .map(([method]) => (group === 'base' ? method : `${group}.${method}`)),
     );
 
-    // A row name is the method, then the kind or filter it reads when one method reads several.
+    // A row named `<method> <case>` is one more case of that method.
     expect([...new Set(READS.map((row) => row.name.split(' ')[0]))].sort()).toEqual(tagged.sort());
   });
 
@@ -734,13 +713,6 @@ describe('vectors from a reader thread', () => {
     const pack = packVectors(stored);
 
     expect(vectorViewsOf(pack)).toEqual(stored);
-    expect(vectorCopiesOf(pack)).toEqual(
-      new Map([
-        ['a', [1, 2, 3]],
-        ['none', []],
-        ['b', [0.5]],
-      ]),
-    );
     expect(vectorViewsOf(packVectors(new Map()))).toEqual(new Map());
   });
 
@@ -748,8 +720,8 @@ describe('vectors from a reader thread', () => {
     const { store, ops } = patientStore(copy());
     cleanups.push(() => store.close());
 
-    expect(await store.vectors.storedVectors([])).toEqual(new Map());
-    expect(await store.vectorViews.storedVectorViews([])).toEqual(new Map());
+    expect(await store.vectors.stored('vectors', [])).toEqual(new Map());
+    expect(await store.vectors.stored('particles', [])).toEqual(new Map());
     expect(ops).toEqual([]);
   });
 });

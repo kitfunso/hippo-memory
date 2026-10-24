@@ -248,6 +248,8 @@ entry/store-kit.d.ts: StoreBusyError re-export
 entry/store-kit.d.ts: StoreGroup re-export
 entry/store-kit.d.ts: StoreGroups re-export
 entry/store-kit.d.ts: StoredGraph re-export
+entry/store-kit.d.ts: StoredPart re-export
+entry/store-kit.d.ts: StoredParts re-export
 entry/store-kit.d.ts: StrengthTallies re-export
 entry/store-kit.d.ts: StrengthenOptions re-export
 entry/store-kit.d.ts: SupersedeWrite re-export

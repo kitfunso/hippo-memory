@@ -332,7 +332,7 @@ describe('check-store-port.mjs', () => {
 
   it('reads route status from the syntax tree: localFiles and hippoDbOnly rows need hippo.db, a comment does not', () => {
     const table =
-      "const V1_ROUTES = [\n  { method: 'GET', path: '/a', /* storeReady: 'localFiles' */ handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n  { method: 'GET', path: '/e', storeReady: 'vectorViews', handler: e },\n  { method: 'POST', path: '/c', hippoDbOnly: 'runs the local process', handler: c },\n];\n";
+      "const V1_ROUTES = [\n  { method: 'GET', path: '/a', /* storeReady: 'localFiles' */ handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n  { method: 'GET', path: '/e', storeReady: 'readiness', handler: e },\n  { method: 'POST', path: '/c', hippoDbOnly: 'runs the local process', handler: c },\n];\n";
     withFixture({ 'src/surface/server/route-table.ts': table }, null, ({ run }) => {
       expect(list(run)).toMatchObject({ routesNeedingHippoDb: '2', hippoDbOnlyRoutes: '1' });
     });
