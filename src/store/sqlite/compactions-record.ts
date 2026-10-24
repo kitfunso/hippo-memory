@@ -35,7 +35,7 @@ import { isRecallBoostAblated } from '../../base/memory/ablation.js';
 import { updateStats } from './index-and-stats.js';
 import type { StoreFiles } from './open.js';
 import { errorFields, errorMessage, log as hippoLog } from '../../base/util/log.js';
-import type { CompactionStart, CompactionText } from '../port/capture.js';
+import type { CompactionStart, CompactionText } from '../../base/ports/store/capture.js';
 
 export type { CompactionStatus };
 

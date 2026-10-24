@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PostCompactPayload } from '../../src/base/session/capture-contract.js';
 import { importSpool, spool, spoolCounts, type SpoolFs, type SpoolImporter } from '../../src/infra/compaction-spool.js';
-import { StoreBusyError } from '../../src/store/port.js';
+import { StoreBusyError } from '../../src/base/ports/store.js';
 
 let root: string;
 let logs: string[];

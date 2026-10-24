@@ -484,7 +484,6 @@ describe('check-store-port.mjs', () => {
 
   it('fails and names a src/store file that runs no SQL, and passes hippo.db definition files, listed files and files that touch hippo.db', () => {
     const files = {
-      'src/store/index.ts': 'export interface Row { id: string }\n',
       'src/store/sqlite/plumbing.ts': 'export const a = 1;\n',
       'src/store/reads.ts': "export const f = (db: any) => db.prepare('SELECT 1').get();\n",
       'src/store/opens.ts': 'export const g = (r: string) => onHandle(r, () => 1);\n',
@@ -502,7 +501,7 @@ describe('check-store-port.mjs', () => {
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('storeFilesWithoutSql: 1 -> 2');
       expect(r.stderr).toContain('src/store/scope.ts: unlisted -> under src/store, runs no SQL');
-      for (const quiet of ['index.ts', 'plumbing.ts', 'reads.ts', 'opens.ts', 'old.ts']) {
+      for (const quiet of ['plumbing.ts', 'reads.ts', 'opens.ts', 'old.ts']) {
         expect(r.stderr).not.toContain(quiet);
       }
       expect(run('--update').status).toBe(1);
@@ -511,12 +510,13 @@ describe('check-store-port.mjs', () => {
 
   it('portImportsFromSql counts a port file import of a store file outside the port or a db file that runs SQL, and nothing else', () => {
     const files = {
-      'src/store/port.ts':
-        "import type { A } from './sql.js';\nimport type { B } from './pure.js';\nexport type { C } from './port/g.js';\n",
-      'src/store/port/g.ts':
-        "import type { A } from '../sql.js';\nimport type { E } from './h.js';\nimport type { F } from '../../db/pure.js';\nimport type { G } from '../../db/sql.js';\nexport type C = A;\n",
-      'src/store/port/h.ts': 'export type E = 1;\n',
-      'src/store/port-groups.ts': "import type { B } from './pure.js';\nimport type { C } from './port/g.js';\n",
+      'src/base/ports/store.ts':
+        "import type { A } from '../../store/sql.js';\nimport type { B } from '../../store/pure.js';\nexport type { C } from './store/g.js';\n",
+      'src/base/ports/store/g.ts':
+        "import type { A } from '../../../store/sql.js';\nimport type { E } from './h.js';\nimport type { F } from '../../../db/pure.js';\nimport type { G } from '../../../db/sql.js';\nexport type C = A;\n",
+      'src/base/ports/store/h.ts': 'export type E = 1;\n',
+      'src/base/ports/store-groups.ts':
+        "import type { B } from '../../store/pure.js';\nimport type { C } from './store/g.js';\n",
       'src/store/sql.ts': "export type A = 1;\nexport const f = (db: any) => db.prepare('SELECT 1');\n",
       'src/store/pure.ts': 'export type B = 2;\n',
       'src/db/pure.ts': 'export type F = 3;\n',
@@ -526,17 +526,17 @@ describe('check-store-port.mjs', () => {
       const l = list(run);
       expect(l).toMatchObject({
         portImportsFromSql: '5',
-        'src/store/port.ts:1': 'portImportsFromSql',
-        'src/store/port.ts:2': 'portImportsFromSql',
-        'src/store/port/g.ts:1': 'portImportsFromSql',
-        'src/store/port/g.ts:4': 'portImportsFromSql',
-        'src/store/port-groups.ts:1': 'portImportsFromSql',
+        'src/base/ports/store.ts:1': 'portImportsFromSql',
+        'src/base/ports/store.ts:2': 'portImportsFromSql',
+        'src/base/ports/store/g.ts:1': 'portImportsFromSql',
+        'src/base/ports/store/g.ts:4': 'portImportsFromSql',
+        'src/base/ports/store-groups.ts:1': 'portImportsFromSql',
       });
       for (const quiet of [
-        'src/store/port.ts:3',
-        'src/store/port/g.ts:2',
-        'src/store/port/g.ts:3',
-        'src/store/port-groups.ts:2',
+        'src/base/ports/store.ts:3',
+        'src/base/ports/store/g.ts:2',
+        'src/base/ports/store/g.ts:3',
+        'src/base/ports/store-groups.ts:2',
       ]) {
         expect(l[quiet]).toBeUndefined();
       }
@@ -578,8 +578,8 @@ describe('check-store-port.mjs', () => {
 
   it('portFunctionParams counts a port method parameter that holds a function, through an alias, a union member, a property and an import', () => {
     const files = {
-      'src/store/port.ts': [
-        "import type { Fate } from './port/fate.js';",
+      'src/base/ports/store.ts': [
+        "import type { Fate } from './store/fate.js';",
         'export type Protect = (id: string) => string | undefined;',
         'export interface Plain { readonly id: string; readonly at: Date }',
         'export interface Group {',
@@ -590,25 +590,25 @@ describe('check-store-port.mjs', () => {
         '  run<T>(work: T): T;',
         '}',
       ].join('\n'),
-      'src/store/port/fate.ts':
+      'src/base/ports/store/fate.ts':
         "export type Fate = { readonly kind: 'weaken' } | { readonly kind: 'reject'; readonly inReach: (scope: string) => boolean };\n",
-      'src/store/port-groups.ts':
+      'src/base/ports/store-groups.ts':
         'export interface Later { readonly every: { readonly on: { tick(): void } } }\nexport interface G { start(later: Later): void }\n',
       'src/api/a.ts': 'export interface NotPort { visit(each: () => void): void }\n',
     };
     withFixture(files, null, ({ run }) => {
       const l = list(run);
       expect(l.portFunctionParams).toBe('4');
-      expect(l['src/store/port.ts:5 Group.visit(each)']).toBe('portFunctionParams');
-      expect(l['src/store/port.ts:6 Group.repair(protect)']).toBe('portFunctionParams');
-      expect(l['src/store/port.ts:7 Group.resolve(fate.inReach)']).toBe('portFunctionParams');
-      expect(l['src/store/port-groups.ts:2 G.start(later.every.on.tick)']).toBe('portFunctionParams');
+      expect(l['src/base/ports/store.ts:5 Group.visit(each)']).toBe('portFunctionParams');
+      expect(l['src/base/ports/store.ts:6 Group.repair(protect)']).toBe('portFunctionParams');
+      expect(l['src/base/ports/store.ts:7 Group.resolve(fate.inReach)']).toBe('portFunctionParams');
+      expect(l['src/base/ports/store-groups.ts:2 G.start(later.every.on.tick)']).toBe('portFunctionParams');
     });
   });
 
   it('portFunctionParams leaves out a type the store only receives, whose function the taking method already counts', () => {
     const files = {
-      'src/store/port.ts': [
+      'src/base/ports/store.ts': [
         'export interface Source { read(sink: (row: string) => void): void }',
         'export interface Group { take(source: Source): void; open(): Promise<Opened> }',
         'export interface Opened { each(visit: () => void): void }',
@@ -618,17 +618,17 @@ describe('check-store-port.mjs', () => {
     withFixture(files, null, ({ run }) => {
       const l = list(run);
       expect(l.portFunctionParams).toBe('2');
-      expect(l['src/store/port.ts:2 Group.take(source.read)']).toBe('portFunctionParams');
-      expect(l['src/store/port.ts:3 Opened.each(visit)']).toBe('portFunctionParams');
+      expect(l['src/base/ports/store.ts:2 Group.take(source.read)']).toBe('portFunctionParams');
+      expect(l['src/base/ports/store.ts:3 Opened.each(visit)']).toBe('portFunctionParams');
     });
   });
 
   it('portFunctionParams fails on one function parameter, and --update cannot pin it', () => {
-    const files = { 'src/store/port.ts': 'export interface Group { visit(each: () => void): void }\n' };
+    const files = { 'src/base/ports/store.ts': 'export interface Group { visit(each: () => void): void }\n' };
     withFixture(files, {}, ({ run, baseline }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/store/port.ts:1 Group.visit(each): data only -> takes a function');
+      expect(r.stderr).toContain('src/base/ports/store.ts:1 Group.visit(each): data only -> takes a function');
       expect(run('--update').status).toBe(1);
       expect(baseline()).not.toHaveProperty('portFunctionParams');
     });
@@ -667,19 +667,19 @@ describe('check-store-port.mjs', () => {
       const r = run();
       expect(r.status, r.stderr).toBe(0);
     });
-    withFixture({ 'src/store/port/rows.ts': FOLDER_FORM }, null, ({ run }) => {
+    withFixture({ 'src/base/ports/store/rows.ts': FOLDER_FORM }, null, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('  src/store/port/rows.ts:1 loadRecallSearchEntries');
+      expect(r.stderr).toContain('  src/base/ports/store/rows.ts:1 loadRecallSearchEntries');
     });
   });
 
-  it('fails and names a file directly in src/store besides the port and its entry', () => {
+  it('fails and names a file directly in src/store', () => {
     const kept = {
-      'src/store/port.ts': 'export type A = 1;\n',
-      'src/store/port-groups.ts': 'export type B = 2;\n',
-      'src/store/index.ts': 'export type C = 3;\n',
-      'src/store/port/g.ts': 'export type E = 4;\n',
+      'src/base/ports/store.ts': 'export type A = 1;\n',
+      'src/base/ports/store-groups.ts': 'export type B = 2;\n',
+      'src/base/ports/store-index.ts': 'export type C = 3;\n',
+      'src/base/ports/store/g.ts': 'export type E = 4;\n',
       'src/store/sqlite/reads.ts': "export const f = (db: any) => db.prepare('SELECT 1').get();\n",
     };
     withFixture(kept, null, ({ run }) => {
@@ -697,7 +697,7 @@ describe('check-store-port.mjs', () => {
 
   it('fails and names each store tenant a caller can leave out, as a parameter or an argument property, and passes the rest', () => {
     const port = [
-      "import type { Opts } from './port/opts.js';",
+      "import type { Opts } from './store/opts.js';",
       'export interface Group {',
       '  page(tenantId?: string): void;',
       '  list(query: Opts): void;',
@@ -705,8 +705,8 @@ describe('check-store-port.mjs', () => {
       '}',
     ].join('\n');
     const files = {
-      'src/store/port.ts': port,
-      'src/store/port/opts.ts':
+      'src/base/ports/store.ts': port,
+      'src/base/ports/store/opts.ts':
         'export type Opts = Base & { limit: number };\ninterface Base { tenant: string | null }\n',
       'src/store/sqlite/reads.ts': [
         "export function read(db: any, tenantId: string | undefined) { return db.prepare('SELECT 1').get(); }",
@@ -718,8 +718,8 @@ describe('check-store-port.mjs', () => {
     withFixture(files, null, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/store/port.ts:3 page(tenantId: tenantId)');
-      expect(r.stderr).toContain('src/store/port.ts:4 list(query: Base.tenant)');
+      expect(r.stderr).toContain('src/base/ports/store.ts:3 page(tenantId: tenantId)');
+      expect(r.stderr).toContain('src/base/ports/store.ts:4 list(query: Base.tenant)');
       expect(r.stderr).toContain('src/store/sqlite/reads.ts:1 read(tenantId: tenantId)');
       expect(r.stderr).toContain('src/store/sqlite/reads.ts:2 rows(');
       expect(r.stderr).not.toContain(' named(');

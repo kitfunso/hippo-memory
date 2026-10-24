@@ -7,7 +7,7 @@ import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag
 import { resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
-import type { ApiKeyListItem } from '../../store/port/keys.js';
+import type { ApiKeyListItem } from '../../base/ports/store/keys.js';
 
 // ---------------------------------------------------------------------------
 // Auth subcommands

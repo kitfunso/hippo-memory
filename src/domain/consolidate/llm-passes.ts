@@ -2,7 +2,7 @@ import { DAG_LEVEL, Layer, type MemoryEntry } from '../../base/memory/memory.js'
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
-import type { EntryCursor } from '../../store/port/types.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 import { isPermanentFailure, llmFailureFields, type Llm, type LlmFailure } from '../../base/ports/llm.js';
 

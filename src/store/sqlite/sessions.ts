@@ -16,10 +16,10 @@ import type {
   WorkingMemoryItem,
   WorkingMemoryFilter,
   WorkingMemoryPush,
-} from '../port/sessions.js';
+} from '../../base/ports/store/sessions.js';
 import { removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
 import type { Handles, StoreFiles } from './open.js';
-import { continuityStamp, type ContinuityKey } from '../port/types.js';
+import { continuityStamp, type ContinuityKey } from '../../base/ports/store/types.js';
 import type { JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
 import {

@@ -13,12 +13,12 @@ import { audit, auditRejectionRefusal } from './audit-event.js';
 import { entryIdTaken } from './entry-reads.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
-import type { DormantRestoreOutcome, Dormant, DormantRestoreRequest } from '../port/dormant.js';
+import type { DormantRestoreOutcome, Dormant, DormantRestoreRequest } from '../../base/ports/store/dormant.js';
 import { updateStatsUnlessBusy } from './index-and-stats.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 import { deleteDormantRow, hasDormantRow, listDormantRows, readDormantSnapshot } from './dormant-rows.js';
-import type { DormantSnapshot } from '../port/types.js';
+import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 /** Dormant memories: what sleep does with a faded memory instead of deleting it (config `dormant.enabled`;

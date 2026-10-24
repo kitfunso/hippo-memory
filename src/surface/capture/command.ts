@@ -11,8 +11,8 @@ import { teeStdStreams } from '../../host/stream-tee.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { extractFromTexts, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
-import type { CaptureDedup, CapturedOutcome } from '../../store/port/capture.js';
-import type { StoreGroups } from '../../store/port.js';
+import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
+import type { StoreGroups } from '../../base/ports/store.js';
 
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';

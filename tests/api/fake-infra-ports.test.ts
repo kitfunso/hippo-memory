@@ -12,7 +12,7 @@ import type { InfraPorts } from '../../src/base/ports/infra.js';
 import type { Llm, LlmRequest } from '../../src/base/ports/llm.js';
 import type { RerankerFn } from '../../src/base/ports/reranker.js';
 import type { AgentFiles } from '../../src/base/util/agent-files.js';
-import type { OptionalGroup } from '../../src/store/port.js';
+import type { OptionalGroup } from '../../src/base/ports/store.js';
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { cwdProject } from '../_helpers/api-ctx.js';

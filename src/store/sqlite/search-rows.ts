@@ -12,9 +12,9 @@ import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js'
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
 import { placeholders } from '../../db/sql.js';
-import type { OriginFilter } from '../port/types.js';
-import type { RecallSearchEntriesOptions } from '../port/sharing.js';
-import { VECTOR_CANDIDATE_LIMIT, type VectorCandidateSpec } from '../port/vectors.js';
+import type { OriginFilter } from '../../base/ports/store/types.js';
+import type { RecallSearchEntriesOptions } from '../../base/ports/store/sharing.js';
+import { VECTOR_CANDIDATE_LIMIT, type VectorCandidateSpec } from '../../base/ports/store/vectors.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
 import { LIKE_WINDOW_ROWS } from '../rules/windows.js';

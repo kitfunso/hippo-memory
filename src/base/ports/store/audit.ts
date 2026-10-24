@@ -1,9 +1,9 @@
 // The audit groups: the audit list, and the maintenance that prunes it, deletes automatically and repairs quality.
-import type { AuditOp } from '../../base/records/audit-ops.js';
-import type { KeysetPosition } from '../../base/util/keyset.js';
-import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../base/util/limits.js';
+import type { AuditOp } from '../../records/audit-ops.js';
+import type { KeysetPosition } from '../../util/keyset.js';
+import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT } from '../../util/limits.js';
 import type { AuditEvent } from './types.js';
-import type { RepairProtection } from '../../base/memory/memory-audit.js';
+import type { RepairProtection } from '../../memory/memory-audit.js';
 
 /** The rows an audit list reads for `limit`: one past the cap, since GET /v1/audit reads a row ahead to tell whether
  * another page exists. */

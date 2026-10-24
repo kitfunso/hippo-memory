@@ -8,7 +8,7 @@ import { buildMemoryPage, buildSearch } from '../../api/dashboard/queries.js';
 import { createSnapshotClock } from '../../api/dashboard/snapshot-clock.js';
 import type { Context } from '../../api/types.js';
 import { configReader } from '../../host/config-file.js';
-import { isStoreBusy } from '../../store/port.js';
+import { isStoreBusy } from '../../base/ports/store.js';
 import { defaultDashboardReads, defaultStore } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';

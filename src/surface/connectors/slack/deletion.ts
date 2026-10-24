@@ -1,5 +1,5 @@
 import { rawArchive, type Context } from '../../../api/index.js';
-import type { ConnectorEvent } from '../../../store/port.js';
+import type { ConnectorEvent } from '../../../base/ports/store.js';
 
 export interface DeletionInput {
   teamId: string;

@@ -16,7 +16,7 @@ export function resolveSpec(file, spec) {
 
 // port-groups.ts holds the session and admin groups (conflicts, dormant), so it is a port file here too.
 const declaresPort = (f) =>
-  f === 'src/store/port.ts' || f.startsWith('src/store/port/') || f === 'src/store/port-groups.ts';
+  f === 'src/base/ports/store.ts' || f.startsWith('src/base/ports/store/') || f === 'src/base/ports/store-groups.ts';
 const typeTables = new Map();
 
 /** The interfaces and type aliases a file declares, and the file and name each imported or re-exported name comes from. */
@@ -114,7 +114,7 @@ function functionInDeclared(file, iface, seen) {
   return null;
 }
 
-const STORE_ROOT = 'src/store/port.ts';
+const STORE_ROOT = 'src/base/ports/store.ts';
 
 /** The interfaces and aliases the store hands out, as `file#name`: HippoStore and every type its members and return types
  * reach, parameters left out. A type only ever passed in is implemented by the caller, and the method that takes it

@@ -1,5 +1,10 @@
 // The in-memory ConnectorWrites group: the entry, its quarantine record and its event log row land in one staged write.
-import type { ConnectorEvent, ConnectorWrites, ConnectorWrite, ConnectorWriteOutcome } from '../port/connectors.js';
+import type {
+  ConnectorEvent,
+  ConnectorWrites,
+  ConnectorWrite,
+  ConnectorWriteOutcome,
+} from '../../base/ports/store/connectors.js';
 import { archiveOne, put, stage } from './staged.js';
 import type { LoggedEvent, MemoryTables } from './tables.js';
 

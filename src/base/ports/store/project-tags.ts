@@ -1,6 +1,6 @@
 // The project names of a store: the reads `hippo projects`, doctor and the note sync plan from, and the merge and the
 // repair, each one transaction, backed up first, whose mirror files follow the commit.
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../memory/memory.js';
 import type { AuditLog } from './audit.js';
 import type { EntryFilter, Reports } from './reports.js';
 import type { DormantSnapshot } from './types.js';

@@ -1,5 +1,5 @@
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import type { HippoStore } from '../../store/index.js';
+import type { HippoStore } from '../../base/ports/store-index.js';
 
 // A prober must never see a 429, so the store read is bounded by remembering its answer instead of rate-limiting the
 // route.

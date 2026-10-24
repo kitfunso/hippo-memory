@@ -2,7 +2,7 @@
 import { markRetrieved, strengthOptionsOf, type LossAversion } from '../../base/memory/memory.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { blockHash } from '../../base/util/token-text.js';
-import type { RecallTraceInput, RecallWrites } from '../port/recall-writes.js';
+import type { RecallTraceInput, RecallWrites } from '../../base/ports/store/recall-writes.js';
 import { byBytes } from '../rules/order.js';
 import { deliveryCutoff } from '../rules/recall-traces.js';
 import { logGoalRecalls } from './goals.js';

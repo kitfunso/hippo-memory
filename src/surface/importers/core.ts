@@ -10,9 +10,9 @@ import { loadConfig } from '../../host/config-file.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import { log } from '../../base/util/log.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type { EntryWrites } from '../../store/port/entry-writes.js';
-import type { Rejections } from '../../store/port/rejections.js';
-import type { Sharing } from '../../store/port/sharing.js';
+import type { EntryWrites } from '../../base/ports/store/entry-writes.js';
+import type { Rejections } from '../../base/ports/store/rejections.js';
+import type { Sharing } from '../../base/ports/store/sharing.js';
 
 /** Below this length a chunk holds nothing worth recalling. */
 const MIN_IMPORT_CHARS = 10;

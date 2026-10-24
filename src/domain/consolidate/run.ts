@@ -2,8 +2,8 @@ import { MemoryEntry, type DecayOptions } from '../../base/memory/memory.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import { NO_MERGE_TAGS } from '../sharing/share.js';
-import type { DormantMove, StrengthRefresh } from '../../store/port/consolidation.js';
-import type { StoreWith } from '../../store/port.js';
+import type { DormantMove, StrengthRefresh } from '../../base/ports/store/consolidation.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import type { SleepRows, Survivors } from './survivors.js';
 import type { TombstoneChecks } from './tombstones.js';
 

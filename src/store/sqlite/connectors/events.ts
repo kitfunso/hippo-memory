@@ -9,7 +9,7 @@ import type {
   ConnectorEvent,
   ConnectorEventRecord,
   EventMarked,
-} from '../../port/connectors.js';
+} from '../../../base/ports/store/connectors.js';
 import { githubEventMemory, githubEventRecord, githubEventSeen, markGitHubEventSeen } from './github.js';
 import { markSlackEventSeen, slackEventMemory, slackEventRecord, slackEventSeen } from './slack.js';
 

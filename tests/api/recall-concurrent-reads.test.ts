@@ -6,7 +6,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { CLI_RECALL } from '../../src/api/recall/profiles.js';
-import type { HippoStore } from '../../src/store/port.js';
+import type { HippoStore } from '../../src/base/ports/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { waitFor } from '../_helpers/wait-for.js';

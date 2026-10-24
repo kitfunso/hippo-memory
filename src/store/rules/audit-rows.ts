@@ -1,6 +1,6 @@
 // Audit rows both adapters write with the same op and keys: a summary flipping dirty, and a value the rejected-value
 // guard refused.
-import type { AppendAuditOpts } from '../port/types.js';
+import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 
 /** The row for a summary whose dirty flag flipped from clean to dirty. */
 export function summaryDirtyAudit(

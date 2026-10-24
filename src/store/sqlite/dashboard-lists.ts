@@ -7,7 +7,12 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import type { LossAversion } from '../../base/memory/memory.js';
 import { BAND_AT_RISK, CONFIDENCE_ORDER, LAYER_ORDER, listHead, memoryFacts } from '../../base/memory/memory-facts.js';
 import { DAY_MS } from '../../base/util/time.js';
-import type { DashboardPageQuery, DashboardSortKey, FilterTally, ListedRow } from '../port/dashboard-reads.js';
+import type {
+  DashboardPageQuery,
+  DashboardSortKey,
+  FilterTally,
+  ListedRow,
+} from '../../base/ports/store/dashboard-reads.js';
 import {
   FACT_COLUMNS,
   factInputs,

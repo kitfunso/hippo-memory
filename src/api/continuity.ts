@@ -1,6 +1,6 @@
 // Where-you-left-off: the active task snapshot with the session events that follow it.
 
-import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
+import type { SessionEvent, TaskSnapshot } from '../base/ports/store/sessions.js';
 import type { Context } from './types.js';
 
 export interface LatestContinuity {

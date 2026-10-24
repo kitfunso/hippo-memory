@@ -14,7 +14,7 @@ import {
 } from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import type { ApiKeyRecord } from '../../src/store/port/types.js';
+import type { ApiKeyRecord } from '../../src/base/ports/store/types.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 
 const WHOAMI = '/v1/x-whoami';

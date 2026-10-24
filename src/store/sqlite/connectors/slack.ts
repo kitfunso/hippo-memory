@@ -2,10 +2,15 @@
 // workspace routing. Each `xAt(db, ...)` runs on the caller's handle.
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
-import type { ConnectorEventRecord } from '../../port.js';
+import type { ConnectorEventRecord } from '../../../base/ports/store.js';
 import { eventMemory, eventRecord, eventSeen, markEventSeen, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
-import type { TenantRoute, SlackDlqInsert, SlackDlqItem as DlqItem, SlackWorkspace } from '../../port/connectors.js';
+import type {
+  TenantRoute,
+  SlackDlqInsert,
+  SlackDlqItem as DlqItem,
+  SlackWorkspace,
+} from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 
 // Backfill cursors

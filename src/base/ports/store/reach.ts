@@ -1,5 +1,5 @@
 // Which stores a call reaches, probed once by a composition root so the api reads this instead of the disk.
-import type { HippoStore, StoreWith } from '../port.js';
+import type { HippoStore, StoreWith } from '../store.js';
 
 /** The groups share, sync and promote use on the operator's global store. */
 export type GlobalTargetGroup = 'promotion' | 'sharing' | 'folderFiles' | 'embeddingIndex' | 'captures';

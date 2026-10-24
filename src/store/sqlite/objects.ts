@@ -54,7 +54,7 @@ import type {
   ObjectSaveArgs,
   PoliciesInForceQuery,
   SkillsByNameQuery,
-} from '../port/objects.js';
+} from '../../base/ports/store/objects.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
 import { placeholders } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';

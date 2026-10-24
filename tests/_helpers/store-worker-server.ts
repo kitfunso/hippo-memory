@@ -8,7 +8,7 @@ import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from
 import type { JsonValue } from '../../src/base/util/json.js';
 import type { ServeOpts, ServerHandle } from '../../src/server.js';
 import { serve } from './store-switch.js';
-import type { HippoStore } from '../../src/store/index.js';
+import type { HippoStore } from '../../src/base/ports/store-index.js';
 import {
   type CallOptions,
   createSqliteExecutor,

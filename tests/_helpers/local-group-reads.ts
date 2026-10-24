@@ -2,7 +2,7 @@
 import { inspect } from 'node:util';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
-import type { HippoStore, StoreGroups } from '../../src/store/index.js';
+import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { startCompaction } from '../../src/store/sqlite/compactions-record.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

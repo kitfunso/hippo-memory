@@ -7,9 +7,9 @@ import {
   type SessionHandoff,
   type SessionHandoffRow,
 } from '../../base/session/handoff.js';
-import type { HandoffFilter, SessionEndHandoffRequest } from '../port/sessions.js';
+import type { HandoffFilter, SessionEndHandoffRequest } from '../../base/ports/store/sessions.js';
 import { isJsonObject, tryParseJson } from '../../base/util/json.js';
-import type { ContinuityKey } from '../port/types.js';
+import type { ContinuityKey } from '../../base/ports/store/types.js';
 import { byBytes, newestFirst } from '../rules/order.js';
 import { sessionEndHandoff, sessionEndSource } from '../rules/session-end.js';
 import { nextId } from './rows.js';

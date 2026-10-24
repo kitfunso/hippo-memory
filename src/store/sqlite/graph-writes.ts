@@ -25,7 +25,7 @@ import type {
   SourceObjectType,
   Entity,
   Relation,
-} from '../port/graph.js';
+} from '../../base/ports/store/graph.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.
  *  SQLite cannot parametrize a table name, so the SQL trigger mirrors this explicitly. */

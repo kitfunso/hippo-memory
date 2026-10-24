@@ -25,7 +25,7 @@ import {
   type Quad,
   type ScatterRows,
   type SearchTally,
-} from '../port/dashboard-reads.js';
+} from '../../base/ports/store/dashboard-reads.js';
 import { openConflictsNaming } from './conflicts.js';
 import {
   FACT_COLUMNS,

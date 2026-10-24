@@ -24,9 +24,9 @@ import type {
   ProjectTagScope,
   RepairPlan,
   RowRead,
-} from '../port/project-tags.js';
-import type { EntryFilter } from '../port/reports.js';
-import type { EntryCursor } from '../port/types.js';
+} from '../../base/ports/store/project-tags.js';
+import type { EntryFilter } from '../../base/ports/store/reports.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
 import { listEntriesWhere } from './entry-filter.js';
 
 const TX_LABEL = 'merge_projects';

@@ -1,31 +1,31 @@
 // The async store interface and its groups: every method answers a Promise and takes only data, so any backend can
 // serve it from any thread, and hippo.db is one adapter. Type-only apart from the group probes and the store errors.
-import { StoreNotPortedError } from '../base/util/store-blocked.js';
-import type { SessionAndAdminGroups } from './port-groups.js';
-import type { MemoryEntry } from '../base/memory/memory.js';
-import type { TenantId } from '../base/util/tenant.js';
-import type { TokenUse, Ledger } from './port/ledger.js';
-import type { SessionEvent, TaskSnapshot } from './port/sessions.js';
-import type { SessionHandoff } from '../base/session/handoff.js';
-import type { AuditMaintenance, AuditLog } from './port/audit.js';
-import type { LessonWrites, EntryWrites } from './port/entry-writes.js';
-import type { VectorReads, VectorWrites, EmbeddingIndex } from './port/vectors.js';
-import type { KeyWrites } from './port/keys.js';
-import type { ContextReads, DagReads } from './port/context-reads.js';
-import type { Objects } from './port/objects.js';
-import type { Quarantine } from './port/quarantine.js';
-import type { GraphReads, GraphRebuild } from './port/graph.js';
-import type { Readiness, Diagnostics } from './port/diagnostics.js';
-import type { LastRecall, RecallSearchArgs, RecallWrites } from './port/recall-writes.js';
-import type { ConnectorEvents, ConnectorWrites } from './port/connectors.js';
-import type { Promotion, Sharing } from './port/sharing.js';
-import type { FolderFiles } from './port/folder-files.js';
-import type { Consolidation } from './port/consolidation.js';
-import type { Learning } from './port/learning.js';
-import type { Captures, CompactionHooks } from './port/capture.js';
-import type { ProjectTags } from './port/project-tags.js';
-import type { AgentImport } from './port/agent-import.js';
-export type { FolderStore, GlobalTargetGroup, StoreReach } from './port/reach.js';
+import { StoreNotPortedError } from '../util/store-blocked.js';
+import type { SessionAndAdminGroups } from './store-groups.js';
+import type { MemoryEntry } from '../memory/memory.js';
+import type { TenantId } from '../util/tenant.js';
+import type { TokenUse, Ledger } from './store/ledger.js';
+import type { SessionEvent, TaskSnapshot } from './store/sessions.js';
+import type { SessionHandoff } from '../session/handoff.js';
+import type { AuditMaintenance, AuditLog } from './store/audit.js';
+import type { LessonWrites, EntryWrites } from './store/entry-writes.js';
+import type { VectorReads, VectorWrites, EmbeddingIndex } from './store/vectors.js';
+import type { KeyWrites } from './store/keys.js';
+import type { ContextReads, DagReads } from './store/context-reads.js';
+import type { Objects } from './store/objects.js';
+import type { Quarantine } from './store/quarantine.js';
+import type { GraphReads, GraphRebuild } from './store/graph.js';
+import type { Readiness, Diagnostics } from './store/diagnostics.js';
+import type { LastRecall, RecallSearchArgs, RecallWrites } from './store/recall-writes.js';
+import type { ConnectorEvents, ConnectorWrites } from './store/connectors.js';
+import type { Promotion, Sharing } from './store/sharing.js';
+import type { FolderFiles } from './store/folder-files.js';
+import type { Consolidation } from './store/consolidation.js';
+import type { Learning } from './store/learning.js';
+import type { Captures, CompactionHooks } from './store/capture.js';
+import type { ProjectTags } from './store/project-tags.js';
+import type { AgentImport } from './store/agent-import.js';
+export type { FolderStore, GlobalTargetGroup, StoreReach } from './store/reach.js';
 import type {
   ApiKeyRecord,
   ActiveGoals,
@@ -33,7 +33,7 @@ import type {
   ContinuityKey,
   PlanningFallacyEvidence,
   AppendAuditOpts,
-} from './port/types.js';
+} from './store/types.js';
 
 /** Every group a store has: the required ones, then five optional capabilities, each a set of groups a store sets or
  * leaves unset together. */
@@ -138,7 +138,7 @@ export function requireGroup<G extends OptionalGroup>(store: HippoStore, group: 
 /** A store that sets the optional groups `G`, as a surface proves once before it calls in. */
 export type StoreWith<G extends OptionalGroup> = HippoStore & Pick<StoreGroups, G>;
 
-export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../base/util/store-blocked.js';
+export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../util/store-blocked.js';
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an await, since a lock wait
  * blocks the event loop; a lock timeout throws `StoreBusyError`. */
@@ -205,9 +205,9 @@ export type {
   ConnectorEvents,
   DeadLetterConnector,
   DeadLetterRows,
-} from './port/connectors.js';
+} from './store/connectors.js';
 
-export type { RecallSearchArgs, RecallWrites, LastRecallWrites, LastRecall } from './port/recall-writes.js';
+export type { RecallSearchArgs, RecallWrites, LastRecallWrites, LastRecall } from './store/recall-writes.js';
 export type {
   VectorReads,
   StoredPart,
@@ -228,8 +228,8 @@ export type {
   StoredVectorSummary,
   VectorCoverage,
   VectorRow,
-} from './port/vectors.js';
-export type { KeyRevoke, KeyMint, SelfKeyMint, KeyListQuery, KeyWrites } from './port/keys.js';
+} from './store/vectors.js';
+export type { KeyRevoke, KeyMint, SelfKeyMint, KeyListQuery, KeyWrites } from './store/keys.js';
 export type {
   AmbientAdmission,
   AmbientCandidateRequest,
@@ -244,7 +244,7 @@ export type {
   DescendantWalk,
   SummaryDescendants,
   DagReads,
-} from './port/context-reads.js';
+} from './store/context-reads.js';
 export type {
   EntryWrite,
   EntryTarget,
@@ -254,7 +254,7 @@ export type {
   RawArchive,
   EntryWrites,
   LessonWrites,
-} from './port/entry-writes.js';
+} from './store/entry-writes.js';
 export type {
   PredictionSave,
   PredictionClose,
@@ -269,9 +269,9 @@ export type {
   PoliciesInForceQuery,
   SkillsByNameQuery,
   Objects,
-} from './port/objects.js';
-export type { AuditLog, AuditMaintenance } from './port/audit.js';
-export type { Readiness } from './port/diagnostics.js';
+} from './store/objects.js';
+export type { AuditLog, AuditMaintenance } from './store/audit.js';
+export type { Readiness } from './store/diagnostics.js';
 export type {
   QuarantineListQuery,
   QuarantinedMemory,
@@ -279,9 +279,9 @@ export type {
   QuarantineApproval,
   QuarantineRejection,
   Quarantine,
-} from './port/quarantine.js';
-export type { GraphViewQuery, GraphWalkQuery, GraphRows, GraphReads } from './port/graph.js';
-export type { Ledger, LedgerTurn, PilotArmOptions } from './port/ledger.js';
+} from './store/quarantine.js';
+export type { GraphViewQuery, GraphWalkQuery, GraphRows, GraphReads } from './store/graph.js';
+export type { Ledger, LedgerTurn, PilotArmOptions } from './store/ledger.js';
 export type {
   PromotedCopy,
   Promotion,
@@ -291,7 +291,7 @@ export type {
   RecallSearchEntriesOptions,
   Sharing,
   SourceTally,
-} from './port/sharing.js';
-export type { EntryFilter, PageRequest } from './port/reports.js';
-export type { TextsHoldingOptions } from './port/capture.js';
-export type { FolderFiles, StoreHome } from './port/folder-files.js';
+} from './store/sharing.js';
+export type { EntryFilter, PageRequest } from './store/reports.js';
+export type { TextsHoldingOptions } from './store/capture.js';
+export type { FolderFiles, StoreHome } from './store/folder-files.js';

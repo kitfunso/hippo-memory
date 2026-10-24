@@ -4,7 +4,7 @@
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
 import { type ChurnStaleResult, detectChurnStale } from '../../domain/learn/invalidation.js';
-import type { StoreWith } from '../../store/port.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import type { Context } from '../types.js';
 
 export type { ChurnStaleResult };

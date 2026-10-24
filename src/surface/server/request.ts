@@ -1,7 +1,7 @@
 // Request plumbing: request ids, error replies, URL parsing and path matching.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { isStoreBusy, STORE_BUSY_MESSAGE } from '../../store/port.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from '../../base/ports/store.js';
 import { errorClassFields, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { mapApiError } from '../../api/error-reply.js';
 import { HttpError, sendJson } from '../../base/util/http-util.js';

@@ -3,7 +3,13 @@ import { ConflictError } from '../../base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { entryAfterOutcome, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
 import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';
-import type { EntryRemoval, EntryWrites, OutcomeWrite, PinWrite, SupersedeWrite } from '../port/entry-writes.js';
+import type {
+  EntryRemoval,
+  EntryWrites,
+  OutcomeWrite,
+  PinWrite,
+  SupersedeWrite,
+} from '../../base/ports/store/entry-writes.js';
 import { bumpCounter } from './rows.js';
 import { archiveOne, inReach, markParentDirty, put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';

@@ -1,4 +1,4 @@
-import type { RerankStep } from '../../base/rank/search-types.js';
+import type { RerankStep } from '../../rank/search-types.js';
 import type { OriginFilter, AppendAuditOpts } from './types.js';
 import type { EntryTarget } from './entry-writes.js';
 

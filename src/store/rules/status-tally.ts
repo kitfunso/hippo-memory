@@ -8,7 +8,7 @@ import {
   type LossAversion,
   type StrengthInputs,
 } from '../../base/memory/memory.js';
-import type { StatusCounts } from '../port/reports.js';
+import type { StatusCounts } from '../../base/ports/store/reports.js';
 
 /** What one row's status reads: its strength and confidence inputs and its layer. */
 export type StatusInputs = StrengthInputs & ConfidenceInputs & { readonly layer: Layer };

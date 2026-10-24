@@ -2,8 +2,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ScopeActor } from '../../src/base/scope/recall-scope.js';
-import type { GraphRows, GraphViewQuery, GraphWalkQuery } from '../../src/store/port.js';
-import type { GraphOp } from '../../src/store/port/graph.js';
+import type { GraphRows, GraphViewQuery, GraphWalkQuery } from '../../src/base/ports/store.js';
+import type { GraphOp } from '../../src/base/ports/store/graph.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -13,7 +13,7 @@ import {
   type TwoTenantFixture,
   expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
-import type { AuditEvent } from '../../src/store/port/types.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
   BULK_TENANT,

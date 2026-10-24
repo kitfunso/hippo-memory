@@ -1,7 +1,7 @@
 // The card shapes the Cards group returns.
-import type { Card, CardComment, CardRun, CardStatus } from '../../base/records/card.js';
-import type { SessionHandoff, HandoffOutcome } from '../../base/session/handoff.js';
-import type { KeysetPosition } from '../../base/util/keyset.js';
+import type { Card, CardComment, CardRun, CardStatus } from '../../records/card.js';
+import type { SessionHandoff, HandoffOutcome } from '../../session/handoff.js';
+import type { KeysetPosition } from '../../util/keyset.js';
 
 /** The ids a card waits on and the ids that wait on it. */
 interface CardDeps {

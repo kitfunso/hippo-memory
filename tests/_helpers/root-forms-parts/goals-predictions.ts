@@ -4,13 +4,13 @@ import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import { onHandle } from '../../../src/store/sqlite/handles.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
-import type { CompleteGoalOpts, PushGoalOpts } from '../../../src/store/port/goals.js';
+import type { CompleteGoalOpts, PushGoalOpts } from '../../../src/base/ports/store/goals.js';
 import * as goalsSql from '../../../src/store/sqlite/goals.js';
 import * as predictionsSql from '../../../src/store/sqlite/predictions.js';
 import type { KeysetPosition } from '../../../src/base/util/keyset.js';
 import { DEFAULT_LIST_LIMIT } from '../../../src/base/util/limits.js';
-import type { ActiveGoals, GetActiveGoalsOpts, Goal, PredictionBaserate } from '../../../src/store/port/types.js';
-import type { Prediction, PredictionClose } from '../../../src/store/port/objects.js';
+import type { ActiveGoals, GetActiveGoalsOpts, Goal, PredictionBaserate } from '../../../src/base/ports/store/types.js';
+import type { Prediction, PredictionClose } from '../../../src/base/ports/store/objects.js';
 import type { ClosureState } from '../../../src/base/records/prediction.js';
 
 export async function pushGoal(hippoRoot: string, opts: PushGoalOpts): Promise<Goal> {

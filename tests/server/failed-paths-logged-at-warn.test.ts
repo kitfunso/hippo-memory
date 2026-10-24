@@ -5,7 +5,7 @@ import { Socket } from 'node:net';
 import { logRequestFailure } from '../../src/surface/server/request.js';
 import { mcpErrorResponse } from '../../src/surface/mcp/protocol.js';
 import { runWithRequestId } from '../../src/base/util/request-scope.js';
-import { StoreBusyError } from '../../src/store/port.js';
+import { StoreBusyError } from '../../src/base/ports/store.js';
 import { HttpError } from '../../src/base/util/http-util.js';
 import { judgeAll } from '../../src/entry/eval-scripts.js';
 import { createLocalEmbedder } from '../../src/infra/local-embedder.js';

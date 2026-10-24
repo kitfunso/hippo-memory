@@ -26,7 +26,8 @@
     "server.ts": "surface"
   },
   "apart": {
-    "api": ["infra"]
+    "api": ["infra"],
+    "domain": ["store"]
   },
   "barrels": {
     "index.ts": "entry"

@@ -16,9 +16,9 @@ import { isReusable } from '../../base/memory/memory-quality.js';
 import { log } from '../../base/util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
 import type { SharingStore } from './text-keys.js';
-import type { EntrySignals, PageRequest, StoreGroups, StoreHome, StoreWith } from '../../store/port.js';
-import type { EntryCursor } from '../../store/port/types.js';
-import type { Captures } from '../../store/port/capture.js';
+import type { EntrySignals, PageRequest, StoreGroups, StoreHome, StoreWith } from '../../base/ports/store.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
+import type { Captures } from '../../base/ports/store/capture.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */

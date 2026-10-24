@@ -17,7 +17,7 @@ import { PROCESS, type SaveProcessOptions } from '../../domain/objects/processes
 import { PROJECT_BRIEF, type SaveProjectBriefOptions } from '../../domain/objects/project-briefs.js';
 import { SKILL, type SaveSkillOptions } from '../../domain/objects/skills.js';
 import { extractPathTags } from '../../domain/search/path-context.js';
-import type { Objects } from '../../store/port.js';
+import type { Objects } from '../../base/ports/store.js';
 import type { Context } from '../types.js';
 
 export type { ObjectListOptions } from '../../domain/objects/descriptor.js';

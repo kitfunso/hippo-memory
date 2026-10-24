@@ -2,7 +2,7 @@
 // code. The driver's error stays as the cause and its text as the message.
 import { isSqliteBusy } from '../../db/index.js';
 import { errorMessage } from '../../base/util/log.js';
-import { StoreBusyError } from '../port.js';
+import { StoreBusyError } from '../../base/ports/store.js';
 
 /** `error` in the port's terms: a busy or locked code becomes a StoreBusyError, and any other error is as thrown. */
 export function portError<E>(error: E): E | StoreBusyError {

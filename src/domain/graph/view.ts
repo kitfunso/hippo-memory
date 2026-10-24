@@ -4,8 +4,8 @@
  * Shared by `hippo graph show|view` and the HTTP `GET /v1/graph` route, which all build the same `GraphModel`. */
 
 import type { ScopeActor } from '../../base/scope/recall-scope.js';
-import type { GraphReads, GraphRows } from '../../store/port.js';
-import type { EntityType, RelationType } from '../../store/port/graph.js';
+import type { GraphReads, GraphRows } from '../../base/ports/store.js';
+import type { EntityType, RelationType } from '../../base/ports/store/graph.js';
 
 const DEFAULT_LAYOUT_ITERATIONS = 300;
 

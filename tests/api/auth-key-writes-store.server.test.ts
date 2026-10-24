@@ -11,7 +11,7 @@ import { serve, type Actor, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, sqliteStore } from '../../src/entry/store-kit.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import type { ApiKeyListItem } from '../../src/store/port/keys.js';
+import type { ApiKeyListItem } from '../../src/base/ports/store/keys.js';
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { memorySide } from '../_helpers/memory-side.js';

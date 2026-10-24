@@ -8,7 +8,7 @@ import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { bound, skipEmpty, type Bodies } from './bound.js';
 import { openStore } from './handles.js';
-import type { LessonWrites } from '../port.js';
+import type { LessonWrites } from '../../base/ports/store.js';
 import { touchableScopeSql } from './rule-sql.js';
 
 /** `entries` in order, each one a rejection refuses left out; returns the ids written. */

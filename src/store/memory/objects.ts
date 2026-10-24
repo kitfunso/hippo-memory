@@ -22,8 +22,8 @@ import type {
   Objects,
   PoliciesInForceQuery,
   SkillsByNameQuery,
-} from '../port/objects.js';
-import type { AppendAuditOpts } from '../port/types.js';
+} from '../../base/ports/store/objects.js';
+import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 import { filterValue, rowOf } from './object-rules.js';
 import {
   closeAudit,

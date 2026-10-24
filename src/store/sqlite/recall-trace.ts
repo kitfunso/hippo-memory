@@ -12,7 +12,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { blockHash } from '../../base/util/token-text.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
-import type { RecallTraceInput } from '../port/recall-writes.js';
+import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { deliveryCutoff } from '../rules/recall-traces.js';
 import { parseLastTraceId } from './rows.js';

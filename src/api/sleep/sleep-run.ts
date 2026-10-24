@@ -17,8 +17,8 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { failedUnitOf } from '../../base/errors/failed-unit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
-import type { StoreWith } from '../../store/port.js';
-import type { EntryCursor } from '../../store/port/types.js';
+import type { StoreWith } from '../../base/ports/store.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial: true` row, or shrink the
  * pages dedup, the audit and ambient read; production never sets them. */

@@ -17,7 +17,7 @@ import {
   saveActiveTaskSnapshot,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
-import type { ContinuityKey } from '../../src/store/port/types.js';
+import type { ContinuityKey } from '../../src/base/ports/store/types.js';
 
 const P = { name: 'p', legacyName: 'p' } as const;
 const KEY_A: ContinuityKey = { owner: 'alice', project: ['p'] };

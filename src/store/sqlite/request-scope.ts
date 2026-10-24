@@ -9,7 +9,7 @@ import {
   SERVER_DB_WAIT_MS,
 } from '../../db/index.js';
 import { withRequestStoresSync } from '../../db/request-stores.js';
-import { isStoreBusy } from '../port.js';
+import { isStoreBusy } from '../../base/ports/store.js';
 import { inPortTerms, rethrowInPortTerms } from './port-errors.js';
 
 type RequestPreset = 'cli' | 'hook' | 'server';

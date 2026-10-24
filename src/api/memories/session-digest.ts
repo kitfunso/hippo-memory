@@ -5,8 +5,8 @@ import { createMemory, Layer, type MemoryEntry } from '../../base/memory/memory.
 import { SESSION_DIGEST_TAG, sessionDigestId } from '../../base/session/session-digest-row.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../../base/session/session-snapshot.js';
 import { buildSessionDigest } from '../../domain/learn/session-digest.js';
-import type { HippoStore } from '../../store/port.js';
-import type { EntryCursor } from '../../store/port/types.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 import type { Context } from '../types.js';
 

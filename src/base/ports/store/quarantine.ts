@@ -1,4 +1,4 @@
-import type { KeysetPosition } from '../../base/util/keyset.js';
+import type { KeysetPosition } from '../../util/keyset.js';
 
 /** How many records a quarantine list reads when its query sets no `limit`. */
 export const QUARANTINE_LIST_LIMIT = 100;

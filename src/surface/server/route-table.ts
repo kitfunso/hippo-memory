@@ -3,7 +3,7 @@ import type { ContextWith } from '../../api/types.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
 import type { WebhookPorts } from '../connectors/ingest.js';
-import { hasGroup, type OptionalGroup, type StoreGroup } from '../../store/index.js';
+import { hasGroup, type OptionalGroup, type StoreGroup } from '../../base/ports/store-index.js';
 import {
   HttpError,
   JSON_HEADERS,

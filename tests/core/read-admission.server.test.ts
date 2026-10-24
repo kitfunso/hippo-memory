@@ -14,7 +14,7 @@ import { passesScopeFilterForRecall } from '../../src/base/scope/recall-scope.js
 import { isSessionDigestRow, SESSION_DIGEST_TAG } from '../../src/base/session/session-digest-row.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { listAmbientCandidates } from '../../src/store/sqlite/candidates.js';
-import type { AmbientRefusal, HippoStore, StoreGroups, SummaryDescendants } from '../../src/store/port.js';
+import type { AmbientRefusal, HippoStore, StoreGroups, SummaryDescendants } from '../../src/base/ports/store.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';

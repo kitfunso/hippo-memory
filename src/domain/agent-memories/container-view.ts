@@ -2,8 +2,8 @@
 // earlier names are planned as steps, and applied to the rows read, as the store will apply them.
 import type { MemoryEntry, StrengthOptions } from '../../base/memory/memory.js';
 import type { AgentMemoryTool } from '../../base/memory/agent-memory-tools.js';
-import type { ImportStep, PlannedRow } from '../../store/port/agent-import.js';
-import type { DormantSnapshot, EntryCursor } from '../../store/port/types.js';
+import type { ImportStep, PlannedRow } from '../../base/ports/store/agent-import.js';
+import type { DormantSnapshot, EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 import { itemSource } from './source.js';
 import type { Container, ImportStore } from './types.js';

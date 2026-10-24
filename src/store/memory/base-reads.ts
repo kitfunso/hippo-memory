@@ -1,8 +1,8 @@
 // The in-memory base reads beyond recall search: fresh raw rows, the continuity block and the planning evidence.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
-import type { ContinuityBlock } from '../port.js';
-import type { ContinuityKey, PlanningFallacyEvidence } from '../port/types.js';
+import type { ContinuityBlock } from '../../base/ports/store.js';
+import type { ContinuityKey, PlanningFallacyEvidence } from '../../base/ports/store/types.js';
 import { resolveClass } from '../rules/class-resolution.js';
 import { latestHandoffIn } from './handoffs.js';
 import { baserateIn } from './predictions.js';

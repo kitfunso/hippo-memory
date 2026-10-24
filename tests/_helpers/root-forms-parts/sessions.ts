@@ -11,7 +11,7 @@ import type {
   SnapshotInput,
   TaskSnapshot,
   WorkingMemoryItem,
-} from '../../../src/store/port/sessions.js';
+} from '../../../src/base/ports/store/sessions.js';
 import * as handoffsSql from '../../../src/store/sqlite/handoffs.js';
 import * as indexAndStatsSql from '../../../src/store/sqlite/index-and-stats.js';
 import { readLastRecall } from '../../../src/store/sqlite/mirrors.js';
@@ -20,7 +20,7 @@ import type { HippoIndex } from '../../../src/store/sqlite/rows.js';
 import * as sessionsSql from '../../../src/store/sqlite/sessions.js';
 import * as taskSnapshotsSql from '../../../src/store/sqlite/task-snapshots.js';
 import { freshActiveSnapshot } from '../../../src/base/session/session-snapshot.js';
-import type { ContinuityKey } from '../../../src/store/port/types.js';
+import type { ContinuityKey } from '../../../src/base/ports/store/types.js';
 import type { JsonObject } from '../../../src/base/util/json.js';
 import { sessionDecayContext } from '../../../src/domain/consolidate/decay.js';
 

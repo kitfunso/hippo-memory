@@ -12,7 +12,7 @@ import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
 import { listObjects, type ObjectSaveSite, saveObject } from './lifecycle.js';
 import type { BriefReceipt, BriefStatus, ProjectBrief } from '../../base/records/object-types.js';
-import type { ObjectListQuery, Objects } from '../../store/port.js';
+import type { ObjectListQuery, Objects } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export type { BriefStatus, ProjectBrief } from '../../base/records/object-types.js';

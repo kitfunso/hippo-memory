@@ -2,7 +2,7 @@
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import type { JsonObject } from '../../base/util/json.js';
 import { plural } from '../../base/util/format.js';
-import type { PredictionBaserate } from '../port/types.js';
+import type { PredictionBaserate } from '../../base/ports/store/types.js';
 
 const present = (value: number | null | undefined): boolean => value !== undefined && value !== null;
 

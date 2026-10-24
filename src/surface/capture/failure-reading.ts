@@ -5,7 +5,7 @@ import { scrubForSharing } from './share-scrub.js';
 import { blockHash } from '../../base/util/token-text.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { type JsonValue, isJsonObjectLiteral, isJsonString } from '../../base/util/json.js';
-import type { CaptureErrorOutcome, RoutineRule } from '../../store/port/rejections.js';
+import type { CaptureErrorOutcome, RoutineRule } from '../../base/ports/store/rejections.js';
 
 const COMMAND_HEAD_WORDS = 2;
 

@@ -27,7 +27,7 @@ import {
 import { log } from '../../src/base/util/log.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
-import type { AuditEvent } from '../../src/store/port/types.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 

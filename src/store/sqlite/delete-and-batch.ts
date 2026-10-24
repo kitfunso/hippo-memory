@@ -6,7 +6,7 @@ import type { SqlFragment } from '../../db/sql.js';
 import { openHippoDb, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { introducesContent, rejectedValues } from './rejection.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
-import type { RejectedValueRow } from '../port/rejections.js';
+import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { insertDormantRow } from './dormant-rows.js';
 import { log } from '../../base/util/log.js';
@@ -22,7 +22,7 @@ import { chunked, ID_CHUNK } from '../../base/util/chunked.js';
 import { placeholders } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type { FlushComponent, LoadedRows, DormantMove, StrengthRefresh } from '../port/consolidation.js';
+import type { FlushComponent, LoadedRows, DormantMove, StrengthRefresh } from '../../base/ports/store/consolidation.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL);
  * tests/store/dormant-memories.test.ts pins it to the schema. */

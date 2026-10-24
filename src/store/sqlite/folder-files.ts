@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { resolveProjectIdentity } from '../../host/project-identity.js';
 import { realpathOrResolve } from '../../host/real-path.js';
 import { blockHash } from '../../base/util/token-text.js';
-import type { FolderFiles, StoreHome } from '../port/folder-files.js';
+import type { FolderFiles, StoreHome } from '../../base/ports/store/folder-files.js';
 import type { Handles, StoreFiles } from './open.js';
 import { openStore } from './handles.js';
 import { answered } from './bound.js';

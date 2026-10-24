@@ -2,7 +2,7 @@ import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { assertTenantId } from '../../src/base/scope/tenant-id.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
-import type { Prediction, SavePredictionOptions } from '../../src/store/port/objects.js';
+import type { Prediction, SavePredictionOptions } from '../../src/base/ports/store/objects.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 
 /** A prediction with its recall mirror, the mirror's half-life read from the store's config.json as the CLI would. */

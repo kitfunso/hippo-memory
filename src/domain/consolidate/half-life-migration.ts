@@ -1,7 +1,7 @@
 // Moves a store's memories still on an old default half-life base to a new one, once, audit-logged; the plan is
 // src/base/memory/half-life-plan.ts, which the store runs inside the move's own transaction as a sleep begins.
-import type { StoreWith } from '../../store/port.js';
-import type { SleepBegin, SleepStart } from '../../store/port/consolidation.js';
+import type { StoreWith } from '../../base/ports/store.js';
+import type { SleepBegin, SleepStart } from '../../base/ports/store/consolidation.js';
 
 /** What {@link migrateDefaultHalfLife} did, or would do under `dryRun`. */
 export interface HalfLifeMigrationResult {

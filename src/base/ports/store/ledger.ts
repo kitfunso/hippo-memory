@@ -1,9 +1,9 @@
 // The token and delivery ledger as a port group. A hook books its turn here, so every call but replaceRereads is best
 // effort: a row that does not land is noted at the level its cause earns and never rejects.
-import type { PilotArm } from '../../base/session/pilot-arm.js';
-import type { DeliveryEventInput } from '../../base/session/delivery.js';
-import type { LastSent } from '../../base/session/skip-unchanged.js';
-import type { ApiCall } from '../../base/session/transcript-calls.js';
+import type { PilotArm } from '../../session/pilot-arm.js';
+import type { DeliveryEventInput } from '../../session/delivery.js';
+import type { LastSent } from '../../session/skip-unchanged.js';
+import type { ApiCall } from '../../session/transcript-calls.js';
 
 export interface Ledger {
   /** The turn's token rows, then its delivery event, on one connection; a turn with no rows books the event alone. */

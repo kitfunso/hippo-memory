@@ -64,7 +64,7 @@ function looseParam(file, p, seen) {
 
 /** `file:line name(param: why)` for each parameter of a function or method in `file` whose tenant may be left out. */
 export function looseTenants(file) {
-  if (!file.startsWith('src/store/')) return [];
+  if (!file.startsWith('src/store/') && !file.startsWith('src/base/ports/store')) return [];
   const sf = parse(file);
   const hits = [];
   const visit = (node) => {

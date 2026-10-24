@@ -1,7 +1,7 @@
 // Sleep's tombstone lookups and refusal audit rows, each one call on the store; a dry run reads and writes neither.
-import type { StoreWith } from '../../store/port.js';
-import type { RejectedValueRow } from '../../store/port/rejections.js';
-import type { AppendAuditOpts } from '../../store/port/types.js';
+import type { StoreWith } from '../../base/ports/store.js';
+import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
+import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 
 export interface TombstoneChecks {

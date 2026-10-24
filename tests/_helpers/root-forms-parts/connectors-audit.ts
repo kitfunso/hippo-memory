@@ -7,9 +7,9 @@ import * as githubSql from '../../../src/store/sqlite/connectors/github.js';
 import * as slackSql from '../../../src/store/sqlite/connectors/slack.js';
 import { onHandle } from '../../../src/store/sqlite/handles.js';
 import { listApiKeyRows } from '../../../src/store/sqlite/auth.js';
-import type { ApiKeyListItem, ListApiKeysOpts } from '../../../src/store/port/keys.js';
-import type { AppendAuditOpts } from '../../../src/store/port/types.js';
-import type { ConnectorEventRecord } from '../../../src/store/port/connectors.js';
+import type { ApiKeyListItem, ListApiKeysOpts } from '../../../src/base/ports/store/keys.js';
+import type { AppendAuditOpts } from '../../../src/base/ports/store/types.js';
+import type { ConnectorEventRecord } from '../../../src/base/ports/store/connectors.js';
 
 /** The highest audit id hippo.db ever assigned, pruned rows included. */
 export function auditHighId(hippoRoot: string): number {

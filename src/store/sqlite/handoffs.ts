@@ -10,8 +10,8 @@ import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { StoreFiles } from './open.js';
 import { continuityWhere, readActiveTaskSnapshot } from './task-snapshots.js';
-import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../port/types.js';
-import type { HandoffFilter, SessionEndHandoffRequest } from '../port/sessions.js';
+import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../../base/ports/store/types.js';
+import type { HandoffFilter, SessionEndHandoffRequest } from '../../base/ports/store/sessions.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { sessionEndHandoff, sessionEndSource } from '../rules/session-end.js';
 

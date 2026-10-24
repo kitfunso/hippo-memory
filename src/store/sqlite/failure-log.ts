@@ -2,7 +2,7 @@
 // of its own.
 import { otherSessionsRequest } from '../rules/request-ids.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { FailureEvent, FailureOutcome, FailureSummary, FailureLog } from '../port/rejections.js';
+import type { FailureEvent, FailureOutcome, FailureSummary, FailureLog } from '../../base/ports/store/rejections.js';
 import type { RatedFailure } from '../../base/records/failure-repeats.js';
 import { failureRow, failureTotals, RATED_OUTCOMES, retentionCutoff, sameStoredSession } from '../rules/failure-log.js';
 import type { OnHandle } from './open.js';

@@ -11,7 +11,7 @@ import {
 import { messageToRememberOpts } from '../../src/surface/connectors/slack/transform.js';
 import { withSqliteBlocked } from '../../src/db/index.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
-import type { ConnectorEvent } from '../../src/store/port.js';
+import type { ConnectorEvent } from '../../src/base/ports/store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';

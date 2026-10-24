@@ -1,10 +1,15 @@
 // The GitHub connector's tables: event log, dead-letter queue, tenant routing and backfill cursors.
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
-import type { ConnectorEventRecord } from '../../port.js';
+import type { ConnectorEventRecord } from '../../../base/ports/store.js';
 import { eventMemory, eventRecord, eventSeen, markEventSeen, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
-import type { TenantRoute, GitHubDlqInsert, GitHubDlqItem as DlqItem, GitHubStream } from '../../port/connectors.js';
+import type {
+  TenantRoute,
+  GitHubDlqInsert,
+  GitHubDlqItem as DlqItem,
+  GitHubStream,
+} from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */

@@ -7,7 +7,7 @@ import type {
   ApplyGraphOpsOptions,
   ApplyGraphOpsResult,
   GraphRebuild,
-} from '../port/graph.js';
+} from '../../base/ports/store/graph.js';
 import {
   deleteEntityRow,
   deleteRelationRow,

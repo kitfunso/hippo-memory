@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import type { HippoStore, LastRecall, LastRecallWrites, RecallWrites } from '../../src/store/index.js';
+import type { HippoStore, LastRecall, LastRecallWrites, RecallWrites } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { withSqliteAllowed } from '../../src/db/index.js';
@@ -163,7 +163,7 @@ describe('retrieve with the CLI ranking core', () => {
 describe('the store port', () => {
   it('imports nothing from the SQLite layer, so an add-on can build a store on it alone', () => {
     // A layering rule about imports, which no call can show, so the file text is the contract.
-    const source = readFileSync(join(import.meta.dirname, '../../src/store/port.ts'), 'utf8');
+    const source = readFileSync(join(import.meta.dirname, '../../src/base/ports/store.ts'), 'utf8');
     expect(source).not.toMatch(/from '\.\.\/db\//);
   });
 });

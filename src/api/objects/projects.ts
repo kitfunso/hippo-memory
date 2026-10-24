@@ -11,7 +11,7 @@ import {
   type RepairResult,
   type StoreFolder,
 } from '../../domain/sharing/project-merge.js';
-import type { ProjectTagReads, ProjectTagScope } from '../../store/port/project-tags.js';
+import type { ProjectTagReads, ProjectTagScope } from '../../base/ports/store/project-tags.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { sharedStoreOf, type ContextWith } from '../types.js';
 
@@ -21,7 +21,7 @@ export type {
   ProjectSummary,
   RepairResult,
 } from '../../domain/sharing/project-merge.js';
-export type { ProjectFold } from '../../store/port/project-tags.js';
+export type { ProjectFold } from '../../base/ports/store/project-tags.js';
 
 export interface MergeProjectNamesOptions {
   from: string;

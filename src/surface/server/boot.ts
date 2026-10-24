@@ -13,8 +13,8 @@ import {
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import type { HippoStore } from '../../store/index.js';
-import { isStoreBusy } from '../../store/port.js';
+import type { HippoStore } from '../../base/ports/store-index.js';
+import { isStoreBusy } from '../../base/ports/store.js';
 import { defaultServerRuntime, tenantOfApiKey, type ResolveOptions, type ServerRuntime } from '../open-store.js';
 import { configReader, loadConfig } from '../../host/config-file.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';

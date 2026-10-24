@@ -1,6 +1,6 @@
 // Option and result shapes for recall and retrieve.
 
-import type { ContinuityBlock } from '../../store/port.js';
+import type { ContinuityBlock } from '../../base/ports/store.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { RerankStep, SearchResult } from '../../base/rank/search-types.js';
 import type {
@@ -10,12 +10,12 @@ import type {
 } from '../../base/records/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from './finish.js';
 import type { AvailabilityHint } from '../availability.js';
-import type { LastRecall } from '../../store/port.js';
+import type { LastRecall } from '../../base/ports/store.js';
 import type { CallerProject } from '../prompt-hook.js';
 import type { GlobalInReach } from '../types.js';
 import type { RankRecallOptions, RankRecallResult } from './pipeline.js';
 import type { RecallRecording } from './finish.js';
-import type { AppendAuditOpts } from '../../store/port/types.js';
+import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 
 /** How many rows a recall loads and returns, and the bands it adds beside them. */
 export interface RecallWindowOptions {
@@ -158,7 +158,7 @@ export interface StoreRanking {
   droppedByScope: number;
 }
 
-export type { ContinuityBlock } from '../../store/port.js';
+export type { ContinuityBlock } from '../../base/ports/store.js';
 
 export interface RecallResultItem {
   id: string;

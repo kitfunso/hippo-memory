@@ -9,7 +9,7 @@ import {
   type ScryptParams,
   type VerifiedApiKey,
 } from '../../base/scope/api-key.js';
-import type { HippoStore } from '../../store/port.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import { Lru } from '../../base/util/lru.js';
 
 const scryptOffLoop: (password: string, salt: Buffer, keylen: number, params: ScryptParams) => Promise<Buffer> =

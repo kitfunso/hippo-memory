@@ -3,7 +3,7 @@
 // path: the store logs the key in the memory's own transaction, which is what holds when two workers race.
 
 import type { RememberOptions, Context } from '../../../api/index.js';
-import type { ConnectorEvent } from '../../../store/port.js';
+import type { ConnectorEvent } from '../../../base/ports/store.js';
 import { rememberWithEventLog, type IngestResult } from '../ingest.js';
 import { computeIdempotencyKey } from './signature.js';
 import {

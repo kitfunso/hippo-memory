@@ -1,7 +1,7 @@
 // The store the token ledger writes to for a caller; context, recall and the session hooks share it.
 import type { HippoConfig } from '../base/config/config.js';
-import type { FolderFiles, HippoStore, Ledger, LedgerTurn } from '../store/port.js';
-import type { TokenSurface, TokenUse } from '../store/port/ledger.js';
+import type { FolderFiles, HippoStore, Ledger, LedgerTurn } from '../base/ports/store.js';
+import type { TokenSurface, TokenUse } from '../base/ports/store/ledger.js';
 import type { LastSent } from '../base/session/skip-unchanged.js';
 import type { Context, GlobalInReach } from './types.js';
 

@@ -2,7 +2,7 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { originInSql, scopeAdmitSql } from './rule-sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import type { CompactionOrigin } from '../port/project-tags.js';
+import type { CompactionOrigin } from '../../base/ports/store/project-tags.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 

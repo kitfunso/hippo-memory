@@ -4,8 +4,8 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { log } from '../../base/util/log.js';
 import { DIGEST_DISPLAY_CHARS } from '../../base/util/token-text.js';
-import type { StoreWith } from '../../store/port.js';
-import type { SummarySettled } from '../../store/port/consolidation.js';
+import type { StoreWith } from '../../base/ports/store.js';
+import type { SummarySettled } from '../../base/ports/store/consolidation.js';
 
 /** A rebuild's result for one summary; `bumpRebuildCount` is false for the zero-child case, true for a normal one. */
 export interface RebuildPatch {

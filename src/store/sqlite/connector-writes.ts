@@ -5,7 +5,12 @@ import { logEvent, loggedMemory } from './connectors/events.js';
 import type { Handles, StoreFiles } from './open.js';
 import { bound } from './bound.js';
 import { openStore } from './handles.js';
-import type { ConnectorArchive, ConnectorWrite, ConnectorWriteOutcome, ConnectorWrites } from '../port.js';
+import type {
+  ConnectorArchive,
+  ConnectorWrite,
+  ConnectorWriteOutcome,
+  ConnectorWrites,
+} from '../../base/ports/store.js';
 import { recordQuarantine } from './quarantine.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryMirrors, archiveRaw, writeInOwnTenant } from './entry-writes.js';

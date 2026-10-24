@@ -8,9 +8,9 @@ import type {
   QuarantineRejection,
   QuarantineRow,
   QuarantinedMemory,
-} from '../port/quarantine.js';
+} from '../../base/ports/store/quarantine.js';
 import { isBelow, newestFirst, type DescendingKeyset } from '../rules/order.js';
-import { QUARANTINE_LIST_LIMIT } from '../port/quarantine.js';
+import { QUARANTINE_LIST_LIMIT } from '../../base/ports/store/quarantine.js';
 import { appendAudit, ownedRow } from './rows.js';
 import type { MemoryTables } from './tables.js';
 

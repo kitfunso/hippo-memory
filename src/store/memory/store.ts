@@ -1,7 +1,7 @@
 // memoryStore: a supported store shipped from hippo-memory/store-kit, every required port group over plain tables in
 // this process. CI runs the server and MCP suites on it, and the store conformance suite holds it to the port.
 import type { LossAversion } from '../../base/memory/memory.js';
-import type { HippoStore } from '../port.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import { memoryAuditLog } from './audit-log.js';
 import { memoryAuditMaintenance } from './audit-maintenance.js';
 import { continuityIn, entriesByIdsIn, freshRawIn, planningEvidenceIn } from './base-reads.js';

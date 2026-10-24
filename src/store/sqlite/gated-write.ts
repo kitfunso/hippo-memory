@@ -8,7 +8,7 @@ import { auditRejectionRefusal } from './audit-event.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly } from './entry-writes.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type { GatedWriteResult } from '../port/agent-import.js';
+import type { GatedWriteResult } from '../../base/ports/store/agent-import.js';
 import type { StoreFiles } from './open.js';
 
 /** Runs on the caller's handle so it nests in the caller's transaction (writeEntry would open a second handle and wait

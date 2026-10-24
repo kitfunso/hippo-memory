@@ -5,7 +5,7 @@
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import type { RejectedValueRow } from '../port/rejections.js';
+import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
 import { orderSql, REJECTED_ORDER } from '../rules/order.js';

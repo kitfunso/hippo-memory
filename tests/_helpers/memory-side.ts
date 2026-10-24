@@ -1,6 +1,6 @@
 // The conformance suite's second side: memoryStore over a copy of the fixture folder's rows, with reads of the
 // tables a test compares to hippo.db's and the name of every store method it was called with.
-import type { HippoStore } from '../../src/store/index.js';
+import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { memoryStore } from '../../src/store/memory/store.js';
 import type { LoggedEvent, MemoryTables, ParkedLetter } from '../../src/store/memory/tables.js';
 import type { HeldRecord } from './connector-sides.js';

@@ -1,5 +1,5 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from '../../base/memory/memory.js';
-import type { StoreWith } from '../../store/port.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';

@@ -8,7 +8,7 @@ import {
 } from '../../api/prompt-hook.js';
 import { loadConfig } from '../../host/config-file.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
-import { hasGroup, type HippoStore } from '../../store/port.js';
+import { hasGroup, type HippoStore } from '../../base/ports/store.js';
 import { entryHost, withEntryInfra } from '../entry-infra.js';
 import { defaultReach } from '../open-store.js';
 

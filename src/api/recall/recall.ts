@@ -25,9 +25,9 @@ import {
 } from './compose.js';
 import { rankCtxOf, rankRecall, withMissing, type RankRecallOptions, type RankRecallResult } from './pipeline.js';
 import { HTTP_RECALL, MCP_RECALL } from './profiles.js';
-import type { ActiveGoals, ContinuityKey } from '../../store/port/types.js';
-import type { GoalRecallLogRow } from '../../store/port/recall-writes.js';
-import type { RecallWrites } from '../../store/port.js';
+import type { ActiveGoals, ContinuityKey } from '../../base/ports/store/types.js';
+import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
+import type { RecallWrites } from '../../base/ports/store.js';
 
 const CONTINUITY_EVENT_LIMIT = 5;
 

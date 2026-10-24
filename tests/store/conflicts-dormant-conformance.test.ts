@@ -5,7 +5,7 @@ import { rmSync } from 'node:fs';
 import { DEFAULT_HALF_LIFE_DAYS, strengthOptionsOf, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import type { ConflictResolution, ConflictRowPage, ConflictSide } from '../../src/store/port/conflicts.js';
+import type { ConflictResolution, ConflictRowPage, ConflictSide } from '../../src/base/ports/store/conflicts.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {

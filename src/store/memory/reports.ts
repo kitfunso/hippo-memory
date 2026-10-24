@@ -13,7 +13,7 @@ import type {
   ReportPage,
   StatusCounts,
   StrengthTallies,
-} from '../port/reports.js';
+} from '../../base/ports/store/reports.js';
 import { openConflictsIn } from './conflicts.js';
 import { entriesWhereIn } from './entry-filter.js';
 import { failureSummaryIn } from './failure-log.js';

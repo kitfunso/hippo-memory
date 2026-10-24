@@ -8,7 +8,7 @@ import {
   type RejectFlowResult,
   type UnrejectOutcome,
 } from '../../domain/trust/reject-flow.js';
-import type { RejectedValueRow } from '../../store/port/rejections.js';
+import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
 import { requireHostAdmin, type Context } from '../types.js';
 import { memoryGet } from './memories.js';
 import { canReadScope, personalScopeOf, scopeReaderOf } from '../../base/scope/recall-scope.js';

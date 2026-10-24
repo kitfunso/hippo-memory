@@ -1,9 +1,9 @@
 // Sleep holds ids, strengths and the few rows a pass changed; every other row is read back a page at a time by id.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { chunked } from '../../base/util/chunked.js';
-import type { StoreWith } from '../../store/port.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import type { EntryCursor } from '../../store/port/types.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
 
 /** The store's rows as this run loaded them: by created then id, with a dry run's half-life preview applied. */
 export class SleepRows {

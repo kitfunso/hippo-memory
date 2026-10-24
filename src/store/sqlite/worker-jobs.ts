@@ -14,7 +14,7 @@ import { sqliteStoreOn } from './store.js';
 import { restoreAllTenants } from './tenant-wire.js';
 import { PackedVectors, packVectors } from './vector-pack.js';
 import { sqliteVectorReads } from './vector-reads.js';
-import type { StoredPart } from '../port.js';
+import type { StoredPart } from '../../base/ports/store.js';
 import {
   type Job,
   type OpRoute,

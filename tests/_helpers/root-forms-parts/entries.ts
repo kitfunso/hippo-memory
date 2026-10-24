@@ -5,7 +5,7 @@ import type { WriteBudget } from '../../../src/base/util/write-budget.js';
 import * as candidatesSql from '../../../src/store/sqlite/candidates.js';
 import { deleteEntriesInBatches } from '../../../src/store/sqlite/delete-and-batch.js';
 import * as deleteAndBatchSql from '../../../src/store/sqlite/delete-and-batch.js';
-import type { DormantMemory, ListDormantOpts } from '../../../src/store/port/dormant.js';
+import type { DormantMemory, ListDormantOpts } from '../../../src/base/ports/store/dormant.js';
 import { listDormantRows } from '../../../src/store/sqlite/dormant-rows.js';
 import { EVERY_SCOPE } from '../../../src/store/sqlite/rule-sql.js';
 import { listEntryTextKeysPage, iterateEveryTenantEntries } from '../../../src/store/sqlite/entry-reads.js';
@@ -16,17 +16,17 @@ import { waitingOpener } from '../../../src/store/sqlite/open.js';
 import { handlesOf, onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/handles.js';
 import type { SqlFragment } from '../../../src/db/sql.js';
 import * as searchRowsSql from '../../../src/store/sqlite/search-rows.js';
-import type { HeldText } from '../../../src/store/port/types.js';
+import type { HeldText } from '../../../src/base/ports/store/types.js';
 import type {
   AmbientLoadResult,
   AmbientRecallRequest,
   ContextCandidateFilter,
   RecentOrigins,
-} from '../../../src/store/port/context-reads.js';
-import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../../src/store/port/sharing.js';
-import type { FlushComponent, LoadedRows } from '../../../src/store/port/consolidation.js';
+} from '../../../src/base/ports/store/context-reads.js';
+import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../../../src/base/ports/store/sharing.js';
+import type { FlushComponent, LoadedRows } from '../../../src/base/ports/store/consolidation.js';
 import { ALL_TENANTS, type TenantId } from '../../../src/base/util/tenant.js';
-import type { EntryCursor } from '../../../src/store/port/types.js';
+import type { EntryCursor } from '../../../src/base/ports/store/types.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../../src/base/util/pages.js';
 
 export {

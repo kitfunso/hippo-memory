@@ -16,7 +16,7 @@ import {
 } from '../../src/server.js';
 import { makeRoot } from './make-root.js';
 import { writeEntry } from './root-forms.js';
-import type { ContinuityKey } from '../../src/store/port/types.js';
+import type { ContinuityKey } from '../../src/base/ports/store/types.js';
 import { initTestStore } from './store-template.js';
 
 // A server ctx carries a reach from its composition root; the ledger books nowhere without one.

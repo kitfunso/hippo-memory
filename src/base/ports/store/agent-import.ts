@@ -1,6 +1,6 @@
 // The agent-memories import's one write per container: the sync plans a container's writes as data from entry pages,
 // and applyContainer runs them in one transaction once the rows they were planned on still stand.
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../memory/memory.js';
 import type { SetAsideResult, SetAsideWhy } from './project-tags.js';
 
 export interface AgentImport {

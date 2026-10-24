@@ -3,7 +3,7 @@ import type { DatabaseSyncLike } from '../../src/db/index.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { parseStoredObject } from '../../src/base/util/stored-json.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
-import type { AuditEvent } from '../../src/store/port/types.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
 
 interface AuditRow {
   id: number;

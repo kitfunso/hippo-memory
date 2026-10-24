@@ -9,7 +9,7 @@ import { reject } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import type { AuditEvent } from '../../src/entry/store-kit.js';
-import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../src/store/port.js';
+import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../src/base/ports/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   outcomeOf,

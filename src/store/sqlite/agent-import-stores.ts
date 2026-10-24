@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { LossAversion } from '../../base/memory/memory.js';
 import { outsideRequestStores } from '../../db/index.js';
 import { isInitialized } from '../../host/project-identity.js';
-import { isStoreBusy, type StoreWith } from '../port.js';
+import { isStoreBusy, type StoreWith } from '../../base/ports/store.js';
 import { sqliteAgentImport } from './agent-import.js';
 import { handlesOf, initStore } from './handles.js';
 import { inPortTerms } from './port-errors.js';

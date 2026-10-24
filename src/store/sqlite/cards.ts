@@ -17,7 +17,7 @@ import {
   unknownParentCard,
 } from '../rules/cards.js';
 import { placeholders } from '../../db/sql.js';
-import type { CardDetail, CardCreate, CardListQuery, CardPage, Cards } from '../port/cards.js';
+import type { CardDetail, CardCreate, CardListQuery, CardPage, Cards } from '../../base/ports/store/cards.js';
 import { keysetPage } from '../../base/util/keyset.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';

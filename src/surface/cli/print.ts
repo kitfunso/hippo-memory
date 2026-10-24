@@ -1,7 +1,7 @@
 // Text printers for recall results, agent imports, task snapshots, session trails and handoffs.
 
 import { confidenceLabel } from '../../base/memory/memory.js';
-import type { TaskSnapshot, SessionEvent } from '../../store/port/sessions.js';
+import type { TaskSnapshot, SessionEvent } from '../../base/ports/store/sessions.js';
 import type { SessionHandoff } from '../../base/session/handoff.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { recallJsonRow } from '../../api/recall/rows.js';

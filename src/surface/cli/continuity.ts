@@ -9,7 +9,7 @@ import {
   type SessionHandoff,
 } from '../../base/session/handoff.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
-import type { SessionEvent, TaskSnapshot } from '../../store/port/sessions.js';
+import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
 import { sessionEventJson, snapshotJson } from '../../api/continuity-json.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff } from './print.js';

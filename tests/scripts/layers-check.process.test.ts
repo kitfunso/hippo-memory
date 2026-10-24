@@ -82,9 +82,6 @@ const SQLITE_BASE = {
 const PORT_BASE = {
   ...SQLITE_BASE,
   'src/store/rows.ts': 'export const rule = 1;\nexport type R = 1;\n',
-  'src/store/port.ts': 'export type P = 1;\n',
-  'src/store/port-groups.ts': 'export type G = 1;\n',
-  'src/store/port/types.ts': 'export type T = 1;\n',
   'src/store/local/index.ts': 'export const isLocal = 1;\n',
 };
 const LOCAL_MAP = { ...SQLITE_MAP, folders: { ...SQLITE_MAP.folders, domain: 'high' } };
@@ -128,7 +125,6 @@ const DASHBOARD_BASE = {
   'src/api/read.ts': 'export const read = 1;\n',
   'src/surface/cli/out.ts': 'export const cli = 1;\n',
   'src/store/rows.ts': 'export const rule = 1;\n',
-  'src/store/port.ts': 'export type R = 1;\n',
 };
 
 type Row = {
@@ -359,14 +355,14 @@ const rows: Row[] = [
     name: 'a store file outside the adapter, or a package entry, that imports it fails like any other file',
     files: {
       ...SQLITE_BASE,
-      'src/store/port.ts': "import type { S } from './sqlite/store.js';\nexport type P = S;\n",
+      'src/store/rows.ts': "import type { S } from './sqlite/store.js';\nexport type P = S;\n",
       'src/entry/testing.ts': FIXTURES_IMPORT,
     },
     map: ENTRY_MAP,
     status: 1,
     output: [
       'src/entry/testing.ts:1 imports src/store/sqlite/fixtures.ts; take the store from src/surface/open-store.ts',
-      'src/store/port.ts:1 imports src/store/sqlite/store.ts',
+      'src/store/rows.ts:1 imports src/store/sqlite/store.ts',
     ],
   },
   {
@@ -492,18 +488,21 @@ const rows: Row[] = [
     output: ['src/api/y.ts:1 imports src/store/rows.ts', 'src/api/z.ts:1 imports src/store/rows.ts'],
   },
   {
-    name: 'an api import of port.ts, port-groups.ts or port/ passes',
+    name: 'an api import of the port in src/base/ports passes',
     files: {
       ...PORT_BASE,
+      'src/base/ports/store.ts': 'export type P = 1;\n',
+      'src/base/ports/store-groups.ts': 'export type G = 1;\n',
+      'src/base/ports/store/types.ts': 'export type T = 1;\n',
       'src/api/y.ts': [
-        "import type { P } from '../store/port.js';",
-        "import type { G } from '../store/port-groups.js';",
-        "import type { T } from '../store/port/types.js';",
+        "import type { P } from '../base/ports/store.js';",
+        "import type { G } from '../base/ports/store-groups.js';",
+        "import type { T } from '../base/ports/store/types.js';",
         'export type Y = [P, G, T];',
         '',
       ].join('\n'),
     },
-    map: SQLITE_MAP,
+    map: { ...SQLITE_MAP, order: ['base', ...SQLITE_MAP.order], folders: { ...SQLITE_MAP.folders, base: 'base' } },
     status: 0,
     output: ['Layer order OK'],
   },
@@ -556,14 +555,14 @@ const rows: Row[] = [
     files: {
       ...DASHBOARD_BASE,
       'src/surface/dashboard/a.ts': "import { rule } from '../../store/rows.js';\nexport const a = rule;\n",
-      'src/surface/dashboard/b.ts': "import type { R } from '../../store/port.js';\nexport type B = R;\n",
+      'src/surface/dashboard/b.ts': "import type { R } from '../../store/rows.js';\nexport type B = R;\n",
       'src/surface/dashboard/c.ts': "export const c = 1;\nimport { cli } from '../cli/out.js';\n",
     },
     map: DASHBOARD_MAP,
     status: 1,
     output: [
       'src/surface/dashboard/a.ts:1 imports src/store/rows.ts',
-      'src/surface/dashboard/b.ts:1 imports src/store/port.ts',
+      'src/surface/dashboard/b.ts:1 imports src/store/rows.ts',
       'src/surface/dashboard/c.ts:2 imports src/surface/cli/out.ts',
     ],
   },

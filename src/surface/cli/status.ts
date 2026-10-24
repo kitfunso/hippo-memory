@@ -29,8 +29,8 @@ import {
   storedParticleStats,
   vectorSummary,
 } from '../../api/status.js';
-import type { StatusCounts } from '../../store/port/reports.js';
-import type { ParticleStats } from '../../store/port.js';
+import type { StatusCounts } from '../../base/ports/store/reports.js';
+import type { ParticleStats } from '../../base/ports/store.js';
 import { cliConfig, cliApiContext, cliDiagnostics, type CliContext } from './api-context.js';
 
 const diagnosticsBodies = (hippoRoot: string): DoctorStore => cliDiagnostics(hippoRoot);

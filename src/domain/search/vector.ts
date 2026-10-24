@@ -5,11 +5,11 @@ import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
-import type { HippoStore, VectorReads } from '../../store/index.js';
+import type { HippoStore, VectorReads } from '../../base/ports/store-index.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { withRequestSignal } from '../../base/util/request-scope.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
-import type { VectorCandidateSpec } from '../../store/port/vectors.js';
+import type { VectorCandidateSpec } from '../../base/ports/store/vectors.js';
 
 /**
  * hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact private regex, entry

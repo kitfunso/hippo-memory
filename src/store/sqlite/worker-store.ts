@@ -3,7 +3,14 @@
 import { existsSync } from 'node:fs';
 import { getHippoDbPath } from '../../db/index.js';
 import { currentDeadline, currentRequestId, currentSignal } from '../../base/util/request-scope.js';
-import type { HippoStore, Readiness, StoreGroups, StoredPart, StoredParts, VectorReads } from '../port.js';
+import type {
+  HippoStore,
+  Readiness,
+  StoreGroups,
+  StoredPart,
+  StoredParts,
+  VectorReads,
+} from '../../base/ports/store.js';
 import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from './executor.js';
 import { sqliteStore } from './store.js';
 import type { LossAversion } from '../../base/memory/memory.js';

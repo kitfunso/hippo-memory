@@ -9,8 +9,8 @@ import {
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';
-import type { EntryTarget, RawArchive } from '../port/entry-writes.js';
-import type { AppendAuditOpts } from '../port/types.js';
+import type { EntryTarget, RawArchive } from '../../base/ports/store/entry-writes.js';
+import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 import { appendAudit, bumpCounter, hippoDbNow, tenantKey } from './rows.js';
 import { refusalAudit, summaryDirtyAudit } from '../rules/audit-rows.js';
 import { asStored } from './stored-entry.js';

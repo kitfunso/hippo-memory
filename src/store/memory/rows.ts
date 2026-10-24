@@ -3,7 +3,7 @@
 import type { JsonObject, JsonValue } from '../../base/util/json.js';
 import { parseStoredObject, type StoredJsonSite } from '../../base/util/stored-json.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { AppendAuditOpts, AuditEvent } from '../port/types.js';
+import type { AppendAuditOpts, AuditEvent } from '../../base/ports/store/types.js';
 import { byIdOrder } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 

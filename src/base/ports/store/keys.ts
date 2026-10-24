@@ -1,7 +1,7 @@
 // The KeyWrites group: minting, listing, granting and revoking API keys.
-import type { JsonValue } from '../../base/util/json.js';
-import type { KeysetPosition } from '../../base/util/keyset.js';
-import type { TenantId } from '../../base/util/tenant.js';
+import type { JsonValue } from '../../util/json.js';
+import type { KeysetPosition } from '../../util/keyset.js';
+import type { TenantId } from '../../util/tenant.js';
 
 export interface KeyRevoke {
   readonly tenantId: string;

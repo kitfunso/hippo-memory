@@ -12,7 +12,7 @@ import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from './default-half-life-memory.js';
 import { serveDashboard } from '../../src/surface/server/dashboard-listener.js';
 import { createSnapshotClock, type SnapshotClock } from '../../src/api/dashboard/snapshot-clock.js';
-import type { DashboardReads } from '../../src/store/port/dashboard-reads.js';
+import type { DashboardReads } from '../../src/base/ports/store/dashboard-reads.js';
 import { sqliteDashboardReads } from '../../src/store/sqlite/dashboard-reads.js';
 import { writeEntry } from './root-forms.js';
 import { initTestStore } from './store-template.js';

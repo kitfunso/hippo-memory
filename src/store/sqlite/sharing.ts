@@ -5,7 +5,7 @@ import { listTextKeysHolding } from './copy-rows.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
-import type { Sharing } from '../port/sharing.js';
+import type { Sharing } from '../../base/ports/store/sharing.js';
 import { listRecallEntries, listSearchEntries } from './search-rows.js';
 
 const sharingReadsBodies: Bodies<Sharing> = {

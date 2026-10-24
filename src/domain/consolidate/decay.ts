@@ -12,7 +12,7 @@ import {
 import type { ConsolidationResult, SleepRun } from './run.js';
 import { plural } from '../../base/util/format.js';
 import { DAY_MS } from '../../base/util/time.js';
-import type { SleepStart } from '../../store/port/consolidation.js';
+import type { SleepStart } from '../../base/ports/store/consolidation.js';
 
 const STRENGTH_DECIMALS = 4;
 

@@ -4,14 +4,14 @@
 // carrierFiles counts src files that name andThen, onStore or StoreReply, the removed sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
 // storeImportsInDomain counts value imports, re-exports and import() calls from every folder layers.json marks domain into src/store or src/db: domain code reaches hippo.db through the port.
 // storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
-// portImportsFromSql counts imports and re-exports in src/store/port.ts, src/store/port-groups.ts and src/store/port/ of a src/store file outside those, or of a src/db file that runs SQL (.prepare, .exec or node:sqlite): the port defines its own types.
+// portImportsFromSql counts imports and re-exports in src/base/ports/store.ts, store-groups.ts and store/ of a src/store file outside those, or of a src/db file that runs SQL (.prepare, .exec or node:sqlite): the port defines its own types.
 // buildsOutsideRoots counts calls of sqliteStore, sqliteStoreOn or initStore (as imported from src/store or src/db) in src files outside the data layer and COMPOSITION_ROOTS.
 // storeImportsInCli counts value imports of src/store or src/db in src/surface/cli files other than the CLI's composition root.
 // groupChecksInApi counts requireGroup and hasGroup calls in files that layers.json puts in the api or a domain layer.
 // portFunctionParams fails outright on any parameter of a method on a port interface whose type holds a function, through aliases, unions, object properties and imports: no function crosses to a store worker, so a rule goes to the store as data. No baseline.
 // A file under src/surface/server/routes or src/surface/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // folderFormsAboveAdapter lists exported src/store functions outside src/store/sqlite that open hippo.db from a folder; any one fails outright.
-// A .ts file directly in src/store other than STORE_TOP_FILES fails outright: a group's SQL goes in src/store/sqlite, a pure rule in src/base.
+// A .ts file directly in src/store fails outright (the port lives in src/base/ports): a group's SQL goes in src/store/sqlite, a pure rule in src/base.
 // A src/store function or port method whose tenant, or an argument's tenant property, is optional, defaulted or admits undefined or null fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
@@ -46,10 +46,6 @@ const BY_FILE_KEYS = ['openersOutsideByFile', 'sqlOutsideByFile', 'handleHolders
 const HANDLE_TYPES = new Set(['DatabaseSyncLike', 'DatabaseSync']);
 // src/store files that run no SQL yet belong there: hippo.db's shapes, SQL text and plumbing. A path ending in / covers its folder.
 const DB_DEFINITION_FILES = {
-  'src/store/port.ts': 'the store port every backend implements',
-  'src/store/port/': 'store port groups kept apart from port.ts',
-  'src/store/port-groups.ts': 'the session and admin groups of the store port',
-  'src/store/index.ts': 'the published entry of the store port',
   'src/store/sqlite/': 'the SQLite adapter and its executor plumbing',
   'src/store/local/': 'the types of the stores a hippo.db root keeps beside its own',
   'src/store/memory/': 'the in-memory adapter, which keeps its rows in plain tables',
@@ -271,7 +267,10 @@ function runsSql(file) {
 }
 
 const isPortFile = (f) =>
-  f === 'src/store/port.ts' || f === 'src/store/port-groups.ts' || f.startsWith('src/store/port/');
+  f === 'src/base/ports/store.ts' || f === 'src/base/ports/store-groups.ts' || f.startsWith('src/base/ports/store/');
+
+/** The data layer and the port it implements: neither may be counted as code outside the store. */
+const isStoreSide = (f) => isDataLayer(f) || isPortFile(f);
 
 /** `file:line` of each import or re-export in a port file whose target is a src/store file outside the port, or a src/db file that runs SQL. */
 function portSqlImports(file, sf) {
@@ -538,21 +537,21 @@ function folderFormsIn(file, sf) {
     .map((name) => `${file}:${lineOf(sf, fns.get(name).node)} ${name}`);
 }
 
-// The port and its published entry.
-const STORE_TOP_FILES = new Set(['port.ts', 'port-groups.ts', 'index.ts']);
-
-/** Each .ts file directly in src/store that STORE_TOP_FILES does not name. */
+/** Each .ts file directly in src/store. */
 function strayStoreTopFiles() {
   if (!existsSync('src/store')) return [];
   return readdirSync('src/store', { withFileTypes: true })
-    .filter((e) => e.isFile() && /\.[cm]?ts$/.test(e.name) && !STORE_TOP_FILES.has(e.name))
+    .filter((e) => e.isFile() && /\.[cm]?ts$/.test(e.name))
     .map((e) => `src/store/${e.name}`)
     .sort();
 }
 
-/** Every folder form in src/store outside the SQLite adapter, named exceptions included. */
+/** The store adapters and the port they implement. */
+const storeAndPortFiles = () => ['src/store', 'src/base/ports'].flatMap((dir) => (existsSync(dir) ? tsFiles(dir) : []));
+
+/** Every folder form in src/store and the port outside the SQLite adapter, named exceptions included. */
 function folderFormsAboveAdapter() {
-  return (existsSync('src/store') ? tsFiles('src/store') : [])
+  return storeAndPortFiles()
     .filter((file) => !file.startsWith('src/store/sqlite/'))
     .flatMap((file) => folderFormsIn(file, parse(file)));
 }
@@ -600,11 +599,11 @@ function measure() {
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     const openers = countOpeners(sf);
     if (isCli(file)) out.openersInCli += openers;
-    else if (!isDataLayer(file)) {
+    else if (!isStoreSide(file)) {
       out.openersOutside += openers;
       if (openers > 0) byFile[file] = openers;
     }
-    if (!isDataLayer(file)) {
+    if (!isStoreSide(file)) {
       const holds = holdsHandle(sf);
       out.handleHoldersOutside += holds;
       if (holds > 0) holdersByFile[file] = holds;
@@ -702,7 +701,7 @@ if (strays.length > 0) {
   process.exit(1);
 }
 
-const loose = existsSync('src/store') ? tsFiles('src/store').flatMap(looseTenants) : [];
+const loose = storeAndPortFiles().flatMap(looseTenants);
 if (loose.length > 0) {
   console.error(`A store function or port method can be called without its tenant:\n  ${loose.join('\n  ')}`);
   console.error('Take `tenantId: string`, or `TenantId` if a real caller sends ALL_TENANTS (src/base/util/tenant.ts).');
@@ -774,7 +773,7 @@ if (folderForms.length > 0) {
 }
 const strayTop = strayStoreTopFiles();
 if (strayTop.length > 0) {
-  console.error(`Files directly in src/store besides ${[...STORE_TOP_FILES].join(', ')}:`);
+  console.error(`Files directly in src/store:`);
   for (const f of strayTop) console.error(`  ${f}`);
   console.error(
     'Put a store group and the SQL only it runs in src/store/sqlite/<feature>.ts, and a rule with no SQL in src/base.',

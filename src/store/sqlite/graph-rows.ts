@@ -8,7 +8,7 @@ import type {
   SourceKind,
   SourceObjectType,
   SourceObjectRef,
-} from '../port/graph.js';
+} from '../../base/ports/store/graph.js';
 
 export const GRAPH_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'person',

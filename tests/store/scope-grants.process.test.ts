@@ -27,7 +27,7 @@ import type {
   KeyWrites,
   ScopeGrantChange,
   SelfKeyMint,
-} from '../../src/store/port/keys.js';
+} from '../../src/base/ports/store/keys.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 

@@ -15,8 +15,8 @@ import type {
   ItemsOptions,
   OpenCompaction,
   StepFailure,
-} from '../../store/port/capture.js';
-import type { StoreGroups } from '../../store/port.js';
+} from '../../base/ports/store/capture.js';
+import type { StoreGroups } from '../../base/ports/store.js';
 import { loadConfig } from '../../host/config-file.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../../base/util/log.js';

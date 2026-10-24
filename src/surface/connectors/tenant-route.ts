@@ -1,7 +1,7 @@
 // The tenant a webhook lands in, by one rule for every connector: its routing rows, else the host's on an install that
 // registered none.
-import type { HippoStore } from '../../store/index.js';
-import type { RouteQuery } from '../../store/port/connectors.js';
+import type { HippoStore } from '../../base/ports/store-index.js';
+import type { RouteQuery } from '../../base/ports/store/connectors.js';
 
 /** The host's tenant, which the root resolved, and the root's allow-unknown escape for the connector. */
 export interface RouteFallback {

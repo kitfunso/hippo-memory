@@ -1,9 +1,9 @@
 // The port calls the published importers make on hippo.db, kept synchronous because those importers return their
 // result rather than a Promise.
-import type { EntryWrite } from '../port/entry-writes.js';
-import type { EntryFilter } from '../port/reports.js';
-import type { RejectionCheck } from '../port/rejections.js';
-import type { EntryTextKey } from '../port/sharing.js';
+import type { EntryWrite } from '../../base/ports/store/entry-writes.js';
+import type { EntryFilter } from '../../base/ports/store/reports.js';
+import type { RejectionCheck } from '../../base/ports/store/rejections.js';
+import type { EntryTextKey } from '../../base/ports/store/sharing.js';
 import { listTextKeysHolding } from './copy-rows.js';
 import { writeEntryRow } from './entry-writes.js';
 import { handlesOf, openStore } from './handles.js';

@@ -1,6 +1,6 @@
-import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { AmbientTallies } from '../../base/memory/ambient.js';
-import type { AmbientAdmission, AmbientRefusalReason, DescendantAdmission } from '../../base/scope/read-admission.js';
+import type { MemoryEntry } from '../../memory/memory.js';
+import type { AmbientTallies } from '../../memory/ambient.js';
+import type { AmbientAdmission, AmbientRefusalReason, DescendantAdmission } from '../../scope/read-admission.js';
 
 export type { AmbientAdmission, AmbientRefusalReason };
 

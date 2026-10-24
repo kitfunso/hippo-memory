@@ -20,13 +20,19 @@ import type { Handles, StoreFiles } from './open.js';
 import { archiveRawMemory, markMirrorCleaned } from './raw-archive.js';
 import { deleteRejectedValue, insertRejectedValue, listRejectedValues, checkRejectionGuard } from './rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../base/records/rejection-digest.js';
-import type { AppliedRejection, LiftedRejection, Rejection, RejectionCheck, Rejections } from '../port/rejections.js';
+import type {
+  AppliedRejection,
+  LiftedRejection,
+  Rejection,
+  RejectionCheck,
+  Rejections,
+} from '../../base/ports/store/rejections.js';
 import { mergedSuccessor } from '../../base/memory/merged-row.js';
 import { rejectedText, rejectionReaches } from '../../base/records/rejection-text.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';
-import type { EntryCursor } from '../port/types.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
 type HoldsValue = (text: string) => boolean;

@@ -20,7 +20,7 @@ import { writeEntriesTogether, writeEntryDbOnly, writeEntryMirrors } from '../..
 import { readEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { writeOutcome, auditingRefusal } from '../../src/store/sqlite/entry-writes.js';
-import type { OutcomeWrite } from '../../src/store/port/entry-writes.js';
+import type { OutcomeWrite } from '../../src/base/ports/store/entry-writes.js';
 import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 

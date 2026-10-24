@@ -84,10 +84,10 @@ describe('check-positional-params.mjs', () => {
   it('counts the store adapters and the port like the rest of src', () => {
     const long = `export function wide(${params(6)}) {}\n`;
     inFixture(
-      { 'src/store/sqlite/a.ts': long, 'src/store/port/b.ts': long, 'src/store/search-rows.ts': long },
+      { 'src/store/sqlite/a.ts': long, 'src/base/ports/store/b.ts': long, 'src/store/search-rows.ts': long },
       (root) => {
         expect(findLongLists(root).map((hit) => hit.site)).toEqual([
-          'src/store/port/b.ts:1 wide',
+          'src/base/ports/store/b.ts:1 wide',
           'src/store/search-rows.ts:1 wide',
           'src/store/sqlite/a.ts:1 wide',
         ]);

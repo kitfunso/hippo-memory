@@ -1,8 +1,14 @@
 // hippo.db's Goals group: the goal stack's writes and the every-status listing.
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import type { ActiveGoals, Goal, GoalStatus, RetrievalPolicy, GetActiveGoalsOpts } from '../port/types.js';
-import type { GoalRecallLogRow } from '../port/recall-writes.js';
-import type { CompleteGoalOpts, PushGoalOpts, Goals } from '../port/goals.js';
+import type {
+  ActiveGoals,
+  Goal,
+  GoalStatus,
+  RetrievalPolicy,
+  GetActiveGoalsOpts,
+} from '../../base/ports/store/types.js';
+import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
+import type { CompleteGoalOpts, PushGoalOpts, Goals } from '../../base/ports/store/goals.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';

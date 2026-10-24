@@ -5,7 +5,7 @@ import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { addAuditWriteFailures } from '../../base/records/audit-report.js';
 import type { LossAversion } from '../../base/memory/memory.js';
 import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../db/index.js';
-import { StoreBusyError } from '../port.js';
+import { StoreBusyError } from '../../base/ports/store.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';
 import { DeadlineExceededError } from '../../base/util/http-util.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';

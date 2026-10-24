@@ -3,9 +3,9 @@
 import type { AmbientTallies } from '../../base/memory/ambient.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import type { DormantMove } from '../port/consolidation.js';
-import type { AmbientStoreFilter } from '../port/context-reads.js';
-import type { RecallSearchEntriesOptions } from '../port/sharing.js';
+import type { DormantMove } from '../../base/ports/store/consolidation.js';
+import type { AmbientStoreFilter } from '../../base/ports/store/context-reads.js';
+import type { RecallSearchEntriesOptions } from '../../base/ports/store/sharing.js';
 import * as ambient from './ambient.js';
 import * as batches from './delete-and-batch.js';
 import * as entryReads from './entry-reads.js';

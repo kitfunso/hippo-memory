@@ -2,10 +2,10 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { NotFoundError } from '../../base/errors/api-errors.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
-import type { HippoStore } from '../../store/port.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import { requireHostAdmin, type Context } from '../types.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
-import type { EntryCursor } from '../../store/port/types.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
 
 /** The row `id` in the caller's tenant, or null when it is missing or another tenant's. */
 export async function memoryGet(ctx: Context, id: string): Promise<MemoryEntry | null> {

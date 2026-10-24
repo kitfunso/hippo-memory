@@ -7,7 +7,7 @@ import { stampOriginProject } from './entry-row.js';
 import { gatedWrite } from './gated-write.js';
 import { updateStatsOn } from './index-and-stats.js';
 import type { Handles, StoreFiles } from './open.js';
-import type { CaptureDedup, CaptureWriteOptions, CapturedOutcome, Captures } from '../port/capture.js';
+import type { CaptureDedup, CaptureWriteOptions, CapturedOutcome, Captures } from '../../base/ports/store/capture.js';
 import { listTextsHolding } from './candidates.js';
 import { EVERY_SCOPE } from './rule-sql.js';
 import { openStore } from './handles.js';

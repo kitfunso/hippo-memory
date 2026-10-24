@@ -5,7 +5,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ServerHandle } from '../../src/server.js';
-import type { HippoStore, StoreGroups } from '../../src/store/index.js';
+import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import type { JsonValue } from '../../src/base/util/json.js';

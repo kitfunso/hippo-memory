@@ -1,7 +1,7 @@
 import { confirmedOutcomeTimes } from './audit.js';
 import { listEntriesMentioning, readEntry } from './entry-reads.js';
 import { addTagToEntries } from './entry-writes.js';
-import type { Learning } from '../port/learning.js';
+import type { Learning } from '../../base/ports/store/learning.js';
 import type { Handles } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';

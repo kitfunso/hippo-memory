@@ -8,7 +8,7 @@ import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
-import type { EntryWrites, Objects } from '../../store/port.js';
+import type { EntryWrites, Objects } from '../../base/ports/store.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { listObjects, saveObject } from './lifecycle.js';
 import type { Decision, DecisionStatus } from '../../base/records/object-types.js';

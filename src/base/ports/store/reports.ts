@@ -1,7 +1,7 @@
 // The tallies, counters and filtered entry pages the Reports group returns.
-import type { JsonValue } from '../../base/util/json.js';
-import type { ConfidenceLevel, Layer, MemoryKind } from '../../base/memory/memory.js';
-import type { TenantId } from '../../base/util/tenant.js';
+import type { JsonValue } from '../../util/json.js';
+import type { ConfidenceLevel, Layer, MemoryKind } from '../../memory/memory.js';
+import type { TenantId } from '../../util/tenant.js';
 import type { FailureSummary } from './rejections.js';
 import type { TokenSummary } from './ledger.js';
 import type { EntryCursor, EntryPage } from './types.js';

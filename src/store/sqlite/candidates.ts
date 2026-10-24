@@ -15,14 +15,14 @@ import { originInSql, rewardFactorSql, scopeAdmitSql } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { pickRarestFtsQuery, listRecallEntries } from './search-rows.js';
-import type { HeldText } from '../port/types.js';
+import type { HeldText } from '../../base/ports/store/types.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import { oldestFirst } from '../rules/order.js';
 import { tenantAnd } from './tenant.js';
 import { rowsHoldingTexts } from './copy-rows.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { ENTRY_PAGE_ORDER, entryPage } from './keyset.js';
-import type { EntryCursor } from '../port/types.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
 import type { AmbientRefusalReason } from '../../base/scope/read-admission.js';
 import type {
   AmbientCandidateRequest,
@@ -30,9 +30,9 @@ import type {
   AmbientRefusal,
   ContextCandidateFilter,
   RecentOrigins,
-} from '../port/context-reads.js';
-import type { SourceTally } from '../port/sharing.js';
-import type { StatusCounts, StrengthTallies } from '../port/reports.js';
+} from '../../base/ports/store/context-reads.js';
+import type { SourceTally } from '../../base/ports/store/sharing.js';
+import type { StatusCounts, StrengthTallies } from '../../base/ports/store/reports.js';
 import { tallyStatus, type StatusInputs } from '../rules/status-tally.js';
 import { SCHEMA_FIT_WINDOW_ROWS } from '../rules/windows.js';
 

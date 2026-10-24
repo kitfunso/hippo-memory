@@ -1,5 +1,5 @@
 import type { Context } from '../../../api/index.js';
-import type { ConnectorEvent } from '../../../store/port.js';
+import type { ConnectorEvent } from '../../../base/ports/store.js';
 import { rememberWithEventLog, type IngestResult } from '../ingest.js';
 import { messageToRememberOpts } from './transform.js';
 import type { ChannelMeta } from './scope.js';

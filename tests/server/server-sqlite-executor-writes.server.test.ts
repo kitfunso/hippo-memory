@@ -12,7 +12,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/base/memo
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import type { ServerHandle } from '../../src/server.js';
-import type { HippoStore, StoreGroups } from '../../src/store/index.js';
+import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import { createSqliteExecutor, type SqliteExecutor } from '../../src/store/sqlite/executor.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

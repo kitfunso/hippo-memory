@@ -2,9 +2,9 @@
 import { calculateStrength, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
 import { memoryFacts } from '../../base/memory/memory-facts.js';
 import { round1 } from '../../base/util/format.js';
-import type { HippoStore } from '../../store/port.js';
-import type { MemoryConflict } from '../../store/port/conflicts.js';
-import type { DashboardReads } from '../../store/port/dashboard-reads.js';
+import type { HippoStore } from '../../base/ports/store.js';
+import type { MemoryConflict } from '../../base/ports/store/conflicts.js';
+import type { DashboardReads } from '../../base/ports/store/dashboard-reads.js';
 import { memoryGet } from '../memories/memories.js';
 import type { Context } from '../types.js';
 import { BANDS, isLiveMemory, LAYERS, projectIdentity, round3 } from './live.js';

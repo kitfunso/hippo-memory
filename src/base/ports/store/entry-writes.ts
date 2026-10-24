@@ -1,5 +1,5 @@
-import type { ScopeReader } from '../../base/scope/recall-scope.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { ScopeReader } from '../../scope/recall-scope.js';
+import type { MemoryEntry } from '../../memory/memory.js';
 import type { HeldText } from './types.js';
 
 export interface EntryWrite {

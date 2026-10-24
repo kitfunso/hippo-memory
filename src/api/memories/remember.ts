@@ -1,6 +1,6 @@
 // Write path: remember stores one memory after secret vetting and, for untrusted content, the instruction check.
 
-import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../store/port.js';
+import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../base/ports/store.js';
 import { detectInstruction, INSTRUCTION_LIKE_TAG } from '../instruction-detect.js';
 import { quarantineScopeFor } from '../../domain/trust/quarantine.js';
 import {

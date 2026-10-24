@@ -11,7 +11,7 @@ import type {
   SlackDlqBucket as DlqBucket,
   SlackDlqItem as DlqItem,
   SlackDlqInsert,
-} from '../../../store/port/connectors.js';
+} from '../../../base/ports/store/connectors.js';
 
 export type { DlqBucket, DlqItem };
 

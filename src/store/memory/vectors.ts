@@ -10,7 +10,7 @@ import {
   type StoredParts,
   type VectorCandidateSpec,
   type VectorReads,
-} from '../port/vectors.js';
+} from '../../base/ports/store/vectors.js';
 import type { MemoryTables } from './tables.js';
 
 function passesScope(scope: string | null, filter: RecallScopeFilter | undefined): boolean {

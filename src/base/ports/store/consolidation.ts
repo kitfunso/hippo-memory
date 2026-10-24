@@ -1,8 +1,8 @@
 // The store work of one sleep, kept apart from port.ts: reads and writes only, each one call on the store. What to
 // decay, merge, promote, rebuild and expire is decided in src/domain/consolidate.
-import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { PhysicsParticle } from '../../base/rank/physics.js';
-import type { HalfLifeOutcome } from '../../base/memory/half-life-plan.js';
+import type { MemoryEntry } from '../../memory/memory.js';
+import type { PhysicsParticle } from '../../rank/physics.js';
+import type { HalfLifeOutcome } from '../../memory/half-life-plan.js';
 import type { AppendAuditOpts, EntryCursor, EntryPage } from './types.js';
 import type { RejectedValueRow } from './rejections.js';
 
@@ -13,7 +13,7 @@ export type {
   HalfLifeRow,
   HalfLifeRows,
   ObjectLink,
-} from '../../base/memory/half-life-plan.js';
+} from '../../memory/half-life-plan.js';
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */
 export interface Consolidation {

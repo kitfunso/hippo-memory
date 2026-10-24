@@ -16,9 +16,9 @@ import type {
   ProjectTags,
   ProjectTagScope,
   RowRetag,
-} from '../../store/port/project-tags.js';
-import type { EntryNarrowing } from '../../store/port/reports.js';
-import type { EntryCursor } from '../../store/port/types.js';
+} from '../../base/ports/store/project-tags.js';
+import type { EntryNarrowing } from '../../base/ports/store/reports.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
 
 export interface ProjectSummary {
   /** '' is user-global, null is unknown; neither can be merged. */

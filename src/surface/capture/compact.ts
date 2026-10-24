@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { TaskSnapshot, Sessions } from '../../store/port/sessions.js';
+import type { TaskSnapshot, Sessions } from '../../base/ports/store/sessions.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactions } from './compaction-record.js';
-import type { CompactionHooks, CompactionStart } from '../../store/port/capture.js';
+import type { CompactionHooks, CompactionStart } from '../../base/ports/store/capture.js';
 import { COMPACTION_DB_WAIT_MS } from '../../base/session/compaction-timing.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks-install/rules/shared.js';
 import { processHomes } from '../../host/agent-homes.js';
@@ -18,7 +18,7 @@ import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, type WorkingState } from '../../base/session/working-state.js';
 import { transcriptWorkingState } from './working-state.js';
-import type { StoreGroups } from '../../store/port.js';
+import type { StoreGroups } from '../../base/ports/store.js';
 
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;

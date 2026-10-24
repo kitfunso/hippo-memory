@@ -5,7 +5,7 @@ import { normalizeValueForRejection, rejectionDigest } from '../../base/records/
 import { rejectedText } from '../../base/records/rejection-text.js';
 import { ownScopeTouches } from '../../base/scope/recall-scope.js';
 import { heldTexts } from '../../base/util/same-text.js';
-import type { AppliedRejection, RejectedValueRow, Rejection, Rejections } from '../port/rejections.js';
+import type { AppliedRejection, RejectedValueRow, Rejection, Rejections } from '../../base/ports/store/rejections.js';
 import { comparing, oldestFirst, REJECTED_ORDER } from '../rules/order.js';
 import { appendAudit, tenantKey } from './rows.js';
 import { markParentDirty, stage, type Tx } from './staged.js';

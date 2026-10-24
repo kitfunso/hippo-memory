@@ -8,7 +8,7 @@ import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../b
 import { blockHash, estimateTokens } from '../base/util/token-text.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { MAX_HOOK_FIELD_LEN } from '../base/util/limits.js';
-import type { Ledger } from '../store/port.js';
+import type { Ledger } from '../base/ports/store.js';
 import type {
   DeliveryBlockState,
   DeliveryCandidateInput,

@@ -11,10 +11,10 @@ import type {
   NewApiKey,
   ScopeGrantChange,
   SelfKeyMint,
-} from '../port/keys.js';
+} from '../../base/ports/store/keys.js';
 import { assertGrantable, ownedKey } from '../rules/keys.js';
 import { byBytes } from '../rules/order.js';
-import type { ApiKeyRecord, AppendAuditOpts } from '../port/types.js';
+import type { ApiKeyRecord, AppendAuditOpts } from '../../base/ports/store/types.js';
 import { appendAudit, nextId } from './rows.js';
 import type { KeyRow, MemoryTables } from './tables.js';
 

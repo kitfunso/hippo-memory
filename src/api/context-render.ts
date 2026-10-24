@@ -12,7 +12,7 @@ import { evalNow } from '../base/memory/ablation.js';
 import { estimateTokens } from '../base/util/token-text.js';
 import { renderAmbientSummary, type AmbientState } from '../base/memory/ambient.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../base/session/handoff.js';
-import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
+import type { SessionEvent, TaskSnapshot } from '../base/ports/store/sessions.js';
 import type {
   AssembleCost,
   AssembleResult,

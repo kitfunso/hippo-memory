@@ -9,7 +9,7 @@ import type { VerifiedApiKey } from '../../src/base/scope/api-key.js';
 import { authRevoke, authGrant } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import type { HippoStore } from '../../src/store/port.js';
+import type { HippoStore } from '../../src/base/ports/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';

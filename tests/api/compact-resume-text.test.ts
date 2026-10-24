@@ -6,7 +6,7 @@ import { initProject, removeScratch, runHippo, scratch, type Scratch } from '../
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { transcriptWorkingState } from '../../src/surface/capture/working-state.js';
 import { preCompactForCaller, type Context } from '../../src/server.js';
-import type { TaskSnapshot } from '../../src/store/port/sessions.js';
+import type { TaskSnapshot } from '../../src/base/ports/store/sessions.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, compactResumeText } from '../../src/api/context-render.js';
 import { truncateCodePointSafe } from '../../src/base/util/code-point-cut.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';

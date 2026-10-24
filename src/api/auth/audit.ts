@@ -1,14 +1,14 @@
 // Audit log queries and retention, and the memory-quality audit with its repair passes.
 
 import { auditMemories, PROTECTED_ROWS, type AuditIssue, type AuditResult } from '../../base/memory/memory-audit.js';
-import type { AuditMaintenance } from '../../store/port.js';
+import type { AuditMaintenance } from '../../base/ports/store.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { Context } from '../types.js';
 import { memoryPages } from '../memories/memories.js';
-import type { AuditEvent } from '../../store/port/types.js';
+import type { AuditEvent } from '../../base/ports/store/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
-import type { QualityRepairResult } from '../../store/port/audit.js';
+import type { QualityRepairResult } from '../../base/ports/store/audit.js';
 
 export interface AuditListOptions {
   op?: AuditOp;

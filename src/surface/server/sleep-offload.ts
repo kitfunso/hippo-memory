@@ -3,7 +3,7 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { type Actor, type SleepOpts, type SleepResult, type Context } from '../../api/index.js';
-import { StoreBusyError } from '../../store/port.js';
+import { StoreBusyError } from '../../base/ports/store.js';
 import { envSleepTimeoutMs } from '../../base/util/env.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/util/http-util.js';
 
