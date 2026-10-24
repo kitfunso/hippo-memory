@@ -20,8 +20,8 @@ import { continuityStamp, type ContinuityKey } from '../port/types.js';
 import type { JsonObject } from '../../base/util/json.js';
 import { parseStoredObject } from '../../base/util/stored-json.js';
 import {
-  loadHandoffById,
-  loadLatestHandoff,
+  readHandoff,
+  readLatestHandoff,
   saveSessionHandoff,
   stampHandoffOutcome,
   writeSessionEndHandoff,
@@ -31,7 +31,7 @@ import { bound, type Bodies } from './bound.js';
 import {
   assertKeyedOnSharedStore,
   continuityWhere,
-  loadActiveTaskSnapshot,
+  readActiveTaskSnapshot,
   saveActiveTaskSnapshot,
 } from './task-snapshots.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -40,14 +40,14 @@ import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../rules/windows.js';
 /** Bounded read for AMBIENT snapshot surfaces so orphaned snapshots expire. The owner (both session ids non-empty and
  * `===`) always sees its own state; all others, null ids included (null === null is no match), get it only if
  * age(updated_at) <= maxAgeMs (default `SNAPSHOT_AMBIENT_MAX_AGE_MS`), else null. */
-function loadFreshActiveTaskSnapshot(
+function readFreshActiveTaskSnapshot(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
   opts: { maxAgeMs?: number; sessionId?: string | null } = {},
   key?: ContinuityKey | null,
 ): TaskSnapshot | null {
-  return freshActiveSnapshot(loadActiveTaskSnapshot(db, files, tenantId, key), opts);
+  return freshActiveSnapshot(readActiveTaskSnapshot(db, files, tenantId, key), opts);
 }
 
 function clearActiveTaskSnapshot(
@@ -214,12 +214,12 @@ export function listSessionEvents(
 
 /** Session_ids with a `session_complete` event newer than `sinceMs`; bounds the sleep auto-promotion scan to a fixed
  * window. */
-export function findPromotableSessions(
+export function listPromotableSessions(
   db: DatabaseSyncLike,
   tenantId: string,
   sinceMs: number,
 ): Array<{ session_id: string }> {
-  assertTenantId('findPromotableSessions', tenantId);
+  assertTenantId('listPromotableSessions', tenantId);
   const rows = cachedStatement(
     db,
     `
@@ -245,7 +245,7 @@ export function traceExistsForSession(db: DatabaseSyncLike, tenantId: string, se
 }
 
 /** The owner a session id is bound to, or null. */
-function selectSessionOwner(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
+function readSessionOwner(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
   const row = cachedStatement(
     db,
     `SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`,
@@ -299,7 +299,7 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
     { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS },
   );
   // Re-read, since a concurrent first bind may have won the INSERT OR IGNORE.
-  return selectSessionOwner(db, tenantId, sessionId);
+  return readSessionOwner(db, tenantId, sessionId);
 }
 
 /** The owner stored for the session id, binding `binding.owner` first when none is stored. */
@@ -312,7 +312,7 @@ function sessionOwnerOrBind(
 ): string | null {
   // A bound session is the common case after the first prompt, so it must not take the write lock.
   return (
-    selectSessionOwner(db, tenantId, sessionId) ?? insertSessionOwner(db, { tenantId, sessionId, owner, retentionMs })
+    readSessionOwner(db, tenantId, sessionId) ?? insertSessionOwner(db, { tenantId, sessionId, owner, retentionMs })
   );
 }
 
@@ -463,8 +463,8 @@ function sessionMirrorsBodies(
 > {
   return {
     saveSnapshot: (db, ...args) => saveActiveTaskSnapshot(db, files, ...args),
-    loadSnapshot: (db, ...args) => loadActiveTaskSnapshot(db, files, ...args),
-    loadFreshSnapshot: (db, ...args) => loadFreshActiveTaskSnapshot(db, files, ...args),
+    loadSnapshot: (db, ...args) => readActiveTaskSnapshot(db, files, ...args),
+    loadFreshSnapshot: (db, ...args) => readFreshActiveTaskSnapshot(db, files, ...args),
     clearSnapshot: (db, ...args) => clearActiveTaskSnapshot(db, files, ...args),
     appendEvent: (db, ...args) => appendSessionEvent(db, files, ...args),
     writeSessionEndHandoff: (db, ...args) => writeSessionEndHandoff(db, files, ...args),
@@ -490,8 +490,8 @@ const sessionRowsBodies: Bodies<
   listEvents: (db, tenantId, { sessionId, task, limit }) =>
     listSessionEvents(db, tenantId, { session_id: sessionId, task, limit }),
   saveHandoff: saveSessionHandoff,
-  latestHandoff: loadLatestHandoff,
-  handoffById: loadHandoffById,
+  latestHandoff: readLatestHandoff,
+  handoffById: readHandoff,
   stampHandoffOutcome: stampHandoffOutcome,
   pushWorkingMemory: wmPush,
   readWorkingMemory: wmRead,

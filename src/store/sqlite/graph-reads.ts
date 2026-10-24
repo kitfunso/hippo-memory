@@ -25,16 +25,16 @@ const DEFAULT_GRAPH_SCAN_LIMIT = 1000;
 
 /** Entities with an exact `name`, bounded by `limit` in SQL with a deterministic order, so graph-view focus finds
  * `--entity NAME` directly without materializing every same-name row. */
-function loadEntitiesByName(
+function listEntitiesByName(
   db: DatabaseSyncLike,
   tenantId: string,
   name: string,
   opts: { limit?: number } = {},
 ): Entity[] {
-  assertTenantId('loadEntitiesByName', tenantId);
+  assertTenantId('listEntitiesByName', tenantId);
   const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
   if (!Number.isInteger(limit) || limit < 0) {
-    throw new Error(`loadEntitiesByName: limit must be a non-negative integer; got ${limit}`);
+    throw new Error(`listEntitiesByName: limit must be a non-negative integer; got ${limit}`);
   }
   const rows = cachedStatement(
     db,
@@ -47,8 +47,8 @@ function loadEntitiesByName(
 }
 
 /** The tenant's newest `limit` entities. */
-function loadEntities(db: DatabaseSyncLike, tenantId: string, limit: number): Entity[] {
-  assertTenantId('loadEntities', tenantId);
+function listEntities(db: DatabaseSyncLike, tenantId: string, limit: number): Entity[] {
+  assertTenantId('listEntities', tenantId);
   const rows = cachedStatement(
     db,
     `SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
@@ -57,8 +57,8 @@ function loadEntities(db: DatabaseSyncLike, tenantId: string, limit: number): En
 }
 
 /** The tenant's newest `limit` relations. */
-function loadRelations(db: DatabaseSyncLike, tenantId: string, limit: number): Relation[] {
-  assertTenantId('loadRelations', tenantId);
+function listRelations(db: DatabaseSyncLike, tenantId: string, limit: number): Relation[] {
+  assertTenantId('listRelations', tenantId);
   const rows = cachedStatement(
     db,
     `SELECT ${RELATION_COLS} FROM relations WHERE tenant_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
@@ -68,8 +68,8 @@ function loadRelations(db: DatabaseSyncLike, tenantId: string, limit: number): R
 
 /** Load entities by primary id (the BFS-reached rows whose `memory_id` maps back to a recall result). Tenant-scoped,
  * read-only. */
-function loadEntitiesByIds(db: DatabaseSyncLike, tenantId: string, ids: readonly number[]): Entity[] {
-  assertTenantId('loadEntitiesByIds', tenantId);
+function readEntitiesByIds(db: DatabaseSyncLike, tenantId: string, ids: readonly number[]): Entity[] {
+  assertTenantId('readEntitiesByIds', tenantId);
   if (ids.length === 0) return [];
   const out: Entity[] = [];
   for (const slice of chunked(ids, GRAPH_ID_BATCH)) {
@@ -88,17 +88,17 @@ function loadEntitiesByIds(db: DatabaseSyncLike, tenantId: string, ids: readonly
 /** All relations touching ANY of `entityIds` in EITHER direction: the per-hop neighbor query for multi-hop traversal,
  * one query for the whole frontier (no N+1). `limit` caps rows and must be a non-negative integer (raw `LIMIT ?`
  * rejects a fraction). */
-function loadNeighborRelations(
+function listNeighborRelations(
   db: DatabaseSyncLike,
   tenantId: string,
   entityIds: readonly number[],
   opts: { limit?: number } = {},
 ): Relation[] {
-  assertTenantId('loadNeighborRelations', tenantId);
+  assertTenantId('listNeighborRelations', tenantId);
   if (entityIds.length === 0) return [];
   const limit = opts.limit ?? DEFAULT_GRAPH_SCAN_LIMIT;
   if (!Number.isInteger(limit) || limit < 0) {
-    throw new Error(`loadNeighborRelations: limit must be a non-negative integer; got ${limit}`);
+    throw new Error(`listNeighborRelations: limit must be a non-negative integer; got ${limit}`);
   }
   // `limit` applies PER CHUNK, so a frontier over one chunk of ids could return limit*chunks rows before the dedup
   // below; harmless today (frontier <= maxNeighbors 200, one chunk, BFS re-enforces the fanout cap).
@@ -123,17 +123,17 @@ function loadNeighborRelations(
 /** Relations with BOTH endpoints in `entityIds` (edges AMONG the set), for the graph-view focus subgraph; `LIMIT` caps
  * only intra-union edges, so no out-of-union row evicts a valid one. The caller bounds `entityIds` (<= view limit), so
  * a single query is safe. */
-function loadRelationsAmong(
+function listRelationsAmong(
   db: DatabaseSyncLike,
   tenantId: string,
   entityIds: number[],
   opts: { limit?: number } = {},
 ): Relation[] {
-  assertTenantId('loadRelationsAmong', tenantId);
+  assertTenantId('listRelationsAmong', tenantId);
   if (entityIds.length === 0) return [];
   const limit = opts.limit ?? DEFAULT_GRAPH_SCAN_LIMIT;
   if (!Number.isInteger(limit) || limit < 0) {
-    throw new Error(`loadRelationsAmong: limit must be a non-negative integer; got ${limit}`);
+    throw new Error(`listRelationsAmong: limit must be a non-negative integer; got ${limit}`);
   }
   const ids = JSON.stringify(entityIds);
   const rows = cachedStatement(
@@ -151,8 +151,8 @@ function loadRelationsAmong(
 
 /** Map consolidated source memory ids to their graph entities: the SEED step of multi-hop recall. Tenant-scoped,
  * read-only; chunks the IN-list under the SQLite variable cap. */
-function loadEntitiesByMemoryId(db: DatabaseSyncLike, tenantId: string, memoryIds: readonly string[]): Entity[] {
-  assertTenantId('loadEntitiesByMemoryId', tenantId);
+function listEntitiesByMemoryId(db: DatabaseSyncLike, tenantId: string, memoryIds: readonly string[]): Entity[] {
+  assertTenantId('listEntitiesByMemoryId', tenantId);
   if (memoryIds.length === 0) return [];
   const out: Entity[] = [];
   for (const slice of chunked(memoryIds, GRAPH_ID_BATCH)) {
@@ -213,8 +213,8 @@ function readableOnly<T extends { memoryId: string | null }>(
 }
 
 function wholeGraphRows({ db, tenantId }: GraphSource, limit: number): GraphRows {
-  const entities = loadEntities(db, tenantId, limit);
-  const relations = loadRelations(db, tenantId, limit);
+  const entities = listEntities(db, tenantId, limit);
+  const relations = listRelations(db, tenantId, limit);
   return { entities, relations, truncated: entities.length >= limit || relations.length >= limit };
 }
 
@@ -228,12 +228,12 @@ function focusRows(
 ): GraphRows | null {
   // The name is queried directly, so it is found on a graph larger than `limit`; one name can map to many entities, so
   // the matches are capped.
-  const named = loadEntitiesByName(db, tenantId, name, { limit });
+  const named = listEntitiesByName(db, tenantId, name, { limit });
   // A hidden focus must not answer through its neighbors that the name exists.
   const focus = readableOnly(db, tenantId, named, canRead);
   if (focus.length === 0) return null;
   const focusIds = focus.map((e) => e.id);
-  const hop = loadNeighborRelations(db, tenantId, focusIds, { limit });
+  const hop = listNeighborRelations(db, tenantId, focusIds, { limit });
   const union = new Set<number>(focusIds);
   let neighborsCapped = false;
   for (const r of hop) {
@@ -245,10 +245,10 @@ function focusRows(
     union.add(r.toEntityId);
   }
   const unionIds = [...union].slice(0, limit);
-  const entities = loadEntitiesByIds(db, tenantId, unionIds);
+  const entities = readEntitiesByIds(db, tenantId, unionIds);
   // Both endpoints in the set: neighbor-to-neighbor edges are included, and the LIMIT never drops one for an
   // out-of-union row.
-  const relations = loadRelationsAmong(db, tenantId, unionIds, { limit });
+  const relations = listRelationsAmong(db, tenantId, unionIds, { limit });
   const truncated =
     named.length >= limit ||
     hop.length >= limit || // neighbor scan capped -> a 1-hop neighbor may be omitted
@@ -286,9 +286,9 @@ function graphRows(db: DatabaseSyncLike, tenantId: string, { entity, limit, read
 
 const graphReadsBodies: Bodies<GraphReads> = {
   graphRows: graphRows,
-  entitiesForMemories: loadEntitiesByMemoryId,
-  entitiesByIds: loadEntitiesByIds,
-  neighborRelations: loadNeighborRelations,
+  entitiesForMemories: listEntitiesByMemoryId,
+  entitiesByIds: readEntitiesByIds,
+  neighborRelations: listNeighborRelations,
   graphDelta: graphDeltaOn,
 };
 

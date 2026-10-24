@@ -12,7 +12,7 @@ import {
   getStringArray,
   isSetMember,
   parseJsonBody,
-  parseListLimit,
+  parseLimitParam,
   validateIdSegment,
 } from '../validation.js';
 import { MAX_ARRAY_ITEMS, MAX_CONTENT_LEN, MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
@@ -58,7 +58,7 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
 // GET /v1/graph?entity=NAME&limit=N — read-only entity/relation graph (tenant-scoped)
 export async function handleGetGraph({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const entity = graphEntityOf(query.get('entity'));
-  const limit = parseListLimit(query.get('limit'));
+  const limit = parseLimitParam(query.get('limit'));
   sendJson(res, 200, await graphView(ctx, { entity, limit }));
   return;
 }
@@ -148,7 +148,7 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
 // POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE
 // hippoRoot, cross-tenant by design, so the row's host-admin-local gate is the trust boundary. Body {dry_run?,
 // no_share?}; returns SleepResult JSON.
-export async function handleSleep({ req, res, ctx, opts }: AuthedRouteRequest): Promise<void> {
+export async function handleRunSleep({ req, res, ctx, opts }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const dryRunRaw = body['dry_run'];
   if (dryRunRaw !== undefined && !isJsonBoolean(dryRunRaw)) {

@@ -1,7 +1,7 @@
 /**
  * v1.7.2 T2 — RECALL_DEFAULT_DENY_SCOPES is the single source of truth.
  *
- * Pre-T2: SQL clause in loadSearchRows hardcodes `m.scope != 'unknown:legacy'`;
+ * Pre-T2: SQL clause in listSearchRows hardcodes `m.scope != 'unknown:legacy'`;
  * JS `passesScopeFilterForRecall` independently checks `scope === 'unknown:legacy'`.
  * Two places to update if the deny list grows.
  *

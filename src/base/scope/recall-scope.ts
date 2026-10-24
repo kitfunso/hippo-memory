@@ -9,7 +9,7 @@ import { MAX_ID_LEN } from '../util/limits.js';
 
 /**
  * Literal scopes excluded from recall by default-deny when the caller passes no `scope`; read by the SQL clause in
- * `loadSearchRows` and by `passesScopeFilterForRecall`. Invariant: never empty, or quarantine scopes would pass both
+ * `listSearchRows` and by `passesScopeFilterForRecall`. Invariant: never empty, or quarantine scopes would pass both
  * paths silently (the module-load assertion below pins this).
  */
 export const RECALL_DEFAULT_DENY_SCOPES = ['unknown:legacy'] as const;
@@ -104,7 +104,7 @@ export function ownScopeTouches(ownScope: string | null, scope: string | null): 
   return !isPersonalScope(scope) || scope === ownScope;
 }
 
-/** JS half of the recall default-deny rule (SQL half: `loadSearchRows`). A non-empty `requested` needs an exact match;
+/** JS half of the recall default-deny rule (SQL half: `listSearchRows`). A non-empty `requested` needs an exact match;
  * otherwise `<source>:private:*` and `RECALL_DEFAULT_DENY_SCOPES` buckets are denied, while null, public scopes and the
  * caller's `ownScope` pass.
  */

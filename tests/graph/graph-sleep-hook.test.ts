@@ -26,7 +26,7 @@ import {
 } from '../../src/domain/graph/extract.js';
 import type { EntityType } from '../../src/store/port/graph.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
-import { sleep, adminActor } from '../../src/api/index.js';
+import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
@@ -151,7 +151,7 @@ describe('sleep enqueue-hook', () => {
     expect(pending(tc.hippoRoot).length).toBe(2);
     expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0); // not yet extracted
 
-    const r = await sleep(tc.ctx, { noShare: true });
+    const r = await sleepWholeStore(tc.ctx, { noShare: true });
     expect(loadEntities(tc.hippoRoot, T, { limit: 100 }).length).toBe(2); // rebuilt by sleep
     expect(pending(tc.hippoRoot)).toHaveLength(0); // drained
     expect(processed(tc.hippoRoot).length).toBe(2);
@@ -162,9 +162,9 @@ describe('sleep enqueue-hook', () => {
     await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
       decisionText: 'Adopt Postgres',
     });
-    const r1 = await sleep(tc.ctx, { noShare: true });
+    const r1 = await sleepWholeStore(tc.ctx, { noShare: true });
     expect(r1.graph?.tenants).toBe(1);
-    const r2 = await sleep(tc.ctx, { noShare: true }); // nothing newly dirty
+    const r2 = await sleepWholeStore(tc.ctx, { noShare: true }); // nothing newly dirty
     expect(r2.graph).toBeUndefined();
     expect(pending(tc.hippoRoot)).toHaveLength(0);
   });
@@ -176,7 +176,7 @@ describe('sleep enqueue-hook', () => {
     await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, 'tenantB', {
       decisionText: 'TenantB adopts Kafka for the event streaming backbone',
     });
-    const r = await sleep(tc.ctx, { noShare: true });
+    const r = await sleepWholeStore(tc.ctx, { noShare: true });
     expect(r.graph?.tenants).toBe(2);
     expect(loadEntities(tc.hippoRoot, 'tenantA', { limit: 100 }).length).toBe(1);
     expect(loadEntities(tc.hippoRoot, 'tenantB', { limit: 100 }).length).toBe(1);
@@ -189,7 +189,7 @@ describe('sleep enqueue-hook', () => {
     await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
       decisionText: 'Adopt Postgres',
     });
-    const r = await sleep(tc.ctx, { dryRun: true });
+    const r = await sleepWholeStore(tc.ctx, { dryRun: true });
     expect(r.graph).toBeUndefined();
     expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0);
     expect(pending(tc.hippoRoot)).toHaveLength(1); // still dirty
@@ -247,13 +247,13 @@ describe('sleep enqueue-hook', () => {
       supersedesDecisionId: d1.id,
     });
     // No call to graph extract / extractGraph here - sleep is the only trigger.
-    await sleep(tc.ctx, { noShare: true });
+    await sleepWholeStore(tc.ctx, { noShare: true });
     const rels = loadRelations(tc.hippoRoot, T, { limit: 100 });
     expect(rels.some((r) => r.relType === 'supersedes')).toBe(true);
   });
 
   it('13. clean store: sleep with no graph-source objects omits the graph field', async () => {
-    const r = await sleep(tc.ctx, { noShare: true });
+    const r = await sleepWholeStore(tc.ctx, { noShare: true });
     expect(r.graph).toBeUndefined();
     expect(loadPendingExtractionTenants(tc.hippoRoot)).toHaveLength(0);
   });
@@ -351,7 +351,7 @@ describe('sleep enqueue-hook', () => {
     expect(pending(tc.hippoRoot)).toHaveLength(queued);
     expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(1); // the first chunk's one op stays
 
-    await sleep(tc.ctx, { noShare: true });
+    await sleepWholeStore(tc.ctx, { noShare: true });
 
     expect(pending(tc.hippoRoot)).toHaveLength(0);
     const desired = deriveGraph(await loadGraphSources(objectsAt(tc.hippoRoot), T));

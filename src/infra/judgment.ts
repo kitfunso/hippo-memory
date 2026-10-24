@@ -29,7 +29,7 @@ export interface JudgeOptions {
   model?: string;
   /** Sends each request; a root passes the real one, a test one over its own fetch. */
   http: Http;
-  /** Bounded parallelism for `judgeAll`. */
+  /** Bounded parallelism for `judgeOver`. */
   concurrency?: number;
 }
 
@@ -149,7 +149,7 @@ async function judge(content: string, opts: JudgeOptions): Promise<Judgment | nu
 }
 
 /** Judge many candidates under a bounded concurrency pool, order preserved. */
-export async function judgeAll(contents: readonly string[], opts: JudgeOptions): Promise<(Judgment | null)[]> {
+export async function judgeOver(contents: readonly string[], opts: JudgeOptions): Promise<(Judgment | null)[]> {
   const out: (Judgment | null)[] = Array.from({ length: contents.length }, () => null);
   const limit = Math.max(1, opts.concurrency ?? MAX_CONCURRENCY);
   let cursor = 0;

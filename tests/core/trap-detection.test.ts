@@ -18,7 +18,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { search } from '../../src/domain/search/bm25-search.js';
+import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -171,7 +171,7 @@ beforeAll(() => {
 
 function recallTop(query: string, n = 5): string[] {
   const entries = loadAllEntries(tmpDir, 'default');
-  const results = search(query, entries, { budget: 8000 });
+  const results = rankBm25(query, entries, { budget: 8000 });
   return results.slice(0, n).map((r) => r.entry.id);
 }
 
@@ -292,7 +292,7 @@ describe('Baseline without memory', () => {
     const emptyDir = makeRoot('empty');
 
     const entries = loadAllEntries(emptyDir, 'default');
-    const results = search('deploying model to production overwrite file', entries, { budget: 8000 });
+    const results = rankBm25('deploying model to production overwrite file', entries, { budget: 8000 });
     // No memories -> no results -> agent has no guidance
     expect(results.length).toBe(0);
   });
@@ -303,7 +303,7 @@ describe('Baseline without memory', () => {
     let caughtWithout = 0;
     for (const trap of trapDefs) {
       const entries = loadAllEntries(emptyDir, 'default');
-      const topIds = search(trap.recall_query, entries, { budget: 8000 })
+      const topIds = rankBm25(trap.recall_query, entries, { budget: 8000 })
         .slice(0, 5)
         .map((r) => r.entry.id);
       if (topIds.includes(trap.memory_id)) caughtWithout++;

@@ -87,7 +87,12 @@ export function importRoot(options: ImportOptions): string {
 
 /** Given an array of raw text chunks, deduplicate against existing memories, create MemoryEntry objects, write them
  *  (unless dry-run), and return a result. */
-export function importEntries(chunks: string[], source: string, tags: string[], options: TargetedImport): ImportResult {
+export function importEntriesInto(
+  chunks: string[],
+  source: string,
+  tags: string[],
+  options: TargetedImport,
+): ImportResult {
   const target = openImportTarget(options);
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
   const baseHalfLifeDays = loadConfig(target.targetRoot).defaultHalfLifeDays;

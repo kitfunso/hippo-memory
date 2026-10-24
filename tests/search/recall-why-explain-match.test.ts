@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { search } from '../../src/domain/search/bm25-search.js';
+import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { explainMatch } from '../../src/domain/search/explain.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
@@ -63,7 +63,7 @@ describe('tokenize export', () => {
 describe('explainMatch', () => {
   it('identifies matched BM25 terms for a keyword query', () => {
     const entries = makeEntries();
-    const results = search('FRED cache failure', entries, { budget: 10000 });
+    const results = rankBm25('FRED cache failure', entries, { budget: 10000 });
 
     // No stemming, so 'failure' misses 'failures'; the FRED row also holds the rarer term and ranks first.
     expect(results.map((r) => r.entry.id)).toEqual([entries[0].id, entries[2].id]);
@@ -77,7 +77,7 @@ describe('explainMatch', () => {
 
   it('includes specific matched terms in the explanation', () => {
     const entries = makeEntries();
-    const results = search('cache refresh', entries, { budget: 10000 });
+    const results = rankBm25('cache refresh', entries, { budget: 10000 });
 
     // Both rows hold both terms; the shorter one ranks first.
     expect(results.map((r) => r.entry.id)).toEqual([entries[2].id, entries[0].id]);
@@ -88,7 +88,7 @@ describe('explainMatch', () => {
 
   it('returns cosine=0 for BM25-only results', () => {
     const entries = makeEntries();
-    const results = search('FRED cache', entries, { budget: 10000 });
+    const results = rankBm25('FRED cache', entries, { budget: 10000 });
     expect(results.map((r) => r.entry.id)).toEqual([entries[0].id, entries[2].id]);
 
     const explanation = explainMatch('FRED cache', results[0]);
@@ -98,7 +98,7 @@ describe('explainMatch', () => {
 
   it('returns reason text that is non-empty', () => {
     const entries = makeEntries();
-    const results = search('error pipeline', entries, { budget: 10000 });
+    const results = rankBm25('error pipeline', entries, { budget: 10000 });
 
     // 'pipeline' comes only from the FRED row's data-pipeline tag; 'error' is a tag on two rows.
     expect(results.map((r) => explainMatch('error pipeline', r).reason)).toEqual([
@@ -150,7 +150,7 @@ describe('explainMatch', () => {
 describe('--why JSON output fields', () => {
   it('search results contain all fields needed for --why annotation', () => {
     const entries = makeEntries();
-    const results = search('FRED cache', entries, { budget: 10000 });
+    const results = rankBm25('FRED cache', entries, { budget: 10000 });
     expect(results).toHaveLength(2);
 
     const r = results[0];

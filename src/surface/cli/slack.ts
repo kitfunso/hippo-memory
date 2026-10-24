@@ -8,7 +8,7 @@ import {
 } from '../../base/util/env.js';
 import * as api from '../../api/index.js';
 import { listDlq } from '../connectors/dlq.js';
-import { replayDlqEntry, slackDlq } from '../connectors/slack/dlq.js';
+import { replaySlackDlqEntry, slackDlq } from '../connectors/slack/dlq.js';
 import { backfillChannel } from '../connectors/slack/backfill.js';
 import { slackHistoryFetcher } from '../connectors/slack/web-client.js';
 import {
@@ -63,7 +63,7 @@ async function listSlackDlq(hippoRoot: string, tenantId: string, _flags: CliFlag
 async function replaySlackDlq(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const ctx = cliApiContext(hippoRoot, tenantId);
   await runDlqReplay('slack', args[2], flags, (id, force) =>
-    replayDlqEntry(ctx, id, {
+    replaySlackDlqEntry(ctx, id, {
       force,
       signingSecret: envSlackSigningSecret(),
       allowUnknownTeamFallback: envSlackAllowUnknownTeamFallback(),

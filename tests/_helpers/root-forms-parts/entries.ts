@@ -8,7 +8,7 @@ import * as deleteAndBatchSql from '../../../src/store/sqlite/delete-and-batch.j
 import type { DormantMemory, ListDormantOpts } from '../../../src/store/port/dormant.js';
 import { listDormantRows } from '../../../src/store/sqlite/dormant-rows.js';
 import { EVERY_SCOPE } from '../../../src/store/sqlite/rule-sql.js';
-import { loadEntryTextKeysPage, iterateEveryTenantEntries } from '../../../src/store/sqlite/entry-reads.js';
+import { listEntryTextKeysPage, iterateEveryTenantEntries } from '../../../src/store/sqlite/entry-reads.js';
 import * as entryReadsSql from '../../../src/store/sqlite/entry-reads.js';
 import * as entryWritesSql from '../../../src/store/sqlite/entry-writes.js';
 import { waitingOpener } from '../../../src/store/sqlite/open.js';
@@ -26,10 +26,11 @@ import type { SourceTally, EntryTextKey, RecallSearchEntriesOptions } from '../.
 import type { FlushComponent, LoadedRows } from '../../../src/store/port/consolidation.js';
 import { ALL_TENANTS, type TenantId } from '../../../src/base/util/tenant.js';
 import type { EntryCursor } from '../../../src/store/port/types.js';
+import { READ_PAGE_ROWS, rowsInPages } from '../../../src/base/util/pages.js';
 
 export {
-  batchWriteAndDelete,
-  loadAmbientTallies,
+  batchWriteAndDeleteInFolder,
+  countAmbientInFolder,
   loadEmbeddingIndex,
   writeEntry,
 } from '../../../src/store/sqlite/fixtures.js';
@@ -37,7 +38,9 @@ export { strengthenRetrieved } from '../../../src/store/sqlite/entry-writes.js';
 
 /** One tenant's entries, oldest first. */
 export function loadAllEntries(hippoRoot: string, tenantId: string): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => entryReadsSql.loadAllEntries(db, tenantId), openStore);
+  const page = (db: Parameters<typeof entryReadsSql.listEntriesPage>[0]) => (after?: EntryCursor) =>
+    entryReadsSql.listEntriesPage(db, tenantId, { limit: READ_PAGE_ROWS, after });
+  return onHandle(hippoRoot, (db) => Array.from(rowsInPages(page(db))), openStore);
 }
 
 export function loadAmbientCandidates(
@@ -51,7 +54,7 @@ export function loadAmbientCandidates(
   const judge = (e: MemoryEntry) => (admit(e) ? null : ('admission' as const));
   return onHandle(
     hippoRoot,
-    (db) => candidatesSql.loadAmbientCandidates(db, tenantId, { recentNeeded, judge, recall, origins }),
+    (db) => candidatesSql.listAmbientCandidates(db, tenantId, { recentNeeded, judge, recall, origins }),
     openStore,
   );
 }
@@ -61,7 +64,7 @@ export function loadContextCandidates(
   tenantId: string,
   filter: ContextCandidateFilter,
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => candidatesSql.loadContextCandidates(db, tenantId, filter), openStore);
+  return onHandle(hippoRoot, (db) => candidatesSql.listContextCandidates(db, tenantId, filter), openStore);
 }
 
 export function loadTextsHolding(
@@ -71,7 +74,7 @@ export function loadTextsHolding(
   project?: readonly string[],
   admit?: SqlFragment,
 ): HeldText[] {
-  return onHandle(hippoRoot, (db) => candidatesSql.loadTextsHolding(db, tenantId, texts, project, admit), openStore);
+  return onHandle(hippoRoot, (db) => candidatesSql.listTextsHolding(db, tenantId, texts, project, admit), openStore);
 }
 
 export function tallySources(hippoRoot: string, tenantId: TenantId = ALL_TENANTS): SourceTally[] {
@@ -109,7 +112,7 @@ export function loadEntriesByIds(
   ids: readonly string[],
   tenantId: TenantId = ALL_TENANTS,
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => entryReadsSql.loadEntriesByIds(db, ids, tenantId), openStore);
+  return onHandle(hippoRoot, (db) => entryReadsSql.readEntriesInIdOrder(db, ids, tenantId), openStore);
 }
 
 export function loadSessionRawMemories(
@@ -121,7 +124,7 @@ export function loadSessionRawMemories(
 ): MemoryEntry[] {
   return onHandle(
     hippoRoot,
-    (db) => entryReadsSql.loadSessionRawMemories(db, { sessionId, tenantId, cap: cap ?? 0, origins }),
+    (db) => entryReadsSql.listSessionRawMemories(db, { sessionId, tenantId, cap: cap ?? 0, origins }),
     openStore,
   );
 }
@@ -150,7 +153,7 @@ export function loadFreshRawMemories(
 ): MemoryEntry[] {
   return onHandle(
     hippoRoot,
-    (db) => entryReadsSql.loadFreshRawMemories(db, count, tenantId, sessionId, origins),
+    (db) => entryReadsSql.listFreshRawMemories(db, count, tenantId, sessionId, origins),
     openStore,
   );
 }
@@ -169,7 +172,7 @@ export function loadEntryTextKeys(hippoRoot: string, tenantId: TenantId = ALL_TE
     (db) => {
       const keys: EntryTextKey[] = [];
       for (let after: EntryCursor | null | undefined; after !== null;) {
-        const page = loadEntryTextKeysPage(db, tenantId, { limit: pageRows, after });
+        const page = listEntryTextKeysPage(db, tenantId, { limit: pageRows, after });
         keys.push(...page.keys);
         after = page.next;
       }
@@ -195,7 +198,7 @@ export function loadRecallEntries(
 ): MemoryEntry[] {
   return onHandle(
     hippoRoot,
-    (db) => searchRowsSql.loadRecallEntries(db, query, { ...options, tenantId: options.tenantId ?? ALL_TENANTS }),
+    (db) => searchRowsSql.listRecallEntries(db, query, { ...options, tenantId: options.tenantId ?? ALL_TENANTS }),
     openStore,
   );
 }
@@ -217,7 +220,7 @@ export function loadSearchEntries(
   limit?: number,
   tenantId: TenantId = ALL_TENANTS,
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => searchRowsSql.loadSearchEntries(db, query, limit, tenantId), openStore);
+  return onHandle(hippoRoot, (db) => searchRowsSql.listSearchEntries(db, query, limit, tenantId), openStore);
 }
 
 export function writePromotedEntry(

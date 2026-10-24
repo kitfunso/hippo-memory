@@ -19,6 +19,10 @@ node:sqlite is synchronous, and the store port is async so another store can do 
 
 A file belongs in `src/store` only if it runs SQL on hippo.db, holds or opens a handle, or is one of the row-shape, SQL-text and adapter files named in `DB_DEFINITION_FILES` in `scripts/check-store-port.mjs`. Scope predicates, the markdown mirror format, typed-object shapes, embedding providers and hook payload parsing live under `src/base`. The same script pins `storeFilesWithoutSqlList`, the files still under `src/store` that run no SQL, so a new pure helper filed there fails CI.
 
+### Read verbs
+
+Each kind of store read has one verb: `read` for what the caller names by id or key (one row or null, or the rows of an id list), `list` for the rows a filter or page picks, `count` for a number or a tally, and `iterate` for a generator; port methods and published names such as `loadAllEntries` keep theirs.
+
 ### The SQLite adapter's door
 
 Only the composition roots in `SQLITE_ROOTS` (`scripts/check-layers.mjs`) import `src/store/sqlite`, and only through its doors in `SQLITE_DOORS`. `src/store/sqlite/index.ts` hands a root `sqliteStore`, `sqliteReach`, `sqliteDashboardReads`, the three request scopes, `tenantOfApiKey` and `sqliteServerRuntime`. That runtime is everything a server serves hippo.db with: the worker store and its executor, the connection held beside it, the global stores, the off-loop fence and the worker counts `/health` reports. Its `close()` closes the held connection last, so that close is SQLite's last. `serve()` and `hippo dashboard` both build one, so neither names the executor or the holder. `src/store/sqlite/fixtures.ts` is the second door, opened only by the `./testing` entry, for the eval kit's seams. A root that imports any other module under `src/store/sqlite` fails CI. The db layer sits behind the same door: `dbReach` in `layers.json` fails any file outside `src/db` and `src/store` that imports `src/db`, so the door re-exports the few db names a root publishes, and an importer gets its batch scope from the root that built its store.
@@ -140,7 +144,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `ArchiveRawOpts.event`: Took the place of `afterArchive`, the connector idempotency hook of v0.39 commit 3, which passed the archive's database handle through the api contract. The store's `connectorWrites` group now logs the event in the archive's transaction.
 
 ### src/api/recall/types.ts
-- `RecallOpts.scorerWindow`: F3 (v1.7.0): scorer-window opt-in. When set, `loadSearchEntries` loads up to `scorerWindow` candidates. When undefined (default), the existing behaviour is preserved: store-internal 200-row default, which every release before v1.7.0 silently relied on.
+- `RecallOpts.scorerWindow`: F3 (v1.7.0): scorer-window opt-in. When set, `listSearchEntries` loads up to `scorerWindow` candidates. When undefined (default), the existing behaviour is preserved: store-internal 200-row default, which every release before v1.7.0 silently relied on.
 - `RecallOpts.scorerWindow`: **Input is library-only at v1.7.0.** Transport exposure for the input planned for v1.7.1 alongside the deferred-queue items that need a wider candidate pool (e.g. mean-of-children summary re-rank).
 - `RecallOpts.summarizeOverflow`: v1.5.0 DAG-aware recall. Set to false to disable and get the pre-v1.5 strict-limit behaviour.
 - `RecallOpts.freshTailCount`: v1.5.2 fresh-tail.
@@ -175,14 +179,14 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RememberOpts.untrusted`: CD5: connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this.
 
 ### src/api/sleep/sleep.ts
-- `sleep` (section banner): sleep (extracted from cmdSleepCore Phase 2-6 — Task 4 of the api.ts refactor)
+- `sleepWholeStore` (section banner): sleep (extracted from cmdSleepCore Phase 2-6; Task 4 of the api.ts refactor)
 - `SleepResult.secretSkipped`: v1.25.0: count of memories the auto-share secret veto withheld this sleep
 - `SleepResult.rejectedSkipped`: AT1: count of auto-share candidates the GLOBAL store's rejection tombstone refused this sleep (docs/plans/2026-08-15-at1-rejected-value-tombstone.md plan §3 — copy paths must not let one rejected candidate abort the batch).
 - `SleepResult.graph`: E3 sleep enqueue-hook: graph re-extraction totals across the tenants rebuilt this sleep.
-- `sleep`: Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in it), matching the pre-refactor cmdSleepCore behavior. Correct for a CLI maintenance op invoked by the operator. Episode B (v1.11.4) exposed this over HTTP `/v1/sleep` with loopback-only enforcement (per-request guard in the handler plus serve()'s boot-time host check). The TODOS.md per-tenant scoping follow-up remains open for the day non-loopback serving lands — at that point the route will need an admin-role gate OR api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
+- `sleepWholeStore`: Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in it), matching the pre-refactor cmdSleepCore behavior. Correct for a CLI maintenance op invoked by the operator. Episode B (v1.11.4) exposed this over HTTP `/v1/sleep` with loopback-only enforcement (per-request guard in the handler plus serve()'s boot-time host check). The TODOS.md per-tenant scoping follow-up remains open for the day non-loopback serving lands; at that point the route will need an admin-role gate OR api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
 - `SleepPhases`: v1.12.2: Test-only DI seam shape for `sleep`'s phase dependencies. Since the serve autoSleep change it lives in `src/api/sleep/sleep-run.ts`, so the package root's declarations never name it.
-- `runSleep` (`src/api/sleep/sleep-run.ts`): its `overrides` argument replaces the old `SleepOpts.__phases` field; tests pass a throwing phase to cover mid-phase failures. `sleep` calls it with none.
-- `sleep`: v1.11.5: phase counters for the consolidate audit emit (in finally).
+- `runSleep` (`src/api/sleep/sleep-run.ts`): its `overrides` argument replaces the old `SleepOpts.__phases` field; tests pass a throwing phase to cover mid-phase failures. `sleepWholeStore` calls it with none.
+- `sleepWholeStore`: v1.11.5: phase counters for the consolidate audit emit (in finally).
 
 ### src/api/tokens.ts
 - `recordTokens`: Record memory text handed to an agent in the token ledger (ROADMAP TE0).
@@ -286,7 +290,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `handleSessionEnd`: Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md): extracts transcript_path + session_id for the detached worker's argv.
 
 ### src/surface/cli/hooks/session-end-worker.ts
-- `cmdSessionEndWorker`: DF1 T3: close the ending session's own active task snapshot AFTER sleep+capture complete — neither producer (runPreCompact, `hippo snapshot save`) runs inside session-end, so this can never destroy same-run work. Scoped to `--session-id`: a concurrent session's active snapshot is untouched (closeTaskSnapshotsForSession's own WHERE clause). Absent session id -> no-op plus one log line; session-end is not guaranteed to fire at all (crash, kill -9), so the freshness bound in loadFreshActiveTaskSnapshot is the backstop layer, not this close. Handoff write happens BEFORE the snapshot close below, while the snapshot writeSessionEndHandoff reads is still active.
+- `cmdSessionEndWorker`: DF1 T3: close the ending session's own active task snapshot AFTER sleep+capture complete; neither producer (runPreCompact, `hippo snapshot save`) runs inside session-end, so this can never destroy same-run work. Scoped to `--session-id`: a concurrent session's active snapshot is untouched (closeTaskSnapshotsForSession's own WHERE clause). Absent session id -> no-op plus one log line; session-end is not guaranteed to fire at all (crash, kill -9), so the freshness bound in readFreshActiveTaskSnapshot is the backstop layer, not this close. Handoff write happens BEFORE the snapshot close below, while the snapshot writeSessionEndHandoff reads is still active.
 
 ### src/surface/cli/slack.ts
 - `slack banner`: Slack subcommands (E1.3 — `hippo slack backfill` / `hippo slack dlq list`)
@@ -393,7 +397,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/domain/consolidate/dag.ts
 - `DagBuildResult.rejected`: AT1: clusters skipped because the LLM-synthesized summary landed on a rejected value (plan §3 containment — per-cluster catch, not a whole- phase abort). Member re-parenting writes are unaffected by construction (same id + same content = guard-exempt), so this only ever counts summary-creation refusals.
 - `createClusterSummaryEntry`: Schema v25: cache descendant_count + earliest/latest_at on the summary row so DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2) can reason about scope without walking the children.
-- `summarizeCluster`: AT1 (plan §3 containment): a refused LLM-synthesized summary skips ONLY this cluster — the sleep cycle continues to the next one. The member re-parenting writes below never run for a skipped cluster (there is no summary id to parent them under). The tombstone check itself is tenant-scoped for free: writeEntry -> writeEntryDbOnly -> upsertEntryRow calls checkRejectionGuard(db, entry.tenantId ?? 'default', ...) (store/entry-writes.ts), reading tenantId off the entry being written. Now that summaryEntry carries home.tenantId instead of the implicit 'default', the guard consults that tenant's tombstones — no separate check needed here (unlike consolidate.ts's merge pass, which pre-checks via findRejectedValue because it writes through batchWriteAndDelete's bypassRejectionGuard path instead of writeEntry).
+- `summarizeCluster`: AT1 (plan §3 containment): a refused LLM-synthesized summary skips ONLY this cluster; the sleep cycle continues to the next one. The member re-parenting writes below never run for a skipped cluster (there is no summary id to parent them under). The tombstone check itself is tenant-scoped for free: writeEntry -> writeEntryDbOnly -> upsertEntryRow calls checkRejectionGuard(db, entry.tenantId ?? 'default', ...) (store/entry-writes.ts), reading tenantId off the entry being written. Now that summaryEntry carries home.tenantId instead of the implicit 'default', the guard consults that tenant's tombstones; no separate check needed here (unlike consolidate.ts's merge pass, which pre-checks via readRejectedValue because it writes through batchWriteAndDelete's bypassRejectionGuard path instead of writeEntry).
 - `summarizeCluster`: v0.30 / E3 — cancel the cascade of dirty-marks fired by member writeEntry calls (E2 hook on writeEntryDbOnly in store/entry-writes.ts). The summary we just built IS fresh, no rebuild needed. Without this, E3 in the SAME sleep cycle would re-rebuild every new summary (2x LLM cost).
 - section banner: v0.30 / E3 of DAG live-coupling — rebuildDirtySummaries orchestrator
 - `DagRebuildResult.refused`: tombstone-hit refusals — dirty cleared, content NOT written (T4 split from `rebuilt`)
@@ -574,7 +578,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/domain/search/embed-memories.ts
 - module header: provider selection, the API-key check and vector computation moved here from src/store/embeddings/index.ts, which keeps only the stored index identity (src/store/port.ts VectorWrites: core computes each vector, the store only keeps it).
-- `embedMemory`: L9: host-wide rebuild. The embedding index is keyed by entry.id (which is tenant-scoped) but the index itself is one per hippoRoot.
+- `embedMemoryInto`: L9: host-wide rebuild. The embedding index is keyed by entry.id (which is tenant-scoped) but the index itself is one per hippoRoot.
 - `embedAll`: L9: host-wide by design. embedAll backfills vectors for all tenants' entries into the per-host embedding index.
 
 ### src/domain/eval/eval-stats.ts
@@ -626,9 +630,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/domain/graph/read.ts
 - `multi-hop read helpers section`: E3.2 multi-hop recall read helpers (SELECT-only; the check-graph-writes lint permits these here and in the read-only consumer src/domain/graph/recall.ts).
-- `loadEntitiesByMemoryId`: Map consolidated source memory ids -> their graph entities. The SEED step of E3.2 multi-hop recall (recall result memory ids -> entities to traverse from).
-- `loadNeighborRelations`: All relations touching ANY of `entityIds` in EITHER direction (from OR to) — the per-hop neighbour query for E3.2 multi-hop traversal.
-- `loadNeighborRelations`: `limit` is applied PER CHUNK; a frontier spanning >IN_LIST_CHUNK ids could return up to limit*chunks rows before the by-id dedup below. Harmless for E3.2 (the frontier is bounded by maxNeighbors <= 200 << IN_LIST_CHUNK, so a single chunk, and the BFS re-enforces the per-hop fanout cap)
+- `listEntitiesByMemoryId`: Map consolidated source memory ids -> their graph entities. The SEED step of E3.2 multi-hop recall (recall result memory ids -> entities to traverse from).
+- `listNeighborRelations`: All relations touching ANY of `entityIds` in EITHER direction (from OR to); the per-hop neighbour query for E3.2 multi-hop traversal.
+- `listNeighborRelations`: `limit` is applied PER CHUNK; a frontier spanning >IN_LIST_CHUNK ids could return up to limit*chunks rows before the by-id dedup below. Harmless for E3.2 (the frontier is bounded by maxNeighbors <= 200 << IN_LIST_CHUNK, so a single chunk, and the BFS re-enforces the per-hop fanout cap)
 
 ### src/domain/graph/types.ts
 - `SourceObjectType`: The authoritative E2 object types a graph row may be anchored to (the object provenance path, alongside the memory path).
@@ -734,7 +738,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `DEFAULT_HALF_LIFE_DAYS`: write-time multipliers. 365 since 1.46.0: the pre-registered E1 decision (docs/evals/2026-09-24-decay-default-result.md and prereg-2) found 7 days lost the current fact far more often (29% vs 75% in the top five), and 730 days and decay off tied with 365. `hippo sleep` moves memories still
 
 ### src/domain/search/multihop.ts
-- `multihopSearch`: T2 note: PLAIN stable score sort on purpose -- pass1/pass2 inputs are deterministically ordered (search() carries the content tail), stability inherits that, and ties keep pass-1 results ahead of pass-2 follow-ups.
+- `rankMultihop`: T2 note: PLAIN stable score sort on purpose -- pass1/pass2 inputs are deterministically ordered (search() carries the content tail), stability inherits that, and ties keep pass-1 results ahead of pass-2 follow-ups.
 
 ### src/surface/cli/owner-validation.ts
 - `module header`: --owner format validation (B2 v1.12.6).
@@ -764,7 +768,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/store/predictions.ts
 - `module header`: E2 prediction first-class object (v0.31 / docs/plans/2026-05-26-e2-prediction-object.md).
-- `module header`: J3 (reference-class / planning-fallacy detector) reads from `loadPredictionsByClass` to compute per-class base rates from (estimate_value, actual_value) at query time. J3 is a follow-up episode; this module ships the data layer.
+- `module header`: J3 (reference-class / planning-fallacy detector) reads from `listPredictionsByClass` to compute per-class base rates from (estimate_value, actual_value) at query time. J3 is a follow-up episode; this module ships the data layer.
 - `savePrediction`: the predictions table is the canonical structured store used by J3.
 - `closePrediction`: J3 computes accuracy (clean vs regressed) from (estimateValue, actualValue) at query time.
 - `section header`: v0.31 / J3 — reference-class / planning-fallacy detector
@@ -808,7 +812,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: v1.25.0 — recall-side scope predicates, extracted from api.ts into a leaf module so shared.ts (which api.ts imports) can apply the same default-deny rule to searchBothHybrid's internal candidate loads without an import cycle. Mirrors the v39 `project-identity.ts` precedent.
 - `isPrivateScope`: v1.2.1: source-agnostic private-scope detector.
 - `passesScopeFilterForRecall`: @internal v1.7.2 — exported for test parity with `RECALL_DEFAULT_DENY_SCOPES` (single-source-of-truth verification).
-- `passesCliRecallScopeFilter`: v1.25.0 — the CLI `--scope` variant of the recall filter (JS half of the SQL 'default-deny-or-exact' mode in loadSearchRows).
+- `passesCliRecallScopeFilter`: v1.25.0; the CLI `--scope` variant of the recall filter (JS half of the SQL 'default-deny-or-exact' mode in listSearchRows).
 - `assertScopeRequestAllowed`: Authorize an explicitly requested scope before any read honours it (ROADMAP Part VIII EI2: member scope grants).
 - `PERSONAL_SCOPE_PREFIX`: E10 (2026-10-06), personal memories. A personal row has the scope `personal:private:<owner>`, and the server stamps it when a write sends `personal: true`. The owner comes only from `actor.owner`, the person behind a sign-in or a key they minted, never from the subject, because subjects such as `localhost:cli` or `api_key:<id>` are not people. A caller with no owner can neither write nor read personal rows, and a client-sent `personal:` scope is a 400. `canReadScope` decides a personal scope before role and grants, so an admin key cannot read another person's personal rows, and a grant or a sign-in provider's scope list naming one opens nothing. A by-id write on someone else's personal row answers 404, as a missing id does. Reject and conflict-resolve sweeps skip other people's personal rows, and rejecting a personal row by id is a 400, so no tenant-wide tombstone is made from personal text. Reject by value still writes a tenant-wide tombstone, since tombstones are tenant policy. Rate limits sit beside this: each person gets a bucket keyed on the tenant and `ownerOrSubject`, each client address keeps its own bucket plus a scrypt bucket that only a key check about to run scrypt draws from (an IPv6 address shares its /64's), so junk and a key whose secret this process has already proved never drain it, and every 429 carries `Retry-After`. Two more bounds sit on that scrypt work (`src/surface/server/key-check-bounds.ts`): one address starts five derivations for one key id and then one more every 12 seconds, and two derivations run at once on the thread pool with eight waiting, past which a key check answers 429 without deriving. A key's row is read from the store on every request, so a revoke, expiry, role or scope change by any process applies on the next one; only "this secret matched this stored hash" is remembered. The buckets live in memory and reset on restart.
 
@@ -895,8 +899,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/surface/server/routes/memories.ts
 - `handleApplyOutcome`: v1.11.5: DoS cap on ids.length.
-- `handleSleep`: v1.12.0 A5 v2 sub-1: admin-role gate. Forward-defensive — exists today under loopback-only enforcement
-- `handleSleep`: v1.12.0: sleepCtx already built above for the admin-role gate; reuse.
+- `handleRunSleep`: v1.12.0 A5 v2 sub-1: admin-role gate. Forward-defensive; exists today under loopback-only enforcement
+- `handleRunSleep`: v1.12.0: sleepCtx already built above for the admin-role gate; reuse.
 
 ### src/surface/server/routes/policies.ts
 - `section header`: ── policies (E2 first-class object, bi-temporal-first) ──
@@ -930,7 +934,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `ServerHandle.server`: Introspection-only (v1.26.2): the underlying node:http Server, exposed so tests can assert keep-alive/headers timeout hardening without reaching into serve()'s closure.
 
 ### src/surface/server/validation.ts
-- `parseListLimit`: Parse a `?limit=` query param for the E2 list routes. Defaults to 100; requires a positive INTEGER <= 1000. Number.isInteger rejects fractional values like "1.5" that Number.isFinite would pass but SQLite `LIMIT ?` rejects with a datatype mismatch (a 500).
+- `parseLimitParam`: Parse a `?limit=` query param for the E2 list routes. Defaults to 100; requires a positive INTEGER <= 1000. Number.isInteger rejects fractional values like "1.5" that Number.isFinite would pass but SQLite `LIMIT ?` rejects with a datatype mismatch (a 500).
 - `validateIdSegment`: v1.6.4: charset + length validation for `:id` route captures.
 
 ### src/domain/sharing/search-both.ts
@@ -965,7 +969,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `auditRejectionRefusal`: Refusal audit for the AT1 rejection guard (plan §3).
 
 ### src/store/candidates.ts
-- `loadAmbientCandidates`: One connection; `recall` piggybacks the Z1 FTS query on it too.
+- `listAmbientCandidates`: One connection; `recall` piggybacks the Z1 FTS query on it too.
 
 ### src/store/delete-and-batch.ts
 - `deleteEntryCore`: AT1 (plan §4, round-2 fix, designed from source): db-scoped delete core. `deleteEntry` used to open+close its OWN connection, which meant it could never compose inside a caller's transaction (unlike writeEntry/ writeEntryDbOnly, which already split this way). Split identically: row- meta SELECT, `DELETE FROM memories`, FTS delete, `forget` audit, DAG dirty-mark. NO filesystem I/O — the caller's own transaction may still be rolled back, and mirror writes must only happen post-commit.
@@ -975,9 +979,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `applyBatchWrites`: AT1 (plan §3, corrected): bypass the rejection guard here. Consolidation merges are DETERMINISTIC CONCATENATION (mergeContents, consolidate.ts:736-751) of already-guarded leaf facts, not an LLM paraphrase — refusing mid-batch would abort the whole consolidation transaction. The bypass is safe because consolidate.ts's merge pass now checks the merged content's rejection digest against the tenant's tombstones BEFORE ever pushing a merge into pendingWrites, skipping that merge entirely on a hit, AND because the point-probe immediately above closes the race window between that producer check and this COMMIT. The guard itself still belongs on leaf inserts, which write through writeEntry / writeEntryDbOnly and stay guarded (bypassRejectionGuard defaults false).
 
 ### src/store/entry-reads.ts
-- `loadEntriesByIds`: Used by DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 1.5) to fetch parent summaries for a set of overflowed leaves.
-- `loadEntriesByIds`: T2: no ORDER BY meant row order followed SQLite's IN(...) scan order (undefined w.r.t. the caller's `ids` order). created ASC, id ASC makes it deterministic.
-- `loadFreshRawMemories`: Deprecation note (v1.6.5) — the **tenant-wide call shape** (omitting `sessionId`) is rarely the right shape for "what did I just see in this conversation". `api.recall` enforces session scoping when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1` is set, throwing `RecallContractError` instead. Tenant-wide remains the back-compat default but is discouraged for new callers. Passing `sessionId` is fully supported and recommended; this function is NOT deprecated as a whole.
+- `readEntriesInIdOrder`: Used by DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 1.5) to fetch parent summaries for a set of overflowed leaves.
+- `readEntriesInIdOrder`: T2: no ORDER BY meant row order followed SQLite's IN(...) scan order (undefined w.r.t. the caller's `ids` order). created ASC, id ASC makes it deterministic.
+- `listFreshRawMemories`: Deprecation note (v1.6.5); the **tenant-wide call shape** (omitting `sessionId`) is rarely the right shape for "what did I just see in this conversation". `api.recall` enforces session scoping when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1` is set, throwing `RecallContractError` instead. Tenant-wide remains the back-compat default but is discouraged for new callers. Passing `sessionId` is fully supported and recommended; this function is NOT deprecated as a whole.
 - `loadChildrenOf`: Used by `drillDown` (Task 3).
 
 ### src/store/entry-row.ts
@@ -986,7 +990,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `writeEntry` (stray doc above stampOriginProject): Used by E1.3+ connectors to stamp idempotency rows atomically with the memory write.
 
 ### src/store/entry-writes.ts
-- `writeEntry`: AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by the time this catch runs, so the refusal audit lands post-rollback in a fresh implicit transaction — then rethrow so the caller sees the refusal.
+- `writeEntryOn`: AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by the time this catch runs, so the refusal audit lands post-rollback in a fresh implicit transaction; then rethrow so the caller sees the refusal.
 - `writeEntryDbOnly`: v0.30 / E2 — DAG live-coupling: child write under a level-2 summary marks the parent dirty for E3 sleep-cycle rebuild. Early-exit on null dag_parent_id (vast majority of writes); cost is one null check on the hot path.
 
 ### src/store/handoffs.ts
@@ -999,7 +1003,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/store/mirrors.ts
 - Outcome mirror writes stay synchronous on the write worker (`writeEntryMirrors` after the commit in `src/store/sqlite/entry-writes-group.ts:80`, `applyOutcome: 'write'` in `src/store/sqlite/worker-ops.ts:57`): an async mirror write could land after a `forget` purged that row's mirror and bring the forgotten file back.
-- `getExistingEntryMirrorPaths`: AT1 mirror-purge honesty fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md): the candidate markdown mirror paths still on disk for `id`, computed the same way `removeEntryMirrors` walks them (one per layer: buffer/episodic/ semantic), filtered to the ones that still `fs.existsSync`. Used to report an EXPLICIT path when a best-effort purge fails and no reaper exists to retry it — plain `removeEntryMirrors` returns void, giving no way to name which file is stuck.
+- `listEntryMirrorPaths`: AT1 mirror-purge honesty fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md): the candidate markdown mirror paths still on disk for `id`, computed the same way `removeEntryMirrors` walks them (one per layer: buffer/episodic/ semantic), filtered to the ones that still `fs.existsSync`. Used to report an EXPLICIT path when a best-effort purge fails and no reaper exists to retry it; plain `removeEntryMirrors` returns void, giving no way to name which file is stuck.
 - `writeStatsMirror` on a recall: every recall counter update still rewrites `stats.json`. Measured 2026-10-09 on Windows, a 5,000-row store with 50 sleep runs, 2,000 updates, median of three runs: one `updateStatsOn` call took 338 microseconds with the file write and 75 with it stubbed, so the write is about 263 microseconds, 78% of the call. That is 4% of one `bumpRecallStats` (7.0 ms, most of it opening the store) and under 1% of a recall (24 ms through `api.recall` before the counter update). The line for dropping the write was 5% of a recall. Three tests pin the file after a recall counter update: `store-port-sqlite`, `recall-branch-rows` and `context-store-path-parity`.
 
 ### src/store/open.ts
@@ -1009,27 +1013,27 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/store/rows.ts
 - `HippoIndex.last_trace_id`: LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md): id of the most recent recall_traces row written by contextGet/cmdRecall, mirrored from the `last_trace_id` meta key exactly like last_retrieval_ids. null when no trace has been written yet (fresh store, pre-v40 flow, or api.recall-only usage - api.recall never sets this).
 - `MemoryRow.summary_dirty`: v0.30 / E1 of DAG live-coupling (schema v28). Symmetric with v25 DAG cache: included in MEMORY_SELECT_COLUMNS so every read path populates these alongside descendant_count / earliest_at / latest_at.
-- `MEMORY_SEARCH_COLUMNS`: F1 (v1.7.0): qualified-and-aliased columns for the FTS join in loadSearchRows. Every column is `m.<col> AS <col>` so rowToEntry's unqualified field reads keep working unchanged. It carries no score: bm25(memories_fts) only orders the rows (3.0). Only used inside the FTS path; non-FTS paths keep MEMORY_SELECT_COLUMNS.
+- `MEMORY_SEARCH_COLUMNS`: F1 (v1.7.0): qualified-and-aliased columns for the FTS join in listSearchRows. Every column is `m.<col> AS <col>` so rowToEntry's unqualified field reads keep working unchanged. It carries no score: bm25(memories_fts) only orders the rows (3.0). Only used inside the FTS path; non-FTS paths keep MEMORY_SELECT_COLUMNS.
 - `rowToEntry`: v0.30 / E1 of DAG live-coupling (schema v28). Symmetric with v25 cache.
 - `parseLastTraceId`: Strict parse for the `last_trace_id` meta value (LC1 F1(d) structural fix).
 
 ### src/store/search-rows.ts
-- `RecallScopeFilter`: v1.7.2 — recall-mode scope filter shape, exported so callers (`loadRecallSearchEntries`) and tests can refer to it symbolically without `Parameters<typeof loadSearchRows>[N]` indirection.
+- `RecallScopeFilter`: v1.7.2; recall-mode scope filter shape, exported so callers (`loadRecallSearchEntries`) and tests can refer to it symbolically without `Parameters<typeof listSearchRows>[N]` indirection.
 - `RecallScopeFilter`: 'default-deny' — exclude scopes in `RECALL_DEFAULT_DENY_SCOPES` (T2).
 - `RecallScopeFilter`: 'default-deny-or-exact' (v1.25.0) — the default-admitted set PLUS rows whose scope equals `value`. This is the CLI `--scope` semantics: the flag predates the envelope column as a TAG-boost ranking hint (`scope:<v>` tags, HIPPO_SCOPE), so an explicit flag must UNLOCK the named envelope scope in addition to the normal set rather than narrow the result to it — narrowing would return zero rows for every tag-scoped workflow (envelope scope NULL). Strictly safer than the pre-v1.25.0 CLI behavior (no filter at all): other private scopes and quarantine buckets stay denied.
 - `RecallScopeFilter`: @internal v1.7.2 — internal SQL-builder shape; not on the public API surface (not re-exported from `src/index.ts`). Subject to change.
-- `loadSearchRows`: no switch forces the LIKE-fallback path; nothing in the environment or the API can. A part-word query (`kapp` for `kappa`) misses FTS5's whole-word tokens and reaches the LIKE branch, which is how tests exercise it without poisoning the on-disk FTS state.
+- `listSearchRows`: no switch forces the LIKE-fallback path; nothing in the environment or the API can. A part-word query (`kapp` for `kappa`) misses FTS5's whole-word tokens and reaches the LIKE branch, which is how tests exercise it without poisoning the on-disk FTS state.
 - `searchPredicates`: v1.12.6 — belt-and-suspenders against `kind='archived'` leaking into recall. `kind='archived'` is a transient sentinel inside `archiveRawMemory`'s SAVEPOINT (src/store/raw-archive.ts:56): UPDATE kind = 'archived' immediately followed by DELETE, both inside one savepoint that commits or rolls back atomically. SQLite atomicity guarantees no concurrent reader sees the intermediate state. This filter is defensive-only against: (a) future bugs that drop the SAVEPOINT, (b) future bugs that introduce kind='archived' as a persisted state, (c) external direct-SQL writes that bypass archiveRawMemory. tenantOnlyPredicate starts with " WHERE tenant_id = ?" when tenant is set; when unset, we have no WHERE yet, so the archived clause needs both AND and WHERE forms. The "tenant-only" path always has WHERE (from tenant or we synthesize one).
-- `selectLikeCandidates`: tests the newest `LIKE_WINDOW_ROWS` (2,000) admitted rows, never the whole store. The window is read newest first by `created` through `idx_memories_tenant_created` when a tenant is given and by rowid when none is, with tenant, archived, scope and superseded filters inside it so another tenant's rows cannot fill it. A store at or under the window returns exactly what the unbounded statement did. Measured at 10,000 rows, two terms, no match: 8.6 ms and every tenant row tested before, 1.5 ms and 2,000 rows after; an FTS5 hit on a common term costs 14 ms on the same store. A part-word match older than the window is missed; an FTS5 trigram index would cover the whole store and is a schema change.
-- `loadVectorCandidateEntries`: async so the scan in `topVectorMatches` (src/db/vector-store.ts) can hand the event loop back every 256 rows. One cursor stays open across those pauses: under WAL a reader blocks no writer, and the scan ranks one snapshot. A keyset read per chunk was measured and rejected, because the plan drives from `memories` and each chunk then sorts the whole tenant (10x slower at 250-row chunks). Measured at 10,000 vectors: longest block 35 ms before and 2 ms after at 384 dims, 90 ms and 4 ms at 1,536 dims, total time unchanged. Each row's bytes are copied into one reused Float32Array instead of a view per row.
-- `selectFtsCandidates`: orders by bm25(memories_fts) and returns no score column (3.0); every column is m.<col> AS <col> so rowToEntry sees the same shape as the other paths.
+- `listLikeCandidates`: tests the newest `LIKE_WINDOW_ROWS` (2,000) admitted rows, never the whole store. The window is read newest first by `created` through `idx_memories_tenant_created` when a tenant is given and by rowid when none is, with tenant, archived, scope and superseded filters inside it so another tenant's rows cannot fill it. A store at or under the window returns exactly what the unbounded statement did. Measured at 10,000 rows, two terms, no match: 8.6 ms and every tenant row tested before, 1.5 ms and 2,000 rows after; an FTS5 hit on a common term costs 14 ms on the same store. A part-word match older than the window is missed; an FTS5 trigram index would cover the whole store and is a schema change.
+- `listVectorCandidateEntries`: async so the scan in `topVectorMatches` (src/db/vector-store.ts) can hand the event loop back every 256 rows. One cursor stays open across those pauses: under WAL a reader blocks no writer, and the scan ranks one snapshot. A keyset read per chunk was measured and rejected, because the plan drives from `memories` and each chunk then sorts the whole tenant (10x slower at 250-row chunks). Measured at 10,000 vectors: longest block 35 ms before and 2 ms after at 384 dims, 90 ms and 4 ms at 1,536 dims, total time unchanged. Each row's bytes are copied into one reused Float32Array instead of a view per row.
+- `listFtsCandidates`: orders by bm25(memories_fts) and returns no score column (3.0); every column is m.<col> AS <col> so rowToEntry sees the same shape as the other paths.
 - `loadRecallSearchEntries`: Consumers: `api.recall` (v1.7.1+), `cmdRecall`/`cmdExplain` direct CLI paths and `searchBothHybrid` recall mode (v1.25.0).
-- `loadRecallSearchEntries`: `tenantId` widened to optional in v1.25.0 for the searchBothHybrid recall mode (its `tenantId` option is optional); `loadSearchRows` already treats undefined as "no tenant filter" for legacy callers.
+- `loadRecallSearchEntries`: `tenantId` widened to optional in v1.25.0 for the searchBothHybrid recall mode (its `tenantId` option is optional); `listSearchRows` already treats undefined as "no tenant filter" for legacy callers.
 - `loadRecallSearchEntriesFromDb`: Split out so callers with an already-open db (Z1 prompt-recall path) skip the initStore+open/close cycle per store per call.
 
 ### src/store/sessions.ts
 - `SNAPSHOT_AMBIENT_MAX_AGE_MS`: Default freshness bound for AMBIENT active-task-snapshot reads (DF1, docs/plans/2026-08-23-df1-snapshot-lifecycle.md): 72h, chosen over 48h so a Friday-evening orphan still offers continuity on Monday morning.
-- `loadFreshActiveTaskSnapshot`: Bounded read for AMBIENT active-task-snapshot surfaces (UserPromptSubmit hook context, MCP recall block) — the never-expires fix for DF1.
+- `readFreshActiveTaskSnapshot`: Bounded read for AMBIENT active-task-snapshot surfaces (UserPromptSubmit hook context, MCP recall block); the never-expires fix for DF1.
 - `closeTaskSnapshotsForSession`: Close the `active` task snapshot(s) owned by `sessionId`, for the T3 session-end death path (DF1, docs/plans/2026-08-23-df1-snapshot-lifecycle.md).
 - `appendSessionEvent`: v1.2: scope is wired through. Default-deny in api.recall + cmdRecall continuity reads applies to slack:private:* and 'unknown:legacy' rows.
 
@@ -1040,9 +1044,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `markSummaryDirtyInTx`: quietly no-ops if the target row does not exist or is not a level-2 or level-3 summary.
 - `markSummaryDirtyInTx`: RETURNING dag_level reads the actual level in the same round trip; the audit row carries `source: E2`.
 - `summaries.ts` (rebuild banner): v0.30 / E3 of DAG live-coupling — sleep-cycle rebuild surface.
-- `loadAllL2Summaries`: v0.30 / E5 — host-wide loader for L2 topic summaries without an L3 parent. Mirrors loadAllDirtySummaries pattern (E3).
-- `loadAllDirtySummaries`: v0.30 / E3 — host-wide variant of loadDirtySummaries.
-- `loadChildrenOfSummary`: v0.30 / E3 — load live children of a DAG summary.
+- `loadAllL2Summaries`: v0.30 / E5; host-wide loader for L2 topic summaries without an L3 parent. Mirrors listDirtySummaries pattern (E3).
+- `listDirtySummaries`: v0.30 / E3; host-wide variant of loadDirtySummaries.
+- `listChildrenOfSummary`: v0.30 / E3; load live children of a DAG summary.
 - `RebuildPatch`: v0.30 / E3 — patch applied by applyRebuildResult.
 - `applyRebuildResult`: v0.30 / E3 — apply a rebuild result to a dirty summary.
 - `REBUILD_CONTENT_SQL` / `REBUILD_METADATA_SQL`: v0.30 / E5: widened dag_level=2 -> IN (2, 3) on both branches.

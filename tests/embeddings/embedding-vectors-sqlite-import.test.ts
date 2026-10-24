@@ -32,7 +32,7 @@ import {
   deleteEntry,
   saveEmbeddingIndex,
   writeEntry,
-  batchWriteAndDelete,
+  batchWriteAndDeleteInFolder,
   loadEmbeddingIndex,
 } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
@@ -197,7 +197,7 @@ describe('memory_vectors upkeep', () => {
     const rows = Array.from({ length: SCAN_PAGE_ROWS + 100 }, (_, i) =>
       createMemory(`note ${i}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     );
-    batchWriteAndDelete(root, rows, []);
+    batchWriteAndDeleteInFolder(root, rows, []);
     // Row i sits at angle atan(i + 1) from the query, so the nearest three are rows 0, 1 and 2.
     saveEmbeddingIndex(root, Object.fromEntries(rows.map((r, i) => [r.id, [1, i + 1]])));
     const late = createMemory('written while the scan ran', {

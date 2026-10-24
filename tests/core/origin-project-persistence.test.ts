@@ -8,7 +8,7 @@ import { serializeEntry, deserializeEntry } from '../../src/base/memory/markdown
 import { stampOriginProject } from '../../src/store/sqlite/entry-row.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { writeEntry, loadAllEntries, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
@@ -55,7 +55,7 @@ describe('writeEntry origin stamping (v39)', () => {
 
   it('stamps origins on the batch write path too (consolidate bypasses writeEntry)', () => {
     const storeRoot = makeProjectStore('proj-a');
-    batchWriteAndDelete(storeRoot, [createMemory('a consolidated semantic summary row')], []);
+    batchWriteAndDeleteInFolder(storeRoot, [createMemory('a consolidated semantic summary row')], []);
     const [entry] = loadAllEntries(storeRoot, 'default');
     expect(entry.originProject).toBe('proj-a');
   });

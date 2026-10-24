@@ -15,7 +15,7 @@ import {
   type CommandContext,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
-import { closeObject, foundOrExit, idArgOrExit, listObjects, type ObjectNames } from './object-verbs.js';
+import { closeObjectVerb, foundOrExit, idArgOrExit, listObjectsVerb, type ObjectNames } from './object-verbs.js';
 import { fail } from './exit.js';
 import { shellFolder } from './versioned-verbs.js';
 
@@ -29,7 +29,7 @@ function printIncidentRow(inc: Incident): void {
 }
 
 function incidentList(ctx: Context, flags: CliFlags): Promise<void> {
-  return listObjects(flags, {
+  return listObjectsVerb(flags, {
     plural: 'incidents',
     states: objectStates('incident'),
     load: (opts) => objectList(ctx, 'incident', opts),
@@ -65,7 +65,7 @@ async function resolveIncident(ctx: Context, args: string[], flags: CliFlags): P
 }
 
 function incidentClose(ctx: Context, args: string[]): Promise<void> {
-  return closeObject(args, INCIDENT, (id) => objectClose(ctx, 'incident', id));
+  return closeObjectVerb(args, INCIDENT, (id) => objectClose(ctx, 'incident', id));
 }
 
 export async function handleIncident({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {

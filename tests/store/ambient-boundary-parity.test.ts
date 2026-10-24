@@ -5,7 +5,7 @@ import { AMBIENT_FRESH_WINDOW_MS, tallyAmbientEntries } from '../../src/base/mem
 import { HIGH_SCHEMA_FIT } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, loadAllEntries, loadAmbientTallies } from '../_helpers/root-forms.js';
+import { writeEntry, loadAllEntries, countAmbientInFolder } from '../_helpers/root-forms.js';
 
 const NOW = new Date('2026-06-15T12:00:00.000Z');
 let root = '';
@@ -30,7 +30,7 @@ describe('ambient tallies at the window and threshold edges', () => {
       writeEntry(root, e);
     });
 
-    const sql = loadAmbientTallies(root, 'default', { currentProject: [], now: NOW });
+    const sql = countAmbientInFolder(root, 'default', { currentProject: [], now: NOW });
     const js = tallyAmbientEntries(loadAllEntries(root, 'default'), NOW);
 
     expect(js.fresh).toBe(1);

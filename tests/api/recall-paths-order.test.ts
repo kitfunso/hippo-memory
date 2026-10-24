@@ -9,7 +9,7 @@ import { RECALL_RECORDING } from '../../src/api/recall/finish.js';
 import type { CliCoreRecall } from '../../src/api/recall/types.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { isJsonNumber } from '../../src/base/util/json.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -84,7 +84,7 @@ function onDb<T>(root: string, use: (db: DatabaseSyncLike) => T): T {
 }
 
 function auditRows(): AuditEvent[] {
-  return onDb(root, (db) => queryAuditEvents(db, { tenantId: TENANT })).reverse();
+  return onDb(root, (db) => listAuditEvents(db, { tenantId: TENANT })).reverse();
 }
 
 function written(): Written {

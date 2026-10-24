@@ -1,7 +1,7 @@
 // The functions eval and benchmark scripts call by name, with the real embedder, models, HTTP and ports wired in: a
 // frozen script re-points its import line here and keeps every call as written.
-import { folderIndex as targetOf, type ConfiguredFolder, type EmbedTarget } from '../domain/search/embed-memories.js';
-import { judgeAll as judgeOver, type JudgeOptions, type Judgment } from '../infra/judgment.js';
+import { folderEmbedTarget, type ConfiguredFolder, type EmbedTarget } from '../domain/search/embed-memories.js';
+import { judgeOver, type JudgeOptions, type Judgment } from '../infra/judgment.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { httpOver } from '../infra/http.js';
 import { realRerankers } from '../infra/rerankers/index.js';
@@ -27,7 +27,7 @@ export { scriptRerankers as getReranker };
 
 /** A folder's embedding target, embedding with the real provider its config names. */
 export function folderIndex(folder: Omit<ConfiguredFolder, 'embedderFor'>): EmbedTarget {
-  return targetOf({ ...folder, embedderFor: resolveEmbeddingProvider });
+  return folderEmbedTarget({ ...folder, embedderFor: resolveEmbeddingProvider });
 }
 
 /** judgeAll's options as a script passes them: the real fetch unless `fetcher` names another. */

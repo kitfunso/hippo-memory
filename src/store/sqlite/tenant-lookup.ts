@@ -5,7 +5,7 @@ import type { ApiKeyOwner } from '../port/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 /** The owner row of `keyId`, or undefined when no such key exists. */
-export function selectApiKeyOwner(db: DatabaseSyncLike, keyId: string): ApiKeyOwner | undefined {
+export function readApiKeyOwner(db: DatabaseSyncLike, keyId: string): ApiKeyOwner | undefined {
   const row = cachedStatement(
     db,
     `SELECT tenant_id, revoked_at, role, owner_subject FROM api_keys WHERE key_id = ?`,
@@ -16,7 +16,7 @@ export function selectApiKeyOwner(db: DatabaseSyncLike, keyId: string): ApiKeyOw
 }
 
 /** Who may reach memory `id`: its tenant and scope, or undefined when no such memory exists. */
-export function selectMemoryReach(
+export function readMemoryReach(
   db: DatabaseSyncLike,
   id: string,
 ): { tenantId: string; scope: string | null } | undefined {

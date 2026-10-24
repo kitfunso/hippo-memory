@@ -68,7 +68,7 @@ export function markPendingProcessedUpTo(hippoRoot: string, tenantId: string, ma
 }
 
 export function loadPendingExtractionTenants(hippoRoot: string): { tenantId: string; maxPendingId: number }[] {
-  return onHandle(hippoRoot, (db) => graphQueueSql.loadPendingExtractionTenants(db));
+  return onHandle(hippoRoot, (db) => graphQueueSql.listPendingExtractionTenants(db));
 }
 
 export async function loadEntitiesByMemoryId(
@@ -177,11 +177,11 @@ export function loadVectorCandidateEntries(
   spec: VectorCandidateSpec,
 ): Promise<MemoryEntry[]> {
   return handlesOf(hippoRoot).onAsync(
-    (db) => searchRowsSql.loadVectorCandidateEntries(db, queryVector, spec),
+    (db) => searchRowsSql.listVectorCandidateEntries(db, queryVector, spec),
     openStore,
   );
 }
 
 export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Map<string, number[]> {
-  return onHandle(hippoRoot, (db) => vectorIndexSql.loadStoredVectors(db, ids));
+  return onHandle(hippoRoot, (db) => vectorIndexSql.readStoredVectors(db, ids));
 }

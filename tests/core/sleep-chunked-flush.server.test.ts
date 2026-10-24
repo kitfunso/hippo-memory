@@ -17,7 +17,7 @@ import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { mergedText } from '../../src/base/util/same-text.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import {
   closeHippoDb,
   getHippoDbPath,
@@ -334,7 +334,7 @@ describe('chunked consolidation flush', () => {
     expect(stopped.inBoth).toEqual([]);
     expect(stopped.ftsIds).toEqual(stopped.memoryIds);
     expect(stopped.runRecord).toEqual({ runs: 0, sleepCount: '0', rescues: 0 });
-    const [audit] = onStore(fx.root, (db) => queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate' }));
+    const [audit] = onStore(fx.root, (db) => listAuditEvents(db, { tenantId: '__host__', op: 'consolidate' }));
     expect(audit?.metadata).toMatchObject({ partial: true, nextUnitIds: expect.arrayContaining(fx.clusters[2]!) });
 
     await consolidate(fx.root, { now: NOW, budget: budget(0) });
@@ -390,7 +390,7 @@ describe('chunked consolidation flush', () => {
       await store.close();
     }
 
-    const [audit] = onStore(fx.root, (db) => queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate' }));
+    const [audit] = onStore(fx.root, (db) => listAuditEvents(db, { tenantId: '__host__', op: 'consolidate' }));
     expect(audit?.metadata).toMatchObject({ partial: true, nextUnitIds: expect.arrayContaining(bad) });
     // SAFETY: consolidate writes nextUnitIds into the partial audit metadata as an array of unit ids.
     const meta = audit?.metadata as { nextUnitIds: string[] } | undefined;

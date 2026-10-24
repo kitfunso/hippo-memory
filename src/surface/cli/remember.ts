@@ -454,7 +454,7 @@ async function rememberViaThinClient(hippoRoot: string, text: string, flags: Cli
   }
   if (thinOwnerCheck.message) printError(thinOwnerCheck.message);
   return runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
-    const result = await client.remember(info.url, apiKey, {
+    const result = await client.postRemember(info.url, apiKey, {
       content: text,
       kind: rememberKindRaw,
       scope: stringFlag(flags, 'scope'),

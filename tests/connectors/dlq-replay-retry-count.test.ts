@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { parkInDlq } from '../../src/surface/connectors/dlq.js';
-import { githubDlq, replayDlqEntry as replayGitHub } from '../../src/surface/connectors/github/dlq.js';
-import { slackDlq, replayDlqEntry as replaySlack } from '../../src/surface/connectors/slack/dlq.js';
+import { githubDlq, replayGithubDlqEntry as replayGitHub } from '../../src/surface/connectors/github/dlq.js';
+import { slackDlq, replaySlackDlqEntry as replaySlack } from '../../src/surface/connectors/slack/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

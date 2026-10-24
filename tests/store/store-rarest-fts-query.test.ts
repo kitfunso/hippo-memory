@@ -1,8 +1,8 @@
 // Z1b latency fix: rarest-term FTS pre-select (docs/plans/2026-09-26-z1b-tool-recall.md).
 // Real SQLite store in a tmp dir, no mocks.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadRecallEntries, pickRarestFtsQuery } from '../../src/store/sqlite/search-rows.js';
-import { loadRecallSearchEntries } from '../../src/store/sqlite/fixtures.js';
+import { listRecallEntries, pickRarestFtsQuery } from '../../src/store/sqlite/search-rows.js';
+import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, setMeta } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -44,7 +44,7 @@ describe('pickRarestFtsQuery', () => {
     try {
       const query = pickRarestFtsQuery(db, ['journal_mode', 'busy_timeout', 'never_seen'], 8);
       expect(query.split(' ').sort()).toEqual(['busy_timeout', 'journal_mode']);
-      expect(loadRecallEntries(db, query, { tenantId: ALL_TENANTS, limit: 10 })).toHaveLength(1);
+      expect(listRecallEntries(db, query, { tenantId: ALL_TENANTS, limit: 10 })).toHaveLength(1);
     } finally {
       closeHippoDb(db);
     }
@@ -73,12 +73,12 @@ describe('pickRarestFtsQuery', () => {
   });
 });
 
-describe('loadRecallEntries', () => {
+describe('listRecallEntries', () => {
   it('matches loadRecallSearchEntries for the same args (open/close wrapper is a pure split)', () => {
     writeEntry(root, createMemory('the postgres migration rollback plan for deploy'));
     writeEntry(root, createMemory('unrelated gardening tips for tomatoes'));
 
-    const viaPublic = loadRecallSearchEntries(root, 'postgres migration rollback', {
+    const viaPublic = listRecallEntriesInFolder(root, 'postgres migration rollback', {
       limit: 10,
       tenantId: ALL_TENANTS,
       explicitScopeMode: 'exact',
@@ -88,7 +88,7 @@ describe('loadRecallEntries', () => {
     const db = openHippoDb(root);
     let viaDb;
     try {
-      viaDb = loadRecallEntries(db, 'postgres migration rollback', {
+      viaDb = listRecallEntries(db, 'postgres migration rollback', {
         tenantId: ALL_TENANTS,
         limit: 10,
         includeSuperseded: true,

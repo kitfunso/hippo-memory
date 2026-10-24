@@ -14,7 +14,7 @@ import { assertCrossTenantAdmin, recheckContextWithAuth } from '../auth.js';
 import { parseCursor } from '../../../api/cursor.js';
 import { pageOf, setNextCursorHeader } from '../cursor.js';
 import type { AuthedRouteRequest, RouteParams } from '../types.js';
-import { getString, isSetMember, parseJsonObjectText, parseListLimit, validateIdSegment } from '../validation.js';
+import { getString, isSetMember, parseJsonObjectText, parseLimitParam, validateIdSegment } from '../validation.js';
 import { isJsonBoolean, isJsonNumber } from '../../../base/util/json.js';
 import { AUDIT_OPS } from '../../../base/records/audit-ops.js';
 import type { AuditOp } from '../../../base/records/audit-ops.js';
@@ -84,7 +84,7 @@ export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest
     else if (activeRaw === 'false') active = false;
     else throw new HttpError(400, "active must be 'true' or 'false'");
   }
-  const limit = parseListLimit(query.get('limit'), MAX_AUTH_KEYS_PAGE, MAX_AUTH_KEYS_PAGE);
+  const limit = parseLimitParam(query.get('limit'), MAX_AUTH_KEYS_PAGE, MAX_AUTH_KEYS_PAGE);
   const after = parseCursor(query.get('cursor'), 'integer', 'integer');
   const page = pageOf(await authListRows(ctx, { active, limit: limit + 1, after }), limit, (r) => ({
     key: r.rowId,
@@ -120,7 +120,7 @@ export async function handleListQuarantine({ res, ctx, query }: AuthedRouteReque
     }
     status = statusRaw;
   }
-  const limit = parseListLimit(query.get('limit'));
+  const limit = parseLimitParam(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'string');
   const page = pageOf(await quarantineList(ctx, { status, limit: limit + 1, after }), limit, (q) => ({
     key: q.quarantinedAt,

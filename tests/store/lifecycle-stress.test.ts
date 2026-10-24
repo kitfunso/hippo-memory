@@ -16,7 +16,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { embedMemory } from '../../src/domain/search/embed-memories.js';
+import { embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import { isEmbeddingAvailable } from '../../src/base/embeddings/local.js';
 import { skipWithoutEmbeddings } from '../_helpers/embedding-backend.js';
 import { physicsSearch } from '../../src/entry/folder-search.js';
@@ -161,14 +161,14 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
       root,
       memories.map((m) => createMemory(m.content, { tags: m.tags, source: 'lse-test' })),
     );
-    for (const e of loadAllEntries(root, 'default')) await embedMemory(localIndex(root), e);
+    for (const e of loadAllEntries(root, 'default')) await embedMemoryInto(localIndex(root), e);
     expectVectorsStored(root);
 
     const cons = await consolidate(root, {});
     // merge must fire once per redundant fact cluster, and never on the distractors
     expect(cons.semanticCreated).toBe(labels.length);
 
-    for (const e of loadAllEntries(root, 'default')) await embedMemory(localIndex(root), e);
+    for (const e of loadAllEntries(root, 'default')) await embedMemoryInto(localIndex(root), e);
     const after = loadAllEntries(root, 'default');
     const summaries = after.filter((e) => (e.content || '').startsWith('[Consolidated'));
     expect(summaries).toHaveLength(labels.length);
@@ -187,10 +187,10 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
       root,
       memories.map((m) => createMemory(m.content, { tags: m.tags, source: 'lse-test' })),
     );
-    for (const e of loadAllEntries(root, 'default')) await embedMemory(localIndex(root), e);
+    for (const e of loadAllEntries(root, 'default')) await embedMemoryInto(localIndex(root), e);
     expectVectorsStored(root);
     await consolidate(root, {});
-    for (const e of loadAllEntries(root, 'default')) await embedMemory(localIndex(root), e);
+    for (const e of loadAllEntries(root, 'default')) await embedMemoryInto(localIndex(root), e);
     const after = loadAllEntries(root, 'default');
 
     // at a generous budget every fact's token must be retrievable by its topic
@@ -218,7 +218,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
       root,
       noise.map((m) => createMemory(m.content, { tags: m.tags, source: 'lse-test' })),
     );
-    for (const e of loadAllEntries(root, 'default')) await embedMemory(localIndex(root), e);
+    for (const e of loadAllEntries(root, 'default')) await embedMemoryInto(localIndex(root), e);
     expectVectorsStored(root);
     const entries = loadAllEntries(root, 'default');
 

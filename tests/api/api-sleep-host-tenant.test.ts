@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { sleep, adminActor } from '../../src/api/index.js';
+import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -24,7 +24,7 @@ describe('api.sleep audit row tenant tag', () => {
 
   it('emits consolidate audit row with tenant_id="__host__" (not ctx.tenantId)', async () => {
     const ctx = apiCtx(root, 'acme', adminActor('cli:operator-alice'));
-    await sleep(ctx, { dryRun: true });
+    await sleepWholeStore(ctx, { dryRun: true });
 
     const db = openHippoDb(root);
     try {
@@ -46,8 +46,8 @@ describe('api.sleep audit row tenant tag', () => {
   });
 
   it('multiple sleeps from different tenants all tag __host__ (host-wide is honest)', async () => {
-    await sleep(apiCtx(root, 'acme', adminActor('cli:alice')), { dryRun: true });
-    await sleep(apiCtx(root, 'globex', adminActor('cli:bob')), { dryRun: true });
+    await sleepWholeStore(apiCtx(root, 'acme', adminActor('cli:alice')), { dryRun: true });
+    await sleepWholeStore(apiCtx(root, 'globex', adminActor('cli:bob')), { dryRun: true });
 
     const db = openHippoDb(root);
     try {

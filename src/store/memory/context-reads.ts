@@ -197,7 +197,7 @@ function rawRowsUnderRefIn(t: MemoryTables, tenantId: string, refPrefix: string)
 export function memoryContextReads(t: MemoryTables): ContextReads {
   return {
     async unfinishedHandoff(tenantId, maxAgeMs, key) {
-      assertTenantId('loadLatestHandoff', tenantId);
+      assertTenantId('readLatestHandoff', tenantId);
       return latestHandoffIn(t, tenantId, null, { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' }, key);
     },
     ambientCandidates: async (tenantId, request) => ambientIn(t, tenantId, request),

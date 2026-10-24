@@ -7,8 +7,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
-import { applyOutcome, writeEntriesTogether, writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { selectEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
+import { writeOutcome, writeEntriesTogether, writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { readEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
 import { markMirrorsDue } from '../../src/store/sqlite/due-mirrors.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
@@ -33,7 +33,7 @@ function mirrorText(root: string, entry: MemoryEntry): string | null {
 
 /** Each mirror as its row now stands. */
 function rowTexts(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): string[] {
-  const rows = selectEntriesByIds(
+  const rows = readEntriesByIds(
     db,
     entries.map((entry) => entry.id),
     ALL_TENANTS,
@@ -58,7 +58,7 @@ describe('outcome mirrors', () => {
     writeEntriesTogether(db, storeFilesOf(root), entries);
     const before = entries.map((entry) => mirrorText(root, entry));
     const ids = entries.map((entry) => entry.id);
-    applyOutcome(db, storeFilesOf(root), {
+    writeOutcome(db, storeFilesOf(root), {
       tenantId: 'default',
       actor: 'test',
       ownScope: null,

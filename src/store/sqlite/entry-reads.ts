@@ -44,7 +44,7 @@ export function readEntry(db: DatabaseSyncLike, id: string, tenantId: TenantId):
 /**
  * Rows by id on the caller's handle, one query per chunk; an id missing or in another tenant is absent from the map.
  */
-export function selectEntriesByIds(
+export function readEntriesByIds(
   db: DatabaseSyncLike,
   ids: readonly string[],
   tenantId: TenantId,
@@ -62,7 +62,7 @@ export function selectEntriesByIds(
 }
 
 /** Direct children of each parent, one query per chunk; each list is in `created ASC, id ASC` order. */
-export function selectChildrenByParent(
+export function readChildrenByParent(
   db: DatabaseSyncLike,
   parentIds: readonly string[],
   tenantId: TenantId,
@@ -87,8 +87,8 @@ export function selectChildrenByParent(
 }
 
 /** The rows of every id in `ids`, in the by-id read's order; the rows of one chunk alone cannot be sorted in SQL. */
-export function loadEntriesByIds(db: DatabaseSyncLike, ids: readonly string[], tenantId: TenantId): MemoryEntry[] {
-  return [...selectEntriesByIds(db, ids, tenantId).values()].sort(byIdOrder);
+export function readEntriesInIdOrder(db: DatabaseSyncLike, ids: readonly string[], tenantId: TenantId): MemoryEntry[] {
+  return [...readEntriesByIds(db, ids, tenantId).values()].sort(byIdOrder);
 }
 
 const ORIGIN_IN = 'origin_project IN (SELECT value FROM json_each(?))';
@@ -115,7 +115,7 @@ function sessionRawWhere({ sessionId, tenantId, origins }: SessionRows<SessionRa
 /** All `kind='raw'` rows for a session, tenant-scoped, oldest-first, excluding superseded; `[]` for an empty sessionId.
  * With a positive `cap`, the NEWEST rows are loaded (DESC LIMIT, reversed client-side); ASC + LIMIT would drop the
  * newest and break fresh-tail in assemble. */
-export function loadSessionRawMemories(db: DatabaseSyncLike, query: SessionRows<SessionRawWindow>): MemoryEntry[] {
+export function listSessionRawMemories(db: DatabaseSyncLike, query: SessionRows<SessionRawWindow>): MemoryEntry[] {
   if (!query.sessionId) return [];
   const where = sessionRawWhere(query);
   const newest = query.cap > 0;
@@ -146,7 +146,7 @@ export function countSessionRawMemories(db: DatabaseSyncLike, query: SessionRows
 /** Last N kind='raw' memories by `created` desc, tenant-scoped, max 200; pass `sessionId` or concurrent sessions show
  * up in each other's fresh tail. The tenant-wide shape is discouraged: `api.recall` throws `RecallContractError` for it
  * when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
-export function loadFreshRawMemories(
+export function listFreshRawMemories(
   db: DatabaseSyncLike,
   count: number,
   tenantId: TenantId,
@@ -173,15 +173,8 @@ export function loadFreshRawMemories(
   return rows.map(rowToEntry);
 }
 
-/** Every entry of one tenant. A caller that surfaces rows to a user passes the resolved tenant. */
-export function loadAllEntries(db: DatabaseSyncLike, tenantId: string): MemoryEntry[] {
-  return Array.from(
-    rowsInPages((after?: EntryCursor) => loadEntriesPage(db, tenantId, { limit: READ_PAGE_ROWS, after })),
-  );
-}
-
 /** Up to `page.limit` of the tenant's memory ids in loadAllEntries' order, after `page.after`. */
-export function loadEntryIdsPage(db: DatabaseSyncLike, tenantId: TenantId, page: EntryPageRequest): EntryIdPage {
+export function listEntryIdsPage(db: DatabaseSyncLike, tenantId: TenantId, page: EntryPageRequest): EntryIdPage {
   const { rows, next } = entryPage(
     tenantId,
     page,
@@ -198,7 +191,7 @@ export function loadEntryIdsPage(db: DatabaseSyncLike, tenantId: TenantId, page:
 type EntryKeyRow = EntryCursor;
 
 /** Up to `page.limit` memory ids of every tenant in id order after `page.afterId`, off the primary key. */
-export function loadEntryIdsById(db: DatabaseSyncLike, page: IdPageRequest): IdPage {
+export function listEveryTenantEntryIds(db: DatabaseSyncLike, page: IdPageRequest): IdPage {
   const after = afterIdAnd(page.afterId);
   const rows = cachedStatement(db, `SELECT id FROM memories WHERE 1${after.sql} ORDER BY id LIMIT ?`).all(
     ...after.params,
@@ -247,7 +240,7 @@ function ftsMentionQuery(tokens: readonly string[], tag: string | null): string 
 /** A page of a superset, in loadAllEntries' order, of the rows whose lowercased content holds any of `tokens` or whose
  * lowercased tags hold `tag`; `next` is where the following page starts.
  * The caller re-checks each row exactly; this only spares decoding rows that cannot match. */
-export function loadEntriesMentioning(
+export function listEntriesMentioning(
   db: DatabaseSyncLike,
   tokens: readonly string[],
   tag: string,
@@ -318,7 +311,7 @@ function entriesPage(tenantId: TenantId, page: EntryPageRequest, read: EntryRows
 }
 
 /** A page of rows in loadAllEntries' order, with only the columns that say whether another store already holds each. */
-export function loadEntryTextKeysPage(
+export function listEntryTextKeysPage(
   db: DatabaseSyncLike,
   tenantId: TenantId,
   page: EntryPageRequest,
@@ -352,11 +345,11 @@ interface EntryTextKeyPageRow {
 
 /** Every tenant's rows in loadAllEntries' order, so the caller holds one page at a time. */
 export function iterateEveryTenantEntries(db: DatabaseSyncLike): Generator<MemoryEntry> {
-  return rowsInPages((after?: EntryCursor) => loadEntriesPage(db, ALL_TENANTS, { limit: READ_PAGE_ROWS, after }));
+  return rowsInPages((after?: EntryCursor) => listEntriesPage(db, ALL_TENANTS, { limit: READ_PAGE_ROWS, after }));
 }
 
 /** Up to `limit` rows in loadAllEntries' order, starting after `after`. */
-export function loadEntriesPage(db: DatabaseSyncLike, tenantId: TenantId, page: EntryPageRequest): EntryPage {
+export function listEntriesPage(db: DatabaseSyncLike, tenantId: TenantId, page: EntryPageRequest): EntryPage {
   return entriesPage(
     tenantId,
     page,
@@ -385,7 +378,7 @@ interface TenantTextPage {
 
 /** A page of a tenant's rows in loadAllEntries' order with the columns a text match needs: callers read whole rows only
  * for the ids that match. */
-export function selectTenantTextsPage(db: DatabaseSyncLike, tenantId: string, page: EntryPageRequest): TenantTextPage {
+export function listTenantTextsPage(db: DatabaseSyncLike, tenantId: string, page: EntryPageRequest): TenantTextPage {
   const { rows, next } = entryPage(
     tenantId,
     page,
@@ -400,7 +393,7 @@ export function selectTenantTextsPage(db: DatabaseSyncLike, tenantId: string, pa
 
 /** A page of the live rows whose source starts with `prefix`, in loadAllEntries' order, on the caller's handle; LIKE
  * folds case, so the prefix is checked again exactly and a page may hold fewer than `limit`. */
-export function selectLiveEntriesBySourcePrefix(
+export function listLiveEntriesBySourcePrefix(
   db: DatabaseSyncLike,
   tenantId: string,
   prefix: string,
@@ -420,7 +413,7 @@ export function selectLiveEntriesBySourcePrefix(
 }
 
 /** A page of a tenant's rows tagged `rows.origin`, in loadAllEntries' order, narrowed as `rows` asks. */
-export function selectEntriesFromOrigin(
+export function listEntriesFromOrigin(
   db: DatabaseSyncLike,
   tenantId: string,
   rows: OriginRows,
@@ -446,7 +439,7 @@ export function selectEntriesFromOrigin(
 type OriginTallyDbRow = OriginTally;
 
 /** Each project name's live rows in one grouped read, in the order its first row comes in loadAllEntries' order. */
-export function selectOriginTallies(db: DatabaseSyncLike, tenantId: string, sourcePrefix: string): OriginTally[] {
+export function countByOrigin(db: DatabaseSyncLike, tenantId: string, sourcePrefix: string): OriginTally[] {
   // The unit separator sorts below every character of a time or an id, so the joined string orders as (created, id).
   return cachedStatement(
     db,
@@ -457,7 +450,7 @@ export function selectOriginTallies(db: DatabaseSyncLike, tenantId: string, sour
 }
 
 /** The ids among `ids` that a row of any tenant holds, one query per chunk. */
-export function selectTakenIds(db: DatabaseSyncLike, ids: readonly string[]): string[] {
+export function readTakenIds(db: DatabaseSyncLike, ids: readonly string[]): string[] {
   const taken: string[] = [];
   for (const chunk of chunked([...new Set(ids)])) {
     const rows = cachedStatement(db, `SELECT id FROM memories WHERE id IN (SELECT value FROM json_each(?))`).all(
@@ -518,7 +511,7 @@ export interface PreviewRow {
 
 /** A page of memories, by rowid, from a store whose schema may predate some columns; `columns` is the table's real
  * column set, and every schema has a rowid. */
-export function selectPreviewRowsPage(
+export function listPreviewRowsPage(
   db: DatabaseSyncLike,
   columns: ReadonlySet<string>,
   tenantId: string,
@@ -618,7 +611,7 @@ const JS_SPACE_CODE_POINTS = [
 const SPACELESS_CONTENT = JS_SPACE_CODE_POINTS.reduce((sql, cp) => `replace(${sql}, char(${cp}), '')`, 'content');
 
 /** The current distilled rows that may be another's duplicate, and the partitions in the order they first appear. */
-export function loadDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidates {
+export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidates {
   // One read transaction, so the partition keys describe the rows read.
   return withReadSnapshot(db, () => {
     const rows = cachedStatement(
@@ -643,7 +636,7 @@ export function loadDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidat
 }
 
 /** A page of the rows holding at least one signal, in loadAllEntries' order. A superset: callers re-check each row. */
-export function loadEntriesWithSignals(
+export function listEntriesWithSignals(
   db: DatabaseSyncLike,
   signals: EntrySignals,
   tenantId: TenantId,
@@ -678,7 +671,7 @@ export function loadEntriesWithSignals(
 
 /** A tenant's rows from `origins` that nothing superseded and that are neither raw nor archived, in loadAllEntries'
  * order. */
-export function loadCurrentEntriesFromOrigins(
+export function listCurrentEntriesFromOrigins(
   db: DatabaseSyncLike,
   tenantId: string,
   origins: readonly string[],

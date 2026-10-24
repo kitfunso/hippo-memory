@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { HIPPO_BIN } from '../_helpers/hippo-bin.js';
 import { hippoOut, hippoRun } from '../_helpers/spawn-hippo.js';
@@ -75,7 +75,7 @@ function startServe(extra: Readonly<Record<string, string>> = {}): Promise<Serve
 function rememberActors(): string[] {
   const db = openHippoDb(join(workspace, '.hippo'));
   try {
-    return queryAuditEvents(db, { tenantId: 'default', op: 'remember' }).map((event) => event.actor);
+    return listAuditEvents(db, { tenantId: 'default', op: 'remember' }).map((event) => event.actor);
   } finally {
     closeHippoDb(db);
   }

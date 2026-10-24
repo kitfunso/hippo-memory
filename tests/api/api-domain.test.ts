@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import {
   remember,
   retrieve,
@@ -61,7 +61,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
 
     const db = openHippoDb(home);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'recall' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'recall' });
       expect(events.length).toBe(1);
       expect(events[0]!.actor).toBe('api_key:hk_recall');
     } finally {
@@ -81,7 +81,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
 
     const db = openHippoDb(home);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'forget' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'forget' });
       // Task 4 dedupe: deleteEntry threads ctx.actor; exactly one event lands.
       expect(events.length).toBe(1);
       expect(events[0]!.actor).toBe('api_key:hk_forget');
@@ -107,7 +107,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
 
     const db = openHippoDb(globalHome);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'promote' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'promote' });
       // Task 4 dedupe: exactly one 'promote' event on the global store.
       expect(events.length).toBe(1);
       expect(events[0]!.actor).toBe('api_key:hk_promote');
@@ -153,7 +153,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
       expect(err).toMatchObject({ status: 400, message: text(row.id) });
       const db = openHippoDb(globalHome);
       try {
-        expect(queryAuditEvents(db, { tenantId: 'default', op: 'promote' })).toEqual([]);
+        expect(listAuditEvents(db, { tenantId: 'default', op: 'promote' })).toEqual([]);
         expect(db.prepare('SELECT COUNT(*) AS n FROM memories').get()).toEqual({ n: 0 });
       } finally {
         closeHippoDb(db);
@@ -183,7 +183,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
 
     const db = openHippoDb(home);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'supersede' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'supersede' });
       // Task 4 dedupe: exactly one 'supersede' event with the supplied actor.
       // (The two 'remember' events from the underlying writeEntry calls land
       // under op='remember' and are not counted here.)
@@ -255,7 +255,7 @@ describe('api domain — archive_raw / auth / audit', () => {
       expect(archived?.reason).toBe('gdpr-request');
       expect(archived?.archived_by).toBe('api_key:hk_archive');
 
-      const events = queryAuditEvents(db2, { tenantId: 'default', op: 'archive_raw' });
+      const events = listAuditEvents(db2, { tenantId: 'default', op: 'archive_raw' });
       expect(events.length).toBe(1); // not double-emitted
       expect(events[0]!.actor).toBe('api_key:hk_archive');
       expect(events[0]!.targetId).toBe(rawId);
@@ -306,11 +306,11 @@ describe('api domain — archive_raw / auth / audit', () => {
     // audit trail.
     const db = openHippoDb(home);
     try {
-      const aEvents = queryAuditEvents(db, { tenantId: 'tenant-a', op: 'auth_revoke' });
+      const aEvents = listAuditEvents(db, { tenantId: 'tenant-a', op: 'auth_revoke' });
       expect(aEvents.length).toBe(1);
       expect(aEvents[0]!.targetId).toBe(k2.keyId);
 
-      const bEvents = queryAuditEvents(db, { tenantId: 'tenant-b', op: 'auth_revoke' });
+      const bEvents = listAuditEvents(db, { tenantId: 'tenant-b', op: 'auth_revoke' });
       expect(bEvents.length).toBe(0);
     } finally {
       closeHippoDb(db);

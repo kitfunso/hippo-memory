@@ -17,7 +17,7 @@ import type { JsonValue } from '../../../base/util/json.js';
 import { parseCursor } from '../../../api/cursor.js';
 import { byCreatedAt, pageOf } from '../cursor.js';
 import type { AuthedRouteRequest, Route } from '../types.js';
-import { isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isSetMember, parseJsonBody, parseLimitParam } from '../validation.js';
 import { kindRows, type IdHandler, type NamedRoute } from './kind-routes.js';
 
 type Body = Record<string, JsonValue>;
@@ -67,7 +67,7 @@ async function listRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: Au
   const { res, query, ctx } = rr;
   const status = query.get('status') ?? 'all';
   const filter = cfg.filterParam === undefined ? null : query.get(cfg.filterParam);
-  const limit = parseListLimit(query.get('limit'));
+  const limit = parseLimitParam(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
   const listOpts: ObjectListOptions<K> = { limit: limit + 1, after, filter: filter?.trim() || undefined };
   if (status !== 'all') {

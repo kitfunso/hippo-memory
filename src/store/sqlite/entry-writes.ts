@@ -15,7 +15,7 @@ import { summaryDirtyAudit } from '../rules/audit-rows.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
 import { appendAuditEvents } from './audit.js';
-import { selectEntriesByIds } from './entry-reads.js';
+import { readEntriesByIds } from './entry-reads.js';
 import {
   stampOriginProject,
   upsertEntryRow,
@@ -40,7 +40,7 @@ import { deleteEntryCore } from './delete-and-batch.js';
 import { updateStatsUnlessBusy } from './index-and-stats.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';
-import { selectMemoryReach } from './tenant-lookup.js';
+import { readMemoryReach } from './tenant-lookup.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 export interface WriteEntryOptions {
@@ -77,7 +77,7 @@ export function writePromotedEntry(
         },
       ]);
     });
-  writeEntry(db, files, entry, { actor: opts.actor, afterWrite });
+  writeEntryOn(db, files, entry, { actor: opts.actor, afterWrite });
 }
 
 /** writeEntry for each of `entries` in one transaction, so all land or none; each keeps its audit row, and mirrors
@@ -140,7 +140,7 @@ export function addTagToEntries(
   ids: readonly string[],
   tag: string,
 ): void {
-  const live = selectEntriesByIds(db, ids, tenantId);
+  const live = readEntriesByIds(db, ids, tenantId);
   const tagged = [...new Set(ids)].flatMap((id) => {
     const entry = live.get(id);
     return !entry || entry.tags.includes(tag) ? [] : [{ ...entry, tags: [...entry.tags, tag] }];
@@ -150,7 +150,7 @@ export function addTagToEntries(
 
 /** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone.
  * `opts.afterWrite` shares the INSERT's SAVEPOINT. */
-export function writeEntry(
+export function writeEntryOn(
   db: DatabaseSyncLike,
   files: StoreFiles,
   entry: MemoryEntry,
@@ -274,7 +274,7 @@ export function strengthenRetrievedOn(
 ): Set<string> {
   const found = new Set<string>();
   if (ids.length === 0 || opts.recallBoostAblated) return found;
-  const byId = selectEntriesByIds(db, ids, opts.tenantId);
+  const byId = readEntriesByIds(db, ids, opts.tenantId);
   const live = [...new Set(ids)].flatMap((id) => byId.get(id) ?? []);
   const updated = markRetrieved(live, undefined, strengthOptionsOf(rules));
   if (updated.length === 0) return found;
@@ -386,7 +386,7 @@ export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
       on,
       {
         writeEntry: (db, write) => writeEntryRow(db, files, write),
-        applyOutcome: (db, ...args) => applyOutcome(db, files, ...args),
+        applyOutcome: (db, ...args) => writeOutcome(db, files, ...args),
         setPinned: (db, pin) => {
           const entry = commitPinned(db, pin);
           writeEntryMirrors(files.hippoRoot, entry);
@@ -429,7 +429,7 @@ export function writeEntryRow(
 
 /** A trace link follows the commit on the same handle and names only the ids applied, so a rolled-back outcome leaves
  * none. */
-export function applyOutcome(
+export function writeOutcome(
   db: DatabaseSyncLike,
   files: StoreFiles,
   outcome: OutcomeWrite,
@@ -471,7 +471,7 @@ function notFound(id: string): NotFoundError {
 
 /** Another tenant's row, or one the caller could not read, answers as missing, so a caller learns nothing about it. */
 function assertInReach(db: DatabaseSyncLike, target: EntryTarget, id: string): void {
-  const reach = selectMemoryReach(db, id);
+  const reach = readMemoryReach(db, id);
   if (reach?.tenantId !== target.tenantId || !readerReaches(targetReader(target), reach.scope)) throw notFound(id);
 }
 
@@ -504,7 +504,7 @@ export function writeInOwnTenant(
  * callers count them. An outcome never changes content, so the rejected-value guard has nothing to check. */
 function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite, rules: LossAversion): readonly MemoryEntry[] {
   return withWriteScope(db, 'apply_outcome', () => {
-    const read = selectEntriesByIds(db, outcome.ids, outcome.tenantId);
+    const read = readEntriesByIds(db, outcome.ids, outcome.tenantId);
     const latest = new Map<string, MemoryEntry>();
     const applied: MemoryEntry[] = [];
     for (const id of outcome.ids) {
@@ -564,7 +564,7 @@ function commitPinned(db: DatabaseSyncLike, pin: PinWrite): MemoryEntry {
   return auditingRefusal(db, actor, () =>
     withWriteScope(db, 'set_pinned', () => {
       assertInReach(db, pin, id);
-      const entry = selectEntriesByIds(db, [id], tenantId).get(id);
+      const entry = readEntriesByIds(db, [id], tenantId).get(id);
       if (!entry) throw notFound(id);
       const updated = { ...entry, pinned };
       writeEntryDbOnly(db, updated, { actor });

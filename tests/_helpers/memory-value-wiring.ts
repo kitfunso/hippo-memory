@@ -8,7 +8,7 @@ import { Layer, calculateStrength, type MemoryEntry } from '../../src/base/memor
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { type HippoConfig } from '../../src/base/config/config.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 
@@ -105,7 +105,7 @@ export function hasStringTargetId(e: AuditEvent): e is AuditEvent & { targetId: 
 export function auditRescueRows(hippoRoot: string, tenantId: string) {
   const db = openHippoDb(hippoRoot);
   try {
-    return queryAuditEvents(db, { tenantId, op: 'mv_rescue' });
+    return listAuditEvents(db, { tenantId, op: 'mv_rescue' });
   } finally {
     closeHippoDb(db);
   }

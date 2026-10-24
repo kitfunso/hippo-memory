@@ -61,11 +61,11 @@ export function loadLatestHandoff(
   opts: HandoffFilter = {},
   key?: ContinuityKey,
 ): SessionHandoff | null {
-  return onHandle(hippoRoot, (db) => handoffsSql.loadLatestHandoff(db, tenantId, sessionId, opts, key), openStore);
+  return onHandle(hippoRoot, (db) => handoffsSql.readLatestHandoff(db, tenantId, sessionId, opts, key), openStore);
 }
 
 export function loadHandoffById(hippoRoot: string, tenantId: string, id: number): SessionHandoff | null {
-  return onHandle(hippoRoot, (db) => handoffsSql.loadHandoffById(db, tenantId, id), openStore);
+  return onHandle(hippoRoot, (db) => handoffsSql.readHandoff(db, tenantId, id), openStore);
 }
 
 export function stampHandoffOutcome(
@@ -113,13 +113,13 @@ export function appendConsolidationRun(
 }
 
 export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext {
-  return onHandle(hippoRoot, (db) => indexAndStatsSql.loadSessionDecayContext(db), openStore);
+  return onHandle(hippoRoot, (db) => indexAndStatsSql.readSessionDecayContext(db), openStore);
 }
 
 export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?: ContinuityKey): TaskSnapshot | null {
   return onHandle(
     hippoRoot,
-    (db) => taskSnapshotsSql.loadActiveTaskSnapshot(db, storeFilesOf(hippoRoot), tenantId, key),
+    (db) => taskSnapshotsSql.readActiveTaskSnapshot(db, storeFilesOf(hippoRoot), tenantId, key),
     openStore,
   );
 }
@@ -164,7 +164,7 @@ export function findPromotableSessions(
   tenantId: string,
   sinceMs: number,
 ): Array<{ session_id: string }> {
-  return onHandle(hippoRoot, (db) => sessionsSql.findPromotableSessions(db, tenantId, sinceMs), openStore);
+  return onHandle(hippoRoot, (db) => sessionsSql.listPromotableSessions(db, tenantId, sinceMs), openStore);
 }
 
 export async function wmPush(

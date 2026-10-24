@@ -9,7 +9,7 @@ import { baserateIn } from './predictions.js';
 import { freshRawOrder } from '../rules/order.js';
 import { MAX_FRESH_RAW } from '../rules/windows.js';
 import { rowsByIds } from './rows.js';
-import { listEventsIn, loadSnapshotIn } from './snapshots.js';
+import { listEventsIn, readSnapshotIn } from './snapshots.js';
 import type { MemoryTables } from './tables.js';
 
 export function entriesByIdsIn(t: MemoryTables, ids: readonly string[], tenantId: TenantId): MemoryEntry[] {
@@ -45,7 +45,7 @@ export function continuityIn(
   eventLimit: number,
   key: ContinuityKey | null,
 ): ContinuityBlock {
-  const activeSnapshot = loadSnapshotIn(t, tenantId, key);
+  const activeSnapshot = readSnapshotIn(t, tenantId, key);
   const sessionId = activeSnapshot?.sessionId ?? undefined;
   return {
     activeSnapshot,

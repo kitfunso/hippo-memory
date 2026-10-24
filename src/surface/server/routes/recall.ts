@@ -19,7 +19,7 @@ import type { AuthedRouteRequest, RouteParams } from '../types.js';
 import { restClientKey } from '../client-key.js';
 import { sharedStoreOf, type Context } from '../../../api/types.js';
 import { MAX_LIST_LIMIT } from '../../../base/util/limits.js';
-import { parseIntParam, parseListLimit, parseNumberParam, validateIdSegment } from '../validation.js';
+import { parseIntParam, parseLimitParam, parseNumberParam, validateIdSegment } from '../validation.js';
 
 // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
 export async function handleRecallMemories({ req, res, ctx, query }: AuthedRouteRequest): Promise<void> {
@@ -77,7 +77,7 @@ export async function handleDrillRecall({ res, ctx, query }: AuthedRouteRequest,
   const limitRaw = query.get('limit');
   const limit = parseNumberParam(limitRaw, 'limit');
   // Past the list ceiling the shared parser refuses, so the reply is the one every other list route gives.
-  if (limit !== undefined && limit > MAX_LIST_LIMIT) parseListLimit(limitRaw);
+  if (limit !== undefined && limit > MAX_LIST_LIMIT) parseLimitParam(limitRaw);
   const budget = parseNumberParam(query.get('budget'), 'budget');
   // depth walks N levels (default 1, hard cap 10).
   const depth = parseIntParam(query.get('depth'), 'depth', 1, 10);

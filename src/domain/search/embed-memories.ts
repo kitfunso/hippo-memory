@@ -319,7 +319,7 @@ export interface ConfiguredFolder<S extends HippoStore = HippoStore> {
 }
 
 /** The store's own index when it keeps one, else its vector groups. */
-export function folderIndex({ store, config, embedderFor }: ConfiguredFolder): EmbedTarget {
+export function folderEmbedTarget({ store, config, embedderFor }: ConfiguredFolder): EmbedTarget {
   const { embeddingIndex } = store;
   const { embeddings } = config;
   if (embeddingIndex !== undefined) {
@@ -332,7 +332,7 @@ export function folderIndex({ store, config, embedderFor }: ConfiguredFolder): E
 /** Embed a single memory entry and cache the result in the embedding index; with a store, through its vectorWrites.
  * Resolves whatever fails, so a caller that fires and forgets stays safe; the outcome says whether the memory reached
  * the index. */
-export async function embedMemory(on: EmbedTarget, entry: MemoryEntry, model?: string): Promise<EmbedOutcome> {
+export async function embedMemoryInto(on: EmbedTarget, entry: MemoryEntry, model?: string): Promise<EmbedOutcome> {
   let provider: EmbeddingProvider;
   let available: boolean;
   try {
@@ -355,7 +355,7 @@ export async function embedMemory(on: EmbedTarget, entry: MemoryEntry, model?: s
 /** embedMemory for a write that does not wait on its vector. A rejection outside embedMemory's own handling is logged
  * here, since nothing else holds it and an unhandled one ends the process. */
 export function embedMemoryDetached(on: EmbedTarget, entry: MemoryEntry): void {
-  embedMemory(on, entry).catch((err) => log.warn(`embedding ${entry.id} failed unexpectedly`, errorFields(err)));
+  embedMemoryInto(on, entry).catch((err) => log.warn(`embedding ${entry.id} failed unexpectedly`, errorFields(err)));
 }
 
 /** Best-effort: an embedding failure (API down, bad key, 5xx) must not reject the caller's write; the existing index is

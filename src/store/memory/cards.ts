@@ -108,7 +108,7 @@ function depsOf(t: MemoryTables, tenantId: string, id: string): CardDetail['deps
 }
 
 function detailIn(t: MemoryTables, tenantId: string, id: string): CardDetail | null {
-  assertTenantId('loadCardDetail', tenantId);
+  assertTenantId('readCardDetail', tenantId);
   const card = cardOf(t, tenantId, id);
   if (!card) return null;
   const comments = t.cardComments
@@ -231,7 +231,7 @@ export function memoryCards(t: MemoryTables): Cards {
   return {
     create: async (tenantId, input) => createIn(t, tenantId, input),
     async load(tenantId, id) {
-      assertTenantId('loadCard', tenantId);
+      assertTenantId('readCard', tenantId);
       const card = cardOf(t, tenantId, id);
       return card ? { ...card } : null;
     },

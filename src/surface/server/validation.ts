@@ -20,7 +20,7 @@ export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string
   return set.has(value as T);
 }
 
-export function parseListLimit(
+export function parseLimitParam(
   limitRaw: string | null,
   defaultLimit = DEFAULT_LIST_LIMIT,
   maxLimit = MAX_LIST_LIMIT,

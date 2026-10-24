@@ -5,13 +5,18 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { closeHippoDb, openHippoDb, SLEEP_DB_WAIT_MS } from '../../src/db/index.js';
 import type { FlushComponent } from '../../src/store/port/consolidation.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { countMatching, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-import { batchWriteAndDelete, commitInChunks, readEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
+import {
+  batchWriteAndDeleteInFolder,
+  commitInChunks,
+  readEntry,
+  writeEntriesTogether,
+} from '../_helpers/root-forms.js';
 
 oneRequestPerTest();
 
@@ -55,7 +60,7 @@ function tombstone(home: string, rows: readonly MemoryEntry[]): void {
 function auditedRefusals(home: string): Array<[string, string, unknown]> {
   const db = openHippoDb(home);
   try {
-    const events = TENANTS.flatMap((tenantId) => queryAuditEvents(db, { tenantId, op: 'reject_refusal' }));
+    const events = TENANTS.flatMap((tenantId) => listAuditEvents(db, { tenantId, op: 'reject_refusal' }));
     return events.map((e): [string, string, unknown] => [e.targetId ?? '', e.actor, e.metadata.digest]).sort();
   } finally {
     closeHippoDb(db);
@@ -87,7 +92,7 @@ function batchOf(perTenant: number): Batch {
 describe('a sleep batch over rejected texts', () => {
   it.each([3, 30])('reads tombstones once per tenant for %i rows a tenant, and refuses only new text', (perTenant) => {
     const { home, ops, kept, refused } = batchOf(perTenant);
-    const { statements } = recordStatements(() => batchWriteAndDelete(home, ops, []));
+    const { statements } = recordStatements(() => batchWriteAndDeleteInFolder(home, ops, []));
     expect(countMatching(statements, 'FROM rejected_values')).toBe(TENANTS.length);
 
     for (const row of kept) expect(readEntry(home, row.id, row.tenantId)?.retrievalCount).toBe(row.retrievalCount + 1);

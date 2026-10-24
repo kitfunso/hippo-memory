@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { remember, rawArchive, retrieve } from '../../src/api/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { recordStatements, countMatching } from '../_helpers/count-statements.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -237,7 +237,7 @@ describe('GDPR Path A completeness fixes', () => {
 
     const db = openHippoDb(root);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'recall' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'recall' });
       expect(events).toHaveLength(1);
       const meta = events[0].metadata;
       const expectedHash = createHash('sha256').update(distinctive).digest('hex').slice(0, 16);
@@ -324,7 +324,7 @@ describe('GDPR Path A completeness fixes', () => {
 
     const db = openHippoDb(root);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'recall' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'recall' });
       expect(events.length).toBe(2);
       const expectedHash = createHash('sha256').update(queryText).digest('hex').slice(0, 16);
       for (const ev of events) {

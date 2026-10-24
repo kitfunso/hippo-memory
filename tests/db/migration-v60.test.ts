@@ -1,4 +1,4 @@
-// Schema v60 adds the decay-key index that loadContextCandidates reads past the cap.
+// Schema v60 adds the decay-key index that listContextCandidates reads past the cap.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';

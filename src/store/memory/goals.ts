@@ -6,7 +6,7 @@ import {
   assertParentInSession,
   goalOverflow,
   newGoalId,
-  outcomeMultiplier,
+  goalOutcomeMultiplier,
   pushedGoal,
   retrievalPolicyOf,
 } from '../rules/goals.js';
@@ -44,7 +44,7 @@ function pushIn(t: MemoryTables, tenantId: string, goal: Omit<PushGoalOpts, 'ten
 
 /** The strength change for every memory the goal's log names, recalled in its active life. */
 function propagateOutcome(t: MemoryTables, goal: Goal, completedAt: string, score: number): void {
-  const multiplier = outcomeMultiplier(score);
+  const multiplier = goalOutcomeMultiplier(score);
   if (multiplier === 1) return;
   const inLife = (r: GoalRecallLogRow): boolean =>
     r.goalId === goal.id && byBytes(r.recalledAt, goal.createdAt) >= 0 && byBytes(r.recalledAt, completedAt) <= 0;

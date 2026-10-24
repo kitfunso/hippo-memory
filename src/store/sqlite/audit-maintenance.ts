@@ -17,7 +17,7 @@ import {
   deleteEntriesAutomatically,
   memoriesBackingAmong,
 } from './delete-and-batch.js';
-import { loadEntriesPage, selectEntriesByIds, selectPreviewRowsPage, type PreviewRow } from './entry-reads.js';
+import { listEntriesPage, readEntriesByIds, listPreviewRowsPage, type PreviewRow } from './entry-reads.js';
 import { ftsRowExists } from './entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
@@ -74,7 +74,7 @@ interface RepairRun {
 /** Each parent the rows name, read by id: the live row, else its dormant snapshot. */
 function parentsOf(db: DatabaseSyncLike, tenantId: string, entries: readonly MemoryEntry[]): Map<string, MemoryEntry> {
   const ids = [...new Set(entries.flatMap((entry) => entry.parents))];
-  const parents = selectEntriesByIds(db, ids, tenantId);
+  const parents = readEntriesByIds(db, ids, tenantId);
   const gone = ids.filter((id) => !parents.has(id));
   for (const [id, snapshot] of dormantSnapshotsByIds(db, tenantId, gone)) parents.set(id, snapshot.entry);
   return parents;
@@ -95,7 +95,7 @@ function planRows(db: DatabaseSyncLike, run: RepairRun): RepairPlan {
   let total = 0;
   let after: EntryCursor | undefined;
   do {
-    const page = loadEntriesPage(db, run.tenantId, { limit: READ_PAGE_ROWS, after });
+    const page = listEntriesPage(db, run.tenantId, { limit: READ_PAGE_ROWS, after });
     const entries = page.entries.filter(isRepairCandidate);
     total += entries.length;
     issues.push(
@@ -137,7 +137,7 @@ function unsupportedPreview(db: DatabaseSyncLike, tenantId: string): RepairPlan 
   // Hippo never names a rowid on insert, so every row's rowid is above 0.
   let afterRowid = 0;
   for (;;) {
-    const rows = selectPreviewRowsPage(db, columns, tenantId, { limit: READ_PAGE_ROWS, afterRowid });
+    const rows = listPreviewRowsPage(db, columns, tenantId, { limit: READ_PAGE_ROWS, afterRowid });
     total += rows.length;
     issues.push(...rows.flatMap(previewIssue));
     if (rows.length < READ_PAGE_ROWS) return { total, issues };
@@ -200,7 +200,7 @@ function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string,
 /** The plan's set-aside rows read again and judged as they stand now, by id; a row gone or changed drops out. */
 function rejudgeSetAsides(db: DatabaseSyncLike, run: RepairRun, plan: QualityRepairResult) {
   const ids = plan.issues.filter((issue) => issue.disposition === 'set-aside').map((issue) => issue.id);
-  const rows = selectEntriesByIds(db, ids, run.tenantId);
+  const rows = readEntriesByIds(db, ids, run.tenantId);
   const entries = ids.flatMap((id) => rows.get(id) ?? []).filter(isRepairCandidate);
   const backing = memoriesBackingAmong(
     db,

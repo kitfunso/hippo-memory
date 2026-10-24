@@ -2,18 +2,18 @@
 // Vectors and physics rows carry no tenant, so each op covers the whole store and needs the host admin.
 
 import type { EmbeddingProvider } from '../base/ports/embedder.js';
-import { embedAll, folderIndex } from '../domain/search/embed-memories.js';
+import { embedAll, folderEmbedTarget } from '../domain/search/embed-memories.js';
 import type { VectorCoverage } from '../store/port.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
 // The embedding target of a folder's store, which a capture embeds its new rows into.
-export { folderIndex } from '../domain/search/embed-memories.js';
+export { folderEmbedTarget } from '../domain/search/embed-memories.js';
 
 /** Embed every memory that has no vector yet; resolves to how many it embedded. */
 export async function memoryEmbedMissing(ctx: Context, provider?: EmbeddingProvider): Promise<number> {
   requireHostAdmin(ctx, 'Embedding the store');
   const { embedderFor } = ctx.infra;
-  return embedAll(folderIndex({ store: ctx.store, config: ctx.config, embedderFor }), undefined, provider);
+  return embedAll(folderEmbedTarget({ store: ctx.store, config: ctx.config, embedderFor }), undefined, provider);
 }
 
 /** How many vectors the store holds, live memory or not. */

@@ -10,7 +10,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
-import { sleep, adminActor } from '../../src/api/index.js';
+import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -63,7 +63,7 @@ describe('api.sleep secretSkipped counter', () => {
   });
 
   it('real sleep reports the withheld share and never leaks the secret row to global', async () => {
-    const result = await sleep(ctx, {});
+    const result = await sleepWholeStore(ctx, {});
     expect(result.secretSkipped).toBe(1);
     expect(result.shared).toBeGreaterThanOrEqual(1);
     const globalContents = loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content);
@@ -72,14 +72,14 @@ describe('api.sleep secretSkipped counter', () => {
   });
 
   it('dry run returns before phase 4: no counter, nothing shared', async () => {
-    const result = await sleep(ctx, { dryRun: true });
+    const result = await sleepWholeStore(ctx, { dryRun: true });
     expect(result.secretSkipped).toBeUndefined();
     expect(result.shared).toBeUndefined();
     expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
   });
 
   it('noShare skips phase 4: no counter', async () => {
-    const result = await sleep(ctx, { noShare: true });
+    const result = await sleepWholeStore(ctx, { noShare: true });
     expect(result.secretSkipped).toBeUndefined();
     expect(result.shared).toBeUndefined();
   });

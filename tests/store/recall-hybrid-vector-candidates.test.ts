@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadRecallSearchEntries } from '../../src/store/sqlite/fixtures.js';
+import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
 import { createMemory, type CreateMemoryOptions } from '../../src/base/memory/memory.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
@@ -179,7 +179,7 @@ describe('hybrid recall candidates with stored vectors', () => {
   it('without a vector spec, hybridSearch ranks only the pool it was given', async () => {
     const s = track(seed());
     withEmbeddings(s);
-    const pool = loadRecallSearchEntries(s.home, QUERY, {
+    const pool = listRecallEntriesInFolder(s.home, QUERY, {
       tenantId: TENANT,
       explicitScopeMode: 'additive',
       includeSuperseded: false,

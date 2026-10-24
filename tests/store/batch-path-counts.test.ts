@@ -7,7 +7,7 @@ import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { computeAmbientState } from '../../src/base/memory/ambient.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
@@ -230,7 +230,7 @@ describe('syncGlobalToLocal', () => {
     const refusals = (() => {
       const handle = openHippoDb(localRoot);
       try {
-        return queryAuditEvents(handle, { tenantId: 'default', op: 'reject_refusal' });
+        return listAuditEvents(handle, { tenantId: 'default', op: 'reject_refusal' });
       } finally {
         closeHippoDb(handle);
       }

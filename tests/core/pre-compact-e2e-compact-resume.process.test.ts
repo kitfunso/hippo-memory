@@ -241,7 +241,7 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
     const result = await runHippo(['compact-resume'], dir, env, payload);
 
     expect(result.status).toBe(0);
-    // loadActiveTaskSnapshot throws before any console.log runs, so the
+    // readActiveTaskSnapshot throws before any console.log runs, so the
     // degrade-to-empty-stdout contract means stdout is empty here — but we
     // assert the weaker "no crash leaked" condition too, matching the
     // store-error requirement without over-coupling to the exact message.

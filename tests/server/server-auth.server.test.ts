@@ -3,7 +3,7 @@ import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey, revokeApiKey } from '../../src/store/sqlite/auth.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { ServerHandle } from '../../src/server.js';
 import { readAuthHeader } from '../../src/surface/server/auth.js';
 import type { RememberResult } from '../../src/api/index.js';
@@ -54,7 +54,7 @@ describe('server auth middleware', () => {
 
     const db = openHippoDb(home);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'remember' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'remember' });
       expect(events).toHaveLength(1);
       expect(events[0]!.actor).toBe('localhost:cli');
       expect(events[0]!.targetId).toBe(body.id);
@@ -93,7 +93,7 @@ describe('server auth middleware', () => {
 
       const db2 = openHippoDb(home);
       try {
-        const events = queryAuditEvents(db2, { tenantId: 'default', op: 'remember' });
+        const events = listAuditEvents(db2, { tenantId: 'default', op: 'remember' });
         expect(events.map((e) => [e.targetId, e.actor])).toEqual([[body.id, `api_key:${keyId}`]]);
       } finally {
         closeHippoDb(db2);
@@ -116,7 +116,7 @@ describe('server auth middleware', () => {
 
     const db = openHippoDb(home);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'remember' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'remember' });
       // No remember should have landed.
       expect(events.length).toBe(0);
     } finally {
@@ -199,10 +199,10 @@ describe('server auth middleware for a non-loopback peer', () => {
     });
   }
 
-  function rememberEvents(): ReturnType<typeof queryAuditEvents> {
+  function rememberEvents(): ReturnType<typeof listAuditEvents> {
     const db = openHippoDb(home);
     try {
-      return queryAuditEvents(db, { tenantId: 'default', op: 'remember' });
+      return listAuditEvents(db, { tenantId: 'default', op: 'remember' });
     } finally {
       closeHippoDb(db);
     }

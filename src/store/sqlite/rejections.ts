@@ -12,7 +12,7 @@ import {
   dormantTextsPage,
   replaceDormantEntry,
 } from './dormant-rows.js';
-import { entryRejectRow, selectEntriesByIds, selectTenantTextsPage } from './entry-reads.js';
+import { entryRejectRow, readEntriesByIds, listTenantTextsPage } from './entry-reads.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
@@ -53,7 +53,7 @@ function holdOf(row: { content: string; source: string | null }, holdsValue: Hol
 
 /** The ids of the tenant's rows in reach that hold the text, live then dormant, read a page at a time with no lock
  * held: the rejected-value row is already committed, so no write can add a holder behind the walk. */
-function findHolderIds(db: DatabaseSyncLike, rejection: Rejection, holdsValue: HoldsValue): string[] {
+function listHolderIds(db: DatabaseSyncLike, rejection: Rejection, holdsValue: HoldsValue): string[] {
   const { tenantId } = rejection;
   const found: string[] = [];
   const keep = (row: { id: string; content: string; source: string | null; scope: string | null }): void => {
@@ -61,7 +61,7 @@ function findHolderIds(db: DatabaseSyncLike, rejection: Rejection, holdsValue: H
   };
   let after: EntryCursor | null = null;
   do {
-    const page = selectTenantTextsPage(db, tenantId, { limit: READ_PAGE_ROWS, after: after ?? undefined });
+    const page = listTenantTextsPage(db, tenantId, { limit: READ_PAGE_ROWS, after: after ?? undefined });
     page.texts.forEach(keep);
     after = page.next;
   } while (after !== null);
@@ -78,7 +78,7 @@ function findHolderIds(db: DatabaseSyncLike, rejection: Rejection, holdsValue: H
 function heldUnderLock(db: DatabaseSyncLike, rejection: Rejection, holdsValue: HoldsValue, ids: string[]): Holders {
   const { tenantId, ownScope } = rejection;
   const inReach = (scope: string | null | undefined): boolean => rejectionReaches(ownScope, scope);
-  const live = selectEntriesByIds(db, ids, tenantId);
+  const live = readEntriesByIds(db, ids, tenantId);
   const dormant = dormantTextsByIds(
     db,
     tenantId,
@@ -222,7 +222,7 @@ function applyRejection(db: DatabaseSyncLike, files: StoreFiles, rejection: Reje
   // SHORTCUT: hashes every text of the tenant, a page at a time with no lock held; a digest column needs a schema
   // migration, held until approved.
   const holdsValue: HoldsValue = (text) => rejectionDigest(text) === digest;
-  const found = findHolderIds(db, rejection, holdsValue);
+  const found = listHolderIds(db, rejection, holdsValue);
   const removal = removeHolders(db, files, rejection, { digest, holdsValue }, found);
 
   purgeRemovedMirrors(db, hippoRoot, removal);

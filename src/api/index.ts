@@ -143,7 +143,7 @@ export { failureSummary, recordTokens, tokenSummary } from './tokens.js';
 export { dormantForget, isDormant, dormantList, dormantRestore } from './sleep/dormant.js';
 export { quarantineApprove, quarantineList, quarantineReject } from './auth/quarantine.js';
 export type { QuarantineListItem } from './auth/quarantine.js';
-export { sleep } from './sleep/sleep.js';
+export { sleepWholeStore } from './sleep/sleep.js';
 export type { SleepOpts, SleepResult } from './sleep/sleep.js';
 export { goalComplete, goalList, goalPush, goalResume, goalSuspend } from './objects/goals.js';
 export type { GoalPushOptions } from './objects/goals.js';

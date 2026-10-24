@@ -4,7 +4,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { sleep } from '../../src/api/index.js';
+import { sleepWholeStore } from '../../src/api/index.js';
 import { auditMemories } from '../../src/base/memory/memory-audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { saveDecision } from '../../src/domain/objects/decisions.js';
@@ -22,7 +22,7 @@ import {
   writeEntry,
   loadAllEntries,
   readEntry,
-  batchWriteAndDelete,
+  batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
@@ -96,9 +96,9 @@ describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
     writeEntry(root, copy);
     run(root, `UPDATE memories SET strength = 0.2 WHERE id = ?`, backing.id);
 
-    const dry = await sleep(ctxFor(root), { dryRun: true, noShare: true });
+    const dry = await sleepWholeStore(ctxFor(root), { dryRun: true, noShare: true });
     expect(dry.deduped?.removed ?? 0).toBe(0);
-    await sleep(ctxFor(root), { noShare: true });
+    await sleepWholeStore(ctxFor(root), { noShare: true });
 
     expect(readEntry(root, backing.id)).not.toBeNull();
     expect(linkOf(root, table, object.id)).toBe(backing.id);
@@ -117,7 +117,7 @@ describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
     expect(auditMemories(entries, backingSet).issues).toMatchObject([
       { memoryId: object.memoryId, severity: 'warning', reason: expect.stringContaining('backs an object') },
     ]);
-    const result = await sleep(ctxFor(root), { noShare: true });
+    const result = await sleepWholeStore(ctxFor(root), { noShare: true });
 
     expect(result.audit?.errorsRemoved ?? 0).toBe(0);
     expect(readEntry(root, object.memoryId!)).not.toBeNull();
@@ -141,8 +141,8 @@ describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
     const backing = readEntry(root, object.memoryId!)!;
     const move = { entry: backing, strength: 0.01, reason: 'decay' as const, dormantAt: new Date().toISOString() };
 
-    expect(batchWriteAndDelete(root, [], [backing.id, plain.id])).toEqual([plain.id]);
-    expect(batchWriteAndDelete(root, [], [], { dormant: [move] })).toEqual([]);
+    expect(batchWriteAndDeleteInFolder(root, [], [backing.id, plain.id])).toEqual([plain.id]);
+    expect(batchWriteAndDeleteInFolder(root, [], [], { dormant: [move] })).toEqual([]);
     expect(readEntry(root, backing.id)).not.toBeNull();
     expect(linkOf(root, table, object.id)).toBe(backing.id);
   });

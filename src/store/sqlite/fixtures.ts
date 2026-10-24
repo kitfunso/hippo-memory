@@ -12,20 +12,20 @@ import * as entryReads from './entry-reads.js';
 import * as entryWrites from './entry-writes.js';
 import type { WriteEntryOptions } from './entry-writes.js';
 import { onHandle, openStore, storeFilesOf } from './handles.js';
-import { loadRecallEntries } from './search-rows.js';
+import { listRecallEntries } from './search-rows.js';
 import * as vectorIndex from './vector-index.js';
 
 export { initStore } from './handles.js';
 export { upsertEntryRow } from './entry-row.js';
 export { writeEntryDbOnly, type WriteEntryOptions } from './entry-writes.js';
 export { buildIndexFromDb, writeIndexMirror } from './mirrors.js';
-export { loadVectorCandidateEntries } from './search-rows.js';
+export { listVectorCandidateEntries } from './search-rows.js';
 export { writeDeliveryEventOnHandle } from './recall-trace.js';
 export { recordTokenUse, tokensBySession } from './token-ledger.js';
 
 /** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'. */
 export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
-  onHandle(hippoRoot, (db) => entryWrites.writeEntry(db, storeFilesOf(hippoRoot), entry, opts), openStore);
+  onHandle(hippoRoot, (db) => entryWrites.writeEntryOn(db, storeFilesOf(hippoRoot), entry, opts), openStore);
 }
 
 /** Every tenant's entries, oldest first: an eval reads the whole folder it seeded. */
@@ -34,31 +34,31 @@ export function loadAllEntries(hippoRoot: string): MemoryEntry[] {
 }
 
 /** The row with `id` in any tenant, or null: an eval reads back what it wrote, as loadAllEntries does. */
-export function readEntry(hippoRoot: string, id: string): MemoryEntry | null {
+export function readEntryInFolder(hippoRoot: string, id: string): MemoryEntry | null {
   return onHandle(hippoRoot, (db) => entryReads.readEntry(db, id, ALL_TENANTS), openStore);
 }
 
 /** Every stored vector keyed by memory id; `{}` when none. */
 export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> {
-  return onHandle(hippoRoot, (db) => vectorIndex.loadEmbeddingIndex(db));
+  return onHandle(hippoRoot, (db) => vectorIndex.listAllVectors(db));
 }
 
 /** The eval kit's positional `loadRecallSearchEntries` serves the frozen q3b-ranker-floor benchmark through this. */
-export function loadRecallSearchEntries(
+export function listRecallEntriesInFolder(
   hippoRoot: string,
   query: string,
   options: RecallSearchEntriesOptions,
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => loadRecallEntries(db, query, options), openStore);
+  return onHandle(hippoRoot, (db) => listRecallEntries(db, query, options), openStore);
 }
 
 /** The per-prompt tally, timed by scripts/check-request-path-timing.mjs on a folder it seeds. */
-export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: AmbientStoreFilter): AmbientTallies {
-  return onHandle(hippoRoot, (db) => ambient.loadAmbientTallies(db, {}, tenantId, filter), openStore);
+export function countAmbientInFolder(hippoRoot: string, tenantId: string, filter: AmbientStoreFilter): AmbientTallies {
+  return onHandle(hippoRoot, (db) => ambient.countAmbient(db, {}, tenantId, filter), openStore);
 }
 
 /** `batchWriteAndDelete` on a handle of its own; an empty batch opens no store. */
-export function batchWriteAndDelete(
+export function batchWriteAndDeleteInFolder(
   hippoRoot: string,
   toWrite: MemoryEntry[],
   toDeleteIds: string[],

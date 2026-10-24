@@ -20,8 +20,8 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
-import { remember, sleep, contextGet } from '../../src/api/index.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { remember, sleepWholeStore, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
@@ -58,7 +58,7 @@ describe('api.sleep', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'sleep-dry-mem-1', kind: 'distilled' });
 
-      const result = await sleep(ctx, { dryRun: true });
+      const result = await sleepWholeStore(ctx, { dryRun: true });
 
       expect(result.dryRun).toBe(true);
       expect(result.removed).toBe(0);
@@ -78,7 +78,7 @@ describe('api.sleep', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-      const result = await sleep(ctx, { dryRun: false });
+      const result = await sleepWholeStore(ctx, { dryRun: false });
 
       expect(result.dryRun).toBe(false);
       expect(result.active).toBe(0);
@@ -104,7 +104,7 @@ describe('api.sleep', () => {
         });
       }
 
-      const result = await sleep(ctx, { dryRun: false });
+      const result = await sleepWholeStore(ctx, { dryRun: false });
 
       expect(result.dryRun).toBe(false);
       expect(Number.isInteger(result.active)).toBe(true);
@@ -125,10 +125,10 @@ describe('api.sleep', () => {
       await remember(ctx, { content: 'before-sleep-1' });
       await remember(ctx, { content: 'before-sleep-2' });
 
-      await sleep(ctx, { dryRun: false, noShare: true });
+      await sleepWholeStore(ctx, { dryRun: false, noShare: true });
 
       const db = openHippoDb(home);
-      const rows = queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate' });
+      const rows = listAuditEvents(db, { tenantId: '__host__', op: 'consolidate' });
       closeHippoDb(db);
 
       expect(rows.length).toBe(1);

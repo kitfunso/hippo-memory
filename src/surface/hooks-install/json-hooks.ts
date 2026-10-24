@@ -16,11 +16,7 @@ import {
   type InstallResult,
   type JsonHookPaths,
 } from '../../domain/hooks/json-hooks.js';
-import {
-  defaultPreCompactLogPath,
-  defaultSleepLogPath as sleepLogOn,
-  type JsonHookTarget,
-} from '../../domain/hooks/shared.js';
+import { defaultPreCompactLogPath, sleepLogPathOn, type JsonHookTarget } from '../../domain/hooks/shared.js';
 
 // What a caller of the installer names beside it: the Copilot events it adds and the reminder Codex needs before it
 // runs a new hook.
@@ -34,7 +30,7 @@ export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
 
 /** The log the SessionStart hook reads when a caller passes no --path. */
 export function defaultSleepLogPath(): string {
-  return sleepLogOn(processHomes());
+  return sleepLogPathOn(processHomes());
 }
 
 /** Swaps the file in with one rename, so a crash mid-write cannot leave a truncated settings.json that Claude Code

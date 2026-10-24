@@ -372,7 +372,7 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
  * (null with no static block, a sub-agent or a holdout). Scope detection and delivery-ledger events are CLI-only.
  * Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before
  * any arm is booked. */
-export async function promptHookContext(
+export async function buildPromptHookContext(
   ctx: Context,
   req: PromptHookRequest,
   opts: PromptHookOptions = {},

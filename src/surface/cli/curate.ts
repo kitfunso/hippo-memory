@@ -503,10 +503,10 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
   const routed = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
     try {
       if (archive) {
-        await client.archiveRaw(info.url, apiKey, id, reason!);
+        await client.postArchiveRaw(info.url, apiKey, id, reason!);
         console.log(`Archived ${id}`);
       } else {
-        await client.forget(info.url, apiKey, id);
+        await client.postForget(info.url, apiKey, id);
         console.log(`Forgot ${id}`);
       }
     } catch (err) {

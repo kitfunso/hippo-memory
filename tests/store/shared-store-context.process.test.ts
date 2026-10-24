@@ -8,7 +8,7 @@ import { adminActor, contextGet } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { log } from '../../src/base/util/log.js';
-import { promptHookContext } from '../../src/api/prompt-hook.js';
+import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -237,7 +237,7 @@ describe('the prompt hook on a shared store', () => {
     const names = ['', '  ', 'Acme/App'];
     for (const [i, name] of names.entries()) {
       await expect(
-        promptHookContext(ctx, { sessionId: `s-${i}`, project: { name, legacyName: '' } }, opts),
+        buildPromptHookContext(ctx, { sessionId: `s-${i}`, project: { name, legacyName: '' } }, opts),
       ).rejects.toBeInstanceOf(BadRequestError);
     }
     expect(armRows(root)).toBe(0);

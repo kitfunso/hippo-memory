@@ -50,6 +50,6 @@ export interface SleepResult {
 
 /** Sleeps the WHOLE store, every tenant, so /v1/sleep stays loopback-only; never auto-deletes pinned, raw, kept or
  * object-backing rows. */
-export async function sleep(ctx: SleepContext, opts: SleepOpts = {}): Promise<SleepResult> {
+export async function sleepWholeStore(ctx: SleepContext, opts: SleepOpts = {}): Promise<SleepResult> {
   return runSleep(ctx, opts);
 }

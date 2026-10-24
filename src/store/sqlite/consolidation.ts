@@ -2,7 +2,7 @@
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/memory.js';
 import { type DatabaseSyncLike, withWriteScope, getMeta, setMeta, SLEEP_DB_WAIT_MS } from '../../db/index.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import { findRejectedValue, rejectedDigests } from './rejection.js';
+import { readRejectedValue, rejectedDigests } from './rejection.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { log } from '../../base/util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
@@ -29,8 +29,8 @@ import { conflictResolveAudits, resolvedConflicts, replaceDetectedConflicts } fr
 import {
   iterateEveryTenantEntries,
   iterateRowsWithObjects,
-  loadDuplicateCandidates,
-  loadEntryIdsPage,
+  listDuplicateCandidates,
+  listEntryIdsPage,
 } from './entry-reads.js';
 import { setHalfLives } from './entry-writes.js';
 import {
@@ -43,9 +43,9 @@ import {
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import { commitInChunks, deleteEntriesInBatches } from './delete-and-batch.js';
 import { expireDormantBefore } from './dormant.js';
-import { loadPendingExtractionTenants, markPendingProcessedUpTo } from './graph-queue.js';
-import { appendConsolidationRun, incrementSleepCount, loadSessionDecayContext } from './index-and-stats.js';
-import { findPromotableSessions, listSessionEvents, traceExistsForSession } from './sessions.js';
+import { listPendingExtractionTenants, markPendingProcessedUpTo } from './graph-queue.js';
+import { appendConsolidationRun, incrementSleepCount, readSessionDecayContext } from './index-and-stats.js';
+import { listPromotableSessions, listSessionEvents, traceExistsForSession } from './sessions.js';
 import { saveStoredParticles, storedParticleIds, storedParticlesByIds } from './vector-index.js';
 import { openStore } from './handles.js';
 import { bound, skipEmpty, type Bodies } from './bound.js';
@@ -60,7 +60,7 @@ import { cachedStatement } from '../../db/statement-cache.js';
 /** One keyset page of the L2 topic summaries without an L3 parent, across all tenants, for consolidate phase 1.9
  * (buildEntityProfiles); SQL-level filter, since in-memory `survivors` lacks L2s created by phase 1.7. Entries carry
  * tenantId so per-cluster writes stay tenant-scoped. */
-function loadL2SummariesPage(
+function listL2SummariesPage(
   db: DatabaseSyncLike,
   page: { readonly limit: number; readonly after?: EntryCursor },
 ): EntryPage {
@@ -87,7 +87,7 @@ function loadL2SummariesPage(
 /** Dirty summaries across all tenants, newest change first (latest_at DESC NULLS LAST, id ASC), at most `limit` so
  * HIPPO_DAG_REBUILD_CAP reads only the most recently changed. Each entry carries its tenantId so later writes stay
  * tenant-scoped. */
-function loadAllDirtySummaries(db: DatabaseSyncLike, limit: number): MemoryEntry[] {
+function listDirtySummaries(db: DatabaseSyncLike, limit: number): MemoryEntry[] {
   const rows = cachedStatement(
     db,
     `
@@ -104,8 +104,8 @@ function loadAllDirtySummaries(db: DatabaseSyncLike, limit: number): MemoryEntry
 
 /** Live (non-archived) children of a DAG summary, so a rebuild regenerates from the CURRENT child set; tenant-scoped as
  * defence in depth. */
-function loadChildrenOfSummary(db: DatabaseSyncLike, summaryId: string, tenantId: string): MemoryEntry[] {
-  assertTenantId('loadChildrenOfSummary', tenantId);
+function listChildrenOfSummary(db: DatabaseSyncLike, summaryId: string, tenantId: string): MemoryEntry[] {
+  assertTenantId('listChildrenOfSummary', tenantId);
   const rows = cachedStatement(
     db,
     `
@@ -121,7 +121,7 @@ function loadChildrenOfSummary(db: DatabaseSyncLike, summaryId: string, tenantId
   return rows.map(rowToEntry);
 }
 
-/** loadChildrenOfSummary for many summaries in one IN query per tenant chunk: one list per summary in the order given,
+/** listChildrenOfSummary for many summaries in one IN query per tenant chunk: one list per summary in the order given,
  * each in created order. */
 function childrenOfSummaries(
   db: DatabaseSyncLike,
@@ -204,7 +204,7 @@ function applyRebuildInSavepoint(db: DatabaseSyncLike, summary: MemoryEntry, pat
   // Check tombstones before choosing the UPDATE: this direct UPDATE bypasses upsertEntryRow's guard, and a
   // deterministic rebuild would otherwise re-assert a rejected value every sleep cycle.
   const tombstone = patch.bumpRebuildCount
-    ? findRejectedValue(db, summary.tenantId, rejectionDigest(patch.content))
+    ? readRejectedValue(db, summary.tenantId, rejectionDigest(patch.content))
     : null;
   // On a tombstone hit, write no content: take the zero-child metadata-only path
   // (descendant_count/earliest_at/latest_at, summary_dirty cleared, no rebuild_count bump). Clearing dirty is
@@ -245,7 +245,7 @@ function auditRefusedRebuild(
   db: DatabaseSyncLike,
   summary: MemoryEntry,
   patch: RebuildPatch,
-  tombstone: NonNullable<ReturnType<typeof findRejectedValue>>,
+  tombstone: NonNullable<ReturnType<typeof readRejectedValue>>,
 ): void {
   // refused === true here (narrowed for the tombstone.* access). Best-effort refusal audit written INLINE in this
   // still-open SAVEPOINT (the metadata UPDATE already committed to it), so a direct audit() call is correct, not the
@@ -339,7 +339,7 @@ function recordedHalfLifeBase(db: DatabaseSyncLike): number {
   return Number.isFinite(raw) && raw > 0 ? raw : LEGACY_HALF_LIFE_BASE;
 }
 
-function readRows(db: DatabaseSyncLike, from: number, typedPending: boolean): HalfLifeRows {
+function listHalfLifeRows(db: DatabaseSyncLike, from: number, typedPending: boolean): HalfLifeRows {
   return {
     from,
     typedPending,
@@ -389,7 +389,7 @@ function moveHalfLives(
     const from = recordedHalfLifeBase(db);
     const typedPending = getMeta(db, TYPED_HALF_LIFE_META_KEY, '') === '';
     if (!(Number.isFinite(to) && to > 0) || (from === to && !typedPending)) return { from, outcome: null };
-    const { moves, outcome } = planHalfLifeMoves(readRows(db, from, typedPending), to);
+    const { moves, outcome } = planHalfLifeMoves(listHalfLifeRows(db, from, typedPending), to);
     if (opts.dryRun) return { from, outcome };
 
     for (const move of moves) writeMove(db, move, opts.actor);
@@ -428,14 +428,14 @@ type StoreWrites = 'replaceConflicts' | 'recordRun' | 'deleteInBatches';
 type BareRows = Exclude<keyof Consolidation, Chunked | StoreReads | StoreWrites | keyof SummaryOps>;
 
 const storeReadsBodies: Bodies<Pick<Consolidation, StoreReads>> = {
-  entryIdsPage: (db, page) => loadEntryIdsPage(db, ALL_TENANTS, page),
-  sessionDecayContext: loadSessionDecayContext,
+  entryIdsPage: (db, page) => listEntryIdsPage(db, ALL_TENANTS, page),
+  sessionDecayContext: readSessionDecayContext,
   moveHalfLives: moveHalfLives,
-  promotableSessions: findPromotableSessions,
+  promotableSessions: listPromotableSessions,
   traceExists: traceExistsForSession,
   sessionEvents: listSessionEvents,
   countSleep: incrementSleepCount,
-  duplicateCandidates: loadDuplicateCandidates,
+  duplicateCandidates: listDuplicateCandidates,
 };
 
 function storeWritesBodies(files: StoreFiles): Bodies<Pick<Consolidation, StoreWrites>> {
@@ -448,23 +448,23 @@ function storeWritesBodies(files: StoreFiles): Bodies<Pick<Consolidation, StoreW
 
 const bareRowsBodies: Bodies<Pick<Consolidation, BareRows>> = {
   ftsDrift: ftsDrift,
-  rejectedValue: findRejectedValue,
+  rejectedValue: readRejectedValue,
   rejectedDigests: rejectedDigests,
   particleIds: storedParticleIds,
   particlesByIds: storedParticlesByIds,
   saveParticles: saveStoredParticles,
   auditEachRow: auditEachRow,
-  dirtyGraphTenants: loadPendingExtractionTenants,
+  dirtyGraphTenants: listPendingExtractionTenants,
   markGraphDrained: markPendingProcessedUpTo,
 };
 
 const summariesBodies: Bodies<SummaryOps> = {
-  dirtySummaries: loadAllDirtySummaries,
-  childrenOfSummary: loadChildrenOfSummary,
+  dirtySummaries: listDirtySummaries,
+  childrenOfSummary: listChildrenOfSummary,
   childrenOfSummaries: childrenOfSummaries,
   applyRebuild: applyRebuildResult,
   clearSummaryDirty: clearSummaryDirtyAfterBuild,
-  unprofiledTopicSummaries: loadL2SummariesPage,
+  unprofiledTopicSummaries: listL2SummariesPage,
 };
 
 /** The chunked writers on the store's own clock and pause, under sleep's own lock wait. */

@@ -9,7 +9,7 @@ import { boostByGoals } from '../../domain/search/goal-boost.js';
 import { graphExpandRecall } from '../../domain/graph/recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../domain/graph/stream.js';
 import { Layer, strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
-import { multihopSearch } from '../../domain/search/multihop.js';
+import { rankMultihop } from '../../domain/search/multihop.js';
 import type { PhysicsConfig } from '../../base/rank/physics-config.js';
 import { passesCliRecallScopeFilter, recallScopeFilter } from '../../base/scope/recall-scope.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
@@ -331,7 +331,7 @@ function multihopPoolSearch(ctx: RankRecallCtx, opts: RankRecallOptions, pool: R
   const globalIds = new Set(pool.global.map((e) => e.id));
   const localIds = new Set(pool.local.map((e) => e.id));
   const fromGlobal = (id: string): boolean => globalIds.has(id) && !localIds.has(id);
-  const results = multihopSearch(query, allEntries, {
+  const results = rankMultihop(query, allEntries, {
     budget,
     cost: cost && ((r) => cost({ ...r, isGlobal: fromGlobal(r.entry.id) })),
     minResults,

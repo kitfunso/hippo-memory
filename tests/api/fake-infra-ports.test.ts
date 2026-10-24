@@ -2,7 +2,7 @@
 // store. check-layers keeps src/infra out of src/api's imports; this proves the calls go to the fakes.
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { join } from 'node:path';
-import { adminActor, contextGet, remember, sleep } from '../../src/api/index.js';
+import { adminActor, contextGet, remember, sleepWholeStore } from '../../src/api/index.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { recallRerankerPick } from '../../src/api/recall/rows.js';
 import { contextReach, type ContextWith } from '../../src/api/types.js';
@@ -168,7 +168,7 @@ describe('the api on fake infra ports', () => {
     const context = await contextGet(ctx, { currentProject: cwdProject() });
     expect(context.entries.length).toBeGreaterThan(0);
 
-    await sleep(ctx, { noShare: true });
+    await sleepWholeStore(ctx, { noShare: true });
     expect(fake.prompts.length).toBeGreaterThan(0);
     expect(fake.prompts[0]!.prompt).toContain('release');
 
@@ -179,6 +179,6 @@ describe('the api on fake infra ports', () => {
 
   it('the api takes no Context without infra', () => {
     const { infra: _unused, ...bare } = contextOn(fakeInfra(join(hippoRoot, '..')));
-    expectTypeOf(bare).not.toExtend<Parameters<typeof sleep>[0]>();
+    expectTypeOf(bare).not.toExtend<Parameters<typeof sleepWholeStore>[0]>();
   });
 });

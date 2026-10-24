@@ -123,7 +123,7 @@ describe('DAG-aware recall substitution', () => {
       );
     }
     // Recall as default tenant: nothing should match (entries belong to other),
-    // and even if loadEntriesByIds saw the parent ID, tenant filter blocks it.
+    // and even if readEntriesInIdOrder saw the parent ID, tenant filter blocks it.
     const r = await retrieve(ctxFor(root, 'default'), { query: 'alpha cross tenant', window: { limit: 3 } });
     expect(r.results).toHaveLength(0);
   });

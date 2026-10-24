@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { sleep, adminActor } from '../../src/api/index.js';
+import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -25,7 +25,7 @@ import {
   type ConsolidationResult,
 } from '../../src/domain/consolidate/run.js';
 import { log } from '../../src/base/util/log.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -73,7 +73,7 @@ function getLastConsolidateAuditRow(hippoRoot: string): {
 } | null {
   const db = openHippoDb(hippoRoot);
   try {
-    const rows = queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate', limit: 1 });
+    const rows = listAuditEvents(db, { tenantId: '__host__', op: 'consolidate', limit: 1 });
     if (rows.length === 0) return null;
     return { metadata: rows[0].metadata };
   } finally {
@@ -197,7 +197,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
 
   it('happy path (no faults) → partial:false + no errorMessage', async () => {
     // No phase overrides: the public entry runs the real phases.
-    await sleep(testCtx.ctx);
+    await sleepWholeStore(testCtx.ctx);
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
     expect(row).not.toBeNull();

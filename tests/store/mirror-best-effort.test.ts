@@ -4,7 +4,7 @@ import * as path from 'path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { layerDir, writeMarkdownMirror } from '../../src/store/sqlite/mirrors.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { deleteEntry, writeEntry, readEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import { deleteEntry, writeEntry, readEntry, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -41,7 +41,7 @@ describe('mirror write failures after COMMIT', () => {
   it('batchWriteAndDelete and deleteEntry report their committed changes as done', () => {
     const entry = createMemory('batch row survives a mirror failure');
     blockMarkdownMirror(entry.id, entry.layer);
-    expect(() => batchWriteAndDelete(root, [entry], [])).not.toThrow();
+    expect(() => batchWriteAndDeleteInFolder(root, [entry], [])).not.toThrow();
     expect(readEntry(root, entry.id)).not.toBeNull();
     expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining(`${entry.id}.md`));
     expect(deleteEntry(root, entry.id)).toBe(true);

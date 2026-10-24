@@ -6,7 +6,7 @@ import { calculateStrength, type MemoryEntry } from '../../base/memory/memory.js
 import { AGENT_MEMORY_SOURCE_PREFIX, isImport, noteKey, toolTag } from '../../base/memory/agent-memory-tools.js';
 import { MAX_AUDIT_LIMIT } from '../../base/util/limits.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
-import { appendAuditEvents, queryAuditEvents } from './audit.js';
+import { appendAuditEvents, listAuditEvents } from './audit.js';
 import {
   compactionOriginsWithCwd,
   compactionTranscripts,
@@ -20,10 +20,10 @@ import {
   replaceDormantEntry,
 } from './dormant-rows.js';
 import {
-  selectEntriesByIds,
-  selectEntriesFromOrigin,
-  selectLiveEntriesBySourcePrefix,
-  selectOriginTallies,
+  readEntriesByIds,
+  listEntriesFromOrigin,
+  listLiveEntriesBySourcePrefix,
+  countByOrigin,
 } from './entry-reads.js';
 import { deleteEntryRowInTx, restampOriginProject, stampOriginProjects, writeEntryMirrors } from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
@@ -66,7 +66,7 @@ function rewrite<T>(
     withWriteScope(db, TX_LABEL, () => body(backup)),
   );
   // After commit, as the agent memory sync does: a stale mirror would bring the old tag back on the next rebuild.
-  for (const entry of selectEntriesByIds(db, done.rewrite, tenantId).values()) {
+  for (const entry of readEntriesByIds(db, done.rewrite, tenantId).values()) {
     writeEntryMirrors(files.hippoRoot, entry);
   }
   for (const id of done.purge) removeEntryMirrors(files.hippoRoot, id);
@@ -75,7 +75,7 @@ function rewrite<T>(
 
 function originRows(db: DatabaseSyncLike, tenantId: string, rows: OriginRows): Iterable<MemoryEntry> {
   return rowsInPages((after?: EntryCursor) =>
-    selectEntriesFromOrigin(db, tenantId, rows, { limit: READ_PAGE_ROWS, after }),
+    listEntriesFromOrigin(db, tenantId, rows, { limit: READ_PAGE_ROWS, after }),
   );
 }
 
@@ -133,7 +133,7 @@ function setAsideCopies(
   tenantId: string,
   copies: readonly RowRead[],
 ): string[] {
-  const rows = selectEntriesByIds(
+  const rows = readEntriesByIds(
     db,
     copies.map((c) => c.id),
     tenantId,
@@ -151,7 +151,7 @@ function setAsideCopies(
 /** The planned sleep merges still live and user-global; the plan chose each by its parents, so one re-tagged since
  * stays as it is. */
 function userGlobalMerges(db: DatabaseSyncLike, tenantId: string, ids: readonly string[]): Map<string, MemoryEntry> {
-  const rows = selectEntriesByIds(db, ids, tenantId);
+  const rows = readEntriesByIds(db, ids, tenantId);
   return new Map([...rows].filter(([, e]) => !e.supersededBy && e.originProject === ''));
 }
 
@@ -192,13 +192,13 @@ function repair(db: DatabaseSyncLike, files: StoreFiles, scope: ProjectTagScope,
 type Reads = Omit<ProjectTags, 'merge' | 'repair' | 'markRepairedOnce'>;
 
 const readsBodies: Bodies<Reads> = {
-  originTallies: selectOriginTallies,
-  entriesFromOrigin: selectEntriesFromOrigin,
-  liveEntriesBySourcePrefix: selectLiveEntriesBySourcePrefix,
-  entriesByIds: (db, tenantId, ids) => selectEntriesByIds(db, ids, tenantId),
+  originTallies: countByOrigin,
+  entriesFromOrigin: listEntriesFromOrigin,
+  liveEntriesBySourcePrefix: listLiveEntriesBySourcePrefix,
+  entriesByIds: (db, tenantId, ids) => readEntriesByIds(db, ids, tenantId),
   dormantFromOrigin: dormantSnapshotsFromOrigin,
   dormantByIds: dormantSnapshotsByIds,
-  auditEvents: (db, tenantId, op) => queryAuditEvents(db, { tenantId, op, limit: MAX_AUDIT_LIMIT }),
+  auditEvents: (db, tenantId, op) => listAuditEvents(db, { tenantId, op, limit: MAX_AUDIT_LIMIT }),
   compactionTranscripts,
   compactionOriginsWithCwd,
   holdsOrigin: (db, tenantId, table, name) => holdsOrigin(db, table, tenantId, name),

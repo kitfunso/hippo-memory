@@ -6,7 +6,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { contextGet } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
-import { promptHookContext } from '../../src/api/prompt-hook.js';
+import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -90,10 +90,12 @@ describe('task state on a shared store', () => {
   it('prompt hook context keyed the same way', async () => {
     writeEntry(home, { ...createMemory('PINNED: always check the rollback plan'), pinned: true, originProject: 'p' });
     seedTwoOwners();
-    const forB = await promptHookContext(ctx('bob'), { sessionId: 'sb2', project: P });
+    const forB = await buildPromptHookContext(ctx('bob'), { sessionId: 'sb2', project: P });
     expect(forB.stdout).toContain('bob task');
     expect(forB.stdout).not.toContain('alice task');
-    expect((await promptHookContext(ctx('alice'), { sessionId: 'sa2', project: P })).stdout).toContain('alice task');
+    expect((await buildPromptHookContext(ctx('alice'), { sessionId: 'sa2', project: P })).stdout).toContain(
+      'alice task',
+    );
   });
 
   it("REST GET /v1/context with owned keys: A sees A's snapshot by id, B sees B's own by id, never A's", async () => {

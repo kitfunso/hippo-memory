@@ -7,7 +7,7 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { classifyOriginProject, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
-import { embedAll, folderIndex, type ConfiguredFolder } from '../search/embed-memories.js';
+import { embedAll, folderEmbedTarget, type ConfiguredFolder } from '../search/embed-memories.js';
 import { log } from '../../base/util/log.js';
 import type { EntryTextKey, Sharing } from '../../store/port.js';
 import { logEmbedAllFailure } from './search-both.js';
@@ -138,6 +138,6 @@ function finishSyncDown(into: ConfiguredFolder, count: number, rejected: number)
   // Batch producer: one embedAll() on the destination rather than an embedMemory() per copied row (same batching
   // invariant as autoShare).
   if (count > 0) {
-    void embedAll(folderIndex(into)).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
+    void embedAll(folderEmbedTarget(into)).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
   }
 }

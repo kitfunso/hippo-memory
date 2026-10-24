@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Layer } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import * as api from '../../src/api/index.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
@@ -51,12 +51,12 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
 
     const db = openHippoDb(tmpDir);
     try {
-      const rejectEvents = queryAuditEvents(db, { tenantId: 'default', op: 'reject_value' });
+      const rejectEvents = listAuditEvents(db, { tenantId: 'default', op: 'reject_value' });
       expect(rejectEvents.length).toBe(1);
       expect(rejectEvents[0]!.metadata.digest).toBe(result.digest);
       expect(rejectEvents[0]!.metadata.count).toBe(2);
 
-      const forgetEvents = queryAuditEvents(db, { tenantId: 'default', op: 'forget' });
+      const forgetEvents = listAuditEvents(db, { tenantId: 'default', op: 'forget' });
       expect(forgetEvents.length).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -172,7 +172,7 @@ describe('resolveConflict rejection wiring', () => {
 
     const db = openHippoDb(tmpDir);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
       expect(events.length).toBe(1);
       expect(events[0]!.metadata.disposition).toBe('weakened');
       expect(events[0]!.metadata.rejected).toBe(false);
@@ -188,7 +188,7 @@ describe('resolveConflict rejection wiring', () => {
 
     const db = openHippoDb(tmpDir);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
       expect(events.length).toBe(1);
       expect(events[0]!.metadata.disposition).toBe('deleted');
     } finally {
@@ -207,7 +207,7 @@ describe('resolveConflict rejection wiring', () => {
 
     const db = openHippoDb(tmpDir);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
       expect(events.length).toBe(1);
       expect(events[0]!.metadata.rejected).toBe(true);
     } finally {
@@ -240,7 +240,7 @@ describe('resolveConflict rejection wiring', () => {
 
     const db = openHippoDb(tmpDir);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
       expect(events.length).toBe(1);
       // SAFETY: resolveConflict's conflict_resolve audit always writes
       // metadata.removedIds as string[] (src/store/conflicts.ts's conflictResolveMeta).
@@ -278,7 +278,7 @@ describe('resolveConflict rejection wiring', () => {
 
     const db = openHippoDb(tmpDir);
     try {
-      const events = queryAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
+      const events = listAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
       expect(events.length).toBe(1);
       expect(events[0]!.metadata.disposition).toBe('archived_raw');
     } finally {
@@ -371,7 +371,7 @@ describe('resolveConflict rejection wiring', () => {
 
     const db2 = openHippoDb(tmpDir);
     try {
-      const events = queryAuditEvents(db2, { tenantId: 'default', op: 'conflict_resolve' });
+      const events = listAuditEvents(db2, { tenantId: 'default', op: 'conflict_resolve' });
       expect(events.length).toBe(1);
       expect(events[0]!.metadata.disposition).toBe('archived_raw');
       expect(events[0]!.metadata.rejected).toBe(true);

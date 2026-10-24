@@ -67,7 +67,7 @@ export function markPendingProcessedUpTo(db: DatabaseSyncLike, tenantId: string,
 /** Dirty tenants awaiting graph re-extraction, each with the MAX pending queue id at read time (a watermark);
  * host-wide, as sleep is cross-tenant. The drain marks only items at or below it processed, so items enqueued DURING
  * the rebuild stay pending (no lost update). */
-export function loadPendingExtractionTenants(db: DatabaseSyncLike): { tenantId: string; maxPendingId: number }[] {
+export function listPendingExtractionTenants(db: DatabaseSyncLike): { tenantId: string; maxPendingId: number }[] {
   const rows = cachedStatement(
     db,
     `

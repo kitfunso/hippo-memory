@@ -170,7 +170,7 @@ export const MEMORY_ROW_COLUMNS = [
 // Rebuild-queue columns the DAG summary rebuild writes (store/sqlite/consolidation.ts); a row write never sets them.
 const MEMORY_COLUMN_NAMES = [...MEMORY_ROW_COLUMNS, 'summary_dirty', 'last_rebuilt_at', 'rebuild_count'] as const;
 
-// FTS-join columns for loadSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified reads working.
+// FTS-join columns for listSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified reads working.
 export const MEMORY_SELECT_COLUMNS = MEMORY_COLUMN_NAMES.join(', ');
 export const MEMORY_SEARCH_COLUMNS = MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`).join(', ');
 

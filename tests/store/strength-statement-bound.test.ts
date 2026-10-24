@@ -5,7 +5,7 @@ import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { strengthSql } from '../../src/store/sqlite/rule-sql.js';
 import { strengthTallies } from '../../src/store/sqlite/candidates.js';
-import { loadAmbientTallies } from '../../src/store/sqlite/ambient.js';
+import { countAmbient } from '../../src/store/sqlite/ambient.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
@@ -68,7 +68,7 @@ describe('the strength aggregates', () => {
   it('prepare one statement each for two clocks, and sum what the literal clock summed', () => {
     const { result, texts } = prepares(() => ({
       tallies: [EARLY, LATE].map((now) => strengthTallies(db, {}, TENANT, now, 0.3)),
-      ambient: [EARLY, LATE].map((now) => loadAmbientTallies(db, {}, TENANT, { currentProject: [], now })),
+      ambient: [EARLY, LATE].map((now) => countAmbient(db, {}, TENANT, { currentProject: [], now })),
     }));
     expect(texts.filter((text) => text.includes('AS strengthSum'))).toHaveLength(2);
     const literal = [EARLY, LATE].map((now) => literalClockSum(db, now));

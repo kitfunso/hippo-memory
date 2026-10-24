@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmbeddingsConfig } from '../../src/base/config/config.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { embedMemory as embedOnFolder, loadEmbeddingIndex, writeEntry } from '../../src/entry/testing.js';
-import { embedMemory as embedOnTarget } from '../../src/domain/search/embed-memories.js';
+import { embedMemoryInto as embedOnTarget } from '../../src/domain/search/embed-memories.js';
 import { isJsonObject, type JsonValue } from '../../src/base/util/json.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';

@@ -6,8 +6,8 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { DEFAULT_HALF_LIFE_DAYS, createMemory, type EmotionalValence } from '../../src/base/memory/memory.js';
 import {
   contentsWithTag,
-  loadCurrentEntriesFromOrigins,
-  loadEntriesWithSignals,
+  listCurrentEntriesFromOrigins,
+  listEntriesWithSignals,
 } from '../../src/store/sqlite/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
@@ -65,7 +65,7 @@ describe('cached list reads', () => {
       sourcePrefix: 'zzz',
       minRetrievals: 1_000,
     });
-    const r = shortThenLong((long) => loadEntriesWithSignals(db, signals(long), TENANT, { limit: 10 }).entries);
+    const r = shortThenLong((long) => listEntriesWithSignals(db, signals(long), TENANT, { limit: 10 }).entries);
     expect(r.prepared).toEqual([]);
     expect(contents(r.short)).toEqual(['beta row', 'gamma row']);
     expect(contents(r.long)).toEqual(['alpha row', 'beta row', 'gamma row', 'global row']);
@@ -76,10 +76,10 @@ describe('cached list reads', () => {
     const tagged = shortThenLong((long) => contentsWithTag(db, TENANT, 'alpha', origins(long)));
     expect(tagged.prepared).toEqual([]);
     expect(tagged.short.sort()).toEqual(['alpha row', 'global row']);
-    const current = shortThenLong((long) => loadCurrentEntriesFromOrigins(db, TENANT, origins(long)));
+    const current = shortThenLong((long) => listCurrentEntriesFromOrigins(db, TENANT, origins(long)));
     expect(current.prepared).toEqual([]);
     expect(contents(current.short)).toEqual(['alpha row']);
     expect(contents(current.long)).toEqual(['alpha row', 'beta row']);
-    expect(loadCurrentEntriesFromOrigins(db, TENANT, [])).toEqual([]);
+    expect(listCurrentEntriesFromOrigins(db, TENANT, [])).toEqual([]);
   });
 });

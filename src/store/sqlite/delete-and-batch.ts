@@ -168,7 +168,7 @@ export function deleteEntriesInBatches(
   const gone = new Set<string>();
   for (const chunk of chunked(targets)) {
     const deleted = withWriteScope(db, 'delete_entries', () => {
-      const rows = selectDeleteTargets(
+      const rows = readDeleteTargets(
         db,
         chunk.map((target) => target.id),
       );
@@ -187,7 +187,7 @@ export function deleteEntriesInBatches(
   return targets.map((target) => gone.delete(target.id));
 }
 
-function selectDeleteTargets(db: DatabaseSyncLike, ids: readonly string[]): Map<string, DeleteTarget> {
+function readDeleteTargets(db: DatabaseSyncLike, ids: readonly string[]): Map<string, DeleteTarget> {
   const rows = new Map<string, DeleteTarget>();
   for (const chunk of chunked([...new Set(ids)])) {
     const found = cachedStatement(
@@ -199,7 +199,7 @@ function selectDeleteTargets(db: DatabaseSyncLike, ids: readonly string[]): Map<
   return rows;
 }
 
-// The child fields a level-2/3 summary is built from (loadChildrenOfSummary, generateDagSummary).
+// The child fields a level-2/3 summary is built from (listChildrenOfSummary, generateDagSummary).
 const SUMMARY_INPUTS = ['content', 'created', 'dagParentId', 'kind'] as const;
 
 function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry): MemoryEntry {
@@ -337,7 +337,7 @@ function applyComponent(
   const deletableIds: string[] = [];
   if (component.deletes.length > 0) {
     // A row pinned after the caller decided to delete it survives.
-    for (const row of selectAutoDeletableRows(db, component.deletes, out.dirty)) deletableIds.push(row.id);
+    for (const row of readAutoDeletableRows(db, component.deletes, out.dirty)) deletableIds.push(row.id);
   }
   applyPlannedWrites(db, writes, refused, out);
   moveDormantAndDelete(db, component.dormant, deletableIds, out);
@@ -377,7 +377,7 @@ function moveDormantAndDelete(
   const movable: DormantMove[] = [];
   if (dormantMoves.length > 0) {
     const byId = new Map(dormantMoves.map((m) => [m.entry.id, m]));
-    for (const row of selectAutoDeletableRows(db, [...byId.keys()], out.dirty)) movable.push(byId.get(row.id)!);
+    for (const row of readAutoDeletableRows(db, [...byId.keys()], out.dirty)) movable.push(byId.get(row.id)!);
   }
   for (const move of movable) {
     insertDormantRow(db, move);
@@ -396,7 +396,7 @@ interface DirtyParents {
 }
 
 /** The still auto-deletable rows among `ids`, recording each one's DAG parent as dirty. */
-function selectAutoDeletableRows(
+function readAutoDeletableRows(
   db: DatabaseSyncLike,
   ids: readonly string[],
   dirty: DirtyParents,

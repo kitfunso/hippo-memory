@@ -4,7 +4,7 @@
 // what comes back.
 
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../base/memory/memory.js';
-import { embedMemory, folderIndex, type EmbedOutcome } from '../../domain/search/embed-memories.js';
+import { embedMemoryInto, folderEmbedTarget, type EmbedOutcome } from '../../domain/search/embed-memories.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
@@ -65,8 +65,8 @@ async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
 /** Best-effort and slow (a model load or a network call), so the caller is not held for it; a row left out of the index
  * is logged. */
 function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutcome> {
-  const target = folderIndex({ store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor });
-  return embedMemory(target, entry).then((outcome) => {
+  const target = folderEmbedTarget({ store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor });
+  return embedMemoryInto(target, entry).then((outcome) => {
     if (outcome === 'failed') {
       log.warn(
         `memory ${entry.id} is stored but not in the vector index, so recall by meaning will miss it; run 'hippo embed' to index it`,

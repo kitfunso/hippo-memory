@@ -3,11 +3,11 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import {
-  selectEntriesByIds,
+  readEntriesByIds,
   TENANT_IS,
   countSessionRawMemories,
-  loadSessionRawMemories,
-  selectChildrenByParent,
+  listSessionRawMemories,
+  readChildrenByParent,
 } from './entry-reads.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { DescendantOrigin, SummaryDescendants, DagReads, DescendantWalk } from '../port.js';
@@ -97,7 +97,7 @@ function keyedLevel(
     }
   }
   const shown = ids.slice(0, Math.max(0, at.room));
-  const whole = selectEntriesByIds(db, shown, walk.tenantId);
+  const whole = readEntriesByIds(db, shown, walk.tenantId);
   return { ids, size: ids.length, rows: shown.flatMap((id) => whole.get(id) ?? []) };
 }
 
@@ -187,7 +187,7 @@ export function sqliteDagReads(on: OnHandle): DagReads {
   return bound<DagReads>(
     on,
     {
-      sessionRawEntries: loadSessionRawMemories,
+      sessionRawEntries: listSessionRawMemories,
       sessionRawCount: countSessionRawMemories,
       summaryWithDescendants: summaryWithDescendants,
     },
@@ -202,7 +202,7 @@ function summaryWithDescendants(
   id: string,
   { depth, admit, minSummaryLevel, page }: DescendantWalk,
 ): SummaryDescendants | null {
-  const summary = selectEntriesByIds(db, [id], tenantId).get(id);
+  const summary = readEntriesByIds(db, [id], tenantId).get(id);
   if (!summary) return null;
   const readable = (row: DescendantOrigin): boolean => descendantAdmits(row, admit);
   const walked = readable(summary) && (minSummaryLevel === undefined || (summary.dagLevel ?? 0) >= minSummaryLevel);
@@ -211,7 +211,7 @@ function summaryWithDescendants(
   const seen = new Set<string>([id]);
   let parents = walked ? [id] : [];
   for (let level = 0; level < depth && parents.length > 0; level++) {
-    const childrenOf = selectChildrenByParent(db, parents, tenantId);
+    const childrenOf = readChildrenByParent(db, parents, tenantId);
     const admitted: MemoryEntry[] = [];
     for (const parentId of parents) {
       for (const child of childrenOf.get(parentId) ?? []) {

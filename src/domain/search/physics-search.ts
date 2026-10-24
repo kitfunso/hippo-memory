@@ -85,7 +85,7 @@ interface PhysicsScoring {
  * Scores memories by gravity, momentum and cluster amplification on the store `source` names; rows without physics
  * state rank through hybridSearch.
  */
-export async function physicsSearch(
+export async function rankPhysics(
   query: string,
   entries: MemoryEntry[],
   options: PhysicsRankOptions = {},

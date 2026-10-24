@@ -11,7 +11,7 @@ import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js
 import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/domain/agent-memories/report.js';
 import type { Machine } from '../../src/base/util/agent-homes.js';
 import type { ToolId } from '../../src/base/memory/agent-memory-tools.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { DormantMemory } from '../../src/store/port/dormant.js';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
@@ -116,7 +116,7 @@ export const dormantRows = (root: string): DormantMemory[] =>
   isInitialized(root) ? loadDormantMemories(root, 'default', { limit: 1000 }) : [];
 
 export const auditCount = (root: string, op: AuditOp): number =>
-  withDb(root, (db) => queryAuditEvents(db, { tenantId: 'default', op, limit: 10000 }).length);
+  withDb(root, (db) => listAuditEvents(db, { tenantId: 'default', op, limit: 10000 }).length);
 
 export function auditTotal(root: string): number {
   // SAFETY: the SELECT names one aliased COUNT column.

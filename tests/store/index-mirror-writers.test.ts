@@ -5,7 +5,13 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { rejectValue } from '../../src/domain/trust/reject-flow.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { deleteEntry, loadLastRecall, saveIndex, writeEntry, batchWriteAndDelete } from '../_helpers/root-forms.js';
+import {
+  deleteEntry,
+  loadLastRecall,
+  saveIndex,
+  writeEntry,
+  batchWriteAndDeleteInFolder,
+} from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -26,7 +32,7 @@ describe('index.json is written by no hippo path', () => {
   });
 
   it('batchWriteAndDelete leaves no index.json', () => {
-    batchWriteAndDelete(root, [createMemory('batch leaves index.json alone')], []);
+    batchWriteAndDeleteInFolder(root, [createMemory('batch leaves index.json alone')], []);
     expect(fs.existsSync(indexPath())).toBe(false);
   });
 
@@ -60,7 +66,7 @@ describe('index.json is written by no hippo path', () => {
     fs.writeFileSync(indexPath(), sentinel, 'utf8');
 
     writeEntry(root, createMemory('sentinel writeEntry'));
-    batchWriteAndDelete(root, [createMemory('sentinel batch')], []);
+    batchWriteAndDeleteInFolder(root, [createMemory('sentinel batch')], []);
     const toDelete = createMemory('sentinel delete');
     writeEntry(root, toDelete);
     deleteEntry(root, toDelete.id);

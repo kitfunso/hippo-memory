@@ -10,7 +10,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { adminActor, remember, type Actor } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -39,7 +39,7 @@ describe('Context.actor shape', () => {
 
     const db = openHippoDb(home);
     try {
-      const rows = queryAuditEvents(db, { tenantId: 'default', op: 'remember' });
+      const rows = listAuditEvents(db, { tenantId: 'default', op: 'remember' });
       expect(rows.length).toBeGreaterThanOrEqual(1);
       // audit_log.actor column is TEXT storing the subject string (not the
       // full Actor object). v1.12.0 brainstorm decision #2.

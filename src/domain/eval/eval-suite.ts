@@ -4,8 +4,8 @@
  * Zero API calls (no LLM judge, no embeddings), deterministic (fixed timestamps, content, IDs) and fast. */
 
 import { DAG_LEVEL, Layer, type MemoryEntry } from '../../base/memory/memory.js';
-import { search } from '../search/bm25-search.js';
-import { multihopSearch } from '../search/multihop.js';
+import { rankBm25 } from '../search/bm25-search.js';
+import { rankMultihop } from '../search/multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
 import {
   authMeetingEntries,
@@ -450,9 +450,9 @@ export async function runFeatureEval(version: string): Promise<EvalSuiteResult> 
   for (const c of cases) {
     let results;
     if (c.category === 'multi-hop') {
-      results = multihopSearch(c.query, entries, { budget: EVAL_TOKEN_BUDGET });
+      results = rankMultihop(c.query, entries, { budget: EVAL_TOKEN_BUDGET });
     } else {
-      results = search(c.query, entries, { budget: EVAL_TOKEN_BUDGET });
+      results = rankBm25(c.query, entries, { budget: EVAL_TOKEN_BUDGET });
     }
     const returnedIds = results.map((r) => r.entry.id);
 

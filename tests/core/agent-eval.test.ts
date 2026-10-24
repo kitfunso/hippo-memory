@@ -17,7 +17,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { search } from '../../src/domain/search/bm25-search.js';
+import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { markRetrieved } from '../../src/base/memory/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
@@ -240,7 +240,7 @@ function simulateIn(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult
 
     // Search memory for relevant guidance
     const entries = loadAllEntries(tmpDir, 'default');
-    const searchResults = search(task.recallQuery, entries, { budget: 4000 });
+    const searchResults = rankBm25(task.recallQuery, entries, { budget: 4000 });
     const topIds = searchResults.slice(0, 5);
 
     // Check if any top result is relevant to this trap category

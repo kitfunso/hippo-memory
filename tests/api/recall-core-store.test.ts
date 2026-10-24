@@ -4,7 +4,7 @@ import type { Context } from '../../src/api/types.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import type { HippoStore, LastRecall, LastRecallWrites, RecallWrites } from '../../src/store/index.js';
@@ -56,7 +56,7 @@ function cliCore(): CliCoreRecall {
 function recallRowsInHippoDb(): number {
   const db = openHippoDb(hippoRoot);
   try {
-    return queryAuditEvents(db, { tenantId: 'default', op: 'recall' }).length;
+    return listAuditEvents(db, { tenantId: 'default', op: 'recall' }).length;
   } finally {
     closeHippoDb(db);
   }

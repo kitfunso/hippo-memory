@@ -51,7 +51,7 @@ export const CODEX_TRUST_LINE =
   'after you trust them once in `/hooks`.';
 
 /** Default log path consumed by `hippo last-sleep` when a caller passes no --path. */
-export function defaultSleepLogPath(homes: Homes): string {
+export function sleepLogPathOn(homes: Homes): string {
   return path.join(userHome(homes), HIPPO_DIR, 'logs', 'last-sleep.log');
 }
 

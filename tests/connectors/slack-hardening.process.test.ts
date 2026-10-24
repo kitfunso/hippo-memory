@@ -10,7 +10,7 @@ import { ingestMessage, type IngestInput } from '../../src/surface/connectors/sl
 import type { IngestResult } from '../../src/surface/connectors/ingest.js';
 import { messageToRememberOpts } from '../../src/surface/connectors/slack/transform.js';
 import { parkInDlq } from '../../src/surface/connectors/dlq.js';
-import { replayDlqEntry, slackDlq } from '../../src/surface/connectors/slack/dlq.js';
+import { replaySlackDlqEntry, slackDlq } from '../../src/surface/connectors/slack/dlq.js';
 import { archiveRawMemory } from '../../src/store/sqlite/raw-archive.js';
 import { verifySlackSignature } from '../../src/surface/connectors/slack/signature.js';
 import { slackHistoryFetcher } from '../../src/surface/connectors/slack/web-client.js';
@@ -357,7 +357,7 @@ describe('Slack hardening + migration v19', () => {
 
     // Replay using the current secret. Use a wide skew override so the test is
     // not flaky against the now/skew check inside verifySlackSignature.
-    const result = await replayDlqEntry(
+    const result = await replaySlackDlqEntry(
       { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root), infra: testInfra() },
       dlqId,
       { signingSecret: SECRET, now: Number(ts), skewSeconds: 60 },

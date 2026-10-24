@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { type ImportResult, type TargetedImport, importEntries } from './core.js';
+import { type ImportResult, type TargetedImport, importEntriesInto } from './core.js';
 import { splitMarkdownFrontmatter, collectMarkdownFiles } from './markdown-parse.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../../base/util/json.js';
@@ -45,9 +45,9 @@ function parseChatGPTFile(filePath: string): string[] {
     .filter(Boolean);
 }
 
-export function importChatGPT(filePath: string, options: TargetedImport): ImportResult {
+export function importChatGPTInto(filePath: string, options: TargetedImport): ImportResult {
   const chunks = parseChatGPTFile(filePath);
-  return importEntries(chunks, 'import:chatgpt', ['imported', 'chatgpt'], options);
+  return importEntriesInto(chunks, 'import:chatgpt', ['imported', 'chatgpt'], options);
 }
 
 const HIPPO_START = '<!-- hippo:start -->';
@@ -141,9 +141,9 @@ function parseClaudeFile(filePath: string): string[] {
   return splitMarkdown(cleaned);
 }
 
-export function importClaude(filePath: string, options: TargetedImport): ImportResult {
+export function importClaudeInto(filePath: string, options: TargetedImport): ImportResult {
   const chunks = parseClaudeFile(filePath);
-  return importEntries(chunks, 'import:claude', ['imported', 'claude'], options);
+  return importEntriesInto(chunks, 'import:claude', ['imported', 'claude'], options);
 }
 
 /** Split cursor rules file into chunks.
@@ -198,7 +198,7 @@ function parseCursorFile(content: string): string[] {
 const CURSOR_RULE_FILE = /\.mdc?$/i;
 
 /** Import `.cursorrules`, one rule file, or a `.cursor/rules` tree of `.mdc` and `.md` rules. */
-export function importCursor(sourcePath: string, options: TargetedImport): ImportResult {
+export function importCursorInto(sourcePath: string, options: TargetedImport): ImportResult {
   const files = fs.statSync(sourcePath).isDirectory()
     ? collectMarkdownFiles(sourcePath, options.hippoRoot, CURSOR_RULE_FILE).map((rel) => path.join(sourcePath, rel))
     : [sourcePath];
@@ -206,7 +206,7 @@ export function importCursor(sourcePath: string, options: TargetedImport): Impor
     const raw = fs.readFileSync(file, 'utf8');
     return parseCursorFile(CURSOR_RULE_FILE.test(file) ? splitMarkdownFrontmatter(raw).body : raw);
   });
-  return importEntries(chunks, 'import:cursor', ['imported', 'cursor'], options);
+  return importEntriesInto(chunks, 'import:cursor', ['imported', 'cursor'], options);
 }
 
 /**
@@ -232,7 +232,7 @@ function parseGenericFile(filePath: string): string[] {
     .filter(Boolean);
 }
 
-export function importGenericFile(filePath: string, options: TargetedImport): ImportResult {
+export function importGenericFileInto(filePath: string, options: TargetedImport): ImportResult {
   const chunks = parseGenericFile(filePath);
-  return importEntries(chunks, 'import:file', ['imported'], options);
+  return importEntriesInto(chunks, 'import:file', ['imported'], options);
 }

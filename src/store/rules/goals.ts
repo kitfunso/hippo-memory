@@ -59,7 +59,7 @@ export function pushedGoal(id: string, opts: PushGoalOpts, createdAt: string, po
 }
 
 /** The factor a completed goal's score applies to the strength of each memory recalled in its active life. */
-export function outcomeMultiplier(score: number): number {
+export function goalOutcomeMultiplier(score: number): number {
   if (score >= POSITIVE_OUTCOME_THRESHOLD) return STRENGTH_BOOST;
   return score < NEGATIVE_OUTCOME_THRESHOLD ? STRENGTH_DECAY : 1;
 }

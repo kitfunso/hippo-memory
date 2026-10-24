@@ -12,7 +12,7 @@ import {
 } from '../../db/index.js';
 import { oncePerStore } from '../../db/connect.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { selectEntriesByIds } from './entry-reads.js';
+import { readEntriesByIds } from './entry-reads.js';
 import { deferMirrorWrite, mirrorBestEffort, writeMarkdownMirrors } from './mirrors.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
@@ -72,7 +72,7 @@ function rewriteDueMirrorsIn(hippoRoot: string): void {
 function rewriteDueMirrors(db: DatabaseSyncLike, hippoRoot: string): void {
   for (let marks = dueMarks(db, DUE); marks.length > 0; marks = dueMarks(db, marks.at(-1)!.key)) {
     // A mark names a row by id alone, and one rewrite serves the marks every tenant's jobs left.
-    const rows = selectEntriesByIds(
+    const rows = readEntriesByIds(
       db,
       marks.map((mark) => mark.key.slice(DUE.length)),
       ALL_TENANTS,

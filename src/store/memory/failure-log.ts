@@ -41,7 +41,7 @@ export function memoryFailureLog(t: MemoryTables): FailureLog {
 }
 
 /** The tenant's failure totals since `sinceIso`. */
-export function failureSummary(t: MemoryTables, tenantId: string, sinceIso: string): FailureSummary {
+export function failureSummaryIn(t: MemoryTables, tenantId: string, sinceIso: string): FailureSummary {
   const mine = t.failures.filter((r) => r.tenantId === tenantId);
   const inWindow = mine.filter((r) => byBytes(r.ts, sinceIso) >= 0);
   const rated = [...mine]

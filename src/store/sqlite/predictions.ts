@@ -275,8 +275,8 @@ function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): nev
   );
 }
 
-function loadPredictionById(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
-  assertTenantId('loadPredictionById', tenantId);
+function readPrediction(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
+  assertTenantId('readPrediction', tenantId);
   const row = cachedStatement(
     db,
     `
@@ -287,20 +287,20 @@ function loadPredictionById(db: DatabaseSyncLike, tenantId: string, id: number):
   return row ? rowToPrediction(row) : null;
 }
 
-function loadPredictionsByClass(
+function listPredictionsByClass(
   db: DatabaseSyncLike,
   tenantId: string,
   classTag: string,
   opts: ListPredictionsOptions = {},
 ): Prediction[] {
-  assertTenantId('loadPredictionsByClass', tenantId);
+  assertTenantId('listPredictionsByClass', tenantId);
   const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;
   const after = keysetAfter('created_at', 'id', opts.after);
   let rows: PredictionRow[];
   if (opts.closureState) {
     if (!VALID_CLOSURE_STATES.has(opts.closureState)) {
       throw new BadRequestError(
-        `loadPredictionsByClass: closureState must be one of ${Array.from(VALID_CLOSURE_STATES).join('|')}; got ` +
+        `listPredictionsByClass: closureState must be one of ${Array.from(VALID_CLOSURE_STATES).join('|')}; got ` +
           `${opts.closureState}`,
       );
     }
@@ -330,12 +330,12 @@ function loadPredictionsByClass(
 }
 
 /** Every prediction in the tenant, open and closed, across all classes: the `status=all` list without a class. */
-function loadAllPredictions(
+function listAllPredictions(
   db: DatabaseSyncLike,
   tenantId: string,
   opts: { limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
-  assertTenantId('loadAllPredictions', tenantId);
+  assertTenantId('listAllPredictions', tenantId);
   const after = keysetAfter('created_at', 'id', opts.after);
   const rows = cachedStatement(
     db,
@@ -414,12 +414,12 @@ function auditBaserateRead(
   ]);
 }
 
-function loadOpenPredictions(
+function listOpenPredictions(
   db: DatabaseSyncLike,
   tenantId: string,
   opts: { classTag?: string; limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
-  assertTenantId('loadOpenPredictions', tenantId);
+  assertTenantId('listOpenPredictions', tenantId);
   const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;
   const after = keysetAfter('created_at', 'id', opts.after);
   let rows: PredictionRow[];
@@ -455,14 +455,14 @@ function listPredictions(
   tenantId: string,
   { classTag, closureState, limit, after }: PredictionListQuery,
 ): Prediction[] {
-  if (closureState === 'open') return loadOpenPredictions(db, tenantId, { classTag, limit, after });
-  if (classTag === undefined) return loadAllPredictions(db, tenantId, { limit, after });
-  return loadPredictionsByClass(db, tenantId, classTag, { closureState, limit, after });
+  if (closureState === 'open') return listOpenPredictions(db, tenantId, { classTag, limit, after });
+  if (classTag === undefined) return listAllPredictions(db, tenantId, { limit, after });
+  return listPredictionsByClass(db, tenantId, classTag, { closureState, limit, after });
 }
 
 const predictionsBodies: Bodies<Omit<Predictions, 'savePrediction'>> = {
   closePrediction: closePrediction,
-  predictionById: loadPredictionById,
+  predictionById: readPrediction,
   listPredictions: listPredictions,
   predictionBaserate: computePredictionBaserate,
 };

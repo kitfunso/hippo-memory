@@ -5,7 +5,7 @@ import { rmSync } from 'node:fs';
 import type { AuditIssue } from '../../src/base/memory/memory-audit.js';
 import { computeSchemaFit, schemaFitFrom, schemaFitSourceOf } from '../../src/base/memory/memory.js';
 import { auditRemoveErrors } from '../../src/api/index.js';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -53,7 +53,7 @@ describe('auditRemoveErrors', () => {
     ).toEqual([pinned.id, warned.id].sort());
     const db = openHippoDb(root);
     try {
-      const forgets = queryAuditEvents(db, { tenantId: 'default', op: 'forget' });
+      const forgets = listAuditEvents(db, { tenantId: 'default', op: 'forget' });
       expect(forgets.map((e) => [e.targetId, e.actor, e.metadata]).sort()).toEqual(
         [
           [first.id, 'audit-test', { reason: 'audit --fix: vague' }],

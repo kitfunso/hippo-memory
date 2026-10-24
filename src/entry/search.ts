@@ -2,8 +2,8 @@
 // entry, so the domain rankers take it as an input.
 import type { MemoryEntry } from '../base/memory/memory.js';
 import type { SearchResult } from '../base/rank/search-types.js';
-import { search as rankBm25, type SearchOptions } from '../domain/search/bm25-search.js';
-import { multihopSearch as rankMultihop } from '../domain/search/multihop.js';
+import { rankBm25, type SearchOptions } from '../domain/search/bm25-search.js';
+import { rankMultihop } from '../domain/search/multihop.js';
 
 /** BM25 * strength * recency with the rank boosts; path tags come from `options.cwd`, else the process's folder. */
 export function search(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {

@@ -37,7 +37,7 @@ function rowToRejectedValue(row: RawRejectedValueRow): RejectedValueRow {
 
 /** Look up a tombstone by tenant + digest: one indexed point query, the guard's common-case cost; a miss ends the
  * guard. */
-export function findRejectedValue(db: DatabaseSyncLike, tenantId: string, digest: string): RejectedValueRow | null {
+export function readRejectedValue(db: DatabaseSyncLike, tenantId: string, digest: string): RejectedValueRow | null {
   const row = cachedStatement(
     db,
     `SELECT ${REJECTED_VALUE_COLUMNS}
@@ -129,7 +129,7 @@ export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): Reje
  * costs ONE indexed point query; only a hit SELECTs the stored row. */
 export function checkRejectionGuard(db: DatabaseSyncLike, tenantId: string, entryId: string, content: string): void {
   const incomingDigest = rejectionDigest(content);
-  const tombstone = findRejectedValue(db, tenantId, incomingDigest);
+  const tombstone = readRejectedValue(db, tenantId, incomingDigest);
   if (!tombstone) return; // miss ends the guard — the overwhelmingly common case
 
   // Id-only on purpose (ids are global ULIDs; the tombstone lookup is tenant-scoped); tenant_id is read as a

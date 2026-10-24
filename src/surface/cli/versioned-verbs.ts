@@ -18,10 +18,10 @@ import { nonEmptyStringFlag, stringFlag, type CliFlags, type CommandContext } fr
 import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
 import {
-  closeObject,
+  closeObjectVerb,
   foundOrExit,
   idArgOrExit,
-  listObjects,
+  listObjectsVerb,
   printLifecycleTail,
   type ObjectNames,
 } from './object-verbs.js';
@@ -82,7 +82,7 @@ export function versionedVerbs<K extends VersionedKindName, B>(
     if (sub === kind.extra?.sub) return kind.extra.run(ctx, args, flags);
     if (sub === 'list') {
       const filter = kind.filterFlag === undefined ? undefined : stringFlag(flags, kind.filterFlag)?.trim();
-      return listObjects(flags, {
+      return listObjectsVerb(flags, {
         plural: kind.plural,
         states: objectStates(kind.kind),
         load: (opts) => objectList(ctx, kind.kind, { ...opts, filter }),
@@ -91,7 +91,7 @@ export function versionedVerbs<K extends VersionedKindName, B>(
     }
     if (sub === 'get') return getVersion(ctx, kind, args);
     if (sub === 'supersede') return supersedeVersion(ctx, kind, args, flags);
-    if (sub === 'close') return closeObject(args, kind.names, (id) => objectClose(ctx, kind.kind, id));
+    if (sub === 'close') return closeObjectVerb(args, kind.names, (id) => objectClose(ctx, kind.kind, id));
     // Both `<cmd> new "<key>"` and the bare `<cmd> "<key>"` create.
     await createVersion(ctx, kind, sub === 'new' ? (args[1] ?? '') : sub, flags);
   };

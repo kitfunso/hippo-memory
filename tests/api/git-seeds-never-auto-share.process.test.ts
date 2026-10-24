@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sleep, adminActor } from '../../src/api/index.js';
+import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { buildDag, buildEntityProfiles } from '../../src/domain/consolidate/dag.js';
 import { storeExtractedFacts, type ExtractedFact } from '../../src/domain/learn/extract.js';
@@ -68,7 +68,7 @@ describe('git-learned rows and the global store', () => {
 
   it('sleep with autoShareOnSleep on does not copy the git-learned row', async () => {
     expect(loadConfig(hippoRoot).autoShareOnSleep).toBe(true);
-    const result = await sleep(apiCtx(hippoRoot, 'default', adminActor('test:gitshare')), {});
+    const result = await sleepWholeStore(apiCtx(hippoRoot, 'default', adminActor('test:gitshare')), {});
     expect(result.shared).toBe(1);
     expect(globalContents()).toEqual([ORDINARY]);
   });

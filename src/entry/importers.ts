@@ -1,14 +1,14 @@
 // The published importers take a folder in their options, so this entry builds the hippo.db store each one writes to.
 import {
-  importEntries as importInto,
+  importEntriesInto,
   importRoot,
   type ImportOptions,
   type ImportResult,
   type TargetedImport,
 } from '../surface/importers/core.js';
 import * as sources from '../surface/importers/sources.js';
-import { importMarkdown as importMarkdownInto } from '../surface/importers/markdown.js';
-import { importVault as importVaultInto } from '../surface/importers/vault.js';
+import { importMarkdownInto } from '../surface/importers/markdown.js';
+import { importVaultInto } from '../surface/importers/vault.js';
 import { defaultImportFiles, defaultStore, runStoreBatch, runStoreRequest } from '../surface/open-store.js';
 import { entryInfra } from '../surface/entry-infra.js';
 
@@ -20,24 +20,24 @@ function targeted(options: ImportOptions): TargetedImport {
 /** Given an array of raw text chunks, deduplicate against existing memories, create MemoryEntry objects, write them
  *  (unless dry-run), and return a result. */
 export function importEntries(chunks: string[], source: string, tags: string[], options: ImportOptions): ImportResult {
-  return importInto(chunks, source, tags, targeted(options));
+  return importEntriesInto(chunks, source, tags, targeted(options));
 }
 
 export function importChatGPT(filePath: string, options: ImportOptions): ImportResult {
-  return sources.importChatGPT(filePath, targeted(options));
+  return sources.importChatGPTInto(filePath, targeted(options));
 }
 
 export function importClaude(filePath: string, options: ImportOptions): ImportResult {
-  return sources.importClaude(filePath, targeted(options));
+  return sources.importClaudeInto(filePath, targeted(options));
 }
 
 /** Import `.cursorrules`, one rule file, or a `.cursor/rules` tree of `.mdc` and `.md` rules. */
 export function importCursor(sourcePath: string, options: ImportOptions): ImportResult {
-  return sources.importCursor(sourcePath, targeted(options));
+  return sources.importCursorInto(sourcePath, targeted(options));
 }
 
 export function importGenericFile(filePath: string, options: ImportOptions): ImportResult {
-  return sources.importGenericFile(filePath, targeted(options));
+  return sources.importGenericFileInto(filePath, targeted(options));
 }
 
 export function importMarkdown(filePath: string, options: ImportOptions): ImportResult {

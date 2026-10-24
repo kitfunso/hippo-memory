@@ -40,7 +40,15 @@ export const SHARED_WRITERS = [
 export const RECALL_VERB_FILES = ['surface/cli/recall.ts', 'surface/cli/explain.ts'];
 
 /** The memory writers and the store opener. A CLI verb reaches them through a root-taking function in src/api or the module that owns the rows. */
-export const STORE_WRITERS = ['writeEntry', 'deleteEntry', 'deleteEntryCore', 'batchWriteAndDelete', 'openHippoDb'];
+export const STORE_WRITERS = [
+  'writeEntry',
+  'writeEntryOn',
+  'deleteEntry',
+  'deleteEntryCore',
+  'batchWriteAndDelete',
+  'batchWriteAndDeleteInFolder',
+  'openHippoDb',
+];
 
 /** The CLI files that may still name some of them, each with its reason. A new entry needs one too.
  * @type {Record<string, string[]>} */

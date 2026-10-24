@@ -6,7 +6,7 @@ import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { KeyAudit, KeyGrants, KeyMint, KeyRevoke, KeyWrites, SelfKeyMint } from '../port.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
-import { selectApiKeyOwner } from './tenant-lookup.js';
+import { readApiKeyOwner } from './tenant-lookup.js';
 import type { AppendAuditOpts } from '../port/types.js';
 import type { ScopeGrantChange } from '../port/keys.js';
 
@@ -51,7 +51,7 @@ function changeScopeGrant(db: DatabaseSyncLike, { tenantId, keyId, scope, op, ac
   withWriteScope(db, 'change_scope_grant', () => {
     // Under the write lock, not in the api: a revoke landing between a check there and this grant would leave a grant
     // on a dead key.
-    const row = ownedKey(selectApiKeyOwner(db, keyId), tenantId, keyId);
+    const row = ownedKey(readApiKeyOwner(db, keyId), tenantId, keyId);
     assertGrantable({ op, keyId }, row.revokedAt);
     if (op === 'auth_grant') grantScope(db, keyId, scope);
     else ungrantScope(db, keyId, scope);
@@ -63,7 +63,7 @@ function changeScopeGrant(db: DatabaseSyncLike, { tenantId, keyId, scope, op, ac
  * error. */
 function revokeKey(db: DatabaseSyncLike, revoke: KeyRevoke): string {
   return withWriteScope(db, 'revoke_api_key', () => {
-    const row = ownedKey(selectApiKeyOwner(db, revoke.keyId), revoke.tenantId, revoke.keyId);
+    const row = ownedKey(readApiKeyOwner(db, revoke.keyId), revoke.tenantId, revoke.keyId);
     if (row.revokedAt) return row.revokedAt;
     revokeApiKey(db, revoke.keyId, revoke.at);
     appendAuditEvents(db, [{ tenantId: row.tenantId, actor: revoke.actor, op: 'auth_revoke', targetId: revoke.keyId }]);

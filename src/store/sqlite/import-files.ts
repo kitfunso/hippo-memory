@@ -4,7 +4,7 @@ import type { TenantId } from '../../base/util/tenant.js';
 import type { EntryWrite } from '../port/entry-writes.js';
 import type { RejectionCheck } from '../port/rejections.js';
 import type { EntryTextKey } from '../port/sharing.js';
-import { selectTextKeysHolding } from './copy-rows.js';
+import { listTextKeysHolding } from './copy-rows.js';
 import { writeEntryRow } from './entry-writes.js';
 import { handlesOf, openStore } from './handles.js';
 import { inPortTerms } from './port-errors.js';
@@ -27,6 +27,6 @@ export function sqliteImportFiles(hippoRoot: string): SqliteImportFiles {
     writeEntry: (write) => inPortTerms(() => on((db) => writeEntryRow(db, files, write), openStore)),
     refusedAmong: (checks) => inPortTerms(() => on((db) => refusedAmong(db, checks))),
     textKeysHolding: (tenantId, texts) =>
-      inPortTerms(() => on((db) => selectTextKeysHolding(db, tenantId, texts), openStore)),
+      inPortTerms(() => on((db) => listTextKeysHolding(db, tenantId, texts), openStore)),
   };
 }

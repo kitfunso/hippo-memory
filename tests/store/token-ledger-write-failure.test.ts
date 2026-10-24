@@ -6,7 +6,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { adminActor, recordTokens } from '../../src/api/index.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { bookTokenUse } from '../../src/api/ledger-db.js';
-import { promptHookContext } from '../../src/api/prompt-hook.js';
+import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { ledgerAt } from '../_helpers/cli-stores.js';
@@ -98,7 +98,7 @@ describe('token ledger write failures', () => {
       "CREATE TRIGGER refuse_ledger BEFORE INSERT ON token_ledger BEGIN SELECT RAISE(ABORT, 'ledger insert refused'); END",
     );
     closeHippoDb(db);
-    const out = await promptHookContext(apiCtx(store, 'default', adminActor('test')), {
+    const out = await buildPromptHookContext(apiCtx(store, 'default', adminActor('test')), {
       sessionId: 's-refused',
       project: PROJECT,
     });
@@ -113,7 +113,7 @@ describe('token ledger write failures', () => {
   it('a store with no ledger table is an expected skip: nothing at the default level, one debug line with no stack, and the hook prints its block', async () => {
     pinNote(root);
     const hook = (sessionId: string) =>
-      promptHookContext(apiCtx(root, 'default', adminActor('test')), { sessionId, project: PROJECT });
+      buildPromptHookContext(apiCtx(root, 'default', adminActor('test')), { sessionId, project: PROJECT });
     expect((await hook('s-dropped-1')).stdout).toContain('the deploy window opens on Tuesdays');
     expect(skippedLines()).toEqual([]);
 

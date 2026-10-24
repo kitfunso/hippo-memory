@@ -11,10 +11,10 @@ import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
 import type { Context } from '../../api/index.js';
 import {
-  closeObject,
+  closeObjectVerb,
   foundOrExit,
   idArgOrExit,
-  listObjects,
+  listObjectsVerb,
   printLifecycleTail,
   type ObjectNames,
 } from './object-verbs.js';
@@ -32,7 +32,7 @@ function printDecisionRow(d: Decision): void {
 }
 
 function decideList(ctx: Context, flags: CliFlags): Promise<void> {
-  return listObjects(flags, {
+  return listObjectsVerb(flags, {
     plural: 'decisions',
     states: objectStates('decision'),
     load: (opts) => objectList(ctx, 'decision', opts),
@@ -51,7 +51,7 @@ async function decideGet(ctx: Context, args: string[]): Promise<void> {
 }
 
 function decideClose(ctx: Context, args: string[]): Promise<void> {
-  return closeObject(args, DECISION, (id) => objectClose(ctx, 'decision', id));
+  return closeObjectVerb(args, DECISION, (id) => objectClose(ctx, 'decision', id));
 }
 
 export async function handleDecide({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {

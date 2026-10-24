@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'v
 import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { embedMemory, embedAll } from '../../src/domain/search/embed-memories.js';
+import { embedMemoryInto, embedAll } from '../../src/domain/search/embed-memories.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
@@ -50,7 +50,7 @@ afterEach(() => {
 async function remember(content: string): Promise<string> {
   const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   writeEntry(root, entry);
-  await embedMemory(localIndex(root), entry);
+  await embedMemoryInto(localIndex(root), entry);
   return entry.id;
 }
 

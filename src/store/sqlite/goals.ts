@@ -10,7 +10,7 @@ import {
   assertParentInSession,
   goalOverflow,
   newGoalId,
-  outcomeMultiplier,
+  goalOutcomeMultiplier,
   pushedGoal,
   retrievalPolicyOf,
 } from '../rules/goals.js';
@@ -147,12 +147,12 @@ function insertRetrievalPolicy(db: DatabaseSyncLike, policy: RetrievalPolicy): v
 
 /** The active goals and their policies on one handle, so a goal and its policy never disagree. */
 export function activeGoalsWithPolicies(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): ActiveGoals {
-  const goals = getActiveGoalsWithDb(db, opts);
-  return { goals, policies: loadGoalPolicies(db, goals) };
+  const goals = listActiveGoalsOn(db, opts);
+  return { goals, policies: readGoalPolicies(db, goals) };
 }
 
 /** Every goal of a (tenant, session), whatever its status, oldest first. */
-function getSessionGoals(db: DatabaseSyncLike, tenantId: string, sessionId: string): Goal[] {
+function listSessionGoals(db: DatabaseSyncLike, tenantId: string, sessionId: string): Goal[] {
   const rows = cachedStatement(
     db,
     `
@@ -165,7 +165,7 @@ function getSessionGoals(db: DatabaseSyncLike, tenantId: string, sessionId: stri
   return rows.map(rowToGoal);
 }
 
-function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
+function listActiveGoalsOn(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
   const rows = cachedStatement(
     db,
     `
@@ -180,7 +180,7 @@ function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): G
 
 // Per-goal retrieval_policy multipliers compose onto the base goal-tag boost and are hard-capped at
 // MAX_FINAL_MULTIPLIER (3.0x) before scoring.
-function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<string, RetrievalPolicy> {
+function readGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<string, RetrievalPolicy> {
   const policiesByGoalId = new Map<string, RetrievalPolicy>();
   const policyIds = [...new Set(active.flatMap((g) => (g.retrievalPolicyId ? [g.retrievalPolicyId] : [])))];
   if (policyIds.length === 0) return policiesByGoalId;
@@ -272,7 +272,7 @@ function completeGoal(db: DatabaseSyncLike, _tenantId: string, goalId: string, o
     ).run(completedAt, score, goalId);
 
     if (score !== null && !opts.noPropagate) {
-      const multiplier = outcomeMultiplier(score);
+      const multiplier = goalOutcomeMultiplier(score);
 
       if (multiplier !== 1) {
         // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one adjustment
@@ -316,7 +316,7 @@ function resumeGoal(db: DatabaseSyncLike, _tenantId: string, goalId: string): vo
 // host admin.
 const goalsBodies: Bodies<Goals> = {
   push: pushGoal,
-  sessionGoals: getSessionGoals,
+  sessionGoals: listSessionGoals,
   complete: completeGoal,
   suspend: suspendGoal,
   resume: resumeGoal,

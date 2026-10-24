@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -61,7 +61,7 @@ describe('the shared gated write', () => {
     const entry = entryFor('The billing service uses pnpm, so npm install is never run there.');
     expect(gatedWrite(db, storeFilesOf(s.hippoRoot), entry)).toBe('written');
     expect(readEntry(s.hippoRoot, entry.id)).toMatchObject({ content: entry.content, originProject: 'proj' });
-    expect(queryAuditEvents(db, { tenantId: 'default', op: 'remember' }).map((e) => e.targetId)).toContain(entry.id);
+    expect(listAuditEvents(db, { tenantId: 'default', op: 'remember' }).map((e) => e.targetId)).toContain(entry.id);
   });
 
   it('keeps an origin the caller already set', () => {
@@ -92,7 +92,7 @@ describe('the shared gated write', () => {
     const entry = entryFor(text);
     expect(gatedWrite(db, storeFilesOf(s.hippoRoot), entry, { actor: 'post-compact' })).toBe('skipped:rejected');
     expect(readEntry(s.hippoRoot, entry.id)).toBeNull();
-    const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+    const refusals = listAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
     expect(refusals).toHaveLength(1);
     expect(refusals[0]!.targetId).toBe(entry.id);
     expect(refusals[0]!.actor).toBe('post-compact');

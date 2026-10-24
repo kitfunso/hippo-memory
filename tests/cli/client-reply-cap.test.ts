@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { promote, remember, HttpResponseError, MalformedReplyError } from '../../src/surface/cli/client.js';
+import { postPromote, postRemember, HttpResponseError, MalformedReplyError } from '../../src/surface/cli/client.js';
 
 const OVER_CAP = 'x'.repeat(1024 * 1024 + 1);
 
@@ -31,28 +31,31 @@ afterEach(async () => {
 describe('thin client reply cap', () => {
   it('returns a normal reply', async () => {
     const url = await startFake(200, JSON.stringify({ ok: true, sourceId: 'a', globalId: 'b' }));
-    await expect(promote(url, undefined, 'a')).resolves.toEqual({ ok: true, sourceId: 'a', globalId: 'b' });
+    await expect(postPromote(url, undefined, 'a')).resolves.toEqual({ ok: true, sourceId: 'a', globalId: 'b' });
   });
 
   it('refuses a 2xx reply past the cap', async () => {
     const url = await startFake(200, JSON.stringify({ id: OVER_CAP }));
-    await expect(remember(url, undefined, { content: 'a fact' })).rejects.toThrow('reply over 1048576 bytes');
+    await expect(postRemember(url, undefined, { content: 'a fact' })).rejects.toThrow('reply over 1048576 bytes');
   });
 
   it("keeps the server's error message and falls back to the status line past the cap", async () => {
     const small = await startFake(404, JSON.stringify({ error: 'memory not found' }));
-    await expect(promote(small, undefined, 'a')).rejects.toMatchObject({ status: 404, message: 'memory not found' });
+    await expect(postPromote(small, undefined, 'a')).rejects.toMatchObject({
+      status: 404,
+      message: 'memory not found',
+    });
     await new Promise<void>((resolve) => server!.close(() => resolve()));
 
     const big = await startFake(500, JSON.stringify({ error: OVER_CAP }));
-    const err = await promote(big, undefined, 'a').catch((e: Error) => e);
+    const err = await postPromote(big, undefined, 'a').catch((e: Error) => e);
     expect(err).toBeInstanceOf(HttpResponseError);
     expect(err).toMatchObject({ status: 500, message: '500 Internal Server Error' });
   });
 
   it.each(['null', '[]', '"text"'])('throws a typed error naming the route when a 2xx reply is %s', async (body) => {
     const url = await startFake(200, body);
-    const err = await remember(url, undefined, { content: 'a fact' }).catch((e: Error) => e);
+    const err = await postRemember(url, undefined, { content: 'a fact' }).catch((e: Error) => e);
     expect(err).toBeInstanceOf(MalformedReplyError);
     expect(err).toMatchObject({ route: 'POST /v1/memories' });
     expect(err instanceof Error && err.message).toContain('POST /v1/memories');
@@ -60,6 +63,6 @@ describe('thin client reply cap', () => {
 
   it('applies the per-route guard to an object missing the fields it needs', async () => {
     const url = await startFake(200, JSON.stringify({ ok: true }));
-    await expect(promote(url, undefined, 'a')).rejects.toBeInstanceOf(MalformedReplyError);
+    await expect(postPromote(url, undefined, 'a')).rejects.toBeInstanceOf(MalformedReplyError);
   });
 });

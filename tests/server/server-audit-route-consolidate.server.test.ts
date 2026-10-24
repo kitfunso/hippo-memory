@@ -17,7 +17,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, sleep, outcome } from '../../src/api/index.js';
+import { remember, sleepWholeStore, outcome } from '../../src/api/index.js';
 import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -50,7 +50,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     // Seed: write one row by invoking api.sleep, then query via HTTP.
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'seed-for-consolidate' });
-    await sleep(ctx, { dryRun: true });
+    await sleepWholeStore(ctx, { dryRun: true });
 
     // D2 v1.12.10: consolidate rows now tagged tenant='__host__' (api.sleep
     // is host-wide). The HTTP audit route accepts ?tenant=<t> to query the

@@ -4,7 +4,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { loadRecallSearchEntries } from '../../src/store/sqlite/fixtures.js';
+import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
 import { assemble, retrieve, supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -77,7 +77,7 @@ describe('the recall candidate window drops superseded rows before its LIMIT', (
     const root = newRoot();
     const { current, old } = seedVersions(root, oldCreatedFirst);
     const windowIds = (includeSuperseded: boolean): string[] =>
-      loadRecallSearchEntries(root, query, { limit: 1, tenantId: 'default', includeSuperseded }).map((e) => e.id);
+      listRecallEntriesInFolder(root, query, { limit: 1, tenantId: 'default', includeSuperseded }).map((e) => e.id);
 
     expect(windowIds(true)).toEqual([old.id]);
     expect(windowIds(false)).toEqual([current.id]);

@@ -9,7 +9,7 @@ import {
 import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { StoreFiles } from './open.js';
-import { continuityWhere, loadActiveTaskSnapshot } from './task-snapshots.js';
+import { continuityWhere, readActiveTaskSnapshot } from './task-snapshots.js';
 import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../port/types.js';
 import type { HandoffFilter, SessionEndHandoffRequest } from '../port/sessions.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -127,14 +127,14 @@ function handoffConditions(
 }
 
 /** Load the most recent handoff, optionally filtered by session ID. */
-export function loadLatestHandoff(
+export function readLatestHandoff(
   db: DatabaseSyncLike,
   tenantId: string,
   sessionId?: string | null,
   opts: HandoffFilter = {},
   key?: ContinuityKey | null,
 ): SessionHandoff | null {
-  assertTenantId('loadLatestHandoff', tenantId);
+  assertTenantId('readLatestHandoff', tenantId);
   const { conditions, params } = handoffConditions(tenantId, sessionId, opts, key);
   const row = cachedStatement(
     db,
@@ -151,8 +151,8 @@ export function loadLatestHandoff(
 }
 
 /** Load a specific handoff by its row ID. */
-export function loadHandoffById(db: DatabaseSyncLike, tenantId: string, id: number): SessionHandoff | null {
-  assertTenantId('loadHandoffById', tenantId);
+export function readHandoff(db: DatabaseSyncLike, tenantId: string, id: number): SessionHandoff | null {
+  assertTenantId('readHandoff', tenantId);
   const row = cachedStatement(
     db,
     `
@@ -242,8 +242,8 @@ export function writeSessionEndHandoff(
   const { sessionId, key, inPlace } = request;
   assertTenantId('writeSessionEndHandoff', tenantId);
   if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than write nothing
-  const active = loadActiveTaskSnapshot(db, files, tenantId, key);
-  const existing = loadLatestHandoff(db, tenantId, sessionId, {}, key);
+  const active = readActiveTaskSnapshot(db, files, tenantId, key);
+  const existing = readLatestHandoff(db, tenantId, sessionId, {}, key);
   const source = sessionEndSource(active, existing, request);
   if (!source) return null;
   const handoff = sessionEndHandoff(sessionId, source, existing, sessionOutcome(db, tenantId, sessionId));

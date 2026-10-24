@@ -26,7 +26,7 @@ export interface ObjectListSpec<O, S extends string> {
   readonly printRow: (o: O) => void;
 }
 
-export async function listObjects<O, S extends string>(flags: CliFlags, spec: ObjectListSpec<O, S>): Promise<void> {
+export async function listObjectsVerb<O, S extends string>(flags: CliFlags, spec: ObjectListSpec<O, S>): Promise<void> {
   const limit = parseListLimit(flags);
   const status = statusFilter(flags, spec.states);
   const results = await spec.load(status === undefined ? { limit } : { status, limit });
@@ -62,7 +62,7 @@ export interface ObjectNames {
 }
 
 /** `hippo <cmd> close <id>` for a kind whose close call returns the closed row. */
-export async function closeObject(
+export async function closeObjectVerb(
   args: string[],
   names: ObjectNames,
   close: (id: number) => Promise<{ id: number }>,

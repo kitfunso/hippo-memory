@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
-import { embedAll, embedMemory, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
+import { embedAll, embedMemoryInto, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
@@ -224,7 +224,7 @@ describe('embedMemory with a store', () => {
     const hippoRoot = markedFolder(hashedConfig());
     const memory = memorySide(copyOf());
     const entry = seeded[1];
-    await withSqliteBlocked(memory.store.kind, () => embedMemory(on(hippoRoot, memory.store), entry));
+    await withSqliteBlocked(memory.store.kind, () => embedMemoryInto(on(hippoRoot, memory.store), entry));
     expect(readdirSync(hippoRoot).sort()).toEqual(['config.json', OTHER_STORE_MARKER]);
     const expected = hashedVector(embeddingInputText(entry)).map(Math.fround);
     expect((await memory.store.vectors.storedVectors([entry.id])).get(entry.id)).toEqual(expected);
@@ -250,7 +250,9 @@ describe('embedMemory with a store', () => {
       const store: HippoStore = stale ? { ...memory.store, vectors: staleVectors } : memory.store;
       const ids = seeded.map((e) => e.id);
       const [before, requests] = [await memory.store.vectors.storedVectors(ids), embeddings.requests()];
-      await withSqliteBlocked(memory.store.kind, () => embedMemory(on(markedFolder(hashedConfig()), store), seeded[0]));
+      await withSqliteBlocked(memory.store.kind, () =>
+        embedMemoryInto(on(markedFolder(hashedConfig()), store), seeded[0]),
+      );
       expect(embeddings.requests() - requests).toBe(asked);
       expect(await memory.store.vectors.storedVectors(ids)).toEqual(before);
       expect(before.size).toBe(4);
