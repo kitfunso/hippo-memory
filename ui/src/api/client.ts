@@ -1,4 +1,5 @@
 import type {
+  Card,
   CardDetail,
   CardList,
   ForgetResult,
@@ -167,9 +168,17 @@ export function postForget(id: string, opts: ActionOptions = {}): Promise<Forget
   return post<ForgetResult>(`/api/memory/${encodeURIComponent(id)}/forget`, {}, opts.keepalive === true);
 }
 
-/** `GET /api/cards`. */
-export function fetchCards(): Promise<CardList> {
-  return get<CardList>("/api/cards");
+/** `GET /api/cards`, then each page its `next_cursor` names, joined into one list. */
+export async function fetchCards(): Promise<CardList> {
+  const cards: Card[] = [];
+  let cursor: string | undefined;
+  do {
+    const path = cursor === undefined ? "/api/cards" : `/api/cards?cursor=${encodeURIComponent(cursor)}`;
+    const page = await get<CardList>(path);
+    cards.push(...page.cards);
+    cursor = page.next_cursor;
+  } while (cursor !== undefined);
+  return { cards };
 }
 
 /** `GET /api/cards/:id`. */

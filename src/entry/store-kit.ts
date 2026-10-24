@@ -180,6 +180,8 @@ export {
 } from '../base/scope/read-admission.js';
 export { SECRET_TAGS } from '../base/util/secret-detect.js';
 export { tallyAmbientEntries } from '../base/memory/ambient.js';
+// An add-on's graphReads.graphDelta plans the rebuild's ops from its stored rows by hippo.db's rule.
+export { diffGraph, type StoredGraph } from '../store/rules/graph-delta.js';
 export { ftsTermParts, rarestFtsQuery } from '../base/rank/prompt-recall.js';
 // store copy --db writes the marker into the other store's folder.
 // An add-on that serves a team store checks the flag before it starts.

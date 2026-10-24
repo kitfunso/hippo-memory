@@ -70,7 +70,7 @@ describe('cards group', () => {
     const detail = await served.detail(T, card.id);
     expect(detail?.comments).toHaveLength(1);
     expect(detail?.runs).toHaveLength(1);
-    expect((await sync.list(T, {})).map((c) => c.id)).toContain(card.id);
+    expect((await sync.list(T, { limit: 10 })).cards.map((c) => c.id)).toContain(card.id);
     expect(await served.load(T, 'nope')).toBeNull();
     await expect(sync.create(T, { title: '' })).rejects.toThrow();
     await expect(served.create(T, { title: '' })).rejects.toThrow();

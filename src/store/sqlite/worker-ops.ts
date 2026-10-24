@@ -93,7 +93,7 @@ export const WORKER_OPS = {
     entitiesForMemories: 'read',
     entitiesByIds: 'read',
     neighborRelations: 'read',
-    storedGraph: 'read',
+    graphDelta: 'read',
   },
   objects: {
     listObjects: 'read',
@@ -152,7 +152,7 @@ export const WORKER_OPS = {
     repairQualityOnce: 'write',
   },
   lessonWrites: {
-    textsHoldingWords: 'read',
+    textsHolding: 'read',
     contentsWithTag: 'read',
     writeSkippingRejected: 'write',
     writeTogether: 'write',

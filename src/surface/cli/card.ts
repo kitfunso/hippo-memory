@@ -2,9 +2,13 @@
 
 import { cliStore } from './api-context.js';
 import { isHandoffOutcome } from '../../base/session/handoff.js';
-import { type Card, isCardStatus } from '../../base/records/card.js';
+import { type Card, type CardStatus, isCardStatus } from '../../base/records/card.js';
+import type { KeysetPosition } from '../../base/util/keyset.js';
+import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
+import { keysetPages } from '../../api/pages.js';
 import type { CardDetail } from '../../store/port/cards.js';
 import { printError } from './output.js';
+import { printJsonList } from './json-list.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -190,24 +194,32 @@ async function cardShow(hippoRoot: string, tenantId: string, args: string[], fla
   printCard(detail);
 }
 
+/** Every page of the tenant's cards in list order, the largest page at a time, so the list prints as it reads. */
+async function* cardPages(hippoRoot: string, tenantId: string, status?: CardStatus): AsyncGenerator<Card[]> {
+  const read = (after?: KeysetPosition) =>
+    cliStore(hippoRoot).cards.list(tenantId, { status, limit: MAX_LIST_LIMIT, after });
+  for await (const page of keysetPages(read)) yield page.cards;
+}
+
 async function cardList(hippoRoot: string, tenantId: string, _args: string[], flags: CliFlags): Promise<void> {
   const status = stringFlagOrExit(flags, 'status');
   if (status !== undefined && !isCardStatus(status)) {
     fail(`Invalid status: "${status}".`);
   }
-  const cards = await cliStore(hippoRoot).cards.list(tenantId, { status });
+  const pages = cardPages(hippoRoot, tenantId, status);
   if (boolFlag(flags, 'json')) {
-    console.log(JSON.stringify({ cards }, null, 2));
+    await printJsonList('cards', pages);
     return;
   }
-  if (cards.length === 0) {
-    console.log('No cards found.');
-    return;
+  let none = true;
+  for await (const cards of pages) {
+    for (const card of cards) {
+      const assignee = card.assigneeRuntime ? `\t(${card.assigneeRuntime})` : '';
+      console.log(`${card.id}\t${card.status}\t${card.title}${assignee}`);
+      none = false;
+    }
   }
-  for (const card of cards) {
-    const assignee = card.assigneeRuntime ? `\t(${card.assigneeRuntime})` : '';
-    console.log(`${card.id}\t${card.status}\t${card.title}${assignee}`);
-  }
+  if (none) console.log('No cards found.');
 }
 
 async function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {

@@ -26,6 +26,7 @@ import {
 } from './flag-values.js';
 import { requireInit, runChurnStaleForRepo, runViaServerIfAvailable, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
+import { printJsonList } from './json-list.js';
 import { errorMessage } from '../../base/util/log.js';
 import { DIGEST_DISPLAY_CHARS, CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { CliExit, fail } from './exit.js';
@@ -143,18 +144,34 @@ export async function handleConflicts({ hippoRoot, tenantId, flags }: CommandCon
 
   const status = stringFlagOrExit(flags, 'status') ?? 'open';
   const ctx = cliApiContext(hippoRoot, tenantId);
-  const conflicts = await api.conflictListAll((page) => api.conflictList(ctx, status, { everyTenant: true }, page));
+  const read = (page: api.ConflictPageOptions) => api.conflictList(ctx, status, { everyTenant: true }, page);
   if (boolFlag(flags, 'json')) {
-    console.log(JSON.stringify({ conflicts: conflicts.map(conflictToWire) }, null, 2));
+    await printJsonList('conflicts', wirePages(api.conflictPages(read)));
     return;
   }
 
-  if (conflicts.length === 0) {
+  // The header leads with the count, so a list past one page is read once to count and again from page 2 to print.
+  let total = 0;
+  let first: api.ConflictPage | undefined;
+  for await (const page of api.conflictPages(read)) {
+    first ??= page;
+    total += page.conflicts.length;
+  }
+  if (first === undefined || total === 0) {
     console.log('No memory conflicts found.');
     return;
   }
 
-  console.log(`Found ${conflicts.length} memory conflict${conflicts.length === 1 ? '' : 's'}\n`);
+  console.log(`Found ${total} memory conflict${total === 1 ? '' : 's'}\n`);
+  printConflictLines(first.conflicts);
+  if (first.next) for await (const page of api.conflictPages(read, first.next)) printConflictLines(page.conflicts);
+}
+
+async function* wirePages(pages: AsyncIterable<api.ConflictPage>) {
+  for await (const page of pages) yield page.conflicts.map(conflictToWire);
+}
+
+function printConflictLines(conflicts: api.ConflictPage['conflicts']): void {
   for (const conflict of conflicts) {
     console.log(`--- conflict_${conflict.id} score=${fmt(conflict.score, 3)} status=${conflict.status}`);
     console.log(`    ${conflict.memoryAId} <-> ${conflict.memoryBId}`);

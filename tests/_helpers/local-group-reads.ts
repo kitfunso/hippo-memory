@@ -128,7 +128,7 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
     (s) => s.agentImport.rowsHoldingOutsideSourcePrefix(TENANT, [PLAIN], IMPORTED, null),
     'mem_p_plain',
   ),
-  read('captures.textsHolding', (s) => s.captures.textsHolding(TENANT, ['deploy'], {}), PLAIN),
+  read('captures.textsHolding', (s) => s.captures.textsHolding(TENANT, [PLAIN], {}), PLAIN),
   read('compactionHooks.openRecords', (s) => s.compactionHooks.openRecords(TENANT, {}), TRANSCRIPT),
   read('consolidation.entryIdsPage', (s) => s.consolidation.entryIdsPage({ limit: 3 }), /ids: \[ 'mem_/),
   read('consolidation.sessionDecayContext', (s) => s.consolidation.sessionDecayContext(), /sleepCount: 2/),

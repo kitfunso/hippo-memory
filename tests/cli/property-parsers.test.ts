@@ -7,7 +7,8 @@ import { parsePositiveId, type CliFlags } from '../../src/surface/cli/flag-value
 import { CliExit } from '../../src/surface/cli/exit.js';
 import { HttpError } from '../../src/base/util/http-util.js';
 import type { KeysetPosition } from '../../src/base/util/keyset.js';
-import { pageOf, parseCursor } from '../../src/surface/server/cursor.js';
+import { parseCursor } from '../../src/api/cursor.js';
+import { pageOf } from '../../src/surface/server/cursor.js';
 import { arr, both, forAll, int, just, map, oneOf, pick, str, type Gen } from '../_helpers/property.js';
 
 /** The id the parser returned, or the exit code its refusal carries. */

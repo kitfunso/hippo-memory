@@ -7,7 +7,8 @@ import { conflictLoserFate } from '../../domain/consolidate/conflicts.js';
 import { classifyOriginProject } from '../../base/scope/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { isQuarantineScope } from '../../domain/trust/quarantine.js';
-import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, resolveListLimit } from '../../base/util/limits.js';
+import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
+import { keysetPages, pageLimit } from '../pages.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { requireHostAdmin, type Actor, type Context } from '../types.js';
@@ -54,12 +55,6 @@ function isLive(member: ConflictMember | null): boolean {
 /** A row the caller could not read hides its whole pair. */
 function touchable(actor: Actor, row: ConflictRow): boolean {
   return [row.a, row.b].every((member) => member !== null && canReadScope(actor, member.scope));
-}
-
-function pageLimit(limit: number | undefined): number {
-  const resolved = resolveListLimit(limit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
-  if (resolved === undefined) throw new BadRequestError(`limit must be a positive integer <= ${MAX_LIST_LIMIT}`);
-  return resolved;
 }
 
 async function touchableConflict(ctx: Context, conflictId: number): Promise<ConflictRow | null> {
@@ -159,16 +154,10 @@ export async function conflictList(
   return { conflicts: page.rows.map((row) => row.conflict), next: page.next };
 }
 
-/** Every conflict a paged list returns, read the largest page at a time, for the verbs that print the whole list. */
-export async function conflictListAll(
+/** Each page a paged list answers from `start`, the largest page at a time, for the verbs that print every conflict. */
+export function conflictPages(
   read: (page: ConflictPageOptions) => Promise<ConflictPage>,
-): Promise<MemoryConflict[]> {
-  const all: MemoryConflict[] = [];
-  let after: KeysetPosition | undefined;
-  do {
-    const page = await read({ limit: MAX_LIST_LIMIT, after });
-    all.push(...page.conflicts);
-    after = page.next ?? undefined;
-  } while (after);
-  return all;
+  start?: KeysetPosition,
+): AsyncGenerator<ConflictPage> {
+  return keysetPages((after) => read({ limit: MAX_LIST_LIMIT, after }), start);
 }

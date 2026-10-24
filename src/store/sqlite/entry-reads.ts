@@ -9,8 +9,6 @@ import { chunked } from '../../base/util/chunked.js';
 import { byIdOrder, FRESH_RAW_ORDER, oldestFirst, orderSql } from '../rules/order.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
-import { longestWord } from '../../base/util/same-text.js';
-import { openingPhrase } from '../rules/fts.js';
 import { MAX_FRESH_RAW } from '../rules/windows.js';
 import { tenantAnd } from './tenant.js';
 import {
@@ -26,7 +24,7 @@ import type { DuplicateCandidates, EntryIdPage, HalfLifeRow, ObjectLink } from '
 import type { IdPage, IdPageRequest } from '../port/vectors.js';
 import type { RawRefRow, SessionRawCount, SessionRawQuery, SessionRawWindow } from '../port/context-reads.js';
 import type { OriginRows, OriginTally } from '../port/project-tags.js';
-import type { EntrySignals, EntryTextKey, EntryTextKeyPage } from '../port/sharing.js';
+import type { EntrySignals, EntryTextKeyPage } from '../port/sharing.js';
 import type { EntryCursor, EntryPage } from '../port/types.js';
 
 // The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant
@@ -96,7 +94,7 @@ export function loadEntriesByIds(db: DatabaseSyncLike, ids: readonly string[], t
 const ORIGIN_IN = 'origin_project IN (SELECT value FROM json_each(?))';
 
 // One JSON param for the list keeps a cached statement's text the same however many origins a caller names.
-function originAnd(origins: readonly string[] | null | undefined): SqlFragment {
+export function originAnd(origins: readonly string[] | null | undefined): SqlFragment {
   if (origins == null) return { sql: '', params: [] };
   return { sql: ` AND (origin_project = '' OR ${ORIGIN_IN})`, params: [JSON.stringify(origins)] };
 }
@@ -458,43 +456,6 @@ export function selectOriginTallies(db: DatabaseSyncLike, tenantId: string, sour
   ).all(sourcePrefix.length, sourcePrefix, tenantId) as OriginTallyDbRow[];
 }
 
-export const IN_PHRASE_HITS = 'id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
-
-/** The index query for `text`'s first words; null when the phrase might name no token. */
-export function holdingPhrase(text: string): string | null {
-  const opening = openingPhrase(text);
-  return opening === null ? null : `content : "${opening.replaceAll('"', '""')}"`;
-}
-
-// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-type EntryTextKeyDbRow = Omit<EntryTextKey, 'tenantId'> & { tenant_id: string | null };
-
-function textKeyCandidates(db: DatabaseSyncLike, tenantId: TenantId, text: string, indexed: boolean): EntryTextKey[] {
-  const phrase = indexed ? holdingPhrase(text) : null;
-  const tenant = tenantAnd(tenantId, phrase === null ? 'tenant_id = ?' : TENANT_IS);
-  const where = phrase === null ? 'instr(content, ?) > 0' : IN_PHRASE_HITS;
-  const rows = cachedStatement(
-    db,
-    `SELECT id, tenant_id, content, source FROM memories WHERE ${where}${tenant.sql}`,
-  ).all(phrase ?? longestWord(text), ...tenant.params) as EntryTextKeyDbRow[];
-  return rows.map(({ tenant_id, ...row }) => ({ ...row, tenantId: tenant_id ?? DEFAULT_TENANT_ID }));
-}
-
-/** The rows of `tenantId` that may hold one of `texts` word for word, spacing aside: the index's phrase hits, else the
- * rows holding the text's longest word. Callers check each again. */
-export function selectTextKeysHolding(
-  db: DatabaseSyncLike,
-  tenantId: TenantId,
-  texts: readonly string[],
-): EntryTextKey[] {
-  const indexed = isFtsAvailable(db) && isFtsInSync(db);
-  const byId = new Map<string, EntryTextKey>();
-  for (const text of new Set(texts)) {
-    for (const key of textKeyCandidates(db, tenantId, text, indexed)) byId.set(key.id, key);
-  }
-  return [...byId.values()];
-}
-
 /** The ids among `ids` that a row of any tenant holds, one query per chunk. */
 export function selectTakenIds(db: DatabaseSyncLike, ids: readonly string[]): string[] {
   const taken: string[] = [];
@@ -621,30 +582,6 @@ export function* iterateRowsWithObjects(db: DatabaseSyncLike): Generator<HalfLif
     `SELECT ${MEMORY_SELECT_COLUMNS}, ${OBJECT_LINK_SQL} AS object_link FROM memories ORDER BY created ASC, id ASC`,
   ).iterate() as Iterable<ObjectLinkedRow>;
   for (const row of rows) yield { entry: rowToEntry(row), object: row.object_link };
-}
-
-/** Live rows of a tenant whose source does not start with `sourcePrefix` that may hold `text` word for word, spacing
- * aside: the index's phrase hits, else the rows holding its longest word. `origins` (global store only) limits them to
- * user-global rows and those projects. A superset: the caller checks each again. */
-export function selectRowsHoldingOutsideSourcePrefix(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  text: string,
-  sourcePrefix: string,
-  origins: readonly string[] | null,
-): Array<{ id: string; content: string; source: string }> {
-  const phrase = isFtsAvailable(db) && isFtsInSync(db) ? holdingPhrase(text) : null;
-  const where = phrase === null ? 'instr(content, ?) > 0 AND tenant_id = ?' : `${IN_PHRASE_HITS} AND ${TENANT_IS}`;
-  const visible = originAnd(origins);
-  return cachedStatement(
-    db,
-    `SELECT id, content, source FROM memories WHERE ${where} AND superseded_by IS NULL ` +
-      `AND substr(source, 1, ?) != ?${visible.sql}`,
-  ).all(phrase ?? longestWord(text), tenantId, sourcePrefix.length, sourcePrefix, ...visible.params) as Array<{
-    id: string;
-    content: string;
-    source: string;
-  }>;
 }
 
 /** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced, in loadAllEntries'

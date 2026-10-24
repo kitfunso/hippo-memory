@@ -64,18 +64,14 @@ export function loadContextCandidates(
   return onHandle(hippoRoot, (db) => candidatesSql.loadContextCandidates(db, tenantId, filter), openStore);
 }
 
-export function loadTextsHoldingWords(
+export function loadTextsHolding(
   hippoRoot: string,
   tenantId: TenantId = ALL_TENANTS,
-  words: readonly string[],
+  texts: readonly string[],
   project?: readonly string[],
   admit?: SqlFragment,
 ): HeldText[] {
-  return onHandle(
-    hippoRoot,
-    (db) => candidatesSql.loadTextsHoldingWords(db, tenantId, words, project, admit),
-    openStore,
-  );
+  return onHandle(hippoRoot, (db) => candidatesSql.loadTextsHolding(db, tenantId, texts, project, admit), openStore);
 }
 
 export function tallySources(hippoRoot: string, tenantId: TenantId = ALL_TENANTS): SourceTally[] {

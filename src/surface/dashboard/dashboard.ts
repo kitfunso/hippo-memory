@@ -4,6 +4,8 @@ import type * as http from 'http';
 import type { Context } from '../../api/index.js';
 import type { DashboardRouteRequest } from '../server/dashboard-types.js';
 import { readBody, sendJson } from '../../base/util/http-util.js';
+import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
+import { encodeCursor, parseCursor } from '../../api/cursor.js';
 import { forgetMemory, markWrong, pinMemory, resolveOpenConflict, type ActionResult } from './dashboard-actions.js';
 import {
   parseActionBody,
@@ -49,8 +51,11 @@ export async function searchRoute(r: DashboardRouteRequest): Promise<void> {
   sendOrNotFound(r.res, await r.reader.search(parseSearchText(r.query), freshOf(r)));
 }
 
+// next_cursor rides only a page with more after it, so a board that fits one page gets its old reply byte for byte.
 export async function cardsRoute(r: DashboardRouteRequest): Promise<void> {
-  sendJson(r.res, 200, { cards: await r.ctx.store.cards.list(r.ctx.tenantId, {}) });
+  const after = parseCursor(r.query.get('cursor'), 'string', 'string');
+  const { cards, next } = await r.ctx.store.cards.list(r.ctx.tenantId, { limit: MAX_LIST_LIMIT, after });
+  sendJson(r.res, 200, next === null ? { cards } : { cards, next_cursor: encodeCursor(next) });
 }
 
 export async function cardRoute(r: DashboardRouteRequest, { id }: Params): Promise<void> {

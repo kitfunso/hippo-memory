@@ -83,7 +83,7 @@ export {
 export type { SharePeer } from './sharing.js';
 export { memoryPin } from './memories/pin.js';
 export type { ForgetResult, RejectOptions, RejectResult } from './memories/forget.js';
-export { conflictListAll, conflictGet, conflictList, conflictListOpen, conflictResolve } from './memories/conflicts.js';
+export { conflictPages, conflictGet, conflictList, conflictListOpen, conflictResolve } from './memories/conflicts.js';
 export type {
   ConflictPage,
   ConflictPageOptions,

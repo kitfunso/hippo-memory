@@ -1,6 +1,7 @@
 // The built-in store's sharing reads: the existing functions, bound to this store.
 import { tallySources } from './candidates.js';
-import { loadEntriesWithSignals, loadEntryTextKeysPage, selectTakenIds, selectTextKeysHolding } from './entry-reads.js';
+import { loadEntriesWithSignals, loadEntryTextKeysPage, selectTakenIds } from './entry-reads.js';
+import { selectTextKeysHolding } from './copy-rows.js';
 import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';

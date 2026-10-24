@@ -1,5 +1,5 @@
 // hippo.db's LessonWrites group: git learn's batch, with the word and tag reads it checks first.
-import { loadTextsHoldingWords } from './candidates.js';
+import { loadTextsHolding } from './candidates.js';
 import { contentsWithTag } from './entry-reads.js';
 import { writeEntriesSkippingRejected, writeEntriesTogether } from './entry-writes.js';
 import { updateStats } from './index-and-stats.js';
@@ -30,13 +30,13 @@ function writeSkippingRejected(
   return written;
 }
 
-const lessonReadsBodies: Bodies<Pick<LessonWrites, 'textsHoldingWords' | 'contentsWithTag'>> = {
-  textsHoldingWords: (db, tenantId, words, ownScope) =>
-    loadTextsHoldingWords(db, tenantId, words, undefined, touchableScopeSql('', ownScope)),
+const lessonReadsBodies: Bodies<Pick<LessonWrites, 'textsHolding' | 'contentsWithTag'>> = {
+  textsHolding: (db, tenantId, texts, ownScope) =>
+    loadTextsHolding(db, tenantId, texts, undefined, touchableScopeSql('', ownScope)),
   contentsWithTag: contentsWithTag,
 };
 
-function lessonWritesBodies(files: StoreFiles): Bodies<Omit<LessonWrites, 'textsHoldingWords' | 'contentsWithTag'>> {
+function lessonWritesBodies(files: StoreFiles): Bodies<Omit<LessonWrites, 'textsHolding' | 'contentsWithTag'>> {
   return {
     writeSkippingRejected: (db, ...args) => writeSkippingRejected(db, files, ...args),
     writeTogether: (db, entries) => {

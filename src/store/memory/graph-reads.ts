@@ -7,8 +7,8 @@ import {
   type GraphRows,
   type GraphViewQuery,
   type Relation,
-  type StoredGraph,
 } from '../port/graph.js';
+import { diffGraph, memoryIdsOf, type StoredGraph } from '../rules/graph-delta.js';
 import { newestFirst } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 
@@ -107,7 +107,7 @@ function storedGraphIn(t: MemoryTables, tenantId: string, memoryIds: readonly st
   });
   const entities = t.entities.filter((e) => e.tenantId === tenantId).sort(byId);
   const relations = t.relations.filter((r) => r.tenantId === tenantId).sort(byId);
-  return structuredClone({
+  return {
     kinds: new Map(kinds),
     entities: entities.map((e) => ({ id: e.id, entity_type: e.entityType, name: e.name, ...sourceColumns(e) })),
     relations: relations.map((r) => ({
@@ -117,7 +117,7 @@ function storedGraphIn(t: MemoryTables, tenantId: string, memoryIds: readonly st
       rel_type: r.relType,
       ...sourceColumns(r),
     })),
-  });
+  };
 }
 
 function entitiesWhere<K>(t: MemoryTables, keys: readonly K[], holds: (e: Entity, batch: K[]) => boolean): Entity[] {
@@ -145,6 +145,7 @@ export function memoryGraphReads(t: MemoryTables): GraphReads {
       }
       return structuredClone([...found.values()]);
     },
-    storedGraph: async (tenantId, memoryIds) => storedGraphIn(t, tenantId, memoryIds),
+    graphDelta: async (tenantId, desired) =>
+      structuredClone(diffGraph(storedGraphIn(t, tenantId, memoryIdsOf(desired)), desired)),
   };
 }

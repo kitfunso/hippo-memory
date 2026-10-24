@@ -32,15 +32,6 @@ export function heldTextKeys(entry: Text): string[] {
   return [duplicateKey(entry.content), ...heldTexts(entry).map(duplicateKey)];
 }
 
-/**
- * The longest word of a text: every row holding the text word for word contains it, so a store lookup can filter on it.
- */
-export function longestWord(text: string): string {
-  return duplicateKey(text)
-    .split(' ')
-    .reduce((best, w) => (w.length > best.length ? w : best), '');
-}
-
 export function storedTextKeys(entries: Iterable<Text>): Set<string> {
   const keys = new Set<string>();
   for (const entry of entries) for (const key of heldTextKeys(entry)) keys.add(key);

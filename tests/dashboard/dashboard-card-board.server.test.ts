@@ -10,6 +10,7 @@ import { serveDashboard } from '../../src/surface/server/dashboard-listener.js';
 import type { ServerHandle } from '../../src/surface/server/types.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sessionCookie } from '../_helpers/dashboard-fixture.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 import {
@@ -311,6 +312,31 @@ describe('card routes', () => {
       expect(idsA).toEqual([T]);
       const showA = await dashboardRequest(at, `/api/cards/${T}`, atHost);
       expect(showA.status).toBe(200);
+    });
+  });
+
+  it('pages a board past 1,000 cards by next_cursor and refuses a cursor it did not mint', async () => {
+    const db = openHippoDb(hippoRoot);
+    try {
+      // One updated_at for all, so the page edge falls inside a tie and the id breaks it.
+      db.prepare(
+        `WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < 1001)
+         INSERT INTO cards (id, title, status, created_at, updated_at, tenant_id)
+         SELECT printf('card_bulk_%04d', i), 'bulk', 'ready', ?, ?, 'tenant_many' FROM k`,
+      ).run('2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
+    } finally {
+      closeHippoDb(db);
+    }
+    const ids = (body: string): string[] => JSON.parse(body).cards.map((card: { id: string }) => card.id);
+    await onTenant('tenant_many', async (at, atHost) => {
+      const first = await dashboardRequest(at, '/api/cards', atHost);
+      const cursor = JSON.parse(first.body).next_cursor;
+      expect(ids(first.body)).toHaveLength(1000);
+      const second = await dashboardRequest(at, `/api/cards?cursor=${cursor}`, atHost);
+      expect(Object.keys(JSON.parse(second.body))).toEqual(['cards']);
+      const expected = Array.from({ length: 1001 }, (_, i) => `card_bulk_${String(1001 - i).padStart(4, '0')}`);
+      expect([...ids(first.body), ...ids(second.body)]).toEqual(expected);
+      expect((await dashboardRequest(at, '/api/cards?cursor=not-ours', atHost)).status).toBe(400);
     });
   });
 

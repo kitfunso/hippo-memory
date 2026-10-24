@@ -6,6 +6,7 @@ import { CARD_LEASE_MS, type CardStatus } from '../../src/base/records/card.js';
 import type { HandoffOutcome } from '../../src/base/session/handoff.js';
 import type { HippoStore } from '../../src/store/index.js';
 import type { CardCreate } from '../../src/store/port/cards.js';
+import { keysetPages } from '../../src/api/pages.js';
 import type { PushGoalOpts } from '../../src/store/port/goals.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
@@ -101,8 +102,8 @@ describe('Cards', () => {
       (g) => g.create(TENANT_A, { title: '  ' }),
       (g) => g.create(TENANT_A, { title: 'bad budget', budget: 0 }),
       (g) => g.create(TENANT_A, { title: 'bad parent', dependsOn: ['card_nope'] }),
-      (g) => g.list(TENANT_A, {}),
-      (g) => g.list(TENANT_A, { status: 'backlog' }),
+      (g) => g.list(TENANT_A, { limit: 100 }),
+      (g) => g.list(TENANT_A, { status: 'backlog', limit: 100 }),
       (g, s) => g.load(TENANT_B, idOf(s, 0)),
       (g, s) => g.claim(TENANT_A, idOf(s, 0), 'claude', 'sess-1'),
       (g, s) => g.claim(TENANT_A, idOf(s, 0), 'codex'),
@@ -141,6 +142,44 @@ describe('Cards', () => {
     expect(outcomes[30]).toHaveProperty('error');
   });
 
+  it('pages the list newest change first, of one status or all, and stops after the last page', async () => {
+    const pages =
+      (status?: CardStatus): GroupCall<'cards', unknown> =>
+      async (g) => {
+        const seen: { cards: string[]; next: boolean }[] = [];
+        for await (const page of keysetPages((after) => g.list(TENANT_A, { status, limit: 2, after }))) {
+          seen.push({ cards: page.cards.map((c) => c.title), next: page.next !== null });
+        }
+        return seen;
+      };
+    const outcomes = await conforms('cards', [
+      ...['one', 'two', 'three', 'four', 'five'].map((title) => create(TENANT_A, () => ({ title }))),
+      create(TENANT_B, () => ({ title: 'tenant b' })),
+      (g, s) => g.claim(TENANT_A, idOf(s, 1), 'claude'),
+      pages(),
+      pages('ready'),
+      pages('running'),
+      pages('done'),
+    ]);
+    expect(outcomes.slice(7)).toEqual([
+      {
+        value: [
+          { cards: ['two', 'five'], next: true },
+          { cards: ['four', 'three'], next: true },
+          { cards: ['one'], next: false },
+        ],
+      },
+      {
+        value: [
+          { cards: ['five', 'four'], next: true },
+          { cards: ['three', 'one'], next: false },
+        ],
+      },
+      { value: [{ cards: ['two'], next: false }] },
+      { value: [{ cards: [], next: false }] },
+    ]);
+  });
+
   it('reclaims expired leases per tenant, shelves a failed card and reads its handoff', async () => {
     const outcomes = await conforms('cards', [
       create(TENANT_A, () => ({ title: 'leased' })),
@@ -166,7 +205,7 @@ describe('Cards', () => {
           null,
         ),
       (g, s) => g.detail(TENANT_A, idOf(s, 1)),
-      (g) => g.list(TENANT_A, { status: 'shelved' }),
+      (g) => g.list(TENANT_A, { status: 'shelved', limit: 100 }),
     ]);
     expect(outcomes[8]).toEqual({ value: [] });
     expect(outcomes[9]).toEqual({ value: ['#0'] });

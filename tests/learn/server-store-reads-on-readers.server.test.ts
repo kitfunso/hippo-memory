@@ -133,7 +133,7 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
       ),
     /'sem_/,
   ),
-  read('lessonWrites.textsHoldingWords', (s) => s.lessonWrites.textsHoldingWords(TENANT, ['deploy'], null), PLAIN),
+  read('lessonWrites.textsHolding', (s) => s.lessonWrites.textsHolding(TENANT, [PLAIN], null), PLAIN),
   read(
     'lessonWrites.contentsWithTag',
     (s) => s.lessonWrites.contentsWithTag(TENANT, 'goal-alpha', undefined),
@@ -153,7 +153,7 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   ),
   read('cards.load', (s) => s.cards.load(TENANT, made.cardId), 'cut the eu release'),
   read('cards.detail', (s) => s.cards.detail(TENANT, made.cardId), 'cut the eu release'),
-  read('cards.list', (s) => s.cards.list(TENANT, {}), 'cut the eu release'),
+  read('cards.list', (s) => s.cards.list(TENANT, { limit: 10 }), 'cut the eu release'),
   read('cards.runs', (s) => s.cards.runs(TENANT, made.cardId), 'codex'),
   read('goals.sessionGoals', (s) => s.goals.sessionGoals(TENANT, SESSION), 'goal-alpha'),
   read(
@@ -355,13 +355,13 @@ const READS: readonly Read[] = [
     /relType: '[^']+'/,
   ),
   read(
-    'graphReads.storedGraph',
-    async (s) =>
-      s.graphReads.storedGraph(
-        TENANT,
-        (await graphEntities(s)).flatMap((e) => (e.memoryId === null ? [] : [e.memoryId])),
-      ),
-    /=> '[a-z]+'/,
+    'graphReads.graphDelta',
+    (s) =>
+      s.graphReads.graphDelta(TENANT, {
+        entities: [{ entityType: 'policy', sourceObject: { type: 'policy', id: 1 }, name: 'Renamed', memoryId: null }],
+        relations: [],
+      }),
+    /op: '(update|insert)Entity'/,
   ),
   read('objects.listObjects', (s) => s.objects.listObjects(TENANT, 'decision', { limit: 5 }), 'We adopt RetryPolicy'),
   read('objects.objectById', (s) => s.objects.objectById(TENANT, 'policy', 1), 'retry up to 3x'),
