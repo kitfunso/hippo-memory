@@ -21,7 +21,7 @@ import { ingestEvent as ingestGitHubEvent, type IngestEvent as GitHubIngestEvent
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
-import { resolveTenantForGitHub } from './tenant-routing.js';
+import { resolveTenant } from '../tenant-route.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import type { Context } from '../../../api/index.js';
 import {
@@ -175,10 +175,14 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
   };
 
   // Tenant resolution. Fail closed on multi-tenant installs with unknown routing - same policy as Slack.
-  const resolvedTenant = await resolveTenantForGitHub(d.store, routing, {
-    hostTenant: envTenant(),
-    allowUnknown: envGitHubAllowUnknownInstallationFallback(),
-  });
+  const resolvedTenant = await resolveTenant(
+    d.store,
+    { connector: 'github', ...routing },
+    {
+      hostTenant: envTenant(),
+      allowUnknown: envGitHubAllowUnknownInstallationFallback(),
+    },
+  );
   if (resolvedTenant === null) {
     await parkAndAck(d, {
       ...routing,

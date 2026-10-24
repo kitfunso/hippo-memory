@@ -63,7 +63,7 @@ export function listDlq<C extends DeadLetterConnector>(
   store: HippoStore,
   opts: { tenantId: string; limit?: number },
 ): Promise<DeadLetterRows[C][]> {
-  return store.connectorEvents.deadLetters(dlq.connector, opts.tenantId, opts.limit ?? DEFAULT_LIST_LIMIT);
+  return store.connectorEvents.deadLetters(dlq.connector, opts.tenantId, { limit: opts.limit ?? DEFAULT_LIST_LIMIT });
 }
 
 /** Every outcome a replay reports; a connector that re-ingests inline reports the ingest outcome itself. */
@@ -113,8 +113,10 @@ async function replayableRow<C extends DeadLetterConnector>(
   tenantId: string,
   id: number,
 ): Promise<DeadLetterRows[C] | null> {
-  const own = await store.connectorEvents.deadLetter(connector, tenantId, id);
-  return own ?? store.connectorEvents.deadLetter(connector, UNROUTABLE_TENANT, id);
+  const [own] = await store.connectorEvents.deadLetters(connector, tenantId, { id });
+  if (own !== undefined) return own;
+  const [unroutable] = await store.connectorEvents.deadLetters(connector, UNROUTABLE_TENANT, { id });
+  return unroutable ?? null;
 }
 
 /** A row that cannot pass the signature gate: 'sig_missing' is not counted, since only --force can get it through. */

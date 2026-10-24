@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { resolveTenantForGitHub, type GitHubFallback } from '../../src/surface/connectors/github/tenant-routing.js';
+import { resolveTenant, type RouteFallback } from '../../src/surface/connectors/tenant-route.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { envTenant } from '../../src/base/util/env.js';
@@ -9,7 +9,10 @@ import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-p
 oneRequestPerTest();
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
-const fallback = (allowUnknown = false): GitHubFallback => ({ hostTenant: envTenant(), allowUnknown });
+const fallback = (allowUnknown = false): RouteFallback => ({
+  hostTenant: envTenant(),
+  allowUnknown,
+});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -36,7 +39,7 @@ function insertRepository(
   );
 }
 
-describe('resolveTenantForGitHub', () => {
+describe('resolveTenant', () => {
   let root: string;
 
   beforeEach(() => {
@@ -53,7 +56,7 @@ describe('resolveTenantForGitHub', () => {
     const db = openHippoDb(root);
     try {
       insertInstallation(db, '12345', 'tenant-alpha');
-      expect(await resolveTenantForGitHub(sqliteStore(root), { installationId: '12345' }, fallback())).toBe(
+      expect(await resolveTenant(sqliteStore(root), { connector: 'github', installationId: '12345' }, fallback())).toBe(
         'tenant-alpha',
       );
     } finally {
@@ -67,9 +70,13 @@ describe('resolveTenantForGitHub', () => {
       insertInstallation(db, '12345', 'tenant-alpha');
       // Unknown installation id, table non-empty -> fail closed.
       expect(
-        await resolveTenantForGitHub(
+        await resolveTenant(
           sqliteStore(root),
-          { installationId: '99999', repoFullName: 'foo/bar' },
+          {
+            connector: 'github',
+            installationId: '99999',
+            repoFullName: 'foo/bar',
+          },
           fallback(),
         ),
       ).toBeNull();
@@ -82,8 +89,8 @@ describe('resolveTenantForGitHub', () => {
     const db = openHippoDb(root);
     try {
       vi.stubEnv('HIPPO_TENANT', 'env-tenant');
-      expect(await resolveTenantForGitHub(sqliteStore(root), {}, fallback())).toBe('env-tenant');
-      expect(await resolveTenantForGitHub(sqliteStore(root), { repoFullName: 'foo/bar' }, fallback())).toBe(
+      expect(await resolveTenant(sqliteStore(root), { connector: 'github' }, fallback())).toBe('env-tenant');
+      expect(await resolveTenant(sqliteStore(root), { connector: 'github', repoFullName: 'foo/bar' }, fallback())).toBe(
         'env-tenant',
       );
     } finally {
@@ -94,8 +101,10 @@ describe('resolveTenantForGitHub', () => {
   it("rule 3 default: no installation_id, both tables empty, no HIPPO_TENANT -> 'default'", async () => {
     const db = openHippoDb(root);
     try {
-      expect(await resolveTenantForGitHub(sqliteStore(root), {}, fallback())).toBe('default');
-      expect(await resolveTenantForGitHub(sqliteStore(root), { repoFullName: 'foo/bar' }, fallback())).toBe('default');
+      expect(await resolveTenant(sqliteStore(root), { connector: 'github' }, fallback())).toBe('default');
+      expect(await resolveTenant(sqliteStore(root), { connector: 'github', repoFullName: 'foo/bar' }, fallback())).toBe(
+        'default',
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -106,9 +115,13 @@ describe('resolveTenantForGitHub', () => {
     try {
       insertRepository(db, 'octo/widget', 'tenant-pat');
       expect(
-        await resolveTenantForGitHub(
+        await resolveTenant(
           sqliteStore(root),
-          { installationId: null, repoFullName: 'octo/widget' },
+          {
+            connector: 'github',
+            installationId: null,
+            repoFullName: 'octo/widget',
+          },
           fallback(),
         ),
       ).toBe('tenant-pat');
@@ -122,14 +135,18 @@ describe('resolveTenantForGitHub', () => {
     try {
       insertInstallation(db, '12345', 'tenant-alpha');
       expect(
-        await resolveTenantForGitHub(
+        await resolveTenant(
           sqliteStore(root),
-          { installationId: null, repoFullName: 'unknown/repo' },
+          {
+            connector: 'github',
+            installationId: null,
+            repoFullName: 'unknown/repo',
+          },
           fallback(),
         ),
       ).toBeNull();
       // Even with no repoFullName supplied — PAT-mode envelope from a foreign source.
-      expect(await resolveTenantForGitHub(sqliteStore(root), {}, fallback())).toBeNull();
+      expect(await resolveTenant(sqliteStore(root), { connector: 'github' }, fallback())).toBeNull();
     } finally {
       closeHippoDb(db);
     }
@@ -140,13 +157,17 @@ describe('resolveTenantForGitHub', () => {
     try {
       insertRepository(db, 'octo/widget', 'tenant-pat');
       expect(
-        await resolveTenantForGitHub(
+        await resolveTenant(
           sqliteStore(root),
-          { installationId: null, repoFullName: 'unknown/repo' },
+          {
+            connector: 'github',
+            installationId: null,
+            repoFullName: 'unknown/repo',
+          },
           fallback(),
         ),
       ).toBeNull();
-      expect(await resolveTenantForGitHub(sqliteStore(root), {}, fallback())).toBeNull();
+      expect(await resolveTenant(sqliteStore(root), { connector: 'github' }, fallback())).toBeNull();
     } finally {
       closeHippoDb(db);
     }
@@ -158,14 +179,18 @@ describe('resolveTenantForGitHub', () => {
       vi.stubEnv('HIPPO_TENANT', 'rollback-tenant');
       // Case 2: installation_id present but unknown.
       insertInstallation(db, '12345', 'tenant-alpha');
-      expect(await resolveTenantForGitHub(sqliteStore(root), { installationId: '99999' }, fallback(true))).toBe(
-        'rollback-tenant',
-      );
+      expect(
+        await resolveTenant(sqliteStore(root), { connector: 'github', installationId: '99999' }, fallback(true)),
+      ).toBe('rollback-tenant');
       // Case 5: no installation_id, no repo match.
       expect(
-        await resolveTenantForGitHub(
+        await resolveTenant(
           sqliteStore(root),
-          { installationId: null, repoFullName: 'unknown/repo' },
+          {
+            connector: 'github',
+            installationId: null,
+            repoFullName: 'unknown/repo',
+          },
           fallback(true),
         ),
       ).toBe('rollback-tenant');
@@ -185,9 +210,10 @@ describe('resolveTenantForGitHub', () => {
       // Post-fix: must fail closed.
       vi.stubEnv('HIPPO_TENANT', 'env-tenant');
       expect(
-        await resolveTenantForGitHub(
+        await resolveTenant(
           sqliteStore(root),
           {
+            connector: 'github',
             installationId: null,
             repoFullName: 'foreign/repo',
           },
@@ -195,7 +221,9 @@ describe('resolveTenantForGitHub', () => {
         ),
       ).toBeNull();
       // Even with no repoFullName at all (malformed PAT-mode envelope).
-      expect(await resolveTenantForGitHub(sqliteStore(root), { installationId: undefined }, fallback())).toBeNull();
+      expect(
+        await resolveTenant(sqliteStore(root), { connector: 'github', installationId: undefined }, fallback()),
+      ).toBeNull();
     } finally {
       closeHippoDb(db);
     }
@@ -210,9 +238,13 @@ describe('resolveTenantForGitHub', () => {
       insertRepository(db, 'shared/tool', 'tenant-bravo', '2026-01-01T00:00:00.000Z');
       // Earliest added_at wins; tie broken by tenant_id ascending -> 'tenant-alpha'.
       expect(
-        await resolveTenantForGitHub(
+        await resolveTenant(
           sqliteStore(root),
-          { installationId: null, repoFullName: 'shared/tool' },
+          {
+            connector: 'github',
+            installationId: null,
+            repoFullName: 'shared/tool',
+          },
           fallback(),
         ),
       ).toBe('tenant-alpha');
@@ -226,13 +258,13 @@ describe('resolveTenantForGitHub', () => {
     try {
       // Both tables empty -> single-tenant deployment, env fallback path.
       vi.stubEnv('HIPPO_TENANT', 'custom-env');
-      expect(await resolveTenantForGitHub(sqliteStore(root), {}, fallback())).toBe('custom-env');
+      expect(await resolveTenant(sqliteStore(root), { connector: 'github' }, fallback())).toBe('custom-env');
       // Whitespace-only HIPPO_TENANT must fall back to 'default'.
       vi.stubEnv('HIPPO_TENANT', '   ');
-      expect(await resolveTenantForGitHub(sqliteStore(root), {}, fallback())).toBe('default');
+      expect(await resolveTenant(sqliteStore(root), { connector: 'github' }, fallback())).toBe('default');
       // Cleared.
       vi.stubEnv('HIPPO_TENANT', undefined);
-      expect(await resolveTenantForGitHub(sqliteStore(root), {}, fallback())).toBe('default');
+      expect(await resolveTenant(sqliteStore(root), { connector: 'github' }, fallback())).toBe('default');
     } finally {
       closeHippoDb(db);
     }
@@ -242,7 +274,7 @@ describe('resolveTenantForGitHub', () => {
     const db = openHippoDb(root);
     try {
       vi.stubEnv('HIPPO_TENANT', 'env-tenant');
-      expect(await resolveTenantForGitHub(sqliteStore(root), { installationId: '12345' }, fallback())).toBe(
+      expect(await resolveTenant(sqliteStore(root), { connector: 'github', installationId: '12345' }, fallback())).toBe(
         'env-tenant',
       );
     } finally {

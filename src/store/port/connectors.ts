@@ -1,56 +1,38 @@
 // The connector groups of the store port and the rows they read and write.
 import type { EntryWrite, RawArchive } from './entry-writes.js';
 
-/** What a connector delivery reads and writes beside connectorWrites: the event log, tenant routing, the dead-letter
- * queue and the archive of a deleted artifact. */
+/** What a connector delivery reads and writes beside connectorWrites, one method family per concept: the event log,
+ * delivery holds, tenant routing, dead letters, backfill cursors and the Slack workspace registry. */
 export interface ConnectorEvents {
-  /** The log row of the event's key, in its connector's own key space. */
-  eventRecord(event: ConnectorEvent): Promise<ConnectorEventRecord>;
-  /** Logs an event that stored no memory, so its redelivery finds it. A key logged before keeps its row, the memory id
-   * it names included. */
-  markEventSeen(event: ConnectorEvent): Promise<void>;
-  /** Both reads on one snapshot: an event logged before answers `seen`, else the raw row the tenant holds for the
-   * artifact. Another tenant's row under the same ref is never returned. */
-  deletionTarget(lookup: DeletionLookup): Promise<DeletionTarget>;
-  /** A logged event answers `duplicate` and changes nothing. Else one transaction archives every raw row of the
-   * artifact (archive_raw row each, under `actor`) and logs the event naming the first, or no memory if none; one
-   * failed archive undoes all and the log row. No reach check. */
-  archiveDeletedArtifact(archive: ArtifactArchive): Promise<{ readonly duplicate: boolean; readonly archived: number }>;
+  /** The log row of the event's key, in its connector's own key space. With `artifact`, an event not logged yet also
+   * names the raw row the tenant holds for the artifact, read on the same handle; never another tenant's row. */
+  eventRecord(event: ConnectorEvent, artifact?: ArtifactLookup): Promise<ConnectorEventRecord>;
+  /** A logged event answers `duplicate` and changes nothing; else the event is logged with no memory. With `deleted`,
+   * one transaction first archives every raw row of the artifact (archive_raw row each, under `actor`) and the log row
+   * names the first; one failed archive undoes all and the log row. No reach check. */
+  markEventSeen(event: ConnectorEvent, deleted?: ArtifactDeletion): Promise<EventMarked>;
   /** Holds a signed delivery's key from `nowMs` for `ttlMs`; false when a hold on it has not run out. A hold outlives a
    * restart and covers every process on the store. */
   claimDelivery(claim: DeliveryClaim): Promise<boolean>;
   /** Frees a hold whose delivery failed, so the sender's retry gets through. */
   releaseDelivery(connector: ConnectorEvent['connector'], key: string): Promise<void>;
-  /** The tenant a Slack team is registered to, or how many workspaces are registered when it is not. */
-  slackTeamRoute(teamId: string): Promise<SlackTeamRoute>;
-  /** The tenant of the installation, or of the repository when no installation is named, with the size of both routing
-   * tables. */
-  githubRouting(query: {
-    readonly installationId?: string | null;
-    readonly repoFullName?: string | null;
-  }): Promise<GitHubRouting>;
+  /** The tenant the connector's routing rows name for the query, else how many rows a match could have come from. */
+  route(query: RouteQuery): Promise<TenantRoute>;
   /** Appends the row and answers its id. */
   parkDeadLetter(letter: ConnectorDeadLetter): Promise<number>;
-  /** The tenant's rows in one queue, oldest first. */
+  /** The tenant's rows in one queue, oldest first, up to `limit`; with `id`, that row alone. Another tenant's row reads
+   * as absent. */
   deadLetters<C extends DeadLetterConnector>(
     connector: C,
     tenantId: string,
-    limit: number,
+    which: DeadLetterQuery,
   ): Promise<DeadLetterRows[C][]>;
-  /** The tenant's row by id; another tenant's row reads as absent. */
-  deadLetter<C extends DeadLetterConnector>(
-    connector: C,
-    tenantId: string,
-    id: number,
-  ): Promise<DeadLetterRows[C] | null>;
   /** Adds one to the tenant's row retry count and stamps its retry time; another tenant's row is left alone. */
   markDeadLetterRetried(connector: DeadLetterConnector, tenantId: string, id: number): Promise<void>;
-  slackCursor(tenantId: string, channelId: string): Promise<string | null>;
-  saveSlackCursor(tenantId: string, channelId: string, latestTs: string): Promise<void>;
-  githubCursors(tenantId: string, repo: string): Promise<StoredCursors>;
-  saveGitHubHwm(tenantId: string, repo: string, column: HwmColumn, value: string): Promise<void>;
-  /** Sets each high-water mark the repository has not saved yet to `since`. */
-  seedGitHubCursors(tenantId: string, repo: string, since: string): Promise<void>;
+  /** The backfill position saved under the key, or null before the first save. */
+  cursor(key: CursorKey): Promise<string | null>;
+  /** With `keepSaved`, a position already saved stays, so a first run's `--since` seeds only what no run saved. */
+  saveCursor(key: CursorKey, value: string, opts?: { readonly keepSaved?: boolean }): Promise<void>;
   slackWorkspaces(): Promise<SlackWorkspace[]>;
   /** Maps the team to the tenant, replacing any mapping it had. */
   registerSlackWorkspace(teamId: string, tenantId: string): Promise<SlackWorkspace>;
@@ -69,7 +51,7 @@ export type ConnectorEvent =
       readonly eventName: string;
     };
 
-/** One signed delivery to hold, by the key its connector signs: Slack's signature, GitHub's delivery id. */
+/** One signed delivery to hold, by the key its connector signs: Slack's signature, GitHub's body signature. */
 export interface DeliveryClaim {
   readonly connector: ConnectorEvent['connector'];
   readonly key: string;
@@ -77,38 +59,43 @@ export interface DeliveryClaim {
   readonly ttlMs: number;
 }
 
-/** What the event log holds for one event's key; `memoryId` is null for an event logged with no memory. */
-export type ConnectorEventRecord = { readonly seen: false } | { readonly seen: true; readonly memoryId: string | null };
+/** What the event log holds for one event's key; `memoryId` is null for an event logged with no memory. An unlogged
+ * event read with an artifact carries the tenant's raw row for it as `memoryId`, null when it holds none. */
+export type ConnectorEventRecord =
+  | { readonly seen: false; readonly memoryId?: string | null }
+  | { readonly seen: true; readonly memoryId: string | null };
 
-export interface DeletionLookup {
-  readonly event: ConnectorEvent;
+/** The artifact a deletion event names, in the tenant whose rows it may archive. */
+export interface ArtifactLookup {
   readonly artifactRef: string;
   readonly tenantId: string;
 }
 
-/** `memoryId` is null when the tenant holds no raw row for the artifact. */
-export type DeletionTarget = { readonly seen: true } | { readonly seen: false; readonly memoryId: string | null };
-
-export interface ArtifactArchive {
-  readonly tenantId: string;
+export interface ArtifactDeletion extends ArtifactLookup {
   readonly actor: string;
-  readonly artifactRef: string;
   readonly reason: string;
-  readonly event: Extract<ConnectorEvent, { readonly connector: 'github' }>;
 }
 
-// Workspace routing
-
-/** The tenant a team maps to, or how many workspaces are registered when it maps to none. */
-export type SlackTeamRoute = { tenantId: string } | { tenantId: null; workspaceCount: number };
-
-/** What the routing tables say about one webhook; `tenant` is the installation match, or the repo match when no
- * installation was sent. */
-export interface GitHubRouting {
-  installations: number;
-  repositories: number;
-  tenant: string | null;
+/** `archived` counts the raw rows a deletion archived. */
+export interface EventMarked {
+  readonly duplicate: boolean;
+  readonly archived: number;
 }
+
+// Tenant routing
+
+/** A webhook's routing key: a Slack team, or a GitHub installation, else its repository. */
+export type RouteQuery =
+  | { readonly connector: 'slack'; readonly teamId: string }
+  | {
+      readonly connector: 'github';
+      readonly installationId?: string | null;
+      readonly repoFullName?: string | null;
+    };
+
+/** `routes` counts the rows a match could have come from: Slack's workspaces, GitHub's installations when one is
+ * named, else its installations and repositories. None is a single-tenant install. */
+export type TenantRoute = { readonly tenantId: string } | { readonly tenantId: null; readonly routes: number };
 
 /** One payload a webhook could not use, already redacted, for the dead-letter queue of its connector. */
 export type ConnectorDeadLetter =
@@ -148,6 +135,9 @@ export type GitHubDlqBucket = 'parse_error' | 'unroutable' | 'signature_failed' 
 
 export type DeadLetterConnector = keyof DeadLetterRows;
 
+/** A page of one queue, or one row by id. */
+export type DeadLetterQuery = { readonly limit: number } | { readonly id: number };
+
 export interface DeadLetterRows {
   readonly slack: SlackDlqItem;
   readonly github: GitHubDlqItem;
@@ -183,13 +173,15 @@ export interface GitHubDlqItem {
   bucket: GitHubDlqBucket | string;
 }
 
-export interface StoredCursors {
-  issues: string | null;
-  issueComments: string | null;
-  prReviewComments: string | null;
-}
+// Backfill cursors
 
-export type HwmColumn = 'issues_hwm' | 'issue_comments_hwm' | 'pr_review_comments_hwm';
+/** The three GitHub streams a backfill drains, each with its own high-water mark. */
+export type GitHubStream = 'issues' | 'issueComments' | 'prReviewComments';
+
+/** Where a backfill resumes: a Slack channel's newest timestamp, or one GitHub stream's high-water mark. */
+export type CursorKey =
+  | { readonly connector: 'slack'; readonly tenantId: string; readonly channelId: string }
+  | { readonly connector: 'github'; readonly tenantId: string; readonly repo: string; readonly stream: GitHubStream };
 
 export interface SlackWorkspace {
   teamId: string;
