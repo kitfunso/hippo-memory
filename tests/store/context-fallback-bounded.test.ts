@@ -49,13 +49,17 @@ function ranked(n: number): string[] {
 
 describe('loadContextCandidates scan fallback', () => {
   // Seeds up to 10,000 real rows, and a runner's disk sets how long that takes.
-  it.each([1000, 10_000])('ranks %i rows in one scan that hands back the cap', (n) => {
-    const home = seed(n);
-    const { result, statements, reads } = recordStatements(() =>
-      loadContextCandidates(home, 'default', { cap: CAP, now: new Date(NOW) }),
-    );
-    expect(result.map((e) => e.id)).toEqual(ranked(n));
-    expect([COUNT, SUBSET, SCAN].map((p) => countMatching(statements, p))).toEqual([1, 1, 1]);
-    expect([COUNT, SUBSET, SCAN].map((p) => peakRowsRead(reads, p))).toEqual([1, 0, CAP]);
-  }, 60_000);
+  it.each([1000, 10_000])(
+    'ranks %i rows in one scan that hands back the cap',
+    (n) => {
+      const home = seed(n);
+      const { result, statements, reads } = recordStatements(() =>
+        loadContextCandidates(home, 'default', { cap: CAP, now: new Date(NOW) }),
+      );
+      expect(result.map((e) => e.id)).toEqual(ranked(n));
+      expect([COUNT, SUBSET, SCAN].map((p) => countMatching(statements, p))).toEqual([1, 1, 1]);
+      expect([COUNT, SUBSET, SCAN].map((p) => peakRowsRead(reads, p))).toEqual([1, 0, CAP]);
+    },
+    60_000,
+  );
 });
