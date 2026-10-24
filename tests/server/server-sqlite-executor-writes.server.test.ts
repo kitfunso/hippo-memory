@@ -500,7 +500,7 @@ describe("the server-thread block of a moved `loop: 'off'` route", () => {
     ],
     [
       'GET /v1/sessions/:id/assemble',
-      (p) => ({ dagReads: p.dagReads }),
+      (p) => ({ reports: p.reports }),
       (s, made) => get(s, '/v1/sessions/sess-1/assemble', made.token),
     ],
     [

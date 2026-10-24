@@ -12,7 +12,7 @@ import { handlesOf, initStore } from './handles.js';
 import { inPortTerms } from './port-errors.js';
 import { sqliteStore } from './store.js';
 
-type SqliteImportStore = StoreWith<'agentImport' | 'projectTags'>;
+type SqliteImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing'>;
 
 interface SqliteImportStores {
   open(root: string, opts: { readonly busyWaitMs?: number }): SqliteImportStore;

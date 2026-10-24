@@ -240,7 +240,6 @@ export type {
   AmbientRefusal,
   ContextReads,
   SessionRawQuery,
-  SessionRawWindow,
   SessionRawCount,
   DescendantAdmission,
   DescendantOrigin,
@@ -292,10 +291,10 @@ export type {
   EntrySignals,
   EntryTextKey,
   EntryTextKeyPage,
-  PageRequest,
   RecallSearchEntriesOptions,
   Sharing,
   SourceTally,
 } from './port/sharing.js';
+export type { EntryFilter, PageRequest } from './port/reports.js';
 export type { TextsHoldingOptions } from './port/capture.js';
 export type { FolderFiles, StoreHome } from './port/folder-files.js';

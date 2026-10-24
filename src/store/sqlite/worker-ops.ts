@@ -59,14 +59,10 @@ export const WORKER_OPS = {
     forget: 'write',
   },
   contextReads: {
-    unfinishedHandoff: 'read',
     ambientCandidates: 'read',
     contextCandidates: 'read',
     ambientTallies: 'read',
-    newestEntries: 'read',
     schemaFit: 'read',
-    liveContentsBySourceAndTag: 'read',
-    rawRowsUnderRef: 'read',
   },
   predictions: {
     savePrediction: 'write',
@@ -76,7 +72,6 @@ export const WORKER_OPS = {
     predictionBaserate: 'write',
   },
   dagReads: {
-    sessionRawEntries: 'read',
     sessionRawCount: 'read',
     summaryWithDescendants: 'read',
   },
@@ -213,7 +208,7 @@ export const WORKER_OPS = {
     tokenUse: 'read',
     failures: 'read',
     memoryStatus: 'read',
-    entriesPage: 'read',
+    entriesWhere: 'read',
     countEntries: 'read',
     stats: 'read',
     statusCounts: 'read',
@@ -315,7 +310,6 @@ export const WORKER_OPS = {
   learning: {
     entriesMentioning: 'read',
     readEntry: 'read',
-    currentEntriesFromOrigins: 'read',
     addTagToEntries: 'write',
     confirmedOutcomeTimes: 'read',
   },
@@ -335,15 +329,8 @@ export const WORKER_OPS = {
   },
   projectTags: {
     originTallies: 'read',
-    entriesFromOrigin: 'read',
-    liveEntriesBySourcePrefix: 'read',
-    entriesByIds: 'read',
-    dormantFromOrigin: 'read',
-    dormantByIds: 'read',
-    auditEvents: 'read',
-    compactionTranscripts: 'read',
-    compactionOriginsWithCwd: 'read',
-    holdsOrigin: 'read',
+    dormantWhere: 'read',
+    compactionOrigins: 'read',
     merge: 'write',
     repair: 'write',
     repairedOnce: 'read',
@@ -357,9 +344,6 @@ export const WORKER_OPS = {
     applyOps: 'write',
   },
   agentImport: {
-    liveBySourcePrefix: 'read',
-    dormantBySourcePrefix: 'read',
-    rowsHoldingOutsideSourcePrefix: 'read',
     applyContainer: 'write',
   },
 } as const satisfies { readonly [G in keyof StoreGroups]: OpPlaces<StoreGroups[G]> } & {

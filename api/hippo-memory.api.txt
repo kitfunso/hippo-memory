@@ -174,6 +174,7 @@ entry/store-kit.d.ts: DormantSnapshot re-export
 entry/store-kit.d.ts: EMBEDDING_MODEL_META_KEY re-export
 entry/store-kit.d.ts: EmbeddingIndexState re-export
 entry/store-kit.d.ts: EntryCursor re-export
+entry/store-kit.d.ts: EntryFilter re-export
 entry/store-kit.d.ts: EntryPage re-export
 entry/store-kit.d.ts: EntryRemoval re-export
 entry/store-kit.d.ts: EntryTarget re-export
@@ -213,6 +214,7 @@ entry/store-kit.d.ts: OptionalGroup re-export
 entry/store-kit.d.ts: OriginFilter re-export
 entry/store-kit.d.ts: OutcomeWrite re-export
 entry/store-kit.d.ts: PROTECTED_ROWS re-export
+entry/store-kit.d.ts: PageRequest re-export
 entry/store-kit.d.ts: PhysicsParticle re-export
 entry/store-kit.d.ts: PlanningFallacyEvidence re-export
 entry/store-kit.d.ts: PredictionBaserate re-export
@@ -220,7 +222,6 @@ entry/store-kit.d.ts: PushGoalOpts re-export
 entry/store-kit.d.ts: RECALL_DEFAULT_DENY_SCOPES re-export
 entry/store-kit.d.ts: RawArchive re-export
 entry/store-kit.d.ts: RawProvenance re-export
-entry/store-kit.d.ts: RawRefRow re-export
 entry/store-kit.d.ts: RecallScopeFilter re-export
 entry/store-kit.d.ts: RecallSearchArgs re-export
 entry/store-kit.d.ts: RecallTraceInput re-export

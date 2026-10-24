@@ -117,17 +117,6 @@ export async function seedLocalGroups(root: string): Promise<void> {
 const CUTOFFS = { since: EVER, stuckBefore: NEVER, transcriptFloor: EVER };
 
 export const LOCAL_GROUP_READS: readonly Read[] = [
-  read('agentImport.liveBySourcePrefix', (s) => s.agentImport.liveBySourcePrefix(TENANT, IMPORTED), NOTE),
-  read(
-    'agentImport.dormantBySourcePrefix',
-    (s) => s.agentImport.dormantBySourcePrefix(TENANT, IMPORTED),
-    'mem_d_agent',
-  ),
-  read(
-    'agentImport.rowsHoldingOutsideSourcePrefix',
-    (s) => s.agentImport.rowsHoldingOutsideSourcePrefix(TENANT, [PLAIN], IMPORTED, null),
-    'mem_p_plain',
-  ),
   read('captures.textsHolding', (s) => s.captures.textsHolding(TENANT, [PLAIN], {}), PLAIN),
   read('compactionHooks.openRecords', (s) => s.compactionHooks.openRecords(TENANT, {}), TRANSCRIPT),
   read('consolidation.entryIdsPage', (s) => s.consolidation.entryIdsPage({ limit: 3 }), /ids: \[ 'mem_/),
@@ -182,36 +171,24 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
   ),
   read('learning.readEntry', (s) => s.learning.readEntry(NOTE, TENANT), 'the rollout runbook lives in the team wiki'),
   read(
-    'learning.currentEntriesFromOrigins',
-    (s) => s.learning.currentEntriesFromOrigins(TENANT, ['seeded-project']),
-    NOTE,
-  ),
-  read(
     'projectTags.originTallies',
     (s) => s.projectTags.originTallies(TENANT, IMPORTED),
     /origin: 'seeded-project', prefixed: 1/,
   ),
   read(
-    'projectTags.entriesFromOrigin',
-    (s) => s.projectTags.entriesFromOrigin(TENANT, { origin: PROJECT, live: true }, { limit: 10 }),
-    NOTE,
+    'projectTags.dormantWhere',
+    async (s) => [
+      await s.projectTags.dormantWhere({ tenantId: TENANT, sourcePrefix: IMPORTED }),
+      await s.projectTags.dormantWhere({ tenantId: TENANT, origins: [PROJECT] }),
+      await s.projectTags.dormantWhere({ tenantId: TENANT, ids: ['mem_d_agent', 'mem_missing'] }),
+    ],
+    /mem_d_agent[\s\S]*mem_d_agent[\s\S]*mem_d_agent/,
   ),
   read(
-    'projectTags.liveEntriesBySourcePrefix',
-    (s) => s.projectTags.liveEntriesBySourcePrefix(TENANT, IMPORTED, { limit: 10 }),
-    NOTE,
+    'projectTags.compactionOrigins',
+    (s) => s.projectTags.compactionOrigins(TENANT),
+    `cwd: '${CWD}', origin: '${PROJECT}', transcript: '${TRANSCRIPT}'`,
   ),
-  read('projectTags.entriesByIds', (s) => s.projectTags.entriesByIds(TENANT, [NOTE, 'mem_missing']), NOTE),
-  read('projectTags.dormantFromOrigin', (s) => s.projectTags.dormantFromOrigin(TENANT, PROJECT), 'mem_d_agent'),
-  read(
-    'projectTags.dormantByIds',
-    (s) => s.projectTags.dormantByIds(TENANT, ['mem_d_agent', 'mem_missing']),
-    'mem_d_agent',
-  ),
-  read('projectTags.auditEvents', (s) => s.projectTags.auditEvents(TENANT, 'project_merge'), "op: 'project_merge'"),
-  read('projectTags.compactionTranscripts', (s) => s.projectTags.compactionTranscripts(TENANT), TRANSCRIPT),
-  read('projectTags.compactionOriginsWithCwd', (s) => s.projectTags.compactionOriginsWithCwd(TENANT), CWD),
-  read('projectTags.holdsOrigin', (s) => s.projectTags.holdsOrigin(TENANT, 'memories', PROJECT), /^true$/),
   read('projectTags.repairedOnce', (s) => s.projectTags.repairedOnce(), /^true$/),
   read('learning.confirmedOutcomeTimes', (s) => s.learning.confirmedOutcomeTimes(TENANT, EVER), `'${NOTE}' =>`),
 ];

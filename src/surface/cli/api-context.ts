@@ -13,6 +13,7 @@ import type { McpHost } from '../mcp/protocol.js';
 import type { ImportFiles } from '../importers/core.js';
 import type { HippoStore, StoreGroups } from '../../store/index.js';
 import type { OptionalGroup } from '../../store/port.js';
+import type { ProjectTagReads } from '../../store/port/project-tags.js';
 import {
   askingNearestFirst,
   defaultDiagnostics,
@@ -58,7 +59,7 @@ export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
 }
 
 /** The folder's hippo.db as doctor reads it: read-only, so a check leaves the store as it found it. */
-export function cliDiagnostics(hippoRoot: string): Pick<StoreGroups, 'diagnostics' | 'projectTags'> {
+export function cliDiagnostics(hippoRoot: string): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {
   return defaultDiagnostics(hippoRoot);
 }
 

@@ -1,22 +1,17 @@
 // What share, auto-share, sync down and the two-store search read on a store; their writes go through lessonWrites.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { TenantId } from '../../base/util/tenant.js';
+import type { EntryFilter, PageRequest } from './reports.js';
 import type { EntryCursor, EntryPage, OriginFilter } from './types.js';
 
-/** Where a page starts and how many rows it holds at most. */
-export interface PageRequest {
-  readonly limit: number;
-  readonly after?: EntryCursor;
-}
-
 export interface Sharing {
-  /** A page of the memories of `tenantId` that may carry any of `signals`, oldest first. */
+  /** A page of the memories of `tenantId` that may carry any of `signals`, in store order. */
   entriesWithSignals(signals: EntrySignals, tenantId: TenantId, page: PageRequest): Promise<EntryPage>;
-  /** A page of the id, tenant, source and text of the memories of `tenantId`, oldest first. */
+  /** A page of the id, tenant, source and text of the memories of `tenantId`, in store order. */
   textKeysPage(tenantId: TenantId, page: PageRequest): Promise<EntryTextKeyPage>;
-  /** The id, tenant, source and text of the memories of `tenantId` that may hold one of `texts` word for word, spacing
-   * aside: a superset the caller checks again. */
-  textKeysHolding(tenantId: TenantId, texts: readonly string[]): Promise<EntryTextKey[]>;
+  /** The id, tenant, source and text of the memories `filter` keeps that may hold one of `texts` word for word, spacing
+   * aside, in no set order: a superset the caller checks again. The full-text index finds them, so no page walks. */
+  textKeysHolding(filter: EntryFilter, texts: readonly string[]): Promise<EntryTextKey[]>;
   /** The ids among `ids` that a memory of any tenant holds. */
   takenIds(ids: readonly string[]): Promise<string[]>;
   /** How many memories of `tenantId` each source holds. */

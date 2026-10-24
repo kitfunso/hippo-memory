@@ -360,7 +360,7 @@ const NO_TASK_STATE: RawTaskState = { snapshot: null, handoff: null, events: [] 
 // Keyed on the RAW snapshot: a scope-hidden active session must not fall through to another session's ambient handoff.
 async function loadRawTaskState(ctx: Context, opts: ContextOptions, plan: ContextPlan): Promise<RawTaskState> {
   if (!plan.hasLocalTaskState) return NO_TASK_STATE;
-  const { store, reads } = plan.local;
+  const { store } = plan.local;
   // On a shared store task state is one person's, keyed by owner and project so it follows them into their next
   // session.
   const key: ContinuityKey | null = plan.sharedStore
@@ -372,11 +372,12 @@ async function loadRawTaskState(ctx: Context, opts: ContextOptions, plan: Contex
   // The block's handoff and events are the raw snapshot's session's, so they stand only while that snapshot is fresh.
   if (snapshot?.sessionId) return { snapshot, handoff: block.sessionHandoff, events: block.recentSessionEvents };
   // An unfinished handoff's scope is admitted in the read, so a newer denied row can't hide an older eligible one.
-  return {
-    snapshot,
-    handoff: await reads.unfinishedHandoff(ctx.tenantId, SNAPSHOT_AMBIENT_MAX_AGE_MS, key),
-    events: [],
-  };
+  const unfinished = {
+    unfinishedOnly: true,
+    maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
+    scopeFilter: 'default-deny',
+  } as const;
+  return { snapshot, handoff: await store.sessions.latestHandoff(ctx.tenantId, null, unfinished, key), events: [] };
 }
 
 // Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry

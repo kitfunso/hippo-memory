@@ -1,6 +1,6 @@
-// The tallies and counters the Reports group returns.
+// The tallies, counters and filtered entry pages the Reports group returns.
 import type { JsonValue } from '../../base/util/json.js';
-import type { ConfidenceLevel, Layer } from '../../base/memory/memory.js';
+import type { ConfidenceLevel, Layer, MemoryKind } from '../../base/memory/memory.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import type { FailureSummary } from './rejections.js';
 import type { TokenSummary } from './ledger.js';
@@ -51,6 +51,39 @@ export interface CorrectionLink {
   sourceCreated: string | null;
 }
 
+/** Which memories a filtered read keeps, as data: hippo.db compiles it to a WHERE (sqlite/entry-filter.ts) and the
+ * memory store runs it as a predicate (memory/entry-filter.ts). Each field that is set narrows the rows. */
+export interface EntryFilter {
+  /** One tenant's rows, or every tenant's under ALL_TENANTS. */
+  readonly tenantId: TenantId;
+  readonly ids?: readonly string[];
+  /** Project names, matched exactly: '' is user-global, and a row with no name matches none. */
+  readonly origins?: readonly string[];
+  readonly source?: string;
+  /** Matched byte for byte, as startsWith does. */
+  readonly sourcePrefix?: string;
+  /** A row with no artifact ref matches no prefix. */
+  readonly artifactRefPrefix?: string;
+  /** One tag, carried exactly. */
+  readonly tag?: string;
+  /** A row with no kind is 'distilled'. */
+  readonly kinds?: readonly MemoryKind[];
+  /** Only rows nothing superseded. */
+  readonly live?: true;
+  /** Only rows the session with this id wrote. */
+  readonly sessionId?: string;
+}
+
+/** The fields past the tenant, each compiled or tested on its own. */
+export type EntryNarrowing = Omit<EntryFilter, 'tenantId'>;
+
+/** Where a page starts and how many rows it holds at most; `newest` walks the order backwards, newest row first. */
+export interface PageRequest {
+  readonly limit: number;
+  readonly after?: EntryCursor;
+  readonly newest?: boolean;
+}
+
 /** What a paged report read asks for: up to `limit` rows after `after`, in the report's created-then-id order. */
 export interface ReportPage {
   readonly limit: number;
@@ -80,8 +113,9 @@ export interface Reports {
   failures(tenantId: string, sinceIso: string): Promise<FailureSummary>;
   /** Strength tallies and the open-conflict count, read on one snapshot. */
   memoryStatus(tenantId: string, now: Date, atRiskBelow: number): Promise<StrengthTallies & { openConflicts: number }>;
-  /** ALL_TENANTS pages every tenant (host admin; the api checks). */
-  entriesPage(tenantId: TenantId, page: { readonly limit: number; readonly after?: EntryCursor }): Promise<EntryPage>;
+  /** A page of the rows `filter` keeps, by created then id; ALL_TENANTS pages every tenant (host admin, the api
+   * checks). One read for each walk of a filtered set of rows, so no group keeps a read per caller. */
+  entriesWhere(filter: EntryFilter, page: PageRequest): Promise<EntryPage>;
   /** Every row in the store, no tenant: host admin. */
   countEntries(): Promise<number>;
   /** The store's lifetime counters and its recent sleep runs: host admin. */

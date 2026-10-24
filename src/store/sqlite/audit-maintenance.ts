@@ -17,7 +17,8 @@ import {
   deleteEntriesAutomatically,
   memoriesBackingAmong,
 } from './delete-and-batch.js';
-import { listEntriesPage, readEntriesByIds, listPreviewRowsPage, type PreviewRow } from './entry-reads.js';
+import { readEntriesByIds, listPreviewRowsPage, type PreviewRow } from './entry-reads.js';
+import { listEntriesWhere } from './entry-filter.js';
 import { ftsRowExists } from './entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
@@ -95,7 +96,7 @@ function planRows(db: DatabaseSyncLike, run: RepairRun): RepairPlan {
   let total = 0;
   let after: EntryCursor | undefined;
   do {
-    const page = listEntriesPage(db, run.tenantId, { limit: READ_PAGE_ROWS, after });
+    const page = listEntriesWhere(db, { tenantId: run.tenantId }, { limit: READ_PAGE_ROWS, after });
     const entries = page.entries.filter(isRepairCandidate);
     total += entries.length;
     issues.push(

@@ -8,7 +8,7 @@ export const v61: Migration = {
   up: (db) => {
     // Sort keys in the page's own direction, so listAllPredictions reads a page without sorting the tenant.
     db.exec(`CREATE INDEX IF NOT EXISTS ${PREDICTIONS_PAGE}`);
-    // The (created, id) order of listEntriesFromOrigin; the origin tally's GROUP BY reads the same index.
+    // The (created, id) order of an entry page of one origin; the origin tally's GROUP BY reads the same index.
     db.exec(`CREATE INDEX IF NOT EXISTS ${MEMORIES_ORIGIN}`);
   },
 };

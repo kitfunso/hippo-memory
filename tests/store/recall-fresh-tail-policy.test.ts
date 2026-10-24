@@ -6,7 +6,7 @@
  * Default behaviour (env unset) preserves v1.6.x back-compat: tenant-wide
  * rows are returned and tagged isFreshTail=true. Guard lives only in
  * api.recall — api.assemble is already session-scoped via
- * listSessionRawMemories and never calls tenant-wide listFreshRawMemories.
+ * its session raw-row read and never calls tenant-wide listFreshRawMemories.
  *
  * No library `console.warn` introduced anywhere — codex C9 said library
  * stderr noise is bad behaviour; enforcement is only at the API boundary.

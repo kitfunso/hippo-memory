@@ -9,7 +9,7 @@ export const CONFORMANCE_FILES = {
   goals: ['tests/store/cards-goals-conformance.test.ts'],
   conflicts: ['tests/store/conflicts-dormant-conformance.test.ts'],
   dormant: ['tests/store/conflicts-dormant-conformance.test.ts'],
-  reports: ['tests/core/reports-conformance.test.ts'],
+  reports: ['tests/core/reports-conformance.test.ts', 'tests/store/entry-filter-parity.test.ts'],
   rejections: ['tests/core/rejections-conformance.test.ts'],
   failureLog: ['tests/entry/failure-log-conformance.test.ts'],
   compactions: ['tests/entry/compactions-conformance.test.ts'],

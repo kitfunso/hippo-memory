@@ -10,13 +10,9 @@ import { activeGoalsWithPolicies, sqliteGoals } from './goals.js';
 import { planningFallacyEvidence } from './planning-fallacy-evidence.js';
 import { sqlitePredictions } from './predictions.js';
 import { recordTokenUse } from './token-ledger.js';
-import { listAmbientCandidates, listContextCandidates, newestEntries, schemaFit } from './candidates.js';
-import {
-  liveContentsBySourceAndTag,
-  readEntriesInIdOrder,
-  listFreshRawMemories,
-  rawRowsUnderRef,
-} from './entry-reads.js';
+import { listAmbientCandidates, listContextCandidates, schemaFit } from './candidates.js';
+import { readEntriesInIdOrder, listFreshRawMemories } from './entry-reads.js';
+import { listEntriesWhere } from './entry-filter.js';
 import { sqliteAgentImport } from './agent-import.js';
 import { sqliteCaptures } from './captures.js';
 import { sqliteCompactionHooks } from './compaction-hooks.js';
@@ -80,6 +76,7 @@ import { listRecallEntries } from './search-rows.js';
 import { readActiveTaskSnapshot } from './task-snapshots.js';
 import { entriesWithoutVector, readStoredVectorViews, writeVectors } from './vector-index.js';
 import type { ContinuityKey } from '../port/types.js';
+import type { ProjectTagReads } from '../port/project-tags.js';
 
 /** The groups that read and write hippo.db's own files beside its rows. */
 function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & MaintenanceGroups {
@@ -244,11 +241,14 @@ export function sqliteReach(
 
 /** hippo.db as `hippo doctor` and `hippo support-bundle` read it: diagnostics and the project-tag reads on read-only
  * handles, so a check never creates or migrates the store it inspects. */
-export function sqliteDiagnosticsStore(hippoRoot: string): Pick<StoreGroups, 'diagnostics' | 'projectTags'> {
+export function sqliteDiagnosticsStore(hippoRoot: string): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {
   const handles = handlesOf(hippoRoot);
+  const { on } = handles;
   return {
-    diagnostics: sqliteDiagnostics(handles.on),
+    diagnostics: sqliteDiagnostics(on),
     projectTags: sqliteProjectTags(handles, openHippoDbReadOnly),
+    reports: bound<ProjectTagReads['reports']>(on, { entriesWhere: listEntriesWhere }, openHippoDbReadOnly),
+    auditLog: bound<ProjectTagReads['auditLog']>(on, { listAuditEvents }, openHippoDbReadOnly),
   };
 }
 
@@ -258,15 +258,10 @@ export function sqliteStore(hippoRoot: string, rules: LossAversion = {}): HippoS
 }
 
 const contextReadsBodies: Bodies<Omit<ContextReads, 'ambientTallies'>> = {
-  unfinishedHandoff: (db, tenantId, maxAgeMs, key) =>
-    readLatestHandoff(db, tenantId, undefined, { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' }, key),
   ambientCandidates: (db, tenantId, { admit, ...request }) =>
     listAmbientCandidates(db, tenantId, { ...request, judge: (e) => ambientRefusal(e, admit) }),
   contextCandidates: listContextCandidates,
-  newestEntries: newestEntries,
   schemaFit: schemaFit,
-  liveContentsBySourceAndTag: liveContentsBySourceAndTag,
-  rawRowsUnderRef: rawRowsUnderRef,
 };
 
 function sqliteContextReads({ on, files }: Handles): ContextReads {

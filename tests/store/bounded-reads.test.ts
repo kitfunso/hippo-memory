@@ -3,12 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { tallyAmbientEntries } from '../../src/base/memory/ambient.js';
 import { type MemoryEntry } from '../../src/base/memory/memory.js';
-import {
-  listEntriesMentioning,
-  listEntryIdsPage,
-  listEntriesFromOrigin,
-  listLiveEntriesBySourcePrefix,
-} from '../../src/store/sqlite/entry-reads.js';
+import { listEntriesMentioning, listEntryIdsPage } from '../../src/store/sqlite/entry-reads.js';
+import { listEntriesWhere } from '../../src/store/sqlite/entry-filter.js';
 import { countAmbient } from '../../src/store/sqlite/ambient.js';
 import { pendingVectorIds, pruneOrphanVectors } from '../../src/store/sqlite/vector-index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
@@ -155,14 +151,14 @@ describe('walks of every row a read names', () => {
     try {
       const imported = recordStatements(() => [
         ...rowsInPages((after?: EntryCursor) =>
-          listLiveEntriesBySourcePrefix(db, tenant, 'agent-memory:', { limit: 2, after }),
+          listEntriesWhere(db, { tenantId: tenant, sourcePrefix: 'agent-memory:', live: true }, { limit: 2, after }),
         ),
       ]);
       expect(imported.result.map((e) => e.id)).toEqual(rows.filter((_, i) => i % 3 !== 0).map((r) => r.id));
       expect(peakRowsRead(imported.reads, MEMORY_SELECT_COLUMNS)).toBe(3);
       const alpha = recordStatements(() => [
         ...rowsInPages((after?: EntryCursor) =>
-          listEntriesFromOrigin(db, tenant, { origin: 'alpha' }, { limit: 2, after }),
+          listEntriesWhere(db, { tenantId: tenant, origins: ['alpha'] }, { limit: 2, after }),
         ),
       ]);
       expect(alpha.result.map((e) => e.id)).toEqual(rows.filter((_, i) => i !== 5).map((r) => r.id));
@@ -175,9 +171,10 @@ describe('walks of every row a read names', () => {
   it('read nothing past the page the caller asks for', async () => {
     const root = makeRoot('bounded-tag-lazy');
     const rows = seeded(root, 3, () => ({ source: 'agent-memory:claude-code:p/note.md' }));
-    const tags = sqliteStore(root).projectTags;
+    const reports = sqliteStore(root).reports;
+    const under = { tenantId: rows[0].tenantId, sourcePrefix: 'agent-memory:', live: true } as const;
     const log = await recordStatementsAsync(async () => {
-      const page = await tags.liveEntriesBySourcePrefix(rows[0].tenantId, 'agent-memory:', { limit: 1 });
+      const page = await reports.entriesWhere(under, { limit: 1 });
       return page.entries[0]?.id;
     });
     expect(log.result).toBe(rows[0].id);

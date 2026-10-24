@@ -9,7 +9,7 @@ import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js
 import { namesFoldedInto } from './project-folds.js';
 import { projectNames, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { syncContainer, type ContainerOutcome } from './apply.js';
-import type { ContainerWork, StoreSession } from './container-view.js';
+import { liveUnder, type ContainerWork, type StoreSession } from './container-view.js';
 import { handOver, warnUnpurged } from './handover.js';
 import { claudeCodeAdapter, claudeTranscriptListing, transcriptNotesProject } from './claude-code.js';
 import { codexAdapter } from './codex.js';
@@ -339,7 +339,7 @@ async function syncStore(
   opts: SyncOptions,
   report: ImportReport,
 ): Promise<ContainerWork[]> {
-  const legacy = pass.legacy ? await legacyWork(store.store.agentImport, opts.tenantId, listings) : null;
+  const legacy = pass.legacy ? await legacyWork(store.store, opts.tenantId, listings) : null;
   const session = storeSession(pass, store, opts, legacy);
   const partition = store.global && pass.scope === 'project' ? (pass.originProject ?? '') : null;
   const earlier =
@@ -402,7 +402,7 @@ async function syncListing(at: PassStore, listing: Listing, report: ImportReport
 /** The legacy names plus every name a merge or repair folded into the project; the audit read runs once per pass. */
 async function earlierNames(store: ImportStore, tenantId: string, names: readonly string[]): Promise<string[]> {
   const [id, ...legacyOrigins] = names;
-  const folded = await namesFoldedInto(store.projectTags, tenantId, names);
+  const folded = await namesFoldedInto(store.auditLog, tenantId, names);
   return [...legacyOrigins, ...folded].filter((n) => n !== '' && n !== id);
 }
 
@@ -490,7 +490,7 @@ async function unlistedRows(session: StoreSession, options: UnlistedRowsOptions)
     (partition ?? ['']).map((name) => containerPrefix(tool.id, containerId(c.path, c.scope, machine, name))),
   );
   const prefix = `${toolSourcePrefix(tool.id)}${scope === 'project' ? 'p' : 'u'}-`;
-  return (await session.store.agentImport.liveBySourcePrefix(session.tenantId, prefix))
+  return (await liveUnder(session.store, session.tenantId, prefix))
     .filter((row) => row.tags.includes(tool.tag) && !listed.some((p) => row.source.startsWith(p)))
     .filter((row) => partition === null || partition.includes(row.originProject ?? '')).length;
 }

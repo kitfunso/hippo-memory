@@ -19,7 +19,6 @@ export type {
 export type { GoalRecallLogRow, RecallTraceInput, StrengthenOptions } from '../store/port/recall-writes.js';
 export type { RecallScopeFilter, VectorCandidateSpec, EmbeddingIndexState } from '../store/port/vectors.js';
 export type {
-  RawRefRow,
   AmbientCandidates,
   AmbientLoadResult,
   AmbientRefusal,
@@ -152,6 +151,8 @@ export type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from '../s
 export type { CallerItems, CompactionStart } from '../store/port/capture.js';
 export type {
   CorrectionLink,
+  EntryFilter,
+  PageRequest,
   RawProvenance,
   StatusCounts,
   StrengthTallies,

@@ -150,25 +150,23 @@ describe('object list query plan', () => {
   });
 });
 
+// The filter the session digest reads its injected digests with.
+const DIGESTS = { tenantId: 'default', source: 'session-digest', tag: 'session-digest', live: true } as const;
+
 describe('session digest read plan', () => {
   it('reads the digest rows through idx_memories_source_tenant_created, not the tenant walk', async () => {
     const root = newRoot();
     const sql = await preparedSql(async () => {
-      await sqliteStore(root).contextReads.liveContentsBySourceAndTag(
-        'default',
-        'session-digest',
-        'session-digest',
-        's1',
-      );
-    }, 'instr(tags_json, ?)');
+      await sqliteStore(root).reports.entriesWhere(DIGESTS, { limit: 500 });
+    }, 'json_valid(tags_json)');
     withDb(root, (db) => {
-      const detail = plan(db, sql, 'default', 'session-digest', '"session-digest"', 's1');
+      const detail = plan(db, sql, 'session-digest', 'session-digest', 'default', 501);
       expect(detail).toContain('USING INDEX idx_memories_source_tenant_created (source=? AND tenant_id=?)');
       expect(detail).not.toContain('TEMP B-TREE');
     });
   });
 
-  it('returns the same digests, in store order, as a filter over every row', async () => {
+  it('returns the same live tagged digests, in store order, as a filter over every row', async () => {
     const root = newRoot();
     const digest = (
       content: string,
@@ -190,24 +188,16 @@ describe('session digest read plan', () => {
       db.prepare('UPDATE memories SET superseded_by = ? WHERE id = ?').run(entries[0]!.id, entries[7]!.id),
     );
     const expected = loadAllEntries(root, 'default')
-      .filter(
-        (e) =>
-          e.source === 'session-digest' &&
-          e.tags.includes('session-digest') &&
-          !e.extractedFrom &&
-          !e.supersededBy &&
-          e.sourceSessionId !== 's1',
-      )
+      .filter((e) => e.source === 'session-digest' && e.tags.includes('session-digest') && !e.supersededBy)
       .map((e) => e.content);
-    expect([...expected].sort()).toEqual(['digest from another session', 'digest with no session']);
-    expect(
-      await sqliteStore(root).contextReads.liveContentsBySourceAndTag(
-        'default',
-        'session-digest',
-        'session-digest',
-        's1',
-      ),
-    ).toEqual(expected);
+    expect([...expected].sort()).toEqual([
+      'digest extracted from a row',
+      'digest from another session',
+      'digest from this session',
+      'digest with no session',
+    ]);
+    const page = await sqliteStore(root).reports.entriesWhere(DIGESTS, { limit: 500 });
+    expect(page.entries.map((e) => e.content)).toEqual(expected);
   });
 });
 

@@ -8,33 +8,42 @@ import { orderSql, STORE_ORDER } from '../rules/order.js';
 import type { EntryCursor } from '../port/types.js';
 import type { IdPage } from '../port/vectors.js';
 
-/** What a page in loadAllEntries' order asks for. */
+/** What a page in loadAllEntries' order asks for; `newest` walks that order backwards, newest row first. */
 export interface EntryPageRequest {
   readonly limit: number;
   readonly after?: EntryCursor;
+  readonly newest?: boolean;
 }
 
 /** The tail every read in loadAllEntries' order ends with; its LIMIT binds the `limit` an EntryRowsRead is given. */
 export const ENTRY_PAGE_ORDER = `ORDER BY ${orderSql(STORE_ORDER)} LIMIT ?`;
+const NEWEST_PAGE_ORDER = `ORDER BY ${orderSql(STORE_ORDER.map((key) => ({ ...key, desc: true })))} LIMIT ?`;
 
 /** Where one page in loadAllEntries' order reads: `match(filter)` is the WHERE that keeps the rows `filter` keeps of
- * the page's tenant, or of every tenant, after its cursor, and `params` binds what it adds, after the filter's own. */
+ * the page's tenant, or of every tenant, after its cursor, and `params` binds what it adds, after the filter's own.
+ * `order` is the page's ORDER BY and LIMIT tail, ENTRY_PAGE_ORDER unless the page walks newest first. */
 export interface EntryRows {
   readonly match: (filter: string) => string;
   readonly params: readonly (string | number)[];
+  readonly order: string;
 }
 
 /** Up to `limit` rows in loadAllEntries' order: its SQL is `SELECT ... FROM memories WHERE ${rows.match(filter)}`
- * then ENTRY_PAGE_ORDER, and it binds the filter's arguments, then `rows.params`, then `limit`. */
+ * then `rows.order`, and it binds the filter's arguments, then `rows.params`, then `limit`. */
 export type EntryRowsRead<R> = (rows: EntryRows, limit: number) => R[];
 
-/** Rows after `after`. The plain `created >=` is the range term SQLite seeks the index on; the OR only settles ties on
- * created. */
-function entryRange(after: EntryCursor | undefined): SqlFragment {
-  return after
-    ? { sql: ' AND created >= ? AND (created > ? OR id > ?)', params: [after.created, after.created, after.id] }
-    : { sql: '', params: [] };
+/** Rows past `after` in the page's direction. The plain `created` bound is the range term SQLite seeks the index on;
+ * the OR only settles ties on created. */
+export function entryRange(after: EntryCursor | undefined, newest = false): SqlFragment {
+  if (!after) return { sql: '', params: [] };
+  const params = [after.created, after.created, after.id];
+  return newest
+    ? { sql: ' AND created <= ? AND (created < ? OR id < ?)', params }
+    : { sql: ' AND created >= ? AND (created > ? OR id > ?)', params };
 }
+
+/** The ORDER BY and LIMIT tail of a page that walks oldest or newest first. */
+export const entryPageOrder = (newest = false): string => (newest ? NEWEST_PAGE_ORDER : ENTRY_PAGE_ORDER);
 
 const entryCursorOf = (row: EntryCursor): EntryCursor => ({ created: row.created, id: row.id });
 
@@ -46,25 +55,31 @@ export function entryPage<R extends EntryCursor>(
   read: EntryRowsRead<R>,
 ): KeysetPage<R, EntryCursor> {
   const keep = page.limit + 1;
-  const range = entryRange(page.after);
-  const rows = tenantId === ALL_TENANTS ? everyTenantRows(range, keep) : oneTenantRows(tenantAnd(tenantId), range);
+  const range = entryRange(page.after, page.newest);
+  const order = entryPageOrder(page.newest);
+  const rows =
+    tenantId === ALL_TENANTS ? everyTenantRows(range, keep, order) : oneTenantRows(tenantAnd(tenantId), range, order);
   return keysetPage(read(rows, keep), page.limit, entryCursorOf);
 }
 
-function oneTenantRows(tenant: SqlFragment, range: SqlFragment): EntryRows {
-  return { match: (filter) => `(${filter})${tenant.sql}${range.sql}`, params: [...tenant.params, ...range.params] };
+function oneTenantRows(tenant: SqlFragment, range: SqlFragment, order: string): EntryRows {
+  return {
+    match: (filter) => `(${filter})${tenant.sql}${range.sql}`,
+    params: [...tenant.params, ...range.params],
+    order,
+  };
 }
 
 // No index orders memories by created across tenants, so each tenant's first `keep` rows come off its own index, one
 // seek per tenant in a loose scan, and the statement sorts only those. INDEXED BY: a filter the origin index covers
 // would otherwise sort the whole tenant.
-function everyTenantRows(range: SqlFragment, keep: number): EntryRows {
+function everyTenantRows(range: SqlFragment, keep: number, order: string): EntryRows {
   return {
     match: (filter) =>
       `rowid IN (${TENANT_IDS} SELECT m.rowid FROM t JOIN memories m ON m.rowid IN (SELECT rowid FROM memories ` +
-      `INDEXED BY idx_memories_tenant_created WHERE tenant_id = t.tid AND (${filter})${range.sql} ` +
-      `${ENTRY_PAGE_ORDER}))`,
+      `INDEXED BY idx_memories_tenant_created WHERE tenant_id = t.tid AND (${filter})${range.sql} ${order}))`,
     params: [...range.params, keep],
+    order,
   };
 }
 

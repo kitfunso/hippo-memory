@@ -15,7 +15,7 @@ import {
   type ChurnRepo,
 } from './churn-git.js';
 import type { EntryCursor } from '../../store/port/types.js';
-import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 
 const HEADLINE_CHARS = 60;
 // The share of a row's tokens that must match the target's before the row counts as mentioning it.
@@ -624,7 +624,7 @@ async function readChurnAnchors(learning: Learning, tenantId: string, candidates
 /** Flags memories whose named file/symbol/script changed or disappeared since storage (or last confirmation); only
  * adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
 export async function detectChurnStale(
-  { learning }: StoreWith<'learning'>,
+  { learning, reports }: StoreWith<'learning'>,
   repo: ChurnRepo,
   opts: DetectChurnStaleOptions,
 ): Promise<ChurnStaleResult> {
@@ -632,7 +632,10 @@ export async function detectChurnStale(
   if (!opts.projectName) return emptyChurnResult(dryRun);
 
   const origins = [opts.projectName, opts.legacyName].filter((name): name is string => !!name);
-  const entries = await learning.currentEntriesFromOrigins(opts.tenantId, origins);
+  const current = { tenantId: opts.tenantId, origins, live: true, kinds: ['distilled', 'superseded'] } as const;
+  const entries = await readAll((after?: EntryCursor) =>
+    reports.entriesWhere(current, { limit: READ_PAGE_ROWS, after }),
+  );
   const { candidates, skippedPinned } = collectChurnCandidates(entries, opts);
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 

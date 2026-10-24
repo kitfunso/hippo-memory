@@ -1,24 +1,17 @@
 // The project names of a store: the reads `hippo projects`, doctor and the note sync plan from, and the merge and the
 // repair, each one transaction, backed up first, whose mirror files follow the commit.
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { PageRequest } from './sharing.js';
-import type { AuditEvent, DormantSnapshot, EntryPage } from './types.js';
+import type { AuditLog } from './audit.js';
+import type { EntryFilter, Reports } from './reports.js';
+import type { DormantSnapshot } from './types.js';
 
 export interface ProjectTags {
   /** Every project name with live rows, in the order its first row was written. */
   originTallies(tenantId: string, sourcePrefix: string): Promise<OriginTally[]>;
-  /** A page of the rows `rows` names, oldest first. */
-  entriesFromOrigin(tenantId: string, rows: OriginRows, page: PageRequest): Promise<EntryPage>;
-  /** A page of the live rows whose source starts with `prefix`, oldest first. */
-  liveEntriesBySourcePrefix(tenantId: string, prefix: string, page: PageRequest): Promise<EntryPage>;
-  entriesByIds(tenantId: string, ids: readonly string[]): Promise<Map<string, MemoryEntry>>;
-  /** The readable dormant snapshots whose row carried project name `origin`. */
-  dormantFromOrigin(tenantId: string, origin: string): Promise<DormantSnapshot[]>;
-  dormantByIds(tenantId: string, ids: readonly string[]): Promise<Map<string, DormantSnapshot>>;
-  auditEvents(tenantId: string, op: ProjectTagOp): Promise<AuditEvent[]>;
-  compactionTranscripts(tenantId: string): Promise<Array<{ transcript: string; cwd: string | null }>>;
-  compactionOriginsWithCwd(tenantId: string): Promise<Array<{ origin: string; cwd: string }>>;
-  holdsOrigin(tenantId: string, table: 'memories' | 'compactions', name: string): Promise<boolean>;
+  /** The readable dormant snapshots whose row `filter` keeps, by tenant then id. Live rows come from entriesWhere. */
+  dormantWhere(filter: EntryFilter): Promise<DormantSnapshot[]>;
+  /** Each distinct project name, transcript and working folder the tenant's compactions recorded together. */
+  compactionOrigins(tenantId: string): Promise<CompactionOrigin[]>;
   /** Folds `from` into `into` and writes the project_merge audit row; a dry run rolls back and writes nothing, backup
    * and mirrors included. */
   merge(scope: ProjectTagScope, request: MergeRequest): Promise<AppliedMerge>;
@@ -29,21 +22,25 @@ export interface ProjectTags {
   markRepairedOnce(): Promise<void>;
 }
 
+/** What a repair plans from: this group, entry pages and the merge audit rows, which doctor offers on read-only
+ * handles. */
+export interface ProjectTagReads {
+  readonly projectTags: ProjectTags;
+  readonly reports: Pick<Reports, 'entriesWhere'>;
+  readonly auditLog: Pick<AuditLog, 'listAuditEvents'>;
+}
+
 export type SetAsideWhy = 'note-gone' | 'note-changed' | 'handover' | 'project-merge' | 'project-repair';
 
 export type SetAsideResult =
   | { readonly kind: 'untagged'; readonly entry: MemoryEntry }
   | { readonly kind: 'dormant'; readonly id: string };
 
-type ProjectTagOp = 'project_merge' | 'project_repair';
-
-/** Which of a tenant's rows tagged one project name to read. */
-export interface OriginRows {
+/** A compaction's project name ('' when none was recorded), Claude transcript and working folder. */
+export interface CompactionOrigin {
   readonly origin: string;
-  /** Only rows nothing superseded. */
-  readonly live?: boolean;
-  /** Only rows whose source starts with this. */
-  readonly sourcePrefix?: string;
+  readonly transcript: string | null;
+  readonly cwd: string | null;
 }
 
 /** One project name's live rows: how many, how many whose source starts with the asked prefix, and the newest. */

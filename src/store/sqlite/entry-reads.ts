@@ -10,7 +10,8 @@ import { byIdOrder, FRESH_RAW_ORDER, oldestFirst, orderSql } from '../rules/orde
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { MAX_FRESH_RAW } from '../rules/windows.js';
-import { tenantAnd } from './tenant.js';
+import { tenantAnd, TENANT_IS } from './tenant.js';
+import { listEntriesWhere } from './entry-filter.js';
 import {
   afterIdAnd,
   entryPage,
@@ -22,14 +23,10 @@ import {
 } from './keyset.js';
 import type { DuplicateCandidates, EntryIdPage, HalfLifeRow, ObjectLink } from '../port/consolidation.js';
 import type { IdPage, IdPageRequest } from '../port/vectors.js';
-import type { RawRefRow, SessionRawCount, SessionRawQuery, SessionRawWindow } from '../port/context-reads.js';
-import type { OriginRows, OriginTally } from '../port/project-tags.js';
+import type { SessionRawCount, SessionRawQuery } from '../port/context-reads.js';
+import type { OriginTally } from '../port/project-tags.js';
 import type { EntrySignals, EntryTextKeyPage } from '../port/sharing.js';
 import type { EntryCursor, EntryPage } from '../port/types.js';
-
-// The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant
-// instead.
-export const TENANT_IS = '+tenant_id = ?';
 
 /** Read a memory entry by ID; a row in another tenant reads as null. */
 export function readEntry(db: DatabaseSyncLike, id: string, tenantId: TenantId): MemoryEntry | null {
@@ -110,21 +107,6 @@ function sessionRawWhere({ sessionId, tenantId, origins }: SessionRows<SessionRa
     sql: `kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL${tenant.sql}${origin.sql}`,
     params: [sessionId, ...tenant.params, ...origin.params],
   };
-}
-
-/** All `kind='raw'` rows for a session, tenant-scoped, oldest-first, excluding superseded; `[]` for an empty sessionId.
- * With a positive `cap`, the NEWEST rows are loaded (DESC LIMIT, reversed client-side); ASC + LIMIT would drop the
- * newest and break fresh-tail in assemble. */
-export function listSessionRawMemories(db: DatabaseSyncLike, query: SessionRows<SessionRawWindow>): MemoryEntry[] {
-  if (!query.sessionId) return [];
-  const where = sessionRawWhere(query);
-  const newest = query.cap > 0;
-  const order = newest ? 'ORDER BY created DESC, id DESC LIMIT ?' : 'ORDER BY created ASC, id ASC';
-  const rows = cachedStatement(db, `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where.sql} ${order}`).all(
-    ...where.params,
-    ...(newest ? [query.cap] : []),
-  ) as MemoryRow[];
-  return (newest ? rows.reverse() : rows).map(rowToEntry);
 }
 
 /** Pre-cap, scope-aware row count for a session, so `assemble` reports the full size without leaking rows the caller
@@ -322,7 +304,7 @@ export function listEntryTextKeysPage(
     (within, limit) =>
       cachedStatement(
         db,
-        `SELECT id, tenant_id, content, source, created FROM memories WHERE ${within.match('1')} ${ENTRY_PAGE_ORDER}`,
+        `SELECT id, tenant_id, content, source, created FROM memories WHERE ${within.match('1')} ${within.order}`,
       ).all(...within.params, limit) as EntryTextKeyPageRow[],
   );
   const keys = rows.map((row) => ({
@@ -345,19 +327,8 @@ interface EntryTextKeyPageRow {
 
 /** Every tenant's rows in loadAllEntries' order, so the caller holds one page at a time. */
 export function iterateEveryTenantEntries(db: DatabaseSyncLike): Generator<MemoryEntry> {
-  return rowsInPages((after?: EntryCursor) => listEntriesPage(db, ALL_TENANTS, { limit: READ_PAGE_ROWS, after }));
-}
-
-/** Up to `limit` rows in loadAllEntries' order, starting after `after`. */
-export function listEntriesPage(db: DatabaseSyncLike, tenantId: TenantId, page: EntryPageRequest): EntryPage {
-  return entriesPage(
-    tenantId,
-    page,
-    (within, limit) =>
-      cachedStatement(
-        db,
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match('1')} ${ENTRY_PAGE_ORDER}`,
-      ).all(...within.params, limit) as MemoryRow[],
+  return rowsInPages((after?: EntryCursor) =>
+    listEntriesWhere(db, { tenantId: ALL_TENANTS }, { limit: READ_PAGE_ROWS, after }),
   );
 }
 
@@ -389,65 +360,6 @@ export function listTenantTextsPage(db: DatabaseSyncLike, tenantId: string, page
       ).all(...within.params, limit) as Array<TenantText & { created: string }>,
   );
   return { texts: rows, next };
-}
-
-/** The least string above every string that starts with `prefix` in byte order, or null when none is. */
-export function prefixUpperBound(prefix: string): string | null {
-  const points = Array.from(prefix);
-  while (points.at(-1) === '\u{10FFFF}') points.pop();
-  const last = points.pop();
-  if (last === undefined) return null;
-  const next = last.codePointAt(0)! + 1;
-  // The surrogate block holds no code point, so the next one up is U+E000.
-  return points.join('') + String.fromCodePoint(next === 0xd800 ? 0xe000 : next);
-}
-
-/** A page of the live rows whose source starts with `prefix`, case-sensitively, in loadAllEntries' order, on the
- * caller's handle; a BINARY range on `source` is what idx_memories_source_tenant_created can seek. */
-export function listLiveEntriesBySourcePrefix(
-  db: DatabaseSyncLike,
-  tenantId: TenantId,
-  prefix: string,
-  page: EntryPageRequest,
-): EntryPage {
-  const upper = prefixUpperBound(prefix);
-  const range = upper === null ? 'source >= ?' : 'source >= ? AND source < ?';
-  // Without the hint the planner takes the tenant index for its created order and filters every row of the tenant;
-  // the all-tenant read already pins its own index inside its subquery.
-  const index = tenantId === ALL_TENANTS ? '' : ' INDEXED BY idx_memories_source_tenant_created';
-  return entriesPage(
-    tenantId,
-    page,
-    (within, limit) =>
-      cachedStatement(
-        db,
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${index} ` +
-          `WHERE ${within.match(`superseded_by IS NULL AND ${range}`)} ${ENTRY_PAGE_ORDER}`,
-      ).all(...(upper === null ? [prefix] : [prefix, upper]), ...within.params, limit) as MemoryRow[],
-  );
-}
-
-/** A page of a tenant's rows tagged `rows.origin`, in loadAllEntries' order, narrowed as `rows` asks. */
-export function listEntriesFromOrigin(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  rows: OriginRows,
-  page: EntryPageRequest,
-): EntryPage {
-  const live = rows.live ? ` AND COALESCE(superseded_by, '') = ''` : '';
-  const { sourcePrefix } = rows;
-  const prefix = sourcePrefix === undefined ? '' : ' AND substr(source, 1, ?) = ?';
-  const prefixArgs = sourcePrefix === undefined ? [] : [sourcePrefix.length, sourcePrefix];
-  return entriesPage(
-    tenantId,
-    page,
-    (within, limit) =>
-      cachedStatement(
-        db,
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-          `WHERE ${within.match(`origin_project = ?${live}${prefix}`)} ${ENTRY_PAGE_ORDER}`,
-      ).all(rows.origin, ...prefixArgs, ...within.params, limit) as MemoryRow[],
-  );
 }
 
 // SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
@@ -498,20 +410,6 @@ export function contentsWithTag(
     tags_json: string;
   }>;
   return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
-}
-
-// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
-type RawRefDbRow = RawRefRow;
-
-/** A tenant's raw rows whose artifact_ref starts with `refPrefix`, by created then id. */
-export function rawRowsUnderRef(db: DatabaseSyncLike, tenantId: string, refPrefix: string): RawRefRow[] {
-  const rows = cachedStatement(
-    db,
-    `SELECT id, artifact_ref, tags_json, scope FROM memories
-         WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw' ORDER BY created ASC, id ASC`,
-  ).all(`${escapeLike(refPrefix)}%`, tenantId) as RawRefDbRow[];
-  // LIKE folds ASCII case, so the exact prefix is checked here.
-  return rows.filter((r) => r.artifact_ref.startsWith(refPrefix));
 }
 
 export interface PreviewRow {
@@ -592,28 +490,6 @@ export function* iterateRowsWithObjects(db: DatabaseSyncLike): Generator<HalfLif
   for (const row of rows) yield { entry: rowToEntry(row), object: row.object_link };
 }
 
-/** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced, in loadAllEntries'
- * order and in every scope; `exceptSessionId` drops one session's own rows. */
-export function liveContentsBySourceAndTag(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  source: string,
-  tag: string,
-  exceptSessionId: string,
-): string[] {
-  /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
-  const rows = db
-    .prepare(
-      `SELECT content, tags_json FROM memories
-   WHERE tenant_id = ? AND source = ? AND instr(tags_json, ?) > 0
-     AND COALESCE(extracted_from, '') = '' AND COALESCE(superseded_by, '') = ''
-     AND (source_session_id IS NULL OR source_session_id != ?)
-   ORDER BY created ASC, id ASC`,
-    )
-    .all(tenantId, source, JSON.stringify(tag), exceptSessionId) as Array<{ content: string; tags_json: string }>;
-  return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
-}
-
 const CURRENT_DISTILLED = "COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''";
 
 // Texts equal apart from spacing are equal with all of it gone, so a group of these keys holds every duplicate group.
@@ -673,24 +549,7 @@ export function listEntriesWithSignals(
     (within, limit) =>
       cachedStatement(
         db,
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match(anyOf.join(' OR '))} ${ENTRY_PAGE_ORDER}`,
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match(anyOf.join(' OR '))} ${within.order}`,
       ).all(...params, ...within.params, limit) as MemoryRow[],
   );
-}
-
-/** A tenant's rows from `origins` that nothing superseded and that are neither raw nor archived, in loadAllEntries'
- * order. */
-export function listCurrentEntriesFromOrigins(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  origins: readonly string[],
-): MemoryEntry[] {
-  const rows = cachedStatement(
-    db,
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
-   WHERE tenant_id = ? AND ${ORIGIN_IN} AND COALESCE(superseded_by, '') = ''
-     AND COALESCE(kind, 'distilled') NOT IN ('raw', 'archived')
-   ORDER BY created ASC, id ASC`,
-  ).all(tenantId, JSON.stringify(origins)) as MemoryRow[];
-  return rows.map(rowToEntry);
 }

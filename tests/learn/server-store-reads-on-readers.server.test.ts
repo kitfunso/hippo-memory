@@ -31,7 +31,6 @@ import {
 import { waitFor } from '../_helpers/wait-for.js';
 
 const NOW = new Date(FAKE_NOW);
-const CENTURY_MS = 100 * 365 * 24 * 60 * 60 * 1000;
 const VECTOR_IDS = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
 
 const graphEntities = async (s: Served) => (await s.graphReads.graphRows(TENANT, { limit: 50 })).entities;
@@ -129,7 +128,7 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
     'auditMaintenance.objectBackedAmong',
     async (s) =>
       s.auditMaintenance.objectBackedAmong(
-        (await s.reports.entriesPage(TENANT, { limit: 100 })).entries.map((e) => e.id),
+        (await s.reports.entriesWhere({ tenantId: TENANT }, { limit: 100 })).entries.map((e) => e.id),
       ),
     /'sem_/,
   ),
@@ -167,7 +166,22 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('reports.tokenUse', (s) => s.reports.tokenUse(TENANT, '2000-01-01T00:00:00.000Z'), /120/),
   read('reports.failures', (s) => s.reports.failures(TENANT, '2000-01-01T00:00:00.000Z'), /stored/),
   read('reports.memoryStatus', (s) => s.reports.memoryStatus(TENANT, NOW, 0.1), /openConflicts: 1/),
-  read('reports.entriesPage', (s) => s.reports.entriesPage(TENANT, { limit: 3 }), /id: 'mem_/),
+  read(
+    'reports.entriesWhere',
+    async (s) => [
+      await s.reports.entriesWhere({ tenantId: TENANT }, { limit: 3 }),
+      await s.reports.entriesWhere(
+        { tenantId: TENANT, kinds: ['raw'], live: true, sessionId: SESSION },
+        { limit: 10, newest: true },
+      ),
+      await s.reports.entriesWhere(
+        { tenantId: TENANT, kinds: ['raw'], artifactRefPrefix: 'vault:golden:' },
+        { limit: 10 },
+      ),
+      await s.reports.entriesWhere({ tenantId: TENANT, source: 'cli', tag: 'deploy', live: true }, { limit: 10 }),
+    ],
+    new RegExp(String.raw`id: 'mem_[\s\S]*mem_x_raw[\s\S]*vault:golden:rollout\.md[\s\S]*${PLAIN}`),
+  ),
   read('reports.countEntries', (s) => s.reports.countEntries(), /^[1-9]\d*$/),
   read('reports.stats', (s) => s.reports.stats(), /total_recalled/),
   read('reports.statusCounts', (s) => s.reports.statusCounts(NOW, 0.1), /total/),
@@ -205,7 +219,14 @@ const FOLDER_GROUP_READS: readonly Read[] = [
     /id: 'mem_/,
   ),
   read('sharing.textKeysPage', (s) => s.sharing.textKeysPage(TENANT, { limit: 3 }), /id: 'mem_/),
-  read('sharing.textKeysHolding', (s) => s.sharing.textKeysHolding(TENANT, [PLAIN]), 'mem_p_plain'),
+  read(
+    'sharing.textKeysHolding',
+    async (s) => [
+      await s.sharing.textKeysHolding({ tenantId: TENANT }, [PLAIN]),
+      await s.sharing.textKeysHolding({ tenantId: TENANT, live: true, origins: ['', 'golden'] }, [PLAIN]),
+    ],
+    /mem_p_plain[\s\S]*mem_p_plain/,
+  ),
   read('sharing.takenIds', (s) => s.sharing.takenIds(['mem_p_plain', 'mem_missing']), "[ 'mem_p_plain' ]"),
   read('sharing.searchEntries', (s) => s.sharing.searchEntries('deploy', 50, TENANT), 'mem_p_plain'),
   read(
@@ -267,11 +288,6 @@ const READS: readonly Read[] = [
     'mem_p_fill0',
   ),
   read(
-    'contextReads.unfinishedHandoff',
-    (s) => s.contextReads.unfinishedHandoff(TENANT, CENTURY_MS, null),
-    'handoff after the canary',
-  ),
-  read(
     'contextReads.ambientCandidates',
     (s) =>
       s.contextReads.ambientCandidates(TENANT, {
@@ -290,25 +306,9 @@ const READS: readonly Read[] = [
     (s) => s.contextReads.ambientTallies(TENANT, { currentProject: [], now: NOW }),
     /tagCounts: Map\(\d+\) \{/,
   ),
-  read('contextReads.newestEntries', (s) => s.contextReads.newestEntries(TENANT, 3), /id: 'mem_/),
   read('contextReads.schemaFit', (s) => s.contextReads.schemaFit(TENANT, PLAIN, ['deploy']), /^(0(\.\d+)?|1)$/),
-  read(
-    'contextReads.liveContentsBySourceAndTag',
-    (s) => s.contextReads.liveContentsBySourceAndTag(TENANT, 'cli', 'deploy', SESSION),
-    PLAIN,
-  ),
-  read(
-    'contextReads.rawRowsUnderRef',
-    (s) => s.contextReads.rawRowsUnderRef(TENANT, 'vault:golden:'),
-    'vault:golden:rollout.md',
-  ),
   read('predictions.predictionById', (s) => s.predictions.predictionById(TENANT, 1), 'deploy-duration'),
   read('predictions.listPredictions', (s) => s.predictions.listPredictions(TENANT, { limit: 5 }), 'deploy-duration'),
-  read(
-    'dagReads.sessionRawEntries',
-    (s) => s.dagReads.sessionRawEntries({ tenantId: TENANT, sessionId: SESSION, cap: 10 }),
-    'mem_x_raw',
-  ),
   read('dagReads.sessionRawCount', (s) => s.dagReads.sessionRawCount({ tenantId: TENANT, sessionId: SESSION }), /^1$/),
   read(
     'dagReads.summaryWithDescendants',

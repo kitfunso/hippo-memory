@@ -346,17 +346,6 @@ export function listTextsHolding(
   return [...byId.values()];
 }
 
-/**
- * A tenant's `limit` newest rows, oldest first: the tail of loadAllEntries' order, without reading the rows before it.
- */
-export function newestEntries(db: DatabaseSyncLike, tenantId: string, limit: number): MemoryEntry[] {
-  const rows = cachedStatement(
-    db,
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?`,
-  ).all(tenantId, limit) as MemoryRow[];
-  return rows.reverse().map(rowToEntry);
-}
-
 function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
   for (const row of rows) yield row.content;
 }

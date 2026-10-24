@@ -3,10 +3,10 @@ import path from 'node:path';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 import { maskEmails } from '../../base/util/secret-detect.js';
-import type { AgentImport } from '../../store/port/agent-import.js';
+import { liveUnder } from './container-view.js';
 import { matchLegacy, type LegacyTarget } from './plan.js';
 import { MIN_ITEM_CHARS, storedText } from './source.js';
-import type { Container, Listing } from './types.js';
+import type { Container, ImportStore, Listing } from './types.js';
 
 export const LEGACY_SOURCE_PREFIX = 'claude-memory:';
 const LEGACY_TAG = 'claude-code-memory';
@@ -50,7 +50,7 @@ function legacyTargets(containers: readonly Container[]): LegacyTargets {
  * row inside one.
  */
 export async function legacyWork(
-  reads: Pick<AgentImport, 'liveBySourcePrefix'>,
+  store: Pick<ImportStore, 'reports'>,
   tenantId: string,
   listings: readonly Listing[],
 ): Promise<LegacyWork> {
@@ -61,7 +61,7 @@ export async function legacyWork(
   const rows =
     containers.length === 0
       ? []
-      : (await reads.liveBySourcePrefix(tenantId, LEGACY_SOURCE_PREFIX)).filter((r) => r.tags.includes(LEGACY_TAG));
+      : (await liveUnder(store, tenantId, LEGACY_SOURCE_PREFIX)).filter((r) => r.tags.includes(LEGACY_TAG));
   const byContainer = new Map<string, ContainerLegacy>();
   if (rows.length === 0) return { byContainer, adopted: new Set() };
 

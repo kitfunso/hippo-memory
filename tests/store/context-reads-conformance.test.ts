@@ -36,16 +36,23 @@ let fixture: TwoTenantFixture;
 let fixtureAudit: readonly AuditEvent[];
 
 /** Runs the calls on both stores, asserts they agree and wrote no audit row, and returns hippo.db's outcomes by name. */
-async function conforms(named: readonly Named[], on = fixture): Promise<Map<string, Outcome<unknown>>> {
+async function conformsOn<G extends 'contextReads' | 'sessions'>(
+  group: G,
+  named: readonly (readonly [string, GroupCall<G, unknown>])[],
+  on = fixture,
+): Promise<Map<string, Outcome<unknown>>> {
   const sides = await onBothStores(
     on,
-    'contextReads',
+    group,
     named.map(([, call]) => call),
   );
   expectSameOutcomes(sides);
   if (on === fixture) expect(sides.sqlite.audit).toEqual(fixtureAudit);
   return new Map(named.map(([name], i) => [name, sides.sqlite.outcomes[i]]));
 }
+
+const conforms = (named: readonly Named[], on = fixture): Promise<Map<string, Outcome<unknown>>> =>
+  conformsOn('contextReads', named, on);
 
 const NOW = new Date(CONTEXT_NOW);
 const HOUR = 3_600_000;
@@ -96,27 +103,26 @@ function recallIds(outcome: Outcome<unknown> | undefined): string[] {
   return (result.recall ?? []).map((e) => e.id);
 }
 
-describe('ContextReads.unfinishedHandoff', () => {
-  it('reads alike under every key, age and bad tenant', async () => {
-    const calls: Named[] = [];
+describe("the context's unfinished handoff, through Sessions.latestHandoff", () => {
+  it('reads alike under every key and age', async () => {
+    const unfinished = (maxAgeMs: number) => ({ unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' }) as const;
+    const calls: (readonly [string, GroupCall<'sessions', unknown>])[] = [];
     for (const [k, key] of KEYS) {
       for (const hours of [72, 2, 1000]) {
-        calls.push([`unfinished ${k} ${hours}h`, (g) => g.unfinishedHandoff(TENANT_A, hours * HOUR, key)]);
+        calls.push([
+          `unfinished ${k} ${hours}h`,
+          (g) => g.latestHandoff(TENANT_A, null, unfinished(hours * HOUR), key),
+        ]);
       }
     }
-    calls.push(['unfinished globex', (g) => g.unfinishedHandoff(TENANT_B, 72 * HOUR, null)]);
-    for (const bad of ['', 'sess-x']) {
-      calls.push([`unfinished bad ${bad}`, (g) => g.unfinishedHandoff(bad, HOUR, null)]);
-    }
-    const out = await conforms(calls);
+    calls.push(['unfinished globex', (g) => g.latestHandoff(TENANT_B, null, unfinished(72 * HOUR), null)]);
+    const out = await conformsOn('sessions', calls);
 
     expect(out.get('unfinished no key 72h')).toMatchObject({ value: { summary: 'partial handoff for session b' } });
     expect(out.get('unfinished no key 2h')).toEqual({ value: null });
     expect(out.get('unfinished alice 72h')).toMatchObject({ value: { summary: 'alice handoff' } });
     expect(out.get('unfinished no owner 72h')).toEqual({ value: null });
     expect(out.get('unfinished globex')).toMatchObject({ value: { summary: 'globex handoff' } });
-    expect(out.get('unfinished bad ')).toEqual({ error: expect.stringContaining('tenantId is required') });
-    expect(out.get('unfinished bad sess-x')).toEqual({ error: expect.stringContaining('looks like a session id') });
   });
 });
 
@@ -309,30 +315,16 @@ describe('ContextReads row reads', () => {
 
   afterAll(() => rmSync(rowsFixture.dir, { recursive: true, force: true }));
 
-  it('read the newest rows, schema fit, live digests and raw rows under a ref alike', async () => {
+  it('read schema fit alike', async () => {
     const out = await conforms(
       [
-        ['newest 3', (g) => g.newestEntries(TENANT_A, 3)],
-        ['newest all', (g) => g.newestEntries(TENANT_A, -1)],
-        ['newest none', (g) => g.newestEntries(TENANT_A, 0)],
-        ['newest globex', (g) => g.newestEntries(TENANT_B, 5)],
         ['fit pipeline', (g) => g.schemaFit(TENANT_A, 'a pipeline note', ['pipeline'])],
         ['fit no tags', (g) => g.schemaFit(TENANT_A, 'vault note', [])],
         ['fit empty tenant', (g) => g.schemaFit('nobody', 'anything', ['pipeline'])],
-        ['digests but s1', (g) => g.liveContentsBySourceAndTag(TENANT_A, 'session-digest', 'session-digest', 's1')],
-        ['digests other source', (g) => g.liveContentsBySourceAndTag(TENANT_A, 'cli', 'session-digest', 's1')],
-        ['raw under notes', (g) => g.rawRowsUnderRef(TENANT_A, 'vault:notes:')],
-        ['raw under globex notes', (g) => g.rawRowsUnderRef(TENANT_B, 'vault:notes:')],
-        ['raw under nothing', (g) => g.rawRowsUnderRef(TENANT_A, 'vault:none:')],
-        ['raw under a wildcard', (g) => g.rawRowsUnderRef(TENANT_A, 'vault:no_es:')],
       ],
       rowsFixture,
     );
 
-    expect(out.get('newest 3')).toMatchObject({ value: [{ id: 'mem_r_11' }, { id: 'mem_r_13' }, { id: 'mem_r_13b' }] });
-    expect(out.get('newest none')).toEqual({ value: [] });
-    expect(out.get('digests but s1')).toEqual({ value: ['digest of session two', 'digest with no session'] });
-    expect(out.get('raw under a wildcard')).toEqual({ value: [] });
-    expect(out.get('raw under notes')).toMatchObject({ value: [{ id: 'mem_r_8', artifact_ref: 'vault:notes:a.md' }] });
+    expect(out.get('fit pipeline')).toMatchObject({ value: expect.any(Number) });
   });
 });

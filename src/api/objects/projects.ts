@@ -11,7 +11,7 @@ import {
   type RepairResult,
   type StoreFolder,
 } from '../../domain/sharing/project-merge.js';
-import type { ProjectTags, ProjectTagScope } from '../../store/port/project-tags.js';
+import type { ProjectTagReads, ProjectTagScope } from '../../store/port/project-tags.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { sharedStoreOf, type ContextWith } from '../types.js';
 
@@ -45,7 +45,7 @@ async function folderOf(ctx: RepairContext): Promise<StoreFolder> {
 
 /** Live rows per project name in the caller's tenant, newest write first. */
 export function projectNameList(ctx: ContextWith<'projectTags'>): Promise<ProjectSummary[]> {
-  return listProjects(ctx.store.projectTags, ctx.tenantId);
+  return listProjects(ctx.store, ctx.tenantId);
 }
 
 /** Folds project `from` into `into`, backed up and audited as `ctx.actor`; rejects on user-global, unknown or equal
@@ -59,19 +59,19 @@ export function projectNameMerge(
 
 /** Sets aside stray imports, folds renamed projects and re-tags sleep's user-global merges; a dry run only plans. */
 export async function projectNameRepair(ctx: RepairContext, opts: { dryRun: boolean }): Promise<RepairResult> {
-  return repairProjects(ctx.store.projectTags, scopeOf(ctx), await folderOf(ctx), opts);
+  return repairProjects(ctx.store, scopeOf(ctx), await folderOf(ctx), opts);
 }
 
 /** The repair sleep runs once per store; null when it already ran. */
 export async function projectNameRepairOnce(ctx: RepairContext): Promise<RepairResult | null> {
-  return repairOnceOnSleep(ctx.store.projectTags, scopeOf(ctx), await folderOf(ctx));
+  return repairOnceOnSleep(ctx.store, scopeOf(ctx), await folderOf(ctx));
 }
 
 /** What a repair of the global store would change, read only so doctor takes no write lock. */
 export function globalProjectRepairPlan(
-  tags: ProjectTags,
+  store: ProjectTagReads,
   tenantId: string,
   machine: Machine,
 ): Promise<Omit<RepairResult, 'backup'>> {
-  return planProjectRepair(tags, tenantId, { isGlobal: true, machine });
+  return planProjectRepair(store, tenantId, { isGlobal: true, machine });
 }

@@ -3,7 +3,8 @@
 import type { MemoryEntry, StrengthOptions } from '../../base/memory/memory.js';
 import type { AgentMemoryTool } from '../../base/memory/agent-memory-tools.js';
 import type { ImportStep, PlannedRow } from '../../store/port/agent-import.js';
-import type { DormantSnapshot } from '../../store/port/types.js';
+import type { DormantSnapshot, EntryCursor } from '../../store/port/types.js';
+import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 import { itemSource } from './source.js';
 import type { Container, ImportStore } from './types.js';
 
@@ -53,14 +54,23 @@ interface Draft {
   readonly steps: ImportStep[];
 }
 
+/** The tenant's live rows whose source starts with `prefix`, oldest first. */
+export async function liveUnder(
+  store: Pick<ImportStore, 'reports'>,
+  tenantId: string,
+  prefix: string,
+): Promise<MemoryEntry[]> {
+  const under = { tenantId, sourcePrefix: prefix, live: true } as const;
+  return readAll((after?: EntryCursor) => store.reports.entriesWhere(under, { limit: READ_PAGE_ROWS, after }));
+}
+
 export async function readContainer(s: StoreSession, w: ContainerWork): Promise<ContainerView> {
-  const reads = s.store.agentImport;
-  const live = await reads.liveBySourcePrefix(s.tenantId, w.prefix);
+  const live = await liveUnder(s.store, s.tenantId, w.prefix);
   const read = [...live];
   const draft: Draft = { live: [...live], movedDormant: [], steps: [] };
   await adoptLegacy(s, w, draft);
   for (const old of w.legacyPrefixes) {
-    const rows = await reads.liveBySourcePrefix(s.tenantId, old);
+    const rows = await liveUnder(s.store, s.tenantId, old);
     read.push(...rows);
     await adoptPrefix(s, w, { old, rows }, draft);
   }
@@ -113,7 +123,7 @@ async function adoptPrefix(
   }
   if (rows.length === 0 && (w.container.items.length === 0 || draft.live.length > 0)) return;
   draft.steps.push({ kind: 'moveDormant', from: old, to: w.prefix, origin });
-  for (const snap of await s.store.agentImport.dormantBySourcePrefix(s.tenantId, old)) {
+  for (const snap of await s.store.projectTags.dormantWhere({ tenantId: s.tenantId, sourcePrefix: old })) {
     const source = w.prefix + snap.entry.source.slice(old.length);
     draft.movedDormant.push({
       ...snap,

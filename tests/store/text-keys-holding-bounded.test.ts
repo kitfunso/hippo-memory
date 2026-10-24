@@ -7,7 +7,7 @@ import { chunked } from '../../src/base/util/chunked.js';
 import { duplicateKey, heldTextKeys, mergedText } from '../../src/base/util/same-text.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb, setFtsInSync, type DatabaseSyncLike } from '../../src/db/index.js';
-import { listRowsHoldingOutsideSourcePrefix, listTextKeysHolding } from '../../src/store/sqlite/copy-rows.js';
+import { listTextKeysHolding } from '../../src/store/sqlite/copy-rows.js';
 import { countMatching, peakRowsRead, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -72,7 +72,9 @@ describe('copy reads by whole text', () => {
 
   it.each([true, false])('textKeysHolding reads only the copies a whole scan finds, index in sync: %s', (inSync) => {
     withDb(root, (db) => setFtsInSync(db, inSync));
-    const { result, reads } = recordStatements(() => withDb(root, (db) => listTextKeysHolding(db, 'default', TEXTS)));
+    const { result, reads } = recordStatements(() =>
+      withDb(root, (db) => listTextKeysHolding(db, { tenantId: 'default' }, TEXTS)),
+    );
     const whole = wholeScan(root, (r) => r.tenant_id === 'default');
     const found = TEXTS.map((text) =>
       result
@@ -86,18 +88,21 @@ describe('copy reads by whole text', () => {
     expect(peakRowsRead(reads, 'json_each')).toBe(4);
   });
 
-  it.each([true, false])(
-    'rowsHoldingOutsideSourcePrefix answers per text as a whole scan, index in sync: %s',
-    (inSync) => {
-      withDb(root, (db) => setFtsInSync(db, inSync));
-      const held = withDb(root, (db) =>
-        listRowsHoldingOutsideSourcePrefix(db, 'default', TEXTS, AGENT_MEMORY_SOURCE_PREFIX, null),
-      );
-      const live = (r: ScanRow) =>
-        r.tenant_id === 'default' && r.superseded_by === null && !r.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX);
-      expect(held.map((rows) => rows.map((r) => r.id).sort())).toEqual(wholeScan(root, live));
-    },
-  );
+  it.each([true, false])('the live rows the import asks about match a whole scan, index in sync: %s', (inSync) => {
+    withDb(root, (db) => setFtsInSync(db, inSync));
+    const held = withDb(root, (db) => listTextKeysHolding(db, { tenantId: 'default', live: true }, TEXTS)).filter(
+      (k) => !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX),
+    );
+    const found = TEXTS.map((text) =>
+      held
+        .filter((k) => heldTextKeys(k).includes(duplicateKey(text)))
+        .map((k) => k.id)
+        .sort(),
+    );
+    const live = (r: ScanRow) =>
+      r.tenant_id === 'default' && r.superseded_by === null && !r.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX);
+    expect(found).toEqual(wholeScan(root, live));
+  });
 });
 
 describe('copy reads statements', () => {
@@ -111,13 +116,15 @@ describe('copy reads statements', () => {
     writeEntriesTogether(root, [row('lesson 3 of the batch')]);
     withDb(root, (db) => setFtsInSync(db, inSync));
     const texts = Array.from({ length: n }, (_, i) => `lesson ${i} of the batch`);
-    const keys = recordStatements(() => withDb(root, (db) => listTextKeysHolding(db, ALL_TENANTS, texts)));
-    const outside = recordStatements(() =>
-      withDb(root, (db) => listRowsHoldingOutsideSourcePrefix(db, 'default', texts, AGENT_MEMORY_SOURCE_PREFIX, null)),
+    const keys = recordStatements(() =>
+      withDb(root, (db) => listTextKeysHolding(db, { tenantId: ALL_TENANTS }, texts)),
+    );
+    const live = recordStatements(() =>
+      withDb(root, (db) => listTextKeysHolding(db, { tenantId: 'default', live: true }, texts)),
     );
     expect(countMatching(keys.statements, 'json_each')).toBe(chunked(texts).length);
-    expect(countMatching(outside.statements, 'json_each')).toBe(chunked(texts).length);
+    expect(countMatching(live.statements, 'json_each')).toBe(chunked(texts).length);
     expect(keys.result.map((k) => k.content)).toEqual(['lesson 3 of the batch']);
-    expect(outside.result.map((rows) => rows.length)).toEqual(texts.map((_, i) => (i === 3 ? 1 : 0)));
+    expect(live.result.map((k) => k.content)).toEqual(['lesson 3 of the batch']);
   });
 });

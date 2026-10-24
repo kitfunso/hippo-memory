@@ -7,6 +7,7 @@ import { findHippoStoreDir, isInitialized } from '../../host/project-identity.js
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { StoreHealth } from '../../store/port/diagnostics.js';
 import type { StoreGroups } from '../../store/port.js';
+import type { ProjectTagReads } from '../../store/port/project-tags.js';
 import { needsNewerHippo } from '../../base/errors/store-open.js';
 import { loadConfig } from '../../host/config-file.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from '../../base/session/compaction-timing.js';
@@ -64,8 +65,8 @@ export interface DoctorOptions {
   diagnosticsBodies: (hippoRoot: string) => DoctorStore;
 }
 
-/** What doctor reads of a store: its health and, for the global store, its project tags. */
-export type DoctorStore = Pick<StoreGroups, 'diagnostics' | 'projectTags'>;
+/** What doctor reads of a store: its health and, for the global store, what a project repair plans from. */
+export type DoctorStore = Pick<StoreGroups, 'diagnostics'> & ProjectTagReads;
 
 /** Minimum Node.js version hippo supports (package.json engines). */
 export const MIN_NODE = '22.16.0';
@@ -232,7 +233,7 @@ function compactionsCheck(
 /** Old project tags in the global store, counted by the repair's own plan so a truly user-global merge never warns. */
 async function projectsCheck(global: DoctorStore, tenantId: string): Promise<DoctorCheck> {
   try {
-    const r = await globalProjectRepairPlan(global.projectTags, tenantId, currentMachine());
+    const r = await globalProjectRepairPlan(global, tenantId, currentMachine());
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
       r.folds.length > 0
