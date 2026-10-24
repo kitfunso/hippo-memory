@@ -384,7 +384,9 @@ describe('incidents store (first-class object)', () => {
     }).rejects.toThrow(/linked memory .* not found/);
   });
 
-  it('objectIdByMemory: row id for an open incident, null for resolved/closed', async () => {
+  it('listObjects by memoryId: row id for an open incident, null for resolved/closed', async () => {
+    const openIdOf = async (memoryId: string) =>
+      (await objectsAt(home).listObjects('default', 'incident', { status: 'open', memoryId, limit: 1 }))[0]?.id ?? null;
     const inc = await openIncident(
       objectsAt(home),
       loadConfig(home).defaultHalfLifeDays,
@@ -392,9 +394,9 @@ describe('incidents store (first-class object)', () => {
       { incidentText: 'open one' },
       'cli',
     );
-    expect(await objectsAt(home).objectIdByMemory('default', 'incident', 'open', inc.memoryId!)).toBe(inc.id);
+    expect(await openIdOf(inc.memoryId!)).toBe(inc.id);
 
     await resolveOpenIncident(objectsAt(home), 'default', inc.id, 'fixed', 'cli');
-    expect(await objectsAt(home).objectIdByMemory('default', 'incident', 'open', inc.memoryId!)).toBeNull();
+    expect(await openIdOf(inc.memoryId!)).toBeNull();
   });
 });

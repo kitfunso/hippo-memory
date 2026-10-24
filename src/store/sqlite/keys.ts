@@ -1,14 +1,21 @@
-// hippo.db's key groups: KeyWrites, KeyGrants and KeyAudit.
+// hippo.db's KeyWrites group: every key write with its audit rows, and the key list.
 import { assertGrantable, ownedKey } from '../rules/keys.js';
 import { appendAuditEvents } from './audit.js';
 import { grantScope, insertApiKey, listApiKeyRows, listLiveOwnedKeyIds, revokeApiKey, ungrantScope } from './auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import type { KeyAudit, KeyGrants, KeyMint, KeyRevoke, KeyWrites, SelfKeyMint } from '../port.js';
+import type {
+  KeyCalls,
+  KeyChangeArgs,
+  KeyMint,
+  KeyRevoke,
+  KeyWrites,
+  ScopeGrantChange,
+  SelfKeyMint,
+} from '../port/keys.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { readApiKeyOwner } from './tenant-lookup.js';
 import type { AppendAuditOpts } from '../port/types.js';
-import type { ScopeGrantChange } from '../port/keys.js';
 
 /** The auth_create row a mint writes; the plaintext never reaches it. */
 function createAuditOf({ key, actor, metadata }: KeyMint): AppendAuditOpts {
@@ -71,24 +78,19 @@ function revokeKey(db: DatabaseSyncLike, revoke: KeyRevoke): string {
   });
 }
 
-const keyWritesBodies: Bodies<KeyWrites> = {
-  createApiKey: createKey,
-  createSelfApiKey: createSelfKey,
+function changeKey(db: DatabaseSyncLike, ...[change, input]: KeyChangeArgs): void | string[] | string {
+  if (change === 'create') return createKey(db, input);
+  if (change === 'create_self') return createSelfKey(db, input);
+  if (change === 'revoke') return revokeKey(db, input);
+  return changeScopeGrant(db, input);
+}
+
+const keyWritesBodies: Bodies<KeyCalls> = {
+  changeApiKey: changeKey,
   listApiKeys: listApiKeyRows,
 };
 
-const keyAuditBodies: Bodies<KeyAudit> = {
-  revokeApiKey: revokeKey,
-};
-
 export function sqliteKeyWrites(on: OnHandle): KeyWrites {
-  return bound(on, keyWritesBodies);
-}
-
-export function sqliteKeyGrants(on: OnHandle): KeyGrants {
-  return bound<KeyGrants>(on, { changeScopeGrant: changeScopeGrant });
-}
-
-export function sqliteKeyAudit(on: OnHandle): KeyAudit {
-  return bound(on, keyAuditBodies);
+  // SAFETY: changeKey answers each change with the value the port's overload for it names.
+  return bound(on, keyWritesBodies) as KeyWrites;
 }

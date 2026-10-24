@@ -7,7 +7,7 @@ import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/store/index.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
-import { sqlitePredictions } from '../../src/store/sqlite/predictions.js';
+import { sqliteObjects } from '../../src/store/sqlite/objects.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import {
@@ -39,7 +39,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const SAVE = 'predictions.savePrediction';
+const SAVE = 'objects.saveObject';
 
 afterEach(undoAll);
 
@@ -236,7 +236,7 @@ describe('a reader thread', () => {
     const executor = createSqliteExecutor(root);
     cleanups.push(() => executor.close());
     const saved = { classTag: 'release', claimText: 'written on a reader' };
-    const args = ['default', { ...saved, mirror: predictionMirror('default', saved, 30) }, 'test'];
+    const args = ['default', 'prediction', { ...saved, mirror: predictionMirror('default', saved, 30), actor: 'test' }];
 
     const write = executor.call(SAVE, args, { mode: 'read', requestId: undefined });
 
@@ -259,7 +259,7 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
     const info = vi.spyOn(log, 'info');
     // The worker-backed store with one group swapped back to the in-process one: the defect the block exists to catch.
     const store = Object.assign(workerSqliteStore(root), {
-      predictions: sqlitePredictions(handlesOf(root)),
+      objects: sqliteObjects(handlesOf(root)),
     });
     const server = await start(root, store);
 
@@ -341,7 +341,7 @@ describe('stopping a server with store workers', () => {
     await store.close();
 
     expect(executor.liveThreads()).toBe(0);
-    await expect(store.predictions.listPredictions('default', { limit: 1 })).rejects.toThrow(/store is closed/);
+    await expect(store.objects.listObjects('default', 'prediction', { limit: 1 })).rejects.toThrow(/store is closed/);
   });
 });
 

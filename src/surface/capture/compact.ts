@@ -87,7 +87,7 @@ export type CompactionStore = Pick<StoreGroups, 'compactionHooks' | 'sessions'>;
 
 async function snapshotJustSaved(sessions: Sessions, tenantId: string, sessionId: string | null): Promise<boolean> {
   if (sessionId === null || sessionId === '') return false;
-  const active = await sessions.loadSnapshot(tenantId, null);
+  const active = await sessions.loadSnapshot(tenantId, {}, null);
   return (
     active?.sessionId === sessionId &&
     active.source === 'pre-compact' &&
@@ -246,7 +246,7 @@ async function saveDerivedSnapshot(
 ): Promise<void> {
   let existing: TaskSnapshot | null = null;
   try {
-    existing = await sessions.loadSnapshot(tenantId, null);
+    existing = await sessions.loadSnapshot(tenantId, {}, null);
   } catch (err) {
     logger.warn(
       `pre-compact: stored snapshot unreadable, saving the derived one alone: ${errorMessage(err)}`,
@@ -264,7 +264,7 @@ async function saveDerivedSnapshot(
     );
   } else {
     try {
-      await sessions.saveSnapshot(tenantId, { ...merged, source: 'pre-compact', sessionId }, null);
+      await sessions.save(tenantId, 'snapshot', { ...merged, source: 'pre-compact', sessionId }, null);
       appendPreCompactLog(logFile, 'snapshot saved');
       if (recordId !== null) await markSnapshotOnRecord(hooks, tenantId, recordId, logFile);
     } catch (err) {

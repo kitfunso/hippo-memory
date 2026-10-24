@@ -1,4 +1,4 @@
-// Predictions answers alike on hippo.db and on a store held in memory: the same rows, the same order, the same errors and the same audit rows.
+// The prediction kind of Objects answers alike on hippo.db and on a store held in memory: the same rows, the same order, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { auditHighId } from '../_helpers/root-forms.js';
@@ -36,7 +36,9 @@ interface MirrorView {
 }
 
 type Value = Prediction | Prediction[] | number[] | PredictionBaserate | MirrorView[] | null;
-type Call = GroupCall<'predictions', Value>;
+type Call = GroupCall<'objects', Value>;
+/** A close as a test writes it; every call closes as ACTOR. */
+type Close = Omit<PredictionClose, 'actor'>;
 type Side = SideResult<Value>;
 
 let fixture: TwoTenantFixture;
@@ -44,7 +46,7 @@ let baseline: Side;
 let nextAuditId: number;
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'predictions', calls);
+  const sides = await onBothStores(fixture, 'objects', calls);
   expectSameOutcomes(sides);
   return sides.sqlite;
 }
@@ -52,7 +54,7 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
 /** Built once per call list, so both stores are handed the same mirror id. */
 function claim(classTag: string, fields: Partial<SavePredictionOptions> = {}, tenantId = TENANT_A): PredictionSave {
   const opts: SavePredictionOptions = { classTag, claimText: `the ${classTag} work lands on time`, ...fields };
-  return { ...opts, mirror: predictionMirror(tenantId, opts, 30) };
+  return { ...opts, mirror: predictionMirror(tenantId, opts, 30), actor: ACTOR };
 }
 
 /** Sets the clock inside the call, so each store reads the same time at the same step. */
@@ -65,23 +67,23 @@ const at =
 const save =
   (input: PredictionSave): Call =>
   (g) =>
-    g.savePrediction(input.mirror.tenantId, input, ACTOR);
+    g.saveObject(input.mirror.tenantId, 'prediction', input);
 const close =
-  (id: number, how: PredictionClose, tenantId = TENANT_A): Call =>
+  (id: number, how: Close, tenantId = TENANT_A): Call =>
   (g) =>
-    g.closePrediction(tenantId, id, how, ACTOR);
+    g.closeObject(tenantId, 'prediction', id, { ...how, actor: ACTOR });
 const byId =
   (id: number, tenantId = TENANT_A): Call =>
   (g) =>
-    g.predictionById(tenantId, id);
+    g.objectById(tenantId, 'prediction', id);
 const list =
   (query: PredictionListQuery, tenantId = TENANT_A): Call =>
   (g) =>
-    g.listPredictions(tenantId, query);
+    g.listObjects(tenantId, 'prediction', query);
 const ids =
   (query: PredictionListQuery, tenantId = TENANT_A): Call =>
   async (g) =>
-    (await g.listPredictions(tenantId, query)).map((p) => p.id);
+    (await g.listObjects(tenantId, 'prediction', query)).map((p) => p.id);
 const baserate =
   (classTag: string, tenantId = TENANT_A): Call =>
   (g) =>
@@ -151,7 +153,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('Predictions.savePrediction and predictionById', () => {
+describe('Objects, the prediction kind: saveObject and objectById', () => {
   it('saves the open row and its mirror in the tenant named, the predict_create row ahead of the remember row', async () => {
     const full = claim('sprint', { estimateValue: 3, estimateUnit: 'days', targetDate: '2026-04-01' });
     const bare = claim('launch');
@@ -240,7 +242,7 @@ describe('Predictions.savePrediction and predictionById', () => {
   });
 });
 
-describe('Predictions.listPredictions', () => {
+describe('Objects, the prediction kind: listObjects', () => {
   /** Ids 1 to 8, id 5 in the other tenant: three timestamps each shared by rows of one tenant, then 1 and 2 closed and 8 closed-unknown. */
   const seed = (): Call[] => [
     at(T1, save(claim('sprint'))),
@@ -316,7 +318,7 @@ describe('Predictions.listPredictions', () => {
   });
 });
 
-describe('Predictions.closePrediction', () => {
+describe('Objects, the prediction kind: closeObject', () => {
   it('closes with an actual and a note, and as closed-unknown with neither, one predict_close row each', async () => {
     const first = claim('sprint', { estimateValue: 3 });
     const second = claim('sprint');
@@ -401,7 +403,7 @@ describe('Predictions.closePrediction', () => {
   });
 });
 
-describe('Predictions.predictionBaserate', () => {
+describe('Objects.predictionBaserate', () => {
   it('a class with no closed row answers the empty baserate and still writes its audit row', async () => {
     const side = await conforms([
       at(T1, save(claim('sprint', { estimateValue: 3 }))),
@@ -429,7 +431,7 @@ describe('Predictions.predictionBaserate', () => {
   });
 
   it("counts only the tenant's closed rows of the class that hold both values, and sums them in id order", async () => {
-    const closedAs = (actualValue: number): PredictionClose => ({ closureState: 'closed', actualValue });
+    const closedAs = (actualValue: number): Close => ({ closureState: 'closed', actualValue });
     const side = await conforms([
       at(T1, save(claim('sprint', { estimateValue: 0.1 }))),
       save(claim('sprint', { estimateValue: 0.2 })),

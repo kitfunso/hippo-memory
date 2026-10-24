@@ -129,9 +129,10 @@ function replaceTranscriptIn(t: MemoryTables, tenantId: string, handoff: Handoff
 export function writeSessionEndIn(
   t: MemoryTables,
   tenantId: string,
-  request: Omit<SessionEndHandoffRequest, 'tenantId'>,
+  request: SessionEndHandoffRequest,
+  key: ContinuityKey | null,
 ) {
-  const { sessionId, key = null, inPlace } = request;
+  const { sessionId, inPlace } = request;
   if (key) stampOf(key);
   const existing = latestHandoffIn(t, tenantId, sessionId, {}, key);
   const source = sessionEndSource(readSnapshotIn(t, tenantId, key), existing, request);

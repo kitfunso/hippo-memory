@@ -57,12 +57,9 @@ export async function sessionEndHandoffForCaller(
   const evidence = checkedEvidence(req.evidence);
   const key = await bindCaller(ctx, req.sessionId, req.project);
   const { sessions } = ctx.store;
-  const handoff = await sessions.writeSessionEndHandoff(ctx.tenantId, {
-    sessionId: req.sessionId,
-    evidence,
-    derived: state === null ? null : snapshotFields(state),
-    key,
-  });
-  const snapshotsClosed = await sessions.closeSessionSnapshots(ctx.tenantId, req.sessionId, 'session-ended', key);
+  const sessionEnd = { sessionId: req.sessionId, evidence, derived: state === null ? null : snapshotFields(state) };
+  const handoff = await sessions.save(ctx.tenantId, 'handoff', { sessionEnd }, key);
+  const close = { status: 'session-ended', sessionId: req.sessionId };
+  const snapshotsClosed = await sessions.clear(ctx.tenantId, 'snapshot', close, key);
   return { handoffWritten: handoff !== null, snapshotsClosed };
 }

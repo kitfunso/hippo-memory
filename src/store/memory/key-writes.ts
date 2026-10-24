@@ -1,6 +1,19 @@
 // The in-memory KeyWrites group and findApiKey's read of the same rows.
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import type { ApiKeyListRow, KeyListQuery, KeyMint, KeyWrites, NewApiKey, SelfKeyMint } from '../port/keys.js';
+import type {
+  ApiKeyListRow,
+  KeyCalls,
+  KeyChangeArgs,
+  KeyListQuery,
+  KeyMint,
+  KeyRevoke,
+  KeyWrites,
+  NewApiKey,
+  ScopeGrantChange,
+  SelfKeyMint,
+} from '../port/keys.js';
+import { assertGrantable, ownedKey } from '../rules/keys.js';
+import { byBytes } from '../rules/order.js';
 import type { ApiKeyRecord, AppendAuditOpts } from '../port/types.js';
 import { appendAudit, nextId } from './rows.js';
 import type { KeyRow, MemoryTables } from './tables.js';
@@ -83,13 +96,39 @@ function listKeysIn(t: MemoryTables, query: KeyListQuery): ApiKeyListRow[] {
   return query.limit === undefined ? rows : rows.slice(0, query.limit);
 }
 
+function revokeIn(t: MemoryTables, { tenantId, keyId, actor, at }: KeyRevoke): string {
+  const key = ownedKey(t.keys.get(keyId), tenantId, keyId);
+  if (key.revokedAt) return key.revokedAt;
+  appendAudit(t, [{ tenantId: key.tenantId, actor, op: 'auth_revoke', targetId: keyId }]);
+  t.keys.set(keyId, { ...key, revokedAt: at });
+  return at;
+}
+
+function changeGrantIn(t: MemoryTables, { tenantId, keyId, scope, op, actor }: ScopeGrantChange): void {
+  const key = ownedKey(t.keys.get(keyId), tenantId, keyId);
+  assertGrantable({ op, keyId }, key.revokedAt);
+  const others = key.scopes.filter((s) => s !== scope);
+  const scopes = op === 'auth_grant' ? [...others, scope].sort(byBytes) : others;
+  appendAudit(t, [{ tenantId, actor, op, targetId: keyId, metadata: { scope } }]);
+  t.keys.set(keyId, { ...key, scopes });
+}
+
+function changeIn(t: MemoryTables, ...[change, input]: KeyChangeArgs): void | string[] | string {
+  if (change === 'create') {
+    insertKey(t, input.key);
+    appendAudit(t, [createAudit(input)]);
+    return;
+  }
+  if (change === 'create_self') return createSelfKeyIn(t, input);
+  if (change === 'revoke') return revokeIn(t, input);
+  return changeGrantIn(t, input);
+}
+
 export function memoryKeyWrites(t: MemoryTables): KeyWrites {
-  return {
-    createApiKey: async (mint) => {
-      insertKey(t, mint.key);
-      appendAudit(t, [createAudit(mint)]);
-    },
-    createSelfApiKey: async (mint) => createSelfKeyIn(t, mint),
+  const keys: KeyCalls = {
+    changeApiKey: async (...args) => changeIn(t, ...args),
     listApiKeys: async (query) => listKeysIn(t, query),
   };
+  // SAFETY: changeIn answers each change with the value the port's overload for it names.
+  return keys as KeyWrites;
 }

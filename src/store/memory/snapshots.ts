@@ -1,7 +1,6 @@
 // The in-memory task snapshots and session events, with the continuity key that scopes the snapshots and handoffs.
-import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot, Sessions } from '../port/sessions.js';
+import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot } from '../port/sessions.js';
 import { continuityStamp, type ContinuityKey } from '../port/types.js';
 import { keyProjects } from '../rules/continuity.js';
 import { newestFirst } from '../rules/order.js';
@@ -35,7 +34,7 @@ export function readSnapshotIn(t: MemoryTables, tenantId: string, key: Continuit
   return newest ? { ...newest.row } : null;
 }
 
-function saveSnapshotIn(t: MemoryTables, tenantId: string, input: SnapshotInput, key: ContinuityKey | null) {
+export function saveSnapshotIn(t: MemoryTables, tenantId: string, input: SnapshotInput, key: ContinuityKey | null) {
   const stamp = stampOf(key);
   const now = new Date().toISOString();
   for (const s of activeIn(t, tenantId, key)) s.row = { ...s.row, status: 'superseded', updatedAt: now };
@@ -55,16 +54,22 @@ function saveSnapshotIn(t: MemoryTables, tenantId: string, input: SnapshotInput,
   return { ...row };
 }
 
-/** The tenant's newest active snapshot, whoever saved it, closed with `status`. */
-function clearIn(t: MemoryTables, tenantId: string, status: string): boolean {
+/** The tenant's newest active snapshot, whoever saved it, closed with `status`; rows closed. */
+export function clearSnapshotIn(t: MemoryTables, tenantId: string, status: string): number {
   const newest = activeIn(t, tenantId, null)[0];
-  if (!newest) return false;
+  if (!newest) return 0;
   newest.row = { ...newest.row, status, updatedAt: new Date().toISOString() };
-  return true;
+  return 1;
 }
 
 // The session id is matched too, so an ending session never closes a newer session's snapshot.
-function closeIn(t: MemoryTables, tenantId: string, sessionId: string, status: string, key: ContinuityKey | null) {
+export function closeSnapshotsIn(
+  t: MemoryTables,
+  tenantId: string,
+  sessionId: string,
+  status: string,
+  key: ContinuityKey | null | undefined,
+) {
   if (key) continuityStamp(key);
   const now = new Date().toISOString();
   const closing = activeIn(t, tenantId, key).filter((s) => s.row.sessionId === sessionId);
@@ -72,7 +77,7 @@ function closeIn(t: MemoryTables, tenantId: string, sessionId: string, status: s
   return closing.length;
 }
 
-function appendEventIn(t: MemoryTables, tenantId: string, input: SessionEventInput): SessionEvent {
+export function appendEventIn(t: MemoryTables, tenantId: string, input: SessionEventInput): SessionEvent {
   const id = nextId(t, 'session_events');
   const row: SessionEvent = {
     id,
@@ -121,27 +126,4 @@ export function sessionCompletion(t: MemoryTables, tenantId: string, sessionId: 
     (e) => e.tenantId === tenantId && e.row.sessionId === sessionId && e.row.eventType === 'session_complete',
   );
   return done.sort(newestEvent)[0]?.row.content;
-}
-
-type SnapshotMethods = Pick<
-  Sessions,
-  | 'saveSnapshot'
-  | 'loadSnapshot'
-  | 'loadFreshSnapshot'
-  | 'clearSnapshot'
-  | 'closeSessionSnapshots'
-  | 'appendEvent'
-  | 'listEvents'
->;
-
-export function memorySnapshots(t: MemoryTables): SnapshotMethods {
-  return {
-    saveSnapshot: async (tenantId, snapshot, key) => saveSnapshotIn(t, tenantId, snapshot, key),
-    loadSnapshot: async (tenantId, key) => readSnapshotIn(t, tenantId, key),
-    loadFreshSnapshot: async (tenantId, opts, key) => freshActiveSnapshot(readSnapshotIn(t, tenantId, key), opts),
-    clearSnapshot: async (tenantId, clearedStatus) => clearIn(t, tenantId, clearedStatus),
-    closeSessionSnapshots: async (tenantId, sessionId, status, key) => closeIn(t, tenantId, sessionId, status, key),
-    appendEvent: async (tenantId, event) => appendEventIn(t, tenantId, event),
-    listEvents: async (tenantId, opts) => listEventsIn(t, tenantId, opts),
-  };
 }

@@ -1,4 +1,4 @@
-// The key groups: minting, listing, granting and revoking API keys.
+// The KeyWrites group: minting, listing, granting and revoking API keys.
 import type { JsonValue } from '../../base/util/json.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { TenantId } from '../../base/util/tenant.js';
@@ -8,18 +8,6 @@ export interface KeyRevoke {
   readonly keyId: string;
   readonly actor: string;
   readonly at: string;
-}
-
-export interface KeyAudit {
-  /** Sets revoked_at to `at` and appends one auth_revoke row (the key's tenant, `actor`, the key id) in one
-   * transaction, then resolves to `at`. A revoked key resolves to its own revoked_at and writes nothing; a key missing
-   * from `tenantId` rejects with NotFoundError `Unknown key_id: <keyId>`. */
-  revokeApiKey(revoke: KeyRevoke): Promise<string>;
-}
-
-export interface KeyGrants {
-  /** Checks the key under the write lock; the change and its auth_grant or auth_ungrant row commit together. */
-  changeScopeGrant(change: ScopeGrantChange): Promise<void>;
 }
 
 /** One grant or ungrant on a key of `tenantId`, and the actor of its audit row; the api has already refused an open or
@@ -49,17 +37,37 @@ export interface SelfKeyMint extends KeyMint {
 /** `listApiKeyRows`'s filters; ALL_TENANTS is sent only by the host's `hippo auth list`. */
 export type KeyListQuery = ListApiKeysOpts;
 
+/** Every key write commits with its audit rows in one transaction, so with either one failing, neither is written. */
 export interface KeyWrites {
-  /** Inserts the key and appends its auth_create row in one transaction; with either one failing, neither is written. A
-   * key id taken in any tenant rejects, since keys are looked up by id alone. */
-  createApiKey(mint: KeyMint): Promise<void>;
+  /** Inserts the key and appends its auth_create row. A key id taken in any tenant rejects, since keys are looked up by
+   * id alone. */
+  changeApiKey(change: 'create', mint: KeyMint): Promise<void>;
   /** Serialized per (tenant, owner) before the count: revoke the owner's oldest live keys to `perSubject - 1`, then
    * insert the key; append auth_revoke `{ replacedBy }` per revoked key, then auth_create. Live: unrevoked and not
-   * expired (NaN counts as expired). */
-  createSelfApiKey(mint: SelfKeyMint): Promise<string[]>;
+   * expired (NaN counts as expired). Resolves to the revoked ids. */
+  changeApiKey(change: 'create_self', mint: SelfKeyMint): Promise<string[]>;
+  /** Sets revoked_at to `at` and appends one auth_revoke row (the key's tenant, `actor`, the key id), then resolves to
+   * `at`. A revoked key resolves to its own revoked_at and writes nothing; a key missing from `tenantId` rejects with
+   * NotFoundError `Unknown key_id: <keyId>`. */
+  changeApiKey(change: 'revoke', revoke: KeyRevoke): Promise<string>;
+  /** Checks the key under the write lock, then grants or ungrants the scope with its auth_grant or auth_ungrant row. */
+  changeApiKey(change: 'scope', grant: ScopeGrantChange): Promise<void>;
   /** As `listApiKeyRows`: newest inserted first, each with its scope grants; `active` drops revoked rows and an
    * expires_at not above now's toISOString. */
   listApiKeys(query: KeyListQuery): Promise<ApiKeyListRow[]>;
+}
+
+/** `changeApiKey`'s overloads as one argument list, so an adapter writes one body. */
+export type KeyChangeArgs =
+  | [change: 'create', mint: KeyMint]
+  | [change: 'create_self', mint: SelfKeyMint]
+  | [change: 'revoke', revoke: KeyRevoke]
+  | [change: 'scope', grant: ScopeGrantChange];
+
+/** `KeyWrites` as an adapter writes it; the port's overloads pair each change with its answer. */
+export interface KeyCalls {
+  changeApiKey(...args: KeyChangeArgs): Promise<void | string[] | string>;
+  listApiKeys: KeyWrites['listApiKeys'];
 }
 
 /** A listed key plus its row id, the paging key the list item itself does not expose. */

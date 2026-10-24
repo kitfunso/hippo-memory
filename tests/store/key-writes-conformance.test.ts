@@ -65,11 +65,11 @@ const SELF_META = { label: 'new', role: 'member', self: true, expiresAt: EXPIRES
 const create =
   (key: NewApiKey): Call =>
   (g) =>
-    g.createApiKey({ key, actor: 'api_key:caller', metadata: { label: key.label, role: key.role } });
+    g.changeApiKey('create', { key, actor: 'api_key:caller', metadata: { label: key.label, role: key.role } });
 const createSelf =
   (key: NewApiKey & { ownerSubject: string; expiresAt: string }, perSubject: number): Call =>
   (g) =>
-    g.createSelfApiKey({ key, actor: OWNER, metadata: SELF_META, perSubject });
+    g.changeApiKey('create_self', { key, actor: OWNER, metadata: SELF_META, perSubject });
 type ListQuery = Omit<KeyListQuery, 'tenantId'> & { tenantId?: TenantId };
 const list =
   (query: ListQuery): Call =>
@@ -121,7 +121,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('KeyWrites.createApiKey', () => {
+describe('KeyWrites.changeApiKey create', () => {
   it('stores the hashed row and one auth_create row under the next id', async () => {
     const key = newKey({ label: 'ci', role: 'admin' });
     const side = await conforms([create(key), find(key.keyId), list({ keyId: key.keyId, active: true })]);
@@ -188,7 +188,7 @@ describe('KeyWrites.createApiKey', () => {
   });
 });
 
-describe('KeyWrites.createSelfApiKey', () => {
+describe('KeyWrites.changeApiKey create_self', () => {
   it('revokes nothing while the owner is under the cap, counting neither expired nor revoked keys', async () => {
     const key = selfKey();
     const side = await conforms([

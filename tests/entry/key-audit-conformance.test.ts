@@ -1,4 +1,4 @@
-// KeyAudit answers alike on hippo.db and on a store held in memory: the same values, the same errors and the same audit rows.
+// KeyWrites' revoke answers alike on hippo.db and on a store held in memory: the same values, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
@@ -21,7 +21,7 @@ const AT = '2026-03-01T12:00:00.000Z';
 
 /** Every value a call below resolves to: a revoked_at, or a key's revoked_at read back. */
 type KeyAuditValue = string | null | undefined;
-type Call = GroupCall<'keyAudit', KeyAuditValue>;
+type Call = GroupCall<'keyWrites', KeyAuditValue>;
 type Side = SideResult<KeyAuditValue>;
 
 let fixture: TwoTenantFixture;
@@ -29,7 +29,7 @@ let baseline: Side;
 
 /** Runs the calls on both stores, asserts they agree, and returns hippo.db's side. */
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'keyAudit', calls);
+  const sides = await onBothStores(fixture, 'keyWrites', calls);
   expectSameOutcomes(sides);
   return sides.sqlite;
 }
@@ -37,7 +37,7 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
 const revoke =
   (tenantId: string, keyId: string): Call =>
   (g) =>
-    g.revokeApiKey({ tenantId, keyId, actor: 'api_key:caller', at: AT });
+    g.changeApiKey('revoke', { tenantId, keyId, actor: 'api_key:caller', at: AT });
 const revokedAtOf =
   (keyId: string): Call =>
   async (_g, store) =>
@@ -63,7 +63,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('KeyAudit.revokeApiKey', () => {
+describe('KeyWrites.changeApiKey revoke', () => {
   it('rejects an unknown key with NotFoundError and writes nothing', async () => {
     const side = await conforms([revoke(TENANT_A, 'hk_missing')]);
     expect(side.outcomes).toEqual([{ error: 'NotFoundError: Unknown key_id: hk_missing' }]);

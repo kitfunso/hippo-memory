@@ -75,7 +75,6 @@ export {
   type FailureLog,
   type Goals,
   type HippoStore,
-  type KeyAudit,
   type KeyListQuery,
   type KeyMint,
   type KeyRevoke,

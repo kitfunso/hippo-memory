@@ -137,13 +137,25 @@ describe('HippoStore continuity', () => {
   it('reads the keyed snapshot with its session handoff and newest events, oldest first', async () => {
     const { outcomes } = await conforms([
       (s) =>
-        s.sessions.saveSnapshot(TENANT_A, { task: 'ship', summary: 'half', nextStep: 'merge', sessionId: 's1' }, KEY),
-      (s) => s.sessions.saveHandoff(TENANT_A, { version: 1, sessionId: 's1', summary: 'carry on' }, KEY),
-      (s) => s.sessions.saveHandoff(TENANT_A, { version: 1, sessionId: 's1', summary: 'carry on again' }, KEY),
-      (s) => s.sessions.appendEvent(TENANT_A, { sessionId: 's1', eventType: 'note', content: 'one' }),
-      (s) => s.sessions.appendEvent(TENANT_A, { sessionId: 's1', eventType: 'note', content: 'two' }),
-      (s) => s.sessions.appendEvent(TENANT_A, { sessionId: 's1', eventType: 'note', content: 'three' }),
-      (s) => s.sessions.appendEvent(TENANT_A, { sessionId: 's2', eventType: 'note', content: 'other session' }),
+        s.sessions.save(
+          TENANT_A,
+          'snapshot',
+          { task: 'ship', summary: 'half', nextStep: 'merge', sessionId: 's1' },
+          KEY,
+        ),
+      (s) =>
+        s.sessions.save(TENANT_A, 'handoff', { handoff: { version: 1, sessionId: 's1', summary: 'carry on' } }, KEY),
+      (s) =>
+        s.sessions.save(
+          TENANT_A,
+          'handoff',
+          { handoff: { version: 1, sessionId: 's1', summary: 'carry on again' } },
+          KEY,
+        ),
+      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'one' }),
+      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'two' }),
+      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's1', eventType: 'note', content: 'three' }),
+      (s) => s.sessions.save(TENANT_A, 'event', { sessionId: 's2', eventType: 'note', content: 'other session' }),
       (s) => s.continuity(TENANT_A, 2, KEY),
       (s) => s.continuity(TENANT_A, 8, null),
       (s) => s.continuity(TENANT_A, 8, { owner: 'bob', project: ['proj'] }),
@@ -164,7 +176,7 @@ describe('HippoStore continuity', () => {
 describe('HippoStore base writes', () => {
   const claim = (classTag: string, tenantId = TENANT_A): PredictionSave => {
     const opts = { classTag, claimText: `the ${classTag} lands on time`, estimateValue: 2, estimateUnit: 'days' };
-    return { ...opts, mirror: predictionMirror(tenantId, opts, 30) };
+    return { ...opts, mirror: predictionMirror(tenantId, opts, 30), actor: 'cli' };
   };
 
   it('resolves a claim to its class baserate, appends audit rows, finishes a recall and counts it', async () => {
@@ -173,10 +185,10 @@ describe('HippoStore base writes', () => {
       ...saves.map(
         (save): GroupCall<'base', unknown> =>
           (s) =>
-            s.predictions.savePrediction(TENANT_A, save, 'cli'),
+            s.objects.saveObject(TENANT_A, 'prediction', save),
       ),
-      (s) => s.predictions.closePrediction(TENANT_A, 1, { closureState: 'closed', actualValue: 4 }, 'cli'),
-      (s) => s.predictions.closePrediction(TENANT_A, 2, { closureState: 'closed', actualValue: 3 }, 'cli'),
+      (s) => s.objects.closeObject(TENANT_A, 'prediction', 1, { closureState: 'closed', actualValue: 4, actor: 'cli' }),
+      (s) => s.objects.closeObject(TENANT_A, 'prediction', 2, { closureState: 'closed', actualValue: 3, actor: 'cli' }),
       (s) => s.planningFallacyEvidence(TENANT_A, ['deploy', 'work']),
       (s) => s.planningFallacyEvidence(TENANT_A, ['work']),
       (s) => s.planningFallacyEvidence(TENANT_A, ['nothing']),

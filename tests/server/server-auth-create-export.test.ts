@@ -30,7 +30,7 @@ describe('hippo-memory/server exports authCreate', () => {
 
   it('builds a sqlite store for no folder without opening a database, which is how the add-on probes for keyWrites', () => {
     const built = recordStatements((): HippoStore => sqliteStore(''));
-    expect(built.result.keyWrites?.createApiKey).toBeTypeOf('function');
+    expect(built.result.keyWrites?.changeApiKey).toBeTypeOf('function');
     expect(built.statements).toEqual([]);
   });
 

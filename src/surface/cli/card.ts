@@ -94,10 +94,9 @@ function cardRunFlag(flags: CliFlags): number | undefined {
 
 // Reads after the store already refused, so this only explains the refusal, never changes it.
 async function cardRefusal(hippoRoot: string, tenantId: string, id: string): Promise<string> {
-  const cards = cliStore(hippoRoot).cards;
-  const card = await cards.load(tenantId, id);
-  const liveRun = (await cards.runs(tenantId, id)).find((r) => !r.ended);
-  return `status ${card?.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
+  const detail = await cliStore(hippoRoot).cards.detail(tenantId, id);
+  const liveRun = detail?.runs.find((r) => !r.ended);
+  return `status ${detail?.card.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
 }
 
 // One entry per subcommand: the flags handleCard actually reads for it, so a typo like --depend-on fails fast instead
@@ -343,7 +342,7 @@ async function cardComment(hippoRoot: string, tenantId: string, args: string[], 
   // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw from the store
   // instead.
   const cards = cliStore(hippoRoot).cards;
-  const card = await cards.load(tenantId, id);
+  const card = (await cards.detail(tenantId, id))?.card;
   if (!card) {
     fail(`No card found with id ${id}.`);
   }

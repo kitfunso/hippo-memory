@@ -31,7 +31,8 @@ export async function compactResumeForCaller(
   const key = await bindCaller(ctx, req.sessionId, req.project);
   if (req.source !== 'compact' || (await callerInHoldout(ctx, req.sessionId))) return { stdout: '' };
   const { sessions } = ctx.store;
-  const snapshot = await sessions.loadFreshSnapshot(ctx.tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS }, key);
+  const ambient = { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS };
+  const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, key);
   // One owner's concurrent sessions must not cross-restore; a snapshot with no session still restores, as on the local
   // path.
   if (snapshot === null || (snapshot.sessionId !== null && snapshot.sessionId !== req.sessionId)) {
@@ -56,7 +57,7 @@ export async function compactResumeForCaller(
 async function sessionTrail(ctx: Context, sessions: Sessions, sessionId: string | null): Promise<SessionEvent[]> {
   if (!sessionId) return [];
   try {
-    return (await sessions.listEvents(ctx.tenantId, { sessionId })).map((e) => ({
+    return (await sessions.read(ctx.tenantId, 'event', { sessionId })).map((e) => ({
       ...e,
       content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP),
     }));

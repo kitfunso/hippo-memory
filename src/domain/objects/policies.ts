@@ -118,7 +118,7 @@ export async function policiesAsOf(
   asOfDate: string,
   opts: { name?: string; limit?: number } = {},
 ): Promise<Policy[]> {
-  return objects.policiesInForce(tenantId, inForceQuery(tenantId, asOfDate, opts));
+  return objects.listObjects(tenantId, 'policy', inForceQuery(tenantId, asOfDate, opts));
 }
 
 /** The as-of read, checked before a store is asked. */

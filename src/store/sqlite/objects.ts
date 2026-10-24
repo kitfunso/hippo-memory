@@ -1,4 +1,5 @@
-// hippo.db's half of the Objects store group: every statement the typed objects run, each call on a handle of its own.
+// hippo.db's half of the Objects store group: every statement the typed objects and predictions run, each call on a
+// handle of its own.
 import { appendAuditEvents } from './audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { escapeLike } from '../../base/util/escape.js';
@@ -35,73 +36,72 @@ import {
   type SavableKind,
   type Skill,
 } from '../../base/records/object-types.js';
-import { type OnHandle, TYPED_HALF_LIFE_META_KEY } from './open.js';
+import { type Handles, type OnHandle, type StoreFiles, TYPED_HALF_LIFE_META_KEY } from './open.js';
 import { openStore } from './handles.js';
 import { answered, bound, type Bodies } from './bound.js';
 import type {
   IncidentOpen,
   IncidentOpenRefusal,
   IncidentResolve,
+  ObjectCalls,
   ObjectClose,
+  ObjectCloseArgs,
+  ObjectListArgs,
   ObjectListQuery,
   Objects,
   ObjectSave,
+  ObjectSaveArgs,
   PoliciesInForceQuery,
-} from '../port.js';
+  SkillsByNameQuery,
+} from '../port/objects.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
 import { placeholders } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import {
+  closePrediction,
+  computePredictionBaserate,
+  listPredictions,
+  readPrediction,
+  writePrediction,
+} from './predictions.js';
 
-export function sqliteObjects(on: OnHandle): Objects {
-  return {
-    ...objectReads(on),
-    closeObject: (tenantId, kind, id, change) => answered(() => close(on, tenantId, kind, id, change)),
-    saveObject: (tenantId, kind, object) => answered(() => save(on, tenantId, kind, object)),
-    openIncident: (tenantId, open) => answered(() => openIncident(on, tenantId, open)),
+export function sqliteObjects({ on, files }: Handles): Objects {
+  const objects: ObjectCalls = {
+    ...bound(on, objectReadsBodies),
+    closeObject: (...args) => answered(() => closeAny(on, ...args)),
+    saveObject: (...args) => answered(() => saveAny(on, files, ...args)),
   };
+  // SAFETY: each body picks its statement from the kind and the payload's shape, the pairs the port's overloads name,
+  // so every overload gets the row its kind declares.
+  return objects as Objects;
 }
 
-type ObjectReads = Pick<
-  Objects,
-  | 'listObjects'
-  | 'objectById'
-  | 'resolveIncident'
-  | 'policiesInForce'
-  | 'activeSkillsByName'
-  | 'briefReceipts'
-  | 'objectIdByMemory'
->;
-
-const objectReadsBodies: Bodies<ObjectReads> = {
-  listObjects: listRows,
-  objectById: rowById,
-  resolveIncident: resolveRow,
-  policiesInForce,
-  activeSkillsByName,
+const objectReadsBodies: Bodies<Omit<ObjectCalls, 'closeObject' | 'saveObject'>> = {
+  listObjects: listAny,
+  objectById: (db, tenantId, kind, id) =>
+    kind === 'prediction' ? readPrediction(db, tenantId, id) : rowById(db, tenantId, kind, id),
   briefReceipts,
-  objectIdByMemory: idByMemory,
+  predictionBaserate: computePredictionBaserate,
 };
 
-function objectReads(on: OnHandle): ObjectReads {
-  // SAFETY: listRows, rowById and idByMemory are generic in the kind, as ObjectReads is; the mapped Bodies type cannot
-  // carry a method's type parameter, so the bound group is typed back to the methods it binds.
-  return bound(on, objectReadsBodies) as ObjectReads;
+function listAny(db: DatabaseSyncLike, ...[tenantId, kind, query]: ObjectListArgs) {
+  if (kind === 'prediction') return listPredictions(db, tenantId, query);
+  if ('asOf' in query) return policiesInForce(db, tenantId, query);
+  if ('byName' in query) return skillsByName(db, tenantId, query);
+  return listRows(db, tenantId, kind, query);
 }
 
-/** The newest object in `status` that a memory mirrors, for the CLI flags that name an object by its memory id. */
-function idByMemory<K extends ObjectKind>(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  kind: K,
-  status: ObjectByKind[K]['status'],
-  memoryId: string,
-): number | null {
-  const row = cachedStatement(
-    db,
-    `SELECT id FROM ${objectTable(kind)} WHERE memory_id = ? AND tenant_id = ? AND status = ? ORDER BY id DESC ` +
-      `LIMIT 1`,
-  ).get(memoryId, tenantId, status) as { id: number } | undefined;
-  return row ? row.id : null;
+function closeAny(on: OnHandle, ...[tenantId, kind, id, change]: ObjectCloseArgs) {
+  if (kind === 'prediction') return on((db) => closePrediction(db, tenantId, id, change));
+  if ('text' in change) return on((db) => resolveRow(db, tenantId, id, change));
+  return close(on, tenantId, kind, id, change);
+}
+
+function saveAny(on: OnHandle, files: StoreFiles, ...[tenantId, kind, object]: ObjectSaveArgs) {
+  // The prediction writes its mirror files too, so it opens the store as every mirrored save does.
+  if (kind === 'prediction') return on((db) => writePrediction(db, files, tenantId, object), openStore);
+  if (kind === 'incident') return openIncident(on, tenantId, object);
+  return save(on, tenantId, kind, object);
 }
 
 function readRow<K extends ObjectKind>(
@@ -144,6 +144,10 @@ function listRows<K extends ObjectKind>(
   if (query.filter && spec.filterColumn) {
     clauses.push(`${spec.filterColumn} = ?`);
     params.push(query.filter);
+  }
+  if (query.memoryId !== undefined) {
+    clauses.push('memory_id = ?');
+    params.push(query.memoryId);
   }
   const after = keysetAfter('created_at', 'id', query.after);
   // SAFETY: the SELECT names spec.cols, the columns the kind's row declares, whatever the WHERE clause holds.
@@ -479,17 +483,17 @@ function policiesInForce(db: DatabaseSyncLike, tenantId: string, query: Policies
   return rows.map(rowSpec('policy').rowTo);
 }
 
-function activeSkillsByName(db: DatabaseSyncLike, tenantId: string, limit: number): Skill[] {
+function skillsByName(db: DatabaseSyncLike, tenantId: string, query: SkillsByNameQuery): Skill[] {
   // SAFETY: the SELECT names the skill row's own column list.
   const rows = cachedStatement(
     db,
     `
       SELECT ${rowSpec('skill').cols} FROM skills
-      WHERE tenant_id = ? AND status = 'active'
+      WHERE tenant_id = ? AND status = ?
       ORDER BY skill_name ASC, id ASC
       LIMIT ?
     `,
-  ).all(tenantId, limit) as RowByKind['skill'][];
+  ).all(tenantId, query.status, query.limit) as RowByKind['skill'][];
   return rows.map(rowSpec('skill').rowTo);
 }
 
