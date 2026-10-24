@@ -288,7 +288,7 @@ describe('published runtime exports', () => {
         SECRET_TAGS StoreBusyError
         ambientRefusal
         bufferToFloat32
-        decodeVector descendantAdmits
+        decodeVector descendantAdmits diffGraph
         encodeVector entryAfterOutcome
         float32ToBuffer ftsTermParts
         hasGroup heldTexts
