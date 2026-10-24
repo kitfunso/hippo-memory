@@ -33,6 +33,7 @@ function logged(store: HippoStore, calls: string[]): HippoStore {
     ...store,
     continuity: log('continuity', store.continuity),
     searchRecallEntries: log('searchRecallEntries', store.searchRecallEntries),
+    // SAFETY: log passes every argument through and returns read's own answer, so each overload still holds.
     sessions: { ...sessions, read: log('sessions.read', sessions.read) as HippoStore['sessions']['read'] },
     contextReads: {
       ambientCandidates: log('ambientCandidates', c.ambientCandidates),
