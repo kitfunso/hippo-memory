@@ -5,3 +5,4 @@
     --dry-run              Preview without writing
     --no-learn             Skip auto git-learn and the agent memory import before consolidation
     --no-share             Skip auto-sharing to global store
+    --global               Sleep the global store (the daily job does this once a day)
