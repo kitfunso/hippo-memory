@@ -3,7 +3,7 @@ import { isFtsAvailable, isFtsInSync, withReadSnapshot, type DatabaseSyncLike } 
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
-import { scopeAdmitSql } from './rule-sql.js';
+import { bareTextSql, scopeAdmitSql } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import { byIdOrder, FRESH_RAW_ORDER, oldestFirst, orderSql } from '../rules/order.js';
@@ -601,14 +601,8 @@ export function liveContentsBySourceAndTag(
 
 const CURRENT_DISTILLED = "COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''";
 
-/** Every code point JavaScript's \s matches; tests/store/dedupe-candidates.test.ts pins it to the engine. */
-const JS_SPACE_CODE_POINTS = [
-  0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007,
-  0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff,
-] as const;
-
 // Texts equal apart from spacing are equal with all of it gone, so a group of these keys holds every duplicate group.
-const SPACELESS_CONTENT = JS_SPACE_CODE_POINTS.reduce((sql, cp) => `replace(${sql}, char(${cp}), '')`, 'content');
+const SPACELESS_CONTENT = bareTextSql('content');
 
 /** The current distilled rows that may be another's duplicate, and the partitions in the order they first appear. */
 export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidates {

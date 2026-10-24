@@ -1,5 +1,8 @@
-// The SQL twins of the model's rules in src/base: strength and keep (memory.ts), recall scope (recall-scope.ts); keep
-// each in step with its JS half.
+// The SQL twins of the model's rules in src/base: strength and keep (memory.ts), recall scope (recall-scope.ts), and
+// the bare text of src/store/rules/copies.ts. Each is held equal to its JS half over seeded rows by a test: strength in
+// tests/core/memory.test.ts and tests/store/rule-sql-parity.test.ts, keep in tests/core/keep-rule.test.ts, scope in
+// tests/db/scope-admit-parity.test.ts and tests/api/personal-read-sites.process.test.ts, bare text in
+// tests/store/rule-sql-parity.test.ts.
 import { DAY_MS } from '../../base/util/time.js';
 import { isDecayAblated, isOutcomeSlowAblated, isRecallBoostAblated } from '../../base/memory/ablation.js';
 import {
@@ -18,8 +21,13 @@ import {
 import { PERSONAL_SCOPE_PREFIX, RECALL_DEFAULT_DENY_SCOPES } from '../../base/scope/recall-scope.js';
 import { placeholders, type SqlFragment } from '../../db/sql.js';
 import { REWARD_FACTOR_SQL } from '../../db/decay-key.js';
+import { SPACE_CODES } from '../rules/copies.js';
 
 const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
+
+/** `bareText` over a column: every code point JavaScript's \s matches removed, as SPACE_CODES lists them. */
+export const bareTextSql = (column: string): string =>
+  SPACE_CODES.reduce((sql, code) => `replace(${sql}, char(${code}), '')`, column);
 
 /** calculateRewardFactor as SQL over `memories` columns; strengthSql and the context-candidate rank both build on it,
  * so the slope has one source. */
