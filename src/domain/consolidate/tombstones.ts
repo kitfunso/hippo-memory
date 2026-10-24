@@ -21,9 +21,12 @@ export function tombstoneChecks(store: StoreWith<'consolidation'>, dryRun: boole
     if (!dryRun) await store.appendAuditEvents([event]);
   };
   return {
-    find: async (tenantId, digest) => (dryRun ? null : store.consolidation.rejectedValue(tenantId, digest)),
-    rejectedAmong: async (tenantId, digests) =>
-      dryRun || digests.length === 0 ? new Set() : store.consolidation.rejectedDigests(tenantId, digests),
+    find: async (tenantId, digest) =>
+      dryRun ? null : ((await store.consolidation.rejected(tenantId, [digest]))[0] ?? null),
+    async rejectedAmong(tenantId, digests) {
+      if (dryRun || digests.length === 0) return new Set();
+      return new Set((await store.consolidation.rejected(tenantId, digests)).map((row) => row.digest));
+    },
     audit,
     async auditOrCount(event) {
       try {

@@ -2,6 +2,7 @@ import { isRecallBoostAblated } from '../../base/memory/ablation.js';
 import { MemoryEntry, Layer, clockBasisOf, createMemory, markRetrieved } from '../../base/memory/memory.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import type { SessionEvent } from '../../store/port/sessions.js';
+import type { SleepBegin } from '../../store/port/consolidation.js';
 import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
 import { commonDerivationScope } from '../../base/scope/recall-scope.js';
@@ -11,24 +12,27 @@ import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { plural } from '../../base/util/format.js';
 
-// 1.4. Auto-promote complete sessions to traces: each session in the window with a `session_complete` event and no
-// trace (idempotent via source_session_id) is rendered as markdown and persisted as a Layer.Trace memory, which
-// inherits decay, search, replay and physics.
-export async function promoteSessionTraces(run: SleepRun): Promise<void> {
-  const { result } = run;
-  if (run.dryRun || run.config.autoTraceCapture === false) return;
-  let tracesSkippedRejected = 0;
+/** The sessions whose traces this sleep promotes: the caller's tenant's, completed within the window, with no trace
+ * yet; none under dryRun or with auto-trace off. */
+export function traceWindow(run: Pick<SleepRun, 'tenantId' | 'now' | 'dryRun' | 'config'>): SleepBegin['traces'] {
+  if (run.dryRun || run.config.autoTraceCapture === false) return undefined;
   const windowDays = run.config.autoTraceWindowDays ?? 7;
-  const sinceMs = run.now.getTime() - windowDays * DAY_MS;
   // Auto-trace runs for the caller's tenant alone; consolidating every tenant needs a per-tenant loop on top of this.
-  const consolidationTenant = run.tenantId;
-  const promotable = await run.store.consolidation.promotableSessions(consolidationTenant, sinceMs);
+  return { tenantId: run.tenantId, sinceMs: run.now.getTime() - windowDays * DAY_MS };
+}
 
-  for (const session of promotable) {
-    const built = await sessionTrace(run, consolidationTenant, session.session_id);
+// 1.4. Auto-promote complete sessions to traces: each session `traceWindow` names (idempotent via source_session_id)
+// is rendered as markdown and persisted as a Layer.Trace memory, which inherits decay, search, replay and physics.
+export async function promoteSessionTraces(run: SleepRun, sessions: readonly string[]): Promise<void> {
+  const { result } = run;
+  let tracesSkippedRejected = 0;
+  const consolidationTenant = run.tenantId;
+
+  for (const sessionId of sessions) {
+    const built = await sessionTrace(run, consolidationTenant, sessionId);
     if (!built) continue;
     const { trace, outcome } = built;
-    if (await traceRejected(run, trace, session.session_id)) {
+    if (await traceRejected(run, trace, sessionId)) {
       tracesSkippedRejected++;
       continue;
     }
@@ -36,7 +40,7 @@ export async function promoteSessionTraces(run: SleepRun): Promise<void> {
     run.pendingWrites.push(trace);
     run.survivors.push(trace);
     result.promotedTraces++;
-    result.details.push(`  🧬 promoted trace ${trace.id} from session ${session.session_id} (${outcome})`);
+    result.details.push(`  🧬 promoted trace ${trace.id} from session ${sessionId} (${outcome})`);
   }
 
   if (result.promotedTraces > 0) {
@@ -54,19 +58,13 @@ export async function promoteSessionTraces(run: SleepRun): Promise<void> {
 
 type TraceOutcome = 'success' | 'failure' | 'partial';
 
-/** The trace a completed session renders to, or null when it already has one or cannot be promoted. */
+/** The trace a completed session renders to, or null when it cannot be promoted. */
 async function sessionTrace(
   run: SleepRun,
   consolidationTenant: string,
   sessionId: string,
 ): Promise<{ trace: MemoryEntry; outcome: TraceOutcome } | null> {
-  // Idempotency: skip if a trace for this session already exists.
-  if (await run.store.consolidation.traceExists(consolidationTenant, sessionId)) return null;
-
-  const events = await run.store.consolidation.sessionEvents(consolidationTenant, {
-    session_id: sessionId,
-    limit: 1000,
-  });
+  const events = await run.store.sessions.read(consolidationTenant, 'event', { sessionId, limit: 1000 });
 
   // A mixed-scope session would otherwise leak into one trace.
   const sessionScope = commonDerivationScope(events.map((e) => e.scope));
@@ -91,7 +89,7 @@ async function sessionTrace(
     tags: ['auto-promoted'],
     source: 'auto-promote',
     scope: sessionScope.scope,
-    // Same tenant as the traceExistsForSession check above, or a non-default tenant's trace regenerates every sleep.
+    // Same tenant as the window's no-trace check, or a non-default tenant's trace regenerates every sleep.
     tenantId: consolidationTenant,
     baseHalfLifeDays: run.config.defaultHalfLifeDays,
   });

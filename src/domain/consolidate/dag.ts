@@ -7,6 +7,7 @@ import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { StoreWith } from '../../store/port.js';
+import { applyRebuild, settleFreshSummary } from './summary-settle.js';
 
 const SUMMARY_FALLBACK_CHARS = 40;
 const DEFAULT_REBUILD_CAP = 20;
@@ -149,9 +150,7 @@ async function summarizeCluster(
   const linked = cluster.members.map((member) => ({ ...member, dagParentId: summaryEntry.id }));
   await store.lessonWrites.writeTogether(linked);
   result.factsLinked += linked.length;
-  // Member writes just marked this fresh summary dirty; clear it, or the same sleep cycle's rebuild pass would
-  // re-rebuild every new summary at twice the LLM cost.
-  await store.consolidation.clearSummaryDirty(summaryEntry.id, summaryEntry.tenantId, 'buildDag');
+  await settleFreshSummary(store, summaryEntry, 'buildDag', 'buildDag-clean');
 }
 
 export async function buildDag(store: DagStore, facts: MemoryEntry[], opts: DagBuildOptions): Promise<DagBuildResult> {
@@ -197,15 +196,17 @@ interface RebuildOneSummaryOptions {
   opts: DagSummaryOptions;
   result: DagRebuildResult;
   preloaded: readonly MemoryEntry[];
-  queuedIds: ReadonlySet<string>;
+  /** The new content of each summary rebuilt earlier in this drain, by id. */
+  rebuiltContent: Map<string, string>;
 }
 
 async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<void> {
-  const { store, summary, opts, result, preloaded, queuedIds } = options;
-  // A queued child may have been rebuilt earlier in this drain, so its preloaded content is stale: reread then.
-  const children = preloaded.some((c) => queuedIds.has(c.id))
-    ? await store.consolidation.childrenOfSummary(summary.id, summary.tenantId)
-    : preloaded;
+  const { store, summary, opts, result, preloaded, rebuiltContent } = options;
+  // A child rebuilt earlier in this drain was loaded before its rebuild, so it takes the content that rebuild wrote.
+  const children = preloaded.map((c) => {
+    const content = rebuiltContent.get(c.id);
+    return content === undefined ? c : { ...c, content };
+  });
 
   if (children.length === 0) {
     await clearZeroChildSummary(store, summary, result);
@@ -225,7 +226,7 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
   }
 
   const childCreatedAts = children.map((c) => c.created).sort();
-  const { changed, refused } = await store.consolidation.applyRebuild(summary, {
+  const { changed, refused } = await applyRebuild(store, summary, {
     content: newContent,
     descendantCount: children.length,
     earliestAt: childCreatedAts[0],
@@ -238,13 +239,14 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
     result.refused++;
   } else if (changed) {
     result.rebuilt++;
+    rebuiltContent.set(summary.id, newContent);
   }
   // changed=false (refused also false) → race lost; not failure, not success, silently skip
 }
 
 /** Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump. */
 async function clearZeroChildSummary(store: DagStore, summary: MemoryEntry, result: DagRebuildResult): Promise<void> {
-  const { changed } = await store.consolidation.applyRebuild(summary, {
+  const { changed } = await applyRebuild(store, summary, {
     content: summary.content,
     descendantCount: 0,
     earliestAt: null,
@@ -254,8 +256,8 @@ async function clearZeroChildSummary(store: DagStore, summary: MemoryEntry, resu
     actor: 'sleep',
   });
   if (changed) result.zeroChildSkipped++;
-  // changed=false means race lost or row vanished: skip silently. `refused` is always false here, as applyRebuildResult
-  // checks the tombstone only when bumpRebuildCount is true.
+  // changed=false means race lost or row vanished: skip silently. `refused` is always false here, as only new content
+  // is checked against the tombstones.
 }
 
 // Derive label from summary's existing entity tags (mirrors clusterFacts)
@@ -274,10 +276,7 @@ export async function rebuildDirtySummaries(
   opts: DagSummaryOptions & { cap?: number },
 ): Promise<DagRebuildResult> {
   const cap = opts.cap ?? DEFAULT_REBUILD_CAP;
-  // One past the cap tells whether more were waiting without reading the rest.
-  const dirty = await store.consolidation.dirtySummaries(cap + 1);
-  const capped = dirty.length > cap;
-  const queue = dirty.slice(0, cap);
+  const { summaries: queue, more } = await store.consolidation.dirtySummaries(cap);
 
   const result: DagRebuildResult = {
     attempted: queue.length,
@@ -285,20 +284,18 @@ export async function rebuildDirtySummaries(
     refused: 0,
     zeroChildSkipped: 0,
     failed: 0,
-    capped,
+    capped: more,
   };
 
-  const childrenOf = await store.consolidation.childrenOfSummaries(queue);
-  const queuedIds = new Set(queue.map((s) => s.id));
-
-  for (const [index, summary] of queue.entries()) {
+  const rebuiltContent = new Map<string, string>();
+  for (const [index, { summary, children }] of queue.entries()) {
     // Yield the macrotask queue every 25 summaries: each iteration is synchronous store work, so a batch of up to 1000
     // would starve timers and IPC (server keep-alives, Vitest's birpc heartbeat).
     if (index > 0 && index % 25 === 0) {
       await new Promise((resolve) => setImmediate(resolve));
     }
     try {
-      await rebuildOneSummary({ store, summary, opts, result, preloaded: childrenOf[index] ?? [], queuedIds });
+      await rebuildOneSummary({ store, summary, opts, result, preloaded: children, rebuiltContent });
     } catch (err) {
       // One throw doesn't abort the queue; log enough to triage an exotic failure (store I/O, prepare), since audit()
       // already catches its own.
@@ -383,14 +380,7 @@ async function profileCluster(
   const linked = cluster.members.map((member) => ({ ...member, dagParentId: profileEntry.id }));
   await store.lessonWrites.writeTogether(linked);
   result.l2sLinked += linked.length;
-  // Re-linking just marked the fresh L3 dirty; clear it so this cycle's rebuild skips it.
-  // The distinct source tags the audit row.
-  await store.consolidation.clearSummaryDirty(
-    profileEntry.id,
-    home.tenantId,
-    'buildEntityProfiles',
-    'buildEntityProfiles-clean',
-  );
+  await settleFreshSummary(store, profileEntry, 'buildEntityProfiles', 'buildEntityProfiles-clean');
 }
 
 /** Build L3 entity profiles by clustering L2 summaries sharing entity tags (2+ L2s per entity).

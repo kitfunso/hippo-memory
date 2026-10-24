@@ -36,7 +36,8 @@ import {
   type SavableKind,
   type Skill,
 } from '../../base/records/object-types.js';
-import { type Handles, type OnHandle, type StoreFiles, TYPED_HALF_LIFE_META_KEY } from './open.js';
+import type { Handles, OnHandle, StoreFiles } from './open.js';
+import { TYPED_HALF_LIFE_META_KEY } from '../rules/half-life.js';
 import { openStore } from './handles.js';
 import { answered, bound, type Bodies } from './bound.js';
 import type {
