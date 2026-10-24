@@ -19,10 +19,7 @@ export interface StoreStatus {
 export async function storeStatus(ctx: Context, now: Date, atRiskBelow: number): Promise<StoreStatus> {
   requireHostAdmin(ctx, 'Reading every tenant');
   const { reports } = ctx.store;
-  return {
-    stats: await reports.stats(),
-    counts: await reports.statusCounts(now, atRiskBelow),
-  };
+  return { stats: await reports.stats(), counts: await reports.statusCounts(now, atRiskBelow) };
 }
 
 /** ISO time of the latest sleep, or undefined when it never slept. Every tenant, so the host admin only. */
