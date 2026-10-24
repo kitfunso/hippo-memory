@@ -10,7 +10,8 @@ import { isCodexPresent } from '../hooks-install/detect.js';
 import { isCodexWrapperInstalled } from '../hooks-install/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks-install/opencode.js';
 import { initMemoryStore } from '../../api/store-init.js';
-import { isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
+import { isInitialized } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { cliApiContext, cliInitGlobal, cliSyncOptions } from './api-context.js';
 import { isGitRepo } from '../../domain/learn/autolearn.js';
@@ -110,7 +111,7 @@ function installScanHooks(repos: readonly string[]): void {
 }
 
 function initGlobalFirst(): string {
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = hippoHomeDir();
   if (!isInitialized(globalRoot)) {
     cliInitGlobal();
     console.log(`Initialized global store at ${globalRoot}\n`);
@@ -176,7 +177,7 @@ async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFla
 }
 
 async function initGlobalOnly(tenantId: string, flags: CliFlags): Promise<void> {
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = hippoHomeDir();
   if (isInitialized(globalRoot)) {
     console.log('Already initialized global store at', globalRoot);
   } else {
@@ -222,7 +223,7 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
     console.log('   Files: hippo.db stats.json');
   }
 
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = hippoHomeDir();
   registerWorkspace(globalRoot, path.dirname(hippoRoot));
 
   if (initInstallsIntegrations(flags)) {

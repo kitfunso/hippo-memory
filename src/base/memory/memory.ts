@@ -440,11 +440,6 @@ export interface CreateMemoryOptions {
 
 /** Create a new memory entry with defaults; hippo's own writers name the half-life base, so the type asks for it. */
 export function createMemory(content: string, options: CreateMemoryOptions): MemoryEntry {
-  return createMemoryWithDefaults(content, options);
-}
-
-/** The published form: every option is optional, and an absent half-life base takes DEFAULT_HALF_LIFE_DAYS. */
-export function createMemoryWithDefaults(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   assertValidMemoryInput(content, options);
 
   const now = evalNow().toISOString(); // honors HIPPO_FAKE_NOW (eval-only)
@@ -453,7 +448,7 @@ export function createMemoryWithDefaults(content: string, options: Partial<Creat
   const emotionalValence = options.emotionalValence ?? inferValence(tags);
   const schemaFit = options.schemaFit ?? DEFAULT_SCHEMA_FIT;
 
-  const halfLifeDays = deriveHalfLife(options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS, { tags, schemaFit });
+  const halfLifeDays = deriveHalfLife(options.baseHalfLifeDays, { tags, schemaFit });
 
   const entry: MemoryEntry = {
     id: generateId(layer === Layer.Semantic ? 'sem' : 'mem'),

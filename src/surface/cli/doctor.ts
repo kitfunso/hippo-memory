@@ -3,7 +3,8 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { findHippoStoreDir, isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
+import { findHippoStoreDir, isInitialized } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { StoreHealth } from '../../store/port/diagnostics.js';
 import type { StoreGroups } from '../../store/port.js';
 import { needsNewerHippo } from '../../base/errors/store-open.js';
@@ -489,7 +490,7 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
   checks.push(nodeCheck(opts.nodeVersion ?? process.versions.node));
 
   const local = findHippoStoreDir(cwd);
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = hippoHomeDir();
   const hasGlobal = isInitialized(globalRoot);
   const { store, check } = storeCheck(local, globalRoot, hasGlobal);
   checks.push(check);

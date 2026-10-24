@@ -1,5 +1,5 @@
 // `hippo capture`: extracts memories from piped text, a file or a session transcript.
-import { resolveGlobalRootDir } from '../../../host/project-identity.js';
+import { hippoHomeDir } from '../../../host/agent-homes.js';
 import { runCapture, type CaptureOptions } from '../../capture/command.js';
 import { readHookStdin } from '../stdin.js';
 import { type CommandContext, boolFlag, stringFlag, stringFlagOrExit } from '../flag-values.js';
@@ -38,7 +38,7 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
     captureSource === 'last-session' && !transcriptPath ? await readHookStdin() : { text: undefined, timedOut: false };
 
   const useGlobal = boolFlag(flags, 'global');
-  await runCapture(captureTarget(useGlobal ? resolveGlobalRootDir() : hippoRoot), {
+  await runCapture(captureTarget(useGlobal ? hippoHomeDir() : hippoRoot), {
     source: captureSource,
     filePath: captureFile,
     transcriptPath,

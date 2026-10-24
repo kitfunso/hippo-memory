@@ -1,6 +1,11 @@
 // The root entry's memory model: the entry shape and its strength, the session and card records, salience and the
 // ambient state.
-import { createMemoryWithDefaults, type CreateMemoryOptions, type MemoryEntry } from '../base/memory/memory.js';
+import {
+  createMemory as createMemoryStrict,
+  DEFAULT_HALF_LIFE_DAYS,
+  type CreateMemoryOptions,
+  type MemoryEntry,
+} from '../base/memory/memory.js';
 
 export {
   MemoryEntry,
@@ -20,7 +25,7 @@ export {
 
 /** The published signature keeps `baseHalfLifeDays` optional; hippo's own writers use the strict one in memory.ts. */
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
-  return createMemoryWithDefaults(content, options);
+  return createMemoryStrict(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...options });
 }
 
 export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from '../base/session/handoff.js';
