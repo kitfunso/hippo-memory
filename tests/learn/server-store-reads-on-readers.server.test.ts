@@ -209,7 +209,6 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   ),
   read('conflicts.get', (s) => s.conflicts.get(TENANT, 1), 'seeded contradiction'),
   read('dormant.list', (s) => s.dormant.list(TENANT, null, {}), 'stg-1'),
-  read('dormant.holds', (s) => s.dormant.holds(TENANT, null, 'mem_d_faded'), /^true$/),
   read('reports.tokenUse', (s) => s.reports.tokenUse(TENANT, '2000-01-01T00:00:00.000Z'), /120/),
   read('reports.failures', (s) => s.reports.failures(TENANT, '2000-01-01T00:00:00.000Z'), /stored/),
   read('reports.memoryStatus', (s) => s.reports.memoryStatus(TENANT, NOW, 0.1), /openConflicts: 1/),

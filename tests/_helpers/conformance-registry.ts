@@ -1,5 +1,5 @@
-// The test files that run each required store group, and the store's own methods, on hippo.db and on memoryStore;
-// the Record type fails the typecheck when a group is added to the port without one.
+// The test files that run each required store group, the optional one memoryStore also sets, and the store's own
+// methods, on hippo.db and on memoryStore; the Record type fails the typecheck when a group is added without one.
 import type { ConformanceGroup } from './store-conformance.js';
 
 export const CONFORMANCE_FILES = {
@@ -9,6 +9,7 @@ export const CONFORMANCE_FILES = {
   goals: ['tests/store/cards-goals-conformance.test.ts'],
   conflicts: ['tests/store/conflicts-dormant-conformance.test.ts'],
   dormant: ['tests/store/conflicts-dormant-conformance.test.ts'],
+  consolidation: ['tests/store/consolidation-conformance.test.ts'],
   reports: ['tests/core/reports-conformance.test.ts'],
   rejections: ['tests/core/rejections-conformance.test.ts'],
   failureLog: ['tests/entry/failure-log-conformance.test.ts'],

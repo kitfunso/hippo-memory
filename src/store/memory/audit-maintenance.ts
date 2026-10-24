@@ -18,7 +18,7 @@ import type { MemoryTables } from './tables.js';
 const AUTO_REPAIR_META_KEY = 'quality_repair_auto';
 
 /** The ids among `ids` a prediction or typed object names, in any tenant. */
-function backedAmong(t: MemoryTables, ids: readonly string[]): Set<string> {
+export function backedAmong(t: MemoryTables, ids: readonly string[]): Set<string> {
   const wanted = new Set(ids);
   const named = [...t.predictions.values(), ...Object.values(t.objects).flatMap((table) => [...table.values()])];
   return new Set(named.flatMap((row) => (row.memoryId !== null && wanted.has(row.memoryId) ? [row.memoryId] : [])));

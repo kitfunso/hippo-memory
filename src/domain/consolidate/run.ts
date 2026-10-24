@@ -57,20 +57,6 @@ export function keptAsWritten(entry: MemoryEntry): boolean {
   return entry.tags.some((tag) => NO_MERGE_TAGS.has(tag));
 }
 
-/** Re-syncs the full-text index with `memories`; a store open that is already current no longer counts the two. */
-export async function syncFtsIndex(
-  store: StoreWith<'consolidation'>,
-  dryRun: boolean,
-  result: ConsolidationResult,
-): Promise<void> {
-  const counts = await store.consolidation.ftsDrift(!dryRun);
-  if (counts === null) return;
-  result.details.push(
-    `  🔎 ${dryRun ? 'would re-sync' : 're-synced'} the full-text index (${counts.fts} indexed rows for ` +
-      `${counts.memories} memories)`,
-  );
-}
-
 /** The store a consolidation runs on: its own group, and the learning group extraction writes through. */
 export type ConsolidationStore = StoreWith<'consolidation' | 'learning'>;
 

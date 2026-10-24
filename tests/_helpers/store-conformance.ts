@@ -8,7 +8,7 @@ import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { auditRowsOn } from './audit-rows.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
-import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/store/index.js';
+import { requireGroup, type HippoStore, type OptionalGroup, type StoreGroups } from '../../src/store/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { AuditEvent } from '../../src/store/port/types.js';
 import { initTestStore } from './store-template.js';
@@ -122,18 +122,24 @@ export function expectSameOutcomes<T>(sides: { readonly other: T; readonly sqlit
 
 export type RequiredGroup = Exclude<keyof StoreGroups, OptionalGroup>;
 
-/** A required group, or 'base' for the methods HippoStore declares itself. */
-export type ConformanceGroup = RequiredGroup | 'base';
+/** A required group, the optional group both adapters set, or 'base' for the methods HippoStore declares itself. */
+export type ConformanceGroup = RequiredGroup | 'consolidation' | 'base';
 
 /** What a call on `G` is handed: the group's methods, or the store itself for 'base'. */
-export type GroupOf<G extends ConformanceGroup> = G extends RequiredGroup ? HippoStore[G] : HippoStore;
+export type GroupOf<G extends ConformanceGroup> = G extends 'base' ? HippoStore : StoreGroups[Exclude<G, 'base'>];
 
 /** One call on a store group; R is every value the calls in one run resolve to. */
 export type GroupCall<G extends ConformanceGroup, R> = (group: GroupOf<G>, store: HippoStore) => Promise<R>;
 
 function groupOf<G extends ConformanceGroup>(store: HippoStore, group: G): GroupOf<G> {
-  // SAFETY: GroupOf<G> is HippoStore for 'base' and HippoStore[G] for every other G, as the branch reads.
-  return (group === 'base' ? store : store[group as RequiredGroup]) as GroupOf<G>;
+  // SAFETY: GroupOf<G> is HippoStore for 'base' and StoreGroups[G] for every other G, as each branch reads.
+  return (
+    group === 'base'
+      ? store
+      : group === 'consolidation'
+        ? requireGroup(store, 'consolidation')
+        : store[group as RequiredGroup]
+  ) as GroupOf<G>;
 }
 
 export interface SideResult<R> {

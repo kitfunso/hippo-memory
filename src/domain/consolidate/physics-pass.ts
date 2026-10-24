@@ -27,7 +27,9 @@ async function simulateStoredParticles(run: SleepRun, maxParticles: number): Pro
   if (storedIds.length === 0) return;
 
   const recalled = await recallTimes(run, storedIds.length > maxParticles);
-  const particles = await consolidation.particlesByIds(particlesToSimulate(storedIds, recalled, maxParticles));
+  const ids = particlesToSimulate(storedIds, recalled, maxParticles);
+  const stored = await run.store.vectors.stored('particles', ids);
+  const particles = ids.flatMap((id) => stored.get(id) ?? []);
   // Only the simulated particles' rows: the refresh and every force lookup read no other id.
   const entryMap = new Map((await survivors.get(particles.map((p) => p.memoryId))).map((e) => [e.id, e]));
   refreshParticleProperties(particles, entryMap, run.now, clockBasisOf(run.decayOpts));

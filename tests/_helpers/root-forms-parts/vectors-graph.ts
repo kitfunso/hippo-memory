@@ -31,7 +31,8 @@ import type { ApiCall } from '../../../src/base/session/transcript-calls.js';
 import * as tokenLedgerSql from '../../../src/store/sqlite/token-ledger.js';
 import { particleStats } from '../../../src/store/sqlite/vector-index.js';
 import * as vectorIndexSql from '../../../src/store/sqlite/vector-index.js';
-import type { RebuildPatch } from '../../../src/store/port/consolidation.js';
+import { applyRebuild, type RebuildPatch } from '../../../src/domain/consolidate/summary-settle.js';
+import { loadEveryTenantEntries } from './entries.js';
 import type { VectorCandidateSpec, StoredVectorSummary } from '../../../src/store/port/vectors.js';
 
 /** The tenant's newest entities, `entityType` only when named. */
@@ -93,19 +94,23 @@ export async function loadAllL2Summaries(hippoRoot: string): Promise<MemoryEntry
 }
 
 export async function loadAllDirtySummaries(hippoRoot: string, limit?: number): Promise<MemoryEntry[]> {
-  return await sqliteStore(hippoRoot).consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
+  const dirty = await sqliteStore(hippoRoot).consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
+  return dirty.summaries.map((s) => s.summary);
 }
 
+/** The summary's live children by created then id, read as a filter over every row so it checks the store's read. */
 export async function loadChildrenOfSummary(
   hippoRoot: string,
   summaryId: string,
   tenantId: string,
 ): Promise<MemoryEntry[]> {
-  return await sqliteStore(hippoRoot).consolidation.childrenOfSummary(summaryId, tenantId);
+  return loadEveryTenantEntries(hippoRoot)
+    .filter((e) => e.dagParentId === summaryId && e.tenantId === tenantId && e.kind !== 'archived' && !e.supersededBy)
+    .sort((a, b) => a.created.localeCompare(b.created) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 export async function applyRebuildResult(hippoRoot: string, summary: MemoryEntry, patch: RebuildPatch) {
-  return await sqliteStore(hippoRoot).consolidation.applyRebuild(summary, patch);
+  return await applyRebuild(sqliteStore(hippoRoot), summary, patch);
 }
 
 export function recordRereads(

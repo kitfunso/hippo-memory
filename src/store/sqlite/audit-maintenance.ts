@@ -14,7 +14,7 @@ import { repairIssues } from '../rules/repair-issues.js';
 import {
   deleteEntryCore,
   MEMORY_BACKED_TABLES,
-  deleteEntriesAutomatically,
+  deleteEntriesInBatches,
   memoriesBackingAmong,
 } from './delete-and-batch.js';
 import { listEntriesPage, readEntriesByIds, listPreviewRowsPage, type PreviewRow } from './entry-reads.js';
@@ -284,7 +284,12 @@ function repairQualityOnce(
 export function sqliteAuditMaintenance({ on, files }: Handles): AuditMaintenance {
   const { deleteAutomatically } = bound<Pick<AuditMaintenance, 'deleteAutomatically'>>(
     on,
-    { deleteAutomatically: (db, ...args) => deleteEntriesAutomatically(db, files, ...args) },
+    {
+      deleteAutomatically: (db, removals, actor) => {
+        const went = deleteEntriesInBatches(db, files, removals, { actor, automatic: true });
+        return removals.filter((_, i) => went[i]).map((removal) => removal.id);
+      },
+    },
     openStore,
   );
   const reads = bound<Pick<AuditMaintenance, 'objectBackedAmong' | 'pruneAuditRows'>>(on, {
