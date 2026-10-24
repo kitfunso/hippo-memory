@@ -98,20 +98,47 @@ export function requiredString(body: Record<string, JsonValue>, key: string, rul
   return value;
 }
 
+/** Which items a string array refuses and what each refusal says; a route that published its own text passes it here. */
+export interface StringArrayRule {
+  /** Refuse an item that is empty (after trim when `trimmed`). */
+  readonly nonEmpty?: 'raw' | 'trimmed';
+  /** A null value is a 400 instead of an absent field. */
+  readonly rejectNull?: boolean;
+  readonly messages?: {
+    /** The value is not an array; also the text for a non-string item unless `itemType` is set. */
+    readonly notArray?: string;
+    readonly itemType?: string;
+    readonly empty?: string;
+    readonly count?: string;
+    readonly length?: string;
+  };
+}
+
 export function getStringArray(
   obj: Record<string, JsonValue>,
   key: string,
   maxItems: number,
   maxItemLen: number,
+  rule: StringArrayRule = {},
 ): string[] | undefined {
   const v = obj[key];
-  if (v === undefined || v === null) return undefined;
-  if (!Array.isArray(v) || !v.every(isJsonString)) throw new HttpError(400, `${key} must be an array of strings`);
-  if (v.length > maxItems) throw new HttpError(400, `${key} exceeds ${maxItems}-item cap`);
-  if (v.some((item) => item.length > maxItemLen)) {
-    throw new HttpError(400, `each ${key} entry exceeds ${maxItemLen}-character cap`);
+  const messages = rule.messages ?? {};
+  const notArray = messages.notArray ?? `${key} must be an array of strings`;
+  if (v === undefined || (v === null && !rule.rejectNull)) return undefined;
+  if (!Array.isArray(v)) throw new HttpError(400, notArray);
+  if (v.length > maxItems) throw new HttpError(400, messages.count ?? `${key} exceeds ${maxItems}-item cap`);
+  const items: string[] = [];
+  for (const item of v) {
+    if (!isJsonString(item)) throw new HttpError(400, messages.itemType ?? notArray);
+    if (rule.nonEmpty && (rule.nonEmpty === 'trimmed' ? item.trim() : item).length === 0) {
+      throw new HttpError(400, messages.empty ?? notArray);
+    }
+    if (item.length > maxItemLen) {
+      throw new HttpError(400, messages.length ?? `each ${key} entry exceeds ${maxItemLen}-character cap`);
+    }
+    items.push(item);
   }
-  return v;
+  return items;
 }
 
 /**
@@ -135,7 +162,7 @@ export function getCallerProject(body: Record<string, JsonValue>): RememberOptio
 /**
  * Charset + length validation for `:id` captures, called right after `matchPath` so empty/overlong/illegal ids get a
  * 400, not "not found".
- * Allows every production id shape (`mem_<hex>`, `sess-<id>`, Slack ids) plus `:` and `.`; no `/`, since
+ * Allows every production id notArray (`mem_<hex>`, `sess-<id>`, Slack ids) plus `:` and `.`; no `/`, since
  * `rejectEncodedSlash` stops `%2F` smuggling.
  */
 const ID_SEGMENT_RE = /^[A-Za-z0-9_:.-]+$/;

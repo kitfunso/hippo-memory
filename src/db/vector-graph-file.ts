@@ -187,8 +187,9 @@ export function readStamp(fd: number, file: string, size: number): GraphStamp {
     throw badGraphFile(file, 'short file');
   }
   const u32 = (at: number): number => head.readUInt32LE(at);
-  if (u32(HEADER_AT.magic) !== MAGIC || u32(HEADER_AT.version) !== VERSION)
+  if (u32(HEADER_AT.magic) !== MAGIC || u32(HEADER_AT.version) !== VERSION) {
     throw badGraphFile(file, 'not a version 1 vector graph file');
+  }
   const [dim, m, nodes, entry, maxLevel, jsonBytes] = [
     HEADER_AT.dim,
     HEADER_AT.m,
