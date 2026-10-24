@@ -59,12 +59,15 @@ export type SearchResult = { aborted: false; hits: GraphHit[]; visited: number }
 
 type VectorLookup = (node: number) => Float32Array;
 
+// A larger M or efConstruction cost far more build than it bought recall; docs/ARCHITECTURE.md has the bench.
+export const GRAPH_M = 16;
+export const GRAPH_EF_CONSTRUCTION = 100;
 const MAX_LEVEL = 15;
 // Float32 rounding leaves a normalised vector's squared length within about 1e-6 of one.
 const UNIT_TOLERANCE = 1e-5;
 
 export function createVectorGraph(opts: VectorGraphOptions): VectorGraph {
-  const { dim, m = 16, efConstruction = 200, seed } = opts;
+  const { dim, m = GRAPH_M, efConstruction = GRAPH_EF_CONSTRUCTION, seed } = opts;
   if (!Number.isInteger(dim) || dim < 1) throw new Error(`vector graph: bad dim ${dim}`);
   if (!Number.isInteger(m) || m < 2) throw new Error(`vector graph: bad m ${m}`);
   return { dim, m, efConstruction, seed, rng: seed >>> 0, entry: -1, maxLevel: -1, nodes: new Map(), unit: new Map() };

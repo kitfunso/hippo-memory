@@ -21,9 +21,6 @@ export const VECTOR_GRAPH_THRESHOLD = 1_000;
 /** Share of a graph's nodes that may be stale, or its file's rows new, before it is rebuilt. */
 export const STALE_SHARE = 0.1;
 
-// A larger M or efConstruction cost far more build than it bought recall; docs/ARCHITECTURE.md has the bench.
-const GRAPH_M = 16;
-const GRAPH_EF_CONSTRUCTION = 100;
 const GRAPH_SEED = 1;
 
 // The first walk asks for this many candidates per wanted row, at least EF_FLOOR, and doubles up to EF_CAP. A lower
@@ -53,7 +50,7 @@ export interface GraphRows {
 }
 
 export function emptyGraphRows(dim: number, model: string): GraphRows {
-  const graph = createVectorGraph({ dim, m: GRAPH_M, efConstruction: GRAPH_EF_CONSTRUCTION, seed: GRAPH_SEED });
+  const graph = createVectorGraph({ dim, seed: GRAPH_SEED });
   return { graph, model, ids: [], rowids: [], nodeOf: new Map(), lastRowid: 0, live: 0 };
 }
 

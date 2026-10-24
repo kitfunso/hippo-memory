@@ -14,6 +14,23 @@ const VERSION = 1;
 const HEADER_BYTES = 64;
 // rowid f64, id hash u32, level u8, flags u8, layer-0 link count u16, upper-links offset u32.
 const RECORD_HEAD = 20;
+/** Where each header field sits, in bytes from the file start; the fields from `magic` to `jsonBytes` are uint32. */
+const HEADER_AT = {
+  magic: 0,
+  version: 4,
+  dim: 8,
+  m: 12,
+  nodes: 16,
+  entry: 20,
+  maxLevel: 24,
+  jsonBytes: 28,
+  highRowid: 32,
+  live: 40,
+  recordBytes: 44,
+  upperBytes: 48,
+} as const;
+/** Where each field sits, in bytes from the record start. */
+const RECORD_AT = { rowid: 0, idHash: 8, level: 12, flags: 13, linkCount: 14, upperOffset: 16 } as const;
 const FLAG_REPLACED = 1;
 const ENCODE_TURN_NODES = 1024;
 
@@ -91,11 +108,20 @@ export function* encodeGraphFile(rows: GraphRows): Generator<void, Uint8Array> {
   const upperAt = recordsAt + order.length * recordBytes;
   const bytes = new Uint8Array(upperAt + upperBytes);
   const view = new DataView(bytes.buffer);
-  const header = [MAGIC, VERSION, dim, m, order.length, at[graph.entry], graph.maxLevel, json.length];
-  header.forEach((value, i) => view.setUint32(i * 4, value, true));
-  view.setFloat64(32, rowids[order[order.length - 1]], true);
-  view.setUint32(44, recordBytes, true);
-  view.setUint32(48, upperBytes, true);
+  const fields: readonly (readonly [number, number])[] = [
+    [HEADER_AT.magic, MAGIC],
+    [HEADER_AT.version, VERSION],
+    [HEADER_AT.dim, dim],
+    [HEADER_AT.m, m],
+    [HEADER_AT.nodes, order.length],
+    [HEADER_AT.entry, at[graph.entry]],
+    [HEADER_AT.maxLevel, graph.maxLevel],
+    [HEADER_AT.jsonBytes, json.length],
+    [HEADER_AT.recordBytes, recordBytes],
+    [HEADER_AT.upperBytes, upperBytes],
+  ];
+  for (const [where, value] of fields) view.setUint32(where, value, true);
+  view.setFloat64(HEADER_AT.highRowid, rowids[order[order.length - 1]], true);
   bytes.set(json, HEADER_BYTES);
   let live = 0;
   for (let i = 0; i < order.length; i++) {
@@ -107,12 +133,12 @@ export function* encodeGraphFile(rows: GraphRows): Generator<void, Uint8Array> {
     const replaced = reused || nodeOf.get(ids[node]) !== node;
     if (!replaced) live++;
     const off = recordsAt + i * recordBytes;
-    view.setFloat64(off, rowids[node], true);
-    view.setUint32(off + 8, idHash(ids[node]), true);
-    bytes[off + 12] = data.level;
-    bytes[off + 13] = replaced ? FLAG_REPLACED : 0;
-    view.setUint16(off + 14, data.links[0].length, true);
-    view.setUint32(off + 16, upperOf[node], true);
+    view.setFloat64(off + RECORD_AT.rowid, rowids[node], true);
+    view.setUint32(off + RECORD_AT.idHash, idHash(ids[node]), true);
+    bytes[off + RECORD_AT.level] = data.level;
+    bytes[off + RECORD_AT.flags] = replaced ? FLAG_REPLACED : 0;
+    view.setUint16(off + RECORD_AT.linkCount, data.links[0].length, true);
+    view.setUint32(off + RECORD_AT.upperOffset, upperOf[node], true);
     data.links[0].forEach((to, j) => view.setUint32(off + RECORD_HEAD + 4 * j, at[to], true));
     putInt8(unit, new Int8Array(bytes.buffer, off + RECORD_HEAD + 8 * m, dim));
     for (let level = 1; level <= data.level; level++) {
@@ -122,7 +148,7 @@ export function* encodeGraphFile(rows: GraphRows): Generator<void, Uint8Array> {
     }
     if (i % ENCODE_TURN_NODES === ENCODE_TURN_NODES - 1) yield;
   }
-  view.setUint32(40, live, true);
+  view.setUint32(HEADER_AT.live, live, true);
   return bytes;
 }
 
@@ -161,10 +187,18 @@ export function readStamp(fd: number, file: string, size: number): GraphStamp {
     throw badGraphFile(file, 'short file');
   }
   const u32 = (at: number): number => head.readUInt32LE(at);
-  if (u32(0) !== MAGIC || u32(4) !== VERSION) throw badGraphFile(file, 'not a version 1 vector graph file');
-  const [dim, m, nodes, entry, maxLevel, jsonBytes] = [8, 12, 16, 20, 24, 28].map(u32);
-  const [live, recordBytes, upperBytes] = [40, 44, 48].map(u32);
-  const highRowid = head.readDoubleLE(32);
+  if (u32(HEADER_AT.magic) !== MAGIC || u32(HEADER_AT.version) !== VERSION)
+    throw badGraphFile(file, 'not a version 1 vector graph file');
+  const [dim, m, nodes, entry, maxLevel, jsonBytes] = [
+    HEADER_AT.dim,
+    HEADER_AT.m,
+    HEADER_AT.nodes,
+    HEADER_AT.entry,
+    HEADER_AT.maxLevel,
+    HEADER_AT.jsonBytes,
+  ].map(u32);
+  const [live, recordBytes, upperBytes] = [HEADER_AT.live, HEADER_AT.recordBytes, HEADER_AT.upperBytes].map(u32);
+  const highRowid = head.readDoubleLE(HEADER_AT.highRowid);
   const recordsAt = align(HEADER_BYTES + jsonBytes, 8);
   const upperAt = recordsAt + nodes * recordBytes;
   const fits =
@@ -190,4 +224,4 @@ export function readStamp(fd: number, file: string, size: number): GraphStamp {
 }
 
 export const isReplaced = (flags: number): boolean => (flags & FLAG_REPLACED) !== 0;
-export { RECORD_HEAD, upperLevelBytes };
+export { RECORD_AT, RECORD_HEAD, upperLevelBytes };
