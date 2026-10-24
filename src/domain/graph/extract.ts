@@ -1,5 +1,5 @@
 /** Deterministic entity extraction: the graph is a pure function of the consolidated object tables (decisions,
- *  policies, customer_notes, project_briefs). Writes go through the src/store/graph-writes.ts consolidated-source
+ *  policies, customer_notes, project_briefs). Writes go through the sqlite/graph-writes.ts consolidated-source
  *  guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
 
 import { MAX_ENTITY_NAME_LEN } from '../../base/records/entity-name.js';

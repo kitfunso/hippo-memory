@@ -25,7 +25,7 @@ import { printError } from './output.js';
 import { requireInit } from './shared.js';
 import { fmt } from './print.js';
 import { type CliFlags, type CommandContext, boolFlag, numberFlag, stringFlagOrExit } from './flag-values.js';
-import { errorMessage } from '../../base/util/log.js';
+import { errorCode, errorMessage } from '../../base/util/log.js';
 import { isJsonNumber, isJsonObject, isJsonString, parseJson, type JsonValue } from '../../base/util/json.js';
 import { CliExit, fail } from './exit.js';
 
@@ -157,7 +157,7 @@ async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean,
     parsed = parseJson(fs.readFileSync(baselinePath, 'utf8'));
   } catch (err) {
     // No baseline file is a first run and says nothing; a file that is there and cannot be used warns.
-    if (!(err instanceof Error && 'code' in err && err.code === 'ENOENT')) {
+    if (errorCode(err) !== 'ENOENT') {
       printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
     }
   }

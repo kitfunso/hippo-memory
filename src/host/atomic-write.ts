@@ -1,7 +1,7 @@
 // One way to replace a file a user or another program depends on: write a temp file beside it, then rename over it.
 import * as fs from 'fs';
 import * as path from 'path';
-import { errorMessage, log, errorFields } from '../base/util/log.js';
+import { errorCode, errorMessage, log, errorFields } from '../base/util/log.js';
 
 const RENAME_RETRY_MS = 1000;
 const WINDOWS_RENAME_REFUSALS = ['EPERM', 'EACCES', 'EBUSY'];
@@ -10,10 +10,6 @@ const WINDOWS_RENAME_REFUSALS = ['EPERM', 'EACCES', 'EBUSY'];
 const REPLACE_REFUSALS = ['EBUSY', 'EXDEV', 'EACCES', 'EPERM'];
 // Matches the usual SYMLOOP_MAX, so a link cycle ends in an error instead of a hang.
 const MAX_LINK_HOPS = 40;
-
-function errnoCode(err: Error): string {
-  return 'code' in err ? String(err.code) : '';
-}
 
 /** Windows refuses a rename onto a file another program has open, usually for a moment, so a refusal is retried before
  * it is reported. */
@@ -26,7 +22,7 @@ function renameOnto(tmp: string, target: string): void {
       return;
     } catch (err) {
       const transient =
-        process.platform === 'win32' && err instanceof Error && WINDOWS_RENAME_REFUSALS.includes(errnoCode(err));
+        process.platform === 'win32' && err instanceof Error && WINDOWS_RENAME_REFUSALS.includes(errorCode(err));
       const left = deadline - Date.now();
       if (!transient || left <= 0) throw err;
       Atomics.wait(idle, 0, 0, Math.min(pause, left));
@@ -114,9 +110,9 @@ function writeInPlace(target: string, data: string | Uint8Array): void {
   } catch (err) {
     if (!(err instanceof Error)) throw err;
     const reason =
-      errnoCode(err) === 'EBUSY'
+      errorCode(err) === 'EBUSY'
         ? 'is in use by another program, so hippo could not replace it; close that program and run the command again'
-        : `could not be replaced (${errnoCode(err) || err.message})`;
+        : `could not be replaced (${errorCode(err) || err.message})`;
     throw new Error(`${target} ${reason}`, { cause: err });
   }
 }
@@ -156,9 +152,9 @@ export function writeFileAtomic(file: string, data: string | Uint8Array, opts: A
   try {
     replaceViaTemp(target, data, old, write);
   } catch (err) {
-    if (!inPlace || !(err instanceof Error) || !REPLACE_REFUSALS.includes(errnoCode(err))) throw err;
+    if (!inPlace || !(err instanceof Error) || !REPLACE_REFUSALS.includes(errorCode(err))) throw err;
     log.warn(
-      `${target} could not be replaced by a rename (${errnoCode(err)}), so it is ` +
+      `${target} could not be replaced by a rename (${errorCode(err)}), so it is ` +
         `written in place: not atomic, a crash mid-write can leave it truncated`,
       errorFields(err),
     );

@@ -17,7 +17,7 @@ import {
   HIPPO_POST_COMPACT_MARKER,
   copilotHooksFile,
 } from './shared.js';
-import { claudeConfigDir, codexHomeDir, userHome, type Homes } from '../../base/util/agent-homes.js';
+import { HIPPO_DIR, claudeConfigDir, codexHomeDir, userHome, type Homes } from '../../base/util/agent-homes.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral, type JsonObject } from '../../base/util/json.js';
 import { escapeRegex } from '../../base/util/escape.js';
 
@@ -52,7 +52,7 @@ export interface InstallResult {
 /** The paths for `target` under the machine's home folder; reads and writes nothing. */
 export function jsonHookPathsOn(target: JsonHookTarget, homes: Homes): JsonHookPaths {
   const home = userHome(homes);
-  const logsDir = path.join(home, '.hippo', 'logs');
+  const logsDir = path.join(home, HIPPO_DIR, 'logs');
   switch (target) {
     case 'claude-code':
       return {

@@ -4,6 +4,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { errorCode } from '../../base/util/log.js';
+import { holderAlive } from '../../host/pid-alive.js';
 
 const EMBED_LOCK_FILE = 'embeddings.lock';
 // A breaker file older than this belongs to a waiter that died mid-break.
@@ -16,29 +18,19 @@ export function embedLockKey(hippoRoot: string): string {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
-function hasCode<E>(err: E, code: string): boolean {
-  return err instanceof Error && 'code' in err && err.code === code;
-}
-
-function holderAlive(lockPath: string): boolean {
+function lockHeld(lockPath: string): boolean {
   let raw: string;
   try {
     raw = fs.readFileSync(lockPath, 'utf8');
   } catch (err) {
-    return !hasCode(err, 'ENOENT');
+    return errorCode(err) !== 'ENOENT';
   }
   const mtimeMs = fs.statSync(lockPath, { throwIfNoEntry: false })?.mtimeMs ?? 0;
   const pid = Number(raw.split(':')[0]);
   // An empty lock is a holder between create and write; after 5 s it is a crashed one.
   if (!Number.isInteger(pid) || pid <= 0) return Date.now() - mtimeMs < 5_000;
   if (raw === EMBED_LOCK_OWNER) return false;
-  if (pid === process.pid) return mtimeMs >= Date.now() - process.uptime() * 1000;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return hasCode(err, 'EPERM');
-  }
+  return holderAlive(pid, () => mtimeMs >= Date.now() - process.uptime() * 1000);
 }
 
 /** Takes the lock under `hippoRoot`, breaking a dead holder's; the token to unlock with, or null while a live holder
@@ -50,9 +42,9 @@ export function tryEmbedLock(hippoRoot: string): string | null {
       fs.writeFileSync(lockPath, EMBED_LOCK_OWNER, { flag: 'wx' });
       return EMBED_LOCK_OWNER;
     } catch (err) {
-      if (!hasCode(err, 'EEXIST')) throw err;
+      if (errorCode(err) !== 'EEXIST') throw err;
     }
-    if (holderAlive(lockPath) || !breakStaleLock(lockPath)) return null;
+    if (lockHeld(lockPath) || !breakStaleLock(lockPath)) return null;
   }
 }
 
@@ -63,13 +55,13 @@ function breakStaleLock(lockPath: string): boolean {
   try {
     fs.writeFileSync(breaker, EMBED_LOCK_OWNER, { flag: 'wx' });
   } catch (err) {
-    if (!hasCode(err, 'EEXIST')) throw err;
+    if (errorCode(err) !== 'EEXIST') throw err;
     const mtimeMs = fs.statSync(breaker, { throwIfNoEntry: false })?.mtimeMs ?? Date.now();
     if (Date.now() - mtimeMs >= BREAKER_STALE_MS) fs.rmSync(breaker, { force: true });
     return false;
   }
   try {
-    if (!holderAlive(lockPath)) fs.rmSync(lockPath, { force: true });
+    if (!lockHeld(lockPath)) fs.rmSync(lockPath, { force: true });
   } finally {
     fs.rmSync(breaker, { force: true });
   }
@@ -83,7 +75,7 @@ export function releaseEmbedLock(hippoRoot: string, token: string): void {
   try {
     raw = fs.readFileSync(lockPath, 'utf8');
   } catch (err) {
-    if (hasCode(err, 'ENOENT')) return;
+    if (errorCode(err) === 'ENOENT') return;
     throw err;
   }
   if (raw === token) fs.rmSync(lockPath, { force: true });

@@ -25,6 +25,7 @@ import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.j
 import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
 import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
 import { appendHookBlock, HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks-install/instructions.js';
+import { HIPPO_DIR } from '../../base/util/agent-homes.js';
 
 // An unreadable or vanished folder is expected while scanning; any other failure is worth a line.
 const QUIET_SCAN_ERRORS: ReadonlySet<string> = new Set(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR']);
@@ -62,7 +63,7 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
 
 /** Creates the repo's store when absent and registers it; returns whether it already existed. */
 async function initScannedRepo(repo: string, tenantId: string, globalRoot: string): Promise<boolean> {
-  const repoHippo = path.join(repo, '.hippo');
+  const repoHippo = path.join(repo, HIPPO_DIR);
   const alreadyExists = isInitialized(repoHippo);
   if (!alreadyExists) {
     await initMemoryStore(cliApiContext(repoHippo, tenantId));
@@ -85,7 +86,7 @@ async function learnScannedRepo(
   options: LearnScannedRepoOptions,
 ): Promise<Pick<Awaited<ReturnType<typeof learnFromRepo>>, 'added' | 'lowInfo'>> {
   const { repo, tenantId, seedDays, learn, machine, agentImport } = options;
-  const repoHippo = path.join(repo, '.hippo');
+  const repoHippo = path.join(repo, HIPPO_DIR);
   let added = 0;
   let lowInfo = 0;
   if (learn && isGitRepo(processGit, repo)) {
@@ -154,7 +155,7 @@ async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFla
     totalLowInfo += lowInfo;
 
     const status = alreadyExists ? 'existing' : 'new';
-    const entries = await memoryList(cliApiContext(path.join(repo, '.hippo'), tenantId), { everyTenant: true });
+    const entries = await memoryList(cliApiContext(path.join(repo, HIPPO_DIR), tenantId), { everyTenant: true });
     console.log(
       `  ${path.basename(repo).padEnd(25)} ${status.padEnd(10)} ${entries.length} ` +
         `memories${added > 0 ? ` (+${added} from git)` : ''}`,
