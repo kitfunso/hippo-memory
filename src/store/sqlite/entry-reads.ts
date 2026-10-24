@@ -391,25 +391,40 @@ export function listTenantTextsPage(db: DatabaseSyncLike, tenantId: string, page
   return { texts: rows, next };
 }
 
-/** A page of the live rows whose source starts with `prefix`, in loadAllEntries' order, on the caller's handle; LIKE
- * folds case, so the prefix is checked again exactly and a page may hold fewer than `limit`. */
+/** The least string above every string that starts with `prefix` in byte order, or null when none is. */
+export function prefixUpperBound(prefix: string): string | null {
+  const points = Array.from(prefix);
+  while (points.at(-1) === '\u{10FFFF}') points.pop();
+  const last = points.pop();
+  if (last === undefined) return null;
+  const next = last.codePointAt(0)! + 1;
+  // The surrogate block holds no code point, so the next one up is U+E000.
+  return points.join('') + String.fromCodePoint(next === 0xd800 ? 0xe000 : next);
+}
+
+/** A page of the live rows whose source starts with `prefix`, case-sensitively, in loadAllEntries' order, on the
+ * caller's handle; a BINARY range on `source` is what idx_memories_source_tenant_created can seek. */
 export function listLiveEntriesBySourcePrefix(
   db: DatabaseSyncLike,
-  tenantId: string,
+  tenantId: TenantId,
   prefix: string,
   page: EntryPageRequest,
 ): EntryPage {
-  const { entries, next } = entriesPage(
+  const upper = prefixUpperBound(prefix);
+  const range = upper === null ? 'source >= ?' : 'source >= ? AND source < ?';
+  // Without the hint the planner takes the tenant index for its created order and filters every row of the tenant;
+  // the all-tenant read already pins its own index inside its subquery.
+  const index = tenantId === ALL_TENANTS ? '' : ' INDEXED BY idx_memories_source_tenant_created';
+  return entriesPage(
     tenantId,
     page,
     (within, limit) =>
       cachedStatement(
         db,
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-          `WHERE ${within.match("superseded_by IS NULL AND source LIKE ? ESCAPE '\\'")} ${ENTRY_PAGE_ORDER}`,
-      ).all(`${escapeLike(prefix)}%`, ...within.params, limit) as MemoryRow[],
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${index} ` +
+          `WHERE ${within.match(`superseded_by IS NULL AND ${range}`)} ${ENTRY_PAGE_ORDER}`,
+      ).all(...(upper === null ? [prefix] : [prefix, upper]), ...within.params, limit) as MemoryRow[],
   );
-  return { entries: entries.filter((entry) => entry.source.startsWith(prefix)), next };
 }
 
 /** A page of a tenant's rows tagged `rows.origin`, in loadAllEntries' order, narrowed as `rows` asks. */
