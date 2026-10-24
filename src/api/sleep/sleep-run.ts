@@ -72,14 +72,12 @@ export async function runSleep(
   // Phase counters for the consolidate audit emit (in finally), accumulated per phase so a partial failure still
   // reports what got done.
   const counts: SleepCounts = { consolidation: 0, dedup: 0, auditDeleted: 0, ambient: 0 };
-  let phaseError: Error | null = null;
+  let phaseError: { thrown: unknown } | null = null;
 
   try {
     return await runSleepPhases(ctx, opts, phases, counts);
   } catch (err) {
-    // SAFETY: phaseError is only read via phaseError.message / (phaseError !== null) below, safe even if a non-Error
-    // was thrown; this mirrors the lenient (err as Error) pattern used through this catch chain.
-    phaseError = err as Error;
+    phaseError = { thrown: err };
     throw err;
   } finally {
     await emitSleepAudit(ctx, opts, dryRun, counts, phaseError);
@@ -368,7 +366,7 @@ async function emitSleepAudit(
   opts: SleepOpts,
   dryRun: boolean,
   counts: SleepCounts,
-  phaseError: Error | null,
+  phaseError: { thrown: unknown } | null,
 ): Promise<void> {
   try {
     // Tagged '__host__' because sleep is host-wide; the actor still names the operator who ran it.
@@ -382,10 +380,10 @@ async function emitSleepAudit(
       partial: phaseError !== null,
       triggeredByTenant: ctx.tenantId, // preserve for audit forensics
     };
-    if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
+    if (phaseError) sleepAuditMetadata.errorMessage = errorMessage(phaseError.thrown);
     // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can
     // be found.
-    const nextUnitIds = failedUnitOf(phaseError);
+    const nextUnitIds = failedUnitOf(phaseError?.thrown instanceof Error ? phaseError.thrown : null);
     if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
     await ctx.store.appendAuditEvents([
       {

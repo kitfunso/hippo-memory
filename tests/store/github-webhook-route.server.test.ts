@@ -378,17 +378,17 @@ describe('POST /v1/connectors/github/events', () => {
     }
   });
 
-  it('14. replay with same body but different delivery UUID → dedup via idempotency_key', async () => {
+  it('14. the same signed body resent under a fresh delivery id is refused with 409 and adds no row', async () => {
     const body = issueBody();
     const res1 = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-14a'));
     expect(res1.status).toBe(200);
-    const j1 = await jsonAs<{ status: string }>(res1);
-    expect(j1.status).toBe('ingested');
+    expect((await jsonAs<{ status: string }>(res1)).status).toBe('ingested');
 
     const res2 = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-14b-DIFFERENT-UUID'));
-    expect(res2.status).toBe(200);
-    const j2 = await jsonAs<{ status: string }>(res2);
-    expect(['duplicate', 'skipped_duplicate']).toContain(j2.status);
+    expect({ status: res2.status, body: await res2.json() }).toEqual({
+      status: 409,
+      body: { error: 'duplicate X-GitHub-Delivery' },
+    });
 
     const rows = loadAllEntries(root, 'default').filter(
       (e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/issue/42',
@@ -396,7 +396,7 @@ describe('POST /v1/connectors/github/events', () => {
     expect(rows.length).toBe(1);
   });
 
-  it('14b. a signed delivery sent again under the same X-GitHub-Delivery is refused with 409; a new id passes', async () => {
+  it('14b. a signed body is accepted once however many delivery ids carry it; a different signed body passes', async () => {
     const issueRows = () =>
       loadAllEntries(root, 'default').filter(
         (e) => e.kind === 'raw' && e.artifactRef?.startsWith('github://acme/repo/issue/'),
@@ -404,16 +404,17 @@ describe('POST /v1/connectors/github/events', () => {
     const first = issueBody({ number: 50 });
     expect((await postWebhook(handle.port, first, defaultHeaders(first, 'issues', 'd-replay'))).status).toBe(200);
 
-    const replay = await postWebhook(handle.port, first, defaultHeaders(first, 'issues', 'd-replay'));
-    expect({ status: replay.status, body: await replay.json() }).toEqual({
-      status: 409,
-      body: { error: 'duplicate X-GitHub-Delivery' },
-    });
-    const other = issueBody({ number: 51 });
-    expect((await postWebhook(handle.port, other, defaultHeaders(other, 'issues', 'd-replay'))).status).toBe(409);
+    for (const id of ['d-replay', 'd-replay-2']) {
+      const replay = await postWebhook(handle.port, first, defaultHeaders(first, 'issues', id));
+      expect({ status: replay.status, body: await replay.json() }).toEqual({
+        status: 409,
+        body: { error: 'duplicate X-GitHub-Delivery' },
+      });
+    }
     expect(issueRows().map((e) => e.artifactRef)).toEqual(['github://acme/repo/issue/50']);
 
-    const fresh = await postWebhook(handle.port, other, defaultHeaders(other, 'issues', 'd-replay-next'));
+    const other = issueBody({ number: 51 });
+    const fresh = await postWebhook(handle.port, other, defaultHeaders(other, 'issues', 'd-replay'));
     expect({ status: fresh.status, status_field: (await jsonAs<{ status: string }>(fresh)).status }).toEqual({
       status: 200,
       status_field: 'ingested',

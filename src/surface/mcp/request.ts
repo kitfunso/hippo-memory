@@ -143,7 +143,7 @@ function invalidArgs(id: McpResponse['id'], toolName: string, problems: readonly
 }
 
 /** The tool and its ledger row run in the caller's request scope, which the host (server or stdio) opens.
- * SHORTCUT: the deadline stops a call only between these steps, not a running store read or fetch; thread the signal */
+ * The request signal reaches store calls, embeddings, rerankers and LLM fetches through the request scope. */
 async function runTool(
   toolName: string,
   run: ToolRun,

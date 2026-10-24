@@ -57,8 +57,8 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           cache: npm
-      # Trusted publishing needs npm 11.5.1 or newer.
-      - run: npm install -g npm@^11.5.1
+      # Trusted publishing needs npm 11.5.1 or newer; an exact pin keeps a new npm release from changing the publish job.
+      - run: npm install -g npm@11.21.1
       - run: npm ci
       - name: Tag matches package.json
         run: |

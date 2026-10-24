@@ -22,7 +22,7 @@ import { type CliFlags, type CommandContext, stringFlag } from './flag-values.js
 import { runDlqReplay } from './dlq-replay.js';
 import { cliApiContext, cliStore } from './api-context.js';
 import { CliExit } from './exit.js';
-import { errorMessage } from '../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 
 /** Map a parsed envelope + eventName header to an IngestEvent; null for unknown event types or shapes failing the type
  * guards. */
@@ -85,6 +85,7 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
     console.log(JSON.stringify(result, null, 2));
   } catch (e) {
     console.error('backfill failed:', errorMessage(e));
+    log.error('github backfill failed', errorFields(e));
     throw new CliExit(3);
   }
 }

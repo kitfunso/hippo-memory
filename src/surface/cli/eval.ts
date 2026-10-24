@@ -196,15 +196,49 @@ function readCorpus(corpusPath: string | null): EvalCase[] {
     fail(`Corpus file not found: ${corpusPath}`);
   }
 
-  let cases: EvalCase[];
   try {
-    const raw = JSON.parse(fs.readFileSync(corpusPath, 'utf8'));
-    cases = Array.isArray(raw) ? raw : raw.cases;
-    if (!Array.isArray(cases)) throw new Error('Corpus JSON must be an array or { cases: [...] }');
+    const raw = parseJson(fs.readFileSync(corpusPath, 'utf8'));
+    const list = Array.isArray(raw) ? raw : isJsonObject(raw) ? raw.cases : undefined;
+    if (!Array.isArray(list)) throw new Error('Corpus JSON must be an array or { cases: [...] }');
+    return list.map((c, i) => readCorpusCase(c, i));
   } catch (err) {
-    fail(`Failed to read corpus: ${errorMessage(err)}`);
+    fail(`Failed to read corpus ${corpusPath}: ${errorMessage(err)}`);
   }
-  return cases;
+}
+
+function readCorpusCase(c: JsonValue | undefined, index: number): EvalCase {
+  const rec = isJsonObject(c) ? c : {};
+  const missing = (field: string): Error => new Error(`case ${index} is missing "${field}"`);
+  const { id, query, expectedIds } = rec;
+  if (!isJsonString(id)) throw missing('id (string)');
+  if (!isJsonString(query)) throw missing('query (string)');
+  if (!Array.isArray(expectedIds) || !expectedIds.every((x) => isJsonString(x))) {
+    throw missing('expectedIds (array of strings)');
+  }
+  const description = isJsonString(rec.description) ? { description: rec.description } : {};
+  return { id, query, expectedIds: expectedIds.filter((x) => isJsonString(x)), ...description };
+}
+
+const BASELINE_MEANS = ['meanMrr', 'meanRecallAt5', 'meanRecallAt10', 'meanNdcgAt10'] as const;
+
+function readBaseline(text: string): EvalSummary {
+  const raw = parseJson(text);
+  const rec = isJsonObject(raw) ? raw : {};
+  for (const key of BASELINE_MEANS) {
+    if (!isJsonNumber(rec[key])) throw new Error(`missing "${key}" (number)`);
+  }
+  const cases = rec.cases;
+  if (!Array.isArray(cases)) throw new Error('missing "cases" (array)');
+  cases.forEach((c, i) => {
+    const row = isJsonObject(c) ? c : {};
+    const inner = isJsonObject(row.case) ? row.case : {};
+    if (!isJsonString(inner.id) || !isJsonString(inner.query) || !isJsonNumber(row.mrr)) {
+      throw new Error(`cases[${i}] is missing "case.id", "case.query" or "mrr"`);
+    }
+  });
+  // Parsed again as the full summary: the checks above cover every field compareSummaries reads.
+  const summary: EvalSummary = JSON.parse(text);
+  return summary;
 }
 
 function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
@@ -254,9 +288,9 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
   }
   let baseline: EvalSummary;
   try {
-    baseline = JSON.parse(fs.readFileSync(comparePath, 'utf8'));
+    baseline = readBaseline(fs.readFileSync(comparePath, 'utf8'));
   } catch (err) {
-    fail(`Failed to parse baseline: ${errorMessage(err)}`);
+    fail(`Failed to parse baseline ${comparePath}: ${errorMessage(err)}`);
   }
   const cmp = compareSummaries(baseline, summary);
 
