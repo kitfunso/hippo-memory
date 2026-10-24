@@ -19,7 +19,7 @@ import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/gith
 import type { IngestResult } from '../../src/surface/connectors/ingest.js';
 import { handleCommentDeleted } from '../../src/surface/connectors/github/deletion.js';
 import { computeIdempotencyKey } from '../../src/surface/connectors/github/signature.js';
-import { resolveTenantForGitHub, type GitHubFallback } from '../../src/surface/connectors/github/tenant-routing.js';
+import { resolveTenant, type RouteFallback } from '../../src/surface/connectors/tenant-route.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
@@ -38,7 +38,10 @@ import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-p
 oneRequestPerTest();
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
-const fallback = (allowUnknown = false): GitHubFallback => ({ hostTenant: envTenant(), allowUnknown });
+const fallback = (allowUnknown = false): RouteFallback => ({
+  hostTenant: envTenant(),
+  allowUnknown,
+});
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -257,7 +260,13 @@ describe('GitHub connector — 200-event smoke test', () => {
     const results: IngestResult[] = [];
     await withSharedStoreHandles(async () => {
       for (const d of deliveries) {
-        results.push(await ingestEvent(ctx, { event: d.event, rawBody: d.rawBody, deliveryId: d.deliveryId }));
+        results.push(
+          await ingestEvent(ctx, {
+            event: d.event,
+            rawBody: d.rawBody,
+            deliveryId: d.deliveryId,
+          }),
+        );
       }
     });
     const ingested = results.filter((r) => r.status === 'ingested').length;
@@ -319,7 +328,11 @@ describe('GitHub connector — 200-event smoke test', () => {
     let duplicateCount = 0;
     await withSharedStoreHandles(async () => {
       for (const d of deliveries) {
-        const r = await ingestEvent(ctx, { event: d.event, rawBody: d.rawBody, deliveryId: d.deliveryId });
+        const r = await ingestEvent(ctx, {
+          event: d.event,
+          rawBody: d.rawBody,
+          deliveryId: d.deliveryId,
+        });
         // Either fast-path 'duplicate' (live row) or 'skipped'/'duplicate' for
         // the 5 archived rows (their event_log row still exists -> 'duplicate').
         expect(['duplicate', 'skipped', 'skipped_duplicate']).toContain(r.status);
@@ -355,7 +368,10 @@ describe('GitHub connector — 200-event smoke test', () => {
       }
     }
 
-    const withScope = await retrieve(ctx, { query: privateMarker, filter: { scope: SCOPE_PRIVATE } });
+    const withScope = await retrieve(ctx, {
+      query: privateMarker,
+      filter: { scope: SCOPE_PRIVATE },
+    });
     // The marker is unique to one delivery, so exactly its row matches.
     expect(withScope.results).toHaveLength(1);
     expect(withScope.results.some((r) => r.content.includes(privateMarker))).toBe(true);
@@ -387,7 +403,11 @@ describe('GitHub connector — 200-event smoke test', () => {
         'tenant-known',
         new Date().toISOString(),
       );
-      const resolved = await resolveTenantForGitHub(sqliteStore(root), { installationId: 'unknown-99' }, fallback());
+      const resolved = await resolveTenant(
+        sqliteStore(root),
+        { connector: 'github', installationId: 'unknown-99' },
+        fallback(),
+      );
       expect(resolved).toBeNull();
     } finally {
       closeHippoDb(db);
@@ -404,7 +424,9 @@ describe('GitHub connector — 200-event smoke test', () => {
       artifactRef: 'acme://demo/secret/1',
       tags: ['source:acme'],
     });
-    const canaryNoScope = await retrieve(ctx, { query: 'cross-scope-canary-payload-1234' });
+    const canaryNoScope = await retrieve(ctx, {
+      query: 'cross-scope-canary-payload-1234',
+    });
     // v1.25.0: same rationale as section (6) — the SQL pre-window exclusion
     // makes a denied-only match behave like a no-match query (fallback rows
     // possible); assert the intent (the canary payload never surfaces), not

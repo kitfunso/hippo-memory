@@ -1,37 +1,17 @@
 // hippo.db's half of the ConnectorWrites store group: a connector's write or archive with its companion rows, in one
 // transaction on one handle.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { githubEventMemory, markGitHubEventSeen } from './connectors/github.js';
-import { markSlackEventSeen, slackEventMemory } from './connectors/slack.js';
+import { logEvent, loggedMemory } from './connectors/events.js';
 import type { Handles, StoreFiles } from './open.js';
 import { bound } from './bound.js';
 import { openStore } from './handles.js';
-import type {
-  ConnectorArchive,
-  ConnectorEvent,
-  ConnectorWrite,
-  ConnectorWriteOutcome,
-  ConnectorWrites,
-} from '../port.js';
+import type { ConnectorArchive, ConnectorWrite, ConnectorWriteOutcome, ConnectorWrites } from '../port.js';
 import { recordQuarantine } from './quarantine.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryMirrors, archiveRaw, writeInOwnTenant } from './entry-writes.js';
 
 /** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever sees it. */
 class EventAlreadyLogged extends Error {}
-
-/** False when the key was logged before: the insert ignores a taken key, so the first writer's row stays. */
-function logEvent(db: DatabaseSyncLike, event: ConnectorEvent, memoryId: string): boolean {
-  if (event.connector === 'slack') return markSlackEventSeen(db, event.eventId, memoryId);
-  const { idempotencyKey, deliveryId, eventName } = event;
-  return markGitHubEventSeen(db, { idempotencyKey, deliveryId, eventName, memoryId });
-}
-
-function loggedMemory(db: DatabaseSyncLike, event: ConnectorEvent): string | null {
-  return event.connector === 'slack'
-    ? slackEventMemory(db, event.eventId)
-    : githubEventMemory(db, event.idempotencyKey);
-}
 
 /** The record, then the log row, go in after the memory row and ahead of its remember row, as a second store must order
  * them. */

@@ -375,10 +375,11 @@ describe('writeDeliveryEventOnHandle', () => {
 });
 
 describe('the delivery ledger prune', () => {
-  const prunes = (log: StatementLog<number | null>): number =>
-    countMatching(log.statements, /^DELETE FROM delivery_events/);
+  const prunes = (log: StatementLog<unknown>): number => countMatching(log.statements, /^DELETE FROM delivery_events/);
   const writeVia = async (ledger: ReturnType<typeof sqliteStore>['ledger'], promptHash: string, ms: number) =>
-    await recordStatementsAsync(async () => await ledger.writeDeliveryEvent(event({ promptHash, ts: at(ms) })));
+    await recordStatementsAsync(
+      async () => await ledger.recordTurn({ uses: [], delivery: event({ promptHash, ts: at(ms) }) }),
+    );
 
   afterEach(() => {
     vi.useRealTimers();
