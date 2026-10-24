@@ -61,8 +61,8 @@ export {
 // reach.
 export type { AuthCreateOpts, AuthCreateResult };
 export { ownerOrSubject } from './api/index.js';
-// A route that writes for a session binds it to the caller's owner first; the second name is the 2.x one.
-export { bindSessionOwner, bindSessionOwner as bindSessionOwnerOn } from './api/auth/session-owners.js';
+// A route that writes for a session binds it to the caller's owner first.
+export { bindSessionOwner } from './api/auth/session-owners.js';
 // A hook route for a caller on another machine: each call binds the session, then writes under the caller's owner and
 // project.
 export {

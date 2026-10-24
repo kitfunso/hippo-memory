@@ -427,7 +427,6 @@ server.d.ts: authCreate re-export
 server.d.ts: authCreateSelf re-export
 server.d.ts: authRevoke re-export
 server.d.ts: bindSessionOwner re-export
-server.d.ts: bindSessionOwnerOn re-export
 server.d.ts: captureFailureForCaller re-export
 server.d.ts: captureSessionTexts re-export
 server.d.ts: clientIpForRateLimit re-export
