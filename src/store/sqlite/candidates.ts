@@ -314,6 +314,7 @@ export function loadContextCandidates(
   // prove itself, and the scan below ranks the tenant.
   const bySubset = ranked && cap > 0 && !isOutcomeSlowAblated() ? decayKeySubsetRows(db, rowsWhere, cap, now) : [];
   if (bySubset.length > 0) return bySubset.map(rowToEntry);
+  // No index orders rows past the key's window by decay, so this scan stays; its LIMIT keeps the sort to the cap.
   const sql = ranked
     ? `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (
     SELECT id FROM memories WHERE ${whereSql} ORDER BY ${decayRankSql()} LIMIT ?
