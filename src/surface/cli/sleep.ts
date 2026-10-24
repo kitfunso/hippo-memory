@@ -18,10 +18,12 @@ import { requireInit, learnFromRepo, runChurnStaleForRepo, skipLearnOnSharedStor
 import { printAgentImport } from './print.js';
 import { repairQualityOnce } from './quality-repair-once.js';
 import { printError } from './output.js';
+import { resolveGlobalRootDir } from '../../host/project-identity.js';
 import { plural } from '../../base/util/format.js';
 
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
-export async function handleSleep({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleSleep({ hippoRoot: cwdRoot, tenantId, flags }: CommandContext): Promise<void> {
+  const hippoRoot = boolFlag(flags, 'global') ? resolveGlobalRootDir() : cwdRoot;
   // Tee stdout/stderr to a log file when --log-file is set; the SessionEnd hook uses it so the SessionStart hook can
   // re-display the output.
   const logFile = stringFlag(flags, 'log-file') ?? null;

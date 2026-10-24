@@ -142,14 +142,23 @@ export function buildSchtasksCreateArgs(taskName: string, cmd: string): string[]
   return ['/create', '/tn', taskName, '/tr', buildWindowsTaskRun(cmd), '/sc', 'daily', '/st', '06:15', '/f'];
 }
 
+function realpathOrSelf(p: string): string {
+  return fs.existsSync(p) ? fs.realpathSync(p) : path.resolve(p);
+}
+
 export function runDailyMaintenance(
   workspaces: readonly string[],
   runCommand: (cwd: string, args: string[]) => void,
+  globalRoot?: string,
 ): void {
+  const globalReal = globalRoot === undefined ? undefined : realpathOrSelf(globalRoot);
   for (const workspace of workspaces) {
     const resolved = normalizeWorkspace(workspace);
-    if (!fs.existsSync(path.join(resolved, HIPPO_DIR))) continue;
+    const store = path.join(resolved, HIPPO_DIR);
+    if (!fs.existsSync(store)) continue;
     runCommand(resolved, ['learn', '--git', '--days', '1']);
+    // The home folder is registered and its .hippo is the global store, which the runner already sleeps.
+    if (globalReal !== undefined && realpathOrSelf(store) === globalReal) continue;
     runCommand(resolved, ['sleep']);
   }
 }

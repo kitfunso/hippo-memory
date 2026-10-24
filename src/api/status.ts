@@ -1,5 +1,6 @@
 // Store-wide status reads: counts, stats, vector index state and the correction and provenance reports.
 
+import { isJsonObject, isJsonString } from '../base/util/json.js';
 import type { LegacyStats } from '../store/port/reports.js';
 import type { CorrectionLink, RawProvenance, ReportPage, StatusCounts } from '../store/port/reports.js';
 import { READ_PAGE_ROWS } from '../base/util/pages.js';
@@ -18,7 +19,19 @@ export interface StoreStatus {
 export async function storeStatus(ctx: Context, now: Date, atRiskBelow: number): Promise<StoreStatus> {
   requireHostAdmin(ctx, 'Reading every tenant');
   const { reports } = ctx.store;
-  return { stats: await reports.stats(), counts: await reports.statusCounts(now, atRiskBelow) };
+  return {
+    stats: await reports.stats(),
+    counts: await reports.statusCounts(now, atRiskBelow),
+  };
+}
+
+/** ISO time of the latest sleep, or undefined when it never slept. Every tenant, so the host admin only. */
+export async function lastSleepAt(ctx: Context): Promise<string | undefined> {
+  requireHostAdmin(ctx, 'Reading every tenant');
+  const runs = (await ctx.store.reports.stats()).consolidation_runs;
+  const last = Array.isArray(runs) ? runs[runs.length - 1] : undefined;
+  const at = isJsonObject(last) ? last['timestamp'] : undefined;
+  return isJsonString(at) ? at : undefined;
 }
 
 /** Ids and dimension of the stored vectors. Every tenant, so the host admin only. */
