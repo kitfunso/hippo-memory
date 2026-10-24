@@ -3,10 +3,15 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { installJsonHooks, uninstallJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
-import { resolveJsonHookPaths } from '../../src/domain/hooks/json-hooks.js';
+import {
+  defaultSleepLogPath,
+  installJsonHooks,
+  resolveJsonHookPaths,
+  uninstallJsonHooks,
+} from '../../src/surface/hooks-install/json-hooks.js';
 import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
-import { defaultSleepLogPath, defaultPreCompactLogPath } from '../../src/domain/hooks/shared.js';
+import { defaultPreCompactLogPath } from '../../src/domain/hooks/shared.js';
+import { processHomes } from '../../src/host/agent-homes.js';
 import { withFakeHome as withFakeHomeShared } from '../_helpers/with-fake-home.js';
 import { trySymlink } from '../_helpers/symlink.js';
 import type { JsonValue } from '../../src/base/util/json.js';
@@ -92,7 +97,7 @@ describe('JSON hook installer', () => {
       expect(settings.hooks.PreCompact[0].matcher).toBeUndefined(); // fires on manual AND auto compaction
       const preCompactCmd = settings.hooks.PreCompact[0].hooks[0].command;
       expect(preCompactCmd).toContain('hippo pre-compact --log-file');
-      expect(preCompactCmd).toContain(defaultPreCompactLogPath());
+      expect(preCompactCmd).toContain(defaultPreCompactLogPath(processHomes()));
 
       // SessionStart now carries two entries: the pre-existing un-matched
       // last-sleep entry and the new matcher:'compact' compact-resume entry.

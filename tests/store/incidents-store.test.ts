@@ -23,7 +23,7 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { openIncident, resolveOpenIncident, INCIDENT } from '../../src/domain/objects/incidents.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';

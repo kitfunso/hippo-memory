@@ -18,7 +18,7 @@ import { runDoctor, formatDoctor, type DoctorStore } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
-import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { resolveGlobalRootDir } from '../../host/project-identity.js';
 import * as api from '../../api/index.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import {
@@ -34,13 +34,13 @@ import type { ParticleStats } from '../../store/port.js';
 import { cliConfig, cliApiContext, cliDiagnostics, type CliContext } from './api-context.js';
 
 const diagnosticsBodies = (hippoRoot: string): DoctorStore => cliDiagnostics(hippoRoot);
-import { errorMessage, log, errorFields } from '../../base/util/log.js';
+import { errorCode, errorMessage, log, errorFields } from '../../base/util/log.js';
 import { printError } from './output.js';
 import { type CommandContext, boolFlag, parseCountFlag, stringFlagOrExit } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { isJsonObject } from '../../base/util/json.js';
-import { readPackageVersion } from '../../base/config/package-root.js';
+import { readPackageVersion } from '../../host/package-version.js';
 import { hookStoreRoot } from './hook-runtime.js';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../../base/util/time.js';
 import { CliExit, fail } from './exit.js';
@@ -370,7 +370,7 @@ export async function handleSupportBundle({ tenantId, flags }: CommandContext): 
   try {
     fs.writeFileSync(file, `${json}\n`, { flag: 'wx', mode: 0o600 });
   } catch (err) {
-    if (err instanceof Error && 'code' in err && err.code === 'EEXIST') {
+    if (errorCode(err) === 'EEXIST') {
       printError(`${file} already exists; pass --out to choose another file. Nothing was written.`);
     } else {
       printError(errorMessage(err));

@@ -3,12 +3,12 @@
 import { adminActor, retrieve, retrieveRanking, retrieveWithCliCore, type Context } from '../../dist/entry/eval-scripts.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { engineFlags } from '../../dist/surface/cli/flag-values.js';
-import { loadConfig } from '../../dist/base/config/config.js';
+import { loadConfig } from '../../dist/host/config-file.js';
 import { getReranker } from '../../dist/entry/eval-scripts.js';
 import { envActiveScope as detectScope } from '../../dist/base/util/env.js';
 import type { SearchResult } from '../../dist/base/rank/search-types.js';
-import { getGlobalRoot } from '../../dist/domain/sharing/global-store.js';
-import { getHippoRoot, isInitialized } from '../../dist/base/scope/project-identity.js';
+import { getGlobalRoot } from '../../dist/host/global-store.js';
+import { getHippoRoot, isInitialized } from '../../dist/host/project-identity.js';
 import { resolveTenantId } from '../../dist/entry/testing.js';
 import { STAGE_LABEL, stagesNotRun, type Arm, type EvalQuery } from './queries.ts';
 

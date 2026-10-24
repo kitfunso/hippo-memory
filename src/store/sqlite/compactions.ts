@@ -27,7 +27,7 @@ function writeCallerItems(
   const text = { summary: '', items: [...req.items] };
   const record =
     earlier ??
-    recordSummary(db, files.hippoRoot, tenantId, {
+    recordSummary(db, files, tenantId, {
       meta,
       text,
       at: new Date(),

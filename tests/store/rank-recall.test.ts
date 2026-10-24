@@ -5,7 +5,7 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import type { RerankerFn } from '../../src/base/ports/reranker.js';

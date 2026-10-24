@@ -27,7 +27,7 @@ import {
   withDb,
   type World,
 } from '../_helpers/agent-memories-world.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';

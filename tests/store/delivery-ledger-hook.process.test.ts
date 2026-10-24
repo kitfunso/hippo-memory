@@ -8,7 +8,7 @@ import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../sr
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../_helpers/delivery-events.js';
 import { blockHash, estimateTokens } from '../../src/base/util/token-text.js';
-import { realpathOrResolve } from '../../src/base/util/real-path.js';
+import { realpathOrResolve } from '../../src/host/real-path.js';
 import type { HippoConfig } from '../../src/base/config/config.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';

@@ -9,7 +9,6 @@ import { rankBothStores } from '../domain/sharing/search-both.js';
 import { evalNow } from '../base/memory/ablation.js';
 import { searchByEngine } from '../domain/search/engine.js';
 import { vectorSourceOf } from '../domain/search/hybrid.js';
-import { infraOf } from './infra.js';
 import type { HybridVectorCandidates, VectorSource } from '../domain/search/vector.js';
 import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../base/rank/search-types.js';
 import { compareScoredResults } from '../base/rank/compare.js';
@@ -380,7 +379,7 @@ async function searchBothStores(
       store: plan.local.store,
       config: plan.config,
       onHippoDb: ctx.reach?.isHippoDb,
-      embedderFor: infraOf(ctx).embedderFor,
+      embedderFor: ctx.infra.embedderFor,
     }),
     // Its own config.json names the global store's embedding model, read only when the vector arm runs.
     global: globalVectorSource(ctx),
@@ -396,7 +395,7 @@ async function searchBothStores(
       cost: cost && ((r) => price(r.entry, isGlobalHit(r.entry))),
       scope: plan.activeScope,
       runtime: ctx.config.runtime,
-      cwd: infraOf(ctx).machine.cwd,
+      cwd: ctx.infra.machine.cwd,
     },
   );
   return merged.map((r) => ({
@@ -444,7 +443,7 @@ async function searchLocalRows(
       store,
       config: ctxConfig,
       onHippoDb: ctx.reach?.isHippoDb,
-      embedderFor: infraOf(ctx).embedderFor,
+      embedderFor: ctx.infra.embedderFor,
     }),
     query,
     localEntries,
@@ -455,7 +454,7 @@ async function searchLocalRows(
       cost: localCost,
       scope: plan.activeScope,
       runtime: ctx.config.runtime,
-      cwd: infraOf(ctx).machine.cwd,
+      cwd: ctx.infra.machine.cwd,
       vectorCandidates,
     },
   );
@@ -493,5 +492,5 @@ function globalInReach(ctx: Context): GlobalInReach {
 /** The global store's vectors, embedded by the model its own config.json names. */
 function globalVectorSource(ctx: Context): VectorSource {
   const { store, config } = globalInReach(ctx);
-  return vectorSourceOf({ store, config, onHippoDb: true, embedderFor: infraOf(ctx).embedderFor });
+  return vectorSourceOf({ store, config, onHippoDb: true, embedderFor: ctx.infra.embedderFor });
 }

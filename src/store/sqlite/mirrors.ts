@@ -25,9 +25,10 @@ import type { MemoryConflict } from '../port/conflicts.js';
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import type { TaskSnapshot, SessionEvent } from '../port/sessions.js';
 import { serializeEntry } from '../../base/memory/markdown.js';
-import { writeFileAtomic } from '../../base/util/atomic-write.js';
+import { writeFileAtomic } from '../../host/atomic-write.js';
 import type { StoreFiles } from './open.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
 const SCORE_DECIMALS = 3;
 
@@ -500,9 +501,6 @@ export function mirrorBestEffort(what: string, write: () => void): void {
   }
 }
 
-/** Rows per page when every memory is walked, so a large store never sits in memory whole. */
-const MIRROR_PAGE_ROWS = 500;
-
 /** Pages through every row by rowid: each file is independent of the others, so row order does not reach the output,
  * and rowid keeps each page a seek (no index covers `created, id`). */
 function* pagedMemoryRows(db: DatabaseSyncLike): Generator<MemoryEntry> {
@@ -512,7 +510,7 @@ function* pagedMemoryRows(db: DatabaseSyncLike): Generator<MemoryEntry> {
   );
   let after = 0;
   for (;;) {
-    const rows = page.all(after, MIRROR_PAGE_ROWS) as Array<MemoryRow & { page_rowid: number }>;
+    const rows = page.all(after, READ_PAGE_ROWS) as Array<MemoryRow & { page_rowid: number }>;
     if (rows.length === 0) return;
     after = rows[rows.length - 1]!.page_rowid;
     yield* rows.map(rowToEntry);

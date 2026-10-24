@@ -4,12 +4,11 @@ import { rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { openHippoDb, closeHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
-import type { Context } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { bindSessionOwner } from '../../src/server.js';
+import { bindSessionOwner, type Context } from '../../src/server.js';
 import { TASK_OWNER_MIN_BINARY, compareSemver } from '../../src/base/util/version.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 interface StatementProto {

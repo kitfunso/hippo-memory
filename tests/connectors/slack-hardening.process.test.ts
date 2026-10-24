@@ -20,9 +20,10 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { stageScratchWinner } from '../_helpers/race-winner.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { envTenant } from '../../src/base/util/env.js';
+import { testInfra } from '../_helpers/infra.js';
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): SlackFallback => ({ hostTenant: envTenant(), allowUnknown });
@@ -357,7 +358,7 @@ describe('Slack hardening + migration v19', () => {
     // Replay using the current secret. Use a wide skew override so the test is
     // not flaky against the now/skew check inside verifySlackSignature.
     const result = await replayDlqEntry(
-      { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root) },
+      { tenantId: 'default', store: sqliteStore(root), config: loadConfig(root), infra: testInfra() },
       dlqId,
       { signingSecret: SECRET, now: Number(ts), skewSeconds: 60 },
     );

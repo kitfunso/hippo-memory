@@ -12,13 +12,12 @@ import {
 } from '../../src/store/sqlite/compactions-record.js';
 import { storeLesson } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';
-import { snapshotFields, WORKING_STATE_CAPS } from '../../src/surface/capture/working-state.js';
+import { snapshotFields, WORKING_STATE_CAPS } from '../../src/domain/capture/working-state.js';
 import { compactResumeText } from '../../src/api/context-render.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
-import type { Context } from '../../src/api/types.js';
-import { bindSessionOwner, compactResumeForCaller } from '../../src/server.js';
+import { bindSessionOwner, compactResumeForCaller, type Context } from '../../src/server.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { handlesOf, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { sqliteCompactionHooks } from '../../src/store/sqlite/compaction-hooks.js';
 import {
   ALICE,
@@ -52,7 +51,7 @@ useCallerStore();
 describe('recordSummary for a caller', () => {
   it("takes the caller's project with no request id, on a store that may predate the column", () => {
     withDb((db) => {
-      const rec = recordSummary(db, root, TENANT, {
+      const rec = recordSummary(db, storeFilesOf(root), TENANT, {
         meta: META,
         text: { summary: '', items: [] },
         at: new Date(),
@@ -74,7 +73,7 @@ describe('saveItems for a caller', () => {
         cwd: null,
         items: [ITEMS[1]],
       };
-      expect(saveItems(db, { hippoRoot: root }, ctx, noLog, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
+      expect(saveItems(db, storeFilesOf(root), ctx, noLog, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
       expect(writtenRows(db, 'compaction:s2')).toEqual([
         { content: ITEMS[1], origin_project: null, actor: 'post-compact' },
       ]);

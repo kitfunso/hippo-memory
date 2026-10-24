@@ -18,6 +18,7 @@ import type { SharingStore } from './text-keys.js';
 import type { EntrySignals, PageRequest, StoreGroups, StoreHome, StoreWith } from '../../store/port.js';
 import type { EntryCursor } from '../../store/port/types.js';
 import type { Captures } from '../../store/port/capture.js';
+import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
 const PROJECT_SPECIFIC_TAGS = new Set([
@@ -98,9 +99,6 @@ const AUTO_SHARE_SIGNALS: EntrySignals = {
   minRetrievals: REUSED_AFTER_RETRIEVALS,
   valences: ['negative', 'critical'],
 };
-
-/** Rows autoShare reads, and shares, per page, so neither a read nor a write holds a whole tenant. */
-const AUTO_SHARE_PAGE_ROWS = 500;
 
 /** Estimate how well a memory would transfer to other projects.
  *  Returns 0..1 where >0.5 = good candidate for sharing. */
@@ -290,7 +288,7 @@ async function* autoSharePages(
 ): AsyncGenerator<MemoryEntry[]> {
   let after: EntryCursor | null = null;
   do {
-    const page: PageRequest = { limit: AUTO_SHARE_PAGE_ROWS, after: after ?? undefined };
+    const page: PageRequest = { limit: READ_PAGE_ROWS, after: after ?? undefined };
     const { entries, next } =
       minScore > TRANSFER_WEIGHTS.neutral
         ? await sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, tenantId, page)
@@ -333,7 +331,7 @@ async function shareCandidates(
 ): Promise<MemoryEntry[]> {
   const shared: MemoryEntry[] = [];
   let rejectedSkipped = 0;
-  for (const page of chunked(candidates, AUTO_SHARE_PAGE_ROWS)) {
+  for (const page of chunked(candidates, READ_PAGE_ROWS)) {
     const written = await sharePage(local, to, page);
     shared.push(...written.shared);
     rejectedSkipped += written.refused;

@@ -2,12 +2,7 @@
 // containers its store now syncs.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import {
-  isInitialized,
-  projectNames,
-  resolveGlobalRootDir,
-  resolveProjectIdentity,
-} from '../../base/scope/project-identity.js';
+import { projectNames } from '../../base/scope/project-identity.js';
 import type { ContainerApply, ImportStep, MirrorFailure } from '../../store/port/agent-import.js';
 import type { ContainerWork } from './container-view.js';
 import { namesFoldedInto } from './project-folds.js';
@@ -22,14 +17,14 @@ export async function handOver(
   opts: Pick<SyncOptions, 'stores' | 'busyWaitMs' | 'tenantId' | 'machine'>,
   report: ImportReport,
 ): Promise<void> {
-  const globalRoot = resolveGlobalRootDir();
-  if (synced.length === 0 || !isInitialized(globalRoot)) return;
+  const globalRoot = opts.machine.globalRoot();
+  if (synced.length === 0 || !opts.stores.exists(globalRoot)) return;
   let store: ImportStore | undefined;
   try {
     store = opts.stores.open(globalRoot, { busyWaitMs: opts.busyWaitMs });
     // A folder with no git and no marker wrote as '' before its store existed, and as its own name after.
     // Names folded into this project's in the global store were its rows too.
-    const names = projectNames(resolveProjectIdentity(projectRoot));
+    const names = projectNames(opts.machine.projectIdentity(projectRoot));
     const folded = await namesFoldedInto(store.projectTags, opts.tenantId, names);
     const origins = [...new Set([...names, ...folded, ''])];
     const at = { origins, tenantId: opts.tenantId, machine: opts.machine, report };

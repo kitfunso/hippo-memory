@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { escapeRegex } from '../../src/base/util/escape.js';
 import { installCopilot } from '../../src/surface/hooks-install/copilot.js';
 import { installJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
-import { resolveJsonHookPaths } from '../../src/domain/hooks/json-hooks.js';
+import { resolveJsonHookPaths } from '../../src/surface/hooks-install/json-hooks.js';
 import { installOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';
 import { registerWorkspace, workspaceRegistryPath } from '../../src/surface/cli/scheduler.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';

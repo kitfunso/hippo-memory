@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { gatedWrite } from '../../src/store/sqlite/gated-write.js';
 import { createMemory, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
@@ -11,7 +11,7 @@ import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { initProject, removeScratch, runHippo, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
-import { openStore } from '../../src/store/sqlite/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -59,7 +59,7 @@ describe('the shared gated write', () => {
 
   it('writes a worthwhile row on the caller handle, stamped with the store origin, and audits it', () => {
     const entry = entryFor('The billing service uses pnpm, so npm install is never run there.');
-    expect(gatedWrite(db, s.hippoRoot, entry)).toBe('written');
+    expect(gatedWrite(db, storeFilesOf(s.hippoRoot), entry)).toBe('written');
     expect(readEntry(s.hippoRoot, entry.id)).toMatchObject({ content: entry.content, originProject: 'proj' });
     expect(queryAuditEvents(db, { tenantId: 'default', op: 'remember' }).map((e) => e.targetId)).toContain(entry.id);
   });
@@ -69,20 +69,20 @@ describe('the shared gated write', () => {
       ...entryFor('The billing service uses pnpm, so npm install is never run there.'),
       originProject: 'elsewhere',
     };
-    expect(gatedWrite(db, s.hippoRoot, entry)).toBe('written');
+    expect(gatedWrite(db, storeFilesOf(s.hippoRoot), entry)).toBe('written');
     expect(readEntry(s.hippoRoot, entry.id)?.originProject).toBe('elsewhere');
   });
 
   it('skips text that is not worth storing', () => {
     const entry = entryFor('fix stuff');
-    expect(gatedWrite(db, s.hippoRoot, entry)).toBe('skipped:not-worth-storing');
+    expect(gatedWrite(db, storeFilesOf(s.hippoRoot), entry)).toBe('skipped:not-worth-storing');
     expect(readEntry(s.hippoRoot, entry.id)).toBeNull();
   });
 
   it('skips a row that holds a secret', () => {
     const token = 'ghp_' + 'd'.repeat(36);
     const entry = entryFor(`The release bot deploys with the token ${token} so rotate it monthly.`);
-    expect(gatedWrite(db, s.hippoRoot, entry)).toBe('skipped:secret');
+    expect(gatedWrite(db, storeFilesOf(s.hippoRoot), entry)).toBe('skipped:secret');
     expect(readEntry(s.hippoRoot, entry.id)).toBeNull();
   });
 
@@ -90,7 +90,7 @@ describe('the shared gated write', () => {
     const text = 'The old staging password rotation runs every Friday at noon by hand.';
     reject(text);
     const entry = entryFor(text);
-    expect(gatedWrite(db, s.hippoRoot, entry, { actor: 'post-compact' })).toBe('skipped:rejected');
+    expect(gatedWrite(db, storeFilesOf(s.hippoRoot), entry, { actor: 'post-compact' })).toBe('skipped:rejected');
     expect(readEntry(s.hippoRoot, entry.id)).toBeNull();
     const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
     expect(refusals).toHaveLength(1);
@@ -102,10 +102,10 @@ describe('the shared gated write', () => {
     const undone = entryFor('The billing service uses pnpm, so npm install is never run there.');
     const kept = entryFor('The search service cache must be flushed after every deploy.');
     db.exec('BEGIN IMMEDIATE');
-    expect(gatedWrite(db, s.hippoRoot, undone)).toBe('written');
+    expect(gatedWrite(db, storeFilesOf(s.hippoRoot), undone)).toBe('written');
     db.exec('ROLLBACK');
     db.exec('BEGIN IMMEDIATE');
-    expect(gatedWrite(db, s.hippoRoot, kept)).toBe('written');
+    expect(gatedWrite(db, storeFilesOf(s.hippoRoot), kept)).toBe('written');
     db.exec('COMMIT');
     expect(readEntry(s.hippoRoot, undone.id)).toBeNull();
     expect(readEntry(s.hippoRoot, kept.id)).not.toBeNull();
@@ -115,11 +115,19 @@ describe('the shared gated write', () => {
     reject('The old staging password rotation runs every Friday at noon by hand.');
     db.exec('BEGIN IMMEDIATE');
     expect(
-      gatedWrite(db, s.hippoRoot, entryFor('The old staging password rotation runs every Friday at noon by hand.')),
+      gatedWrite(
+        db,
+        storeFilesOf(s.hippoRoot),
+        entryFor('The old staging password rotation runs every Friday at noon by hand.'),
+      ),
     ).toBe('skipped:rejected');
-    expect(gatedWrite(db, s.hippoRoot, entryFor('The search service cache must be flushed after every deploy.'))).toBe(
-      'written',
-    );
+    expect(
+      gatedWrite(
+        db,
+        storeFilesOf(s.hippoRoot),
+        entryFor('The search service cache must be flushed after every deploy.'),
+      ),
+    ).toBe('written');
     db.exec('COMMIT');
     expect(loadAllEntries(s.hippoRoot, 'default')).toHaveLength(1);
   });

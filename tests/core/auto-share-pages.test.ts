@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { autoShare } from '../../src/domain/sharing/share.js';
-import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
+import { getGlobalRoot } from '../../src/host/global-store.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { mergedText } from '../../src/base/util/same-text.js';

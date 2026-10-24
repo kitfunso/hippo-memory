@@ -7,7 +7,7 @@ import { isObjectLike, isStringValue } from '../../base/session/capture-contract
 import type { CompactionText, StepFailure } from '../../store/port/capture.js';
 import type { PostCompactPayload } from './compaction-record.js';
 import { isStoreBusy } from '../../store/port.js';
-import { errorMessage } from '../../base/util/log.js';
+import { errorCode, errorMessage } from '../../base/util/log.js';
 import { tryParseJson } from '../../base/util/json.js';
 
 const STAMP_DIGITS = 13;
@@ -105,10 +105,6 @@ const stamp = (ms: number): string => String(Math.trunc(ms)).padStart(STAMP_DIGI
 const isTime = <T>(value: T): value is T & number => typeof value === 'number' && Number.isFinite(value);
 const idle = new Int32Array(new SharedArrayBuffer(4));
 
-function errCode(cause: unknown): string {
-  return cause instanceof Error && 'code' in cause && isStringValue(cause.code) ? cause.code : '';
-}
-
 /**
  * Runs one fs step, retrying a busy code briefly; '' when it ran, else the busy code it kept hitting. Any other error
  * throws.
@@ -119,7 +115,7 @@ function retryBusy(step: () => void): string {
       step();
       return '';
     } catch (err) {
-      const code = errCode(err);
+      const code = errorCode(err);
       if (!BUSY_CODES.has(code)) throw err;
       if (retry === BUSY_RETRIES) return code;
       Atomics.wait(idle, 0, 0, BUSY_WAIT_MS);
@@ -136,7 +132,7 @@ function settleCode(step: () => void, log: Log, what: string): SettledStep {
     const code = retryBusy(step);
     return { settled: code === '' ? 'done' : 'busy', code };
   } catch (err) {
-    const code = errCode(err);
+    const code = errorCode(err);
     if (code === 'ENOENT') return { settled: 'gone', code };
     log(`${SPOOL_PROBLEM}${what}: ${errorMessage(err)}`);
     return { settled: 'busy', code };
@@ -274,7 +270,7 @@ function createLock(fsx: SpoolFs, lock: string, body: string, log: Log): 'taken'
     fsx.writeFileSync(lock, body, { encoding: 'utf8', flag: 'wx' });
     return 'taken';
   } catch (err) {
-    const code = errCode(err);
+    const code = errorCode(err);
     if (code === 'EEXIST') return 'exists';
     // Windows refuses a create while a delete of the same name is pending, and the folder may have just gone.
     if (code !== 'ENOENT' && !BUSY_CODES.has(code)) log(`spool lock not taken: ${errorMessage(err)}`);
@@ -624,7 +620,7 @@ function mtimeOf(fsx: SpoolFs, file: string): number | null {
   try {
     return fsx.statSync(file).mtimeMs;
   } catch (err) {
-    const code = errCode(err);
+    const code = errorCode(err);
     // Moved by a replay after the listing, or held by another program: left out of this count rather than failing it.
     if (code === 'ENOENT' || BUSY_CODES.has(code)) return null;
     throw err;

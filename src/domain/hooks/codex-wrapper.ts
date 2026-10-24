@@ -3,7 +3,7 @@
 import * as path from 'path';
 import { PACKAGE_ROOT } from '../../base/config/package-root.js';
 import { HIPPO_CODEX_WRAPPER_MARKER } from './shared.js';
-import { homeDir, codexHomeDir } from '../../base/util/agent-homes.js';
+import { HIPPO_DIR, codexHomeDir, userHome, type Homes } from '../../base/util/agent-homes.js';
 import { isJsonString } from '../../base/util/json.js';
 
 export interface CodexWrapperPaths {
@@ -47,18 +47,19 @@ export interface EnsureCodexWrapperResult {
   backupPath?: string;
 }
 
-export function resolveCodexWrapperPaths(): CodexWrapperPaths {
-  const home = homeDir();
-  const codexHome = codexHomeDir(home);
-  const wrapperDir = path.join(home, '.hippo', 'bin');
+/** Where the wrapper, its metadata and its logs live under the machine's home folder. */
+export function codexWrapperPathsOn(homes: Homes): CodexWrapperPaths {
+  const home = userHome(homes);
+  const codexHome = codexHomeDir(home, homes.env);
+  const wrapperDir = path.join(home, HIPPO_DIR, 'bin');
   return {
     wrapperDir,
-    metadataPath: path.join(home, '.hippo', 'integrations', 'codex.json'),
+    metadataPath: path.join(home, HIPPO_DIR, 'integrations', 'codex.json'),
     wrapperCmdPath: path.join(wrapperDir, 'codex.cmd'),
     wrapperPs1Path: path.join(wrapperDir, 'codex.ps1'),
     wrapperShPath: path.join(wrapperDir, 'codex'),
-    logFile: path.join(home, '.hippo', 'logs', 'codex-sleep.log'),
-    runsDir: path.join(home, '.hippo', 'runs', 'codex'),
+    logFile: path.join(home, HIPPO_DIR, 'logs', 'codex-sleep.log'),
+    runsDir: path.join(home, HIPPO_DIR, 'runs', 'codex'),
     codexHome,
     historyPath: path.join(codexHome, 'history.jsonl'),
   };

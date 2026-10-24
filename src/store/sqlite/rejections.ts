@@ -27,11 +27,9 @@ import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { openStore } from './handles.js';
 import { bound } from './bound.js';
 import type { EntryCursor } from '../port/types.js';
+import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
 type HoldsValue = (text: string) => boolean;
-
-/** Rows a rejection reads per page while it looks for the rows that hold its text. */
-const HOLDER_PAGE_ROWS = 500;
 
 /** What one rejection removed and wrote, gathered across the live and dormant passes. */
 interface Removal {
@@ -63,14 +61,14 @@ function findHolderIds(db: DatabaseSyncLike, rejection: Rejection, holdsValue: H
   };
   let after: EntryCursor | null = null;
   do {
-    const page = selectTenantTextsPage(db, tenantId, { limit: HOLDER_PAGE_ROWS, after: after ?? undefined });
+    const page = selectTenantTextsPage(db, tenantId, { limit: READ_PAGE_ROWS, after: after ?? undefined });
     page.texts.forEach(keep);
     after = page.next;
   } while (after !== null);
   for (let afterId = ''; ;) {
-    const page = dormantTextsPage(db, tenantId, { limit: HOLDER_PAGE_ROWS, afterId });
+    const page = dormantTextsPage(db, tenantId, { limit: READ_PAGE_ROWS, afterId });
     page.forEach(keep);
-    if (page.length < HOLDER_PAGE_ROWS) return found;
+    if (page.length < READ_PAGE_ROWS) return found;
     afterId = page[page.length - 1].id;
   }
 }
@@ -110,7 +108,7 @@ interface Sweep {
   readonly removal: Removal;
 }
 
-function removeLiveRows(db: DatabaseSyncLike, hippoRoot: string, sweep: Sweep): void {
+function removeLiveRows(db: DatabaseSyncLike, files: StoreFiles, sweep: Sweep): void {
   const { rejection, holdsValue, removal } = sweep;
   const { live } = sweep.holders;
   const { tenantId, actor, reason } = rejection;
@@ -131,7 +129,7 @@ function removeLiveRows(db: DatabaseSyncLike, hippoRoot: string, sweep: Sweep): 
     deleteEntryCore(db, row.id, tenantId, { actor, suppressForgetAudit: true });
     removedIds.push(row.id);
     if (!successor) continue;
-    const kept = stampOriginProject(hippoRoot, successor);
+    const kept = stampOriginProject(files, successor);
     writeEntryDbOnly(db, kept, { actor });
     successors.push(kept);
   }
@@ -178,7 +176,7 @@ function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: R
 /** One short write scope: every found row that still holds the text goes, with one reject_value audit row. */
 function removeHolders(
   db: DatabaseSyncLike,
-  hippoRoot: string,
+  files: StoreFiles,
   rejection: Rejection,
   { digest, holdsValue }: { digest: string; holdsValue: HoldsValue },
   found: string[],
@@ -186,7 +184,7 @@ function removeHolders(
   const removal: Removal = { removedIds: [], removedRawIds: [], successors: [], dormantSuccessorIds: [] };
   withWriteScope(db, 'reject_value', () => {
     const sweep = { rejection, holdsValue, holders: heldUnderLock(db, rejection, holdsValue, found), removal };
-    removeLiveRows(db, hippoRoot, sweep);
+    removeLiveRows(db, files, sweep);
     removeDormantCopies(db, sweep);
     // Still inside the write scope: a failed audit row is reported and the removal commits without it.
     const { tenantId, actor, memoryId } = rejection;
@@ -225,7 +223,7 @@ function applyRejection(db: DatabaseSyncLike, files: StoreFiles, rejection: Reje
   // migration, held until approved.
   const holdsValue: HoldsValue = (text) => rejectionDigest(text) === digest;
   const found = findHolderIds(db, rejection, holdsValue);
-  const removal = removeHolders(db, hippoRoot, rejection, { digest, holdsValue }, found);
+  const removal = removeHolders(db, files, rejection, { digest, holdsValue }, found);
 
   purgeRemovedMirrors(db, hippoRoot, removal);
 

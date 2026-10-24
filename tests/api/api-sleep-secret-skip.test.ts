@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { sleep, adminActor } from '../../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { getGlobalRoot } from '../../src/domain/sharing/global-store.js';
+import { getGlobalRoot } from '../../src/host/global-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';

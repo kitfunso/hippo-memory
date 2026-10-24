@@ -13,7 +13,7 @@ import type {
 import * as handoffsSql from '../../../src/store/sqlite/handoffs.js';
 import * as indexAndStatsSql from '../../../src/store/sqlite/index-and-stats.js';
 import { readLastRecall } from '../../../src/store/sqlite/mirrors.js';
-import { onHandle, openStore } from '../../../src/store/sqlite/handles.js';
+import { onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/handles.js';
 import type { HippoIndex } from '../../../src/store/sqlite/rows.js';
 import * as sessionsSql from '../../../src/store/sqlite/sessions.js';
 import * as taskSnapshotsSql from '../../../src/store/sqlite/task-snapshots.js';
@@ -48,7 +48,7 @@ export function stampHandoffOutcome(
 export function writeSessionEndHandoff(hippoRoot: string, request: SessionEndHandoffRequest): SessionHandoff | null {
   return onHandle(
     hippoRoot,
-    (db) => handoffsSql.writeSessionEndHandoff(db, { hippoRoot }, request.tenantId, request),
+    (db) => handoffsSql.writeSessionEndHandoff(db, storeFilesOf(hippoRoot), request.tenantId, request),
     openStore,
   );
 }
@@ -66,14 +66,18 @@ export function updateStatsUnlessBusy(
   delta: Parameters<typeof indexAndStatsSql.updateStatsUnlessBusy>[2],
   committed: string,
 ): void {
-  onHandle(hippoRoot, (db) => indexAndStatsSql.updateStatsUnlessBusy(db, { hippoRoot }, delta, committed), openStore);
+  onHandle(
+    hippoRoot,
+    (db) => indexAndStatsSql.updateStatsUnlessBusy(db, storeFilesOf(hippoRoot), delta, committed),
+    openStore,
+  );
 }
 
 export function appendConsolidationRun(
   hippoRoot: string,
   run: { timestamp: string; decayed: number; merged: number; removed: number },
 ): void {
-  onHandle(hippoRoot, (db) => indexAndStatsSql.appendConsolidationRun(db, { hippoRoot }, run), openStore);
+  onHandle(hippoRoot, (db) => indexAndStatsSql.appendConsolidationRun(db, storeFilesOf(hippoRoot), run), openStore);
 }
 
 export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext {
@@ -83,7 +87,7 @@ export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext 
 export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?: ContinuityKey): TaskSnapshot | null {
   return onHandle(
     hippoRoot,
-    (db) => taskSnapshotsSql.loadActiveTaskSnapshot(db, { hippoRoot }, tenantId, key),
+    (db) => taskSnapshotsSql.loadActiveTaskSnapshot(db, storeFilesOf(hippoRoot), tenantId, key),
     openStore,
   );
 }
@@ -170,5 +174,5 @@ export async function wmClear(
 }
 
 export function updateStats(hippoRoot: string, delta: Parameters<typeof indexAndStatsSql.updateStats>[2]): void {
-  onHandle(hippoRoot, (db) => indexAndStatsSql.updateStats(db, { hippoRoot }, delta), openStore);
+  onHandle(hippoRoot, (db) => indexAndStatsSql.updateStats(db, storeFilesOf(hippoRoot), delta), openStore);
 }

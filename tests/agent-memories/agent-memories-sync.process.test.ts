@@ -11,7 +11,7 @@ import type { ImportReport } from '../../src/domain/agent-memories/report.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { deriveOriginProject, isInitialized } from '../../src/base/scope/project-identity.js';
+import { deriveOriginProject, isInitialized } from '../../src/host/project-identity.js';
 import { removeEntryMirrors } from '../../src/store/sqlite/mirrors.js';
 import { deleteEntryRowInTx } from '../../src/store/sqlite/entry-writes.js';
 import {
@@ -32,7 +32,7 @@ import {
   withDb,
   type World,
 } from '../_helpers/agent-memories-world.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';

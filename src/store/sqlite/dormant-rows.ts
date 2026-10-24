@@ -107,10 +107,12 @@ function rowToDormantMemory(row: DormantRow): DormantMemory {
   };
 }
 
+/** A field of the snapshot JSON, NULL when the stored text is not valid JSON. */
+const entryField = (field: string): string =>
+  `CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.${field}') END`;
+
 // The snapshot's scope as a `scope` column, so recall-scope's SQL fragments read it as they read memories.scope.
-const DORMANT_WITH_SCOPE =
-  `(SELECT *, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END ` +
-  `AS scope FROM dormant_memories)`;
+const DORMANT_WITH_SCOPE = `(SELECT *, ${entryField('scope')} AS scope FROM dormant_memories)`;
 
 /** A tenant's dormant memories whose scope `admit` passes, newest first, optionally filtered by search terms. */
 export function listDormantRows(
@@ -153,7 +155,7 @@ export function dormantSnapshotsBySourcePrefix(
     `SELECT ${DORMANT_COLUMNS}
        FROM dormant_memories
       WHERE tenant_id = ?
-        AND CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END LIKE ? ESCAPE '\\'`,
+        AND ${entryField('source')} LIKE ? ESCAPE '\\'`,
   ).all(tenantId, `${escapeLike(prefix)}%`) as DormantRow[];
   return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => String(s.entry.source).startsWith(prefix));
 }
@@ -165,7 +167,7 @@ export function dormantSnapshotsFromOrigin(db: DatabaseSyncLike, tenantId: strin
     `SELECT ${DORMANT_COLUMNS}
        FROM dormant_memories
       WHERE tenant_id = ?
-        AND CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.origin_project') END = ?`,
+        AND ${entryField('origin_project')} = ?`,
   ).all(tenantId, origin) as DormantRow[];
   return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => s.entry.originProject === origin);
 }
@@ -216,9 +218,7 @@ interface DormantText {
   readonly scope: string | null;
 }
 
-const DORMANT_TEXT_COLUMNS =
-  `id, content, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END AS source, ` +
-  `CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END AS scope`;
+const DORMANT_TEXT_COLUMNS = `id, content, ${entryField('source')} AS source, ${entryField('scope')} AS scope`;
 
 /**
  * Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a text match reads.

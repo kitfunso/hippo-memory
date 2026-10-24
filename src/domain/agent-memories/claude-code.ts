@@ -1,7 +1,7 @@
 // Claude Code's auto memory: frontmatter `.md` notes in a per-project folder, plus the `autoMemoryDirectory` user
 // folder.
 import path from 'node:path';
-import { resolveProjectIdentity, type ProjectIdentity } from '../../base/scope/project-identity.js';
+import { type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { isStringValue } from '../../base/session/capture-contract.js';
 import { claudeConfigDir } from '../../base/util/agent-homes.js';
 import type { AgentFiles } from '../../base/util/agent-files.js';
@@ -80,7 +80,7 @@ export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: str
 export function transcriptNotesProject(
   transcriptPath: string,
   cwd: string | null,
-  machine: Pick<AdapterContext, 'platform' | 'env' | 'files'>,
+  machine: Pick<AdapterContext, 'platform' | 'env' | 'files' | 'projectIdentity'>,
 ): ProjectIdentity | null {
   const fold = (name: string) => (machine.platform === 'win32' ? name.toLowerCase() : name);
   const folder = fold(path.basename(path.dirname(transcriptPath)));
@@ -89,7 +89,7 @@ export function transcriptNotesProject(
   if (pinned !== null && fold(pinned) === folder) {
     // A pinned name stands for whatever project the session ran in, so its start folder decides.
     const from = start ?? cwd;
-    return from !== null && machine.files.exists(from) ? resolveProjectIdentity(from) : null;
+    return from !== null && machine.files.exists(from) ? machine.projectIdentity(from) : null;
   }
   for (const from of [start, cwd]) {
     for (
@@ -99,7 +99,7 @@ export function transcriptNotesProject(
     ) {
       // A folder gone from disk resolves to its bare name, never the project it was in, so it decides nothing.
       if ([dir, machine.files.realPath(dir)].some((d) => fold(claudeFolderName(d)) === folder)) {
-        return machine.files.exists(dir) ? resolveProjectIdentity(dir) : null;
+        return machine.files.exists(dir) ? machine.projectIdentity(dir) : null;
       }
     }
   }

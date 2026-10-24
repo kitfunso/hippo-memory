@@ -5,7 +5,7 @@ import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server
 import { validateToolArgs, type ToolInputSchema } from '../../src/surface/mcp/tool-args.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 import { testInfra } from '../_helpers/infra.js';

@@ -1,4 +1,5 @@
 // Project ids in real stores: two `api` repos sharing a global store, the upgrade re-sync, folds the sync follows, and the repairs.
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { diskAgentFiles } from '../../src/infra/agent-files.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -13,7 +14,7 @@ import { diagnosticsBodies } from '../_helpers/cli-stores.js';
 import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { projectNameRepair, projectNameRepairOnce } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
-import { resolveProjectIdentity } from '../../src/base/scope/project-identity.js';
+import { resolveProjectIdentity } from '../../src/host/project-identity.js';
 import { loadRecallSearchEntries } from '../../src/store/sqlite/folder-forms.js';
 import {
   closeWorld,
@@ -26,7 +27,7 @@ import {
   withDb,
   type World,
 } from '../_helpers/agent-memories-world.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
@@ -100,7 +101,7 @@ async function nextProcess() {
     import('../../src/api/objects/projects.js'),
     import('../../src/surface/cli/api-context.js'),
     import('../../src/store/sqlite/agent-import-stores.js'),
-    import('../../src/base/config/config.js'),
+    import('../../src/host/config-file.js'),
   ]);
   return {
     sync: (cwd: string) =>
@@ -172,7 +173,7 @@ describe('two repos named api in one global store', () => {
     const written = withDb(w.global, (db) =>
       saveItems(
         db,
-        { hippoRoot: w.global },
+        storeFilesOf(w.global),
         {
           tenantId: T,
           recordId: null,
@@ -192,7 +193,7 @@ describe('two repos named api in one global store', () => {
     const written = withDb(w.global, (db) =>
       saveItems(
         db,
-        { hippoRoot: w.global },
+        storeFilesOf(w.global),
         {
           tenantId: T,
           recordId: null,

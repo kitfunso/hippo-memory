@@ -24,7 +24,7 @@ import { createCallerState } from '../../src/api/callers.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { memorySide } from '../_helpers/memory-side.js';
 import { testInfra } from '../_helpers/infra.js';
 
@@ -81,7 +81,14 @@ describe('the api with ctx.store', () => {
   it('writes through entryWrites with hippo.db blocked, and creates no hippo.db in hippoRoot', async () => {
     const hippoRoot = markedFolder();
     const memory = memorySide(copyOf());
-    const ctx = { hippoRoot, tenantId: TENANT_A, actor: admin, store: memory.store, config: loadConfig(hippoRoot) };
+    const ctx = {
+      hippoRoot,
+      tenantId: TENANT_A,
+      actor: admin,
+      store: memory.store,
+      config: loadConfig(hippoRoot),
+      infra: testInfra(),
+    };
     await withSqliteBlocked('in-memory', async () => {
       const raw = await remember(ctx, { content: 'raw call transcript about the outage', kind: 'raw' });
       const note = await remember(ctx, { content: 'deploys go out on tuesdays' });

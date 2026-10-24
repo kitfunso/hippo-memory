@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { npmShimEntry } from '../../src/base/util/spawn-argv.js';
+import { npmShimEntry } from '../../src/host/spawn-argv.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 let dir: string;

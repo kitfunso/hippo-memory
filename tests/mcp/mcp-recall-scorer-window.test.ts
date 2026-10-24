@@ -17,7 +17,7 @@ import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server
 import { RecallContractError } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';

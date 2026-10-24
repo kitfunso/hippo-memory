@@ -4,11 +4,12 @@
 import type { MemoryEntry } from '../base/memory/memory.js';
 import type { SearchResult } from '../base/rank/search-types.js';
 import type { OriginFilter } from '../store/port/types.js';
-import { defaultStore, loadRecallSearchEntries as loadRecallByOptions } from '../surface/open-store.js';
+import { defaultStore } from '../surface/open-store.js';
+import { loadRecallSearchEntries as loadRecallByOptions } from '../surface/testing-kit.js';
 import type { TenantId } from '../base/util/tenant.js';
 import { embedMemory as embedInto, folderIndex, type EmbedOutcome } from '../domain/search/embed-memories.js';
 import { hybridSearch as rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../domain/search/hybrid.js';
-import { loadConfig } from '../base/config/config.js';
+import { loadConfig } from '../host/config-file.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { physicsSearch as rankPhysics, type PhysicsSearchOptions } from '../domain/search/physics-search.js';
 import type { VectorSource } from '../domain/search/vector.js';

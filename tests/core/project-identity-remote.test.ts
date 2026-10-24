@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { projectNames, resolveProjectIdentity } from '../../src/base/scope/project-identity.js';
-import { normalizeRemote, originUrlFromConfig } from '../../src/base/scope/project-remote.js';
+import { projectNames } from '../../src/base/scope/project-identity.js';
+import { resolveProjectIdentity } from '../../src/host/project-identity.js';
+import { normalizeRemote, originUrlFromConfig } from '../../src/host/project-remote.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

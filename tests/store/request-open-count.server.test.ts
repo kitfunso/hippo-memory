@@ -11,9 +11,10 @@ import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import { retrieve, remember } from '../../src/api/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
+import { withEntryInfra } from '../../src/surface/entry-infra.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -104,7 +105,8 @@ beforeAll(async () => {
   // An add-on route that runs two api helpers, as a hook route does.
   const addon: AddonRoute = {
     path: '/v1/test/remember-then-recall',
-    handler: async ({ ctx }) => {
+    handler: async ({ ctx: given }) => {
+      const ctx = withEntryInfra(given);
       await remember(ctx, { content: 'the release train leaves every second Wednesday' });
       return { total: (await retrieve(ctx, { query: 'release train' })).total };
     },

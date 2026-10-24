@@ -2,7 +2,7 @@
 // scanning. Node records have one size and sit in rowid order, so a search reads only the records it reaches.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { writeFileAtomic } from '../base/util/atomic-write.js';
+import { writeFileAtomic } from '../host/atomic-write.js';
 import { isJsonObject, isJsonString, tryParseJson } from '../base/util/json.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
 import { getHippoDbPath } from './connect.js';

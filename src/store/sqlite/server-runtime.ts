@@ -1,5 +1,6 @@
 // What a server serves hippo.db with, built in one place: the worker store, the connection held beside it, the global
 // stores and the worker counts, so a server root never names the executor or the holder.
+import { createHost, type Host } from '../../host/host.js';
 import type { HippoStore, StoreReach } from '../port.js';
 import { createSqliteExecutor, type ExecutorOptions } from './executor.js';
 import { workerCounts } from './executor-counts.js';
@@ -11,11 +12,15 @@ import { globalStoresFor, workerSqliteStore } from './worker-store.js';
 export interface ServerRuntimeOptions extends ExecutorOptions {
   /** Served in place of hippo.db's worker store; the caller built it, so close() leaves it open. */
   readonly store?: HippoStore | undefined;
+  /** The server root's Host, which every request's reach probes through. */
+  readonly host?: Host | undefined;
 }
 
 /** The served store and what a listener calls around each response; close() ends it all, the held connection last. */
 export interface SqliteServerRuntime extends Omit<StoreHolder, 'release'> {
   readonly store: HippoStore;
+  /** The Host this server root keeps for its life; its ports and every reach share it. */
+  readonly host: Host;
   /** The store is hippo.db rather than a caller's own, so its folder's config.json decides shared-ness. */
   readonly onHippoDb: boolean;
   /** What a request's store call reaches, probed per request (`shared` is the transport's flag). */
@@ -30,14 +35,15 @@ export interface SqliteServerRuntime extends Omit<StoreHolder, 'release'> {
 
 /** hippo.db under `hippoRoot` as a server runs it: `opts.store` when given, else a worker store on `opts`' executor. */
 export function sqliteServerRuntime(hippoRoot: string, opts: ServerRuntimeOptions = {}): SqliteServerRuntime {
-  const { store: given, ...executorOpts } = opts;
+  const { store: given, host = createHost(), ...executorOpts } = opts;
   const store = given ?? workerSqliteStore(hippoRoot, createSqliteExecutor(hippoRoot, executorOpts), executorOpts);
   const globalStores = globalStoresFor(store, executorOpts);
   const holder = createStoreHolder(hippoRoot, store);
   return {
     store,
+    host,
     onHippoDb: isHippoDbStore(store),
-    reachOf: (shared) => sqliteReach(hippoRoot, store, shared, globalStores.open),
+    reachOf: (shared) => sqliteReach(hippoRoot, store, shared, globalStores.open, host),
     offLoop: offLoopFor(store),
     outsideRouteBlock,
     workerCounts,

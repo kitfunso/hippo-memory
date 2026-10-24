@@ -8,7 +8,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { replaceDetectedConflicts, listMemoryConflicts, readEntry, writeEntry } from '../_helpers/root-forms.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
 
@@ -151,6 +151,7 @@ describe('conflictResolve', () => {
     actor: adminActor('test'),
     store: sqliteStore(root),
     config: loadConfig(root),
+    infra: testInfra(),
   });
 
   it("answers a resolved conflict with 409 and another tenant's with 404", async () => {

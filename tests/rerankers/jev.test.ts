@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
-import { realRerankers } from '../../src/infra/rerankers.js';
-import { createJevReranker } from '../../src/domain/rerankers/jev.js';
+import { realRerankers } from '../../src/infra/rerankers/index.js';
+import { createJevReranker } from '../../src/infra/rerankers/jev.js';
 import { processHttp } from '../../src/infra/http.js';
 import type { RerankerFn } from '../../src/base/ports/reranker.js';
 

@@ -8,7 +8,7 @@ import { retrieve, retrieveRanking } from '../../src/api/recall/recall.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { adminActor, type RecallOptions } from '../../src/api/index.js';
 import type { RankRecallOptions } from '../../src/api/recall/pipeline.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { setMeta } from '../../src/db/index.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';

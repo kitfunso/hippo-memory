@@ -3,7 +3,7 @@
 export {
   MAX_PROJECT_ALIASES,
   MCP_PROJECT_SCOPED_HEADER,
-  resolveProjectIdentity,
   type ProjectIdentity,
   type ResolveProjectIdentityOpts,
 } from '../base/scope/project-identity.js';
+export { resolveProjectIdentity } from '../host/project-identity.js';

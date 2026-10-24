@@ -1,6 +1,6 @@
 // A write that fires its embedding and moves on must log a rejection from the embed path, never leave it unhandled.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { sharedLocalEmbedder } from '../../src/infra/local-embedder.js';

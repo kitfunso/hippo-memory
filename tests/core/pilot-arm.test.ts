@@ -1,8 +1,10 @@
 // CD11 units: config parsing, the arm helpers, the consumer's arm query, ledger readers and doctor.
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { loadConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
+import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -52,7 +54,7 @@ async function ensurePilotArm(
   rateBp: number,
   opts: { ownTenantOnly?: boolean } = {},
 ): Promise<PilotArm> {
-  const ledger = sqliteLedger((fn) => fn(handle, { hippoRoot: root }));
+  const ledger = sqliteLedger((fn) => fn(handle, storeFilesOf(root)));
   return ledger.pilotArm(tenantId, sessionId, rateBp, { write: true, ...opts });
 }
 

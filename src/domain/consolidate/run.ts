@@ -1,5 +1,5 @@
 import { MemoryEntry, type DecayOptions } from '../../base/memory/memory.js';
-import { loadConfig } from '../../base/config/config.js';
+import type { HippoConfig } from '../../base/config/config.js';
 import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import { NO_MERGE_TAGS } from '../sharing/share.js';
 import type { DormantMove, StrengthRefresh } from '../../store/port/consolidation.js';
@@ -17,7 +17,7 @@ export interface PhaseFailure {
 export interface ConsolidationResult {
   decayed: number;
   removed: number;
-  /** Faded memories moved to the dormant store instead of deleted (config `dormant.enabled`; src/store/dormant.ts).
+  /** Faded memories moved to the dormant store instead of deleted (config `dormant.enabled`; sqlite/dormant.ts).
    *  Always 0 when that is off. */
   dormant: number;
   /** Dormant memories deleted for good this sleep because they outlived `dormant.retentionDays` without a restore. */
@@ -84,7 +84,7 @@ export interface SleepRun {
   store: ConsolidationStore;
   now: Date;
   dryRun: boolean;
-  config: ReturnType<typeof loadConfig>;
+  config: HippoConfig;
   decayOpts: DecayOptions;
   result: ConsolidationResult;
   rows: SleepRows;

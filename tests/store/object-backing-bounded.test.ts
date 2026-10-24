@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { saveDecision } from '../../src/domain/objects/decisions.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { iterateRowsWithObjects } from '../../src/store/sqlite/entry-reads.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { objectsAt } from '../_helpers/objects-at.js';

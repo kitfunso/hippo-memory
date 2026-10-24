@@ -3,14 +3,14 @@ import * as os from 'os';
 import * as path from 'path';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { getHippoRoot } from '../../src/base/scope/project-identity.js';
+import { getHippoRoot } from '../../src/host/project-identity.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
 

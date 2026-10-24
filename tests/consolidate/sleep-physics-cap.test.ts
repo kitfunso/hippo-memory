@@ -4,8 +4,8 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { particlesToSimulate, physicsPass } from '../../src/domain/consolidate/physics-pass.js';
 import { newConsolidationResult, type SleepRun } from '../../src/domain/consolidate/run.js';
-import { SLEEP_PAGE_ROWS, SleepRows, Survivors } from '../../src/domain/consolidate/survivors.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { SleepRows, Survivors } from '../../src/domain/consolidate/survivors.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -15,6 +15,7 @@ import { tombstoneChecks } from '../../src/domain/consolidate/tombstones.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
+import { READ_PAGE_ROWS } from '../../src/base/util/pages.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -51,7 +52,7 @@ function storedParticles(root: string): Map<string, PhysicsParticle> {
 /** The state consolidate hands the physics pass after decay, with every entry a survivor and nothing pending. */
 function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
   const store = sqliteStore(root);
-  const rows = new SleepRows(store, new Map(), SLEEP_PAGE_ROWS);
+  const rows = new SleepRows(store, new Map(), READ_PAGE_ROWS);
   const survivors = new Survivors(rows);
   for (const e of entries) survivors.keep(e.id, e.strength);
   return {

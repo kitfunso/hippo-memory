@@ -1,6 +1,6 @@
 // Recall routes: /v1/memories search, assemble, drill and /v1/context.
 import { dirname, resolve } from 'node:path';
-import { assertCallerProject, resolveProjectIdentity, type ProjectRef } from '../../../base/scope/project-identity.js';
+import { assertCallerProject, type ProjectRef } from '../../../base/scope/project-identity.js';
 import { assembleCost, contextCost, drillCost } from '../../../api/context-render.js';
 import {
   assemble,
@@ -103,7 +103,7 @@ export async function handleDrillRecall({ res, ctx, query }: AuthedRouteRequest,
  * contextGet refuses.
  */
 function contextReader(ctx: Context, hippoRoot: string, query: URLSearchParams): ProjectRef {
-  if (!sharedStoreOf(ctx)) return resolveProjectIdentity(dirname(resolve(hippoRoot)));
+  if (!sharedStoreOf(ctx)) return ctx.infra.machine.projectIdentity(dirname(resolve(hippoRoot)));
   const name = query.get('project');
   if (name === null) return '';
   const aliases = query.getAll('alias');

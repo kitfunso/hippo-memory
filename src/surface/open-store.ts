@@ -20,7 +20,7 @@ export {
   type ServerRuntimeOptions,
   type SqliteServerRuntime as ServerRuntime,
 } from '../store/sqlite/index.js';
-// The published entries' own names: ./store-kit's default store and vector rules, and ./testing's hippo.db seams.
+// The published entries' own names: ./store-kit's default store and vector rules.
 export {
   decodeVector,
   EMBEDDING_MODEL_META_KEY,
@@ -31,20 +31,3 @@ export {
   type VectorMatch,
   type VectorRow,
 } from '../store/sqlite/index.js';
-export {
-  batchWriteAndDelete,
-  buildIndexFromDb,
-  initStore,
-  loadAllEntries,
-  loadEmbeddingIndex,
-  loadRecallSearchEntries,
-  loadVectorCandidateEntries,
-  recordTokenUse,
-  tokensBySession,
-  upsertEntryRow,
-  writeDeliveryEventOnHandle,
-  writeEntry,
-  writeEntryDbOnly,
-  writeIndexMirror,
-  type WriteEntryOptions,
-} from '../store/sqlite/fixtures.js';

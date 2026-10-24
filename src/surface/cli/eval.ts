@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { cliConfig, cliApiContext, cliFolder } from './api-context.js';
-import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
 import { folderVectorSource } from '../../entry/folder-search.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import {
@@ -25,7 +25,7 @@ import { printError } from './output.js';
 import { requireInit } from './shared.js';
 import { fmt } from './print.js';
 import { type CliFlags, type CommandContext, boolFlag, numberFlag, stringFlagOrExit } from './flag-values.js';
-import { errorMessage } from '../../base/util/log.js';
+import { errorCode, errorMessage } from '../../base/util/log.js';
 import { isJsonNumber, isJsonObject, isJsonString, parseJson, type JsonValue } from '../../base/util/json.js';
 import { CliExit, fail } from './exit.js';
 
@@ -157,7 +157,7 @@ async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean,
     parsed = parseJson(fs.readFileSync(baselinePath, 'utf8'));
   } catch (err) {
     // No baseline file is a first run and says nothing; a file that is there and cannot be used warns.
-    if (!(err instanceof Error && 'code' in err && err.code === 'ENOENT')) {
+    if (errorCode(err) !== 'ENOENT') {
       printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
     }
   }

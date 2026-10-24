@@ -5,7 +5,7 @@ import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'child_
 import type { InstallResult } from '../../domain/hooks/json-hooks.js';
 import { CODEX_TRUST_LINE, installJsonHooks } from '../hooks-install/json-hooks.js';
 import { envSkipSchedule } from '../../base/util/env.js';
-import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 import {
   DAILY_TASK_NAME,
   buildDailyRunnerCommand,
@@ -81,7 +81,7 @@ type RunScheduler = (file: string, args: readonly string[], opts: ExecFileSyncOp
  * missing.
  */
 function schedulerTimedOut<E>(err: E): boolean {
-  return err instanceof Error && 'code' in err && err.code === 'ETIMEDOUT';
+  return errorCode(err) === 'ETIMEDOUT';
 }
 
 function warnSchedulerTimedOut(command: string): void {

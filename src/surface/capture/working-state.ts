@@ -1,88 +1,13 @@
 // A session's working state read from its transcript tail, with no store in the imports, so a hook with no store can
 // derive it.
 import * as fs from 'fs';
-import type { TaskSnapshot } from '../../store/port/sessions.js';
-import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import { errorMessage } from '../../base/util/log.js';
 import { tryParseJson } from '../../base/util/json.js';
-import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
+import { workingStateOf, type WorkingState } from '../../domain/capture/working-state.js';
 import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail } from '../../infra/transcript-tail.js';
 import { humanUserText, summariseTranscript } from './transcript.js';
 import { copilotTurn } from './copilot-transcript.js';
-
-const PRE_COMPACT_TASK_CAP = 200;
-const PRE_COMPACT_SUMMARY_CAP = 2000;
-const PRE_COMPACT_NEXT_STEP_CAP = 500;
-const TRIM_MARKER = '[...earlier turns trimmed]\n';
-
-/**
- * The longest each field of {@link transcriptWorkingState} can be, so a check of a sent working state imports these
- * instead of copying them.
- */
-export const WORKING_STATE_CAPS = {
-  task: PRE_COMPACT_TASK_CAP,
-  summary: PRE_COMPACT_SUMMARY_CAP + TRIM_MARKER.length,
-  next_step: PRE_COMPACT_NEXT_STEP_CAP,
-} as const;
-
-/** Published in snake_case, as a transcript read and a caller's request carry it; the port spells it camelCase. */
-export type WorkingState = { task: string; summary: string; next_step: string };
-
-/** A working state in the store port's field names. */
-export type SnapshotFields = Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'>;
-
-export function snapshotFields(state: WorkingState): SnapshotFields {
-  return { task: state.task, summary: state.summary, nextStep: state.next_step };
-}
-
-/** Cuts each field to {@link WORKING_STATE_CAPS}, for after a scrub, as a mask can run longer than what it hides. */
-export function fitWorkingState(state: WorkingState): WorkingState {
-  return {
-    task: truncateCodePointSafe(state.task, WORKING_STATE_CAPS.task),
-    // Only past the cap, since re-trimming a summary that fits would drop its head again; the cut keeps the newest
-    // turns.
-    summary:
-      state.summary.length > WORKING_STATE_CAPS.summary
-        ? truncateKeepNewest(state.summary, PRE_COMPACT_SUMMARY_CAP)
-        : state.summary,
-    next_step: truncateCodePointSafe(state.next_step, WORKING_STATE_CAPS.next_step),
-  };
-}
-
-/**
- * Each empty field falls back to `existing`'s, since a tool-heavy tail derives no task; null when all are empty, so
- * blanks never replace a snapshot.
- * Never across sessions: another session's task saved under this id would pass compact-resume's session check. */
-export function mergeWorkingState(
-  derived: WorkingState,
-  existing: TaskSnapshot | null,
-  sessionId: string | null,
-): SnapshotFields | null {
-  const fallback =
-    existing !== null && (existing.sessionId === null || sessionId === null || existing.sessionId === sessionId)
-      ? existing
-      : null;
-  const merged = {
-    task: derived.task || (fallback?.task ?? ''),
-    summary: derived.summary || (fallback?.summary ?? ''),
-    nextStep: derived.next_step || (fallback?.nextStep ?? ''),
-  };
-  return merged.task || merged.summary || merged.nextStep ? merged : null;
-}
-
-/**
- * Keeps the LAST maxChars behind a trim marker, aligned to a nearby line start: the summary runs oldest first, so a
- * head cap would drop the newest working state. */
-export function truncateKeepNewest(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text;
-  let start = text.length - maxChars;
-  const code = text.charCodeAt(start);
-  if (code >= 0xdc00 && code <= 0xdfff) start += 1; // never start on a low surrogate
-  const nl = text.indexOf('\n', start);
-  if (nl !== -1 && nl + 1 < text.length && nl - start < 200) start = nl + 1;
-  return TRIM_MARKER + text.slice(start);
-}
 
 type LineFlags = Parameters<typeof humanUserText>[0];
 type LineMessage = Parameters<typeof humanUserText>[1];
@@ -156,20 +81,7 @@ export function transcriptWorkingState(transcriptPath: string, log: (message: st
     return null;
   }
 
-  const rawSummary = summariseTranscript(tail);
-  if (!rawTask.trim() && !rawSummary.trim() && !rawNextStep.trim()) {
-    log('skip: empty summary');
-    return null;
-  }
-
-  // These fields skip the capture content gate and reach a prompt, so the strict scrub runs. The caps protect the
-  // re-injection token budget and never split a surrogate pair; `hippo snapshot save` stays uncapped.
-  const task = maskEmails(redactSecretsStrict(rawTask));
-  const summary = maskEmails(redactSecretsStrict(rawSummary));
-  const nextStep = maskEmails(redactSecretsStrict(rawNextStep));
-  return {
-    task: task.trim() ? truncateCodePointSafe(task, PRE_COMPACT_TASK_CAP) : '',
-    summary: summary.trim() ? truncateKeepNewest(summary, PRE_COMPACT_SUMMARY_CAP) : '',
-    next_step: nextStep.trim() ? truncateCodePointSafe(nextStep, PRE_COMPACT_NEXT_STEP_CAP) : '',
-  };
+  const state = workingStateOf(rawTask, summariseTranscript(tail), rawNextStep);
+  if (state === null) log('skip: empty summary');
+  return state;
 }

@@ -8,7 +8,7 @@ import { recordStatements, recordStatementsAsync, countMatching } from '../_help
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';

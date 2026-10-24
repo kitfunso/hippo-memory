@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {

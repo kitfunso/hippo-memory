@@ -27,8 +27,9 @@ import { physicsPass } from './physics-pass.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { plural } from '../../base/util/format.js';
 import type { AppendAuditOpts } from '../../store/port/types.js';
-import { SLEEP_PAGE_ROWS, SleepRows, Survivors } from './survivors.js';
+import { SleepRows, Survivors } from './survivors.js';
 import { tombstoneChecks } from './tombstones.js';
+import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
 export type ConsolidateOptions = {
   dryRun?: boolean;
@@ -56,7 +57,7 @@ export async function runConsolidation(
 
   // One run for every tenant: physics, the run log and the sleep count are host-wide; rows are read a page at a time.
   const preview = dryRun ? halfLife.halfLives : new Map<string, number>();
-  const rows = new SleepRows(store, preview, options.pageRows ?? SLEEP_PAGE_ROWS);
+  const rows = new SleepRows(store, preview, options.pageRows ?? READ_PAGE_ROWS);
   // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class object.
   const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !rows.backsObject(entry.id);
 

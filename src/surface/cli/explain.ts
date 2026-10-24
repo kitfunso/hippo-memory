@@ -4,7 +4,7 @@ import { envActiveScope } from '../../base/util/env.js';
 import { confidenceFacets } from '../../base/memory/memory.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../../base/rank/search-types.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
-import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { resolveGlobalRootDir } from '../../host/project-identity.js';
 import * as api from '../../api/index.js';
 import { recallRowOrigin, scopeHiddenCount } from '../../api/recall/rows.js';
 import { cliConfig, cliApiContext, cliSecondStore, cliStore } from './api-context.js';

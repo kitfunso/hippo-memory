@@ -21,7 +21,6 @@ import {
   syncFtsRow,
   deleteFtsRow,
   replaceFtsRows,
-  stampOriginProjectIn,
   updateMemoryRows,
 } from './entry-row.js';
 import { mirrorBestEffort, writeMarkdownMirror, purgeMirrorBestEffortIn, removeEntryMirrorsIn } from './mirrors.js';
@@ -83,7 +82,7 @@ export function writePromotedEntry(
 /** writeEntry for each of `entries` in one transaction, so all land or none; each keeps its audit row, and mirrors
  * follow the commit. Returns how many were written; an empty list opens no store. */
 export function writeEntriesTogether(db: DatabaseSyncLike, files: StoreFiles, entries: readonly MemoryEntry[]): number {
-  const stamped = entries.map((entry) => stampOriginProject(files.hippoRoot, entry));
+  const stamped = entries.map((entry) => stampOriginProject(files, entry));
   try {
     withWriteScope(db, 'write_entries_together', () => {
       for (const entry of stamped) writeEntryDbOnly(db, entry);
@@ -109,7 +108,7 @@ export function writeEntriesSkippingRejected(
   const written: MemoryEntry[] = [];
   withWriteScope(db, 'write_entries_skipping_rejected', () => {
     fill((entry) => {
-      const stamped = stampOriginProject(files.hippoRoot, entry);
+      const stamped = stampOriginProject(files, entry);
       try {
         writeEntryDbOnly(db, stamped, { actor });
       } catch (error) {
@@ -157,7 +156,7 @@ export function writeEntry(
   opts?: WriteEntryInternalOptions,
 ): void {
   try {
-    const stamped = stampOriginProject(files.hippoRoot, entry);
+    const stamped = stampOriginProject(files, entry);
     writeEntryDbOnly(db, stamped, opts);
     opts?.afterCommit?.();
     writeEntryMirrors(files.hippoRoot, stamped);
@@ -387,7 +386,7 @@ export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
     ...bound<Pick<EntryWrites, 'archiveRaw' | 'supersede'>>(on, {
       archiveRaw: (db, ...args) => archiveRaw(db, files, ...args),
       supersede: (db, write) => {
-        const successor = stampOriginProjectIn(files, write.successor);
+        const successor = stampOriginProject(files, write.successor);
         commitSupersede(db, { ...write, successor });
         writeEntryMirrorsIn(files, successor);
       },
@@ -402,7 +401,7 @@ export function writeEntryRow(
   { entry, actor }: EntryWrite,
   afterWrite?: WriteEntryInternalOptions['afterWrite'],
 ): void {
-  const stamped = stampOriginProjectIn(files, entry);
+  const stamped = stampOriginProject(files, entry);
   writeInOwnTenant(db, stamped, actor, afterWrite);
   writeEntryMirrorsIn(files, stamped);
 }

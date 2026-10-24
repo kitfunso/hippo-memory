@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as http from 'node:http';
 import { boundPort } from '../_helpers/listen.js';
-import { createLlmReranker } from '../../src/domain/rerankers/llm.js';
+import { createLlmReranker } from '../../src/infra/rerankers/llm.js';
 import { processHttp } from '../../src/infra/http.js';
-import { realRerankers } from '../../src/infra/rerankers.js';
+import { realRerankers } from '../../src/infra/rerankers/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 

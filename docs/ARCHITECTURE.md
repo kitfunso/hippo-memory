@@ -2,9 +2,10 @@
 
 ## Layers
 
-Seven layers, lowest first: base (pure helpers, core types, the ports), db (SQLite connection and schema), store (code that runs SQL on hippo.db, plus its row shapes, SQL text and adapter), domain (recall, graph, consolidation, hooks), infra (the adapters behind the ports), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
-Domain code gets every model and socket through a port in `src/base/ports`: `EmbedderFor` builds an embedding provider from a config, `Http` sends a request under a timeout policy, `CrossEncoderLoad` loads the reranker's model, and `Llm`, the machine and the git runner do the rest. `src/infra` holds the real ones: the embedding providers and the local embedder, the Transformers.js loaders, `fetchWithRetry` and the reranker registry. `src/base/embeddings/local.ts` keeps only the model rules and a package probe that loads nothing, because token-eval scripts import it by its dist path. `scripts/check-domain-io.mjs` fails a domain file that imports `src/infra` or an adapter module, or that calls `fetch`.
-The roots wire the real adapters in. `infraOf(ctx)` in `src/api/infra.ts` hands api code the context's embedder, and a `ConfiguredFolder` or `globalTarget` carries its `embedderFor`, so a target built from it embeds with no further wiring. Eval and benchmark scripts import the wired `embedAll`, `folderIndex`, `getReranker` and `judgeAll` from `src/entry/eval-scripts.ts`.
+Eight layers, lowest first: base (pure helpers, core types, the ports), host (the disk, environment and process reads: config.json, project walks, home folders, atomic writes, child processes), db (SQLite connection and schema), store (code that runs SQL on hippo.db, plus its row shapes, SQL text and adapter), domain (recall, graph, consolidation, hooks), infra (the adapters behind the ports), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
+Domain code gets every model and socket through a port in `src/base/ports`: `EmbedderFor` builds an embedding provider from a config, `Http` sends a request under a timeout policy, `CrossEncoderLoad` loads the reranker's model, and `Llm`, the machine and the git runner do the rest. `src/infra` holds the real ones: the embedding providers and the local embedder, the Transformers.js loaders, `fetchWithRetry`, and the hosted rerankers with their registry and the TypeSafe judge (`src/infra/rerankers`, whose `endpoint.ts` holds the one outbound rule: TypeSafe's address, the pinned Jev model and the bounded, retried post). `src/base/embeddings/local.ts` keeps only the model rules and a package probe that loads nothing, because token-eval scripts import it by its dist path. `scripts/check-domain-io.mjs` fails a domain file that imports `src/infra` or an adapter module, or that calls `fetch`.
+`src/base` imports no `fs`, `os` or `child_process`; those reads live in `src/host`, and domain and api import host for its types only, getting its answers from the machine port or their caller. `scripts/check-domain-io.mjs` holds both lines. A host keeps no module state: the project-walk cache and the sticky shared-store flag live in a `Host` (`src/host/host.ts`) that each root builds and drops with itself (a CLI command through `currentMachine()`, a server runtime, the sleep child, and each SQLite store object through `storeFilesOf`).
+The roots wire the real adapters in. Every api `Context` carries them as `ctx.infra`, which its composition root sets. A published entry takes an `EntryContext`, where `infra` is optional, and `withEntryInfra` in `src/surface/entry-infra.ts` fills in the real ports. `ctx.infra` hands api code the context's embedder, and a `ConfiguredFolder` or `globalTarget` carries its `embedderFor`, so a target built from it embeds with no further wiring. Eval and benchmark scripts import the wired `embedAll`, `folderIndex`, `getReranker` and `judgeAll` from `src/entry/eval-scripts.ts`.
 The tree shows them: `src/base`, `src/domain` and `src/surface` hold one folder per feature, and `src/db`, `src/store` and `src/api` are one feature each. `src/entry` and the five root files stay at the top of `src` because package.json exports and bin/hippo.js name their dist paths.
 A file imports only from its own layer or a lower one. `layers.json` is the map and `scripts/check-layers.mjs` enforces it: any upward import fails, and `.layers-baseline.json` caps the root files. `scripts/check-folder-cycles.mjs` fails on a runtime import cycle between two features.
 
@@ -276,11 +277,15 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `handleRemember`: B2 v1.12.6 — validate --owner on the thin-client path too. Failure on this path exits early so the user gets the same validation experience whether or not a server is up.
 - `handleRemember`: A routed remember meets the same salience gate as a direct one: `POST /v1/memories` always asks `api.remember` for it (#1018, which closed the 2026-09-07 gap). `--force` is a rich flag, so a forced remember takes the direct path and skips the gate there.
 
-### src/surface/cli/session-hooks.ts
+### src/surface/cli/hooks/compact-resume.ts
 - `COMPACT_RESUME_EVENT_CONTENT_CAP`: X8: session-event content is capped at print time only — the shared printSessionEvents stays untouched for every other caller.
 - `restoreCompactSnapshot`: X5: concurrent sessions must not cross-restore. Only suppress when BOTH ids are present and differ — either side missing, or a manual invocation with no payload session_id, still prints.
 - `restoreCompactSnapshot`: X12: re-injected state is background reference, not instructions: the framing line the model actually sees at every compaction.
+
+### src/surface/cli/hooks/session-end.ts
 - `handleSessionEnd`: Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md): extracts transcript_path + session_id for the detached worker's argv.
+
+### src/surface/cli/hooks/session-end-worker.ts
 - `cmdSessionEndWorker`: DF1 T3: close the ending session's own active task snapshot AFTER sleep+capture complete — neither producer (runPreCompact, `hippo snapshot save`) runs inside session-end, so this can never destroy same-run work. Scoped to `--session-id`: a concurrent session's active snapshot is untouched (closeTaskSnapshotsForSession's own WHERE clause). Absent session id -> no-op plus one log line; session-end is not guaranteed to fire at all (crash, kill -9), so the freshness bound in loadFreshActiveTaskSnapshot is the backstop layer, not this close. Handoff write happens BEFORE the snapshot close below, while the snapshot writeSessionEndHandoff reads is still active.
 
 ### src/surface/cli/slack.ts
@@ -310,9 +315,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `pinnedInject.promptRecallMaxItems`: Z1: max prompt-recall entries injected per prompt. Default 5 (tuned).
 - `pinnedInject.promptRecallCandidates`: Z1: FTS candidate pool size per store before gating. Default 100.
 - `contextProjectIsolation`: Memory scope isolation (v39): when true (default), ambient context ... See docs/plans/2026-07-01-memory-scope-isolation.md.
-- `sharedStore`: set `true` on a store that a team server serves. Its folder is no caller's project, so a write that names none stores NULL (no known project, hidden from every project's context) instead of the folder's project or `''` (user-global, shown everywhere). Callers name their project: `POST /v1/memories` takes `project: {name, aliases?}` and `GET /v1/context` takes `project` and repeated `alias`; a context read with none answers 400. MCP `hippo_context` and `hippo sync` refuse the store. Once a process reads the flag as true it stays true, so a broken edit cannot reopen reads.
+- `sharedStore`: set `true` on a store that a team server serves. Its folder is no caller's project, so a write that names none stores NULL (no known project, hidden from every project's context) instead of the folder's project or `''` (user-global, shown everywhere). Callers name their project: `POST /v1/memories` takes `project: {name, aliases?}` and `GET /v1/context` takes `project` and repeated `alias`; a context read with none answers 400. MCP `hippo_context` and `hippo sync` refuse the store. Once a root's `Host` reads the flag as true it stays true for that root, so a broken edit cannot reopen reads; the published `isSharedStore` reads the file on each call.
 - Salience gate on `POST /v1/memories`: the route always asks `api.remember` for the gate. A skipped write answers 200 `{ skipped: { reason, score } }`; the optional boolean body field `force: true` stores without the gate, as `hippo remember --force` does. MCP, connectors and importers call `api.remember` without the gate.
-- `isSharedStore` cost: a false answer is not cached, so a store that is not shared pays one realpath and one `config.json` read on every write that names no project and on every context call (once per prompt from the local hook); a broken `config.json` warns on each.
+- `isSharedStore` cost: a `Host`'s check parses an unchanged not-shared `config.json` once and then pays one stat per write that names no project and per context call; the published free function reads the file each time.
 - `memoryValue`: LC2-E3: opt-in learned memory-value rescue veto on the sleep decay pass (docs/plans/2026-08-10-lc2-e3-mv-wiring.md). Default OFF — the frozen E2 weights (src/domain/consolidate/memory-value-weights.ts) only run when explicitly enabled; no other knobs in v1 (the rescue budget is a code constant tied to E2 evidence, not user-tunable).
 - `churnStaleness`: FE2: tags a memory `churn-stale` when its named file/symbol/script changed since storage. Default OFF - FE3 measures before it flips.
 
@@ -774,11 +779,11 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: E2 project_brief first-class object (docs/plans/2026-05-30-e2-project-brief-object.md).
 - `loadActiveBriefForRepo`: if an operator created more than one (the DB does not prevent it, consistent with every other E2 object), the MOST-RECENT active row wins.
 
-### src/base/scope/project-identity.ts
+### src/host/project-identity.ts
 - `module header`: Project identity resolution for memory scope isolation (ROADMAP.md Part I [Committed] "Memory scope isolation"; plan docs/plans/2026-07-01-memory-scope-isolation.md S1).
 - `findHippoStoreDir`: Design notes: docs/plans/2026-09-05-*.md
 - `deriveOriginProject`: NULL means no known project: a legacy row with no evidence, or a write to a shared store that named none; ambient context treats it as deny (see plan docs/plans/2026-07-01-memory-scope-isolation.md "Origin model").
-- `fallbackOrigin`: the origin for a write that names none. A store whose `config.json` sets `"sharedStore": true` gets NULL, because its folder is no caller's project; any other store gets its folder's project.
+- `fallbackOrigin` (src/host/host.ts): the origin for a write that names none. A store whose `config.json` sets `"sharedStore": true` gets NULL, because its folder is no caller's project; any other store gets its folder's project.
 
 ### src/base/rank/prompt-recall.ts
 - `module header`: Z1: recall gated on the hook prompt, not the five newest memories (pure, no I/O). See docs/plans/2026-09-26-z1-prompt-recall.md.
@@ -826,12 +831,16 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `deleteRejectedValue`: Delete a tombstone by tenant + exact digest — the T2 `unreject` verb, the only v1 escape hatch (plan §4).
 - `listRejectedValues`: List tombstones for a tenant, newest first — the T2 `rejections` verb.
 
-### src/domain/rerankers/jev.ts
-- `DEFAULT_MODEL`: Pinned, not `jev-latest`: every number in docs/evals/2026-09-19-jev-reranker.md was measured on this version, and the alias moves whenever the vendor ships a release.
+### src/infra/rerankers/endpoint.ts
+- `JEV_MODEL`: Pinned, not `jev-latest`: every number in docs/evals/2026-09-19-jev-reranker.md was measured on this version, and the alias moves whenever the vendor ships a release.
+
+### src/domain/rerankers/hosted.ts
 - `JEV_DEFAULT_TOP_K`: The pool size every number in docs/evals/2026-09-19-jev-reranker.md was measured at.
+
+### src/infra/rerankers/jev.ts
 - `jevReranker`: Cost, env vars, evidence and limits: docs/evals/2026-09-19-jev-reranker.md.
 
-### src/domain/rerankers/llm.ts
+### src/infra/rerankers/llm.ts
 - `module header`: Skeleton only — see docs/plans/2026-05-10-f6-reranker-hardening.md Task 8. Full characterisation deferred to a follow-on plan.
 
 ### src/base/ports/reranker.ts

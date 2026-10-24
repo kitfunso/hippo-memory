@@ -10,7 +10,7 @@ import { churnStaleFactor } from '../../src/domain/search/boosts.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import * as api from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

@@ -8,7 +8,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { queryAuditEvents } from '../../src/store/sqlite/audit.js';
 import { adminActor, retrieve } from '../../src/api/index.js';
-import { findHippoStoreDir, getHippoRoot, isInitialized } from '../../src/base/scope/project-identity.js';
+import { findHippoStoreDir, getHippoRoot, isInitialized } from '../../src/host/project-identity.js';
 import { findHippoRoot } from '../../src/surface/mcp/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCliAs, runCliOut } from '../_helpers/run-cli-as.js';

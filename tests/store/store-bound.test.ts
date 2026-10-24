@@ -1,4 +1,5 @@
 // bound() and answered() give a group's methods the port's async form without changing what the bodies do.
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { describe, expect, it } from 'vitest';
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 import { StoreBusyError } from '../../src/store/port.js';
@@ -20,7 +21,7 @@ describe('bound', () => {
   const notes: string[] = [];
   const on: OnHandle = (fn) => {
     opened.push(handle);
-    return fn(handle, { hippoRoot: '/nowhere' });
+    return fn(handle, storeFilesOf('/nowhere'));
   };
   const group = bound<Probe>(on, {
     boom: () => {

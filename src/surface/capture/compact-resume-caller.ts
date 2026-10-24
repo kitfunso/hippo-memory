@@ -1,6 +1,6 @@
 // SessionStart after a compaction, for a caller on another machine: the owner's fresh snapshot for this session, as the
 // local hook prints it.
-import type { Context } from '../../api/types.js';
+import type { Context, EntryContext } from '../../api/types.js';
 import {
   COMPACT_RESUME_EVENT_CONTENT_CAP,
   COMPACT_RESUME_MAX_AGE_MS,
@@ -24,7 +24,7 @@ export interface CallerCompactResumeRequest {
 }
 
 export async function compactResumeForCaller(
-  given: Context,
+  given: EntryContext,
   req: CallerCompactResumeRequest,
 ): Promise<CallerHookOutput> {
   const ctx = withEntryInfra(given);

@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
-import { createClefReranker } from '../../src/domain/rerankers/clef.js';
-import { rerankerPost } from '../../src/domain/rerankers/remote.js';
+import { createClefReranker } from '../../src/infra/rerankers/clef.js';
+import { postScoring } from '../../src/infra/rerankers/endpoint.js';
 import { createOutageWarning } from '../../src/domain/rerankers/outage-warning.js';
 import { processHttp } from '../../src/infra/http.js';
 import { log } from '../../src/base/util/log.js';
@@ -43,14 +43,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('rerankerPost and the request signal', () => {
+describe('postScoring and the request signal', () => {
   it('aborts the post when the request aborts, long before the budget', async () => {
     const seen: Seen = {};
     vi.spyOn(globalThis, 'fetch').mockImplementation(hangingFetch(seen));
     const request = new AbortController();
     const post = runWithRequestId(
       'req-abort',
-      () => rerankerPost(processHttp, 'https://rerank.example.com/run', { body: '{}' }, 60_000),
+      () =>
+        postScoring(processHttp, {
+          url: 'https://rerank.example.com/run',
+          token: undefined,
+          body: {},
+          budgetMs: 60_000,
+        }),
       undefined,
       request.signal,
     );

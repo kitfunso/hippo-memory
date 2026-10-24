@@ -8,7 +8,7 @@ import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../../src
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
 import { embedAll, embedMemory, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { loadPhysicsState } from '../../src/db/physics-state.js';

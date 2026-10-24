@@ -18,7 +18,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { countSessionRawMemories, writeEntry } from '../_helpers/root-forms.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { testInfra } from '../_helpers/infra.js';
 
 beforeEach(() => {

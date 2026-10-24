@@ -20,7 +20,7 @@ import { projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import type { ImportReport } from '../../src/domain/agent-memories/report.js';
 import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
-import { deriveOriginProject, isInitialized } from '../../src/base/scope/project-identity.js';
+import { deriveOriginProject, isInitialized } from '../../src/host/project-identity.js';
 import { autoShare } from '../../src/domain/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import {
@@ -41,7 +41,7 @@ import {
   writeConfig,
   type World,
 } from '../_helpers/agent-memories-world.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';

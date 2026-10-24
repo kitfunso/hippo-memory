@@ -31,7 +31,7 @@ import { recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/co
 import { allocatedBytes } from '../_helpers/allocated-bytes.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
   replaceDetectedConflicts,

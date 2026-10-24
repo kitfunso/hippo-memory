@@ -10,7 +10,7 @@ import type {
   DeliveryStage,
 } from '../../src/base/session/delivery.js';
 import { blockHash } from '../../src/base/util/token-text.js';
-import { realpathOrResolve } from '../../src/base/util/real-path.js';
+import { realpathOrResolve } from '../../src/host/real-path.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { seed, verdictOf, writeHostTranscript, type ReadOptions } from '../_helpers/host-transcript.js';
 import { type Project } from '../_helpers/delivery-boundary.js';

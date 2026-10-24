@@ -23,7 +23,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../../src/base/util/json.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { listApiKeys, loadAllPredictions } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { cliSave } from '../_helpers/cli-save-site.js';

@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { teeStdStreams } from '../../src/base/util/stream-tee.js';
+import { teeStdStreams } from '../../src/host/stream-tee.js';
 
 describe('teeStdStreams', () => {
   let restore: (() => void) | null = null;

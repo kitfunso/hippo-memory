@@ -3,7 +3,7 @@ import type { CaptureTarget } from '../../src/surface/capture/command.js';
 import type { CompactionFolder } from '../../src/surface/capture/compaction-record.js';
 import { cliDiagnostics, cliStore } from '../../src/surface/cli/api-context.js';
 import { folderIndex, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { DoctorStore } from '../../src/surface/cli/doctor.js';
 import type { StoreGroups } from '../../src/store/port.js';

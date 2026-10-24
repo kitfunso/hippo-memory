@@ -8,7 +8,7 @@ import { parseOlderThanFlag } from './audit-prune.js';
 import { cliApiContext } from './api-context.js';
 import { type CliFlags, type CommandContext, boolFlag, parseListLimit, stringFlag } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
-import { resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { resolveGlobalRootDir } from '../../host/project-identity.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { plural } from '../../base/util/format.js';

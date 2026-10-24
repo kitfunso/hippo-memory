@@ -1,16 +1,13 @@
 /**
- * Config support for Hippo: reads .hippo/config.json with sane defaults.
+ * Hippo's config: its shape, its defaults and the rule for each key of .hippo/config.json. src/host reads the file.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from '../rank/physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../memory/memory.js';
 import { SALIENCE_DEFAULTS } from '../memory/salience.js';
 import type { PromptRecallMetric } from '../rank/prompt-recall.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_MMR_LAMBDA, DEFAULT_RECALL_BUDGET } from '../rank/search-types.js';
-import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
-import { isJsonObject, type JsonValue } from '../util/json.js';
+import type { JsonValue } from '../util/json.js';
 import {
   basisPoints,
   block,
@@ -47,7 +44,7 @@ export interface HippoConfig {
     hybridWeight: number;
     /** Embedding backend: 'local' (default) = zero-dependency transformers.js; 'openai' | 'voyage' | 'cohere' = opt-in
      * API embedder needing the provider's
-     * API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/base/embeddings/provider.ts. */
+     * API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/infra/embedding-provider.ts. */
     provider?: 'local' | 'openai' | 'voyage' | 'cohere';
     /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost may use http). Ignored by the local
      *  provider. */
@@ -133,7 +130,7 @@ export interface HippoConfig {
   memoryValue: {
     enabled: boolean;
   };
-  /** Dormant memories (src/store/dormant.ts), on by default: the sleep decay pass moves a memory that faded below the
+  /** Dormant memories (sqlite/dormant.ts), on by default: the sleep decay pass moves a memory that faded below the
    * threshold there instead of deleting it (`hippo dormant restore|forget <id>`); a faded memory the secret detector
    * flags is always deleted. `{"enabled": false}` restores delete-on-fade. */
   dormant: {
@@ -151,7 +148,7 @@ export interface HippoConfig {
   agentMemories: {
     tools: string[] | null;
   };
-  /** Per-turn delivery ledger (src/store/recall-trace.ts): hashes, ids, counts and rejection reasons for each
+  /** Per-turn delivery ledger (src/store/sqlite/recall-trace.ts): hashes, ids, counts and rejection reasons for each
    *  pinned-only context call. Default off; read from the store the token ledger writes to. */
   deliveryLedger: {
     enabled: boolean;
@@ -318,7 +315,8 @@ export const DEFAULT_CONFIG: HippoConfig = {
 };
 
 type ConfigKey = Exclude<keyof HippoConfig, 'runtime'>;
-type ConfigFile = { [key: string]: JsonValue };
+/** A config.json's top-level object, as parsed. */
+export type ConfigFile = { [key: string]: JsonValue };
 
 interface ConfigEntry {
   apply(raw: ConfigFile, into: HippoConfig): void;
@@ -491,121 +489,9 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
   ),
 ];
 
-/** Reads the folder's config.json on every call; a root that loads often holds a configReader instead. */
-export function loadConfig(hippoRoot: string): HippoConfig {
-  // A caller that names no folder, as an add-on serving another store does, gets the defaults, never the working
-  // folder's config.json.
-  if (hippoRoot === '') return { ...DEFAULT_CONFIG };
-  const configPath = path.join(hippoRoot, 'config.json');
-  return fileStamp(configPath) === null ? { ...DEFAULT_CONFIG } : parseConfigFile(configPath);
-}
-
-export type ConfigReader = (hippoRoot: string) => HippoConfig;
-
-const PARSED_CONFIGS_MAX = 64;
-
-/** A loadConfig whose parses belong to the root that made it, so two servers in one process never share one.
- * `runtime` is the root's environment read, taken on each call so every command or request sees the current one. */
-export function configReader(runtime?: () => RuntimeSettings): ConfigReader {
-  // Keyed by the file's stamp, so an unchanged file costs one stat and no parse, and an edit shows on the next call.
-  const parsed = new Map<string, { stamp: string | null; config: HippoConfig }>();
-  const read = (hippoRoot: string): HippoConfig => {
-    if (hippoRoot === '') return { ...DEFAULT_CONFIG };
-    const configPath = path.join(hippoRoot, 'config.json');
-    const key = path.resolve(configPath);
-    const stamp = fileStamp(configPath);
-    const hit = parsed.get(key);
-    if (hit !== undefined && hit.stamp === stamp) return { ...hit.config };
-    const config = stamp === null ? DEFAULT_CONFIG : parseConfigFile(configPath);
-    if (parsed.size >= PARSED_CONFIGS_MAX) parsed.clear();
-    parsed.set(key, { stamp, config });
-    return { ...config };
-  };
-  return runtime === undefined ? read : (hippoRoot) => ({ ...read(hippoRoot), runtime: runtime() });
-}
-
-/** A file's mtime and size, which an edit changes; null when it is missing. A permission refusal throws, as
- * readConfigFile does: the file is there, and defaults would silently drop its settings. */
-function fileStamp(file: string): string | null {
-  try {
-    const stat = fs.statSync(file, { throwIfNoEntry: false });
-    return stat === undefined ? null : `${stat.mtimeMs}:${stat.size}`;
-  } catch (err) {
-    const code = errorCode(err);
-    if (code === 'EACCES' || code === 'EPERM') {
-      throw new Error(
-        `${file} could not be reached (${code}): ${errorMessage(err)}. ` +
-          `Fix the permissions on the file and its folder, or delete the file to use the defaults.`,
-        { cause: err },
-      );
-    }
-    // ENOTDIR and ELOOP mean the path is simply not there.
-    log.debug(`config: ${file} is not reachable, read as missing: ${errorMessage(err)}`, errorFields(err));
-    return null;
-  }
-}
-
-/** A config.json that exists must load: running on defaults would silently drop the user's settings, such as
- * `sharedStore`. */
-function readConfigFile(configPath: string): ConfigFile {
-  let raw: JsonValue;
-  try {
-    raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  } catch (err) {
-    throw new Error(
-      `${configPath} could not be loaded: ${errorMessage(err)}. Fix the file or delete it to use the defaults.`,
-      { cause: err },
-    );
-  }
-  if (!isJsonObject(raw)) {
-    throw new Error(`${configPath} must hold a JSON object. Fix the file or delete it to use the defaults.`);
-  }
-  return raw;
-}
-
-function parseConfigFile(configPath: string): HippoConfig {
-  return configOverDefaults(readConfigFile(configPath));
-}
-
-function configOverDefaults(raw: ConfigFile): HippoConfig {
+/** The config a parsed config.json gives: each key it sets over the defaults; src/host/config-file.ts reads it. */
+export function configOverDefaults(raw: ConfigFile): HippoConfig {
   const config: HippoConfig = { ...DEFAULT_CONFIG };
   for (const entry of CONFIG_TABLE) entry.apply(raw, config);
   return config;
-}
-
-const sharedStoreRoots = new Set<string>();
-// The stamp of each config.json last read as not shared: an unchanged file is not parsed again.
-const notSharedStamps = new Map<string, string>();
-
-/** The folder as isGlobalStoreRoot compares it (realpath, case-folded on Windows); its helper sits behind an import
- * cycle. */
-function sharedStoreKey(hippoRoot: string): string {
-  let real: string;
-  try {
-    real = fs.realpathSync.native(hippoRoot);
-  } catch (err) {
-    // A folder that does not exist yet has no real path, so the resolved one stands in.
-    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${errorMessage(err)}`, errorFields(err));
-    real = path.resolve(hippoRoot);
-  }
-  return process.platform === 'win32' ? real.toLowerCase() : real;
-}
-
-/** True when the store's config.json sets `"sharedStore": true`. Once true, a root stays true for this process, so a
- * broken edit while a server runs cannot turn it off. Reads only this key, so loadConfig's warnings stay loadConfig's.
- */
-export function isSharedStore(hippoRoot: string): boolean {
-  const key = sharedStoreKey(hippoRoot);
-  if (sharedStoreRoots.has(key)) return true;
-  const configPath = path.join(path.resolve(hippoRoot), 'config.json');
-  const stamp = fileStamp(configPath);
-  if (stamp === null || notSharedStamps.get(configPath) === stamp) return false;
-  const raw = readConfigFile(configPath);
-  if (raw.sharedStore !== true) {
-    if (notSharedStamps.size >= PARSED_CONFIGS_MAX) notSharedStamps.clear();
-    notSharedStamps.set(configPath, stamp);
-    return false;
-  }
-  sharedStoreRoots.add(key);
-  return true;
 }

@@ -29,7 +29,6 @@ import { duplicateKey, heldTextKeys, storedTextKeys } from '../../base/util/same
 import type { LessonWrites } from '../../store/port.js';
 import { memoryPages } from '../memories/memories.js';
 import type { Context, ContextWith } from '../types.js';
-import { infraOf } from '../infra.js';
 
 /** How a surface writes what it learns. */
 export interface LearnProfile {
@@ -136,7 +135,7 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   if (!batch.full) return;
   if (landed.length > 0) await writes.bumpRemembered(landed.length);
   const strength = strengthOptionsOf(ctx.config.runtime);
-  const { embedderFor } = infraOf(ctx);
+  const { embedderFor } = ctx.infra;
   const target = { store: ctx.store, embeddings: ctx.config.embeddings, embedderFor, strength };
   for (const entry of landed) embedMemoryDetached(target, entry);
 }

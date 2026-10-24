@@ -47,15 +47,15 @@ import {
   isMcpFailure,
   uninstallCopilot,
 } from '../hooks-install/copilot.js';
-import { isInitialized, resolveGlobalRootDir } from '../../base/scope/project-identity.js';
+import { isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
 import { importUserMemories } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
 import { cliStore, cliSyncOptions } from './api-context.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
 import { replayCompactions } from '../capture/compaction-record.js';
-import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { envDailyStepTimeoutMs } from '../../base/util/env.js';
-import { writeFileAtomic } from '../../base/util/atomic-write.js';
+import { writeFileAtomic } from '../../host/atomic-write.js';
 import { printError } from './output.js';
 import { boolFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
@@ -560,7 +560,7 @@ const DAILY_STEP_TIMEOUT_MS = 30 * MINUTE_MS;
  * Why a child step failed; a child killed at the deadline says so, since its own message is only the spawn error code.
  */
 function dailyStepFailure<E>(err: E, timeoutMs: number): string {
-  if (err instanceof Error && 'code' in err && err.code === 'ETIMEDOUT') {
+  if (errorCode(err) === 'ETIMEDOUT') {
     return `timed out after ${timeoutMs} ms and was stopped`;
   }
   return errorMessage(err);

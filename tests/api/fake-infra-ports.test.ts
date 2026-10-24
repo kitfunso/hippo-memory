@@ -1,12 +1,12 @@
 // The api runs remember, recall, context and sleep on the ports its Context carries: fakes here and a real SQLite
 // store. check-layers keeps src/infra out of src/api's imports; this proves the calls go to the fakes.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { adminActor, contextGet, remember, sleep } from '../../src/api/index.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import { recallRerankerPick } from '../../src/api/recall/rows.js';
 import { contextReach, type ContextWith } from '../../src/api/types.js';
-import { loadConfig } from '../../src/base/config/config.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import type { EmbedderFor, EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import type { InfraPorts } from '../../src/base/ports/infra.js';
 import type { Llm, LlmRequest } from '../../src/base/ports/llm.js';
@@ -73,7 +73,17 @@ function fakeInfra(cwd: string): FakeInfra {
     listFiles: read('listFiles'),
     realPath: read('realPath'),
   };
-  const machine = { home: cwd, env: {}, platform: process.platform, files, git: { run: read('git') }, cwd };
+  const machine = {
+    home: cwd,
+    env: {},
+    platform: process.platform,
+    files,
+    git: { run: read('git') },
+    cwd,
+    projectIdentity: read('projectIdentity'),
+    globalRoot: read('globalRoot'),
+    isGlobalRoot: read('isGlobalRoot'),
+  };
   const infra: InfraPorts = {
     machine,
     llm,
@@ -167,9 +177,8 @@ describe('the api on fake infra ports', () => {
     expect(network).not.toHaveBeenCalled();
   });
 
-  it('a Context with no infra fails at the api, not deep in a real service', async () => {
+  it('the api takes no Context without infra', () => {
     const { infra: _unused, ...bare } = contextOn(fakeInfra(join(hippoRoot, '..')));
-    await expect(sleep(bare, { noShare: true })).rejects.toThrow('this Context has no infra');
-    expect(network).not.toHaveBeenCalled();
+    expectTypeOf(bare).not.toExtend<Parameters<typeof sleep>[0]>();
   });
 });

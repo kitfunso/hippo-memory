@@ -1,16 +1,18 @@
-// Where hippo and the agent tools keep their config and data on this machine, shared by the store resolver, the hook
-// installers and the agent-memory readers: the one place home-folder variables are read.
+// Where hippo and the agent tools keep their config and data, from a machine's home folder and environment: the rules
+// only. src/host/agent-homes.ts reads this process's home, and src/infra/machine.ts builds the real Machine.
 
-import * as os from 'os';
 import * as path from 'path';
 import type { AgentFiles } from './agent-files.js';
-import { envHippoHome, envHomeDir, envXdgDataHome, processEnv } from './env.js';
 import type { GitRunner } from '../ports/git.js';
+import type { ProjectIdentity } from '../scope/project-identity.js';
+
+/** The folder a hippo store lives in: `<project>/.hippo`, and `~/.hippo` for the global one. */
+export const HIPPO_DIR = '.hippo';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
-/** Everything the agent-memory adapters may know about the machine, its disk and git included; src/infra/machine.ts
- * builds the real one and tests hand in a scratch one. */
+/** Everything the agent-memory adapters and the hook installers may know about the machine, its disk and git included;
+ * src/infra/machine.ts builds the real one and tests hand in a scratch one. */
 export interface Machine {
   readonly home: string;
   readonly env: Env;
@@ -19,36 +21,37 @@ export interface Machine {
   readonly git: GitRunner;
   /** The folder the process runs in, whose path segments boost a recall; absent, no path boost. */
   readonly cwd?: string;
+  /** The project a folder belongs to, as src/host walks its markers. */
+  readonly projectIdentity: (dir: string) => ProjectIdentity;
+  /** hippo's global store folder, read when asked so a changed HIPPO_HOME shows. */
+  readonly globalRoot: () => string;
+  /** Whether a folder is the global store's, links and case resolved as the disk has them. */
+  readonly isGlobalRoot: (hippoRoot: string) => boolean;
 }
 
-/** The global Hippo store directory: $HIPPO_HOME, else $XDG_DATA_HOME/hippo, else ~/.hippo. */
-export function hippoHomeDir(): string {
-  const hippoHome = envHippoHome();
-  if (hippoHome) return hippoHome;
-  const xdgData = envXdgDataHome();
-  if (xdgData) return path.join(xdgData, 'hippo');
-  return path.join(os.homedir(), '.hippo');
+/** The home folder and environment the path rules below read. */
+export type Homes = Pick<Machine, 'home' | 'env'>;
+
+/** The home a HOME or USERPROFILE variable names, else the profile's; codex, opencode and hippo's logs live there. */
+export function userHome({ home, env }: Homes): string {
+  return env.HOME || env.USERPROFILE || home;
 }
 
 /** Whether CLAUDE_CONFIG_DIR or a home variable says where Claude Code's files are. */
-export function claudeHomeIsSet(): boolean {
-  return Boolean(processEnv().CLAUDE_CONFIG_DIR || envHomeDir());
+export function claudeHomeIsSet(env: Env): boolean {
+  return Boolean(env.CLAUDE_CONFIG_DIR || env.HOME || env.USERPROFILE);
 }
 
 const VSCODE_PRODUCTS = ['Code', 'Code - Insiders'] as const;
 
-export function homeDir(): string {
-  return envHomeDir() || os.homedir();
-}
-
 /** Codex's config folder: $CODEX_HOME, else ~/.codex, as the Codex hooks docs describe. */
-export function codexHomeDir(home: string = homeDir(), env: Env = processEnv()): string {
+export function codexHomeDir(home: string, env: Env): string {
   return env.CODEX_HOME || path.join(home, '.codex');
 }
 
 /** Claude Code's config folder, where it reads settings.json: $CLAUDE_CONFIG_DIR when set and non-empty, else ~/.claude
  * under os.homedir(), as Claude Code does (a HOME that differs from the profile must not move it). */
-export function claudeConfigDir(home: string = os.homedir(), env: Env = processEnv()): string {
+export function claudeConfigDir(home: string, env: Env): string {
   return env.CLAUDE_CONFIG_DIR || path.join(home, '.claude');
 }
 
