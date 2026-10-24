@@ -270,7 +270,7 @@ export const MEMORY_VERBS = {
     repairsCodexWrapper: true,
     destructive: true,
     scoped: true,
-    flags: { switches: ['dry-run', 'no-learn', 'no-share'], values: ['log-file'] },
+    flags: { switches: ['dry-run', 'global', 'no-learn', 'no-share'], values: ['log-file'] },
     usage: [
       `
   sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)
@@ -279,14 +279,15 @@ export const MEMORY_VERBS = {
                            fact extraction; {"extraction":{"enabled":false}} turns that off
     --dry-run              Preview without writing
     --no-learn             Skip auto git-learn and the agent memory import before consolidation
-    --no-share             Skip auto-sharing to global store`,
+    --no-share             Skip auto-sharing to global store
+    --global               Sleep the global store (the daily job does this once a day)`,
     ],
   }),
   'daily-runner': verb(() => import('../setup.js'), 'handleDailyRunner', {
     flags: {},
     usage: [
       `
-  daily-runner             Sweep registered workspaces and run daily learn+sleep`,
+  daily-runner             Sleep the global store, then sweep registered workspaces and run daily learn+sleep`,
     ],
   }),
   dedup: verb(() => import('../maintenance.js'), 'handleDedup', {

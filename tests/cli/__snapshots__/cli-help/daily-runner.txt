@@ -1,1 +1,1 @@
-  daily-runner             Sweep registered workspaces and run daily learn+sleep
+  daily-runner             Sleep the global store, then sweep registered workspaces and run daily learn+sleep
