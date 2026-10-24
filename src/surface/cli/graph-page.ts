@@ -1,5 +1,6 @@
 // The graph page and JSON Canvas renderers: presentation of the plain GraphModel the domain computes.
 
+import { createHash } from 'node:crypto';
 import { layoutGraph, LAYOUT_H, LAYOUT_W, type GraphModel } from '../../api/objects/graph.js';
 import { GRAPH_CLIENT_SCRIPT } from './graph-page-client.js';
 
@@ -28,6 +29,7 @@ const NODE_COLORS: NodeColorMap = {
   person: '#3b82f6',
   system: '#64748b',
 };
+const OTHER_COLOR = '#64748b';
 
 const STYLE = [
   'html,body{margin:0;height:100%;background:#0b1020;font-family:ui-sans-serif,system-ui,sans-serif}',
@@ -43,9 +45,24 @@ const STYLE = [
   '#g.focused .edge.hi{opacity:1;stroke:#e2e8f0}',
   '.legend{position:fixed;top:10px;left:12px;color:#94a3b8;font-size:12px;line-height:1.6}',
   '.legend b{color:#e2e8f0}',
+  '.legend .warn{color:#f59e0b}',
+  `.legend .hint,.legend .t-other{color:${OTHER_COLOR}}`,
+  ...Object.entries(NODE_COLORS).map(([t, color]) => `.legend .t-${t}{color:${color}}`),
 ].join('\n');
 
-const nodeColor = (t: string): string => NODE_COLORS[t] ?? '#64748b';
+const sha256 = (text: string): string => `'sha256-${createHash('sha256').update(text).digest('base64')}'`;
+
+// Entity names come from memories, so the page runs only its own script and style block, each named by hash.
+const POLICY = [
+  "default-src 'none'",
+  `script-src ${sha256(GRAPH_CLIENT_SCRIPT)}`,
+  `style-src ${sha256(STYLE)}`,
+  "base-uri 'none'",
+  "form-action 'none'",
+].join('; ');
+
+const nodeColor = (t: string): string => NODE_COLORS[t] ?? OTHER_COLOR;
+const legendClass = (t: string): string => (Object.hasOwn(NODE_COLORS, t) ? `t-${t}` : 't-other');
 
 function renderEdgeSvg(model: GraphModel, pos: Map<number, Point>): string {
   return model.edges
@@ -87,7 +104,7 @@ function inlineModelJson(model: GraphModel): string {
 
 function renderLegend(model: GraphModel): string {
   const types = [...new Set(model.nodes.map((nd) => nd.type))];
-  return types.map((t) => `<span style="color:${nodeColor(t)}">●</span> ${escapeHtml(t)}`).join('  ');
+  return types.map((t) => `<span class="${legendClass(t)}">●</span> ${escapeHtml(t)}`).join('  ');
 }
 
 /**
@@ -106,12 +123,13 @@ export function renderGraphHtml(model: GraphModel): string {
   return [
     '<!doctype html>',
     '<html lang="en"><head><meta charset="utf-8">',
+    `<meta http-equiv="Content-Security-Policy" content="${POLICY}">`,
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     '<title>hippo graph</title>',
     '<style>' + STYLE + '</style></head><body>',
     `<div class="legend"><b>hippo graph</b> · ${model.nodes.length} entities · ${model.edges.length} relations` +
-      (model.truncated ? ' · <b style="color:#f59e0b">truncated</b>' : '') +
-      `<br>${legend}<br><span style="color:#64748b">drag to pan ` +
+      (model.truncated ? ' · <b class="warn">truncated</b>' : '') +
+      `<br>${legend}<br><span class="hint">drag to pan ` +
       `· scroll to zoom · click a node to focus</span></div>`,
     `<svg id="g" viewBox="0 0 ${LAYOUT_W} ${LAYOUT_H}" preserveAspectRatio="xMidYMid meet">`,
     `<g id="edges">${edgeSvg}</g><g id="nodes">${nodeSvg}</g>`,

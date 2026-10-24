@@ -1,12 +1,13 @@
 // Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
 
 import { anthropicLlmFromEnv } from '../../infra/ports.js';
-import { deduplicateStore, groupDedupPairs, type DedupResult } from '../../domain/consolidate/dedupe.js';
+import { dedupWholeStore, type DedupResult } from '../../api/sleep/dedup.js';
+import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { embedCoverage, memoryEmbedMissing, resetPhysicsFromVectors, storedVectorCount } from '../../api/embeddings.js';
 import { memoryCountAll } from '../../api/memories/memories.js';
-import { cliConfig, cliApiContext, cliStore, type CliContext } from './api-context.js';
+import { cliConfig, cliApiContext, type CliContext } from './api-context.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
 import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext, hasFlag } from './flag-values.js';
@@ -71,7 +72,7 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
     `Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`,
   );
 
-  const result = await deduplicateStore(cliStore(hippoRoot), { dryRun });
+  const result = await dedupWholeStore(cliApiContext(hippoRoot, tenantId), { dryRun });
 
   if (result.removed === 0) {
     console.log('No duplicates found.');

@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { packVectors, vectorCopiesOf, vectorViewsOf } from '../../src/store/sqlite/vector-pack.js';
+import { packVectors, vectorViewsOf } from '../../src/store/sqlite/vector-pack.js';
 import { WORKER_OPS } from '../../src/store/sqlite/worker-ops.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
@@ -37,6 +37,17 @@ const graphEntities = async (s: Served) => (await s.graphReads.graphRows(TENANT,
 
 const SLACK_EVENT = { connector: 'slack', eventId: 'Ev-seeded' } as const;
 const REPO = 'acme/demo';
+const SLACK_CURSOR = {
+  connector: 'slack',
+  tenantId: TENANT,
+  channelId: 'C-seeded',
+} as const;
+const GITHUB_CURSOR = {
+  connector: 'github',
+  tenantId: TENANT,
+  repo: REPO,
+  stream: 'issues',
+} as const;
 /** Ids the extra seed makes, read by the rows below once it has run. */
 const made = { handoffId: 0, cardId: '' };
 
@@ -53,8 +64,8 @@ async function seedSessionAndAdmin(root: string): Promise<void> {
     signature: null,
     bucket: 'unroutable',
   });
-  await s.connectorEvents.saveSlackCursor(TENANT, 'C-seeded', '1700000000.000100');
-  await s.connectorEvents.seedGitHubCursors(TENANT, REPO, '2026-01-01T00:00:00Z');
+  await s.connectorEvents.saveCursor(SLACK_CURSOR, '1700000000.000100');
+  await s.connectorEvents.saveCursor(GITHUB_CURSOR, '2026-01-01T00:00:00Z');
   await s.sessions.pushWorkingMemory(TENANT, {
     scope: 'deploy',
     content: 'watch the canary error rate',
@@ -80,7 +91,12 @@ async function seedSessionAndAdmin(root: string): Promise<void> {
     hash: 'block-seeded',
     now: FAKE_NOW,
   });
-  await rejectValue(s, { tenantId: TENANT, actor: ACTOR, reason: 'wrong', value: REFUSED });
+  await rejectValue(s, {
+    tenantId: TENANT,
+    actor: ACTOR,
+    reason: 'wrong',
+    value: REFUSED,
+  });
   onDb(root, (db) => {
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(
       '101',
@@ -90,39 +106,69 @@ async function seedSessionAndAdmin(root: string): Promise<void> {
     db.prepare(
       "INSERT INTO memory_conflicts (memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at, tenant_id) VALUES ('mem_p_plain', 'mem_p_noise', 'seeded contradiction', 0.9, 'open', ?, ?, ?)",
     ).run(FAKE_NOW, FAKE_NOW, TENANT);
-    const faded = { ...createMemory('the old staging hostname was stg-1', { tenantId: TENANT }), id: 'mem_d_faded' };
-    insertDormantRow(db, { entry: faded, strength: 0.01, reason: 'decay', dormantAt: FAKE_NOW });
+    const faded = {
+      ...createMemory('the old staging hostname was stg-1', {
+        tenantId: TENANT,
+      }),
+      id: 'mem_d_faded',
+    };
+    insertDormantRow(db, {
+      entry: faded,
+      strength: 0.01,
+      reason: 'decay',
+      dormantAt: FAKE_NOW,
+    });
   });
   // SAFETY: MAX(id) over the handoff just pushed returns one row with a numeric id.
   made.handoffId = onDb(root, (db) =>
-    Number((db.prepare('SELECT MAX(id) AS id FROM session_handoffs').get() as { id: number }).id),
+    Number(
+      (
+        db.prepare('SELECT MAX(id) AS id FROM session_handoffs').get() as {
+          id: number;
+        }
+      ).id,
+    ),
   );
   made.cardId = card.id;
   await s.close();
 }
 
 const SESSION_AND_ADMIN_READS: readonly Read[] = [
-  read('connectorEvents.eventRecord', (s) => s.connectorEvents.eventRecord(SLACK_EVENT), 'seen: true'),
   read(
-    'connectorEvents.deletionTarget',
-    (s) =>
-      s.connectorEvents.deletionTarget({
-        event: { connector: 'slack', eventId: 'Ev-unseen' },
-        artifactRef: 'vault:golden:rollout.md',
-        tenantId: TENANT,
+    'connectorEvents.eventRecord',
+    async (s) => [
+      await s.connectorEvents.eventRecord(SLACK_EVENT),
+      await s.connectorEvents.eventRecord(
+        { connector: 'slack', eventId: 'Ev-unseen' },
+        { artifactRef: 'vault:golden:rollout.md', tenantId: TENANT },
+      ),
+    ],
+    /seen: true.*mem_z_vault/,
+  ),
+  read(
+    'connectorEvents.route',
+    async (s) => [
+      await s.connectorEvents.route({ connector: 'slack', teamId: 'T-seeded' }),
+      await s.connectorEvents.route({
+        connector: 'github',
+        installationId: '101',
       }),
-    'mem_z_vault',
+    ],
+    `[ { tenantId: '${TENANT}' }, { tenantId: '${TENANT}' } ]`,
   ),
-  read('connectorEvents.slackTeamRoute', (s) => s.connectorEvents.slackTeamRoute('T-seeded'), `tenantId: '${TENANT}'`),
   read(
-    'connectorEvents.githubRouting',
-    (s) => s.connectorEvents.githubRouting({ installationId: '101' }),
-    `tenant: '${TENANT}'`,
+    'connectorEvents.deadLetters',
+    async (s) => [
+      await s.connectorEvents.deadLetters('github', TENANT, { limit: 5 }),
+      await s.connectorEvents.deadLetters('github', TENANT, { id: 1 }),
+    ],
+    /unroutable payload.*unroutable payload/,
   ),
-  read('connectorEvents.deadLetters', (s) => s.connectorEvents.deadLetters('github', TENANT, 5), 'unroutable payload'),
-  read('connectorEvents.deadLetter', (s) => s.connectorEvents.deadLetter('github', TENANT, 1), 'unroutable payload'),
-  read('connectorEvents.slackCursor', (s) => s.connectorEvents.slackCursor(TENANT, 'C-seeded'), '1700000000.000100'),
-  read('connectorEvents.githubCursors', (s) => s.connectorEvents.githubCursors(TENANT, REPO), '2026-01-01T00:00:00Z'),
+  read(
+    'connectorEvents.cursor',
+    async (s) => [await s.connectorEvents.cursor(SLACK_CURSOR), await s.connectorEvents.cursor(GITHUB_CURSOR)],
+    `[ '1700000000.000100', '2026-01-01T00:00:00Z' ]`,
+  ),
   read('connectorEvents.slackWorkspaces', (s) => s.connectorEvents.slackWorkspaces(), 'T-seeded'),
   read(
     'auditMaintenance.objectBackedAmong',
@@ -198,16 +244,8 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('sharing.sourceTallies', (s) => s.sharing.sourceTallies(TENANT), /count: [1-9]/),
 ];
 
-/** The groups that were the local files: the index sleep and `hippo embed` fill, the ledger, the folder and sharing. */
+/** The groups that were the local files: the ledger, the folder and sharing; the index's sessions run on the writer. */
 const FOLDER_GROUP_READS: readonly Read[] = [
-  read('embeddingIndex.requiresReindex', (s) => s.embeddingIndex.requiresReindex('another-provider'), /^true$/),
-  read('embeddingIndex.entryCount', (s) => s.embeddingIndex.entryCount(), /^[1-9]\d*$/),
-  read('embeddingIndex.lockKey', (s) => s.embeddingIndex.lockKey(), /\S/),
-  read('embeddingIndex.entryIdsById', (s) => s.embeddingIndex.entryIdsById({ limit: 3 }), /ids: \[ 'mem_/),
-  read('embeddingIndex.summary', (s) => s.embeddingIndex.summary(), /vectors: [1-9]/),
-  read('embeddingIndex.coverage', (s) => s.embeddingIndex.coverage(), /memories: [1-9]/),
-  read('embeddingIndex.particleStats', (s) => s.embeddingIndex.particleStats(1_000), 'mem_p_noise'),
-  read('embeddingIndex.pendingIds', (s) => s.embeddingIndex.pendingIds({ limit: 50 }), 'mem_p_fill0'),
   read('folderFiles.home', (s) => s.folderFiles.home(), /folderName: '/),
   read('ledger.lastSent', (s) => s.ledger.lastSent(TENANT, SESSION, 'http_recall'), "hash: 'block-seeded'"),
   read(
@@ -261,9 +299,9 @@ const READS: readonly Read[] = [
   ),
   read('vectors.embeddingIndexState', (s) => s.vectors.embeddingIndexState(), VECTOR_IDENTITY),
   read(
-    'vectors.storedVectors',
-    (s) => s.vectors.storedVectors(VECTOR_IDS),
-    /'mem_p_noise' => \[\s+1, 0, 0, 0,\s+0, 0, 0, 0\s+\]/,
+    'vectors.stored vectors',
+    (s) => s.vectors.stored('vectors', VECTOR_IDS),
+    /'mem_p_noise' => Float32Array\(8\) \[\s+1, 0, 0, 0,\s+0, 0, 0, 0\s+\]/,
   ),
   read(
     'vectors.nearestEntries',
@@ -275,16 +313,16 @@ const READS: readonly Read[] = [
       }),
     'mem_p_plain',
   ),
-  read('vectors.physicsParticles', (s) => s.vectors.physicsParticles(VECTOR_IDS), 'mem_p_noise'),
-  read(
-    'vectorViews.storedVectorViews',
-    (s) => s.vectorViews.storedVectorViews(VECTOR_IDS),
-    /'mem_p_noise' => Float32Array\(8\) \[\s+1, 0, 0, 0,\s+0, 0, 0, 0\s+\]/,
-  ),
+  read('vectors.stored particles', (s) => s.vectors.stored('particles', VECTOR_IDS), 'mem_p_noise'),
   read('keyWrites.listApiKeys', (s) => s.keyWrites.listApiKeys({ tenantId: TENANT, active: true }), "role: 'member'"),
   read(
     'vectorWrites.entriesWithoutVector',
-    (s) => s.vectorWrites.entriesWithoutVector({ tenantId: ALL_TENANTS, model: VECTOR_IDENTITY, limit: 5 }),
+    (s) =>
+      s.vectorWrites.entriesWithoutVector({
+        tenantId: ALL_TENANTS,
+        model: VECTOR_IDENTITY,
+        limit: 5,
+      }),
     'mem_p_fill0',
   ),
   read(
@@ -312,7 +350,12 @@ const READS: readonly Read[] = [
   read('dagReads.sessionRawCount', (s) => s.dagReads.sessionRawCount({ tenantId: TENANT, sessionId: SESSION }), /^1$/),
   read(
     'dagReads.summaryWithDescendants',
-    (s) => s.dagReads.summaryWithDescendants(TENANT, 'mem_x_summary', { depth: 2, admit: {}, page: { rows: 1 } }),
+    (s) =>
+      s.dagReads.summaryWithDescendants(TENANT, 'mem_x_summary', {
+        depth: 2,
+        admit: {},
+        page: { rows: 1 },
+      }),
     'mem_x_child1',
   ),
   read(
@@ -327,38 +370,37 @@ const READS: readonly Read[] = [
   ),
   read('graphReads.graphRows', (s) => s.graphReads.graphRows(TENANT, { limit: 50 }), 'RetryPolicy'),
   read(
-    'graphReads.entitiesForMemories',
+    'graphReads.graphRows by memory',
     async (s) =>
-      s.graphReads.entitiesForMemories(
-        TENANT,
-        (await graphEntities(s)).flatMap((e) => (e.memoryId === null ? [] : [e.memoryId])),
-      ),
+      s.graphReads.graphRows(TENANT, {
+        by: 'memory',
+        ids: (await graphEntities(s)).flatMap((e) => (e.memoryId === null ? [] : [e.memoryId])),
+      }),
     /memoryId: '[^']+'/,
   ),
   read(
-    'graphReads.entitiesByIds',
-    (s) =>
-      s.graphReads.entitiesByIds(
-        TENANT,
-        Array.from({ length: 50 }, (_, i) => i + 1),
-      ),
+    'graphReads.graphRows by entity',
+    (s) => s.graphReads.graphRows(TENANT, { by: 'entity', ids: Array.from({ length: 50 }, (_, i) => i + 1) }),
     'RetryPolicy',
   ),
   read(
-    'graphReads.neighborRelations',
+    'graphReads.graphRows by neighbor',
     async (s) =>
-      s.graphReads.neighborRelations(
-        TENANT,
-        (await graphEntities(s)).map((e) => e.id),
-        { limit: 50 },
-      ),
+      s.graphReads.graphRows(TENANT, { by: 'neighbor', ids: (await graphEntities(s)).map((e) => e.id), limit: 50 }),
     /relType: '[^']+'/,
   ),
   read(
     'graphReads.graphDelta',
     (s) =>
       s.graphReads.graphDelta(TENANT, {
-        entities: [{ entityType: 'policy', sourceObject: { type: 'policy', id: 1 }, name: 'Renamed', memoryId: null }],
+        entities: [
+          {
+            entityType: 'policy',
+            sourceObject: { type: 'policy', id: 1 },
+            name: 'Renamed',
+            memoryId: null,
+          },
+        ],
         relations: [],
       }),
     /op: '(update|insert)Entity'/,
@@ -378,7 +420,11 @@ const READS: readonly Read[] = [
   ),
   read(
     'objects.policiesInForce',
-    (s) => s.objects.policiesInForce(TENANT, { asOf: '9999-12-31T23:59:59.999Z', limit: 5 }),
+    (s) =>
+      s.objects.policiesInForce(TENANT, {
+        asOf: '9999-12-31T23:59:59.999Z',
+        limit: 5,
+      }),
     'RetryPolicy',
   ),
   read('objects.activeSkillsByName', (s) => s.objects.activeSkillsByName(TENANT, 5), 'page the owner, then revert'),
@@ -397,7 +443,11 @@ interface Write {
 }
 
 function write<T>(name: string, run: Call<T>, leaves: readonly string[]): Write {
-  return { name, run: async (store, seed) => shown(await run(store, seed)), leaves };
+  return {
+    name,
+    run: async (store, seed) => shown(await run(store, seed)),
+    leaves,
+  };
 }
 
 const ACTOR = 'reads-on-readers';
@@ -420,7 +470,14 @@ const finishRecall: Call<void> = (s, seed) =>
         score: 1.6,
       },
     ],
-    audit: [{ tenantId: TENANT, actor: ACTOR, op: 'recall', metadata: { results: 2 } }],
+    audit: [
+      {
+        tenantId: TENANT,
+        actor: ACTOR,
+        op: 'recall',
+        metadata: { results: 2 },
+      },
+    ],
     trace: {
       tenantId: TENANT,
       sessionId: SESSION,
@@ -442,8 +499,18 @@ const WRITES: readonly Write[] = [
     'appendAuditEvents',
     (s) =>
       s.appendAuditEvents([
-        { tenantId: TENANT, actor: ACTOR, op: 'recall', targetId: 'mem_p_plain' },
-        { tenantId: TENANT, actor: ACTOR, op: 'recall_availability_detected', metadata: { share: 0.9 } },
+        {
+          tenantId: TENANT,
+          actor: ACTOR,
+          op: 'recall',
+          targetId: 'mem_p_plain',
+        },
+        {
+          tenantId: TENANT,
+          actor: ACTOR,
+          op: 'recall_availability_detected',
+          metadata: { share: 0.9 },
+        },
       ]),
     ['"op":"recall_availability_detected"', `"actor":"${ACTOR}","op":"recall","target_id":"mem_p_plain"`],
   ),
@@ -510,7 +577,12 @@ beforeAll(async () => {
 
 afterAll(() => {
   for (const dir of [seed.templates.dir, ...homes]) {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    rmSync(dir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
   }
 });
 
@@ -553,7 +625,8 @@ describe('a read the op table places on a reader thread', () => {
         .map(([method]) => (group === 'base' ? method : `${group}.${method}`)),
     );
 
-    expect(READS.map((row) => row.name).sort()).toEqual(tagged.sort());
+    // A row named `<method> <case>` is one more case of that method.
+    expect([...new Set(READS.map((row) => row.name.split(' ')[0]))].sort()).toEqual(tagged.sort());
   });
 
   it.each(READS)('$name answers as the in-process store does', async ({ run, shows }) => {
@@ -581,7 +654,9 @@ describe('a read the op table places on a reader thread', () => {
       };
       void answer.then(settle, settle);
       // A read sent to the writer thread waits behind the blocked write until the lock is let go, which is only below.
-      await waitFor(() => answered, { what: `${name} to answer with the write lock held` });
+      await waitFor(() => answered, {
+        what: `${name} to answer with the write lock held`,
+      });
       await answer;
     }
     lock.release();
@@ -625,13 +700,6 @@ describe('vectors from a reader thread', () => {
     const pack = packVectors(stored);
 
     expect(vectorViewsOf(pack)).toEqual(stored);
-    expect(vectorCopiesOf(pack)).toEqual(
-      new Map([
-        ['a', [1, 2, 3]],
-        ['none', []],
-        ['b', [0.5]],
-      ]),
-    );
     expect(vectorViewsOf(packVectors(new Map()))).toEqual(new Map());
   });
 
@@ -639,8 +707,8 @@ describe('vectors from a reader thread', () => {
     const { store, ops } = patientStore(copy());
     cleanups.push(() => store.close());
 
-    expect(await store.vectors.storedVectors([])).toEqual(new Map());
-    expect(await store.vectorViews.storedVectorViews([])).toEqual(new Map());
+    expect(await store.vectors.stored('vectors', [])).toEqual(new Map());
+    expect(await store.vectors.stored('particles', [])).toEqual(new Map());
     expect(ops).toEqual([]);
   });
 });

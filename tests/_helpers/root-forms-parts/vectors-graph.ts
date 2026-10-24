@@ -8,6 +8,7 @@ import type { PhysicsParticle } from '../../../src/base/rank/physics.js';
 import { getMeta } from '../../../src/db/index.js';
 import {
   EMBEDDING_MODEL_META_KEY,
+  loadVectors,
   openVectorStaging,
   replaceVectorsWithStaged,
   stageVectors,
@@ -76,7 +77,7 @@ export async function loadEntitiesByMemoryId(
   tenantId: string,
   memoryIds: readonly string[],
 ): Promise<Entity[]> {
-  return await sqliteStore(hippoRoot).graphReads.entitiesForMemories(tenantId, memoryIds);
+  return (await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, { by: 'memory', ids: memoryIds })).entities;
 }
 
 export async function loadAllL2Summaries(hippoRoot: string): Promise<MemoryEntry[]> {
@@ -157,7 +158,7 @@ export async function loadEntitiesByIds(
   tenantId: string,
   ids: readonly number[],
 ): Promise<Entity[]> {
-  return await sqliteStore(hippoRoot).graphReads.entitiesByIds(tenantId, ids);
+  return (await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, { by: 'entity', ids })).entities;
 }
 
 export async function loadNeighborRelations(
@@ -166,9 +167,8 @@ export async function loadNeighborRelations(
   entityIds: readonly number[],
   opts: { limit?: number } = {},
 ): Promise<Relation[]> {
-  return await sqliteStore(hippoRoot).graphReads.neighborRelations(tenantId, entityIds, {
-    limit: opts.limit ?? 1000,
-  });
+  const query = { by: 'neighbor', ids: entityIds, limit: opts.limit ?? 1000 } as const;
+  return (await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, query)).relations;
 }
 
 export function loadVectorCandidateEntries(
@@ -183,5 +183,5 @@ export function loadVectorCandidateEntries(
 }
 
 export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Map<string, number[]> {
-  return onHandle(hippoRoot, (db) => vectorIndexSql.readStoredVectors(db, ids));
+  return ids.length === 0 ? new Map() : onHandle(hippoRoot, (db) => loadVectors(db, ids));
 }

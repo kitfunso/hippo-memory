@@ -10,13 +10,10 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { Relation } from '../../store/port/graph.js';
 import type { HippoStore } from '../../store/index.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './recall.js';
+import { DEFAULT_GRAPH_HOPS } from '../../base/rank/recall-defaults.js';
 
-/** Default hops expanded from each seed (MVP; hard cap MAX_HOPS=3 reused from graph recall). */
-export const DEFAULT_GRAPH_HOPS = 2;
 /** Default per-hop multiplicative decay applied to the seed strength. */
 export const DEFAULT_GRAPH_DECAY = 0.5;
-/** Default number of top lexical seeds expanded from. */
-export const DEFAULT_GRAPH_SEED_COUNT = 10;
 /** Recommended RRF weight for the graph stream, a CLI-only convenience default. The library `graphStream.weight` option
  *  stays REQUIRED (opt-in is explicit). */
 export const DEFAULT_GRAPH_STREAM_WEIGHT = 0.5;
@@ -122,9 +119,8 @@ async function reachedEntityScores(
 
   for (let depth = 1; depth <= hops && frontier.length > 0; depth++) {
     const frontierSet = new Set(frontier);
-    const rels = await store.graphReads.neighborRelations(tenantId, frontier, {
-      limit: Math.max(maxNeighbors, maxNeighbors * frontier.length),
-    });
+    const limit = Math.max(maxNeighbors, maxNeighbors * frontier.length);
+    const { relations: rels } = await store.graphReads.graphRows(tenantId, { by: 'neighbor', ids: frontier, limit });
     const hopFactor = Math.pow(decay, depth);
     const bestStrengthThisDepth = bestStrengthAtDepth(rels, frontierSet, visited, frontierStrength, originStrength);
     // Pass 2: commit strongest-first (then id asc, so deterministic), so the per-hop fanout cap keeps the
@@ -179,7 +175,8 @@ async function accumulateForStore(
     const memId = entries[s.index].id;
     strengthByMemId.set(memId, Math.max(strengthByMemId.get(memId) ?? 0, s.strength));
   }
-  const seedEntities = await store.graphReads.entitiesForMemories(tenantId, [...strengthByMemId.keys()]);
+  const seedIds = [...strengthByMemId.keys()];
+  const { entities: seedEntities } = await store.graphReads.graphRows(tenantId, { by: 'memory', ids: seedIds });
   if (seedEntities.length === 0) return;
 
   // entityId -> origin seed strength. Seeds load by memory id so memoryId is non-null here; the guard keeps the widened
@@ -201,7 +198,8 @@ async function accumulateForStore(
   if (reachedScore.size === 0) return;
 
   // Reached entity ids -> source memory ids -> in-pool entry indices.
-  const reachedEntities = await store.graphReads.entitiesByIds(tenantId, [...reachedScore.keys()]);
+  const reachedIds = [...reachedScore.keys()];
+  const { entities: reachedEntities } = await store.graphReads.graphRows(tenantId, { by: 'entity', ids: reachedIds });
   for (const ent of reachedEntities) {
     if (ent.memoryId === null) continue; // mirror-less node: no pool memory to re-rank
     const idx = memIdToIndex.get(ent.memoryId);

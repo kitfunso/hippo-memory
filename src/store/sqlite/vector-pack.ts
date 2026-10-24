@@ -17,7 +17,7 @@ export class PackedVectors implements VectorPack {
   ) {}
 }
 
-export function packVectors(vectors: ReadonlyMap<string, Float32Array>): PackedVectors {
+export function packVectors(vectors: ReadonlyMap<string, ArrayLike<number>>): PackedVectors {
   let total = 0;
   for (const vector of vectors.values()) total += vector.length;
   const buffer = new ArrayBuffer(total * Float32Array.BYTES_PER_ELEMENT);
@@ -32,23 +32,15 @@ export function packVectors(vectors: ReadonlyMap<string, Float32Array>): PackedV
   return new PackedVectors([...vectors.keys()], dims, buffer);
 }
 
-function eachVector<V>(pack: VectorPack, valueOf: (view: Float32Array) => V): Map<string, V> {
+/** Each value views its own stretch of the pack's one buffer. */
+export function vectorViewsOf(pack: VectorPack): Map<string, Float32Array> {
   const floats = new Float32Array(pack.buffer);
-  const out = new Map<string, V>();
+  const out = new Map<string, Float32Array>();
   let at = 0;
   pack.ids.forEach((id, i) => {
     const end = at + (pack.dims[i] ?? 0);
-    out.set(id, valueOf(floats.subarray(at, end)));
+    out.set(id, floats.subarray(at, end));
     at = end;
   });
   return out;
-}
-
-/** Each value views its own stretch of the pack's one buffer. */
-export function vectorViewsOf(pack: VectorPack): Map<string, Float32Array> {
-  return eachVector(pack, (view) => view);
-}
-
-export function vectorCopiesOf(pack: VectorPack): Map<string, number[]> {
-  return eachVector(pack, (view) => Array.from(view));
 }

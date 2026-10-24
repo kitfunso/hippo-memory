@@ -13,7 +13,7 @@ A file imports only from its own layer or a lower one. `layers.json` is the map 
 
 ### Async port
 
-node:sqlite is synchronous, and the store port is async so another store can do I/O. Every api function is async and reaches the store through `storeFor(ctx)`, with or without `ctx.store`. `sqliteStore` runs each method's synchronous body when it is called and resolves the result, so an api function's first store call has run by the time the function returns. Every store group is required except the ones `OptionalGroup` in `src/store/port.ts` names, such as `vectorViews`, `readiness` and `lastRecall`; a path that needs one of those on a store without it gives `StoreNotPortedError`, a 501. The last recall and its trace sit in the optional `lastRecall` group, which only the sqlite stores have. `scripts/check-floating-api.mjs` fails on any call to an api write function whose Promise nothing awaits.
+node:sqlite is synchronous, and the store port is async so another store can do I/O. Every api function is async and reaches the store through `storeFor(ctx)`, with or without `ctx.store`. `sqliteStore` runs each method's synchronous body when it is called and resolves the result, so an api function's first store call has run by the time the function returns. Every store group is required except the ones `OptionalGroup` in `src/store/port.ts` names, such as `readiness` and `lastRecall`; a path that needs one of those on a store without it gives `StoreNotPortedError`, a 501. The last recall and its trace sit in the optional `lastRecall` group, which only the sqlite stores have. `scripts/check-floating-api.mjs` fails on any call to an api write function whose Promise nothing awaits.
 
 ### What lives in src/store
 
@@ -659,7 +659,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: without this migration a store would mix old-base and new-base memories, a state the decay evaluation never tested (docs/evals/2026-09-24-decay-default-prereg.md, Migration). The rule, declared there before any run:
 - `conflictLosers`: A resolved conflict with no audit row (before v1.31.0, or found stale) names no winner, so both sides count.
 
-### src/domain/hooks/json-hooks.ts
+### src/surface/hooks-install/rules/json-hooks.ts
 - `hasLegacySplitSessionEnd`: Returns true when `hooks.SessionEnd` still contains either of the legacy v0.22.x split entries (bare `hippo sleep` / `hippo capture --last-session`) without the current consolidated `hippo session-end` entry.
 
 ### src/domain/objects/incidents.ts

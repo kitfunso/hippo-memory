@@ -17,9 +17,9 @@ import {
   HIPPO_POST_COMPACT_MARKER,
   copilotHooksFile,
 } from './shared.js';
-import { HIPPO_DIR, claudeConfigDir, codexHomeDir, userHome, type Homes } from '../../base/util/agent-homes.js';
-import { type JsonValue, isJsonString, isJsonObjectLiteral, type JsonObject } from '../../base/util/json.js';
-import { escapeRegex } from '../../base/util/escape.js';
+import { HIPPO_DIR, claudeConfigDir, codexHomeDir, userHome, type Homes } from '../../../base/util/agent-homes.js';
+import { type JsonValue, isJsonString, isJsonObjectLiteral, type JsonObject } from '../../../base/util/json.js';
+import { escapeRegex } from '../../../base/util/escape.js';
 
 /** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display name. */
 export interface JsonHookPaths {

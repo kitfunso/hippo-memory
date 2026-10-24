@@ -1,8 +1,9 @@
-// hippo.db's EmbeddingIndex. The model checks take the opener, since an unreadable index there reads as none.
+// hippo.db's EmbeddingIndex: sessions by id, each holding the lock token and the rebuild it took, so a session stays on
+// the thread that opened it. The model checks take the opener, since an unreadable index there reads as none.
 import { randomUUID } from 'node:crypto';
 import { closeHippoDb } from '../../db/index.js';
-import { countAllEntries, listEveryTenantEntryIds } from './entry-reads.js';
-import type { EmbeddingIndex } from '../port/vectors.js';
+import { listEveryTenantEntryIds } from './entry-reads.js';
+import type { EmbeddingIndex, IndexStep, IndexStepAnswers, IndexStepKind } from '../port/vectors.js';
 import {
   type VectorRebuild,
   beginVectorRebuild,
@@ -16,9 +17,9 @@ import {
   storedVectorSummary,
   vectorCoverage,
 } from './vector-index.js';
-import type { Handles, StoreFiles } from './open.js';
+import type { Handles } from './open.js';
 import { openStore } from './handles.js';
-import { answered, bound, type Bodies } from './bound.js';
+import { answered } from './bound.js';
 import { dropVectorStaging, upsertVectors } from '../../db/vector-store.js';
 import { embedLockKey, releaseEmbedLock, tryEmbedLock } from './embed-lock.js';
 
@@ -40,70 +41,92 @@ function beginRebuild(open: Handles['open']): VectorRebuild {
   }
 }
 
-const entryRowsBodies: Bodies<Pick<EmbeddingIndex, 'entryCount' | 'entryIdsById' | 'coverage'>> = {
-  entryCount: countAllEntries,
-  entryIdsById: listEveryTenantEntryIds,
-  coverage: vectorCoverage,
-};
+/** What a session took: the lock's token, and a rebuild begun and not yet committed. */
+interface Session {
+  token: string | null;
+  rebuild: VectorRebuild | null;
+}
 
-type Particles = 'resetParticles' | 'seedParticle';
+type Steps = { readonly [K in IndexStepKind]: (session: Session, step: IndexStep<K>) => IndexStepAnswers[K] };
 
-type Rebuilds = 'beginRebuild' | 'stageRebuild' | 'commitRebuild' | 'closeRebuild';
+function rebuildOf(session: Session): VectorRebuild {
+  if (session.rebuild === null) throw new Error('no vector rebuild is open on this session');
+  return session.rebuild;
+}
 
-type VectorRows = Pick<EmbeddingIndex, 'summary' | 'particleStats' | 'saveVectors' | 'pruneOrphans' | 'pendingIds'>;
+function closeSession(session: Session, hippoRoot: string): void {
+  try {
+    session.rebuild?.close();
+  } finally {
+    if (session.token !== null) releaseEmbedLock(hippoRoot, session.token);
+  }
+}
 
-const vectorRowsBodies: Bodies<VectorRows> = {
-  summary: storedVectorSummary,
-  particleStats: particleStats,
-  saveVectors: upsertVectors,
-  pruneOrphans: pruneOrphanVectors,
-  pendingIds: pendingVectorIds,
-};
-
-// A particle's start strength is scored, so these score by the store's loss-aversion rules.
-function particlesBodies(files: StoreFiles): Bodies<Pick<EmbeddingIndex, Particles>> {
+function rebuildSteps(
+  open: Handles['open'],
+  hippoRoot: string,
+): Pick<Steps, 'lock' | 'begin' | 'stage' | 'commit' | 'close'> {
   return {
-    resetParticles: (db, ...args) => resetStoredParticles(db, files, ...args),
-    seedParticle: (db, ...args) => seedStoredParticle(db, files, ...args),
+    lock: (session) => {
+      session.token ??= tryEmbedLock(hippoRoot);
+      return session.token !== null;
+    },
+    begin: (session) => {
+      if (session.rebuild !== null) throw new Error('a vector rebuild is already open on this session');
+      session.rebuild = beginRebuild(open);
+    },
+    stage: (session, { rows }) => rebuildOf(session).stage(rows),
+    commit: (session, { model }) => {
+      const rebuild = rebuildOf(session);
+      session.rebuild = null;
+      try {
+        rebuild.commit(model);
+      } finally {
+        rebuild.close();
+      }
+    },
+    close: (session) => closeSession(session, hippoRoot),
   };
 }
 
-/** The open rebuilds by id: each holds its handle across calls, so they stay on the thread that began them. */
-function sqliteRebuilds(open: Handles['open']): Pick<EmbeddingIndex, Rebuilds> {
-  const begun = new Map<string, VectorRebuild>();
-  const named = (id: string): VectorRebuild => {
-    const rebuild = begun.get(id);
-    if (rebuild === undefined) throw new Error(`no open vector rebuild '${id}'`);
-    return rebuild;
+// A particle's start strength is scored, so seed and reset score by the store's loss-aversion rules.
+function indexSteps({ on, open, files }: Handles): Steps {
+  return {
+    ...rebuildSteps(open, files.hippoRoot),
+    reindex: (_, { providerId }) => embeddingModelRequiresReindex(on, providerId),
+    saveModel: (_, { providerId }) => saveStoredEmbeddingModel(on, providerId),
+    ids: (_, { page }) => on((db) => listEveryTenantEntryIds(db, page), openStore),
+    pending: (_, { page }) => on((db) => pendingVectorIds(db, page)),
+    save: (_, { rows, model }) => on((db) => upsertVectors(db, rows, model)),
+    prune: () => on(pruneOrphanVectors),
+    seed: (_, { entry, vector }) => on((db) => seedStoredParticle(db, files, entry, vector)),
+    reset: () => on((db) => resetStoredParticles(db, files)),
+    summary: () => on(storedVectorSummary),
+    coverage: () => on(vectorCoverage, openStore),
+    particles: (_, { fullUpTo }) => on((db) => particleStats(db, fullUpTo)),
+  };
+}
+
+export function sqliteEmbeddingIndex(handles: Handles): EmbeddingIndex {
+  const sessions = new Map<string, Session>();
+  const steps = indexSteps(handles);
+  const opened = (id: string): Session => {
+    const session = sessions.get(id);
+    if (session === undefined) throw new Error(`no open index session '${id}'`);
+    return session;
   };
   return {
-    beginRebuild: () =>
+    open: () =>
       answered(() => {
         const id = randomUUID();
-        begun.set(id, beginRebuild(open));
-        return id;
+        sessions.set(id, { token: null, rebuild: null });
+        return { id, key: embedLockKey(handles.files.hippoRoot) };
       }),
-    stageRebuild: (id, rows) => answered(() => named(id).stage(rows)),
-    commitRebuild: (id, model) => answered(() => named(id).commit(model)),
-    closeRebuild: (id) =>
+    step: (id, step) =>
       answered(() => {
-        const rebuild = begun.get(id);
-        begun.delete(id);
-        rebuild?.close();
+        const session = opened(id);
+        if (step.kind === 'close') sessions.delete(id);
+        return steps[step.kind](session, step);
       }),
-  };
-}
-
-export function sqliteEmbeddingIndex({ on, open, files }: Handles): EmbeddingIndex {
-  return {
-    requiresReindex: (providerId) => answered(() => embeddingModelRequiresReindex(on, providerId)),
-    saveModel: (providerId) => answered(() => saveStoredEmbeddingModel(on, providerId)),
-    ...bound(on, entryRowsBodies, openStore),
-    ...bound(on, vectorRowsBodies),
-    ...bound(on, particlesBodies(files)),
-    ...sqliteRebuilds(open),
-    lockKey: () => answered(() => embedLockKey(files.hippoRoot)),
-    tryLock: () => answered(() => tryEmbedLock(files.hippoRoot)),
-    unlock: (token) => answered(() => releaseEmbedLock(files.hippoRoot, token)),
   };
 }

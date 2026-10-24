@@ -1,5 +1,4 @@
-// Runs the adapters and routes each container to its store: the project pass, the user pass and their call sites (plan
-// designs 2, 8, 11).
+// Runs the adapters for one pass and routes each container to its store; src/api/agent-memories.ts picks the passes.
 import path from 'node:path';
 import { plural } from '../../base/util/format.js';
 import type { Machine } from '../../base/util/agent-homes.js';
@@ -7,27 +6,33 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import { namesFoldedInto } from './project-folds.js';
-import { projectNames, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { syncContainer, type ContainerOutcome } from './apply.js';
 import { liveUnder, type ContainerWork, type StoreSession } from './container-view.js';
 import { handOver, warnUnpurged } from './handover.js';
-import { claudeCodeAdapter, claudeTranscriptListing, transcriptNotesProject } from './claude-code.js';
+import { claudeCodeAdapter } from './claude-code.js';
 import { codexAdapter } from './codex.js';
 import { copilotAdapter } from './copilot.js';
 import { geminiAdapter } from './gemini.js';
 import { legacyWork, type LegacyWork } from './legacy.js';
 import { openclawAdapter } from './openclaw.js';
 import { qwenCodeAdapter } from './qwen-code.js';
-import { addTally, emptyReport, mergeReports, toolReport, type ImportReport, type ToolReport } from './report.js';
+import {
+  addTally,
+  emptyReport,
+  toolReport,
+  type ImportReport,
+  type ToolReport,
+} from '../../base/memory/agent-memory-report.js';
 import { containerId, containerPrefix, type ContainerMachine } from './source.js';
 import {
   AGENT_MEMORY_TOOLS,
   isToolId,
   toolSourcePrefix,
   type AgentMemoryTool,
+  type Scope,
   type ToolId,
 } from '../../base/memory/agent-memory-tools.js';
-import type { Adapter, AdapterContext, ImportStore, ImportStores, Listing, Scope } from './types.js';
+import type { Adapter, ImportStore, ImportStores, Listing } from './types.js';
 
 export const ADAPTERS: readonly Adapter[] = [
   claudeCodeAdapter,
@@ -55,7 +60,8 @@ export interface SyncOptions {
   readonly stores: ImportStores;
 }
 
-interface Pass {
+/** One pass: the listing it takes from each adapter and the store its rows land in. */
+export interface Pass {
   readonly scope: Scope;
   /** The store rows land in. */
   readonly target: string;
@@ -68,119 +74,6 @@ interface Pass {
   readonly legacyOrigins: readonly string[];
   /** Set aside the global store's copies of each container this pass syncs into a local store. */
   readonly handover: boolean;
-}
-
-/**
- * init, sleep, `import --agents` and the daily runner: a local store gets its project pass then the user pass; the
- * global store the user pass only.
- */
-export async function importForStore(hippoRoot: string, opts: SyncOptions): Promise<ImportReport> {
-  if (opts.machine.isGlobalRoot(hippoRoot)) return importUserMemories(hippoRoot, opts);
-  const report = await importProjectMemories(hippoRoot, opts);
-  mergeReports(report, await importUserMemories(hippoRoot, opts));
-  return report;
-}
-
-/** A local store's project pass with legacy adoption; `init --scan` runs it per repository and the user pass once. */
-export async function importProjectMemories(hippoRoot: string, opts: SyncOptions): Promise<ImportReport> {
-  const ctx = context(opts.machine, { projectRoot: path.dirname(hippoRoot) });
-  return runPass(
-    {
-      scope: 'project',
-      target: hippoRoot,
-      invoking: hippoRoot,
-      list: (a) => a.list(ctx, 'project'),
-      legacy: true,
-      originProject: undefined,
-      legacyOrigins: [],
-      handover: true,
-    },
-    opts,
-  );
-}
-
-/** Every tool's user-level memory into the global store, created on demand, with no origin. */
-export async function importUserMemories(invokingRoot: string, opts: SyncOptions): Promise<ImportReport> {
-  const ctx = context(opts.machine, {});
-  return runPass(
-    {
-      scope: 'user',
-      target: opts.machine.globalRoot(),
-      invoking: invokingRoot,
-      list: (a) => a.list(ctx, 'user'),
-      legacy: false,
-      originProject: '',
-      legacyOrigins: [],
-      handover: false,
-    },
-    opts,
-  );
-}
-
-/** Session end in a folder with no store of its own: the session's project into the global store with its origin, the
- * session folder's notes, then the user pass. */
-export async function importAtSessionEnd(
-  cwd: string,
-  transcriptPath: string | undefined,
-  opts: SyncOptions,
-): Promise<ImportReport> {
-  const globalRoot = opts.machine.globalRoot();
-  const ctx = context(opts.machine, { projectRoot: cwd });
-  const report = await runPass(
-    {
-      scope: 'project',
-      target: globalRoot,
-      invoking: globalRoot,
-      list: (a) => a.list(ctx, 'project'),
-      legacy: false,
-      ...projectOrigins(opts.machine.projectIdentity(cwd)),
-      handover: false,
-    },
-    opts,
-  );
-  if (transcriptPath !== undefined) {
-    mergeReports(report, await importSessionFolder(globalRoot, transcriptPath, cwd, opts));
-  }
-  mergeReports(report, await importUserMemories(globalRoot, opts));
-  return report;
-}
-
-/** The session folder's notes under the project Claude filed them for, never cwd's: a session begun at home keeps its
- * home notes user-global wherever it ends. No git call, so post-compact can run it. */
-export async function importSessionFolder(
-  hippoRoot: string,
-  transcriptPath: string,
-  cwd: string | null,
-  opts: SyncOptions,
-): Promise<ImportReport> {
-  const project = transcriptNotesProject(transcriptPath, cwd, opts.machine);
-  if (project === null) return emptyReport();
-  // A project store takes its own project's notes; another project's, or home's, go to the global store, which parts
-  // them by origin.
-  const { machine } = opts;
-  const own = machine.isGlobalRoot(hippoRoot) || project.name === machine.projectIdentity(path.dirname(hippoRoot)).name;
-  const target = own ? hippoRoot : machine.globalRoot();
-  const ctx = context(opts.machine, {});
-  return runPass(
-    {
-      scope: 'project',
-      target,
-      invoking: hippoRoot,
-      legacy: false,
-      ...projectOrigins(project),
-      handover: false,
-      list: (a) => (a.tool === 'claude-code' ? claudeTranscriptListing(ctx, transcriptPath) : null),
-    },
-    opts,
-  );
-}
-
-function projectOrigins(project: ProjectIdentity): Pick<Pass, 'originProject' | 'legacyOrigins'> {
-  return { originProject: project.name, legacyOrigins: projectNames(project).slice(1) };
-}
-
-function context(machine: Machine, extra: Pick<AdapterContext, 'projectRoot'>): AdapterContext {
-  return { ...machine, ...extra };
 }
 
 /**
@@ -238,7 +131,8 @@ function knownTools(ids: readonly string[], onUnknown: (id: string) => void): Se
   return out;
 }
 
-async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportReport> {
+/** Lists each allowed tool's containers for `pass` and syncs them into its target store; a failure is a warning. */
+export async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportReport> {
   const report = emptyReport();
   const allowed = allowedTools(opts, pass.invoking, pass.target, report.warnings);
   const listings = ADAPTERS.filter((a) => allowed.has(a.tool)).flatMap((a) => listSafely(a, pass, report));

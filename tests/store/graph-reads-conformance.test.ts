@@ -2,8 +2,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ScopeActor } from '../../src/base/scope/recall-scope.js';
-import type { GraphRows, GraphViewQuery } from '../../src/store/port.js';
-import type { Entity, GraphOp, Relation } from '../../src/store/port/graph.js';
+import type { GraphRows, GraphViewQuery, GraphWalkQuery } from '../../src/store/port.js';
+import type { GraphOp } from '../../src/store/port/graph.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -59,6 +59,10 @@ const rows =
   (query: Partial<GraphViewQuery> = {}, tenantId = TENANT_A): Call =>
   (group) =>
     group.graphRows(tenantId, { limit: 100, ...query });
+const walk =
+  (tenantId: string, query: GraphWalkQuery): Call =>
+  (group) =>
+    group.graphRows(tenantId, query);
 const without = <T>(items: readonly T[], ...gone: readonly T[]): T[] => items.filter((item) => !gone.includes(item));
 const ids = (entities: readonly number[], relations: readonly Edge[], truncated = false): RowIds => ({
   entities,
@@ -77,12 +81,20 @@ async function answers<R>(calls: readonly Call<R>[]): Promise<R[]> {
   });
 }
 
-async function entityIds(calls: readonly Call<Entity[]>[]): Promise<number[][]> {
-  return (await answers(calls)).map((read) => read.map((row) => row.id));
+/** A walk by memory or by entity: its entity ids, with no relations and never truncated. */
+async function entityIds(calls: readonly Call[]): Promise<number[][]> {
+  return (await readIds(calls)).map(({ entities, ...rest }) => {
+    expect(rest).toEqual({ relations: [], truncated: false });
+    return [...entities];
+  });
 }
 
-async function edges(calls: readonly Call<Relation[]>[]): Promise<Edge[][]> {
-  return (await answers(calls)).map((read) => read.map((r): Edge => [r.fromEntityId, r.toEntityId]));
+/** A walk by neighbor: its relations as edges, with no entities and never truncated. */
+async function edges(calls: readonly Call[]): Promise<Edge[][]> {
+  return (await readIds(calls)).map(({ relations, ...rest }) => {
+    expect(rest).toEqual({ entities: [], truncated: false });
+    return [...relations];
+  });
 }
 
 async function readIds(calls: readonly Call[]): Promise<RowIds[]> {
@@ -373,11 +385,11 @@ describe('GraphReads walk reads', () => {
   it('maps memory ids to their entities, by id in each 400, inside the asking tenant', async () => {
     const { e, memories, many } = g;
     const [both, team, otherTenant, none, bulk] = await entityIds([
-      (r) => r.entitiesForMemories(TENANT_A, [memories.held, memories.team]),
-      (r) => r.entitiesForMemories(TENANT_A, [memories.team]),
-      (r) => r.entitiesForMemories(TENANT_B, [memories.team]),
-      (r) => r.entitiesForMemories(TENANT_A, []),
-      (r) => r.entitiesForMemories(BULK_TENANT, ['mem_gbulk']),
+      walk(TENANT_A, { by: 'memory', ids: [memories.held, memories.team] }),
+      walk(TENANT_A, { by: 'memory', ids: [memories.team] }),
+      walk(TENANT_B, { by: 'memory', ids: [memories.team] }),
+      walk(TENANT_A, { by: 'memory', ids: [] }),
+      walk(BULK_TENANT, { by: 'memory', ids: ['mem_gbulk'] }),
     ]);
     expect(both).toEqual([e.hub, e.spoke1, e.spoke2, e.secret, e.twinHeld, e.twinOpen, e.lone, e.shared]);
     expect(team).toEqual([e.hub, e.spoke1, e.spoke2, e.twinOpen, e.lone, e.shared]);
@@ -388,10 +400,10 @@ describe('GraphReads walk reads', () => {
   it('reads entities by id, in id order inside each 400 asked, and never from another tenant', async () => {
     const { e, many } = g;
     const [scrambled, crossTenant, reversed, none] = await entityIds([
-      (r) => r.entitiesByIds(TENANT_A, [e.shared, e.hub, e.secret]),
-      (r) => r.entitiesByIds(TENANT_A, [e.sharedB, e.hub]),
-      (r) => r.entitiesByIds(BULK_TENANT, [...many].reverse()),
-      (r) => r.entitiesByIds(TENANT_A, []),
+      walk(TENANT_A, { by: 'entity', ids: [e.shared, e.hub, e.secret] }),
+      walk(TENANT_A, { by: 'entity', ids: [e.sharedB, e.hub] }),
+      walk(BULK_TENANT, { by: 'entity', ids: [...many].reverse() }),
+      walk(TENANT_A, { by: 'entity', ids: [] }),
     ]);
     expect(scrambled).toEqual([e.hub, e.secret, e.shared]);
     expect(crossTenant).toEqual([e.hub]);
@@ -405,14 +417,14 @@ describe('GraphReads walk reads', () => {
     const first = many[0]!;
     const last = many[MANY - 1]!;
     const [hub, hubTwo, hubSecret, perBatch, repeated, otherTenant, zero, none] = await edges([
-      (r) => r.neighborRelations(TENANT_A, [e.hub], { limit: 100 }),
-      (r) => r.neighborRelations(TENANT_A, [e.hub], { limit: 2 }),
-      (r) => r.neighborRelations(TENANT_A, [e.hub, e.secret], { limit: 100 }),
-      (r) => r.neighborRelations(BULK_TENANT, many, { limit: 1 }),
-      (r) => r.neighborRelations(BULK_TENANT, [...many.slice(0, 400), e.tailA], { limit: 5 }),
-      (r) => r.neighborRelations(TENANT_B, [e.hub], { limit: 100 }),
-      (r) => r.neighborRelations(TENANT_A, [e.hub], { limit: 0 }),
-      (r) => r.neighborRelations(TENANT_A, [], { limit: 100 }),
+      walk(TENANT_A, { by: 'neighbor', ids: [e.hub], limit: 100 }),
+      walk(TENANT_A, { by: 'neighbor', ids: [e.hub], limit: 2 }),
+      walk(TENANT_A, { by: 'neighbor', ids: [e.hub, e.secret], limit: 100 }),
+      walk(BULK_TENANT, { by: 'neighbor', ids: many, limit: 1 }),
+      walk(BULK_TENANT, { by: 'neighbor', ids: [...many.slice(0, 400), e.tailA], limit: 5 }),
+      walk(TENANT_B, { by: 'neighbor', ids: [e.hub], limit: 100 }),
+      walk(TENANT_A, { by: 'neighbor', ids: [e.hub], limit: 0 }),
+      walk(TENANT_A, { by: 'neighbor', ids: [], limit: 100 }),
     ]);
     const hubEdges: Edge[] = [
       [e.shared, e.hub],
@@ -439,7 +451,11 @@ describe('GraphReads walk reads', () => {
 describe('GraphReads.graphDelta', () => {
   it('plans the same ops on both stores: deletes in id order, then updates and inserts in desired order', async () => {
     const { e, memories } = g;
-    const [[anchored]] = await answers<Entity[]>([(r) => r.entitiesByIds(TENANT_A, [e.anchored])]);
+    const [
+      {
+        entities: [anchored],
+      },
+    ] = await answers([walk(TENANT_A, { by: 'entity', ids: [e.anchored] })]);
     const key = {
       entityType: 'policy' as const,
       sourceObject: { type: 'policy' as const, id: anchored!.sourceObjectId! },

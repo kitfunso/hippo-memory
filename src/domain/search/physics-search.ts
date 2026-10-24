@@ -178,7 +178,10 @@ async function loadCandidateParticles(
   pool: MemoryEntry[],
 ): Promise<Map<string, PhysicsParticle> | null> {
   try {
-    return await reads.physicsParticles(pool.map((e) => e.id));
+    return await reads.stored(
+      'particles',
+      pool.map((e) => e.id),
+    );
   } catch (err) {
     rethrowIfStoreBlocked(err);
     log.warn(`physics search: state load failed, using hybrid: ${errorMessage(err)}`, errorFields(err));

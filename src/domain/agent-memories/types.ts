@@ -1,9 +1,7 @@
 // The contract between a tool's adapter, which knows where its memory lives, and the sync, which knows no tool.
-import type { ToolId } from '../../base/memory/agent-memory-tools.js';
+import type { Scope, ToolId } from '../../base/memory/agent-memory-tools.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import type { StoreWith } from '../../store/port.js';
-
-export type Scope = 'project' | 'user';
 
 /** All an adapter may know about the machine, its disk and git included; it reads nothing else, so tests can fake it
  * all. */

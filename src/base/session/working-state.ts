@@ -1,8 +1,7 @@
 // The rules a session's working state follows once its fields are read: the scrub, the caps, the fit after a mask and
 // the merge with a saved snapshot. Its caller reads the transcript.
-import type { TaskSnapshot } from '../../store/port/sessions.js';
-import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
+import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
+import { truncateCodePointSafe } from '../util/code-point-cut.js';
 
 const PRE_COMPACT_TASK_CAP = 200;
 const PRE_COMPACT_SUMMARY_CAP = 2000;
@@ -21,7 +20,14 @@ export const WORKING_STATE_CAPS = {
 export type WorkingState = { task: string; summary: string; next_step: string };
 
 /** A working state in the store port's field names. */
-export type SnapshotFields = Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'>;
+export interface SnapshotFields {
+  readonly task: string;
+  readonly summary: string;
+  readonly nextStep: string;
+}
+
+/** A saved snapshot as the merge reads it: its fields and the session that saved it. */
+type SavedSnapshot = SnapshotFields & { readonly sessionId: string | null };
 
 export function snapshotFields(state: WorkingState): SnapshotFields {
   return { task: state.task, summary: state.summary, nextStep: state.next_step };
@@ -45,7 +51,7 @@ export function fitWorkingState(state: WorkingState): WorkingState {
  * which would pass compact-resume's session check; null when all are empty, so blanks never replace a snapshot. */
 export function mergeWorkingState(
   derived: WorkingState,
-  existing: TaskSnapshot | null,
+  existing: SavedSnapshot | null,
   sessionId: string | null,
 ): SnapshotFields | null {
   const fallback =

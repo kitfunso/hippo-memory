@@ -7,7 +7,7 @@
 
 import { textOverlap } from '../../base/util/tokenize.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
-import { canAutoDelete, Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { canAutoDelete, type MemoryEntry } from '../../base/memory/memory.js';
 import { derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 import type { StoreWith } from '../../store/port.js';
@@ -28,24 +28,6 @@ export interface DedupPair {
 export interface DedupResult {
   removed: number;
   pairs: DedupPair[];
-}
-
-/** A dedup run's pairs by how the two rows relate: both semantic, both episodic, or across layers. */
-export interface DedupGroups<P> {
-  readonly semantic: P[];
-  readonly episodic: P[];
-  readonly cross: P[];
-}
-
-export function groupDedupPairs<P extends Pick<DedupPair, 'keptLayer' | 'removedLayer'>>(
-  pairs: readonly P[],
-): DedupGroups<P> {
-  const sameLayer = (layer: Layer) => (p: P) => p.keptLayer === layer && p.removedLayer === layer;
-  return {
-    semantic: pairs.filter(sameLayer(Layer.Semantic)),
-    episodic: pairs.filter(sameLayer(Layer.Episodic)),
-    cross: pairs.filter((p) => p.keptLayer !== p.removedLayer),
-  };
 }
 
 /**

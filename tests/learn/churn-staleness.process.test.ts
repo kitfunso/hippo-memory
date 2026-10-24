@@ -1,6 +1,6 @@
 /** FE2 staleness-from-code-churn: extraction and detection. */
 import type { FullContext } from '../_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
@@ -13,6 +13,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { initGitRepo, commit, DAY, ANCHOR, BEFORE_ANCHOR, AFTER_ANCHOR } from '../_helpers/churn-git-repo.js';
 import { processGit } from '../../src/infra/git-runner.js';
+import { markChurnStale } from '../../src/api/sleep/churn.js';
 
 // ---------------------------------------------------------------------------
 // extractChurnRefs (pure syntax, no repo access)
@@ -559,5 +560,40 @@ describe('detectChurnStale', () => {
       },
     );
     expect(result.preview[0]?.evidence).toBe('script-gone: goner');
+  });
+});
+
+describe('markChurnStale', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("reads the repo and project from the folder and runs every store, naming a failed one's folder", async () => {
+    const repoDir = makeRoot('churn-api-repo', { init: false });
+    initGitRepo(repoDir);
+    fs.writeFileSync(path.join(repoDir, 'a.ts'), 'v1');
+    commit(repoDir, BEFORE_ANCHOR);
+    const brokenRoot = makeRoot('churn-api-broken');
+    const okRoot = makeRoot('churn-api-ok');
+    const ctx = apiCtx(okRoot);
+    const mem = createMemory('see a.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
+    mem.created = ANCHOR;
+    mem.originProject = ctx.infra.machine.projectIdentity(repoDir).name;
+    writeEntry(okRoot, mem);
+    fs.writeFileSync(path.join(repoDir, 'a.ts'), 'v2');
+    commit(repoDir, AFTER_ANCHOR);
+    const broken = sqliteStore(brokenRoot);
+    vi.spyOn(broken.reports, 'entriesWhere').mockRejectedValue(new Error('disk gone'));
+
+    const stores = [
+      { root: brokenRoot, store: broken },
+      { root: okRoot, store: ctx.store },
+    ];
+    const results = await markChurnStale(ctx, stores, { repoDir, dryRun: false });
+
+    expect(results.map((r) => r.root)).toEqual([brokenRoot, okRoot]);
+    expect(results[0].result).toMatchObject({ marked: 0, dryRun: false, error: 'disk gone' });
+    expect(results[1].result.marked).toBe(1);
+    expect(readEntry(okRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 });

@@ -9,7 +9,7 @@ import type { SessionEvent, TaskSnapshot } from './port/sessions.js';
 import type { SessionHandoff } from '../base/session/handoff.js';
 import type { AuditMaintenance, AuditLog } from './port/audit.js';
 import type { LessonWrites, EntryWrites } from './port/entry-writes.js';
-import type { VectorReads, VectorViews, VectorWrites, EmbeddingIndex } from './port/vectors.js';
+import type { VectorReads, VectorWrites, EmbeddingIndex } from './port/vectors.js';
 import type { KeyAudit, KeyWrites, KeyGrants } from './port/keys.js';
 import type { ContextReads, DagReads } from './port/context-reads.js';
 import type { Predictions, Objects } from './port/objects.js';
@@ -46,10 +46,9 @@ export type OptionalGroup = keyof (FallbackGroups & FolderGroups & SleepGroups &
 /** The groups a sleep runs on. */
 export type SleepGroup = keyof SleepGroups;
 
-/** Groups a store may skip for a fallback: recall scores the plain vectors, GET /ready answers 200 with
- * `store: "unchecked"`, and context writes no last recall for the CLI's no-ids outcome to read. */
+/** Groups a store may skip for a fallback: GET /ready answers 200 with `store: "unchecked"`, and context writes no last
+ * recall for the CLI's no-ids outcome to read. */
 interface FallbackGroups {
-  readonly vectorViews: VectorViews;
   readonly readiness: Readiness;
   readonly lastRecall: LastRecall;
 }
@@ -143,7 +142,7 @@ export function requireGroup<G extends OptionalGroup>(store: HippoStore, group: 
 /** A store that sets the optional groups `G`, as a surface proves once before it calls in. */
 export type StoreWith<G extends OptionalGroup> = HippoStore & Pick<StoreGroups, G>;
 
-export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from './port/busy.js';
+export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../base/util/store-blocked.js';
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an await, since a lock wait
  * blocks the event loop; a lock timeout throws `StoreBusyError`. */
@@ -206,9 +205,6 @@ export type {
   ConnectorWrites,
   ConnectorEventRecord,
   DeliveryClaim,
-  DeletionLookup,
-  DeletionTarget,
-  ArtifactArchive,
   ConnectorDeadLetter,
   ConnectorEvents,
   DeadLetterConnector,
@@ -218,13 +214,18 @@ export type {
 export type { RecallSearchArgs, RecallWrites, LastRecallWrites, LastRecall } from './port/recall-writes.js';
 export type {
   VectorReads,
+  StoredPart,
+  StoredParts,
   VectorRowWrite,
   VectorWrite,
   VectorWriteResult,
   VectorBackfillQuery,
   VectorWrites,
-  VectorViews,
   EmbeddingIndex,
+  IndexSession,
+  IndexStep,
+  IndexStepAnswers,
+  IndexStepKind,
   IdPage,
   IdPageRequest,
   ParticleStats,
@@ -283,7 +284,7 @@ export type {
   QuarantineRejection,
   Quarantine,
 } from './port/quarantine.js';
-export type { GraphViewQuery, GraphRows, GraphReads } from './port/graph.js';
+export type { GraphViewQuery, GraphWalkQuery, GraphRows, GraphReads } from './port/graph.js';
 export type { Ledger, LedgerTurn, PilotArmOptions } from './port/ledger.js';
 export type {
   PromotedCopy,

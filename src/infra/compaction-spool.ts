@@ -1,14 +1,13 @@
 // Summaries post-compact could not record because the store was busy, waiting on disk for the next replay.
-import { MINUTE_MS } from '../../base/util/time.js';
+import { MINUTE_MS } from '../base/util/time.js';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
-import type { CompactionText, StepFailure } from '../../store/port/capture.js';
-import type { PostCompactPayload } from './compaction-record.js';
-import { isStoreBusy } from '../../store/port.js';
-import { errorCode, errorMessage } from '../../base/util/log.js';
-import { tryParseJson } from '../../base/util/json.js';
+import { isObjectLike, isStringValue, type PostCompactPayload } from '../base/session/capture-contract.js';
+import type { CompactionText, StepFailure } from '../store/port/capture.js';
+import { isStoreBusy } from '../store/port.js';
+import { errorCode, errorMessage } from '../base/util/log.js';
+import { tryParseJson } from '../base/util/json.js';
 
 const STAMP_DIGITS = 13;
 

@@ -9,6 +9,7 @@ import { buildCorrectionLatency, type CorrectionLatencyReport } from './correcti
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 import type { ParticleStats, StoredVectorSummary } from '../store/port.js';
+import { indexStep } from '../domain/search/embed-memories.js';
 
 export interface StoreStatus {
   stats: LegacyStats;
@@ -34,7 +35,7 @@ export async function lastSleepAt(ctx: Context): Promise<string | undefined> {
 /** Ids and dimension of the stored vectors. Every tenant, so the host admin only. */
 export async function vectorSummary(ctx: ContextWith<'embeddingIndex'>): Promise<StoredVectorSummary> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return ctx.store.embeddingIndex.summary();
+  return indexStep(ctx.store.embeddingIndex, { kind: 'summary' });
 }
 
 /**
@@ -42,7 +43,7 @@ export async function vectorSummary(ctx: ContextWith<'embeddingIndex'>): Promise
  */
 export async function embeddingReindexNeeded(ctx: ContextWith<'embeddingIndex'>, providerId: string): Promise<boolean> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return ctx.store.embeddingIndex.requiresReindex(providerId);
+  return indexStep(ctx.store.embeddingIndex, { kind: 'reindex', providerId });
 }
 
 /** The stored particles' count and mean speed, and the particles while at most `fullUpTo`. Every tenant, so the host
@@ -52,7 +53,7 @@ export async function storedParticleStats(
   fullUpTo: number,
 ): Promise<ParticleStats> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return ctx.store.embeddingIndex.particleStats(fullUpTo);
+  return indexStep(ctx.store.embeddingIndex, { kind: 'particles', fullUpTo });
 }
 
 /** Every correction link, one keyset page per store call. */

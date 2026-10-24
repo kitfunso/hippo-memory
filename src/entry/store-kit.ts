@@ -17,7 +17,13 @@ export type {
   EntryPage,
 } from '../store/port/types.js';
 export type { GoalRecallLogRow, RecallTraceInput, StrengthenOptions } from '../store/port/recall-writes.js';
-export type { RecallScopeFilter, VectorCandidateSpec, EmbeddingIndexState } from '../store/port/vectors.js';
+export type {
+  RecallScopeFilter,
+  VectorCandidateSpec,
+  EmbeddingIndexState,
+  StoredPart,
+  StoredParts,
+} from '../store/port/vectors.js';
 export type {
   AmbientCandidates,
   AmbientLoadResult,

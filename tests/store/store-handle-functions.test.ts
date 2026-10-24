@@ -160,7 +160,7 @@ describe('captureExtractedItems', () => {
 
   it('skips a text another writer stores between the plan and the write, so the store keeps one row of it', async () => {
     const text = 'Rotate the deploy key before the quarterly audit starts.';
-    const { store, config, index } = captureTarget(root);
+    const { store, config, embed } = captureTarget(root);
     const captures: Captures = {
       ...store.captures,
       write: (entries, opts) => {
@@ -169,7 +169,7 @@ describe('captureExtractedItems', () => {
       },
     };
     const keys = new Set<string>();
-    expect(await captureExtractedItems({ store: { captures }, config, index }, options, [item(text)], keys)).toEqual({
+    expect(await captureExtractedItems({ store: { captures }, config, embed }, options, [item(text)], keys)).toEqual({
       captured: 0,
       skipped: 1,
       rejected: 0,

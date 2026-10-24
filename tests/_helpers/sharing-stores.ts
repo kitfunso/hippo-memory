@@ -3,7 +3,7 @@ import { getGlobalRoot } from '../../src/host/global-store.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import type { ConfiguredFolder } from '../../src/domain/search/embed-memories.js';
+import type { ConfiguredFolder } from '../../src/base/config/configured-folder.js';
 import type { HippoStore, StoreGroups } from '../../src/store/port.js';
 
 /** A folder's store, config and the real embedder, with the folder a test reopens. */

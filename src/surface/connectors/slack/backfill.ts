@@ -34,7 +34,8 @@ export async function backfillChannel(
   // `oldest` (numeric ts) is the resume bound for the first page only; `cursor` starts null and Slack mints the
   // next-page token. Mixing the two would feed a numeric ts as an opaque cursor and break on rerun.
   const cursors = ctx.store.connectorEvents;
-  const resumeFrom: string | null = await cursors.slackCursor(ctx.tenantId, opts.channel.id);
+  const at = { connector: 'slack', tenantId: ctx.tenantId, channelId: opts.channel.id } as const;
+  const resumeFrom: string | null = await cursors.cursor(at);
   let cursor: string | null = null;
   let ingested = 0;
   let pages = 0;
@@ -56,11 +57,11 @@ export async function backfillChannel(
       if (r.status === 'ingested') ingested++;
       if (!latestTs || msg.ts > latestTs) latestTs = msg.ts;
       if (opts.maxMessages && ingested >= opts.maxMessages) {
-        if (latestTs) await cursors.saveSlackCursor(ctx.tenantId, opts.channel.id, latestTs);
+        if (latestTs) await cursors.saveCursor(at, latestTs);
         return { ingested, pages };
       }
     }
-    if (latestTs) await cursors.saveSlackCursor(ctx.tenantId, opts.channel.id, latestTs);
+    if (latestTs) await cursors.saveCursor(at, latestTs);
     if (!page.next_cursor) break;
     cursor = page.next_cursor;
   }

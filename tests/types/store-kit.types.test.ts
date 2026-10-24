@@ -42,7 +42,6 @@ describe('hippo-memory/store-kit entry types', () => {
 
   it('the optional groups are a closed set of names, and no localFiles group is left', () => {
     expectTypeOf<OptionalGroup>().toEqualTypeOf<
-      | 'vectorViews'
       | 'readiness'
       | 'lastRecall'
       | 'ledger'

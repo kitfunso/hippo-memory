@@ -24,12 +24,12 @@ export interface DeletionResult {
  * another tenant's row or a distilled row. */
 export async function handleCommentDeleted(ctx: Context, input: DeletionInput): Promise<DeletionResult> {
   const { artifactRef, idempotencyKey, deliveryId, eventName } = input;
-  const done = await ctx.store.connectorEvents.archiveDeletedArtifact({
+  const event = { connector: 'github', idempotencyKey, deliveryId, eventName } as const;
+  const done = await ctx.store.connectorEvents.markEventSeen(event, {
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
     artifactRef,
     reason: `source_deleted:github:${eventName}:${deliveryId}`,
-    event: { connector: 'github', idempotencyKey, deliveryId, eventName },
   });
   if (done.duplicate) return { status: 'duplicate', archivedCount: 0 };
   if (done.archived === 0) return { status: 'archive_skipped_not_found', archivedCount: 0 };

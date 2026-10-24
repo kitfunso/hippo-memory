@@ -5,7 +5,7 @@ import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { ConnectorEventRecord } from '../../port.js';
 import { eventMemory, eventRecord, eventSeen, markEventSeen, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
-import type { SlackTeamRoute, SlackDlqInsert, SlackDlqItem as DlqItem, SlackWorkspace } from '../../port/connectors.js';
+import type { TenantRoute, SlackDlqInsert, SlackDlqItem as DlqItem, SlackWorkspace } from '../../port/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 
 // Backfill cursors
@@ -18,11 +18,19 @@ export function slackCursor(db: DatabaseSyncLike, tenantId: string, channelId: s
   return row?.latest_ts ?? null;
 }
 
-export function saveSlackCursor(db: DatabaseSyncLike, tenantId: string, channelId: string, latestTs: string): void {
+/** `keepSaved` leaves a timestamp already saved as it is. */
+export function saveSlackCursor(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  channelId: string,
+  latestTs: string,
+  keepSaved: boolean,
+): void {
+  const kept = keepSaved ? 'COALESCE(slack_cursors.latest_ts, excluded.latest_ts)' : 'excluded.latest_ts';
   cachedStatement(
     db,
     `INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?,?,?,?)
-       ON CONFLICT(tenant_id, channel_id) DO UPDATE SET latest_ts = excluded.latest_ts, updated_at =
+       ON CONFLICT(tenant_id, channel_id) DO UPDATE SET latest_ts = ${kept}, updated_at =
        excluded.updated_at`,
   ).run(tenantId, channelId, latestTs, new Date().toISOString());
 }
@@ -48,18 +56,6 @@ export function slackEventRecord(db: DatabaseSyncLike, eventId: string): Connect
   return eventRecord(db, SLACK_LOG, eventId);
 }
 
-// Deletion lookup
-
-/** The raw memory a Slack message became. The tenant filter keeps one tenant's deletion from reaching another's row
- * with the same ref. */
-export function rawMemoryIdForArtifact(db: DatabaseSyncLike, artifactRef: string, tenantId: string): string | null {
-  const row = cachedStatement(
-    db,
-    `SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`,
-  ).get(artifactRef, tenantId) as { id?: string } | undefined;
-  return row?.id ?? null;
-}
-
 export const SLACK_DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
   { field: 'id', column: 'id', kind: 'int' },
   { field: 'tenantId', column: 'tenant_id', kind: 'text', insert: true },
@@ -74,7 +70,7 @@ export const SLACK_DLQ = dlqAccess<DlqItem, SlackDlqInsert>('slack_dlq', [
   { field: 'slackTimestamp', column: 'slack_timestamp', kind: 'nullableText', insert: true },
 ]);
 
-export function slackTeamRoute(db: DatabaseSyncLike, teamId: string): SlackTeamRoute {
+export function slackTeamRoute(db: DatabaseSyncLike, teamId: string): TenantRoute {
   const row = cachedStatement(db, `SELECT tenant_id FROM slack_workspaces WHERE team_id = ?`).get(teamId) as
     | { tenant_id?: string }
     | undefined;
@@ -82,7 +78,7 @@ export function slackTeamRoute(db: DatabaseSyncLike, teamId: string): SlackTeamR
 
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const total = (cachedStatement(db, `SELECT COUNT(*) AS c FROM slack_workspaces`).get() as { c: number | bigint }).c;
-  return { tenantId: null, workspaceCount: Number(total) };
+  return { tenantId: null, routes: Number(total) };
 }
 
 /** Upserts on team_id: operators move a workspace between tenants without a delete first. */

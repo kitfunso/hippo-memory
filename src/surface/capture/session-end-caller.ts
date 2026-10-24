@@ -5,7 +5,7 @@ import type { EntryContext } from '../../api/types.js';
 import type { HandoffEvidence } from '../../base/session/handoff.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { bindCaller, checkedWorkingState } from './caller-session.js';
-import { snapshotFields, type WorkingState } from '../../domain/capture/working-state.js';
+import { snapshotFields, type WorkingState } from '../../base/session/working-state.js';
 import { withEntryInfra } from '../entry-infra.js';
 
 export type CallerEvidence = Pick<HandoffEvidence, 'gitRef' | 'dirtyTree' | 'testStatus'>;

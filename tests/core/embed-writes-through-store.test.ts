@@ -150,7 +150,7 @@ describe('embedAll with a store', () => {
     });
     expect(left.map((e) => e.content)).toEqual(['unembeddable row the provider gives up on']);
     const [a] = seeded;
-    expect((await memory.store.vectors.storedVectors([a.id])).get(a.id)).toEqual(
+    expect(Array.from((await memory.store.vectors.stored('vectors', [a.id])).get(a.id) ?? [])).toEqual(
       hashedVector(`fake-a ${embeddingInputText(a)}`).map(Math.fround),
     );
   });
@@ -215,7 +215,11 @@ describe('embedAll with a store', () => {
       "the vector index was built by another embedding model; run 'hippo embed' to rebuild it",
     );
     expect(await memory.store.vectors.embeddingIndexState()).toEqual({ storedModel: other, hasVectors: true });
-    expect([...(await memory.store.vectors.storedVectors(seeded.map((e) => e.id))).keys()]).toEqual([first.id]);
+    const left = await memory.store.vectors.stored(
+      'vectors',
+      seeded.map((e) => e.id),
+    );
+    expect([...left.keys()]).toEqual([first.id]);
   });
 });
 
@@ -227,8 +231,10 @@ describe('embedMemory with a store', () => {
     await withSqliteBlocked(memory.store.kind, () => embedMemoryInto(on(hippoRoot, memory.store), entry));
     expect(readdirSync(hippoRoot).sort()).toEqual(['config.json', OTHER_STORE_MARKER]);
     const expected = hashedVector(embeddingInputText(entry)).map(Math.fround);
-    expect((await memory.store.vectors.storedVectors([entry.id])).get(entry.id)).toEqual(expected);
-    expect((await memory.store.vectors.physicsParticles([entry.id])).get(entry.id)).toMatchObject({
+    expect(Array.from((await memory.store.vectors.stored('vectors', [entry.id])).get(entry.id) ?? [])).toEqual(
+      expected,
+    );
+    expect((await memory.store.vectors.stored('particles', [entry.id])).get(entry.id)).toMatchObject({
       memoryId: entry.id,
       position: expected,
       lastSimulation: FAKE_NOW,
@@ -249,12 +255,12 @@ describe('embedMemory with a store', () => {
       };
       const store: HippoStore = stale ? { ...memory.store, vectors: staleVectors } : memory.store;
       const ids = seeded.map((e) => e.id);
-      const [before, requests] = [await memory.store.vectors.storedVectors(ids), embeddings.requests()];
+      const [before, requests] = [await memory.store.vectors.stored('vectors', ids), embeddings.requests()];
       await withSqliteBlocked(memory.store.kind, () =>
         embedMemoryInto(on(markedFolder(hashedConfig()), store), seeded[0]),
       );
       expect(embeddings.requests() - requests).toBe(asked);
-      expect(await memory.store.vectors.storedVectors(ids)).toEqual(before);
+      expect(await memory.store.vectors.stored('vectors', ids)).toEqual(before);
       expect(before.size).toBe(4);
       expect(await memory.store.vectors.embeddingIndexState()).toEqual({
         storedModel: embeddingIndexIdentity('fake-old'),

@@ -17,7 +17,7 @@ import {
   type PlanInput,
   type PlanItem,
 } from './plan.js';
-import { emptyTally, type Tally } from './report.js';
+import { emptyTally, type Tally } from '../../base/memory/agent-memory-report.js';
 import { MIN_ITEM_CHARS, splitSource, storedText } from './source.js';
 import type { MemoryItem } from './types.js';
 

@@ -42,9 +42,11 @@ function logged(store: HippoStore, calls: string[]): HippoStore {
     },
     vectors: {
       embeddingIndexState: log('embeddingIndexState', v.embeddingIndexState),
-      storedVectors: log('storedVectors', v.storedVectors),
+      stored: (part, ids) => {
+        calls.push(`stored:${part}`);
+        return v.stored(part, ids);
+      },
       nearestEntries: log('nearestEntries', v.nearestEntries),
-      physicsParticles: log('physicsParticles', v.physicsParticles),
     },
   };
 }

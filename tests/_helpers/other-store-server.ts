@@ -25,7 +25,6 @@ export function stubStore(root: string, base: Partial<HippoStore>): HippoStore {
   return {
     ...withoutFolderGroups(sqliteStore(root)),
     kind: 'stub',
-    vectorViews: undefined,
     readiness: undefined,
     lastRecall: undefined,
     ...base,
