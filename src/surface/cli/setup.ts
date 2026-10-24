@@ -1,6 +1,6 @@
 // `hippo hook`, `hippo setup` and `hippo daily-runner`: install and run the agent and machine integrations.
 
-import { MINUTE_MS } from '../../base/util/time.js';
+import { HOUR_MS, MINUTE_MS } from '../../base/util/time.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync } from 'child_process';
@@ -51,7 +51,8 @@ import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { importUserMemories } from '../../domain/agent-memories/sync.js';
 import { currentMachine } from '../../infra/machine.js';
-import { cliStore, cliSyncOptions } from './api-context.js';
+import { cliApiContext, cliStore, cliSyncOptions } from './api-context.js';
+import { lastSleepAt } from '../../api/status.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
 import { replayCompactions } from '../capture/compaction-record.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -581,17 +582,10 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
   printAgentImport(await importUserMemories(globalRoot, cliSyncOptions(tenantId, currentMachine())), '');
   const workspaces = listRegisteredWorkspaces(globalRoot);
 
-  if (workspaces.length === 0) {
-    console.log('No registered Hippo workspaces found. Run `hippo init` inside a project first.');
-    return;
-  }
-
-  console.log(`Running daily maintenance across ${plural(workspaces.length, 'registered workspace')}...`);
-
   let processed = 0;
   let failed = 0;
   const timeout = envDailyStepTimeoutMs() ?? DAILY_STEP_TIMEOUT_MS;
-  runDailyMaintenance(workspaces, (cwd, args) => {
+  const runStep = (cwd: string, args: string[]): void => {
     try {
       execFileSync(process.execPath, [process.argv[1], ...args], {
         cwd,
@@ -608,8 +602,41 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
         ...errorFields(err),
       });
     }
-  });
+  };
+  // Before the no-workspace return: a box with no workspaces still has a global store that hooks write to.
+  if (isInitialized(globalRoot)) await sleepGlobalStore(globalRoot, tenantId, runStep);
 
+  if (workspaces.length === 0) {
+    console.log('No registered Hippo workspaces found. Run `hippo init` inside a project first.');
+  } else {
+    console.log(`Running daily maintenance across ${plural(workspaces.length, 'registered workspace')}...`);
+    runDailyMaintenance(workspaces, runStep, globalRoot);
+  }
+  reportDailyRun(processed, failed);
+}
+
+const GLOBAL_SLEEP_GAP_MS = 20 * HOUR_MS;
+
+/** Sleeps the global store once a day, as a child step like a workspace's; an unreadable history sleeps it anyway. */
+async function sleepGlobalStore(
+  globalRoot: string,
+  tenantId: string,
+  runStep: (cwd: string, args: string[]) => void,
+): Promise<void> {
+  let last: string | undefined;
+  try {
+    last = await lastSleepAt(cliApiContext(globalRoot, tenantId));
+  } catch (err) {
+    log.warn(`could not read the global store's last sleep: ${errorMessage(err)}`, errorFields(err));
+  }
+  if (last !== undefined && Date.now() - Date.parse(last) < GLOBAL_SLEEP_GAP_MS) {
+    console.log(`Skipped the global store: it slept at ${last}, less than 20 hours ago.`);
+    return;
+  }
+  runStep(process.cwd(), ['sleep', '--global', '--no-learn']);
+}
+
+function reportDailyRun(processed: number, failed: number): void {
   console.log(
     `Daily maintenance complete: ${plural(processed, 'workspace')} processed, ` +
       `${plural(failed, 'command failure')}.`,
