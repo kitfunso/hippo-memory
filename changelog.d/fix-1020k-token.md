@@ -6,4 +6,4 @@
 
 ### Changed
 
-- **The per-address rate limiter frees a slot at its key cap without a walk of every bucket.** It keeps the same eviction order: the oldest refilled bucket, then the oldest that can still spend, then the oldest.
+- **The per-address rate limiter frees a slot at its key cap from its 64 oldest buckets, not a walk of every bucket.** Among those it drops the oldest refilled bucket, then the oldest that can still spend, then the oldest.

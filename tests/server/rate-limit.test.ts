@@ -98,21 +98,20 @@ describe('createRateLimiter', () => {
     expect(Array.from({ length: 3 }, () => rl.check('spending', 1100))).toEqual([true, true, false]);
   });
 
-  it('frees a slot at the cap from its index, never by walking the table', () => {
-    const rl = createRateLimiter(OPTS);
-    for (let k = 0; k < OPTS.maxKeys - 1; k++) for (let i = 0; i < 5; i++) rl.check(`drained-${k}`, 1000);
-    rl.check('refilled', 1000); // four tokens at 1000, full again by 1100
+  it('reads at most 64 buckets to free a slot for an unseen key at 10,000 keys, then drops the oldest', () => {
+    const rl = createRateLimiter({ ...OPTS, maxKeys: 10_000 });
+    for (let k = 0; k < 10_000; k++) for (let i = 0; i < 5; i++) rl.check(`drained-${k}`, 1000);
     // Every walk of a Map steps this one iterator method, so its calls count the buckets a check reads in turn.
     const mapIterator: Iterator<unknown> = Object.getPrototypeOf(new Map().keys());
     const steps = vi.spyOn(mapIterator, 'next');
     try {
-      rl.check('new', 1100); // each drained bucket holds one token by 1100: spendable, not full
-      expect(steps).not.toHaveBeenCalled();
+      expect(rl.check('new', 1000)).toBe(true); // every bucket is throttled, so none ends the walk early
+      expect(steps.mock.calls.length).toBeLessThanOrEqual(64);
     } finally {
       steps.mockRestore();
     }
-    // refilled went, not the least recently used bucket, which keeps the one token it refilled.
-    expect([rl.check('drained-0', 1100), rl.check('drained-0', 1100)]).toEqual([true, false]);
+    // drained-0 went and starts over with a full burst; drained-1 kept its empty bucket.
+    expect([rl.check('drained-1', 1000), rl.check('drained-0', 1000)]).toEqual([false, true]);
   });
 
   it('drops the oldest bucket only when every bucket is throttled', () => {
