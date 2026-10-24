@@ -88,6 +88,16 @@ describe('scheduler', () => {
       [norm(repoC), ['sleep']],
     ]);
   });
+
+  it('runDailyMaintenance learns in, but does not sleep, a workspace whose store is the global root', () => {
+    const runCommand = vi.fn();
+    const home = join(root, 'home');
+    mkdirSync(join(home, '.hippo'), { recursive: true });
+
+    runDailyMaintenance([home], runCommand, join(home, '.hippo'));
+
+    expect(runCommand.mock.calls).toEqual([[norm(home), ['learn', '--git', '--days', '1']]]);
+  });
 });
 
 // About 2 s solo, two runs of two short child steps, so the 30 s process-project timeout is a 15x margin.
