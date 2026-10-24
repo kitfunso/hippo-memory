@@ -71,7 +71,7 @@ describe('mcp hippo_context scope filter', () => {
       sessionId: 'sess-ctx-text',
       source: 'test',
     });
-    appendSessionEvent(home, 'default', {
+    await appendSessionEvent(home, 'default', {
       sessionId: 'sess-ctx-text',
       eventType: 'note',
       content: 'parity trail event',

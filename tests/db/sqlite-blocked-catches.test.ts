@@ -37,7 +37,7 @@ const ROWS: readonly Row[] = [
     'returned',
   ],
   [
-    'store/sqlite/folder-forms.ts strengthenRetrieved',
+    'store/sqlite/entry-writes.ts strengthenRetrieved',
     /strengthenRetrieved/,
     async (root) =>
       `found ${strengthenRetrieved(root, [entry.id], { tenantId: 'default', recallBoostAblated: false }, {}).size}`,

@@ -14,7 +14,16 @@ import {
   upsertVectors,
 } from '../../../src/db/vector-store.js';
 import * as graphQueueSql from '../../../src/store/sqlite/graph-queue.js';
-import type { Entity, Relation } from '../../../src/store/port/graph.js';
+import {
+  ENTITY_COLS,
+  RELATION_COLS,
+  rowToEntity,
+  rowToRelation,
+  type EntityRow,
+  type RelationRow,
+} from '../../../src/store/sqlite/graph-rows.js';
+import { DEFAULT_LIST_LIMIT } from '../../../src/base/util/limits.js';
+import type { Entity, EntityType, Relation } from '../../../src/store/port/graph.js';
 import { handlesOf, onHandle, openStore } from '../../../src/store/sqlite/handles.js';
 import * as searchRowsSql from '../../../src/store/sqlite/search-rows.js';
 import type { ApiCall } from '../../../src/base/session/transcript-calls.js';
@@ -23,6 +32,36 @@ import { particleStats } from '../../../src/store/sqlite/vector-index.js';
 import * as vectorIndexSql from '../../../src/store/sqlite/vector-index.js';
 import type { RebuildPatch } from '../../../src/store/port/consolidation.js';
 import type { VectorCandidateSpec, StoredVectorSummary } from '../../../src/store/port/vectors.js';
+
+/** The tenant's newest entities, `entityType` only when named. */
+export function loadEntities(
+  hippoRoot: string,
+  tenantId: string,
+  opts: { entityType?: EntityType; limit?: number } = {},
+): Entity[] {
+  const type = opts.entityType === undefined ? [] : [opts.entityType];
+  const sql =
+    `SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ?${type.length ? ' AND entity_type = ?' : ''} ` +
+    `ORDER BY created_at DESC, id DESC LIMIT ?`;
+  return onHandle(hippoRoot, (db) =>
+    (db.prepare(sql).all(tenantId, ...type, opts.limit ?? DEFAULT_LIST_LIMIT) as EntityRow[]).map(rowToEntity),
+  );
+}
+
+/** The tenant's newest relations, from one entity only when `fromEntityId` is set. */
+export function loadRelations(
+  hippoRoot: string,
+  tenantId: string,
+  opts: { fromEntityId?: number; limit?: number } = {},
+): Relation[] {
+  const from = opts.fromEntityId === undefined ? [] : [opts.fromEntityId];
+  const sql =
+    `SELECT ${RELATION_COLS} FROM relations WHERE tenant_id = ?${from.length ? ' AND from_entity_id = ?' : ''} ` +
+    `ORDER BY created_at DESC, id DESC LIMIT ?`;
+  return onHandle(hippoRoot, (db) =>
+    (db.prepare(sql).all(tenantId, ...from, opts.limit ?? DEFAULT_LIST_LIMIT) as RelationRow[]).map(rowToRelation),
+  );
+}
 
 export function markPendingProcessedUpTo(hippoRoot: string, tenantId: string, maxId: number): number {
   return onHandle(hippoRoot, (db) => graphQueueSql.markPendingProcessedUpTo(db, tenantId, maxId));

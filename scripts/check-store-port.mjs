@@ -768,7 +768,7 @@ if (folderForms.length > 0) {
   console.error(`Folder forms above src/store/sqlite: ${folderForms.length}, none allowed:`);
   for (const site of folderForms) console.error(`  ${site}`);
   console.error(
-    'Take the store or the handle the caller holds; a folder form for a script or the eval kit goes in src/store/sqlite/folder-forms.ts.',
+    'Take the store or the handle the caller holds; a folder form for a script or the eval kit goes in src/store/sqlite/fixtures.ts.',
   );
   process.exit(1);
 }

@@ -8,18 +8,14 @@ import { cliConfig, cliApiContext, cliFolder } from './api-context.js';
 import { isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
 import { folderVectorSource } from '../../entry/folder-search.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
+import { bootstrapCorpus, compareSummaries, runEval, type EvalCase, type EvalSummary } from '../../domain/eval/eval.js';
 import {
-  bootstrapCorpus,
-  compareSummaries,
   detectRegressions,
   formatResult,
   resultToBaseline,
-  runEval,
   runFeatureEval,
   type EvalBaseline,
-  type EvalCase,
-  type EvalSummary,
-} from '../../api/eval.js';
+} from '../../domain/eval/eval-suite.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';

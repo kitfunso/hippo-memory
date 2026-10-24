@@ -32,7 +32,7 @@ async function runHippo(flags: Record<string, string>): Promise<string> {
   return r.stdout;
 }
 
-function seedContinuityState(): void {
+async function seedContinuityState(): Promise<void> {
   initTestStore(hippoDir);
 
   saveActiveTaskSnapshot(hippoDir, 'default', {
@@ -43,7 +43,7 @@ function seedContinuityState(): void {
     source: 'test',
   });
 
-  appendSessionEvent(hippoDir, 'default', {
+  await appendSessionEvent(hippoDir, 'default', {
     sessionId: 'sess-current',
     eventType: 'note',
     content: 'Checked the latest branch state and confirmed the matching handoff should drive the next action.',
@@ -69,7 +69,7 @@ function seedContinuityState(): void {
 
 describe('hippo context continuity assembly', () => {
   it('returns snapshot, matching handoff, and recent trail in JSON even when no memories are recalled', async () => {
-    seedContinuityState();
+    await seedContinuityState();
 
     const out = await runHippo({ format: 'json', budget: '500' });
     const parsed = JSON.parse(out);
@@ -83,7 +83,7 @@ describe('hippo context continuity assembly', () => {
   });
 
   it('prints the matching handoff in markdown context and excludes the stale one', async () => {
-    seedContinuityState();
+    await seedContinuityState();
 
     const out = await runHippo({ budget: '500' });
 

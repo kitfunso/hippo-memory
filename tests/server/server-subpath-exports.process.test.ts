@@ -11,7 +11,6 @@ const SERVER_VALUES = [
   'authCreateSelf',
   'authRevoke',
   'bindSessionOwner',
-  'bindSessionOwnerOn',
   'captureFailureForCaller',
   'captureSessionTexts',
   'clientIpForRateLimit',

@@ -19,16 +19,16 @@ beforeEach(() => {
 });
 
 describe('session_events tenant isolation', () => {
-  it('listSessionEvents does not return rows from another tenant', () => {
+  it('listSessionEvents does not return rows from another tenant', async () => {
     initTestStore(tmpDir);
 
-    appendSessionEvent(tmpDir, 'tenantA', {
+    await appendSessionEvent(tmpDir, 'tenantA', {
       sessionId: 'shared-id',
       eventType: 'note',
       content: 'A says hi',
       source: 'test',
     });
-    appendSessionEvent(tmpDir, 'tenantB', {
+    await appendSessionEvent(tmpDir, 'tenantB', {
       sessionId: 'shared-id',
       eventType: 'note',
       content: 'B says hi',
@@ -44,16 +44,16 @@ describe('session_events tenant isolation', () => {
     expect(bEvents[0].content).toBe('B says hi');
   });
 
-  it('findPromotableSessions only sees the calling tenant', () => {
+  it('findPromotableSessions only sees the calling tenant', async () => {
     initTestStore(tmpDir);
 
-    appendSessionEvent(tmpDir, 'tenantA', {
+    await appendSessionEvent(tmpDir, 'tenantA', {
       sessionId: 'sess-a',
       eventType: 'session_complete',
       content: 'success',
       source: 'test',
     });
-    appendSessionEvent(tmpDir, 'tenantB', {
+    await appendSessionEvent(tmpDir, 'tenantB', {
       sessionId: 'sess-b',
       eventType: 'session_complete',
       content: 'success',

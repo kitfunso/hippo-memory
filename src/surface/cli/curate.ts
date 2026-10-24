@@ -5,7 +5,7 @@ import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import * as path from 'path';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
-import { isGitRepo } from '../../api/repo-learning.js';
+import { isGitRepo } from '../../domain/learn/autolearn.js';
 import { processGit } from '../../infra/git-runner.js';
 import * as api from '../../api/index.js';
 import { memoryGet } from '../../api/memories/memories.js';

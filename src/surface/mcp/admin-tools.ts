@@ -4,7 +4,7 @@ import { evalNow } from '../../base/memory/ablation.js';
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
 import { conflictListAll, conflictListOpen, conflictResolve } from '../../api/memories/conflicts.js';
-import { memoryStatusGet, memoryGetTouchable } from '../../api/memories/memories.js';
+import { memoryGetTouchable } from '../../api/memories/memories.js';
 import { mcpApiContext, type LocalToolCall, type ToolCall } from './protocol.js';
 import { sharePeers, shareToGlobal } from '../../api/sharing.js';
 import { MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
@@ -45,7 +45,8 @@ export async function runPredictBaserateTool({ args, ctx }: ToolCall): Promise<s
 
 export async function runStatusTool({ ctx, config }: ToolCall): Promise<string> {
   // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
-  const tallies = await memoryStatusGet(mcpApiContext(ctx), evalNow(), AT_RISK_BELOW);
+  const api = mcpApiContext(ctx);
+  const tallies = await api.store.reports.memoryStatus(api.tenantId, evalNow(), AT_RISK_BELOW);
   const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
   return [
     `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,

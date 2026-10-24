@@ -12,7 +12,7 @@ import {
   type CreateMemoryOptions,
   type MemoryEntry,
 } from '../../src/base/memory/memory.js';
-import { loadRecallSearchEntries } from '../../src/store/sqlite/folder-forms.js';
+import { loadRecallSearchEntries } from '../../src/store/sqlite/fixtures.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {
   canReadScope,

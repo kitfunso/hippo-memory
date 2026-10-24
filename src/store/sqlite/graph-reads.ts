@@ -4,7 +4,6 @@ import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { withReadSnapshot, type DatabaseSyncLike } from '../../db/index.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import {
-  GRAPH_ENTITY_TYPES,
   type EntityRow,
   type RelationRow,
   rowToEntity,
@@ -14,7 +13,6 @@ import {
 } from './graph-rows.js';
 import {
   GRAPH_ID_BATCH,
-  type EntityType,
   type Entity,
   type Relation,
   type StoredEntity,
@@ -54,60 +52,23 @@ function loadEntitiesByName(
   return rows.map(rowToEntity);
 }
 
-export function loadEntities(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  opts: { entityType?: EntityType; limit?: number } = {},
-): Entity[] {
+/** The tenant's newest `limit` entities. */
+function loadEntities(db: DatabaseSyncLike, tenantId: string, limit: number): Entity[] {
   assertTenantId('loadEntities', tenantId);
-  const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
-  if (opts.entityType && !GRAPH_ENTITY_TYPES.has(opts.entityType)) {
-    throw new Error(
-      `loadEntities: entityType must be one of ${Array.from(GRAPH_ENTITY_TYPES).join('|')}; got ${opts.entityType}`,
-    );
-  }
-  const clauses = ['tenant_id = ?'];
-  const params: unknown[] = [tenantId];
-  if (opts.entityType) {
-    clauses.push('entity_type = ?');
-    params.push(opts.entityType);
-  }
-  params.push(limit);
   const rows = cachedStatement(
     db,
-    `
-    SELECT ${ENTITY_COLS} FROM entities
-    WHERE ${clauses.join(' AND ')}
-    ORDER BY created_at DESC, id DESC
-    LIMIT ?
-  `,
-  ).all(...params) as EntityRow[];
+    `SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+  ).all(tenantId, limit) as EntityRow[];
   return rows.map(rowToEntity);
 }
 
-export function loadRelations(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  opts: { fromEntityId?: number; limit?: number } = {},
-): Relation[] {
+/** The tenant's newest `limit` relations. */
+function loadRelations(db: DatabaseSyncLike, tenantId: string, limit: number): Relation[] {
   assertTenantId('loadRelations', tenantId);
-  const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
-  const clauses = ['tenant_id = ?'];
-  const params: unknown[] = [tenantId];
-  if (opts.fromEntityId !== undefined) {
-    clauses.push('from_entity_id = ?');
-    params.push(opts.fromEntityId);
-  }
-  params.push(limit);
   const rows = cachedStatement(
     db,
-    `
-    SELECT ${RELATION_COLS} FROM relations
-    WHERE ${clauses.join(' AND ')}
-    ORDER BY created_at DESC, id DESC
-    LIMIT ?
-  `,
-  ).all(...params) as RelationRow[];
+    `SELECT ${RELATION_COLS} FROM relations WHERE tenant_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+  ).all(tenantId, limit) as RelationRow[];
   return rows.map(rowToRelation);
 }
 
@@ -291,8 +252,8 @@ function readableOnly<T extends { memoryId: string | null }>(
 }
 
 function wholeGraphRows({ db, tenantId }: GraphSource, limit: number): GraphRows {
-  const entities = loadEntities(db, tenantId, { limit });
-  const relations = loadRelations(db, tenantId, { limit });
+  const entities = loadEntities(db, tenantId, limit);
+  const relations = loadRelations(db, tenantId, limit);
   return { entities, relations, truncated: entities.length >= limit || relations.length >= limit };
 }
 

@@ -385,10 +385,10 @@ describe('active task snapshots', () => {
 });
 
 describe('session events', () => {
-  it('stores and reloads recent session events in chronological order', () => {
+  it('stores and reloads recent session events in chronological order', async () => {
     initTestStore(tmpDir);
 
-    appendSessionEvent(tmpDir, 'default', {
+    await appendSessionEvent(tmpDir, 'default', {
       sessionId: 'sess_alpha',
       task: 'Ship continuity',
       eventType: 'plan',
@@ -397,7 +397,7 @@ describe('session events', () => {
       metadata: { step: 1 },
     });
 
-    appendSessionEvent(tmpDir, 'default', {
+    await appendSessionEvent(tmpDir, 'default', {
       sessionId: 'sess_alpha',
       task: 'Ship continuity',
       eventType: 'progress',
@@ -418,10 +418,10 @@ describe('session events', () => {
     expect(fs.readFileSync(mirrorPath, 'utf8')).toContain('sess_alpha');
   });
 
-  it('can filter down to the newest session trail', () => {
+  it('can filter down to the newest session trail', async () => {
     initTestStore(tmpDir);
 
-    appendSessionEvent(tmpDir, 'default', {
+    await appendSessionEvent(tmpDir, 'default', {
       sessionId: 'sess_old',
       task: 'Old task',
       eventType: 'note',
@@ -429,7 +429,7 @@ describe('session events', () => {
       source: 'test',
     });
 
-    appendSessionEvent(tmpDir, 'default', {
+    await appendSessionEvent(tmpDir, 'default', {
       sessionId: 'sess_new',
       task: 'New task',
       eventType: 'note',

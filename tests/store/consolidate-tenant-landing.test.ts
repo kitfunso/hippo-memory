@@ -108,13 +108,13 @@ describe('trace pass lands in the resolved tenant and stays idempotent there', (
     const home = makeRoot('consolidate-tenant-landing');
 
     const sid = 'test-session-tenant-x';
-    appendSessionEvent(home, 'tenant-x', {
+    await appendSessionEvent(home, 'tenant-x', {
       sessionId: sid,
       eventType: 'action',
       content: 'rotate the deploy key',
       source: 'agent',
     });
-    appendSessionEvent(home, 'tenant-x', {
+    await appendSessionEvent(home, 'tenant-x', {
       sessionId: sid,
       eventType: 'session_complete',
       content: 'success',
