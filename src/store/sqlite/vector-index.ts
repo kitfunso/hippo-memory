@@ -257,13 +257,6 @@ export function storedParticleIds(db: DatabaseSyncLike): string[] {
   return rows.map((row) => row.memory_id);
 }
 
-/** The stored particles for `ids`, in that order; an id with no particle is skipped. */
-export function storedParticlesByIds(db: DatabaseSyncLike, ids: readonly string[]): PhysicsParticle[] {
-  if (ids.length === 0) return [];
-  const byId = loadPhysicsState(db, [...ids]);
-  return ids.flatMap((id) => byId.get(id) ?? []);
-}
-
 /** Writes `particles` over their stored state under `hippoRoot`, as one batch. */
 export function saveStoredParticles(db: DatabaseSyncLike, particles: PhysicsParticle[]): void {
   savePhysicsState(db, particles);

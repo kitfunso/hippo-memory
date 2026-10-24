@@ -22,7 +22,7 @@ import * as taskSnapshotsSql from '../../../src/store/sqlite/task-snapshots.js';
 import { freshActiveSnapshot } from '../../../src/base/session/session-snapshot.js';
 import type { ContinuityKey } from '../../../src/store/port/types.js';
 import type { JsonObject } from '../../../src/base/util/json.js';
-import type { SessionDecayContext } from '../../../src/store/port/consolidation.js';
+import { sessionDecayContext } from '../../../src/domain/consolidate/decay.js';
 
 export function saveActiveTaskSnapshot(
   hippoRoot: string,
@@ -112,8 +112,8 @@ export function appendConsolidationRun(
   onHandle(hippoRoot, (db) => indexAndStatsSql.appendConsolidationRun(db, storeFilesOf(hippoRoot), run), openStore);
 }
 
-export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext {
-  return onHandle(hippoRoot, (db) => indexAndStatsSql.readSessionDecayContext(db), openStore);
+export function loadSessionDecayContext(hippoRoot: string): ReturnType<typeof sessionDecayContext> {
+  return sessionDecayContext(onHandle(hippoRoot, (db) => indexAndStatsSql.readSleepHistory(db), openStore));
 }
 
 export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?: ContinuityKey): TaskSnapshot | null {

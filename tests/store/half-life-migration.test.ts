@@ -9,7 +9,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/sqlite/open.js';
+import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/rules/half-life.js';
 import {
   createMemory,
   deriveHalfLife,
@@ -99,7 +99,7 @@ const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 /** The base the store's memories are on, as a dry-run move reads it. */
 async function baseOf(root: string): Promise<number> {
-  return (await local(root).consolidation.moveHalfLives(DEFAULT_HALF_LIFE_DAYS, { dryRun: true, actor: 'test' })).from;
+  return (await local(root).consolidation.begin(DEFAULT_HALF_LIFE_DAYS, { dryRun: true, actor: 'test' })).from;
 }
 
 function byContent(root: string): Map<string, number> {
@@ -251,7 +251,7 @@ describe('default half-life migration', () => {
       const move = sqliteStore(root).consolidation;
       let moved: Promise<unknown> | undefined;
       const bytes = allocatedBytes(() => {
-        moved = move.moveHalfLives(365, { dryRun: false, actor: 'system' });
+        moved = move.begin(365, { dryRun: false, actor: 'system' });
       });
       await moved;
       return bytes;

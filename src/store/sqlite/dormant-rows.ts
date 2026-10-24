@@ -127,10 +127,16 @@ export function listDormantRows(
     db,
     `SELECT ${DORMANT_COLUMNS}
        FROM ${DORMANT_WITH_SCOPE}
-      WHERE tenant_id = ? AND ${admit.sql}${termClauses}
+      WHERE tenant_id = ?${opts.id === undefined ? '' : ' AND id = ?'} AND ${admit.sql}${termClauses}
       ORDER BY ${orderSql(DORMANT_ORDER)}
       LIMIT ?`,
-  ).all(tenantId, ...admit.params, ...terms.map((t) => `%${escapeLike(t)}%`), dormantListCap(opts)) as DormantRow[];
+  ).all(
+    tenantId,
+    ...(opts.id === undefined ? [] : [opts.id]),
+    ...admit.params,
+    ...terms.map((t) => `%${escapeLike(t)}%`),
+    dormantListCap(opts),
+  ) as DormantRow[];
   return rows.map(rowToDormantMemory);
 }
 

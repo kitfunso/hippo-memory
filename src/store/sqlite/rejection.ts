@@ -64,11 +64,6 @@ export function rejectedValues(
   return found;
 }
 
-/** The digests among `digests` the tenant holds a tombstone for. */
-export function rejectedDigests(db: DatabaseSyncLike, tenantId: string, digests: readonly string[]): Set<string> {
-  return new Set(rejectedValues(db, tenantId, digests).keys());
-}
-
 /** Insert (or refresh) a tombstone row; the caller owns the transaction (used by the `reject` verb and
  * `resolveConflict`'s `rejectLoserValue`). */
 export function insertRejectedValue(

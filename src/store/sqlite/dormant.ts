@@ -161,9 +161,8 @@ function forgetDormantMemory(db: DatabaseSyncLike, forget: DormantForget): boole
 }
 
 // The port names the caller's own scope; the rows take the SQL that admits it.
-const dormantReadsBodies: Bodies<Pick<Dormant, 'list' | 'holds'>> = {
+const dormantReadsBodies: Bodies<Pick<Dormant, 'list'>> = {
   list: (db, tenantId, ownScope, opts) => listDormantRows(db, tenantId, opts, touchableScopeSql('', ownScope)),
-  holds: (db, tenantId, ownScope, id) => hasDormantRow(db, tenantId, id, touchableScopeSql('', ownScope)),
 };
 
 export function sqliteDormant({ on, files }: Handles): Dormant {

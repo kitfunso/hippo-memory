@@ -156,7 +156,7 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     path: '/v1/sleep',
     auth: 'host-admin-local',
-    storeReady: 'consolidation',
+    hippoDbOnly: 'the sleep child reopens the hippo.db under the served folder',
     handler: handleRunSleep,
   },
   {

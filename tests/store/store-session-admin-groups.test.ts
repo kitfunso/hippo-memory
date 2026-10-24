@@ -144,8 +144,8 @@ describe('dormant group', () => {
     const sync = sqliteStore(r).dormant;
     const served = sqliteStore(r).dormant;
     expect((await sync.list(T, null, {})).map((m) => m.id)).toEqual([row.id]);
-    expect(await served.holds(T, null, row.id)).toBe(true);
-    expect(await served.holds('other', null, row.id)).toBe(false);
+    expect((await served.list(T, null, { id: row.id })).map((m) => m.id)).toEqual([row.id]);
+    expect(await served.list('other', null, { id: row.id })).toEqual([]);
     const outcome = await served.restore(T, {
       id: row.id,
       actor: 'me',

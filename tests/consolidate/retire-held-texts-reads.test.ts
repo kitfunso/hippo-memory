@@ -88,9 +88,9 @@ async function sleepCountingAsks(perTenant: number): Promise<SleepAsks> {
     ...local,
     consolidation: {
       ...local.consolidation,
-      rejectedDigests: (tenantId: string, digests: readonly string[]) => {
+      rejected: (tenantId: string, digests: readonly string[]) => {
         asks.push(tenantId);
-        return local.consolidation.rejectedDigests(tenantId, digests);
+        return local.consolidation.rejected(tenantId, digests);
       },
     },
   };

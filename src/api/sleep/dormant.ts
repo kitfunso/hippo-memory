@@ -43,6 +43,6 @@ export async function dormantForget(ctx: Context, id: string): Promise<void> {
 }
 
 /** Whether the tenant holds a dormant memory with this id that the caller may touch (for "not found" hints). */
-export function isDormant(ctx: Context, id: string): Promise<boolean> {
-  return ctx.store.dormant.holds(ctx.tenantId, personalScopeOf(ctx.actor), id);
+export async function isDormant(ctx: Context, id: string): Promise<boolean> {
+  return (await ctx.store.dormant.list(ctx.tenantId, personalScopeOf(ctx.actor), { id, limit: 1 })).length > 0;
 }

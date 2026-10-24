@@ -1,6 +1,6 @@
 // The reads of the port groups that were hippo.db's local files, as the reader-thread parity test runs them, and the rows they need.
 import { inspect } from 'node:util';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import type { HippoStore, StoreGroups } from '../../src/store/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
@@ -8,8 +8,8 @@ import { startCompaction } from '../../src/store/sqlite/compactions-record.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from './default-half-life-memory.js';
 import type { MovedReadsSeed } from './moved-reads-seed.js';
-import { SESSION, TENANT } from './recall-golden-seed.js';
-import { appendSessionEvent, markGraphDirty, writeEntry } from './root-forms.js';
+import { TENANT } from './recall-golden-seed.js';
+import { markGraphDirty, writeEntry } from './root-forms.js';
 import { onDb } from './store-worker-server.js';
 
 export type Served = HippoStore & StoreGroups;
@@ -47,7 +47,6 @@ const IMPORTED = 'agent-memory:claude:seeded/';
 const NOTE = 'mem_z_note';
 const PROJECT = 'seeded-project';
 const CWD = 'C:/seeded/project';
-const TRACE_SESSION = 'trace-session';
 const TRANSCRIPT = 'C:/seeded/transcript.jsonl';
 const ACTOR = 'local-group-seed';
 const HOUR_MS = 60 * 60 * 1000;
@@ -66,28 +65,14 @@ export async function seedLocalGroups(root: string): Promise<void> {
     source: `${IMPORTED}note.md#h1`,
     originProject: PROJECT,
   });
-  const trace = {
-    ...createMemory('deploy trace: ran the canary and held the release', {
-      tenantId: TENANT,
-      layer: Layer.Trace,
-      traceOutcome: 'success',
-      sourceSessionId: TRACE_SESSION,
-    }),
-    id: 'mem_z_trace',
-  };
   // The two texts differ only by spacing, which is what the dedupe partitions on.
   const twins = [
     live('mem_z_twin1', 'the release train leaves at noon on thursday'),
     live('mem_z_twin2', 'the release  train leaves at noon on thursday'),
   ];
-  for (const row of [note, trace, ...twins]) writeEntry(root, row);
+  for (const row of [note, ...twins]) writeEntry(root, row);
   // A pending queue row, for the read of the tenants with graph work waiting.
   markGraphDirty(root, TENANT, 'mem_p_plain');
-  await appendSessionEvent(root, TENANT, {
-    sessionId: TRACE_SESSION,
-    eventType: 'session_complete',
-    content: 'wrapped up',
-  });
   onDb(root, (db) => {
     const gone = live('mem_d_agent', 'an imported note whose file was deleted', {
       source: `${IMPORTED}old.md#h2`,
@@ -101,10 +86,6 @@ export async function seedLocalGroups(root: string): Promise<void> {
   });
   const s = sqliteStore(root);
   await s.entryWrites.applyOutcome({ tenantId: TENANT, actor: ACTOR, ownScope: null, ids: [NOTE], good: true });
-  for (const timestamp of ['2026-01-01T00:00:00.000Z', '2026-01-03T00:00:00.000Z']) {
-    await s.consolidation.recordRun({ timestamp, decayed: 0, merged: 0, removed: 0 });
-    await s.consolidation.countSleep();
-  }
   // Folds the compaction records' stale project name into the seeded one, which leaves the merge's audit row.
   await s.projectTags.merge(
     { tenantId: TENANT, actor: ACTOR },
@@ -131,43 +112,15 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
   read('captures.textsHolding', (s) => s.captures.textsHolding(TENANT, [PLAIN], {}), PLAIN),
   read('compactionHooks.openRecords', (s) => s.compactionHooks.openRecords(TENANT, {}), TRANSCRIPT),
   read('consolidation.entryIdsPage', (s) => s.consolidation.entryIdsPage({ limit: 3 }), /ids: \[ 'mem_/),
-  read('consolidation.sessionDecayContext', (s) => s.consolidation.sessionDecayContext(), /sleepCount: 2/),
   read(
-    'consolidation.rejectedValue',
-    (s) => s.consolidation.rejectedValue(TENANT, rejectionDigest(REFUSED)),
+    'consolidation.rejected',
+    (s) => s.consolidation.rejected(TENANT, [rejectionDigest(REFUSED), rejectionDigest(PLAIN)]),
     "reason: 'wrong'",
   ),
-  read(
-    'consolidation.rejectedDigests',
-    (s) => s.consolidation.rejectedDigests(TENANT, [rejectionDigest(REFUSED), rejectionDigest(PLAIN)]),
-    `Set(1) { '${rejectionDigest(REFUSED)}' }`,
-  ),
-  read('consolidation.promotableSessions', (s) => s.consolidation.promotableSessions(TENANT, 0), TRACE_SESSION),
-  read('consolidation.traceExists', (s) => s.consolidation.traceExists(TENANT, TRACE_SESSION), /^true$/),
-  read(
-    'consolidation.sessionEvents',
-    (s) => s.consolidation.sessionEvents(TENANT, { session_id: SESSION, limit: 5 }),
-    'canary passed',
-  ),
   read('consolidation.particleIds', (s) => s.consolidation.particleIds(), 'mem_p_noise'),
-  read(
-    'consolidation.particlesByIds',
-    (s) => s.consolidation.particlesByIds(['mem_p_noise', 'mem_missing']),
-    'mem_p_noise',
-  ),
   read('consolidation.duplicateCandidates', (s) => s.consolidation.duplicateCandidates(), 'mem_z_twin2'),
   read('consolidation.dirtyGraphTenants', (s) => s.consolidation.dirtyGraphTenants(), /maxPendingId: [1-9]/),
-  read('consolidation.dirtySummaries', (s) => s.consolidation.dirtySummaries(10), 'mem_x_summary'),
-  read(
-    'consolidation.childrenOfSummary',
-    (s) => s.consolidation.childrenOfSummary('mem_x_summary', TENANT),
-    'mem_x_child1',
-  ),
-  read(
-    'consolidation.childrenOfSummaries',
-    (s) => s.consolidation.childrenOfSummaries([{ id: 'mem_x_summary', tenantId: TENANT }]),
-    'mem_x_child1',
-  ),
+  read('consolidation.dirtySummaries', (s) => s.consolidation.dirtySummaries(10), 'mem_x_child1'),
   read(
     'consolidation.unprofiledTopicSummaries',
     (s) => s.consolidation.unprofiledTopicSummaries({ limit: 10 }),

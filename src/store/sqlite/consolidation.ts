@@ -1,19 +1,9 @@
-// hippo.db's Consolidation group: sleep's reads and writes, the DAG summaries, half-life moves and tombstone checks.
-import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/memory.js';
+// hippo.db's Consolidation group: sleep's reads and writes, each a body on one short-lived handle.
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import { type DatabaseSyncLike, withWriteScope, getMeta, setMeta, SLEEP_DB_WAIT_MS } from '../../db/index.js';
-import { assertTenantId } from '../../base/scope/tenant-id.js';
-import { readRejectedValue, rejectedDigests } from './rejection.js';
-import { rejectionDigest } from '../../base/records/rejection-digest.js';
-import { log } from '../../base/util/log.js';
-import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
-import { audit } from './audit-event.js';
-import { refusalAudit } from '../rules/audit-rows.js';
-import { syncFtsRow, ftsDrift } from './entry-row.js';
-import { chunked } from '../../base/util/chunked.js';
-import { keysetPage } from '../../base/util/keyset.js';
+import { rejectedValues } from './rejection.js';
+import { ftsDrift } from './entry-row.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { DIGEST_DISPLAY_CHARS } from '../../base/util/token-text.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { WRITE_BUDGET } from '../../base/util/write-budget.js';
 import {
   planHalfLifeMoves,
@@ -22,9 +12,8 @@ import {
   type HalfLifeRow,
   type HalfLifeRows,
 } from '../../base/memory/half-life-plan.js';
-import type { RebuildPatch, Consolidation } from '../port/consolidation.js';
-import type { EntryCursor, EntryPage } from '../port/types.js';
-import { appendAuditEvents, recordAuditEventsRowByRow } from './audit.js';
+import type { Consolidation, SleepBegin, SleepCommit, SleepCommitted, SleepStart } from '../port/consolidation.js';
+import { appendAuditEvents } from './audit.js';
 import { conflictResolveAudits, resolvedConflicts, replaceDetectedConflicts } from './conflicts.js';
 import {
   iterateEveryTenantEntries,
@@ -33,312 +22,25 @@ import {
   listEntryIdsPage,
 } from './entry-reads.js';
 import { setHalfLives } from './entry-writes.js';
+import { type Handles, type StoreFiles, waitingOpener } from './open.js';
 import {
   HALF_LIFE_BASE_META_KEY,
   TYPED_HALF_LIFE_META_KEY,
-  type Handles,
-  type StoreFiles,
-  waitingOpener,
-} from './open.js';
-import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
-import { commitInChunks, deleteEntriesInBatches } from './delete-and-batch.js';
+  halfLifeAuditRows,
+  recordedHalfLifeBase,
+} from '../rules/half-life.js';
+import { commitInChunks } from './delete-and-batch.js';
 import { expireDormantBefore } from './dormant.js';
 import { listPendingExtractionTenants, markPendingProcessedUpTo } from './graph-queue.js';
-import { appendConsolidationRun, incrementSleepCount, readSessionDecayContext } from './index-and-stats.js';
-import { listPromotableSessions, listSessionEvents, traceExistsForSession } from './sessions.js';
-import { saveStoredParticles, storedParticleIds, storedParticlesByIds } from './vector-index.js';
+import { appendConsolidationRun, incrementSleepCount, readSleepHistory } from './index-and-stats.js';
+import { listPromotableSessions, traceExistsForSession } from './sessions.js';
+import { saveStoredParticles, storedParticleIds } from './vector-index.js';
 import { openStore } from './handles.js';
-import { bound, skipEmpty, type Bodies } from './bound.js';
-import type { AppendAuditOpts } from '../port/types.js';
+import { bound, type Bodies } from './bound.js';
 import { rethrowInPortTerms } from './port-errors.js';
-import { cachedStatement } from '../../db/statement-cache.js';
-
-// Sleep-cycle rebuild surface: lives here, not in src/domain/consolidate/dag.ts, because it needs module-private
-// MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry, audit, syncFtsRow and assertTenantId. dag.ts keeps only the thin
-// orchestrator rebuildDirtySummaries().
-
-/** One keyset page of the L2 topic summaries without an L3 parent, across all tenants, for consolidate phase 1.9
- * (buildEntityProfiles); SQL-level filter, since in-memory `survivors` lacks L2s created by phase 1.7. Entries carry
- * tenantId so per-cluster writes stay tenant-scoped. */
-function listL2SummariesPage(
-  db: DatabaseSyncLike,
-  page: { readonly limit: number; readonly after?: EntryCursor },
-): EntryPage {
-  const { after } = page;
-  const range = after ? 'AND created >= ? AND (created > ? OR id > ?)' : '';
-  const rows = cachedStatement(
-    db,
-    `
-    SELECT ${MEMORY_SELECT_COLUMNS}
-      FROM memories
-     WHERE dag_level = ${DAG_LEVEL.topic}
-       AND dag_parent_id IS NULL
-       AND kind != 'archived'
-       AND superseded_by IS NULL
-       ${range}
-     ORDER BY created ASC, id ASC
-     LIMIT ?
-  `,
-  ).all(...(after ? [after.created, after.created, after.id] : []), page.limit + 1) as MemoryRow[];
-  const kept = keysetPage(rows, page.limit, (row) => ({ created: row.created, id: row.id }));
-  return { entries: kept.rows.map(rowToEntry), next: kept.next };
-}
-
-/** Dirty summaries across all tenants, newest change first (latest_at DESC NULLS LAST, id ASC), at most `limit` so
- * HIPPO_DAG_REBUILD_CAP reads only the most recently changed. Each entry carries its tenantId so later writes stay
- * tenant-scoped. */
-function listDirtySummaries(db: DatabaseSyncLike, limit: number): MemoryEntry[] {
-  const rows = cachedStatement(
-    db,
-    `
-    SELECT ${MEMORY_SELECT_COLUMNS}
-      FROM memories
-     WHERE summary_dirty = 1
-       AND kind != 'archived'
-     ORDER BY latest_at DESC NULLS LAST, id ASC
-     LIMIT ?
-  `,
-  ).all(limit) as MemoryRow[];
-  return rows.map(rowToEntry);
-}
-
-/** Live (non-archived) children of a DAG summary, so a rebuild regenerates from the CURRENT child set; tenant-scoped as
- * defence in depth. */
-function listChildrenOfSummary(db: DatabaseSyncLike, summaryId: string, tenantId: string): MemoryEntry[] {
-  assertTenantId('listChildrenOfSummary', tenantId);
-  const rows = cachedStatement(
-    db,
-    `
-    SELECT ${MEMORY_SELECT_COLUMNS}
-      FROM memories
-     WHERE dag_parent_id = ?
-       AND tenant_id = ?
-       AND kind != 'archived'
-       AND superseded_by IS NULL
-     ORDER BY created ASC, id ASC
-  `,
-  ).all(summaryId, tenantId) as MemoryRow[];
-  return rows.map(rowToEntry);
-}
-
-/** listChildrenOfSummary for many summaries in one IN query per tenant chunk: one list per summary in the order given,
- * each in created order. */
-function childrenOfSummaries(
-  db: DatabaseSyncLike,
-  summaries: ReadonlyArray<{ id: string; tenantId: string }>,
-): MemoryEntry[][] {
-  const byTenant = new Map<string, string[]>();
-  for (const s of summaries) {
-    assertTenantId('loadChildrenOfSummaries', s.tenantId);
-    const ids = byTenant.get(s.tenantId) ?? [];
-    ids.push(s.id);
-    byTenant.set(s.tenantId, ids);
-  }
-  const out = new Map<string, MemoryEntry[]>();
-  for (const [tenantId, ids] of byTenant) {
-    for (const slice of chunked(ids)) {
-      const rows = cachedStatement(
-        db,
-        `
-        SELECT ${MEMORY_SELECT_COLUMNS}
-          FROM memories
-         WHERE dag_parent_id IN (SELECT value FROM json_each(?))
-           AND tenant_id = ?
-           AND kind != 'archived'
-           AND superseded_by IS NULL
-         ORDER BY created ASC, id ASC
-      `,
-      ).all(JSON.stringify(slice), tenantId) as MemoryRow[];
-      for (const entry of rows.map(rowToEntry)) {
-        const key = childrenKey(tenantId, entry.dagParentId ?? '');
-        const list = out.get(key);
-        if (list) list.push(entry);
-        else out.set(key, [entry]);
-      }
-    }
-  }
-  return summaries.map((summary) => out.get(childrenKey(summary.tenantId, summary.id)) ?? []);
-}
-
-/** Key into the map childrenOfSummaries reads. */
-function childrenKey(tenantId: string, summaryId: string): string {
-  return `${tenantId}\u0000${summaryId}`;
-}
-
-/** Apply a rebuild result to a dirty summary in one write scope (UPDATE plus syncFtsRow); `AND summary_dirty = 1` makes
- * a concurrent race-loser a no-op. Returns `{ changed, refused }`: `refused` only when a tombstone hit suppressed the
- * content write while the metadata UPDATE still landed. */
-function applyRebuildResult(db: DatabaseSyncLike, summary: MemoryEntry, patch: RebuildPatch) {
-  assertTenantId('applyRebuildResult', summary.tenantId);
-  return withWriteScope(db, 'rebuild_summary', () => applyRebuildInSavepoint(db, summary, patch));
-}
-
-// ONE prepared UPDATE per branch. Test #8 inspects the SQL string.
-const REBUILD_CONTENT_SQL = `UPDATE memories
-              SET content = ?,
-                  descendant_count = ?,
-                  earliest_at = ?,
-                  latest_at = ?,
-                  last_rebuilt_at = ?,
-                  rebuild_count = COALESCE(rebuild_count, 0) + 1,
-                  summary_dirty = 0
-            WHERE id = ?
-              AND tenant_id = ?
-              AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
-              AND summary_dirty = 1
-              AND kind != 'archived'`;
-const REBUILD_METADATA_SQL = `UPDATE memories
-              SET descendant_count = ?,
-                  earliest_at = ?,
-                  latest_at = ?,
-                  summary_dirty = 0
-            WHERE id = ?
-              AND tenant_id = ?
-              AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
-              AND summary_dirty = 1
-              AND kind != 'archived'`;
-
-function applyRebuildInSavepoint(db: DatabaseSyncLike, summary: MemoryEntry, patch: RebuildPatch) {
-  const nowIso = new Date().toISOString();
-
-  // Check tombstones before choosing the UPDATE: this direct UPDATE bypasses upsertEntryRow's guard, and a
-  // deterministic rebuild would otherwise re-assert a rejected value every sleep cycle.
-  const tombstone = patch.bumpRebuildCount
-    ? readRejectedValue(db, summary.tenantId, rejectionDigest(patch.content))
-    : null;
-  // On a tombstone hit, write no content: take the zero-child metadata-only path
-  // (descendant_count/earliest_at/latest_at, summary_dirty cleared, no rebuild_count bump). Clearing dirty is
-  // deliberate: leaving it set would make every later sleep re-attempt and re-refuse the same rebuild forever.
-  const applyContentWrite = patch.bumpRebuildCount && !tombstone;
-
-  const result = applyContentWrite
-    ? cachedStatement(db, REBUILD_CONTENT_SQL).run(
-        patch.content,
-        patch.descendantCount,
-        patch.earliestAt,
-        patch.latestAt,
-        nowIso,
-        summary.id,
-        summary.tenantId,
-      )
-    : cachedStatement(db, REBUILD_METADATA_SQL).run(
-        patch.descendantCount,
-        patch.earliestAt,
-        patch.latestAt,
-        summary.id,
-        summary.tenantId,
-      );
-
-  // `changed` means THIS call's UPDATE hit a row, so a refusal still settles the cycle (false would retry the doomed
-  // rebuild forever); `refused` lets the caller count it as refused rather than rebuilt.
-  const changed = (result.changes ?? 0) > 0;
-  const refused = Boolean(tombstone) && changed;
-
-  if (tombstone && changed) auditRefusedRebuild(db, summary, patch, tombstone);
-
-  if (changed) syncRebuiltSummary(db, summary, patch, applyContentWrite, nowIso);
-  return { changed, refused };
-}
-
-/** Audit and log a rebuild whose content matched a rejected value; metadata still landed. */
-function auditRefusedRebuild(
-  db: DatabaseSyncLike,
-  summary: MemoryEntry,
-  patch: RebuildPatch,
-  tombstone: NonNullable<ReturnType<typeof readRejectedValue>>,
-): void {
-  // refused === true here (narrowed for the tombstone.* access). Best-effort refusal audit written INLINE in this
-  // still-open SAVEPOINT (the metadata UPDATE already committed to it), so a direct audit() call is correct, not the
-  // post-rollback auditRejectionRefusal.
-  const refused = refusalAudit(summary.tenantId, patch.actor, summary.id, tombstone);
-  audit(db, refused.op, refused);
-  log.warn(
-    `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
-      `(digest ${tombstone.digest.slice(0, DIGEST_DISPLAY_CHARS)}...); metadata updated, content unchanged`,
-  );
-}
-
-function syncRebuiltSummary(
-  db: DatabaseSyncLike,
-  summary: MemoryEntry,
-  patch: RebuildPatch,
-  applyContentWrite: boolean,
-  nowIso: string,
-): void {
-  // A bare UPDATE on memories does NOT update memories_fts, so resync from the patched entry; content stays
-  // summary.content when the write was refused, since FTS must mirror the row.
-  const patchedEntry: MemoryEntry = {
-    ...summary,
-    content: applyContentWrite ? patch.content : summary.content,
-    descendantCount: patch.descendantCount,
-    earliestAt: patch.earliestAt,
-    latestAt: patch.latestAt,
-    summaryDirty: false,
-    lastRebuiltAt: applyContentWrite ? nowIso : summary.lastRebuiltAt,
-    rebuildCount: applyContentWrite ? (summary.rebuildCount ?? 0) + 1 : summary.rebuildCount,
-  };
-  syncFtsRow(db, patchedEntry);
-
-  audit(db, 'summary_rebuilt', {
-    targetId: summary.id,
-    metadata: {
-      // Actual level from the summary in scope, never hardcoded: L2 -> 2, L3 -> 3.
-      dag_level: summary.dagLevel,
-      source: 'E3-rebuild',
-      zero_children: patch.zeroChildren,
-      descendant_count: patch.descendantCount,
-    },
-    actor: patch.actor,
-    tenantId: summary.tenantId,
-  });
-}
-
-/** Clear summary_dirty on a new summary after buildDag's child-link loop (each member's writeEntry marks the parent
- * dirty, so the same cycle would rebuild it). Idempotent (no-op, no audit if not dirty); audit source='buildDag-clean'
- * distinguishes it from the rebuild's. */
-function clearSummaryDirtyAfterBuild(
-  db: DatabaseSyncLike,
-  summaryId: string,
-  tenantId: string,
-  actor: string = CLI_ACTOR,
-  source: string = 'buildDag-clean',
-): void {
-  assertTenantId('clearSummaryDirtyAfterBuild', tenantId);
-  // RETURNING dag_level reads the actual level so audit metadata stays accurate without an extra SELECT.
-  const result = cachedStatement(
-    db,
-    `
-    UPDATE memories
-       SET summary_dirty = 0
-     WHERE id = ?
-       AND tenant_id = ?
-       AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
-       AND summary_dirty = 1
-       AND kind != 'archived'
-    RETURNING dag_level
-  `,
-  ).get(summaryId, tenantId) as { dag_level: number } | undefined;
-  if (result) {
-    // source tells buildDag-clean (L2) from buildEntityProfiles-clean (L3) and any future build path.
-    audit(db, 'summary_marked_clean', {
-      targetId: summaryId,
-      metadata: { dag_level: result.dag_level, source },
-      actor,
-      tenantId,
-    });
-  }
-}
+import { auditRows, dirtySummaries, listL2SummariesPage, settleSummary } from './consolidation-summaries.js';
 
 // A half-life move reads, writes, audits and records its base on one handle, so it commits whole or not at all.
-/** The base every store used before the base was recorded. */
-const LEGACY_HALF_LIFE_BASE = 7;
-
-/** The base this store's memories are on: 7 days when none was ever recorded. */
-function recordedHalfLifeBase(db: DatabaseSyncLike): number {
-  const raw = Number(getMeta(db, HALF_LIFE_BASE_META_KEY, String(LEGACY_HALF_LIFE_BASE)));
-  return Number.isFinite(raw) && raw > 0 ? raw : LEGACY_HALF_LIFE_BASE;
-}
-
 function listHalfLifeRows(db: DatabaseSyncLike, from: number, typedPending: boolean): HalfLifeRows {
   return {
     from,
@@ -353,29 +55,13 @@ function* withoutObjects(entries: Iterable<MemoryEntry>): Generator<HalfLifeRow>
   for (const entry of entries) yield { entry, object: null };
 }
 
-/** Writes the move, then one audit event per tenant with each id's old half-life, so the move can be undone. */
+/** Writes the move, then its audit rows one statement each. */
 function writeMove(db: DatabaseSyncLike, move: HalfLifeMove, actor: string): void {
   setHalfLives(
     db,
     move.entries.map((e) => ({ id: e.id, halfLifeDays: e.halfLifeDays })),
   );
-  const byTenant = new Map<string, Record<string, number>>();
-  for (const e of move.entries) {
-    // One record per tenant, filled in place: copying it per row made the write grow with the square of the store.
-    let record = byTenant.get(e.tenantId);
-    if (!record) byTenant.set(e.tenantId, (record = {}));
-    record[e.id] = e.oldHalfLifeDays;
-  }
-  for (const [tenantId, oldHalfLives] of byTenant) {
-    appendAuditEvents(db, [
-      {
-        tenantId,
-        actor,
-        op: 'half_life_migrate',
-        metadata: { from: move.from, to: move.to, ids: Object.keys(oldHalfLives), oldHalfLives },
-      },
-    ]);
-  }
+  for (const row of halfLifeAuditRows(move, actor)) appendAuditEvents(db, [row]);
 }
 
 /** Moves the store's half-lives to base `to` as planned from the rows read here, then records the base. `outcome` is
@@ -386,7 +72,7 @@ function moveHalfLives(
   opts: { dryRun: boolean; actor: string },
 ): { from: number; outcome: HalfLifeOutcome | null } {
   const run = () => {
-    const from = recordedHalfLifeBase(db);
+    const from = recordedHalfLifeBase(getMeta(db, HALF_LIFE_BASE_META_KEY, ''));
     const typedPending = getMeta(db, TYPED_HALF_LIFE_META_KEY, '') === '';
     if (!(Number.isFinite(to) && to > 0) || (from === to && !typedPending)) return { from, outcome: null };
     const { moves, outcome } = planHalfLifeMoves(listHalfLifeRows(db, from, typedPending), to);
@@ -401,112 +87,87 @@ function moveHalfLives(
   return opts.dryRun ? run() : withWriteScope(db, 'migrate_half_life', run);
 }
 
+/** The tenant's sessions completed since `sinceMs` that hold no trace yet. */
+function untracedSessions(db: DatabaseSyncLike, { tenantId, sinceMs }: NonNullable<SleepBegin['traces']>): string[] {
+  return listPromotableSessions(db, tenantId, sinceMs)
+    .map((row) => row.session_id)
+    .filter((sessionId) => !traceExistsForSession(db, tenantId, sessionId));
+}
+
+function begin(db: DatabaseSyncLike, to: number, opts: SleepBegin): SleepStart {
+  const { from, outcome } = moveHalfLives(db, to, opts);
+  const fts = ftsDrift(db, !opts.dryRun);
+  const sessions = opts.traces ? untracedSessions(db, opts.traces) : [];
+  return { from, outcome, fts, ...readSleepHistory(db), sessions };
+}
+
 // The wait is sleep's own, not a server request's 250 ms.
 const sleepOpener = waitingOpener(SLEEP_DB_WAIT_MS);
 const sleepStoreOpener = waitingOpener(SLEEP_DB_WAIT_MS, openStore);
 
-/** Writes each row in its own scope, logging each one that failed; returns how many failed. */
-function auditEachRow(db: DatabaseSyncLike, events: readonly AppendAuditOpts[]): number {
-  const failed = recordAuditEventsRowByRow(db, events);
-  for (const { event, error } of failed) reportAuditWriteFailure(event.op, error, event.targetId);
-  return failed.length;
+async function commitSleep(db: DatabaseSyncLike, files: StoreFiles, commit: SleepCommit): Promise<SleepCommitted> {
+  const budget = { ...WRITE_BUDGET, holdMs: commit.holdMs };
+  const { flush, expireBefore, dryRun } = commit;
+  const removedIds = flush
+    ? await commitInChunks(db, files, flush.components, { snapshot: flush.snapshot, budget })
+    : [];
+  const expired = expireBefore === null ? 0 : await expireDormantBefore(db, expireBefore, { dryRun, budget });
+  return { removedIds, expired };
 }
 
-/** The chunked writers yield between chunks, so each keeps its handle open until its Promise settles. */
-type Chunked = 'commitFlush' | 'expireDormant';
-
-type StoreReads =
-  | 'entryIdsPage'
-  | 'sessionDecayContext'
-  | 'moveHalfLives'
-  | 'promotableSessions'
-  | 'traceExists'
-  | 'sessionEvents'
-  | 'countSleep'
-  | 'duplicateCandidates';
-type StoreWrites = 'replaceConflicts' | 'recordRun' | 'deleteInBatches';
-type BareRows = Exclude<keyof Consolidation, Chunked | StoreReads | StoreWrites | keyof SummaryOps>;
-
-const storeReadsBodies: Bodies<Pick<Consolidation, StoreReads>> = {
-  entryIdsPage: (db, page) => listEntryIdsPage(db, ALL_TENANTS, page),
-  sessionDecayContext: readSessionDecayContext,
-  moveHalfLives: moveHalfLives,
-  promotableSessions: listPromotableSessions,
-  traceExists: traceExistsForSession,
-  sessionEvents: listSessionEvents,
-  countSleep: incrementSleepCount,
-  duplicateCandidates: listDuplicateCandidates,
-};
-
-function storeWritesBodies(files: StoreFiles): Bodies<Pick<Consolidation, StoreWrites>> {
-  return {
-    replaceConflicts: (db, ...args) => replaceDetectedConflicts(db, files, ...args),
-    recordRun: (db, ...args) => appendConsolidationRun(db, files, ...args),
-    deleteInBatches: (db, ...args) => deleteEntriesInBatches(db, files, ...args),
+/** The chunked writes keep their handle until their Promise settles; a commit with nothing to write opens none, and
+ * one that only expires opens a bare handle, so a dry run sets up no mirror folder. */
+function chunkedCommit({ onAsync }: Handles): Consolidation['commit'] {
+  return (commit) => {
+    const flush = commit.flush && commit.flush.components.length > 0 ? commit.flush : null;
+    if (!flush && commit.expireBefore === null) return Promise.resolve({ removedIds: [], expired: 0 });
+    const opener = flush ? sleepStoreOpener : sleepOpener;
+    return onAsync((db, files) => commitSleep(db, files, { ...commit, flush }), opener).catch(rethrowInPortTerms);
   };
 }
 
-const bareRowsBodies: Bodies<Pick<Consolidation, BareRows>> = {
-  ftsDrift: ftsDrift,
-  rejectedValue: readRejectedValue,
-  rejectedDigests: rejectedDigests,
+type StoreBodies = 'begin' | 'entryIdsPage' | 'duplicateCandidates' | 'dirtySummaries' | 'unprofiledTopicSummaries';
+
+const storeBodies: Bodies<Pick<Consolidation, StoreBodies | 'settleSummary'>> = {
+  begin,
+  entryIdsPage: (db, page) => listEntryIdsPage(db, ALL_TENANTS, page),
+  duplicateCandidates: listDuplicateCandidates,
+  dirtySummaries,
+  unprofiledTopicSummaries: listL2SummariesPage,
+  settleSummary,
+};
+
+function recordSleepBody(files: StoreFiles): Bodies<Pick<Consolidation, 'recordSleep'>> {
+  return {
+    recordSleep: (db, { conflicts, at, decayed, merged, removed }) => {
+      replaceDetectedConflicts(db, files, conflicts, at);
+      appendConsolidationRun(db, files, { timestamp: at, decayed, merged, removed });
+      incrementSleepCount(db);
+    },
+  };
+}
+
+type BareBodies = 'rejected' | 'particleIds' | 'saveParticles' | 'auditEachRow' | 'dirtyGraphTenants';
+
+const bareBodies: Bodies<Pick<Consolidation, BareBodies | 'markGraphDrained'>> = {
+  rejected: (db, tenantId, digests) => {
+    const found = rejectedValues(db, tenantId, digests);
+    return [...new Set(digests)].flatMap((digest) => found.get(digest) ?? []);
+  },
   particleIds: storedParticleIds,
-  particlesByIds: storedParticlesByIds,
   saveParticles: saveStoredParticles,
-  auditEachRow: auditEachRow,
+  auditEachRow: auditRows,
   dirtyGraphTenants: listPendingExtractionTenants,
   markGraphDrained: markPendingProcessedUpTo,
 };
 
-const summariesBodies: Bodies<SummaryOps> = {
-  dirtySummaries: listDirtySummaries,
-  childrenOfSummary: listChildrenOfSummary,
-  childrenOfSummaries: childrenOfSummaries,
-  applyRebuild: applyRebuildResult,
-  clearSummaryDirty: clearSummaryDirtyAfterBuild,
-  unprofiledTopicSummaries: listL2SummariesPage,
-};
-
-/** The chunked writers on the store's own clock and pause, under sleep's own lock wait. */
-function chunkedWriters({ onAsync }: Handles): Pick<Consolidation, Chunked> {
-  const commitFlush: Consolidation['commitFlush'] = (components, { snapshot, holdMs }) =>
-    onAsync(
-      (db, files) => commitInChunks(db, files, components, { snapshot, budget: { ...WRITE_BUDGET, holdMs } }),
-      sleepStoreOpener,
-    ).catch(rethrowInPortTerms);
-  return {
-    commitFlush: skipEmpty(commitFlush, () => []),
-    expireDormant: (cutoffIso, { dryRun, holdMs }) =>
-      onAsync(
-        (db) => expireDormantBefore(db, cutoffIso, { dryRun, budget: { ...WRITE_BUDGET, holdMs } }),
-        sleepOpener,
-      ).catch(rethrowInPortTerms),
-  };
-}
-
-/** Sleep's store work on its hippo.db, each call on its own short-lived handle; an empty batch opens none. */
+/** Sleep's store work on its hippo.db, each call on its own short-lived handle. */
 export function sqliteConsolidation(handles: Handles): Consolidation {
   const { on, files } = handles;
-  const reads = bound(on, storeReadsBodies, openStore);
-  const writes = bound(on, storeWritesBodies(files), openStore);
-  const bare = bound(on, bareRowsBodies);
   return {
-    ...reads,
-    ...writes,
-    ...bare,
-    ...bound(on, summariesBodies, openStore),
-    particlesByIds: skipEmpty(bare.particlesByIds, () => []),
-    deleteInBatches: skipEmpty(writes.deleteInBatches, () => []),
-    ...chunkedWriters(handles),
+    ...bound(on, storeBodies, openStore),
+    ...bound(on, recordSleepBody(files), openStore),
+    ...bound(on, bareBodies),
+    commit: chunkedCommit(handles),
   };
 }
-
-type SummaryOps = Pick<
-  Consolidation,
-  | 'dirtySummaries'
-  | 'childrenOfSummary'
-  | 'childrenOfSummaries'
-  | 'applyRebuild'
-  | 'clearSummaryDirty'
-  | 'unprofiledTopicSummaries'
->;
