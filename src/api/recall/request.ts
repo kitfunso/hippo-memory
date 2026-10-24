@@ -1,5 +1,5 @@
 // The recall and context input rules in one copy, so MCP and HTTP reject the same inputs with the same messages.
-// retrieveWithCliCore is the CLI ranking core's entry: it ranks with rankRecall, then records the list shown once.
+// retrieveWithCliCore is the CLI's entry: it ranks with rankRecall under CLI_RECALL, then records the list shown once.
 import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import {
@@ -15,7 +15,8 @@ import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import type { ContextOptions } from '../context-types.js';
 import type { Context } from '../types.js';
-import { rankRecall, type RankRecallResult, type RankSource } from './pipeline.js';
+import { rankCtxOf, rankRecall, type RankRecallResult, type RankSource } from './pipeline.js';
+import { CLI_RECALL } from './profiles.js';
 import {
   callerOf,
   heldIds,
@@ -204,7 +205,7 @@ export function parseContextRequest(params: RequestParams): ParsedContextRequest
   return { q, budget, limit, pinnedOnly, scope, includeRecent, crossProject };
 }
 
-/** The CLI ranker: ranks with rankRecall over its own candidate pool, then records what `core.show` prints. */
+/** The CLI recall: ranks with rankRecall under CLI_RECALL, then records what `core.show` prints. */
 export async function retrieveWithCliCore(
   ctx: Context,
   opts: CliCoreQuery,
@@ -215,17 +216,9 @@ export async function retrieveWithCliCore(
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('The CLI ranking core serves the host admin only');
   const store = ctx.store;
   const ranking = await rankRecall(
-    {
-      store,
-      config: ctx.config,
-      onHippoDb: ctx.reach?.isHippoDb,
-      global: rankGlobal(ctx, core.sources),
-      tenantId: ctx.tenantId,
-      embedderFor: ctx.infra.embedderFor,
-      cwd: ctx.infra.machine.cwd,
-      note: core.note,
-    },
+    { ...rankCtxOf(ctx), global: rankGlobal(ctx, core.sources), note: core.note },
     { ...core.rank, query: opts.query, boost: opts.boost },
+    CLI_RECALL,
   );
   if (ranking.halted) {
     // The stages that ran earned these rows, so the caller's flag error does not drop them.

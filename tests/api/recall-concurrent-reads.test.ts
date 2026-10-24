@@ -5,6 +5,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
+import { CLI_RECALL } from '../../src/api/recall/profiles.js';
 import type { HippoStore } from '../../src/store/port.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -77,7 +78,7 @@ async function run(order: readonly [StoreName, StoreName]): Promise<{ ids: strin
     tenantId: 'default',
     embedderFor: resolveEmbeddingProvider,
   };
-  const ranked = rankRecall(ctx, options(local));
+  const ranked = rankRecall(ctx, options(local), CLI_RECALL);
   // Neither read may end yet, so a recall that ran them one after the other never starts the second.
   await waitFor(() => events.length === 2, { what: 'both store reads to start before either ends', timeoutMs: 4_000 });
   for (const name of order) {

@@ -1,5 +1,5 @@
-// Ranking core shared by `hippo recall` and `hippo explain`: load, search, expand, re-rank and filter, with no writes
-// and no direct output. Callers own flag parsing, printing, budget fitting and persistence.
+// The one recall ranker: CLI, MCP and HTTP recall each load, search, expand, re-rank and filter here under their
+// profile, with no writes and no direct output. Callers own flag parsing, printing, budget fitting and persistence.
 
 import { evalNow } from '../../base/memory/ablation.js';
 import { oneCopyPerMemory } from '../context-select.js';
@@ -11,7 +11,11 @@ import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../domain/graph/stream.js';
 import { Layer, strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import { rankMultihop } from '../../domain/search/multihop.js';
 import type { PhysicsConfig } from '../../base/rank/physics-config.js';
-import { passesCliRecallScopeFilter, recallScopeFilter } from '../../base/scope/recall-scope.js';
+import {
+  passesCliRecallScopeFilter,
+  passesScopeFilterForRecall,
+  recallScopeFilter,
+} from '../../base/scope/recall-scope.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import { currentEntries } from '../../domain/search/as-of.js';
 import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../../domain/search/boosts.js';
@@ -22,6 +26,7 @@ import type { HippoConfig } from '../../base/config/config.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
 import {
   CONFLICT_PEER_MULTIPLIER,
+  DEFAULT_RECALL_BUDGET,
   DEFAULT_SEARCH_CANDIDATE_LIMIT,
   SALIENCE_MIN_MULTIPLIER,
   UTILITY_LENGTH_PENALTY_CAP,
@@ -38,8 +43,13 @@ import type { HippoStore } from '../../store/port.js';
 import { isJsonNumber } from '../../base/util/json.js';
 import { currentSignal } from '../../base/util/request-scope.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../../base/util/tokenize.js';
+import { estimateTokens } from '../../base/util/token-text.js';
+import type { HybridVectorCandidates } from '../../domain/search/vector.js';
 import type { RecallBoostOptions, RecallWindowOptions } from './types.js';
+import type { Context } from '../types.js';
+import type { RecallProfile } from './profiles.js';
 import type { GoalRecallLogRow } from '../../store/port/recall-writes.js';
+import type { ActiveGoals } from '../../store/port/types.js';
 
 /** A store rankRecall reads, with the config that names its embedding model. */
 export interface RankSource {
@@ -62,16 +72,19 @@ export interface RankRecallCtx extends RankSource {
   note?: (line: string) => void;
 }
 
-/** Search-engine choice and tuning. */
+/** Search-engine choice and tuning; tuning left unset takes the engine's own default. */
 export interface RecallSearchOptions {
   usePhysics: boolean;
+  /** The request names an engine (HTTP `mode=hybrid` or `physics`); without it a 'position' profile keeps the load
+   * order. */
+  engineNamed?: boolean;
   physicsConfig: PhysicsConfig;
   multihop: boolean;
   /** Graph-stream rrf fusion over the local store; hop and seed counts fall back to the engine defaults. */
   graphStream?: RecallGraphStream;
-  mmr: boolean;
-  mmrLambda: number;
-  localBump: number;
+  mmr?: boolean;
+  mmrLambda?: number;
+  localBump?: number;
   minResults?: number;
   /** Score breakdowns for `hippo explain`; explain's physics call also leaves out minResults and includeSuperseded. */
   explain: boolean;
@@ -102,10 +115,17 @@ export type RankStage = 'expand' | 'rerank' | 'salience' | 'outcome' | 'layer';
 export interface RankRecallFilters {
   includeSuperseded: boolean;
   asOf?: string;
-  /** `--scope`: unlocks that envelope scope on top of the default-admitted set. */
+  /** `--scope` unlocks that envelope scope on top of the default-admitted set; under `scopeMode: 'exact'` it is the one
+   * scope read. */
   explicitScope: string | null;
-  /** Scope used for boosting only, never for filtering. */
-  activeScope: string | null;
+  /** 'additive' (the default) for the CLI operator, who has no identity; 'exact' for an API caller. */
+  scopeMode?: 'additive' | 'exact';
+  /** The API caller's own personal scope, which the default deny still admits. */
+  ownScope?: string;
+  /** The caller's project names: other projects' rows stay out, user-global ones stay in. */
+  originProjects?: readonly string[];
+  /** Scope used for boosting only, never for filtering; absent, the engine boosts the store's runtime active scope. */
+  activeScope?: string | null;
 }
 
 /** The stages after the search, each off until its flag sets it. */
@@ -128,11 +148,12 @@ export interface RankRecallStages {
 /** Everything that shapes one ranking, already parsed and validated. */
 export interface RankRecallOptions extends RankRecallFilters, RankRecallStages {
   query: string;
-  /** Tokens the engines may spend, priced by `cost`. */
-  budget: number;
+  /** Tokens the engines may spend, priced by `cost`; a 'band' profile spends no budget. */
+  budget?: number;
   /** Price of one result, usually the tokens its printed line takes. */
-  cost: ResultCost;
-  window: Required<Pick<RecallWindowOptions, 'limit'>>;
+  cost?: ResultCost;
+  /** `limit` stops a 'budget' profile's list; `scorerWindow` sizes the lexical load, 200 rows when unset. */
+  window: Pick<RecallWindowOptions, 'limit' | 'scorerWindow'>;
   /** Record a rerank trace step for each score change. */
   why?: boolean;
   search: RecallSearchOptions;
@@ -152,6 +173,9 @@ export interface RankRecallResult {
   graphAdded: number;
   /** goal_recall_log rows the session goal boost earned; the caller writes them. */
   goalRecallLog: GoalRecallLogRow[];
+  /** The goals the ranked goal pass read, so a band pass need not read them again: null when the pass had no session
+   *  to read for, absent when the profile runs no ranked pass. */
+  goals?: ActiveGoals | null;
   /** True when ranking stopped at `haltBefore`. */
   halted: boolean;
 }
@@ -168,15 +192,45 @@ interface RankState {
   droppedPreRank: number;
   graphAdded: number;
   goalRecallLog: GoalRecallLogRow[];
+  goals?: ActiveGoals | null;
 }
 
-/**
- * Ranks memories for a query as `hippo recall` does, through the `limit` slice. Reads stores, embeddings and physics
- * state; writes and prints nothing (notes go to `ctx.note`). The caller supplies the cost function and reranker in
- * `opts` and persists the returned goal-log rows.
- */
-export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOptions): Promise<RankRecallResult> {
-  const pool = await loadRecallPool(ctx, opts);
+/** The request once its profile is applied: what the engines may spend and where the list stops. */
+interface SettledOptions extends RankRecallOptions {
+  readonly budget: number;
+  readonly limit: number;
+}
+
+// A band profile ranks every row; the band composed from the list, and its caller, make the cut.
+const WHOLE_LIST = { budget: Infinity, cost: undefined, limit: Infinity } as const;
+
+function settle(request: RankRecallOptions, profile: RecallProfile): SettledOptions {
+  if (profile.resultCount === 'band') return { ...request, ...WHOLE_LIST };
+  return { ...request, budget: request.budget ?? DEFAULT_RECALL_BUDGET, limit: request.window.limit ?? Infinity };
+}
+
+/** The ranker's reads through an api Context: its store, the embedding model its config names, and its folder. */
+export function rankCtxOf(ctx: Context): RankRecallCtx {
+  return {
+    store: ctx.store,
+    config: ctx.config,
+    onHippoDb: ctx.reach?.isHippoDb,
+    tenantId: ctx.tenantId,
+    embedderFor: ctx.infra.embedderFor,
+    cwd: ctx.infra.machine.cwd,
+  };
+}
+
+/** Ranks memories for a query under the surface's `profile`; notes go to `ctx.note`, and the caller supplies the cost
+ * function and reranker in `request` and writes the returned goal-log rows. */
+export async function rankRecall(
+  ctx: RankRecallCtx,
+  request: RankRecallOptions,
+  profile: RecallProfile,
+): Promise<RankRecallResult> {
+  const opts = settle(request, profile);
+  const reach: RankRecallCtx = profile.globalReach ? ctx : { ...ctx, global: undefined };
+  const pool = await loadRecallPool(reach, opts, profile);
   const state: RankState = { results: [], droppedPreRank: pool.dropped, graphAdded: 0, goalRecallLog: [] };
   const done = (halted: boolean): RankRecallResult => ({
     results: state.results,
@@ -186,25 +240,30 @@ export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOptions): P
     droppedPreRank: state.droppedPreRank,
     graphAdded: state.graphAdded,
     goalRecallLog: state.goalRecallLog,
+    goals: state.goals,
     halted,
   });
 
-  state.results = await searchPool(ctx, opts, pool);
+  state.results = await searchPool(reach, opts, pool, profile);
   // A request past its deadline during the search has no caller left for the later stages.
   currentSignal()?.throwIfAborted();
   for (const stage of RANK_STAGES) {
     if (opts.haltBefore === stage.name) return done(true);
-    await stage.run(ctx, opts, state);
+    await stage.run(reach, opts, state, profile);
   }
-  const { limit } = opts.window;
-  if (limit < state.results.length) state.results = state.results.slice(0, limit);
+  if (opts.limit < state.results.length) state.results = state.results.slice(0, opts.limit);
   return done(false);
 }
 
 /** The stages after the search, in order; `haltBefore` stops the walk ahead of the stage it names. */
 const RANK_STAGES: readonly {
   readonly name: RankStage;
-  readonly run: (ctx: RankRecallCtx, opts: RankRecallOptions, state: RankState) => void | Promise<void>;
+  readonly run: (
+    ctx: RankRecallCtx,
+    opts: SettledOptions,
+    state: RankState,
+    profile: RecallProfile,
+  ) => void | Promise<void>;
 }[] = [
   {
     name: 'expand',
@@ -215,9 +274,9 @@ const RANK_STAGES: readonly {
   },
   {
     name: 'rerank',
-    run: async (ctx, opts, state) => {
+    run: async (ctx, opts, state, profile) => {
       if (opts.reranker) state.results = await applyRecallReranker(opts, opts.reranker, state.results, ctx.config);
-      await applyGoalBoosts(ctx, opts, state);
+      if (profile.goalBoost.ranked) await applyGoalBoosts(ctx, opts, state);
     },
   },
   {
@@ -255,16 +314,29 @@ function poolScope(opts: RankRecallOptions): PoolScope {
   return { requested: opts.explicitScope || undefined, loadSuperseded: opts.includeSuperseded || Boolean(opts.asOf) };
 }
 
-async function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOptions): Promise<RecallPool> {
+/** The JS half of the load's scope rule: the CLI's additive unlock, or an API caller's exact scope and own scope. */
+function poolAdmits(opts: RankRecallOptions): (e: MemoryEntry) => boolean {
+  const { requested } = poolScope(opts);
+  return opts.scopeMode === 'exact'
+    ? (e) => passesScopeFilterForRecall(e.scope ?? null, requested, opts.ownScope)
+    : (e) => passesCliRecallScopeFilter(e.scope ?? null, requested);
+}
+
+async function loadRecallPool(
+  ctx: RankRecallCtx,
+  opts: RankRecallOptions,
+  profile: RecallProfile,
+): Promise<RecallPool> {
   const { requested, loadSuperseded } = poolScope(opts);
   const load = {
-    limit: DEFAULT_SEARCH_CANDIDATE_LIMIT,
+    limit: Math.max(opts.window.scorerWindow ?? DEFAULT_SEARCH_CANDIDATE_LIMIT, profile.candidateFloor),
     tenantId: ctx.tenantId,
     requestedScope: requested,
-    explicitScopeMode: 'additive',
+    explicitScopeMode: opts.scopeMode ?? 'additive',
     includeSuperseded: loadSuperseded,
-    ownScope: undefined,
-  } as const;
+    originProjects: opts.originProjects,
+    ownScope: opts.ownScope,
+  };
   // The two stores are independent, so their reads overlap; Promise.all keeps the local-then-global order.
   const reads = await Promise.all([
     ctx.store.searchRecallEntries(opts.query, load),
@@ -273,7 +345,7 @@ async function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOptions): Prom
   let [local, global] = reads;
   // SQL-excluded rows are pre-candidate, so the total is taken before the JS filters, which normally drop nothing.
   const total = local.length + global.length;
-  const passes = (e: MemoryEntry): boolean => passesCliRecallScopeFilter(e.scope ?? null, requested);
+  const passes = poolAdmits(opts);
   local = local.filter(passes);
   global = global.filter(passes);
   const currentness = { asOf: opts.asOf, includeSuperseded: opts.includeSuperseded };
@@ -282,13 +354,19 @@ async function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOptions): Prom
   return { local, global, total, dropped: total - (local.length + global.length) };
 }
 
+interface PoolSearch {
+  readonly pool: RecallPool;
+  /** The scope the engines boost, by the profile's `scopeBoost`; undefined leaves the engine its runtime scope. */
+  readonly scope: string | null | undefined;
+}
+
 function graphStreamSearch(
   ctx: RankRecallCtx,
-  opts: RankRecallOptions,
-  graphStream: NonNullable<RankRecallOptions['search']['graphStream']>,
-  pool: RecallPool,
+  opts: SettledOptions,
+  graphStream: RecallGraphStream,
+  { pool, scope }: PoolSearch,
 ): Promise<SearchResult[]> {
-  const { query, budget, cost, includeSuperseded, asOf, activeScope: scope, search } = opts;
+  const { query, budget, cost, includeSuperseded, asOf, search } = opts;
   const { mmr, mmrLambda, minResults } = search;
   // Without embeddings hybridSearch falls back to BM25-only and the stream is inert; say so rather than no-op.
   if (!isEmbeddingAvailable()) {
@@ -323,7 +401,7 @@ function graphStreamSearch(
   });
 }
 
-function multihopPoolSearch(ctx: RankRecallCtx, opts: RankRecallOptions, pool: RecallPool): SearchResult[] {
+function multihopPoolSearch(ctx: RankRecallCtx, opts: SettledOptions, pool: RecallPool): SearchResult[] {
   const { query, budget, cost, includeSuperseded, asOf, search } = opts;
   const { minResults } = search;
   // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
@@ -344,20 +422,45 @@ function multihopPoolSearch(ctx: RankRecallCtx, opts: RankRecallOptions, pool: R
   return results.map((r) => ({ ...r, isGlobal: fromGlobal(r.entry.id) }));
 }
 
-function poolVectorCandidates(ctx: RankRecallCtx, opts: RankRecallOptions) {
+function poolVectorCandidates(ctx: RankRecallCtx, opts: RankRecallOptions): HybridVectorCandidates {
   const { requested, loadSuperseded } = poolScope(opts);
   return {
     tenantId: ctx.tenantId,
-    scope: recallScopeFilter(requested, 'additive'),
+    scope: recallScopeFilter(requested, opts.scopeMode ?? 'additive', opts.ownScope),
     includeSuperseded: loadSuperseded,
-    admit: (e: MemoryEntry) => passesCliRecallScopeFilter(e.scope ?? null, requested),
+    origin: opts.originProjects,
+    admit: poolAdmits(opts),
   };
 }
 
-async function searchPool(ctx: RankRecallCtx, opts: RankRecallOptions, pool: RecallPool): Promise<SearchResult[]> {
-  const { query, budget, cost, includeSuperseded, asOf, activeScope: scope, search } = opts;
+async function searchPool(
+  ctx: RankRecallCtx,
+  opts: SettledOptions,
+  pool: RecallPool,
+  profile: RecallProfile,
+): Promise<SearchResult[]> {
+  const scope = profile.scopeBoost === 'filter' ? opts.explicitScope : opts.activeScope;
+  if (profile.scoreForm === 'engine') return engineSearch(ctx, opts, { pool, scope });
+  // Every loaded row stays, in the order of an engine the request names; rows it leaves out keep their load order.
+  const ranked = opts.search.engineNamed ? await engineSearch(ctx, opts, { pool, scope }) : [];
+  const order = withMissing(
+    ranked.map((r) => r.entry),
+    pool.local,
+  );
+  return order.map((entry, i) => ({
+    entry,
+    score: 1 - i / order.length,
+    bm25: 0,
+    cosine: 0,
+    tokens: estimateTokens(entry.content),
+  }));
+}
+
+async function engineSearch(ctx: RankRecallCtx, opts: SettledOptions, poolSearch: PoolSearch): Promise<SearchResult[]> {
+  const { pool, scope } = poolSearch;
+  const { query, budget, cost, includeSuperseded, asOf, search } = opts;
   const { mmr, mmrLambda, minResults, explain } = search;
-  if (search.graphStream) return graphStreamSearch(ctx, opts, search.graphStream, pool);
+  if (search.graphStream) return graphStreamSearch(ctx, opts, search.graphStream, poolSearch);
   if (search.multihop) return multihopPoolSearch(ctx, opts, pool);
   const vectorCandidates = poolVectorCandidates(ctx, opts);
   if (ctx.global && pool.global.length > 0) {
@@ -404,10 +507,16 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOptions, pool: Rec
   });
 }
 
+/** `first`, then the rows of `second` that `first` does not hold. */
+export function withMissing(first: MemoryEntry[], second: MemoryEntry[]): MemoryEntry[] {
+  const held = new Set(first.map((e) => e.id));
+  return [...first, ...second.filter((e) => !held.has(e.id))];
+}
+
 /** Adds memories reached by walking the entity graph out from the lexical seeds. */
 async function expandGraph(
   ctx: RankRecallCtx,
-  opts: RankRecallOptions,
+  opts: SettledOptions,
   graph: RecallGraphHops,
   state: RankState,
 ): Promise<void> {
@@ -565,8 +674,9 @@ function applyRecallReranker(
   );
 }
 
-async function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOptions, state: RankState): Promise<void> {
+async function applyGoalBoosts(ctx: RankRecallCtx, opts: SettledOptions, state: RankState): Promise<void> {
   const { goalTag = '', sessionId } = opts.boost ?? {};
+  state.goals = null;
   if (goalTag) {
     // Its own trace stage: `goal` is the explicit flag, `goal-boost` the session stack it replaces.
     state.results = rescore(
@@ -583,9 +693,10 @@ async function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOptions, stat
   const goalBoostTrace = opts.why ? new Map<string, RerankStep>() : undefined;
   const session = { sessionId, tenantId: ctx.tenantId };
   // The log may name global rows; the store drops those when it writes, as it does for api.recall.
-  const boost = boostByGoals(state.results, await ctx.store.activeGoals(session), {
+  state.goals = await ctx.store.activeGoals(session);
+  const boost = boostByGoals(state.results, state.goals, {
     ...session,
-    limit: opts.window.limit,
+    limit: opts.limit,
     trace: goalBoostTrace,
   });
   state.results = boost.results;
