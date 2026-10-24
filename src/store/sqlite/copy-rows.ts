@@ -5,12 +5,13 @@ import { DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { isFtsAvailable, isFtsInSync, type DatabaseSyncLike } from '../../db/index.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import type { EntryFilter } from '../port/reports.js';
 import type { EntryTextKey } from '../port/sharing.js';
-import { bareText, mayHoldCopy } from '../rules/copies.js';
+import { bareText } from '../rules/copies.js';
 import { openingPhrase } from '../rules/fts.js';
-import { originAnd, TENANT_IS } from './entry-reads.js';
+import { narrowingAnd } from './entry-filter.js';
 import { bareTextSql } from './rule-sql.js';
-import { tenantAnd } from './tenant.js';
+import { tenantAnd, TENANT_IS } from './tenant.js';
 
 const IN_PHRASE_HITS = 'id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
 
@@ -88,42 +89,17 @@ function distinctRowsHolding(db: DatabaseSyncLike, read: CopyRead, texts: readon
   return [...new Map(rowsHoldingTexts(db, read, texts).map((row) => [row.id, row])).values()];
 }
 
-const NO_FILTER: SqlFragment = { sql: '', params: [] };
-
-/** The rows of `tenantId` that may hold one of `texts` word for word, spacing aside. Callers check each again. */
+/** The rows `filter` keeps that may hold one of `texts` word for word, spacing aside. Callers check each again. */
 export function listTextKeysHolding(
   db: DatabaseSyncLike,
-  tenantId: TenantId,
+  filter: EntryFilter,
   texts: readonly string[],
 ): EntryTextKey[] {
-  return distinctRowsHolding(db, { tenantId, filter: NO_FILTER }, texts).map((row) => ({
+  const { tenantId, ...narrowing } = filter;
+  return distinctRowsHolding(db, { tenantId, filter: narrowingAnd(narrowing) }, texts).map((row) => ({
     id: row.id,
     tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
     content: row.content,
     source: row.source,
   }));
-}
-
-/** Per text, in order: the tenant's live rows whose source does not start with `sourcePrefix` that may hold it word for
- * word, spacing aside. `origins` (global store only) limits them to user-global rows and those projects. A superset:
- * the caller checks each again. */
-export function listRowsHoldingOutsideSourcePrefix(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  texts: readonly string[],
-  sourcePrefix: string,
-  origins: readonly string[] | null,
-): Array<Array<{ id: string; content: string; source: string }>> {
-  const visible = originAnd(origins);
-  const filter = {
-    sql: ` AND superseded_by IS NULL AND substr(source, 1, ?) != ?${visible.sql}`,
-    params: [sourcePrefix.length, sourcePrefix, ...visible.params],
-  };
-  const rows = distinctRowsHolding(db, { tenantId, filter }, texts);
-  return texts.map((text) => {
-    const bare = new Set([bareText(text)]);
-    return rows
-      .filter((row) => mayHoldCopy(row, bare))
-      .map((row) => ({ id: row.id, content: row.content, source: row.source }));
-  });
 }

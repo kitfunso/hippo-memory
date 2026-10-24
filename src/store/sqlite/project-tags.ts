@@ -4,27 +4,11 @@ import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike
 import { withBackup } from '../../db/backup.js';
 import { calculateStrength, type MemoryEntry } from '../../base/memory/memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, isImport, noteKey, toolTag } from '../../base/memory/agent-memory-tools.js';
-import { MAX_AUDIT_LIMIT } from '../../base/util/limits.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
-import { appendAuditEvents, listAuditEvents } from './audit.js';
-import {
-  compactionOriginsWithCwd,
-  compactionTranscripts,
-  holdsOrigin,
-  restampCompactionOrigin,
-} from './compaction-rows.js';
-import {
-  dormantSnapshotsByIds,
-  dormantSnapshotsFromOrigin,
-  insertDormantRow,
-  replaceDormantEntry,
-} from './dormant-rows.js';
-import {
-  readEntriesByIds,
-  listEntriesFromOrigin,
-  listLiveEntriesBySourcePrefix,
-  countByOrigin,
-} from './entry-reads.js';
+import { appendAuditEvents } from './audit.js';
+import { compactionOrigins, restampCompactionOrigin } from './compaction-rows.js';
+import { dormantSnapshotsWhere, insertDormantRow, replaceDormantEntry } from './dormant-rows.js';
+import { readEntriesByIds, countByOrigin } from './entry-reads.js';
 import { deleteEntryRowInTx, restampOriginProject, stampOriginProjects, writeEntryMirrors } from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
 import type { Handles, HandleOpener, StoreFiles } from './open.js';
@@ -35,14 +19,15 @@ import type {
   AppliedRepair,
   FoldResult,
   MergeRequest,
-  OriginRows,
   ProjectFold,
   ProjectTags,
   ProjectTagScope,
   RepairPlan,
   RowRead,
 } from '../port/project-tags.js';
+import type { EntryFilter } from '../port/reports.js';
 import type { EntryCursor } from '../port/types.js';
+import { listEntriesWhere } from './entry-filter.js';
 
 const TX_LABEL = 'merge_projects';
 const AUTO_REPAIR_META_KEY = 'project_repair_auto';
@@ -73,10 +58,8 @@ function rewrite<T>(
   return done.result;
 }
 
-function originRows(db: DatabaseSyncLike, tenantId: string, rows: OriginRows): Iterable<MemoryEntry> {
-  return rowsInPages((after?: EntryCursor) =>
-    listEntriesFromOrigin(db, tenantId, rows, { limit: READ_PAGE_ROWS, after }),
-  );
+function rowsWhere(db: DatabaseSyncLike, filter: EntryFilter): Iterable<MemoryEntry> {
+  return rowsInPages((after?: EntryCursor) => listEntriesWhere(db, filter, { limit: READ_PAGE_ROWS, after }));
 }
 
 /** Re-tags `from`'s rows, snapshots and compactions to `into`, setting aside the imports `into` already holds. */
@@ -84,13 +67,14 @@ function fold(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, { from,
   // The sync renames the rest to `into`'s prefix and keeps their ids; only a note `into` already holds would show
   // twice.
   const held = new Set<string>();
-  for (const row of originRows(db, tenantId, { origin: into, live: true, sourcePrefix: AGENT_MEMORY_SOURCE_PREFIX })) {
+  const imports = { tenantId, origins: [into], live: true, sourcePrefix: AGENT_MEMORY_SOURCE_PREFIX } as const;
+  for (const row of rowsWhere(db, imports)) {
     held.add(noteKey(row.source));
   }
   const setAside: string[] = [];
   const restamped: string[] = [];
   // A row set aside sits at or before the page cursor, so the write never moves a row the walk has yet to read.
-  for (const row of originRows(db, tenantId, { origin: from })) {
+  for (const row of rowsWhere(db, { tenantId, origins: [from] })) {
     const tag = toolTag(row.source);
     const live = isImport(row.source) && !row.supersededBy && row.kind !== 'raw';
     const copy = live && tag !== null && held.has(noteKey(row.source));
@@ -101,7 +85,7 @@ function fold(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, { from,
   restampOriginProject(db, tenantId, from, into);
   const gone = new Set(setAside);
   const dormantRestamped: string[] = [];
-  for (const snap of dormantSnapshotsFromOrigin(db, tenantId, from)) {
+  for (const snap of dormantSnapshotsWhere(db, { tenantId, origins: [from] })) {
     if (gone.has(snap.entry.id)) continue;
     replaceDormantEntry(db, tenantId, snap.entry.id, { ...snap.entry, originProject: into });
     dormantRestamped.push(snap.entry.id);
@@ -193,15 +177,8 @@ type Reads = Omit<ProjectTags, 'merge' | 'repair' | 'markRepairedOnce'>;
 
 const readsBodies: Bodies<Reads> = {
   originTallies: countByOrigin,
-  entriesFromOrigin: listEntriesFromOrigin,
-  liveEntriesBySourcePrefix: listLiveEntriesBySourcePrefix,
-  entriesByIds: (db, tenantId, ids) => readEntriesByIds(db, ids, tenantId),
-  dormantFromOrigin: dormantSnapshotsFromOrigin,
-  dormantByIds: dormantSnapshotsByIds,
-  auditEvents: (db, tenantId, op) => listAuditEvents(db, { tenantId, op, limit: MAX_AUDIT_LIMIT }),
-  compactionTranscripts,
-  compactionOriginsWithCwd,
-  holdsOrigin: (db, tenantId, table, name) => holdsOrigin(db, table, tenantId, name),
+  dormantWhere: dormantSnapshotsWhere,
+  compactionOrigins,
   repairedOnce: (db) => getMeta(db, AUTO_REPAIR_META_KEY) === '1',
 };
 

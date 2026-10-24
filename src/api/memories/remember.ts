@@ -208,8 +208,8 @@ async function salienceVerdict(ctx: Context, opts: RememberOptions): Promise<Sal
   // computeSalience compares against the last `recentWindow` rows only.
   const window = Math.trunc(salience.recentWindow);
   const rows = Number.isSafeInteger(window) && window >= 1 ? Math.min(window, MAX_SALIENCE_ROWS) : MAX_SALIENCE_ROWS;
-  const recent = await ctx.store.contextReads.newestEntries(ctx.tenantId, rows);
-  return computeSalience(opts.content, [...(opts.tags ?? [])], recent, {
+  const newest = await ctx.store.reports.entriesWhere({ tenantId: ctx.tenantId }, { limit: rows, newest: true });
+  return computeSalience(opts.content, [...(opts.tags ?? [])], newest.entries.reverse(), {
     recentWindow: salience.recentWindow,
     overlapThreshold: salience.overlapThreshold,
     minContentLength: salience.minContentLength,

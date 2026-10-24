@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
-import { listLiveEntriesBySourcePrefix, prefixUpperBound } from '../../src/store/sqlite/entry-reads.js';
+import { listEntriesWhere, prefixUpperBound } from '../../src/store/sqlite/entry-filter.js';
 import { finishRecall } from '../../src/store/sqlite/last-recall.js';
 import type { RecallWrites } from '../../src/store/port/recall-writes.js';
 import { rowsInPages } from '../../src/base/util/pages.js';
@@ -46,10 +46,7 @@ describe('the live rows under a source prefix', () => {
         for (const limit of [1, 2, 100]) {
           const got = [
             ...rowsInPages((after?: EntryCursor) =>
-              listLiveEntriesBySourcePrefix(db, tenant, prefix, {
-                limit,
-                after,
-              }),
+              listEntriesWhere(db, { tenantId: tenant, sourcePrefix: prefix, live: true }, { limit, after }),
             ),
           ];
           expect(got.map((e) => e.id)).toEqual(want);
@@ -71,9 +68,7 @@ describe('the live rows under a source prefix', () => {
     const db = openHippoDb(root);
     try {
       const log = recordStatements(() =>
-        listLiveEntriesBySourcePrefix(db, 'default', 'agent-memory:', {
-          limit: 5,
-        }),
+        listEntriesWhere(db, { tenantId: 'default', sourcePrefix: 'agent-memory:', live: true }, { limit: 5 }),
       );
       const sql = log.statements.find((s) => s.includes('source >= ?'));
       if (sql === undefined) throw new Error('no range statement ran');

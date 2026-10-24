@@ -19,7 +19,8 @@ export interface MemorySide extends StoreSide {
 
 const byBytes = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
 
-/** The store with each read recall and context make logged by name: the two base reads, contextReads and vectors. */
+/** The store with each read recall and context make logged by name: the two base reads, contextReads, vectors and the
+ * handoff read. */
 function logged(store: HippoStore, calls: string[]): HippoStore {
   const log =
     <A extends unknown[], R>(name: string, fn: (...args: A) => R) =>
@@ -27,20 +28,18 @@ function logged(store: HippoStore, calls: string[]): HippoStore {
       calls.push(name);
       return fn(...args);
     };
-  const { contextReads: c, vectors: v } = store;
+  const { contextReads: c, vectors: v, sessions } = store;
   return {
     ...store,
     continuity: log('continuity', store.continuity),
     searchRecallEntries: log('searchRecallEntries', store.searchRecallEntries),
+    // SAFETY: log passes every argument through and returns read's own answer, so each overload still holds.
+    sessions: { ...sessions, read: log('sessions.read', sessions.read) as HippoStore['sessions']['read'] },
     contextReads: {
-      unfinishedHandoff: log('unfinishedHandoff', c.unfinishedHandoff),
       ambientCandidates: log('ambientCandidates', c.ambientCandidates),
       contextCandidates: log('contextCandidates', c.contextCandidates),
       ambientTallies: log('ambientTallies', c.ambientTallies),
-      newestEntries: log('newestEntries', c.newestEntries),
       schemaFit: log('schemaFit', c.schemaFit),
-      liveContentsBySourceAndTag: log('liveContentsBySourceAndTag', c.liveContentsBySourceAndTag),
-      rawRowsUnderRef: log('rawRowsUnderRef', c.rawRowsUnderRef),
     },
     vectors: {
       embeddingIndexState: log('embeddingIndexState', v.embeddingIndexState),

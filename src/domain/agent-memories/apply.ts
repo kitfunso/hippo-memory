@@ -130,7 +130,7 @@ async function dormantSnapshots(
 ): Promise<DormantSnapshot[]> {
   const needed = w.container.items.some((item) => !refusals.has(item.key) && !liveKeys.has(item.key));
   if (!needed) return [];
-  const under = await s.store.agentImport.dormantBySourcePrefix(s.tenantId, w.prefix);
+  const under = await s.store.projectTags.dormantWhere({ tenantId: s.tenantId, sourcePrefix: w.prefix });
   return [...under, ...view.movedDormant].filter((snap) => !snap.entry.supersededBy);
 }
 
@@ -159,10 +159,12 @@ async function planWithDuplicates(
 /** Design 6: only text stored by another path counts; the store is asked only for rows holding the text's words. */
 async function duplicatesAmong(s: StoreSession, texts: readonly string[]): Promise<boolean[]> {
   if (texts.length === 0) return [];
-  const reads = s.store.agentImport;
-  const held = await reads.rowsHoldingOutsideSourcePrefix(s.tenantId, texts, AGENT_MEMORY_SOURCE_PREFIX, s.visible);
-  return texts.map((text, i) => {
-    const key = duplicateKey(text);
-    return held[i].some((r) => !s.adopted.has(r.id) && heldTextKeys(r).includes(key));
-  });
+  const origins = s.visible === null ? undefined : ['', ...s.visible];
+  const rows = await s.store.sharing.textKeysHolding({ tenantId: s.tenantId, live: true, origins }, texts);
+  const keys = new Set(
+    rows
+      .filter((r) => !r.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX) && !s.adopted.has(r.id))
+      .flatMap((r) => heldTextKeys(r)),
+  );
+  return texts.map((text) => keys.has(duplicateKey(text)));
 }

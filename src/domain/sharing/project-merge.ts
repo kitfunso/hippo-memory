@@ -3,16 +3,22 @@
 import * as path from 'node:path';
 import { transcriptNotesProject } from '../agent-memories/claude-code.js';
 import { containerId, containerPrefix } from '../agent-memories/source.js';
-import { foldEdges, foldedInto } from '../agent-memories/project-folds.js';
+import { foldEdges, foldedInto, projectAudit } from '../agent-memories/project-folds.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, toolSourcePrefix, toolTag } from '../../base/memory/agent-memory-tools.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import { READ_PAGE_ROWS, readPages } from '../../base/util/pages.js';
 import { projectNames, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { duplicateKey } from '../../base/util/same-text.js';
-import type { ProjectFold, ProjectTags, ProjectTagScope, RowRetag } from '../../store/port/project-tags.js';
-import type { PageRequest } from '../../store/port/sharing.js';
-import type { EntryCursor, EntryPage } from '../../store/port/types.js';
+import type {
+  ProjectFold,
+  ProjectTagReads,
+  ProjectTags,
+  ProjectTagScope,
+  RowRetag,
+} from '../../store/port/project-tags.js';
+import type { EntryNarrowing } from '../../store/port/reports.js';
+import type { EntryCursor } from '../../store/port/types.js';
 
 export interface ProjectSummary {
   /** '' is user-global, null is unknown; neither can be merged. */
@@ -74,22 +80,19 @@ export type StoreFolder =
 
 /** One tenant's project-tag reads. */
 interface Reader {
-  readonly tags: ProjectTags;
+  readonly store: ProjectTagReads;
   readonly tenantId: string;
 }
 
-/** Every row of a paged read, one page per call, so no one call holds a whole tenant. */
-async function* rowsOf(read: (page: PageRequest) => Promise<EntryPage>): AsyncGenerator<MemoryEntry> {
-  let after: EntryCursor | undefined;
-  do {
-    const page = await read({ limit: READ_PAGE_ROWS, after });
-    yield* page.entries;
-    after = page.next ?? undefined;
-  } while (after !== undefined);
+/** Every row of the tenant `narrowing` keeps, one page per call, so no one call holds a whole tenant. */
+async function* rowsOf(r: Reader, narrowing: EntryNarrowing): AsyncGenerator<MemoryEntry> {
+  const filter = { ...narrowing, tenantId: r.tenantId };
+  const read = (after?: EntryCursor) => r.store.reports.entriesWhere(filter, { limit: READ_PAGE_ROWS, after });
+  for await (const page of readPages(read)) yield* page;
 }
 
 function liveRows(r: Reader, prefix: string): AsyncGenerator<MemoryEntry> {
-  return rowsOf((page) => r.tags.liveEntriesBySourcePrefix(r.tenantId, prefix, page));
+  return rowsOf(r, { sourcePrefix: prefix, live: true });
 }
 
 /** Per project name, how many of its imports hold a text that another name's import also holds. */
@@ -110,9 +113,9 @@ async function copiesByOrigin(imports: AsyncIterable<MemoryEntry>): Promise<Map<
 }
 
 /** Live rows per project name, newest write first, with how many of its imported notes are copies held elsewhere. */
-export async function listProjects(tags: ProjectTags, tenantId: string): Promise<ProjectSummary[]> {
-  const copies = await copiesByOrigin(liveRows({ tags, tenantId }, AGENT_MEMORY_SOURCE_PREFIX));
-  return (await tags.originTallies(tenantId, AGENT_MEMORY_SOURCE_PREFIX))
+export async function listProjects(store: ProjectTagReads, tenantId: string): Promise<ProjectSummary[]> {
+  const copies = await copiesByOrigin(liveRows({ store, tenantId }, AGENT_MEMORY_SOURCE_PREFIX));
+  return (await store.projectTags.originTallies(tenantId, AGENT_MEMORY_SOURCE_PREFIX))
     .map(({ origin, live, prefixed, newest }) => ({
       origin,
       live,
@@ -160,10 +163,19 @@ async function importCopies(r: Reader): Promise<MemoryEntry[]> {
   return copies;
 }
 
+/** Each transcript the tenant's compactions recorded with its working folder, once. */
+async function transcriptsOf(r: Reader): Promise<Array<{ transcript: string; cwd: string | null }>> {
+  const seen = new Map<string, { transcript: string; cwd: string | null }>();
+  for (const { transcript, cwd } of await r.store.projectTags.compactionOrigins(r.tenantId)) {
+    if (transcript !== null) seen.set(JSON.stringify([transcript, cwd]), { transcript, cwd });
+  }
+  return [...seen.values()];
+}
+
 /** Each Claude session folder a compaction recorded, with the names of each project it resolves to. */
 async function sessionOwners(r: Reader, machine: SessionMachine): Promise<Map<string, Map<string, string[]>>> {
   const owners = new Map<string, Map<string, string[]>>();
-  for (const { transcript, cwd } of await r.tags.compactionTranscripts(r.tenantId)) {
+  for (const { transcript, cwd } of await transcriptsOf(r)) {
     const project = transcriptNotesProject(transcript, cwd, machine);
     const dir = path.join(path.dirname(transcript), 'memory');
     if (project === null) continue;
@@ -184,7 +196,7 @@ async function strayImports(r: Reader, folder: StoreFolder): Promise<MemoryEntry
   const kept = (e: MemoryEntry): boolean => e.kind !== 'raw' && !e.pinned;
   const origins = new Set<string>();
   for await (const e of liveRows(r, tool)) if (kept(e)) origins.add(e.originProject ?? '');
-  const edges = await foldEdges(r.tags, r.tenantId);
+  const edges = await foldEdges(r.store.auditLog, r.tenantId);
   const right = new Set<string>();
   const wrong = new Set<string>();
   for (const [dir, ids] of owners) {
@@ -214,13 +226,15 @@ async function planFolds(
   globalFolds: boolean,
 ): Promise<Pick<RepairResult, 'folds' | 'collisions'>> {
   // A name someone merged into by hand stays: undoing their choice would rest on the resolver alone.
-  const chosen = new Set((await r.tags.auditEvents(r.tenantId, 'project_merge')).map((e) => e.metadata.into));
+  const chosen = new Set(
+    (await projectAudit(r.store.auditLog, r.tenantId, 'project_merge')).map((e) => e.metadata.into),
+  );
   if (!folder.isGlobal) {
     return { folds: (await ownLegacyFold(r, folder)).filter((f) => !chosen.has(f.from)), collisions: [] };
   }
   const today = new Map<string, Set<string>>();
-  for (const { origin, cwd } of await r.tags.compactionOriginsWithCwd(r.tenantId)) {
-    if (folder.machine.files.exists(cwd)) {
+  for (const { origin, cwd } of await r.store.projectTags.compactionOrigins(r.tenantId)) {
+    if (origin !== '' && cwd !== null && folder.machine.files.exists(cwd)) {
       today.set(origin, (today.get(origin) ?? new Set<string>()).add(folder.machine.projectIdentity(cwd).name));
     }
   }
@@ -245,10 +259,11 @@ async function ownLegacyFold(r: Reader, folder: Extract<StoreFolder, { isGlobal:
   if (folder.shared) return [];
   const { name, legacyName } = folder.project;
   if (legacyName === '' || legacyName === name) return [];
+  const legacy = { tenantId: r.tenantId, origins: [legacyName] };
   const held =
-    (await r.tags.holdsOrigin(r.tenantId, 'memories', legacyName)) ||
-    (await r.tags.holdsOrigin(r.tenantId, 'compactions', legacyName)) ||
-    (await r.tags.dormantFromOrigin(r.tenantId, legacyName)).length > 0;
+    (await r.store.reports.entriesWhere(legacy, { limit: 1 })).entries.length > 0 ||
+    (await r.store.projectTags.compactionOrigins(r.tenantId)).some((c) => c.origin === legacyName) ||
+    (await r.store.projectTags.dormantWhere(legacy)).length > 0;
   return held ? [{ from: legacyName, into: name }] : [];
 }
 
@@ -269,12 +284,12 @@ function publicPlan({ stray, ...rest }: RepairPlanRows): Omit<RepairResult, 'bac
 
 /** Reads only, so doctor and a dry run take no write lock. */
 export async function planProjectRepair(
-  tags: ProjectTags,
+  store: ProjectTagReads,
   tenantId: string,
   folder: StoreFolder,
   globalFolds = true,
 ): Promise<Omit<RepairResult, 'backup'>> {
-  return publicPlan(await planRepair({ tags, tenantId }, folder, globalFolds));
+  return publicPlan(await planRepair({ store, tenantId }, folder, globalFolds));
 }
 
 /** Parents read with `folds` already applied, so a plan matches what apply does after folding. */
@@ -282,8 +297,7 @@ async function planUserGlobalRepair(
   r: Reader,
   folds: readonly ProjectFold[],
 ): Promise<Pick<RepairResult, 'toProject' | 'setAside' | 'untraced'>> {
-  const merges = { origin: '', live: true, sourcePrefix: 'consolidation' } as const;
-  const mergeRows = () => rowsOf((page) => r.tags.entriesFromOrigin(r.tenantId, merges, page));
+  const mergeRows = () => rowsOf(r, { origins: [''], live: true, sourcePrefix: 'consolidation' });
   const origins = await parentOrigins(r, mergeRows(), folds);
   const toProject: RowRetag[] = [];
   const setAside: string[] = [];
@@ -311,13 +325,12 @@ async function parentOrigins(
   const parents = new Set<string>();
   for await (const row of merges) for (const id of row.parents) parents.add(id);
   const parentIds = [...parents];
-  const live = await r.tags.entriesByIds(r.tenantId, parentIds);
+  const live = new Map<string, MemoryEntry>();
+  for await (const e of rowsOf(r, { ids: parentIds })) live.set(e.id, e);
   // A live row outranks a snapshot under its id, so only the parents with no live row are looked up dormant.
-  const dormant = await r.tags.dormantByIds(
-    r.tenantId,
-    parentIds.filter((id) => !live.has(id)),
-  );
-  const origins = new Map<string, string | null>([...dormant].map(([id, s]) => [id, after(s.entry.originProject)]));
+  const gone = parentIds.filter((id) => !live.has(id));
+  const dormant = await r.store.projectTags.dormantWhere({ tenantId: r.tenantId, ids: gone });
+  const origins = new Map<string, string | null>(dormant.map((s) => [s.entry.id, after(s.entry.originProject)]));
   for (const [id, e] of live) origins.set(id, after(e.originProject));
   return origins;
 }
@@ -339,13 +352,13 @@ async function applyRepair(
 /** Sets aside stray imports, folds the names the resolver now maps elsewhere, then re-tags sleep's user-global merges
  * by their parents; a dry run only plans. */
 export async function repairProjects(
-  tags: ProjectTags,
+  store: ProjectTagReads,
   scope: ProjectTagScope,
   folder: StoreFolder,
   opts: { dryRun: boolean },
 ): Promise<RepairResult> {
-  const plan = await planRepair({ tags, tenantId: scope.tenantId }, folder, true);
-  return opts.dryRun ? { ...publicPlan(plan), backup: null } : applyRepair(tags, scope, plan);
+  const plan = await planRepair({ store, tenantId: scope.tenantId }, folder, true);
+  return opts.dryRun ? { ...publicPlan(plan), backup: null } : applyRepair(store.projectTags, scope, plan);
 }
 
 /** True when a repair would change nothing. */
@@ -356,12 +369,13 @@ function repairIsEmpty(r: RepairPlanRows): boolean {
 /** Sleep runs repair once per store, so an upgrade needs no command. Global-store folds stay with `hippo projects
  * repair`: their evidence is compaction folders, blind to a same-named repo that never compacted. */
 export async function repairOnceOnSleep(
-  tags: ProjectTags,
+  store: ProjectTagReads,
   scope: ProjectTagScope,
   folder: StoreFolder,
 ): Promise<RepairResult | null> {
+  const tags = store.projectTags;
   if (await tags.repairedOnce()) return null;
-  const plan = await planRepair({ tags, tenantId: scope.tenantId }, folder, false);
+  const plan = await planRepair({ store, tenantId: scope.tenantId }, folder, false);
   const result = repairIsEmpty(plan) ? null : await applyRepair(tags, scope, plan);
   await tags.markRepairedOnce();
   return result;

@@ -1,4 +1,4 @@
-// The in-memory ContextReads group: contextGet's fallback handoff, candidate rows and ambient tallies, each read in
+// The in-memory ContextReads group: contextGet's candidate rows, ambient tallies and schema fit, each read in
 // the windows and order the port fixes, so both stores pick the same rows.
 import { tallyAmbientEntries } from '../../base/memory/ambient.js';
 import { sortableStamp } from '../../base/memory/created-stamp.js';
@@ -6,7 +6,6 @@ import { computeSchemaFit, type MemoryEntry } from '../../base/memory/memory.js'
 import { rarestFtsQuery } from '../../base/rank/prompt-recall.js';
 import { ambientRefusal } from '../../base/scope/read-admission.js';
 import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
-import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { SECRET_TAGS } from '../../base/util/secret-detect.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type {
@@ -17,7 +16,6 @@ import type {
   ContextReads,
   RecentOrigins,
 } from '../port/context-reads.js';
-import { latestHandoffIn } from './handoffs.js';
 import { byBytes, newestFirst, oldestFirst, type DescendingKeyset } from '../rules/order.js';
 import { rowTerms } from '../rules/fts.js';
 import { SCHEMA_FIT_WINDOW_ROWS } from '../rules/windows.js';
@@ -159,47 +157,14 @@ function ambientIn(t: MemoryTables, tenantId: string, request: AmbientCandidateR
   return { entries, recall: found, refused };
 }
 
-/** The tenant's `limit` newest rows, oldest first; a negative limit is no limit, as SQL's LIMIT reads it. */
+/** The tenant's `limit` newest rows, oldest first. */
 function newestIn(t: MemoryTables, tenantId: string, limit: number): MemoryEntry[] {
   const newest = [...t.entries.values()].filter((e) => e.tenantId === tenantId).sort(newestFirst(BY_CREATED));
-  return structuredClone((limit < 0 ? newest : newest.slice(0, limit)).reverse());
-}
-
-function liveContentsIn(t: MemoryTables, tenantId: string, source: string, tag: string, exceptSessionId: string) {
-  const rows = [...t.entries.values()].filter(
-    (e) =>
-      e.tenantId === tenantId &&
-      e.source === source &&
-      (e.extractedFrom ?? '') === '' &&
-      live(e) &&
-      e.sourceSessionId !== exceptSessionId &&
-      e.tags.includes(tag),
-  );
-  return rows.sort(oldestFirst).map((e) => e.content);
-}
-
-function rawRowsUnderRefIn(t: MemoryTables, tenantId: string, refPrefix: string) {
-  const under = [...t.entries.values()].filter(
-    (e): e is MemoryEntry & { artifactRef: string } =>
-      e.tenantId === tenantId &&
-      e.kind === 'raw' &&
-      typeof e.artifactRef === 'string' &&
-      e.artifactRef.startsWith(refPrefix),
-  );
-  return under.sort(oldestFirst).map((e) => ({
-    id: e.id,
-    artifact_ref: e.artifactRef,
-    tags_json: JSON.stringify(e.tags),
-    scope: e.scope ?? null,
-  }));
+  return structuredClone(newest.slice(0, limit).reverse());
 }
 
 export function memoryContextReads(t: MemoryTables): ContextReads {
   return {
-    async unfinishedHandoff(tenantId, maxAgeMs, key) {
-      assertTenantId('readLatestHandoff', tenantId);
-      return latestHandoffIn(t, tenantId, null, { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' }, key);
-    },
     ambientCandidates: async (tenantId, request) => ambientIn(t, tenantId, request),
     contextCandidates: async (tenantId, filter) => contextCandidatesIn(t, tenantId, filter),
     async ambientTallies(tenantId, filter) {
@@ -208,11 +173,7 @@ export function memoryContextReads(t: MemoryTables): ContextReads {
       );
       return tallyAmbientEntries(kept.map(utcDates), filter.now);
     },
-    newestEntries: async (tenantId, limit) => newestIn(t, tenantId, limit),
     schemaFit: async (tenantId, content, tags) =>
       computeSchemaFit(content, [...tags], newestIn(t, tenantId, SCHEMA_FIT_WINDOW_ROWS)),
-    liveContentsBySourceAndTag: async (tenantId, source, tag, exceptSessionId) =>
-      liveContentsIn(t, tenantId, source, tag, exceptSessionId),
-    rawRowsUnderRef: async (tenantId, refPrefix) => rawRowsUnderRefIn(t, tenantId, refPrefix),
   };
 }

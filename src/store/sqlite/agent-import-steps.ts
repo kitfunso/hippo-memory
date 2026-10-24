@@ -6,14 +6,10 @@ import { chunked } from '../../base/util/chunked.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { appendAuditEvents } from './audit.js';
-import {
-  deleteDormantRow,
-  dormantSnapshotsBySourcePrefix,
-  readDormantSnapshot,
-  replaceDormantEntry,
-} from './dormant-rows.js';
+import { deleteDormantRow, dormantSnapshotsWhere, readDormantSnapshot, replaceDormantEntry } from './dormant-rows.js';
 import { stampOriginProject } from './entry-row.js';
-import { entryIdTaken, readEntriesInIdOrder, listLiveEntriesBySourcePrefix } from './entry-reads.js';
+import { entryIdTaken, readEntriesInIdOrder } from './entry-reads.js';
+import { listEntriesWhere } from './entry-filter.js';
 import { renameEntrySourceAndOrigin, renameEntrySource, setEntryTagsInTx, supersedeEntry } from './entry-writes.js';
 import { gatedWrite } from './gated-write.js';
 import type { StoreFiles } from './open.js';
@@ -38,12 +34,9 @@ interface StepsRun {
 }
 
 /** The tenant's live rows under `prefix`, one bounded statement per page. */
-export function liveUnder(db: DatabaseSyncLike, tenantId: string, prefix: string): MemoryEntry[] {
-  return [
-    ...rowsInPages((after?: EntryCursor) =>
-      listLiveEntriesBySourcePrefix(db, tenantId, prefix, { limit: READ_PAGE_ROWS, after }),
-    ),
-  ];
+function liveUnder(db: DatabaseSyncLike, tenantId: string, prefix: string): MemoryEntry[] {
+  const filter = { tenantId, sourcePrefix: prefix, live: true } as const;
+  return [...rowsInPages((after?: EntryCursor) => listEntriesWhere(db, filter, { limit: READ_PAGE_ROWS, after }))];
 }
 
 /** Null when the rows the plan read have changed: nothing is written then, and the sync plans again. */
@@ -150,7 +143,7 @@ class ContainerSteps {
 
   private moveDormant(from: string, to: string, origin: string | null): StepOutcome {
     const tenantId = this.plan.tenantId;
-    for (const snap of dormantSnapshotsBySourcePrefix(this.db, tenantId, from)) {
+    for (const snap of dormantSnapshotsWhere(this.db, { tenantId, sourcePrefix: from })) {
       const source = to + snap.entry.source.slice(from.length);
       const originProject = origin ?? snap.entry.originProject;
       replaceDormantEntry(this.db, tenantId, snap.entry.id, { ...snap.entry, source, originProject });

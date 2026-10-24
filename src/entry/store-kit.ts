@@ -25,7 +25,6 @@ export type {
   StoredParts,
 } from '../store/port/vectors.js';
 export type {
-  RawRefRow,
   AmbientCandidates,
   AmbientLoadResult,
   AmbientRefusal,
@@ -157,6 +156,8 @@ export type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from '../s
 export type { CallerItems, CompactionStart } from '../store/port/capture.js';
 export type {
   CorrectionLink,
+  EntryFilter,
+  PageRequest,
   RawProvenance,
   StatusCounts,
   StrengthTallies,

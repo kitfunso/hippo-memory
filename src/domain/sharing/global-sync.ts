@@ -47,7 +47,7 @@ async function missingRows(local: Sharing, from: Sharing): Promise<EntryTextKey[
     const open = page.filter((k) => !taken.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX));
     if (open.length === 0) continue;
     const held = await local.textKeysHolding(
-      ALL_TENANTS,
+      { tenantId: ALL_TENANTS },
       open.map((k) => k.content),
     );
     const heldKeys = new Set(held.map(textKey));

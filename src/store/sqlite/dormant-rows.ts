@@ -8,12 +8,15 @@ import type { SqlFragment } from '../../db/sql.js';
 import { EVERY_SCOPE } from './rule-sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import { escapeLike } from '../../base/util/escape.js';
+import type { EntryFilter } from '../port/reports.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { DormantMove } from '../port/consolidation.js';
 import { dormantListCap, dormantTerms, type DormantMemory, type ListDormantOpts } from '../port/dormant.js';
 import { DORMANT_ORDER, orderSql } from '../rules/order.js';
 import type { DormantSnapshot } from '../port/types.js';
+import { narrowingAnd, type FilterColumn } from './entry-filter.js';
+import { tenantAnd } from './tenant.js';
 
 // SAFETY: every read cast to this row selects DORMANT_COLUMNS; scripts/check-row-casts.mjs proves it.
 interface DormantRow {
@@ -150,32 +153,21 @@ export function readDormantSnapshot(db: DatabaseSyncLike, tenantId: string, id: 
   return row ? toSnapshot(row) : null;
 }
 
-/** Readable snapshots whose entry's source starts with `prefix`; a malformed snapshot is passed over, not an error. */
-export function dormantSnapshotsBySourcePrefix(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  prefix: string,
-): DormantSnapshot[] {
-  const rows = cachedStatement(
-    db,
-    `SELECT ${DORMANT_COLUMNS}
-       FROM dormant_memories
-      WHERE tenant_id = ?
-        AND ${entryField('source')} LIKE ? ESCAPE '\\'`,
-  ).all(tenantId, `${escapeLike(prefix)}%`) as DormantRow[];
-  return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => String(s.entry.source).startsWith(prefix));
-}
+/** A snapshot's field for each filter column: the row's own id, else its entry's wire field of the same name. */
+const snapshotColumn = (column: FilterColumn): string =>
+  column === 'id' ? 'id' : entryField(column === 'tags_json' ? 'tags' : column);
 
-/** Readable snapshots of a tenant whose entry carries project name `origin`. */
-export function dormantSnapshotsFromOrigin(db: DatabaseSyncLike, tenantId: string, origin: string): DormantSnapshot[] {
+/** Readable snapshots whose entry `filter` keeps, by tenant then id; a malformed snapshot is passed over, not an error.
+ */
+export function dormantSnapshotsWhere(db: DatabaseSyncLike, filter: EntryFilter): DormantSnapshot[] {
+  const { tenantId, ...narrowing } = filter;
+  const where = narrowingAnd(narrowing, snapshotColumn);
+  const tenant = tenantAnd(tenantId);
   const rows = cachedStatement(
     db,
-    `SELECT ${DORMANT_COLUMNS}
-       FROM dormant_memories
-      WHERE tenant_id = ?
-        AND ${entryField('origin_project')} = ?`,
-  ).all(tenantId, origin) as DormantRow[];
-  return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => s.entry.originProject === origin);
+    `SELECT ${DORMANT_COLUMNS} FROM dormant_memories WHERE 1${where.sql}${tenant.sql} ORDER BY tenant_id, id`,
+  ).all(...where.params, ...tenant.params) as DormantRow[];
+  return rows.flatMap((row) => toSnapshot(row) ?? []);
 }
 
 function toSnapshot(row: DormantRow): DormantSnapshot | null {

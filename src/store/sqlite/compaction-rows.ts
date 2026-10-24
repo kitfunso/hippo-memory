@@ -2,6 +2,7 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { originInSql, scopeAdmitSql } from './rule-sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import type { CompactionOrigin } from '../port/project-tags.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 
@@ -249,39 +250,13 @@ export function restampCompactionOrigin(db: DatabaseSyncLike, tenantId: string, 
   );
 }
 
-export function compactionTranscripts(
-  db: DatabaseSyncLike,
-  tenantId: string,
-): Array<{ transcript: string; cwd: string | null }> {
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
+type CompactionOriginRow = CompactionOrigin;
+
+/** Each distinct project name, transcript and working folder of the tenant's compactions, in one read. */
+export function compactionOrigins(db: DatabaseSyncLike, tenantId: string): CompactionOrigin[] {
   return cachedStatement(
     db,
-    `SELECT DISTINCT transcript_path AS transcript, cwd FROM compactions WHERE tenant_id = ? AND transcript_path ` +
-      `IS NOT NULL`,
-  ).all(tenantId) as Array<{ transcript: string; cwd: string | null }>;
-}
-
-export function compactionOriginsWithCwd(
-  db: DatabaseSyncLike,
-  tenantId: string,
-): Array<{ origin: string; cwd: string }> {
-  return cachedStatement(
-    db,
-    `SELECT DISTINCT origin_project AS origin, cwd FROM compactions WHERE tenant_id = ? AND origin_project <> '' ` +
-      `AND cwd IS NOT NULL`,
-  ).all(tenantId) as Array<{ origin: string; cwd: string }>;
-}
-
-/** True when `table` holds a row of this tenant under the project name. */
-export function holdsOrigin(
-  db: DatabaseSyncLike,
-  table: 'memories' | 'compactions',
-  tenantId: string,
-  name: string,
-): boolean {
-  return (
-    cachedStatement(db, `SELECT 1 FROM ${table} WHERE tenant_id = ? AND origin_project = ? LIMIT 1`).get(
-      tenantId,
-      name,
-    ) !== undefined
-  );
+    'SELECT DISTINCT origin_project AS origin, transcript_path AS transcript, cwd FROM compactions WHERE tenant_id = ?',
+  ).all(tenantId) as CompactionOriginRow[];
 }

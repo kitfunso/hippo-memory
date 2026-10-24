@@ -1,8 +1,6 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { SessionHandoff } from '../../base/session/handoff.js';
 import type { AmbientTallies } from '../../base/memory/ambient.js';
 import type { AmbientAdmission, AmbientRefusalReason, DescendantAdmission } from '../../base/scope/read-admission.js';
-import type { ContinuityKey } from './types.js';
 
 export type { AmbientAdmission, AmbientRefusalReason };
 
@@ -26,13 +24,9 @@ export interface AmbientCandidates extends AmbientLoadResult {
   refused: AmbientRefusal[];
 }
 
-/** The reads behind contextGet beyond the base `continuity`: its fallback handoff, candidate rows and ambient tallies.
+/** The reads behind contextGet beyond the base `continuity` and `sessions`: its candidate rows and ambient tallies.
  *  contextGet with a query under an embedding provider needs `vectors` too, and answers 501 without it. */
 export interface ContextReads {
-  /** The newest handoff of the last `maxAgeMs` that is its session's highest id, has no outcome or a partial or failed
-   * one, and passes recall's default scope deny, as `readLatestHandoff` with `unfinishedOnly` and `scopeFilter:
-   * 'default-deny'`. Rejects an empty tenant id. */
-  unfinishedHandoff(tenantId: string, maxAgeMs: number, key: ContinuityKey | null): Promise<SessionHandoff | null>;
   /** As `listAmbientCandidates` with `ambientRefusal` as its admit; `recall` searches with the query `rarestFtsQuery`
    * builds from full-text document counts over every tenant's rows, and finds nothing when no term is indexed. Core
    * keeps only `tenantId`'s rows that the admission passes, whatever the store returns. */
@@ -43,14 +37,8 @@ export interface ContextReads {
   /** As `countAmbient`: one aggregate over the live, unarchived rows `filter` admits, less other projects'
    * secret-tagged rows. */
   ambientTallies(tenantId: string, filter: AmbientStoreFilter): Promise<AmbientTallies>;
-  /** The tenant's `limit` newest rows, oldest first. */
-  newestEntries(tenantId: string, limit: number): Promise<MemoryEntry[]>;
   /** computeSchemaFit of `content` and `tags` against the tenant's newest 2,000 rows. */
   schemaFit(tenantId: string, content: string, tags: readonly string[]): Promise<number>;
-  /** Contents of the tenant's live, unextracted rows from `source` tagged `tag`, less one session's, by created, id. */
-  liveContentsBySourceAndTag(tenantId: string, source: string, tag: string, exceptSessionId: string): Promise<string[]>;
-  /** The tenant's raw rows whose artifact_ref starts with `refPrefix`, by created then id. */
-  rawRowsUnderRef(tenantId: string, refPrefix: string): Promise<RawRefRow[]>;
 }
 
 export interface AmbientLoadResult {
@@ -95,24 +83,12 @@ export interface AmbientStoreFilter {
   now: Date;
 }
 
-export interface RawRefRow {
-  id: string;
-  artifact_ref: string;
-  tags_json: string;
-  scope: string | null;
-}
-
 /** One session's unsuperseded raw rows inside a tenant; `origins` keeps those projects' rows and rows of no project,
  * unset keeps every origin. */
 export interface SessionRawQuery {
   readonly tenantId: string;
   readonly sessionId: string;
   readonly origins?: readonly string[];
-}
-
-export interface SessionRawWindow extends SessionRawQuery {
-  /** How many of the newest rows to read; zero or less reads them all. */
-  readonly cap: number;
 }
 
 export interface SessionRawCount extends SessionRawQuery {
@@ -156,9 +132,6 @@ export interface SummaryDescendants {
 
 /** The reads behind session assembly and summary drill-down. None writes an audit row. */
 export interface DagReads {
-  /** The newest `cap` rows by created then id, returned oldest first (created, then id, ascending) as
-   * `listSessionRawMemories` does; an empty session id reads nothing. */
-  sessionRawEntries(query: SessionRawWindow): Promise<MemoryEntry[]>;
   /** How many rows the session holds with no cap, under the scope rule `passesScopeFilterForRecall` applies, so the
    * count never tells of a row the caller could not read. */
   sessionRawCount(query: SessionRawCount): Promise<number>;

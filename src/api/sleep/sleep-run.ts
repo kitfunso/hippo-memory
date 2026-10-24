@@ -187,7 +187,7 @@ function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['dedup
 async function* entryPages(store: StoreWith<'consolidation'>, limit: number): AsyncGenerator<MemoryEntry[]> {
   let after: EntryCursor | undefined;
   do {
-    const page = await store.reports.entriesPage(ALL_TENANTS, { limit, after });
+    const page = await store.reports.entriesWhere({ tenantId: ALL_TENANTS }, { limit, after });
     yield page.entries;
     after = page.next ?? undefined;
   } while (after);

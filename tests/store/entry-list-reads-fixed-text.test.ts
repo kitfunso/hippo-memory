@@ -4,11 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DEFAULT_HALF_LIFE_DAYS, createMemory, type EmotionalValence } from '../../src/base/memory/memory.js';
-import {
-  contentsWithTag,
-  listCurrentEntriesFromOrigins,
-  listEntriesWithSignals,
-} from '../../src/store/sqlite/entry-reads.js';
+import { contentsWithTag, listEntriesWithSignals } from '../../src/store/sqlite/entry-reads.js';
+import { listEntriesWhere } from '../../src/store/sqlite/entry-filter.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 
@@ -76,10 +73,17 @@ describe('cached list reads', () => {
     const tagged = shortThenLong((long) => contentsWithTag(db, TENANT, 'alpha', origins(long)));
     expect(tagged.prepared).toEqual([]);
     expect(tagged.short.sort()).toEqual(['alpha row', 'global row']);
-    const current = shortThenLong((long) => listCurrentEntriesFromOrigins(db, TENANT, origins(long)));
-    expect(current.prepared).toEqual([]);
-    expect(contents(current.short)).toEqual(['alpha row']);
-    expect(contents(current.long)).toEqual(['alpha row', 'beta row']);
-    expect(listCurrentEntriesFromOrigins(db, TENANT, [])).toEqual([]);
+  });
+
+  // One origin binds `=` so the origin index can seek it; from two up the list is one JSON param.
+  it('the entry filter reads one statement for a list of two origins and kinds and for three', () => {
+    const current = (origins: readonly string[]) =>
+      listEntriesWhere(db, { tenantId: TENANT, origins, live: true, kinds: ['distilled', 'superseded'] }, { limit: 10 })
+        .entries;
+    const r = shortThenLong((long) => current(long ? ['p1', 'p2', 'p9'] : ['p1', 'p8']));
+    expect(r.prepared).toEqual([]);
+    expect(contents(r.short)).toEqual(['alpha row']);
+    expect(contents(r.long)).toEqual(['alpha row', 'beta row']);
+    expect(current([])).toEqual([]);
   });
 });

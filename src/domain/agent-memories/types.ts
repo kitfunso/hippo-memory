@@ -44,7 +44,7 @@ export interface Adapter {
 }
 
 /** One store a sync reads and writes; the sync closes it. */
-export type ImportStore = StoreWith<'agentImport' | 'projectTags'>;
+export type ImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing'>;
 
 /** How a sync reaches each store it targets: the caller's, so the sync never names a store adapter. */
 export interface ImportStores {

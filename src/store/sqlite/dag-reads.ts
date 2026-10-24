@@ -2,13 +2,8 @@
 // at a time.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
-import {
-  readEntriesByIds,
-  TENANT_IS,
-  countSessionRawMemories,
-  listSessionRawMemories,
-  readChildrenByParent,
-} from './entry-reads.js';
+import { readEntriesByIds, countSessionRawMemories, readChildrenByParent } from './entry-reads.js';
+import { TENANT_IS } from './tenant.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { DescendantOrigin, SummaryDescendants, DagReads, DescendantWalk } from '../port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
@@ -187,7 +182,6 @@ export function sqliteDagReads(on: OnHandle): DagReads {
   return bound<DagReads>(
     on,
     {
-      sessionRawEntries: listSessionRawMemories,
       sessionRawCount: countSessionRawMemories,
       summaryWithDescendants: summaryWithDescendants,
     },

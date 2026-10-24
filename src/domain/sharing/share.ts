@@ -293,7 +293,7 @@ async function* autoSharePages(
     const { entries, next } =
       minScore > TRANSFER_WEIGHTS.neutral
         ? await sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, tenantId, page)
-        : await reports.entriesPage(tenantId, page);
+        : await reports.entriesWhere({ tenantId }, page);
     yield entries;
     after = next;
   } while (after !== null);

@@ -9,6 +9,7 @@ import type { DormantMemory, ListDormantOpts } from '../../../src/store/port/dor
 import { listDormantRows } from '../../../src/store/sqlite/dormant-rows.js';
 import { EVERY_SCOPE } from '../../../src/store/sqlite/rule-sql.js';
 import { listEntryTextKeysPage, iterateEveryTenantEntries } from '../../../src/store/sqlite/entry-reads.js';
+import { listEntriesWhere } from '../../../src/store/sqlite/entry-filter.js';
 import * as entryReadsSql from '../../../src/store/sqlite/entry-reads.js';
 import * as entryWritesSql from '../../../src/store/sqlite/entry-writes.js';
 import { waitingOpener } from '../../../src/store/sqlite/open.js';
@@ -38,8 +39,8 @@ export { strengthenRetrieved } from '../../../src/store/sqlite/entry-writes.js';
 
 /** One tenant's entries, oldest first. */
 export function loadAllEntries(hippoRoot: string, tenantId: string): MemoryEntry[] {
-  const page = (db: Parameters<typeof entryReadsSql.listEntriesPage>[0]) => (after?: EntryCursor) =>
-    entryReadsSql.listEntriesPage(db, tenantId, { limit: READ_PAGE_ROWS, after });
+  const page = (db: Parameters<typeof listEntriesWhere>[0]) => (after?: EntryCursor) =>
+    listEntriesWhere(db, { tenantId }, { limit: READ_PAGE_ROWS, after });
   return onHandle(hippoRoot, (db) => Array.from(rowsInPages(page(db))), openStore);
 }
 
@@ -122,9 +123,16 @@ export function loadSessionRawMemories(
   cap?: number,
   origins?: readonly string[],
 ): MemoryEntry[] {
+  if (!sessionId) return [];
+  const raws = { tenantId, kinds: ['raw'], live: true, sessionId, origins: origins && ['', ...origins] } as const;
   return onHandle(
     hippoRoot,
-    (db) => entryReadsSql.listSessionRawMemories(db, { sessionId, tenantId, cap: cap ?? 0, origins }),
+    (db) =>
+      cap !== undefined && cap > 0
+        ? listEntriesWhere(db, raws, { limit: cap, newest: true }).entries.reverse()
+        : Array.from(
+            rowsInPages((after?: EntryCursor) => listEntriesWhere(db, raws, { limit: READ_PAGE_ROWS, after })),
+          ),
     openStore,
   );
 }

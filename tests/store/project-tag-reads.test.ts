@@ -41,7 +41,8 @@ function withDb<R>(fn: (db: DatabaseSyncLike) => R): R {
 }
 
 const SCOPE = { tenantId: T, actor: 'test' };
-const tags = () => sqliteStore(root).projectTags;
+const store = () => sqliteStore(root);
+const tags = () => store().projectTags;
 
 /** The store's folder as the api hands it to the repair: a project store, not the global one. */
 async function folder(): Promise<StoreFolder> {
@@ -122,7 +123,7 @@ describe('hippo projects reads', () => {
   it('lists live rows, imports and copies per project, newest first, a tie in first-seen order', async () => {
     seed();
 
-    expect(await listProjects(tags(), T)).toEqual([
+    expect(await listProjects(store(), T)).toEqual([
       { origin: '', live: 7, imported: 1, newest: at(16), copiesElsewhere: 1 },
       { origin: 'elsewhere', live: 2, imported: 1, newest: at(7), copiesElsewhere: 1 },
       { origin: null, live: 1, imported: 0, newest: at(7), copiesElsewhere: 0 },
@@ -146,13 +147,13 @@ describe('hippo projects reads', () => {
     expect(dry).toEqual({ ...expected, backup: null });
     const done = await mergeProjects(tags(), SCOPE, { from: 'repo-wt-a', into: 'repo', dryRun: false });
     expect(done).toMatchObject(expected);
-    expect((await listProjects(tags(), T)).find((p) => p.origin === 'repo')).toMatchObject({ live: 3, imported: 2 });
+    expect((await listProjects(store(), T)).find((p) => p.origin === 'repo')).toMatchObject({ live: 3, imported: 2 });
   });
 
   it('plans the repair from the user-global merges, their parents live or dormant, and copied imports', async () => {
     const { r } = seed();
 
-    expect(await planProjectRepair(tags(), T, await folder())).toEqual({
+    expect(await planProjectRepair(store(), T, await folder())).toEqual({
       copies: [r[7].id],
       folds: [],
       collisions: [],
@@ -170,9 +171,9 @@ describe('hippo projects reads', () => {
     const at = await folder();
     const dryMerge = { from: 'repo-wt-a', into: 'repo', dryRun: true };
     const rowsRead = async (): Promise<number[]> => [
-      (await recordStatementsAsync(() => listProjects(tags(), T))).rowsRead,
+      (await recordStatementsAsync(() => listProjects(store(), T))).rowsRead,
       (await recordStatementsAsync(() => mergeProjects(tags(), SCOPE, dryMerge))).rowsRead,
-      (await recordStatementsAsync(() => planProjectRepair(tags(), T, at))).rowsRead,
+      (await recordStatementsAsync(() => planProjectRepair(store(), T, at))).rowsRead,
     ];
     const before = await rowsRead();
 

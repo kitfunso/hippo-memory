@@ -1,12 +1,14 @@
 // Session context assembly under a token budget.
 
 import { estimateTokens } from '../base/util/token-text.js';
+import { READ_PAGE_ROWS, readAll } from '../base/util/pages.js';
 import type { MemoryEntry } from '../base/memory/memory.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall-scope.js';
 import { projectNames } from '../base/scope/project-identity.js';
 import { eligibleSummaryParents } from './summary-parents.js';
 import type { CallerProject } from './prompt-hook.js';
 import type { Context } from './types.js';
+import type { EntryCursor } from '../store/port/types.js';
 
 const DEFAULT_FRESH_TAIL_COUNT = 10;
 const DEFAULT_ROW_CAP = 5000;
@@ -123,7 +125,7 @@ async function loadScopedRaws(
   const rowCap = opts.rowCap ?? DEFAULT_ROW_CAP;
   const origins = opts.project ? projectNames(opts.project) : undefined;
   const dag = ctx.store.dagReads;
-  const rows = await dag.sessionRawEntries({ tenantId: ctx.tenantId, sessionId, cap: rowCap, origins });
+  const rows = await sessionRawRows(ctx, sessionId, rowCap, origins);
   const truncated = rows.length === rowCap;
   // `scoped.length` under-counts a capped session, so totalRaw falls back to a COUNT below.
   const scoped = rows.filter((r) => passesScopeFilterForRecall(r.scope ?? null, opts.scope, own));
@@ -142,6 +144,26 @@ async function loadScopedRaws(
     totalRaw = scoped.length;
   }
   return { scoped, totalRaw, truncated };
+}
+
+/** The session's live raw rows oldest first, only the newest `cap` when it is positive; none for an empty id. */
+async function sessionRawRows(
+  ctx: Context,
+  sessionId: string,
+  cap: number,
+  origins: readonly string[] | undefined,
+): Promise<MemoryEntry[]> {
+  if (!sessionId) return [];
+  const raws = {
+    tenantId: ctx.tenantId,
+    kinds: ['raw'],
+    live: true,
+    sessionId,
+    origins: origins === undefined ? undefined : ['', ...origins],
+  } as const;
+  const reports = ctx.store.reports;
+  if (cap > 0) return (await reports.entriesWhere(raws, { limit: cap, newest: true })).entries.reverse();
+  return readAll((after?: EntryCursor) => reports.entriesWhere(raws, { limit: READ_PAGE_ROWS, after }));
 }
 
 function rawItem(r: MemoryEntry): AssembledContextItem {
