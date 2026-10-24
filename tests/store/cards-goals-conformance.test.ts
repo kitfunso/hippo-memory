@@ -105,7 +105,7 @@ describe('Cards', () => {
       (g) => g.create(TENANT_A, { title: 'bad parent', dependsOn: ['card_nope'] }),
       (g) => g.list(TENANT_A, { limit: 100 }),
       (g) => g.list(TENANT_A, { status: 'backlog', limit: 100 }),
-      (g, s) => g.load(TENANT_B, idOf(s, 0)),
+      (g, s) => g.detail(TENANT_B, idOf(s, 0)).then((detail) => detail?.card ?? null),
       (g, s) => g.claim(TENANT_A, idOf(s, 0), 'claude', 'sess-1'),
       (g, s) => g.claim(TENANT_A, idOf(s, 0), 'codex'),
       (g, s) => g.claim(TENANT_A, idOf(s, 2), 'codex'),
@@ -130,7 +130,7 @@ describe('Cards', () => {
       (g, s) => g.complete(TENANT_A, idOf(s, 1), 'bogus' as HandoffOutcome),
       (g, s) => g.detail(TENANT_A, idOf(s, 0)).then((detail) => sortedDeps(named(s, detail))),
       (g, s) => g.detail(TENANT_A, idOf(s, 2)).then((detail) => sortedDeps(named(s, detail))),
-      (g, s) => g.runs(TENANT_A, idOf(s, 0)),
+      (g, s) => g.detail(TENANT_A, idOf(s, 0)).then((detail) => detail?.runs ?? []),
       (g) => g.detail(TENANT_A, 'card_nope'),
     ]);
     expect(outcomes[2]).toMatchObject({ value: { status: 'backlog' satisfies CardStatus } });
@@ -196,13 +196,14 @@ describe('Cards', () => {
         at(CARD_LEASE_MS * 2);
         return g.reclaimExpired(TENANT_A);
       },
-      (g, s) => g.runs(TENANT_A, idOf(s, 0)),
-      (g, s) => g.load(TENANT_A, idOf(s, 0)),
-      (g, s) => g.load(TENANT_B, idOf(s, 2)),
+      (g, s) => g.detail(TENANT_A, idOf(s, 0)).then((detail) => detail?.runs ?? []),
+      (g, s) => g.detail(TENANT_A, idOf(s, 0)).then((detail) => detail?.card ?? null),
+      (g, s) => g.detail(TENANT_B, idOf(s, 2)).then((detail) => detail?.card ?? null),
       (_g, s) =>
-        s.sessions.saveHandoff(
+        s.sessions.save(
           TENANT_A,
-          { version: 1, sessionId: 's1', summary: 'over to you', cardId: idOf(s, 1) },
+          'handoff',
+          { handoff: { version: 1, sessionId: 's1', summary: 'over to you', cardId: idOf(s, 1) } },
           null,
         ),
       (g, s) => g.detail(TENANT_A, idOf(s, 1)),

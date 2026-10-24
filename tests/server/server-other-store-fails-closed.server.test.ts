@@ -97,8 +97,8 @@ describe('serve() under a store that is not hippo.db', () => {
         },
         { path: '/v1/x-addon-base', storeReady: 'base', handler: async ({ ctx }) => ({ tenant: ctx.tenantId }) },
         {
-          path: '/v1/x-addon-keyaudit',
-          storeReady: 'keyAudit',
+          path: '/v1/x-addon-keywrites',
+          storeReady: 'keyWrites',
           handler: async ({ ctx }) => ({ tenant: ctx.tenantId }),
         },
         {
@@ -158,7 +158,7 @@ describe('serve() under a store that is not hippo.db', () => {
   });
 
   it('runs an add-on route that names a required group, and refuses one whose optional group the store lacks', async () => {
-    for (const path of ['/v1/x-addon-base', '/v1/x-addon-keyaudit']) {
+    for (const path of ['/v1/x-addon-base', '/v1/x-addon-keywrites']) {
       const ran = await post(path, valid);
       expect({ path, status: ran.status, body: await ran.json() }).toEqual({
         path,

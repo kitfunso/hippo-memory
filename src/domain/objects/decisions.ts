@@ -102,5 +102,6 @@ export async function resolveActiveDecisionIdByMemory(
   memoryId: string,
 ): Promise<number | null> {
   assertTenantId('resolveActiveDecisionIdByMemory', tenantId);
-  return objects.objectIdByMemory(tenantId, 'decision', 'active', memoryId);
+  const [row] = await objects.listObjects(tenantId, 'decision', { status: 'active', memoryId, limit: 1 });
+  return row ? row.id : null;
 }

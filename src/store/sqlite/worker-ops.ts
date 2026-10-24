@@ -34,12 +34,8 @@ export const WORKER_OPS = {
     stored: 'read',
     nearestEntries: 'pinned-read',
   },
-  keyAudit: {
-    revokeApiKey: 'write',
-  },
   keyWrites: {
-    createApiKey: 'write',
-    createSelfApiKey: 'write',
+    changeApiKey: 'write',
     listApiKeys: 'read',
   },
   vectorWrites: {
@@ -64,13 +60,6 @@ export const WORKER_OPS = {
     liveContentsBySourceAndTag: 'read',
     rawRowsUnderRef: 'read',
   },
-  predictions: {
-    savePrediction: 'write',
-    closePrediction: 'write',
-    predictionById: 'read',
-    listPredictions: 'read',
-    predictionBaserate: 'write',
-  },
   dagReads: {
     sessionRawEntries: 'read',
     sessionRawCount: 'read',
@@ -81,8 +70,7 @@ export const WORKER_OPS = {
   },
   quarantine: {
     listQuarantined: 'read',
-    approveQuarantined: 'write',
-    rejectQuarantined: 'write',
+    decideQuarantined: 'write',
   },
   graphReads: {
     graphRows: 'read',
@@ -93,18 +81,11 @@ export const WORKER_OPS = {
     objectById: 'read',
     closeObject: 'write',
     saveObject: 'write',
-    openIncident: 'write',
-    resolveIncident: 'write',
-    policiesInForce: 'read',
-    activeSkillsByName: 'read',
     briefReceipts: 'read',
-    objectIdByMemory: 'read',
+    predictionBaserate: 'write',
   },
   readiness: {
     ping: 'read',
-  },
-  keyGrants: {
-    changeScopeGrant: 'write',
   },
   connectorWrites: {
     writeConnectorEntry: 'write',
@@ -144,31 +125,18 @@ export const WORKER_OPS = {
     writeTogether: 'write',
     bumpRemembered: 'write',
   },
-  // Both snapshot loads rewrite the active-task mirror file, so they run on the one writer.
+  // A snapshot load rewrites the active-task mirror file, so it runs on the one writer.
   sessions: {
-    saveSnapshot: 'write',
+    save: 'write',
+    read: 'read',
+    clear: 'write',
     loadSnapshot: 'write',
-    loadFreshSnapshot: 'write',
-    clearSnapshot: 'write',
-    closeSessionSnapshots: 'write',
-    appendEvent: 'write',
-    listEvents: 'read',
-    saveHandoff: 'write',
-    latestHandoff: 'read',
-    handoffById: 'read',
-    stampHandoffOutcome: 'write',
-    writeSessionEndHandoff: 'write',
-    pushWorkingMemory: 'write',
-    readWorkingMemory: 'read',
-    clearWorkingMemory: 'write',
     bindSessionOwner: 'write',
   },
   cards: {
     create: 'write',
-    load: 'read',
     detail: 'read',
     list: 'read',
-    runs: 'read',
     claim: 'write',
     heartbeat: 'write',
     block: 'write',

@@ -6,11 +6,14 @@ import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { TASK_OWNER_MIN_BINARY } from '../../base/util/version.js';
 import { SESSION_EVENT_COLUMNS, type SessionEventRow, rowToSessionEvent } from './rows.js';
 import type {
-  TaskSnapshot,
+  SessionCalls,
+  SessionClearArgs,
   SessionEvent,
   SessionEventInput,
-  WorkingMemoryItem,
+  SessionReadArgs,
   Sessions,
+  SessionSaveArgs,
+  WorkingMemoryItem,
   WorkingMemoryFilter,
   WorkingMemoryPush,
 } from '../port/sessions.js';
@@ -37,25 +40,13 @@ import {
 import { cachedStatement } from '../../db/statement-cache.js';
 import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../rules/windows.js';
 
-/** Bounded read for AMBIENT snapshot surfaces so orphaned snapshots expire. The owner (both session ids non-empty and
- * `===`) always sees its own state; all others, null ids included (null === null is no match), get it only if
- * age(updated_at) <= maxAgeMs (default `SNAPSHOT_AMBIENT_MAX_AGE_MS`), else null. */
-function readFreshActiveTaskSnapshot(
-  db: DatabaseSyncLike,
-  files: StoreFiles,
-  tenantId: string,
-  opts: { maxAgeMs?: number; sessionId?: string | null } = {},
-  key?: ContinuityKey | null,
-): TaskSnapshot | null {
-  return freshActiveSnapshot(readActiveTaskSnapshot(db, files, tenantId, key), opts);
-}
-
+/** Rows closed: the tenant's newest active snapshot, whoever saved it, or none. */
 function clearActiveTaskSnapshot(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
-  clearedStatus: string = 'cleared',
-): boolean {
+  clearedStatus: string,
+): number {
   const { hippoRoot } = files;
   assertTenantId('clearActiveTaskSnapshot', tenantId);
   assertKeyedOnSharedStore('clearActiveTaskSnapshot', files, undefined);
@@ -67,7 +58,7 @@ function clearActiveTaskSnapshot(
   ).get(tenantId) as { id?: number } | undefined;
   if (!active?.id) {
     removeActiveTaskMirror(hippoRoot, tenantId);
-    return false;
+    return 0;
   }
 
   cachedStatement(db, `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`).run(
@@ -77,7 +68,7 @@ function clearActiveTaskSnapshot(
     tenantId,
   );
   removeActiveTaskMirror(hippoRoot, tenantId);
-  return true;
+  return 1;
 }
 
 /** Close the `active` task snapshot(s) owned by `sessionId` at session end; the WHERE scopes on `session_id` too so an
@@ -86,8 +77,8 @@ function closeTaskSnapshotsForSession(
   db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
-  status: string = 'session-ended',
-  key?: ContinuityKey | null,
+  status: string,
+  key: ContinuityKey | null | undefined,
 ): number {
   assertTenantId('closeTaskSnapshotsForSession', tenantId);
   if (key) continuityStamp(key);
@@ -452,56 +443,50 @@ function wmClear(db: DatabaseSyncLike, tenantId: string, filter: WorkingMemoryFi
   return Number(result.changes ?? 0);
 }
 
-// These write or read the session's mirror files beside hippo.db as well as its rows.
-function sessionMirrorsBodies(
-  files: StoreFiles,
-): Bodies<
-  Pick<
-    Sessions,
-    'saveSnapshot' | 'loadSnapshot' | 'loadFreshSnapshot' | 'clearSnapshot' | 'appendEvent' | 'writeSessionEndHandoff'
-  >
-> {
+function saveAny(db: DatabaseSyncLike, files: StoreFiles, ...[tenantId, kind, row, key]: SessionSaveArgs) {
+  if (kind === 'snapshot') return saveActiveTaskSnapshot(db, files, tenantId, row, key);
+  if (kind === 'event') return appendSessionEvent(db, files, tenantId, row);
+  if (kind === 'working_memory') return wmPush(db, tenantId, row);
+  if ('handoff' in row) return saveSessionHandoff(db, tenantId, row.handoff, key);
+  if ('sessionEnd' in row) return writeSessionEndHandoff(db, files, tenantId, row.sessionEnd, key);
+  return stampHandoffOutcome(db, tenantId, row.sessionId, row.outcome);
+}
+
+function readAny(db: DatabaseSyncLike, ...[tenantId, kind, query, key]: SessionReadArgs) {
+  // The port names the session in camelCase; the event rows keep their column's name.
+  if (kind === 'event') {
+    return listSessionEvents(db, tenantId, { session_id: query.sessionId, task: query.task, limit: query.limit });
+  }
+  if (kind === 'working_memory') return wmRead(db, tenantId, query);
+  if ('id' in query) return readHandoff(db, tenantId, query.id);
+  return readLatestHandoff(db, tenantId, query.sessionId, query, key);
+}
+
+function clearAny(db: DatabaseSyncLike, files: StoreFiles, ...[tenantId, kind, close, key]: SessionClearArgs) {
+  if (kind === 'working_memory') return wmClear(db, tenantId, close);
+  if (close.sessionId === undefined) return clearActiveTaskSnapshot(db, files, tenantId, close.status);
+  return closeTaskSnapshotsForSession(db, tenantId, close.sessionId, close.status, key);
+}
+
+// Each kind writes or reads the session's mirror files beside hippo.db as well as its rows.
+function sessionBodies(files: StoreFiles): Bodies<Omit<SessionCalls, 'bindSessionOwner'>> {
   return {
-    saveSnapshot: (db, ...args) => saveActiveTaskSnapshot(db, files, ...args),
-    loadSnapshot: (db, ...args) => readActiveTaskSnapshot(db, files, ...args),
-    loadFreshSnapshot: (db, ...args) => readFreshActiveTaskSnapshot(db, files, ...args),
-    clearSnapshot: (db, ...args) => clearActiveTaskSnapshot(db, files, ...args),
-    appendEvent: (db, ...args) => appendSessionEvent(db, files, ...args),
-    writeSessionEndHandoff: (db, ...args) => writeSessionEndHandoff(db, files, ...args),
+    save: (db, ...args) => saveAny(db, files, ...args),
+    read: readAny,
+    clear: (db, ...args) => clearAny(db, files, ...args),
+    loadSnapshot: (db, tenantId, { ambient }, key) => {
+      const active = readActiveTaskSnapshot(db, files, tenantId, key);
+      return ambient ? freshActiveSnapshot(active, ambient) : active;
+    },
   };
 }
 
-const sessionRowsBodies: Bodies<
-  Pick<
-    Sessions,
-    | 'closeSessionSnapshots'
-    | 'listEvents'
-    | 'saveHandoff'
-    | 'latestHandoff'
-    | 'handoffById'
-    | 'stampHandoffOutcome'
-    | 'pushWorkingMemory'
-    | 'readWorkingMemory'
-    | 'clearWorkingMemory'
-  >
-> = {
-  closeSessionSnapshots: closeTaskSnapshotsForSession,
-  // The port names the session in camelCase; the event rows keep their column's name.
-  listEvents: (db, tenantId, { sessionId, task, limit }) =>
-    listSessionEvents(db, tenantId, { session_id: sessionId, task, limit }),
-  saveHandoff: saveSessionHandoff,
-  latestHandoff: readLatestHandoff,
-  handoffById: readHandoff,
-  stampHandoffOutcome: stampHandoffOutcome,
-  pushWorkingMemory: wmPush,
-  readWorkingMemory: wmRead,
-  clearWorkingMemory: wmClear,
-};
-
 export function sqliteSessions({ on, files }: Handles): Sessions {
-  return {
-    ...bound(on, sessionMirrorsBodies(files), openStore),
-    ...bound(on, sessionRowsBodies, openStore),
+  const sessions: SessionCalls = {
+    ...bound(on, sessionBodies(files), openStore),
     ...bound<Pick<Sessions, 'bindSessionOwner'>>(on, { bindSessionOwner: sessionOwnerOrBind }),
   };
+  // SAFETY: each body picks its statement from the kind and the payload's shape, the pairs the port's overloads name,
+  // so every overload gets the answer its kind declares.
+  return sessions as Sessions;
 }

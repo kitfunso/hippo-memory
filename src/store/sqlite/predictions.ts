@@ -1,26 +1,29 @@
-// hippo.db's Predictions group: the queries the CLI and the MCP tools run.
+// hippo.db's prediction rows: the statements the Objects group runs for the prediction kind.
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import type { Handles, StoreFiles } from './open.js';
+import type { StoreFiles } from './open.js';
 import { writeEntryRow } from './entry-writes.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { appendAuditEvents } from './audit.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { keysetAfter } from '../../db/sql.js';
-import type { PredictionSave, Predictions } from '../port.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../../base/records/prediction.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { PredictionBaserate } from '../port/types.js';
-import {
-  predictionBaserateOf,
-  type Prediction,
-  type PredictionListQuery,
-  type SavePredictionOptions,
+import type {
+  Prediction,
+  PredictionClose,
+  PredictionListQuery,
+  PredictionSave,
+  SavePredictionOptions,
 } from '../port/objects.js';
-import { closeMissError, predictionCloseMetadata, predictionCreateMetadata } from '../rules/predictions.js';
-import { openStore } from './handles.js';
-import { bound, type Bodies } from './bound.js';
+import {
+  closeMissError,
+  predictionBaserateOf,
+  predictionCloseMetadata,
+  predictionCreateMetadata,
+} from '../rules/predictions.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 /** First-class prediction: an ex-ante claim closed against an outcome. The `predictions` table is the source of truth;
@@ -33,12 +36,6 @@ const DEFAULT_PREDICTION_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 const SELECT_COLUMNS = `id, memory_id, tenant_id, class_tag, claim_text,
   estimate_value, estimate_unit, target_date,
   actual_value, closure_state, closed_at, closure_note, created_at`;
-
-interface ClosePredictionOptions {
-  closureState: ClosureState;
-  actualValue?: number;
-  closureNote?: string;
-}
 
 interface ListPredictionsOptions {
   closureState?: ClosureState;
@@ -86,15 +83,15 @@ function rowToPrediction(row: PredictionRow): Prediction {
 
 /** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant check included, and
  * its predictions row shares that write scope, so neither lands alone. */
-function writePrediction(
+export function writePrediction(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
   save: PredictionSave,
-  actor: string,
 ): Prediction {
   assertTenantId('savePrediction', tenantId);
   const now = new Date().toISOString();
+  const { actor } = save;
 
   // Captured for the return value; populated inside afterWrite hook so the INSERT and the memory write share a
   // SAVEPOINT.
@@ -183,13 +180,7 @@ function auditPredictionCreate(
 
 /** Close an open prediction. Updates the predictions row only; the memory mirror is not mutated (the predictions table
  * is the source of truth). Accuracy is computed from (estimateValue, actualValue) at query time. */
-function closePrediction(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  id: number,
-  opts: ClosePredictionOptions,
-  actor: string = CLI_ACTOR,
-): Prediction {
+export function closePrediction(db: DatabaseSyncLike, tenantId: string, id: number, opts: PredictionClose): Prediction {
   assertTenantId('closePrediction', tenantId);
   if (!VALID_CLOSURE_STATES.has(opts.closureState)) {
     throw new BadRequestError(
@@ -199,7 +190,7 @@ function closePrediction(
   }
   const now = new Date().toISOString();
   const row = withWriteScope(db, 'close_prediction', () =>
-    closeOpenPredictionRow(db, tenantId, id, opts, { now, actor }),
+    closeOpenPredictionRow(db, tenantId, id, opts, { now, actor: opts.actor }),
   );
   return rowToPrediction(row);
 }
@@ -209,7 +200,7 @@ function closeOpenPredictionRow(
   db: DatabaseSyncLike,
   tenantId: string,
   id: number,
-  opts: ClosePredictionOptions,
+  opts: PredictionClose,
   stamp: PredictionStamp,
 ): PredictionRow {
   const { now, actor } = stamp;
@@ -261,7 +252,7 @@ function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): nev
   throw closeMissError(tenantId, id, existing?.closure_state ?? null);
 }
 
-function readPrediction(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
+export function readPrediction(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
   assertTenantId('readPrediction', tenantId);
   const row = cachedStatement(
     db,
@@ -436,7 +427,7 @@ function listOpenPredictions(
 }
 
 /** One page of the tenant's predictions: the open ones, every one, or one class's, as the query names. */
-function listPredictions(
+export function listPredictions(
   db: DatabaseSyncLike,
   tenantId: string,
   { classTag, closureState, limit, after }: PredictionListQuery,
@@ -444,22 +435,4 @@ function listPredictions(
   if (closureState === 'open') return listOpenPredictions(db, tenantId, { classTag, limit, after });
   if (classTag === undefined) return listAllPredictions(db, tenantId, { limit, after });
   return listPredictionsByClass(db, tenantId, classTag, { closureState, limit, after });
-}
-
-const predictionsBodies: Bodies<Omit<Predictions, 'savePrediction'>> = {
-  closePrediction: closePrediction,
-  predictionById: readPrediction,
-  listPredictions: listPredictions,
-  predictionBaserate: computePredictionBaserate,
-};
-
-// The save writes the prediction's mirror, so it alone opens the store with its mirror folders.
-function predictionSaveBodies(files: StoreFiles): Bodies<Pick<Predictions, 'savePrediction'>> {
-  return {
-    savePrediction: (db, ...args) => writePrediction(db, files, ...args),
-  };
-}
-
-export function sqlitePredictions({ on, files }: Handles): Predictions {
-  return { ...bound(on, predictionsBodies), ...bound(on, predictionSaveBodies(files), openStore) };
 }

@@ -13,15 +13,15 @@ import type {
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { ClosureState } from '../../base/records/prediction.js';
-import { plural } from '../../base/util/format.js';
 import type { PredictionBaserate } from './types.js';
 
 /** Which of a tenant's rows of one kind a list reads: every status when `status` is unset, every value of the kind's
- * one filter column (customer, repo) when `filter` is. Neither is ever empty; a kind with no filter column ignores
- * `filter`. */
+ * one filter column (customer, repo) when `filter` is, every mirror when `memoryId` is. None is ever empty; a kind with
+ * no filter column ignores `filter`. */
 export interface ObjectListQuery<K extends ObjectKind = ObjectKind> {
   readonly status?: ObjectByKind[K]['status'];
   readonly filter?: string;
+  readonly memoryId?: string;
   readonly limit: number;
   readonly after?: KeysetPosition;
 }
@@ -80,16 +80,32 @@ export interface PoliciesInForceQuery {
   readonly limit: number;
 }
 
-/** The reads and writes behind the typed-object routes. An audit row names the object under the kind's id key
- * (decision_id, incident_id, ...). A row belongs to one tenant: another tenant's id reads as missing in every method.
- */
+/** Skills in one status ordered by skillName ascending compared as text in byte order, then by id ascending. */
+export interface SkillsByNameQuery {
+  readonly byName: true;
+  readonly status: Skill['status'];
+  readonly limit: number;
+}
+
+/** The reads and writes behind the typed-object and prediction routes, each kind's typed payload under one call. An
+ * audit row names the object under the kind's id key (decision_id, incident_id, prediction_id, ...). A row belongs to
+ * one tenant: another tenant's id reads as missing in every method. */
 export interface Objects {
   /** At most `limit` rows of the kind, newest first: by createdAt compared as text in byte order, then by id, both
-   * descending, so the order is total. `after` keeps only the rows below its (createdAt, id) pair in that order. No
-   * audit row. */
+   * descending, so the order is total. `after` keeps only the rows below its (createdAt, id) pair in that order;
+   * `memoryId` only the rows that memory mirrors. No audit row. */
   listObjects<K extends ObjectKind>(tenantId: string, kind: K, query: ObjectListQuery<K>): Promise<ObjectByKind[K][]>;
+  /** Policies in force at `asOf` (max `limit`): not closed, validFrom <= asOf < validTo (or unset), and active or
+   * superseded by a row whose validFrom is after asOf. Newest validFrom first, compared as text in byte order, then
+   * larger id. No audit row. */
+  listObjects(tenantId: string, kind: 'policy', query: PoliciesInForceQuery): Promise<Policy[]>;
+  /** At most `limit` of the tenant's skills in `status`, in the query's by-name order. No audit row. */
+  listObjects(tenantId: string, kind: 'skill', query: SkillsByNameQuery): Promise<Skill[]>;
+  /** At most `limit` predictions, in the newest-first order of the typed objects. No audit row. */
+  listObjects(tenantId: string, kind: 'prediction', query: PredictionListQuery): Promise<Prediction[]>;
   /** The tenant's row; null for a missing id or another tenant's. No audit row. */
   objectById<K extends ObjectKind>(tenantId: string, kind: K, id: number): Promise<ObjectByKind[K] | null>;
+  objectById(tenantId: string, kind: 'prediction', id: number): Promise<Prediction | null>;
   /** In one transaction: moves the tenant's row from a `close.from` status to closed at `close.at` and appends one
    * <kind>_close row; a refusal writes nothing. After the commit a kind the graph reads has its graph rows dropped and
    * its mirror queued for a rebuild; a failure there is logged, never thrown. */
@@ -99,6 +115,18 @@ export interface Objects {
     id: number,
     close: ObjectClose<K>,
   ): Promise<ObjectByKind[K] | ObjectRefusal>;
+  /** In one transaction: moves the tenant's incident from open to resolved with `resolve.text` and `resolve.at`, then
+   * appends one incident_resolve row. A refusal (`missing`, `status`, or `vanished`) writes nothing. */
+  closeObject(
+    tenantId: string,
+    kind: 'incident',
+    id: number,
+    resolve: IncidentResolve,
+  ): Promise<Incident | ObjectRefusal>;
+  /** Closes the tenant's open prediction and appends one predict_close row ({prediction_id, closure_state, has_actual})
+   * in one transaction; the mirror stays as saved. A missing or other-tenant id rejects with NotFoundError, an
+   * already-closed row with BadRequestError; neither writes anything. */
+  closeObject(tenantId: string, kind: 'prediction', id: number, close: PredictionClose): Promise<Prediction>;
   /** In one transaction, in order: writes `mirror` as `EntryWrites.writeEntry` does; inserts the row active (version 1,
    * or the replaced row's plus one); with `supersedesId`, supersedes that row; appends the supersede and create rows. A
    * refusal (`missing`, `status`, `raced`, `vanished`) writes nothing. */
@@ -110,40 +138,60 @@ export interface Objects {
   /** In one transaction, in order: writes `mirror` as `EntryWrites.writeEntry` does; checks each linked id is a memory
    * of the tenant; inserts the row open under the next id; appends the incident_open row, then the mirror's remember
    * row. A refusal leaves no mirror, row or audit row. */
-  openIncident(tenantId: string, open: IncidentOpen): Promise<Incident | IncidentOpenRefusal>;
-  /** In one transaction: moves the tenant's incident from open to resolved with `resolve.text` and `resolve.at`, then
-   * appends one incident_resolve row. A refusal (`missing`, `status`, or `vanished`) writes nothing. */
-  resolveIncident(tenantId: string, id: number, resolve: IncidentResolve): Promise<Incident | ObjectRefusal>;
-  /** Policies in force at `asOf` (max `limit`): not closed, validFrom <= asOf < validTo (or unset), and active or
-   * superseded by a row whose validFrom is after asOf. Newest validFrom first, compared as text in byte order, then
-   * larger id. No audit row. */
-  policiesInForce(tenantId: string, query: PoliciesInForceQuery): Promise<Policy[]>;
-  /** At most `limit` of the tenant's active skills, by skillName ascending compared as text in byte order, then by id
-   * ascending. No audit row. */
-  activeSkillsByName(tenantId: string, limit: number): Promise<Skill[]>;
+  saveObject(tenantId: string, kind: 'incident', open: IncidentOpen): Promise<Incident | IncidentOpenRefusal>;
+  /** In one transaction: writes `mirror` as `EntryWrites.writeEntry` does, inserts the open row under the next id, and
+   * appends one predict_create row ({prediction_id, class_tag, has_estimate, target_date}) ahead of the mirror's
+   * remember row. Resolves to the row saved. */
+  saveObject(tenantId: string, kind: 'prediction', save: PredictionSave): Promise<Prediction>;
   /** At most `limit` of the tenant's memories carrying `tag` (tag list as JSON, matched between double quotes,
    * unescaped, ASCII case-folded) whose source is not project_brief and whose scope recall admits with no scope asked,
-   * newest first by created (text, byte order) then id. No audit row. */
+   * newest first by created (text, byte order) then id. No audit row. It reads memories, not object rows. */
   briefReceipts(tenantId: string, tag: string, limit: number): Promise<BriefReceipt[]>;
-  /** The id of the tenant's newest `kind` row in `status` that `memoryId` mirrors, or null. No audit row. */
-  objectIdByMemory<K extends ObjectKind>(
-    tenantId: string,
-    kind: K,
-    status: ObjectByKind[K]['status'],
-    memoryId: string,
-  ): Promise<number | null>;
+  /** `predictionBaserateOf` over the tenant's closed (not closed-unknown) rows of the class with an estimate and an
+   * actual, in ascending id order (its float sums depend on it). Then appends one predict_baserate row ({class_tag,
+   * n_closed}), also for a class with no such row. One aggregate statement, so it is not a list of rows. */
+  predictionBaserate(tenantId: string, classTag: string, actor: string): Promise<PredictionBaserate>;
 }
 
-/** A claim to save and the memory row that mirrors it into recall: core builds it with `predictionMirror` in the tenant
- * the save names, so every store keeps the same row. */
+/** Each method's overloads as one argument list, so an adapter writes one body per method: the kind and the payload's
+ * shape pick the statement. */
+export type ObjectListArgs =
+  | [tenantId: string, kind: 'prediction', query: PredictionListQuery]
+  | [tenantId: string, kind: ObjectKind, query: ObjectListQuery | PoliciesInForceQuery | SkillsByNameQuery];
+export type ObjectCloseArgs =
+  | [tenantId: string, kind: 'prediction', id: number, close: PredictionClose]
+  | [tenantId: string, kind: ObjectKind, id: number, close: ObjectClose | IncidentResolve];
+export type ObjectSaveArgs =
+  | [tenantId: string, kind: 'prediction', save: PredictionSave]
+  | [tenantId: string, kind: 'incident', open: IncidentOpen]
+  | [tenantId: string, kind: SavableKind, save: ObjectSave];
+
+type AnyObject = ObjectByKind[ObjectKind] | Prediction;
+
+/** `Objects` as an adapter writes it, one signature per method; the port's overloads pair each kind with its answer. */
+export interface ObjectCalls {
+  listObjects(...args: ObjectListArgs): Promise<AnyObject[]>;
+  objectById(tenantId: string, kind: ObjectKind | 'prediction', id: number): Promise<AnyObject | null>;
+  closeObject(...args: ObjectCloseArgs): Promise<AnyObject | ObjectRefusal>;
+  saveObject(...args: ObjectSaveArgs): Promise<AnyObject | ObjectRefusal | IncidentOpenRefusal>;
+  briefReceipts: Objects['briefReceipts'];
+  predictionBaserate: Objects['predictionBaserate'];
+}
+
+/** A claim to save, the memory row that mirrors it into recall and the actor its predict_create row names: core builds
+ * the mirror with `predictionMirror` in the tenant the save names, so every store keeps the same row. createdAt is the
+ * store's own clock at the write, as `toISOString` gives it, since the list orders createdAt as text. */
 export interface PredictionSave extends SavePredictionOptions {
   readonly mirror: MemoryEntry;
+  readonly actor: string;
 }
 
+/** closedAt is the store's own clock at the write. */
 export interface PredictionClose {
   readonly closureState: Exclude<ClosureState, 'open'>;
   readonly actualValue?: number;
   readonly closureNote?: string;
+  readonly actor: string;
 }
 
 /** Which of a tenant's predictions a list reads: every class when `classTag` is unset (it is never empty), every state
@@ -153,28 +201,6 @@ export type PredictionFilter =
   | { readonly classTag: string; readonly closureState: ClosureState };
 
 export type PredictionListQuery = PredictionFilter & { readonly limit: number; readonly after?: KeysetPosition };
-
-/** The reads and writes behind the predictions routes. createdAt and closedAt are the store's own clock at the write,
- * as `toISOString` gives it, since the list orders createdAt as text. */
-export interface Predictions {
-  /** In one transaction: writes `mirror` as `EntryWrites.writeEntry` does, inserts the open row under the next id, and
-   * appends one predict_create row ({prediction_id, class_tag, has_estimate, target_date}) ahead of the mirror's
-   * remember row. Resolves to the row saved. */
-  savePrediction(tenantId: string, input: PredictionSave, actor: string): Promise<Prediction>;
-  /** Closes the tenant's open row and appends one predict_close row ({prediction_id, closure_state, has_actual}) in one
-   * transaction; the mirror stays as saved. A missing or other-tenant id rejects with NotFoundError, an already-closed
-   * row with BadRequestError; neither writes anything. */
-  closePrediction(tenantId: string, id: number, close: PredictionClose, actor: string): Promise<Prediction>;
-  /** The tenant's row; null for a missing id or another tenant's. No audit row. */
-  predictionById(tenantId: string, id: number): Promise<Prediction | null>;
-  /** At most `limit` rows, newest first: by createdAt compared as text in byte order, then by id, both descending, so
-   * the order is total. `after` keeps only the rows below its (createdAt, id) pair in that order. No audit row. */
-  listPredictions(tenantId: string, query: PredictionListQuery): Promise<Prediction[]>;
-  /** `predictionBaserateOf` over the tenant's closed (not closed-unknown) rows of the class with an estimate and an
-   * actual, in ascending id order (its float sums depend on it). Then appends one predict_baserate row ({class_tag,
-   * n_closed}), also for a class with no such row. */
-  predictionBaserate(tenantId: string, classTag: string, actor: string): Promise<PredictionBaserate>;
-}
 
 export interface Prediction {
   id: number;
@@ -199,44 +225,4 @@ export interface SavePredictionOptions {
   estimateValue?: number;
   estimateUnit?: string;
   targetDate?: string;
-}
-
-/** One closed prediction as the baserate reads it: both values set. */
-interface ClosedEstimate {
-  readonly estimate: number;
-  readonly actual: number;
-}
-
-function emptyBaserate(classTag: string): PredictionBaserate {
-  const nulls = { meanEstimate: null, meanActual: null, meanRatio: null, p50Ratio: null, mae: null };
-  return { classTag, nClosed: 0, nRatioEligible: 0, summary: '', ...nulls };
-}
-
-function median(sorted: readonly number[]): number {
-  const n = sorted.length;
-  return n % 2 === 1 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
-}
-
-/** A class's stats over its closed rows, summed in the order given. Every store computes them here, so no two can
- * disagree on the arithmetic. */
-export function predictionBaserateOf(classTag: string, rows: readonly ClosedEstimate[]): PredictionBaserate {
-  const nClosed = rows.length;
-  if (nClosed === 0) return emptyBaserate(classTag);
-  const ratios = rows.filter((r) => r.estimate > 0).map((r) => r.actual / r.estimate);
-  const nRatioEligible = ratios.length;
-  const mae = rows.reduce((s, r) => s + Math.abs(r.actual - r.estimate), 0) / nClosed;
-  const meanRatio = nRatioEligible > 0 ? ratios.reduce((s, x) => s + x, 0) / nRatioEligible : null;
-  const ratioPart =
-    meanRatio !== null ? `averaged ${meanRatio.toFixed(2)}x actual` : 'no ratio-eligible rows (all estimates were 0)';
-  return {
-    classTag,
-    nClosed,
-    nRatioEligible,
-    meanEstimate: rows.reduce((s, r) => s + r.estimate, 0) / nClosed,
-    meanActual: rows.reduce((s, r) => s + r.actual, 0) / nClosed,
-    meanRatio,
-    p50Ratio: nRatioEligible > 0 ? median(ratios.slice().sort((a, b) => a - b)) : null,
-    mae,
-    summary: `Last ${plural(nClosed, 'estimate')} in class ${classTag} ${ratioPart} (MAE ${mae.toFixed(2)}).`,
-  };
 }

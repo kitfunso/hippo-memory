@@ -10,9 +10,9 @@ import type { SessionHandoff } from '../base/session/handoff.js';
 import type { AuditMaintenance, AuditLog } from './port/audit.js';
 import type { LessonWrites, EntryWrites } from './port/entry-writes.js';
 import type { VectorReads, VectorWrites, EmbeddingIndex } from './port/vectors.js';
-import type { KeyAudit, KeyWrites, KeyGrants } from './port/keys.js';
+import type { KeyWrites } from './port/keys.js';
 import type { ContextReads, DagReads } from './port/context-reads.js';
-import type { Predictions, Objects } from './port/objects.js';
+import type { Objects } from './port/objects.js';
 import type { Quarantine } from './port/quarantine.js';
 import type { GraphReads, GraphRebuild } from './port/graph.js';
 import type { Readiness, Diagnostics } from './port/diagnostics.js';
@@ -98,15 +98,11 @@ interface RequiredGroups extends SessionAndAdminGroups {
   readonly auditMaintenance: AuditMaintenance;
   readonly lessonWrites: LessonWrites;
   readonly vectors: VectorReads;
-  readonly keyAudit: KeyAudit;
   readonly keyWrites: KeyWrites;
-  /** The CLI's auth grant and ungrant. */
-  readonly keyGrants: KeyGrants;
   /** embedMemory and embedAll with a store need it and `vectors`. */
   readonly vectorWrites: VectorWrites;
   readonly entryWrites: EntryWrites;
   readonly contextReads: ContextReads;
-  readonly predictions: Predictions;
   readonly dagReads: DagReads;
   readonly auditLog: AuditLog;
   readonly quarantine: Quarantine;
@@ -233,7 +229,7 @@ export type {
   VectorCoverage,
   VectorRow,
 } from './port/vectors.js';
-export type { KeyRevoke, KeyAudit, KeyMint, SelfKeyMint, KeyListQuery, KeyWrites, KeyGrants } from './port/keys.js';
+export type { KeyRevoke, KeyMint, SelfKeyMint, KeyListQuery, KeyWrites } from './port/keys.js';
 export type {
   AmbientAdmission,
   AmbientCandidateRequest,
@@ -265,7 +261,6 @@ export type {
   PredictionClose,
   PredictionFilter,
   PredictionListQuery,
-  Predictions,
   ObjectListQuery,
   ObjectClose,
   ObjectSave,
@@ -273,6 +268,7 @@ export type {
   IncidentOpenRefusal,
   IncidentResolve,
   PoliciesInForceQuery,
+  SkillsByNameQuery,
   Objects,
 } from './port/objects.js';
 export type { AuditLog, AuditMaintenance } from './port/audit.js';

@@ -237,9 +237,10 @@ export function writeSessionEndHandoff(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
-  request: Omit<SessionEndHandoffRequest, 'tenantId'>,
+  request: SessionEndHandoffRequest,
+  key: ContinuityKey | null | undefined,
 ): SessionHandoff | null {
-  const { sessionId, key, inPlace } = request;
+  const { sessionId, inPlace } = request;
   assertTenantId('writeSessionEndHandoff', tenantId);
   if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than write nothing
   const active = readActiveTaskSnapshot(db, files, tenantId, key);

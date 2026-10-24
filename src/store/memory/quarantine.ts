@@ -2,8 +2,10 @@
 import type {
   Quarantine,
   QuarantineApproval,
+  QuarantineCalls,
   QuarantineListQuery,
   QuarantineRefusal,
+  QuarantineRejection,
   QuarantineRow,
   QuarantinedMemory,
 } from '../port/quarantine.js';
@@ -56,16 +58,20 @@ function approveIn(t: MemoryTables, tenantId: string, id: string, actor: string)
   return { outcome: 'approved' };
 }
 
+function rejectIn(t: MemoryTables, tenantId: string, id: string, actor: string): QuarantineRejection {
+  const row = pendingOrRefusal(t, tenantId, id);
+  if ('outcome' in row) return row;
+  appendAudit(t, [{ tenantId, actor, op: 'quarantine_reject', targetId: id, metadata: {} }]);
+  decide(t, row, 'rejected', actor);
+  return { outcome: 'rejected' };
+}
+
 export function memoryQuarantine(t: MemoryTables): Quarantine {
-  return {
+  const quarantine: QuarantineCalls = {
     listQuarantined: async (tenantId, query) => listIn(t, tenantId, query),
-    approveQuarantined: async (tenantId, id, actor) => approveIn(t, tenantId, id, actor),
-    async rejectQuarantined(tenantId, id, actor) {
-      const row = pendingOrRefusal(t, tenantId, id);
-      if ('outcome' in row) return row;
-      appendAudit(t, [{ tenantId, actor, op: 'quarantine_reject', targetId: id, metadata: {} }]);
-      decide(t, row, 'rejected', actor);
-      return { outcome: 'rejected' };
-    },
+    decideQuarantined: async (tenantId, id, decision, actor) =>
+      decision === 'approve' ? approveIn(t, tenantId, id, actor) : rejectIn(t, tenantId, id, actor),
   };
+  // SAFETY: each decision answers with the outcome the port's overload for it names.
+  return quarantine as Quarantine;
 }

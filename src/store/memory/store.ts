@@ -18,12 +18,9 @@ import { memoryEntryWrites } from './entry-writes.js';
 import { memoryFailureLog } from './failure-log.js';
 import { activeGoalsIn, memoryGoals } from './goals.js';
 import { memoryGraphReads } from './graph-reads.js';
-import { memoryKeyAudit } from './key-audit.js';
-import { memoryKeyGrants } from './key-grants.js';
 import { apiKeyRecord, memoryKeyWrites } from './key-writes.js';
 import { memoryLessonWrites } from './lesson-writes.js';
 import { memoryObjects } from './objects.js';
-import { memoryPredictions } from './predictions.js';
 import { memoryQuarantine } from './quarantine.js';
 import { finishRecallIn } from './recall-writes.js';
 import { memoryRejections } from './rejections.js';
@@ -86,13 +83,10 @@ export function memoryStore(tables: MemoryTables = emptyTables(), rules: LossAve
     lessonWrites: memoryLessonWrites(t),
     auditMaintenance: memoryAuditMaintenance(t, rules),
     vectors: memoryVectors(t),
-    keyAudit: memoryKeyAudit(t),
     keyWrites: memoryKeyWrites(t),
-    keyGrants: memoryKeyGrants(t),
     vectorWrites: memoryVectorWrites(t),
     entryWrites: memoryEntryWrites(t, rules),
     contextReads: memoryContextReads(t),
-    predictions: memoryPredictions(t),
     dagReads: memoryDagReads(t),
     auditLog: memoryAuditLog(t),
     quarantine: memoryQuarantine(t),

@@ -8,7 +8,6 @@ import { appendAuditEvents, listAuditEvents } from './audit.js';
 import { getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../../db/index.js';
 import { activeGoalsWithPolicies, sqliteGoals } from './goals.js';
 import { planningFallacyEvidence } from './planning-fallacy-evidence.js';
-import { sqlitePredictions } from './predictions.js';
 import { recordTokenUse } from './token-ledger.js';
 import { listAmbientCandidates, listContextCandidates, newestEntries, schemaFit } from './candidates.js';
 import {
@@ -52,7 +51,7 @@ import { sqliteVectorReads } from './vector-reads.js';
 import { readLatestHandoff } from './handoffs.js';
 import { updateStats } from './index-and-stats.js';
 import { flushHeldMirrors } from './mirrors.js';
-import { sqliteKeyAudit, sqliteKeyGrants, sqliteKeyWrites } from './keys.js';
+import { sqliteKeyWrites } from './keys.js';
 import type { Handles, OnHandle, StoreFiles } from './open.js';
 import { handlesOf, openStore } from './handles.js';
 import { answered, bound, skipEmpty, type Bodies } from './bound.js';
@@ -104,20 +103,17 @@ export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
     kind: 'sqlite',
     ...sqliteLocalGroups(handles),
     ...sqliteBaseMethods(handles),
-    keyAudit: sqliteKeyAudit(on),
     keyWrites: sqliteKeyWrites(on),
-    keyGrants: sqliteKeyGrants(on),
     vectorWrites: sqliteVectorWrites(on),
     entryWrites: sqliteEntryWrites(handles),
     contextReads: sqliteContextReads(handles),
-    predictions: sqlitePredictions(handles),
     dagReads: sqliteDagReads(on),
     auditLog: sqliteAuditLog(on),
     quarantine: sqliteQuarantine(handles),
     graphReads: sqliteGraphReads(on),
     connectorWrites: sqliteConnectorWrites(handles),
     connectorEvents: sqliteConnectorEvents(on),
-    objects: sqliteObjects(on),
+    objects: sqliteObjects(handles),
     readiness: sqliteReadiness(files.hippoRoot, on),
     vectors: sqliteVectorReads(handles),
     lastRecall: sqliteLastRecall(handles),

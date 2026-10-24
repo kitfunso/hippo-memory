@@ -135,7 +135,6 @@ const STORE_KIT_TYPES = [
   'Goal',
   'GoalRecallLogRow',
   'HippoStore',
-  'KeyAudit',
   'KeyListQuery',
   'KeyMint',
   'KeyRevoke',

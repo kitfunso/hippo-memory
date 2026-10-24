@@ -90,7 +90,8 @@ export const SKILL: SavableDescriptor<'skill', SaveSkillOptions> = {
  *  skill_name) and return it; writes no file. Bounded by MAX_EXPORT_SKILLS rows; instructions are emitted verbatim. */
 export async function skillsMarkdown(objects: Objects, tenantId: string): Promise<string> {
   assertTenantId('exportSkills', tenantId);
-  return skillsBlock(await objects.activeSkillsByName(tenantId, MAX_EXPORT_SKILLS));
+  const query = { byName: true, status: 'active', limit: MAX_EXPORT_SKILLS } as const;
+  return skillsBlock(await objects.listObjects(tenantId, 'skill', query));
 }
 
 function skillsBlock(skills: readonly Skill[]): string {

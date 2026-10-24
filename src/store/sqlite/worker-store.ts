@@ -72,13 +72,10 @@ function probing(hippoRoot: string, served: Readiness): Readiness {
 
 type RecallAndWriteGroups = Pick<
   StoreGroups,
-  | 'keyAudit'
   | 'keyWrites'
-  | 'keyGrants'
   | 'vectorWrites'
   | 'entryWrites'
   | 'contextReads'
-  | 'predictions'
   | 'dagReads'
   | 'auditLog'
   | 'quarantine'
@@ -92,13 +89,10 @@ type RecallAndWriteGroups = Pick<
 function recallAndWriteGroups(executor: SqliteExecutor, inProcess: StoreGroups): RecallAndWriteGroups {
   const ops = WORKER_OPS;
   return {
-    keyAudit: onWorkers(executor, 'keyAudit', ops.keyAudit, inProcess.keyAudit),
     keyWrites: onWorkers(executor, 'keyWrites', ops.keyWrites, inProcess.keyWrites),
-    keyGrants: onWorkers(executor, 'keyGrants', ops.keyGrants, inProcess.keyGrants),
     vectorWrites: onWorkers(executor, 'vectorWrites', ops.vectorWrites, inProcess.vectorWrites),
     entryWrites: onWorkers(executor, 'entryWrites', ops.entryWrites, inProcess.entryWrites),
     contextReads: onWorkers(executor, 'contextReads', ops.contextReads, inProcess.contextReads),
-    predictions: onWorkers(executor, 'predictions', ops.predictions, inProcess.predictions),
     dagReads: onWorkers(executor, 'dagReads', ops.dagReads, inProcess.dagReads),
     auditLog: onWorkers(executor, 'auditLog', ops.auditLog, inProcess.auditLog),
     quarantine: onWorkers(executor, 'quarantine', ops.quarantine, inProcess.quarantine),

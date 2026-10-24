@@ -64,7 +64,7 @@ async function sessionTrace(
   consolidationTenant: string,
   sessionId: string,
 ): Promise<{ trace: MemoryEntry; outcome: TraceOutcome } | null> {
-  const events = await run.store.sessions.listEvents(consolidationTenant, { sessionId, limit: 1000 });
+  const events = await run.store.sessions.read(consolidationTenant, 'event', { sessionId, limit: 1000 });
 
   // A mixed-scope session would otherwise leak into one trace.
   const sessionScope = commonDerivationScope(events.map((e) => e.scope));

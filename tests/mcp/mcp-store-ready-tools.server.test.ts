@@ -150,17 +150,16 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
   it("hippo_predict_baserate reads the store's closed rows inside the caller's tenant and leaves its audit row there", async () => {
     const memory = memorySide(fixture.dir);
     const claim = { classTag: 'cutover', claimText: 'the cutover takes two days', estimateValue: 2 };
-    const saved = await memory.store.predictions.savePrediction(
-      TENANT_A,
-      { ...claim, mirror: predictionMirror(TENANT_A, claim, 30) },
-      'seed',
-    );
-    await memory.store.predictions.closePrediction(
-      TENANT_A,
-      saved.id,
-      { closureState: 'closed', actualValue: 3 },
-      'seed',
-    );
+    const saved = await memory.store.objects.saveObject(TENANT_A, 'prediction', {
+      ...claim,
+      mirror: predictionMirror(TENANT_A, claim, 30),
+      actor: 'seed',
+    });
+    await memory.store.objects.closeObject(TENANT_A, 'prediction', saved.id, {
+      closureState: 'closed',
+      actualValue: 3,
+      actor: 'seed',
+    });
     const { memberA, memberB } = fixture.tokens;
     expect(await callServed(memory.store, memberA, 'hippo_predict_baserate', { class_tag: 'cutover' })).toBe(
       [

@@ -12,7 +12,12 @@ import type {
   QuarantinedMemory,
   Quarantine,
 } from '../port.js';
-import { QUARANTINE_LIST_LIMIT, type QuarantineRow, type QuarantineStatus } from '../port/quarantine.js';
+import {
+  QUARANTINE_LIST_LIMIT,
+  type QuarantineCalls,
+  type QuarantineRow,
+  type QuarantineStatus,
+} from '../port/quarantine.js';
 import { QUARANTINE_SCOPE_PREFIX, quarantineScopeFor } from '../../base/scope/recall-scope.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { Handles, StoreFiles } from './open.js';
@@ -201,22 +206,32 @@ function rewriteMirror(db: DatabaseSyncLike, files: StoreFiles, tenantId: string
   }
 }
 
+interface Decision {
+  readonly tenantId: string;
+  readonly id: string;
+  readonly decision: 'approve' | 'reject';
+  readonly actor: string;
+}
+
+function decide(db: DatabaseSyncLike, files: StoreFiles, { tenantId, id, decision, actor }: Decision) {
+  if (decision === 'reject') return rejectQuarantined(db, tenantId, id, actor);
+  const result = approveQuarantined(db, tenantId, id, actor);
+  if (result.outcome === 'approved') rewriteMirror(db, files, tenantId, id);
+  return result;
+}
+
 export function sqliteQuarantine({ on, files }: Handles): Quarantine {
-  return {
-    ...bound<Omit<Quarantine, 'approveQuarantined'>>(on, {
-      listQuarantined: listQuarantined,
-      rejectQuarantined: rejectQuarantined,
-    }),
-    ...bound<Pick<Quarantine, 'approveQuarantined'>>(
+  const quarantine: QuarantineCalls = {
+    ...bound<Pick<QuarantineCalls, 'listQuarantined'>>(on, { listQuarantined: listQuarantined }),
+    // An approval rewrites the memory's mirror, so the decision opens the store with its mirror folders.
+    ...bound<Pick<QuarantineCalls, 'decideQuarantined'>>(
       on,
       {
-        approveQuarantined: (db, tenantId, id, actor) => {
-          const result = approveQuarantined(db, tenantId, id, actor);
-          if (result.outcome === 'approved') rewriteMirror(db, files, tenantId, id);
-          return result;
-        },
+        decideQuarantined: (db, tenantId, id, decision, actor) => decide(db, files, { tenantId, id, decision, actor }),
       },
       openStore,
     ),
   };
+  // SAFETY: decide answers each decision with the outcome the port's overload for it names.
+  return quarantine as Quarantine;
 }
