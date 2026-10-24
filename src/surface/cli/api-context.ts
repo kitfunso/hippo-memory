@@ -1,12 +1,11 @@
 import { adminActor } from '../../api/index.js';
 import { contextReach, type ContextReach, type ContextWith, type GlobalInReach } from '../../api/types.js';
-import type { ConfiguredFolder } from '../../domain/search/embed-memories.js';
-import type { SyncOptions } from '../../domain/agent-memories/sync.js';
+import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
+import type { SyncOptions } from '../../api/agent-memories.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import { ledgerReachOf, type LedgerReach } from '../../api/ledger-db.js';
 import { configReader, type ConfigReader } from '../../host/config-file.js';
-import { logPhaseFailures } from '../../domain/consolidate/run.js';
-import { runConsolidation } from '../../domain/consolidate/sleep.js';
+import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
 import { resolveGlobalRootDir } from '../../host/project-identity.js';
 import type { McpHost } from '../mcp/protocol.js';
@@ -29,7 +28,7 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import { autoSleepHost, createCallerState, type CallerState } from '../../api/callers.js';
-import { anthropicLlmFromEnv, rootInfra } from '../../infra/ports.js';
+import { rootInfra } from '../../infra/ports.js';
 import { createHost } from '../../host/host.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { serverNearestAsk } from './server-nearest.js';
@@ -155,12 +154,13 @@ export function cliStdioHost(): McpHost {
     if (callers === undefined) {
       const run = (): Promise<void> =>
         runDetachedStoreRequest(() =>
-          runConsolidation(cliStore(root), {
+          autoSleepConsolidate({
+            store: cliStore(root),
             config: cliConfig(root),
             tenantId: hostTenantId,
-            llm: anthropicLlmFromEnv(),
+            infra: cliInfra(),
           }),
-        ).then(logPhaseFailures);
+        ).then(() => undefined);
       callers = { ...shared, autoSleep: autoSleepHost({ hostTenantId, run }) };
       byRoot.set(root, callers);
     }

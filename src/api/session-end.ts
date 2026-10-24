@@ -11,7 +11,7 @@ import { truncateCodePointSafe } from '../base/util/code-point-cut.js';
 import { errorMessage, log, errorFields } from '../base/util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
 import { autoSleepDue } from './sleep/auto-sleep.js';
-import { snapshotFields, type WorkingState } from '../domain/capture/working-state.js';
+import { snapshotFields, type WorkingState } from '../base/session/working-state.js';
 import type { Context } from './types.js';
 import type { Ledger } from '../store/port.js';
 

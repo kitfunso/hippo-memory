@@ -1,7 +1,8 @@
 // A folder whose files are the items, as Claude Code, Gemini, Qwen and Copilot keep them: one reader for all four.
 import path from 'node:path';
 import type { AgentFiles } from '../../base/util/agent-files.js';
-import type { Container, MemoryItem, Scope } from './types.js';
+import type { Container, MemoryItem } from './types.js';
+import type { Scope } from '../../base/memory/agent-memory-tools.js';
 
 export interface FolderRules {
   readonly recursive: boolean;

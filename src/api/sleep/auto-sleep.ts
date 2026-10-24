@@ -1,9 +1,11 @@
-// When a write starts a background sleep; api remember and the session-close hook share it.
+// When a write starts a background sleep and what that sleep runs; api remember and the session-close hook share it.
 
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { HippoStore } from '../../store/port.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import type { Context } from '../types.js';
+import { logPhaseFailures, type ConsolidationResult } from '../../domain/consolidate/run.js';
+import { runConsolidation } from '../../domain/consolidate/sleep.js';
+import type { Context, ContextWith } from '../types.js';
 
 /**
  * Runs one auto-sleep consolidation of the folder its host was built for: the HTTP server passes one that runs it off
@@ -60,4 +62,14 @@ export async function autoSleepAfterWrite(
     .finally(() => {
       host.latch.held = false;
     });
+}
+
+/** What one auto-sleep runs: the consolidation alone, its skipped passes logged by the process that ran it. */
+export async function autoSleepConsolidate(
+  ctx: Pick<ContextWith<'consolidation' | 'learning'>, 'store' | 'config' | 'tenantId' | 'infra'>,
+): Promise<ConsolidationResult> {
+  const { store, config, tenantId, infra } = ctx;
+  const result = await runConsolidation(store, { config, tenantId, llm: infra.llm });
+  logPhaseFailures(result);
+  return result;
 }

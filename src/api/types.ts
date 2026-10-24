@@ -4,7 +4,7 @@ import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
 import type { HippoStore, StoreReach } from '../store/port.js';
 import type { HippoConfig } from '../base/config/config.js';
 import type { GlobalTargetGroup, OptionalGroup, SleepGroup, StoreWith } from '../store/port.js';
-import type { ConfiguredFolder } from '../domain/search/embed-memories.js';
+import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { EmbedderFor } from '../base/ports/embedder.js';

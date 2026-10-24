@@ -2,9 +2,10 @@
 // and hands it to the store, which only keeps it (src/store/port.ts VectorWrites).
 
 import { strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../../base/memory/memory.js';
+import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { initializeParticle } from '../../base/rank/physics.js';
 import type { EmbedderFor, EmbeddingProvider } from '../../base/ports/embedder.js';
-import type { EmbeddingsConfig, HippoConfig } from '../../base/config/config.js';
+import type { EmbeddingsConfig } from '../../base/config/config.js';
 import {
   embeddingIndexIdentity,
   embeddingInputText,
@@ -310,16 +311,8 @@ export interface StoreEmbedTarget extends EmbedWith {
   readonly strength: StrengthOptions;
 }
 
-/** A store with the config its root loaded and the root's embedder, so a write into it embeds with the provider that
- * config names. */
-export interface ConfiguredFolder<S extends HippoStore = HippoStore> {
-  readonly store: S;
-  readonly config: HippoConfig;
-  readonly embedderFor: EmbedderFor;
-}
-
 /** The store's own index when it keeps one, else its vector groups. */
-export function folderEmbedTarget({ store, config, embedderFor }: ConfiguredFolder): EmbedTarget {
+export function folderEmbedTarget({ store, config, embedderFor }: ConfiguredFolder<HippoStore>): EmbedTarget {
   const { embeddingIndex } = store;
   const { embeddings } = config;
   if (embeddingIndex !== undefined) {

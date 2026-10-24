@@ -14,9 +14,8 @@ import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { HippoStore } from '../../store/index.js';
-import type { StoreWith } from '../../store/port.js';
-import type { ConfiguredFolder } from '../../domain/search/embed-memories.js';
-import type { SharingStore } from '../../domain/sharing/text-keys.js';
+import type { GlobalTargetGroup, StoreWith } from '../../store/port.js';
+import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { CallerState } from '../../api/callers.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 
@@ -148,7 +147,7 @@ export type ToolHandler = (call: ToolCall) => string | Promise<string>;
 /** A share or peers call: a folder store and the global store its reach names, both checked by the gate. */
 export interface LocalToolCall extends ToolCall {
   store: StoreWith<'folderFiles'>;
-  globalTarget: ConfiguredFolder<SharingStore>;
+  globalTarget: ConfiguredFolder<StoreWith<GlobalTargetGroup>>;
 }
 
 export type LocalToolHandler = (call: LocalToolCall) => string | Promise<string>;

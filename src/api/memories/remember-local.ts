@@ -5,6 +5,7 @@
 
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../base/memory/memory.js';
 import { embedMemoryInto, folderEmbedTarget, type EmbedOutcome } from '../../domain/search/embed-memories.js';
+import { captureError } from '../../domain/learn/autolearn.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
@@ -151,4 +152,19 @@ export async function extractRememberedFacts(
     failures.push(errorMessage(cause));
   }
   return { status: 'ran', facts, failures };
+}
+
+/** What `hippo watch` keeps of a command that failed: its redacted stderr as an episodic row, stored every time, since
+ * watch has never put a failure to the salience gate. */
+export async function rememberFailedCommand(
+  ctx: Context,
+  failed: { readonly command: string; readonly exitCode: number; readonly stderr: string },
+): Promise<LocalRememberOutcome> {
+  const { content, tags, layer, source, confidence } = captureError(
+    failed.exitCode,
+    failed.stderr,
+    failed.command,
+    ctx.tenantId,
+  );
+  return rememberLocally(ctx, { content, tags, layer, source, confidence, force: true });
 }
