@@ -1,14 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { resolveTenantForSlackTeam, type SlackFallback } from '../../src/surface/connectors/slack/tenant-routing.js';
+import { resolveTenant, type RouteFallback } from '../../src/surface/connectors/tenant-route.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { envTenant } from '../../src/base/util/env.js';
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
-const fallback = (allowUnknown = false): SlackFallback => ({ hostTenant: envTenant(), allowUnknown });
+const fallback = (allowUnknown = false): RouteFallback => ({
+  hostTenant: envTenant(),
+  allowUnknown,
+});
 
-describe('resolveTenantForSlackTeam', () => {
+describe('resolveTenant', () => {
   let root: string;
 
   beforeEach(() => {
@@ -23,7 +26,9 @@ describe('resolveTenantForSlackTeam', () => {
         'tenant-alpha',
         new Date().toISOString(),
       );
-      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TTEAM1', fallback())).toBe('tenant-alpha');
+      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEAM1' }, fallback())).toBe(
+        'tenant-alpha',
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -38,11 +43,13 @@ describe('resolveTenantForSlackTeam', () => {
         new Date().toISOString(),
       );
       // Prefix-extended id must NOT match — fail closed (workspaces non-empty).
-      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TTEAMX', fallback())).toBeNull();
+      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEAMX' }, fallback())).toBeNull();
       // Substring must NOT match — fail closed.
-      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TTEA', fallback())).toBeNull();
+      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEA' }, fallback())).toBeNull();
       // Exact still works.
-      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TTEAM', fallback())).toBe('tenant-short');
+      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEAM' }, fallback())).toBe(
+        'tenant-short',
+      );
     } finally {
       closeHippoDb(db);
     }

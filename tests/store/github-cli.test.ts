@@ -20,7 +20,10 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
 function runCli(cwd: string, args: string[], extraEnv: Record<string, string> = {}) {
-  return runCliAs(args, { cwd, env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo'), ...extraEnv } });
+  return runCliAs(args, {
+    cwd,
+    env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo'), ...extraEnv },
+  });
 }
 
 /** Every GitHub list call answers one 200 page with no next link: `issues` on the issues stream, empty elsewhere. */
@@ -79,7 +82,12 @@ describe('hippo github CLI', () => {
     const origLog = console.log;
     console.log = (...a: unknown[]) => logs.push(a.map(String).join(' '));
     try {
-      await handleGitHub({ hippoRoot, tenantId: 'default', args: ['backfill'], flags: { repo: 'acme/widgets' } });
+      await handleGitHub({
+        hippoRoot,
+        tenantId: 'default',
+        args: ['backfill'],
+        flags: { repo: 'acme/widgets' },
+      });
     } finally {
       console.log = origLog;
     }
@@ -128,7 +136,9 @@ describe('hippo github CLI', () => {
         bucket: 'unhandled',
       });
     }
-    const r = await runCli(root, ['github', 'dlq', 'list'], { HIPPO_TENANT: 'acme' });
+    const r = await runCli(root, ['github', 'dlq', 'list'], {
+      HIPPO_TENANT: 'acme',
+    });
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/err-acme/);
     expect(r.stdout).not.toMatch(/err-default/);
@@ -141,10 +151,20 @@ describe('hippo github CLI', () => {
   });
 
   const SECRET = 'github-webhook-secret';
-  const REPOSITORY = { full_name: 'acme/repo', private: false, owner: { login: 'acme' }, name: 'repo' };
+  const REPOSITORY = {
+    full_name: 'acme/repo',
+    private: false,
+    owner: { login: 'acme' },
+    name: 'repo',
+  };
   const issueOpenedBody = JSON.stringify({
     action: 'opened',
-    issue: { number: 42, title: 'Bug', body: 'broken', user: { login: 'alice', id: 1 } },
+    issue: {
+      number: 42,
+      title: 'Bug',
+      body: 'broken',
+      user: { login: 'alice', id: 1 },
+    },
     repository: REPOSITORY,
     sender: { login: 'alice', id: 1 },
     installation: { id: 99 },
@@ -188,8 +208,9 @@ describe('hippo github CLI', () => {
   const liveRaws = (artifactRef: string) =>
     loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw' && e.artifactRef === artifactRef);
   const retryCountOf = async (id: number) =>
-    (await sqliteStore(hippoRoot).connectorEvents.deadLetters('github', 'default', 100)).find((row) => row.id === id)
-      ?.retryCount;
+    (await sqliteStore(hippoRoot).connectorEvents.deadLetters('github', 'default', { limit: 100 })).find(
+      (row) => row.id === id,
+    )?.retryCount;
 
   it('dlq replay re-ingests a parked delivery and counts the retry', async () => {
     const id = await parkDelivery('issues', issueOpenedBody);
@@ -272,7 +293,12 @@ describe('hippo github CLI', () => {
     const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('GITHUB_TOKEN', 'fake-token');
     try {
-      await handleGitHub({ hippoRoot, tenantId: 'default', args: ['backfill'], flags: { repo, max } });
+      await handleGitHub({
+        hippoRoot,
+        tenantId: 'default',
+        args: ['backfill'],
+        flags: { repo, max },
+      });
       return JSON.parse(String(printed.mock.calls[0][0])).ingested.issues;
     } finally {
       vi.unstubAllEnvs();
