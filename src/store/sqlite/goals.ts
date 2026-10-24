@@ -248,14 +248,15 @@ export function writeGoalRecallLog(db: DatabaseSyncLike, rows: readonly GoalReca
   }
 }
 
-function completeGoal(db: DatabaseSyncLike, _tenantId: string, goalId: string, opts: CompleteGoalOpts): void {
+function completeGoal(db: DatabaseSyncLike, tenantId: string, goalId: string, opts: CompleteGoalOpts): void {
   const completedAt = new Date().toISOString();
   const score = opts.outcomeScore ?? null;
 
   withWriteScope(db, 'complete_goal', () => {
-    const goalRow = cachedStatement(db, `SELECT created_at, status FROM goal_stack WHERE id = ?`).get(goalId) as
-      | { created_at: string; status: string }
-      | undefined;
+    const goalRow = cachedStatement(db, `SELECT created_at, status FROM goal_stack WHERE id = ? AND tenant_id = ?`).get(
+      goalId,
+      tenantId,
+    ) as { created_at: string; status: string } | undefined;
     if (!goalRow) return;
     if (goalRow.status === 'completed') {
       // Already completed -- second call is a no-op for idempotency.
@@ -267,9 +268,9 @@ function completeGoal(db: DatabaseSyncLike, _tenantId: string, goalId: string, o
       `
       UPDATE goal_stack
       SET status = 'completed', completed_at = ?, outcome_score = ?
-      WHERE id = ?
+      WHERE id = ? AND tenant_id = ?
     `,
-    ).run(completedAt, score, goalId);
+    ).run(completedAt, score, goalId, tenantId);
 
     if (score !== null && !opts.noPropagate) {
       const multiplier = goalOutcomeMultiplier(score);
@@ -282,38 +283,40 @@ function completeGoal(db: DatabaseSyncLike, _tenantId: string, goalId: string, o
           `
           UPDATE memories
           SET strength = MIN(1.0, MAX(0.0, strength * ?))
-          WHERE id IN (
+          WHERE tenant_id = ? AND id IN (
             SELECT memory_id FROM goal_recall_log
             WHERE goal_id = ?
               AND recalled_at >= ?
               AND recalled_at <= ?
           )
         `,
-        ).run(multiplier, goalId, goalRow.created_at, completedAt);
+        ).run(multiplier, tenantId, goalId, goalRow.created_at, completedAt);
       }
     }
   });
 }
 
-function suspendGoal(db: DatabaseSyncLike, _tenantId: string, goalId: string): void {
-  cachedStatement(db, `UPDATE goal_stack SET status = 'suspended' WHERE id = ? AND status = 'active'`).run(goalId);
+function suspendGoal(db: DatabaseSyncLike, tenantId: string, goalId: string): void {
+  cachedStatement(
+    db,
+    `UPDATE goal_stack SET status = 'suspended' WHERE id = ? AND tenant_id = ? AND status = 'active'`,
+  ).run(goalId, tenantId);
 }
 
-function resumeGoal(db: DatabaseSyncLike, _tenantId: string, goalId: string): void {
+function resumeGoal(db: DatabaseSyncLike, tenantId: string, goalId: string): void {
   withWriteScope(db, 'resume_goal', () => {
-    const row = cachedStatement(db, `SELECT session_id, tenant_id, status FROM goal_stack WHERE id = ?`).get(goalId) as
-      | { session_id: string; tenant_id: string; status: string }
-      | undefined;
+    const row = cachedStatement(db, `SELECT session_id, status FROM goal_stack WHERE id = ? AND tenant_id = ?`).get(
+      goalId,
+      tenantId,
+    ) as { session_id: string; status: string } | undefined;
     if (!row || row.status !== 'suspended') return;
 
-    enforceDepthCapWithinTx(db, row.tenant_id, row.session_id);
+    enforceDepthCapWithinTx(db, tenantId, row.session_id);
 
-    cachedStatement(db, `UPDATE goal_stack SET status = 'active' WHERE id = ?`).run(goalId);
+    cachedStatement(db, `UPDATE goal_stack SET status = 'active' WHERE id = ? AND tenant_id = ?`).run(goalId, tenantId);
   });
 }
 
-// Goal ids are not tenant-scoped in hippo.db, so complete, suspend and resume ignore the tenant; the api checks the
-// host admin.
 const goalsBodies: Bodies<Goals> = {
   push: pushGoal,
   sessionGoals: listSessionGoals,

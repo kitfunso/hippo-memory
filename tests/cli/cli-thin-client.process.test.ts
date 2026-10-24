@@ -105,6 +105,8 @@ async function startServer(workspace: string): Promise<SpawnedServer> {
 interface CliResult {
   stdout: string;
   stderr: string;
+  /** The exit code; 0 when the CLI succeeded. */
+  status?: number;
 }
 
 function runCli(workspace: string, ...cliArgs: string[]): CliResult {
@@ -115,7 +117,7 @@ function runCli(workspace: string, ...cliArgs: string[]): CliResult {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    return { stdout, stderr: '' };
+    return { stdout, stderr: '', status: 0 };
   } catch (e) {
     // SAFETY: execFileSync on failure throws an Error augmented with
     // stdout/stderr/status per Node's child_process API contract.
@@ -123,6 +125,7 @@ function runCli(workspace: string, ...cliArgs: string[]): CliResult {
     return {
       stdout: Buffer.isBuffer(err.stdout) ? err.stdout.toString('utf8') : (err.stdout ?? ''),
       stderr: Buffer.isBuffer(err.stderr) ? err.stderr.toString('utf8') : (err.stderr ?? ''),
+      status: err.status,
     };
   }
 }
@@ -368,6 +371,8 @@ describe('cli thin-client mode', () => {
       }
 
       server = await startServer(workspace);
+      // A keyless caller is a member, which may not change a row it does not own, so the CLI sends an admin key.
+      vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
 
       // With the server up, forget --archive now routes over HTTP like plain
       // forget does; the archive endpoint has existed since ea155d6.
@@ -381,7 +386,7 @@ describe('cli thin-client mode', () => {
         expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_rawthin'`).get()).toBeUndefined();
         const events = listAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
         expect(events).toHaveLength(1);
-        expect(events[0].actor).toBe('localhost:cli');
+        expect(events[0].actor).toMatch(/^api_key:/);
         // The counter lives in api.rawArchive so the routed path reaches it;
         // when it lived in the CLI, routing an archive silently lost the count.
         expect(getMeta(db2, 'total_forgotten', '0')).toBe('1');
@@ -450,6 +455,8 @@ describe('cli thin-client mode', () => {
       }
 
       server = await startServer(workspace);
+      // A keyless caller is a member, which may not change a row it does not own, so the CLI sends an admin key.
+      vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
 
       // raw-archive.ts throws "is not raw" for a non-raw kind; the routed
       // catch must wrap it the same way forgetMemory's direct catch does.
@@ -641,12 +648,14 @@ describe('cli thin-client mode', () => {
       const routedId = /Remembered \[([^\]]+)\]/.exec(routedRemember.stdout)?.[1];
       expect(routedId, `stdout: ${routedRemember.stdout} stderr: ${routedRemember.stderr}`).toMatch(/^mem_[0-9a-f]+$/);
 
+      // A keyless caller is a member, which may not change a row it does not own, so the CLI sends an admin key.
+      vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
       const routedForget = runCli(workspace, 'forget', routedId!);
       expect(routedForget.stdout, `stderr: ${routedForget.stderr}`).toMatch(/Forgot/);
       // Pins that this half really took HTTP, so the counter assertion below
       // cannot pass by silently running the direct path twice.
       const routedActor = getActorForId(workspace, routedId!);
-      expect(routedActor).toBe('localhost:cli');
+      expect(routedActor).toMatch(/^api_key:/);
 
       let db = openHippoDb(hippoRoot);
       try {
@@ -670,6 +679,36 @@ describe('cli thin-client mode', () => {
       db = openHippoDb(hippoRoot);
       try {
         expect(getMeta(db, 'total_forgotten', '0')).toBe('2');
+      } finally {
+        closeHippoDb(db);
+      }
+    } finally {
+      if (server) await server.stop();
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  }, 38_000);
+
+  // Starts a server process and a CLI process for remember and for forget.
+  it('a keyless routed forget of a row with no writer fails with the 403 text and the HIPPO_API_KEY hint', async () => {
+    const workspace = makeWorkspace();
+    let server: SpawnedServer | null = null;
+    try {
+      vi.stubEnv('HIPPO_API_KEY', undefined);
+      server = await startServer(workspace);
+      const remembered = runCli(workspace, 'remember', 'keyless-refusal-canary');
+      const id = /Remembered \[([^\]]+)\]/.exec(remembered.stdout)?.[1];
+      expect(id, `stdout: ${remembered.stdout} stderr: ${remembered.stderr}`).toMatch(/^mem_[0-9a-f]+$/);
+
+      const refused = runCli(workspace, 'forget', id!);
+      // Not 1 exactly: on Windows a routed refusal, a missing id's too, can end in a libuv abort after the message.
+      expect(refused.status).not.toBe(0);
+      expect(refused.stderr).toContain(
+        `memory ${id} records no writer: change it with an admin key. hippo serve is running, so the CLI acts as ` +
+          'the key in HIPPO_API_KEY, or as a member without one: set HIPPO_API_KEY to that key or an admin key.',
+      );
+      const db = openHippoDb(join(workspace, '.hippo'));
+      try {
+        expect(db.prepare(`SELECT id FROM memories WHERE id = ?`).get(id!)).toEqual({ id });
       } finally {
         closeHippoDb(db);
       }

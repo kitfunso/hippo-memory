@@ -107,16 +107,27 @@ describe('typed errors from real domain paths keep their status and message', ()
   it('ConflictError -> 409: superseding a row that is already superseded', async () => {
     const old = createMemory('the build runs on node 20', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(home, old);
+    // A keyless caller is a member, which may not supersede a row it does not own, so this sends an admin key.
+    const db = openHippoDb(home);
+    let adminKey: string;
+    try {
+      adminKey = createApiKey(db, { tenantId: 'default', role: 'admin' }).plaintext;
+    } finally {
+      closeHippoDb(db);
+    }
+    const headers = { authorization: `Bearer ${adminKey}` };
     const first = await call(handle, {
       method: 'POST',
       path: `/v1/memories/${old.id}/supersede`,
       body: { content: 'the build runs on node 22' },
+      headers,
     });
     expect(first.status).toBe(200);
     const r = await call(handle, {
       method: 'POST',
       path: `/v1/memories/${old.id}/supersede`,
       body: { content: 'the build runs on node 24' },
+      headers,
     });
     expect(r.status).toBe(409);
     expect(r.body.error).toMatch(/is already superseded by/);

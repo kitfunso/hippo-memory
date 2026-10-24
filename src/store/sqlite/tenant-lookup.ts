@@ -15,13 +15,13 @@ export function readApiKeyOwner(db: DatabaseSyncLike, keyId: string): ApiKeyOwne
   return row && { tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role, ownerSubject: row.owner_subject };
 }
 
-/** Who may reach memory `id`: its tenant and scope, or undefined when no such memory exists. */
+/** Who may reach and change memory `id`: its tenant, scope and owner, or undefined when no such memory exists. */
 export function readMemoryReach(
   db: DatabaseSyncLike,
   id: string,
-): { tenantId: string; scope: string | null } | undefined {
-  const row = cachedStatement(db, `SELECT tenant_id, scope FROM memories WHERE id = ?`).get(id) as
-    | { tenant_id: string; scope: string | null }
+): { tenantId: string; scope: string | null; owner: string | null } | undefined {
+  const row = cachedStatement(db, `SELECT tenant_id, scope, owner FROM memories WHERE id = ?`).get(id) as
+    | { tenant_id: string; scope: string | null; owner: string | null }
     | undefined;
-  return row && { tenantId: row.tenant_id, scope: row.scope };
+  return row && { tenantId: row.tenant_id, scope: row.scope, owner: row.owner };
 }

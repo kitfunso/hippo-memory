@@ -18,9 +18,8 @@ export async function goalList(ctx: Context, opts: { sessionId: string; all: boo
   return (await ctx.store.activeGoals({ sessionId: opts.sessionId, tenantId: ctx.tenantId })).goals;
 }
 
-/** Complete a goal by id; a no-op for an unknown or already completed goal. Host admin only. */
+/** Complete a goal by id; a no-op for an unknown, another tenant's or an already completed goal. Host admin only. */
 export async function goalComplete(ctx: Context, goalId: string, opts: CompleteGoalOpts): Promise<void> {
-  // Goal ids are not tenant-scoped in the store, so acting on one by id reaches past the caller's tenant.
   requireHostAdmin(ctx, 'Completing a goal by id');
   await ctx.store.goals.complete(ctx.tenantId, goalId, opts);
 }

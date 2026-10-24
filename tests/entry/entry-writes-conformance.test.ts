@@ -498,10 +498,13 @@ describe('EntryWrites.forget', () => {
   });
 });
 
+const BOB = 'user:bob';
+
 describe('a restricted scope by id', () => {
   const OPS = 'slack:private:Cops';
-  const secret = fresh('the ops rota sits in the locked channel', { scope: OPS });
-  const secretRaw = fresh('raw ops channel message about the rota', { scope: OPS, kind: 'raw' });
+  // Bob owns the rows, so only the grant decides reach here; write rights get their own block below.
+  const secret = fresh('the ops rota sits in the locked channel', { scope: OPS, owner: BOB });
+  const secretRaw = fresh('raw ops channel message about the rota', { scope: OPS, kind: 'raw', owner: BOB });
   const successor = fresh('the ops rota moved to the wiki', { scope: OPS });
   const seedOps: Call = async (g) => {
     for (const entry of [secret, secretRaw]) await g.writeEntry({ entry, actor: ACTOR });
@@ -517,7 +520,8 @@ describe('a restricted scope by id', () => {
   ];
 
   it('answers a member without the grant as if the rows were missing, and changes nothing', async () => {
-    const side = await conforms([seedOps, ops, ...writesAs({ role: 'member', grants: ['slack:private:Cother'] }), ops]);
+    const ungranted: Reader = { role: 'member', grants: ['slack:private:Cother'], owner: BOB };
+    const side = await conforms([seedOps, ops, ...writesAs(ungranted), ops]);
     expect(side.outcomes.slice(2, 7)).toEqual([
       { value: [] },
       { error: `NotFoundError: memory not found: ${secret.id}` },
@@ -529,7 +533,7 @@ describe('a restricted scope by id', () => {
     expect(added(side).map((r) => r.op)).toEqual(['remember', 'remember']);
   });
 
-  const granted: Reader = { role: 'member', grants: [OPS] };
+  const granted: Reader = { role: 'member', grants: [OPS], owner: BOB };
 
   it.each([
     ['a member with the grant', granted],
@@ -540,5 +544,69 @@ describe('a restricted scope by id', () => {
     expect(side.outcomes[1]).toEqual({ value: [secret.id] });
     // SAFETY: the last call reads rows back, so it resolved to Row[].
     expect((side.outcomes[6] as { value: Row[] }).value.map((r) => r.id)).toEqual([successor.id]);
+  });
+});
+
+describe('write rights on a team row', () => {
+  const owned = fresh('the staging cluster restarts at noon', { owner: BOB });
+  const ownedRaw = fresh('raw standup note about the staging cluster', { kind: 'raw', owner: BOB });
+  const unowned = fresh('the release train leaves on thursdays');
+  const unownedRaw = fresh('raw thread about the release train', { kind: 'raw' });
+  const seedTeam: Call = async (g) => {
+    for (const entry of [owned, ownedRaw, unowned, unownedRaw]) await g.writeEntry({ entry, actor: ACTOR });
+  };
+  const team = readBack(TENANT_A, owned.id, ownedRaw.id, unowned.id, unownedRaw.id);
+  const bobKey: Reader = { role: 'member', owner: BOB };
+  /** Pin, archive, supersede and forget, in that order, on `row` and its raw twin. */
+  const changesAs = (reader: Reader, row: MemoryEntry, raw: MemoryEntry): Call[] => [
+    async (g) => project([await g.setPinned({ ...target(row.id, null, TENANT_A, reader), pinned: true })]),
+    (g) => g.archiveRaw({ ...target(raw.id, null, TENANT_A, reader), reason: 'r' }),
+    supersede(row.id, fresh(`${row.content}, revised`), null, reader),
+    (g) => g.forget(target(row.id, null, TENANT_A, reader)),
+  ];
+  const refused = (row: MemoryEntry, raw: MemoryEntry) => {
+    const why = row.owner
+      ? 'was written by someone else: change it with the key that wrote it or an admin key'
+      : 'records no writer: change it with an admin key';
+    return [row.id, raw.id, row.id, row.id].map((id) => ({ error: `ForbiddenError: memory ${id} ${why}` }));
+  };
+
+  it("refuses a member key on another person's row and on a row with no owner, naming the key that can", async () => {
+    const carolKey: Reader = { role: 'member', owner: 'user:carol' };
+    const side = await conforms([
+      seedTeam,
+      team,
+      ...changesAs(carolKey, owned, ownedRaw),
+      ...changesAs(bobKey, unowned, unownedRaw),
+      ...changesAs({ role: 'member' }, owned, ownedRaw),
+      team,
+    ]);
+    expect(side.outcomes.slice(2, 14)).toEqual([
+      ...refused(owned, ownedRaw),
+      ...refused(unowned, unownedRaw),
+      ...refused(owned, ownedRaw),
+    ]);
+    expect(side.outcomes[14]).toEqual(side.outcomes[1]);
+    expect(added(side).map((r) => r.op)).toEqual(['remember', 'remember', 'remember', 'remember']);
+  });
+
+  it.each([
+    ['the member key of the person who owns it', bobKey, owned, ownedRaw],
+    ['an admin key', ADMIN, owned, ownedRaw],
+    ['an admin key, on a row with no owner', ADMIN, unowned, unownedRaw],
+  ])('lets %s pin, archive, supersede and forget', async (_who, reader, row, raw) => {
+    const side = await conforms([seedTeam, ...changesAs(reader, row, raw), readBack(TENANT_A, row.id, raw.id)]);
+    expect(side.outcomes.slice(1, 5).filter((o) => 'error' in o)).toEqual([]);
+    expect(side.outcomes[5]).toEqual({ value: [] });
+    expect(
+      added(side)
+        .filter((r) => r.op !== 'remember')
+        .map((r) => [r.op, r.targetId]),
+    ).toEqual([
+      ['pin', row.id],
+      ['archive_raw', raw.id],
+      ['supersede', row.id],
+      ['forget', row.id],
+    ]);
   });
 });

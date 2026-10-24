@@ -67,6 +67,7 @@ const SERVER_TYPES = [
 const STORE_KIT_VALUES = [
   'ALL_TENANTS',
   'ambientRefusal',
+  'assertWriteRight',
   'bufferToFloat32',
   'decodeVector',
   'descendantAdmits',
@@ -89,6 +90,7 @@ const STORE_KIT_VALUES = [
   'PROTECTED_ROWS',
   'rankVectorRows',
   'rarestFtsQuery',
+  'readerMayChange',
   'readerReaches',
   'repairKeeps',
   'RECALL_DEFAULT_DENY_SCOPES',
@@ -221,6 +223,7 @@ const STORE_KIT_TYPES = [
   'WorkingMemoryFilter',
   'WorkingMemoryItem',
   'WorkingMemoryPush',
+  'WrittenRow',
   'AppliedRejection',
   'LiftedRejection',
   'Rejection',

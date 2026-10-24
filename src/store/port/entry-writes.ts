@@ -8,7 +8,7 @@ export interface EntryWrite {
 }
 
 /** Who acts on which of a tenant's rows: a row `readerReaches` refuses the caller is out of reach, as recall would not
- * show it. */
+ * show it, and forget, archive, supersede and pin also refuse a row `readerMayChange` refuses. */
 export interface EntryTarget extends Omit<ScopeReader, 'role'> {
   /** Absent reads as a member key with no grants (see `targetReader`). */
   readonly role?: ScopeReader['role'];
@@ -50,19 +50,19 @@ export interface EntryWrites {
    * outcome row ({good}); other ids skipped. Each read holds the row's lock to commit, so a concurrent supersede is not
    * undone. Resolves to the ids applied, repeats kept. */
   applyOutcome(outcome: OutcomeWrite): Promise<string[]>;
-  /** Rewrites the row as writeEntry does plus one pin row ({pinned}); out of reach rejects as forget does. */
+  /** Rewrites the row as writeEntry does plus one pin row ({pinned}); refuses a row as forget does. */
   setPinned(pin: PinWrite): Promise<MemoryEntry>;
-  /** Sets the old row's superseded_by if it is within reach and not yet superseded (both checked in the transaction),
-   * else rejects NotFoundError or ConflictError. Then writes the successor as writeEntry does and one supersede row
-   * ({newId}), all or nothing. */
+  /** Sets the old row's superseded_by if the caller may change it and it is not yet superseded (both checked in the
+   * transaction), else rejects as forget does or with ConflictError. Then writes the successor as writeEntry does and
+   * one supersede row ({newId}), all or nothing. */
   supersede(write: SupersedeWrite): Promise<void>;
   /** Moves a raw row to raw_archive (metadata only, no content), deletes it and its full-text row and writes one
-   * archive_raw row ({reason}); resolves to the archived_at written. A row out of reach rejects with NotFoundError
-   * `memory not found: <id>`, any other kind with BadRequestError. */
+   * archive_raw row ({reason}); resolves to the archived_at written. Refuses a row as forget does, and any other kind
+   * with BadRequestError. */
   archiveRaw(archive: RawArchive): Promise<string>;
-  /** Deletes the row and its full-text row and writes one forget row; a raw row rejects, being append-only. A row out
-   * of reach rejects with NotFoundError `memory not found: <id>`. Archive and forget then add one to the store-wide
-   * forgotten counter, best effort. */
+  /** Deletes the row and its full-text row and writes one forget row; a raw row rejects, being append-only. In the
+   * write's transaction a row is refused as `assertWriteRight` refuses it: NotFoundError or a 403 ForbiddenError.
+   * Archive and forget then add one to the store-wide forgotten counter, best effort. */
   forget(removal: EntryRemoval): Promise<void>;
 }
 

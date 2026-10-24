@@ -504,8 +504,8 @@ function assertValidMemoryInput(content: string, options: Partial<CreateMemoryOp
 }
 
 /**
- * The row that replaces `old`: a supersede never changes where a memory belongs, so source, scope, session and a
- * stamped origin carry over.
+ * The row that replaces `old`: a supersede never changes where a memory belongs or whose it is, so source, scope,
+ * owner, session and a stamped origin carry over.
  */
 export function createSuccessor(
   old: MemoryEntry,
@@ -520,6 +520,7 @@ export function createSuccessor(
     confidence: 'verified',
     tenantId: opts.tenantId,
     scope: old.scope,
+    owner: old.owner,
     sourceSessionId: old.sourceSessionId,
     baseHalfLifeDays: opts.baseHalfLifeDays,
   });
