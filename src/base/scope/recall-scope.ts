@@ -4,7 +4,7 @@
  * back-compat (`api.isPrivateScope`, tests importing `passesScopeFilterForRecall`).
  */
 
-import { BadRequestError, ForbiddenError } from '../errors/api-errors.js';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api-errors.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 
 /**
@@ -166,16 +166,19 @@ export interface ScopeActor {
   owner?: string;
 }
 
-/** A caller as a store's write by id receives it: its own personal scope, its role and its restricted-scope grants. */
+/** A caller as a store's write by id receives it: its own personal scope, its role, its restricted-scope grants and the
+ * person behind its key, who may change the team rows they own. */
 export interface ScopeReader {
   readonly ownScope: string | null;
   readonly role: 'admin' | 'member';
   readonly grants?: readonly string[];
+  readonly owner?: string;
 }
 
 export function scopeReaderOf(actor: ScopeActor): ScopeReader {
-  const reader = { ownScope: personalScopeOf(actor), role: actor.role };
-  return actor.scopes === undefined ? reader : { ...reader, grants: actor.scopes };
+  const reader: ScopeReader = { ownScope: personalScopeOf(actor), role: actor.role };
+  const withGrants = actor.scopes === undefined ? reader : { ...reader, grants: actor.scopes };
+  return actor.owner ? { ...withGrants, owner: actor.owner } : withGrants;
 }
 
 /** Personal rows answer to their owner alone: role and grants never open one. Else admin reads all; a member needs an
@@ -185,6 +188,37 @@ export function readerReaches(reader: ScopeReader, scope: string | null): boolea
   if (reader.role === 'admin' || !isRestrictedScope(scope)) return true;
   return scope !== null && (reader.grants ?? []).includes(scope);
 }
+
+/** Where a row sits and who it records as its writer: the owner remember stamped, which a member key can only set to
+ * its own. */
+export interface WrittenRow {
+  readonly scope: string | null;
+  readonly owner: string | null;
+}
+
+/** Forget, archive, supersede and pin need more than reach: a personal row is its owner's, as readerReaches says; a
+ * team row changes for an admin or the person who owns it, and a row with no owner for an admin alone. */
+export function readerMayChange(reader: ScopeReader, row: WrittenRow): boolean {
+  if (!readerReaches(reader, row.scope)) return false;
+  if (isPersonalScope(row.scope) || reader.role === 'admin') return true;
+  return Boolean(reader.owner) && row.owner === reader.owner;
+}
+
+/** Absent or out of reach throws NotFoundError(`missing`), as for a missing id. A reached row the reader may not change
+ * throws a 403 naming the key that can: the caller already sees the row, so saying so leaks nothing. */
+export function assertWriteRight(
+  reader: ScopeReader,
+  row: WrittenRow | undefined,
+  id: string,
+  missing: string,
+): asserts row is WrittenRow {
+  if (!row || !readerReaches(reader, row.scope)) throw new NotFoundError(missing);
+  if (readerMayChange(reader, row)) return;
+  const fix = row.owner === null ? 'records no writer: change it with an admin key' : WRITTEN_BY_ANOTHER;
+  throw new ForbiddenError(`memory ${id} ${fix}`);
+}
+
+const WRITTEN_BY_ANOTHER = 'was written by someone else: change it with the key that wrote it or an admin key';
 
 /** A by-id write's target as a reader: with no role it reads as a member key, so it fails closed on restricted rows. */
 export function targetReader(target: Omit<ScopeReader, 'role'> & { readonly role?: ScopeReader['role'] }): ScopeReader {

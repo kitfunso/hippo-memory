@@ -94,7 +94,8 @@ describe('resolving conflicts next to personal rows', () => {
   it("rejectLoser on a team row sweeps team duplicates but leaves another person's personal row holding the same text", async () => {
     const personalId = (await remember(ctxFor(actorA), { content: A_TEXT, personal: true })).id;
     const teamCopy = (await remember(ctxFor(actorB), { content: A_TEXT })).id;
-    const loser = (await remember(ctxFor(actorB), { content: A_TEXT })).id;
+    // B owns the loser, so B may remove it.
+    const loser = (await remember(ctxFor(actorB), { content: A_TEXT, owner: 'b' })).id;
     const keeper = (await remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' })).id;
     expect(new Set([personalId, teamCopy, loser]).size).toBe(3);
     const conflictId = await seedConflict(keeper, loser);

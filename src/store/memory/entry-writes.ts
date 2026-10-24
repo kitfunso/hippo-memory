@@ -11,7 +11,7 @@ import type {
   SupersedeWrite,
 } from '../../base/ports/store/entry-writes.js';
 import { bumpCounter } from './rows.js';
-import { archiveOne, inReach, markParentDirty, put, stage } from './staged.js';
+import { archiveOne, changeable, markParentDirty, put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
 function applyOutcomeIn(t: MemoryTables, outcome: OutcomeWrite, rules: LossAversion): string[] {
@@ -31,7 +31,7 @@ function applyOutcomeIn(t: MemoryTables, outcome: OutcomeWrite, rules: LossAvers
 
 function pinIn(t: MemoryTables, pin: PinWrite): MemoryEntry {
   return stage(t, pin.actor, (tx) => {
-    const pinned = { ...inReach(tx, pin, pin.id), pinned: pin.pinned };
+    const pinned = { ...changeable(tx, pin, pin.id), pinned: pin.pinned };
     put(t, tx, pinned, pin.actor);
     const metadata = { pinned: pin.pinned };
     tx.audit.push({ tenantId: pin.tenantId, actor: pin.actor, op: 'pin', targetId: pin.id, metadata });
@@ -42,7 +42,7 @@ function pinIn(t: MemoryTables, pin: PinWrite): MemoryEntry {
 function supersedeIn(t: MemoryTables, write: SupersedeWrite): void {
   const { tenantId, actor, oldId, successor } = write;
   stage(t, actor, (tx) => {
-    const old = inReach(tx, write, oldId);
+    const old = changeable(tx, write, oldId);
     if ((old.supersededBy ?? null) !== null) {
       throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
     }
@@ -55,7 +55,7 @@ function supersedeIn(t: MemoryTables, write: SupersedeWrite): void {
 
 function forgetIn(t: MemoryTables, removal: EntryRemoval): void {
   stage(t, removal.actor, (tx) => {
-    const row = inReach(tx, removal, removal.id);
+    const row = changeable(tx, removal, removal.id);
     if (row.kind === 'raw') throw new RawAppendOnlyError();
     tx.rows.delete(removal.id);
     tx.audit.push({ tenantId: row.tenantId, actor: removal.actor, op: 'forget', targetId: removal.id });

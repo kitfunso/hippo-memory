@@ -31,7 +31,7 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { RenameSourceOptions } from '../../base/ports/store/agent-import.js';
 import type { StrengthenOptions } from '../../base/ports/store/recall-writes.js';
 import { archiveRawMemory, type ArchiveOptions } from './raw-archive.js';
-import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';
+import { assertWriteRight, readerReaches, targetReader } from '../../base/scope/recall-scope.js';
 import { recordTraceOutcome } from './recall-trace.js';
 import type {
   EntryTarget,
@@ -401,7 +401,7 @@ export function sqliteEntryWrites({ on, files }: Handles): EntryWrites {
         },
         forget: (db, removal) => {
           withWriteScope(db, 'forget_in_reach', () => {
-            assertInReach(db, removal, removal.id);
+            assertMayChange(db, removal, removal.id);
             const { id, tenantId, actor } = removal;
             if (!deleteEntryCore(db, id, tenantId, { actor })) throw notFound(id);
           });
@@ -455,8 +455,8 @@ export function writeOutcome(
   return memoryIds;
 }
 
-/** Reach is checked inside the archive's write scope. A store-side hook writes on the same handle inside that scope, so
- * its throw undoes the archive. */
+/** Write rights are checked inside the archive's write scope. A store-side hook writes on the same handle inside that
+ * scope, so its throw undoes the archive. */
 export function archiveRaw(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -464,7 +464,7 @@ export function archiveRaw(
   afterArchive?: ArchiveOptions['afterArchive'],
 ): string {
   const at = withWriteScope(db, 'archive_raw_in_reach', () => {
-    assertInReach(db, archive, archive.id);
+    assertMayChange(db, archive, archive.id);
     return archiveRawMemory(db, archive.id, { reason: archive.reason, who: archive.actor, afterArchive });
   });
   cleanArchivedMirrors(db, files, archive.id);
@@ -476,10 +476,11 @@ function notFound(id: string): NotFoundError {
   return new NotFoundError(`memory not found: ${id}`);
 }
 
-/** Another tenant's row, or one the caller could not read, answers as missing, so a caller learns nothing about it. */
-function assertInReach(db: DatabaseSyncLike, target: EntryTarget, id: string): void {
+/** Another tenant's row, or one out of reach, answers as missing, so a caller learns nothing about it. */
+function assertMayChange(db: DatabaseSyncLike, target: EntryTarget, id: string): void {
   const reach = readMemoryReach(db, id);
-  if (reach?.tenantId !== target.tenantId || !readerReaches(targetReader(target), reach.scope)) throw notFound(id);
+  const own = reach?.tenantId === target.tenantId ? reach : undefined;
+  assertWriteRight(targetReader(target), own, id, `memory not found: ${id}`);
 }
 
 /** The refusal row lands after `write` has rolled back, in a fresh implicit transaction the aborted one cannot undo. */
@@ -570,7 +571,7 @@ function commitPinned(db: DatabaseSyncLike, pin: PinWrite): MemoryEntry {
   const { tenantId, actor, id, pinned } = pin;
   return auditingRefusal(db, actor, () =>
     withWriteScope(db, 'set_pinned', () => {
-      assertInReach(db, pin, id);
+      assertMayChange(db, pin, id);
       const entry = readEntriesByIds(db, [id], tenantId).get(id);
       if (!entry) throw notFound(id);
       const updated = { ...entry, pinned };
@@ -588,7 +589,7 @@ function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
   // The refusal row lands after the scope has rolled back, in a fresh implicit transaction the aborted one cannot undo.
   auditingRefusal(db, actor, () =>
     withWriteScope(db, 'supersede', () => {
-      assertInReach(db, write, oldId);
+      assertMayChange(db, write, oldId);
       // No row means another writer got there first.
       const won = cachedStatement(
         db,

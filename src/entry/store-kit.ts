@@ -117,10 +117,13 @@ export { heldTexts } from '../base/util/same-text.js';
 export { PROTECTED_ROWS, repairKeeps, type RepairProtection } from '../base/memory/memory-audit.js';
 export { RejectedValueError } from '../base/errors/api-errors.js';
 export {
+  assertWriteRight,
   ownScopeTouches,
+  readerMayChange,
   readerReaches,
   targetReader,
   type ScopeReader,
+  type WrittenRow,
   passesScopeFilterForRecall,
   RECALL_DEFAULT_DENY_SCOPES,
 } from '../base/scope/recall-scope.js';

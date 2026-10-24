@@ -50,13 +50,19 @@ function propagateOutcome(t: MemoryTables, goal: Goal, completedAt: string, scor
     r.goalId === goal.id && byBytes(r.recalledAt, goal.createdAt) >= 0 && byBytes(r.recalledAt, completedAt) <= 0;
   for (const id of new Set(t.goalRecallLog.filter(inLife).map((r) => r.memoryId))) {
     const row = t.entries.get(id);
-    if (row) t.entries.set(id, { ...row, strength: Math.min(1, Math.max(0, row.strength * multiplier)) });
+    if (row?.tenantId === goal.tenantId) {
+      t.entries.set(id, { ...row, strength: Math.min(1, Math.max(0, row.strength * multiplier)) });
+    }
   }
 }
 
-// Goal ids are not tenant-scoped, so complete, suspend and resume ignore the tenant.
-function completeIn(t: MemoryTables, goalId: string, opts: CompleteGoalOpts): void {
-  const goal = t.goals.find((g) => g.id === goalId);
+/** The tenant's goal `goalId`; another tenant's reads as missing. */
+function goalIn(t: MemoryTables, tenantId: string, goalId: string): Goal | undefined {
+  return t.goals.find((g) => g.id === goalId && g.tenantId === tenantId);
+}
+
+function completeIn(t: MemoryTables, tenantId: string, goalId: string, opts: CompleteGoalOpts): void {
+  const goal = goalIn(t, tenantId, goalId);
   if (!goal || goal.status === 'completed') return;
   const completedAt = new Date().toISOString();
   goal.status = 'completed';
@@ -65,8 +71,8 @@ function completeIn(t: MemoryTables, goalId: string, opts: CompleteGoalOpts): vo
   if (opts.outcomeScore !== undefined && !opts.noPropagate) propagateOutcome(t, goal, completedAt, opts.outcomeScore);
 }
 
-function resumeIn(t: MemoryTables, goalId: string): void {
-  const goal = t.goals.find((g) => g.id === goalId);
+function resumeIn(t: MemoryTables, tenantId: string, goalId: string): void {
+  const goal = goalIn(t, tenantId, goalId);
   if (!goal || goal.status !== 'suspended') return;
   enforceDepthCap(t, goal.tenantId, goal.sessionId);
   goal.status = 'active';
@@ -96,11 +102,11 @@ export function memoryGoals(t: MemoryTables): Goals {
   return {
     push: async (tenantId, goal) => pushIn(t, tenantId, goal),
     sessionGoals: async (tenantId, sessionId) => sessionGoalsIn(t, tenantId, sessionId).map((g) => ({ ...g })),
-    complete: async (_tenantId, goalId, opts) => completeIn(t, goalId, opts),
-    async suspend(_tenantId, goalId) {
-      const goal = t.goals.find((g) => g.id === goalId);
+    complete: async (tenantId, goalId, opts) => completeIn(t, tenantId, goalId, opts),
+    async suspend(tenantId, goalId) {
+      const goal = goalIn(t, tenantId, goalId);
       if (goal?.status === 'active') goal.status = 'suspended';
     },
-    resume: async (_tenantId, goalId) => resumeIn(t, goalId),
+    resume: async (tenantId, goalId) => resumeIn(t, tenantId, goalId),
   };
 }

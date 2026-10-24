@@ -15,6 +15,7 @@ import {
   TENANT_A,
   TENANT_B,
   type GroupCall,
+  type Outcome,
   type TwoTenantFixture,
   expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
@@ -240,6 +241,8 @@ describe('Goals', () => {
         ],
         audit: [],
       });
+  const statuses = (o: Outcome<unknown> | undefined) =>
+    o && 'value' in o && Array.isArray(o.value) ? o.value.map((goal: { status: string }) => goal.status) : o;
 
   it('caps the active stack at three, refuses a parent from another session, and passes an outcome to recalled rows', async () => {
     const outcomes = await conforms('goals', [
@@ -277,10 +280,9 @@ describe('Goals', () => {
         s.activeGoals({ tenantId: TENANT_A, sessionId: 's1' }).then((a) => ({ ...a, policies: [...a.policies] })),
     ]);
     expect(outcomes.slice(4, 6).every((o) => 'error' in o)).toBe(true);
-    const statuses = (o: (typeof outcomes)[number]) =>
-      'value' in o && Array.isArray(o.value) ? o.value.map((goal: { status: string }) => goal.status) : o;
-    expect(statuses(outcomes[7]!)).toEqual(['suspended', 'active', 'active', 'active']);
-    expect(statuses(outcomes[23]!)).toEqual(['completed', 'completed', 'completed', 'completed']);
+    expect(statuses(outcomes[7])).toEqual(['suspended', 'active', 'active', 'active']);
+    // Tenant B's complete of the suspended 'test' goal changed nothing.
+    expect(statuses(outcomes[23])).toEqual(['completed', 'completed', 'suspended', 'completed']);
     expect(outcomes[22]).toEqual({
       value: [
         [MEMORIES.boosted, 0.55],
@@ -289,5 +291,26 @@ describe('Goals', () => {
       ],
     });
     expect(outcomes[24]).toEqual({ value: { goals: [], policies: [] } });
+  });
+
+  it("answers another tenant's goal as missing: complete, suspend and resume change nothing", async () => {
+    const outcomes = await conforms('goals', [
+      push(TENANT_A, () => ({ sessionId: 's1', goalName: 'mine' })),
+      push(TENANT_A, () => ({ sessionId: 's1', goalName: 'parked' })),
+      (g, s) => g.suspend(TENANT_A, idOf(s, 1)),
+      (g, s) => g.suspend(TENANT_B, idOf(s, 0)),
+      (g, s) => g.resume(TENANT_B, idOf(s, 1)),
+      recalled(0, MEMORIES.boosted),
+      (g, s) => g.complete(TENANT_B, idOf(s, 0), { outcomeScore: 0.9 }),
+      (g) => g.sessionGoals(TENANT_A, 's1'),
+      (_g, s) => s.entriesByIds([MEMORIES.boosted], TENANT_A).then((rows) => rows.map((r) => r.strength)),
+      (g, s) => g.suspend(TENANT_A, idOf(s, 0)),
+      (g, s) => g.resume(TENANT_A, idOf(s, 1)),
+      (g, s) => g.complete(TENANT_A, idOf(s, 0), {}),
+      (g) => g.sessionGoals(TENANT_A, 's1'),
+    ]);
+    expect(statuses(outcomes[7])).toEqual(['active', 'suspended']);
+    expect(outcomes[8]).toEqual({ value: [0.5] });
+    expect(statuses(outcomes[12])).toEqual(['completed', 'active']);
   });
 });

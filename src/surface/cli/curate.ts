@@ -68,6 +68,9 @@ export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandConte
 
 // Shared between the forget dispatch and forgetMemory so the message can't drift.
 const ARCHIVE_REASON_REQUIRED = 'hippo forget --archive requires --reason "<why>" (recorded on the archive).';
+const SERVED_KEY_HINT =
+  'hippo serve is running, so the CLI acts as the key in HIPPO_API_KEY, or as a member without one: ' +
+  'set HIPPO_API_KEY to that key or an admin key.';
 
 async function forgetMemory(hippoRoot: string, tenantId: string, id: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
@@ -513,7 +516,8 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
       // A server that died after the health probe is the caller's transport fallback to handle, not an error to report
       // to the user.
       if (err instanceof Error && client.classifyTransportFailure(err) !== 'none') throw err;
-      const msg = errorMessage(err);
+      const refused = err instanceof client.HttpResponseError && err.status === 403;
+      const msg = refused ? `${errorMessage(err)}. ${SERVED_KEY_HINT}` : errorMessage(err);
       fail(archive ? `Could not archive ${id}: ${msg}` : msg);
     }
   });
