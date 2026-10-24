@@ -111,8 +111,9 @@ const indexState: Call = async (_g, store) =>
   (await store.vectors?.embeddingIndexState()) ?? { storedModel: 'no vectors group', hasVectors: false };
 const sorted = <V>(map: Map<string, V> | undefined): [string, V][] =>
   [...(map ?? new Map<string, V>())].sort(([a], [b]) => (a < b ? -1 : 1));
-const stored: Call = async (_g, store) => sorted(await store.vectors?.storedVectors(ALL_IDS));
-const particles: Call = async (_g, store) => sorted(await store.vectors?.physicsParticles(ALL_IDS));
+const stored: Call = async (_g, store) =>
+  sorted(await store.vectors?.stored('vectors', ALL_IDS)).map(([id, v]): [string, number[]] => [id, Array.from(v)]);
+const particles: Call = async (_g, store) => sorted(await store.vectors?.stored('particles', ALL_IDS));
 const particleFor = (id: string, vector: number[]): PhysicsParticle =>
   initializeParticle(entries.get(id) ?? memory(id, TENANT_A, 9), vector, {}, SEEDED_AT);
 

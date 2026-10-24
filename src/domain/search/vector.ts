@@ -125,11 +125,6 @@ export async function resolveVectorArm(
   return arm;
 }
 
-// Views when the store has them, so a search copies no vector; the number[] copies score the same.
-async function storedVectorsOf(store: HippoStore, ids: readonly string[]): Promise<Map<string, ArrayLike<number>>> {
-  return store.vectorViews ? store.vectorViews.storedVectorViews(ids) : store.vectors.storedVectors(ids);
-}
-
 async function fillVectorArm(
   arm: VectorArm,
   query: string,
@@ -145,8 +140,8 @@ async function fillVectorArm(
     return;
   }
   const spec = options.vectorCandidates;
-  const vectors = await storedVectorsOf(
-    store,
+  const vectors = await store.vectors.stored(
+    'vectors',
     arm.entries.map((e) => e.id),
   );
   // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search can use.
@@ -169,8 +164,8 @@ async function fillVectorArm(
   if (added.length > 0) {
     arm.addedRows = true;
     arm.entries = currentEntries([...arm.entries, ...added], options);
-    for (const [id, v] of await storedVectorsOf(
-      store,
+    for (const [id, v] of await store.vectors.stored(
+      'vectors',
       added.map((e) => e.id),
     )) {
       vectors.set(id, v);

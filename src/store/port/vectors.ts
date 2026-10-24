@@ -12,14 +12,22 @@ export type { EmbeddingIndexState, RecallScopeFilter };
 export interface VectorReads {
   /** The stored model and whether any vector exists, in one snapshot. */
   embeddingIndexState(): Promise<EmbeddingIndexState>;
-  storedVectors(ids: readonly string[]): Promise<Map<string, number[]>>;
+  /** The stored `part` of each of `ids` that has one; an empty list reads nothing. */
+  stored<P extends StoredPart>(part: P, ids: readonly string[]): Promise<Map<string, StoredParts[P]>>;
   /** The `spec.limit ?? VECTOR_CANDIDATE_LIMIT` rows nearest `queryVector` by `rankVectorRows`, filtered by tenant
    * (when set), kind != 'archived', superseded only with `includeSuperseded`, scope per `RecallScopeFilter`, and origin
    * '' or listed (when `spec.origin` is set). */
   nearestEntries(queryVector: readonly number[], spec: VectorCandidateSpec): Promise<MemoryEntry[]>;
-  /** The particles of `ids` only; an empty list reads nothing. */
-  physicsParticles(ids: readonly string[]): Promise<Map<string, PhysicsParticle>>;
 }
+
+/** What `VectorReads.stored` reads per memory: its vector, as Float32 views where the store holds Float32 bytes, or its
+ * particle. */
+export interface StoredParts {
+  readonly vectors: ArrayLike<number>;
+  readonly particles: PhysicsParticle;
+}
+
+export type StoredPart = keyof StoredParts;
 
 /** Asks another process for the ids nearest a query, nearest first; undefined leaves the read to this store's scan. */
 export type NearestIdsAsk = (
@@ -40,12 +48,6 @@ export interface VectorCandidateSpec {
   /** How many nearest rows to add; VECTOR_CANDIDATE_LIMIT when unset. */
   limit?: number;
   origin?: OriginFilter;
-}
-
-/** `storedVectors` with no number[] copy, for a store that holds vectors as Float32 bytes. */
-export interface VectorViews {
-  /** The same ids and values as `VectorReads.storedVectors`, each value a Float32 view. */
-  storedVectorViews(ids: readonly string[]): Promise<Map<string, Float32Array>>;
 }
 
 /** One memory's vector, computed by the caller's embedding provider. */
@@ -94,48 +96,87 @@ export interface VectorWrites {
   writeVectors(write: VectorWrite): Promise<VectorWriteResult>;
 }
 
-// A store's own vector index, which the embed and status verbs read and write. Vectors and particles carry no tenant,
-// so each method covers the whole store.
+// A store's own vector index, worked through sessions so the write lock and a rebuild's staged vectors stay on the
+// thread that holds one. Vectors and particles carry no tenant, so each step covers the whole store.
 export interface EmbeddingIndex {
+  /** Opens a session that holds nothing yet. */
+  open(): Promise<IndexSession>;
+  /** Runs one step on the open session `session`; `close` ends it. */
+  step<K extends IndexStepKind>(session: string, step: IndexStep<K>): Promise<IndexStepAnswers[K]>;
+}
+
+/** `id` names the session to `step`; `key` names the store's hippo.db, so sessions on one file in this process take
+ * turns and sessions on another do not. */
+export interface IndexSession {
+  readonly id: string;
+  readonly key: string;
+}
+
+type NoFields = Record<never, never>;
+
+/** What each step takes beside its kind. */
+export interface IndexStepFields {
+  /** Takes the index's write lock until `close`; other processes and threads on the store honour it, and it answers
+   * false while a live holder has it. */
+  readonly lock: NoFields;
+  /** Opens a rebuild whose vectors wait apart from the live index. */
+  readonly begin: NoFields;
+  /** Stages one page of the rebuild, skipping empty or non-finite vectors; answers how many it staged. */
+  readonly stage: { readonly rows: readonly VectorRow[] };
+  /** In one transaction, replaces every stored vector with the staged ones and records `model` as what built them,
+   * then drops the staging, committed or not. */
+  readonly commit: { readonly model: string };
+  /** Drops a rebuild not committed, which leaves the live index as it was, releases the lock this session took, and
+   * ends the session. */
+  readonly close: NoFields;
   /** Whether another model than `providerId` built the stored vectors; an unreadable index answers false. */
-  requiresReindex(providerId: string): Promise<boolean>;
+  readonly reindex: { readonly providerId: string };
   /** Records `providerId`'s index identity as what built the vectors. */
-  saveModel(providerId: string): Promise<void>;
-  entryCount(): Promise<number>;
+  readonly saveModel: { readonly providerId: string };
   /** Up to `page.limit` memory ids in id order after `page.afterId`: a re-embed needs each row once, not time order. */
-  entryIdsById(page: IdPageRequest): Promise<IdPage>;
-  summary(): Promise<StoredVectorSummary>;
-  /** How many memories and vectors the store holds, and how many memories have a vector. */
-  coverage(): Promise<VectorCoverage>;
-  /** The particle count and mean speed, and every particle only while at most `fullUpTo` are stored. */
-  particleStats(fullUpTo: number): Promise<ParticleStats>;
+  readonly ids: { readonly page: IdPageRequest };
+  /** `ids` for the memories with no vector only. */
+  readonly pending: { readonly page: IdPageRequest };
   /** Upserts each row under `model`, one commit per row so a failure keeps those before it; answers how many. */
-  saveVectors(rows: readonly VectorRow[], model: string): Promise<number>;
-  /** Opens a rebuild whose vectors wait apart from the live index; the id names it to the three calls below. */
-  beginRebuild(): Promise<string>;
-  /** Stages one page of vectors, skipping empty or non-finite ones; answers how many it staged. */
-  stageRebuild(rebuild: string, rows: readonly VectorRow[]): Promise<number>;
-  /** In one transaction, replaces every stored vector with the staged ones and records `model` as what built them. */
-  commitRebuild(rebuild: string, model: string): Promise<void>;
-  /** Drops what is staged; a rebuild never committed leaves the live index as it was. */
-  closeRebuild(rebuild: string): Promise<void>;
+  readonly save: { readonly rows: readonly VectorRow[]; readonly model: string };
   /** Drops the vectors of deleted memories. */
-  pruneOrphans(): Promise<void>;
-  /** Up to `page.limit` ids with no vector, in id order after `page.afterId`. */
-  pendingIds(page: IdPageRequest): Promise<IdPage>;
+  readonly prune: NoFields;
+  /** A first particle for `entry` at `vector`, unless it has one. */
+  readonly seed: { readonly entry: MemoryEntry; readonly vector: number[] };
   /** Replaces every particle with a fresh one per memory that has a stored vector, reading a page at a time; answers
    * how many. */
-  resetParticles(): Promise<number>;
-  /** A first particle for `entry` at `vector`, unless it has one. */
-  seedParticle(entry: MemoryEntry, vector: number[]): Promise<void>;
-  /** Names the store's hippo.db, so writers to one file in this process wait on each other and writers to another do
-   * not. */
-  lockKey(): Promise<string>;
-  /** Takes the index's write lock, which other processes on the store honour; a token to unlock, or null while a live
-   * holder has it. */
-  tryLock(): Promise<string | null>;
-  /** Releases the lock `token` took; a lock another holder took since is left. */
-  unlock(token: string): Promise<void>;
+  readonly reset: NoFields;
+  readonly summary: NoFields;
+  /** How many memories and vectors the store holds, and how many memories have a vector. */
+  readonly coverage: NoFields;
+  /** The particle count and mean speed, and every particle only while at most `fullUpTo` are stored. */
+  readonly particles: { readonly fullUpTo: number };
+}
+
+export type IndexStepKind = keyof IndexStepFields;
+
+/** One step of kind `K`, plain data so it crosses to a store worker. */
+export type IndexStep<K extends IndexStepKind = IndexStepKind> = {
+  [P in K]: { readonly kind: P } & IndexStepFields[P];
+}[K];
+
+export interface IndexStepAnswers {
+  readonly lock: boolean;
+  readonly begin: void;
+  readonly stage: number;
+  readonly commit: void;
+  readonly close: void;
+  readonly reindex: boolean;
+  readonly saveModel: void;
+  readonly ids: IdPage;
+  readonly pending: IdPage;
+  readonly save: number;
+  readonly prune: void;
+  readonly seed: void;
+  readonly reset: number;
+  readonly summary: StoredVectorSummary;
+  readonly coverage: VectorCoverage;
+  readonly particles: ParticleStats;
 }
 
 /** One memory's vector. */

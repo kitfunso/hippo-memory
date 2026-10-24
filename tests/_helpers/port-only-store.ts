@@ -23,12 +23,7 @@ export const FOLDER_GROUPS = [
 type FolderGroup = (typeof FOLDER_GROUPS)[number];
 
 // The optional groups, which an add-on store at its smallest has none of.
-const LEFT_OUT: ReadonlySet<string> = new Set<OptionalGroup>([
-  'vectorViews',
-  'readiness',
-  'lastRecall',
-  ...FOLDER_GROUPS,
-]);
+const LEFT_OUT: ReadonlySet<string> = new Set<OptionalGroup>(['readiness', 'lastRecall', ...FOLDER_GROUPS]);
 
 /** `store` without its folder groups, as a store that is not hippo.db holds none; copying string keys alone drops the
  * symbol that marks a store as hippo.db. */

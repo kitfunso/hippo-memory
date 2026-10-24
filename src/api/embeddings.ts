@@ -2,7 +2,7 @@
 // Vectors and physics rows carry no tenant, so each op covers the whole store and needs the host admin.
 
 import type { EmbeddingProvider } from '../base/ports/embedder.js';
-import { embedAll, folderEmbedTarget } from '../domain/search/embed-memories.js';
+import { embedAll, folderEmbedTarget, indexStep } from '../domain/search/embed-memories.js';
 import type { VectorCoverage } from '../store/port.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
@@ -24,11 +24,11 @@ export async function storedVectorCount(ctx: ContextWith<'embeddingIndex'>): Pro
 /** Memories against vectors, counted in the store, for the embed status and backfill lines. */
 export async function embedCoverage(ctx: ContextWith<'embeddingIndex'>): Promise<VectorCoverage> {
   requireHostAdmin(ctx, 'Reading the vector index');
-  return ctx.store.embeddingIndex.coverage();
+  return indexStep(ctx.store.embeddingIndex, { kind: 'coverage' });
 }
 
 /** Re-seed every memory's physics particle from its vector; returns how many it reset. */
 export async function resetPhysicsFromVectors(ctx: ContextWith<'embeddingIndex'>): Promise<number> {
   requireHostAdmin(ctx, 'Resetting physics');
-  return ctx.store.embeddingIndex.resetParticles();
+  return indexStep(ctx.store.embeddingIndex, { kind: 'reset' });
 }

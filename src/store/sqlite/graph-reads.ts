@@ -13,7 +13,7 @@ import {
 } from './graph-rows.js';
 import { GRAPH_ID_BATCH, type Entity, type Relation } from '../port/graph.js';
 import { chunked } from '../../base/util/chunked.js';
-import type { GraphRows, GraphReads, GraphViewQuery } from '../port.js';
+import type { GraphRows, GraphReads, GraphViewQuery, GraphWalkQuery } from '../port.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
@@ -288,7 +288,7 @@ function graphViewRows(db: DatabaseSyncLike, tenantId: string, spec: GraphViewSp
   };
 }
 
-function graphRows(db: DatabaseSyncLike, tenantId: string, { entity, limit, reader }: GraphViewQuery): GraphRows {
+function viewRows(db: DatabaseSyncLike, tenantId: string, { entity, limit, reader }: GraphViewQuery): GraphRows {
   return withGraphReadSnapshot(db, (snapshot) =>
     graphViewRows(snapshot, tenantId, {
       entity,
@@ -298,11 +298,19 @@ function graphRows(db: DatabaseSyncLike, tenantId: string, { entity, limit, read
   );
 }
 
+function walkRows(db: DatabaseSyncLike, tenantId: string, query: GraphWalkQuery): GraphRows {
+  const only = (entities: Entity[], relations: Relation[] = []): GraphRows => ({
+    entities,
+    relations,
+    truncated: false,
+  });
+  if (query.by === 'memory') return only(listEntitiesByMemoryId(db, tenantId, query.ids));
+  if (query.by === 'entity') return only(readEntitiesByIds(db, tenantId, query.ids));
+  return only([], listNeighborRelations(db, tenantId, query.ids, { limit: query.limit }));
+}
+
 const graphReadsBodies: Bodies<GraphReads> = {
-  graphRows: graphRows,
-  entitiesForMemories: listEntitiesByMemoryId,
-  entitiesByIds: readEntitiesByIds,
-  neighborRelations: listNeighborRelations,
+  graphRows: (db, tenantId, query) => ('by' in query ? walkRows(db, tenantId, query) : viewRows(db, tenantId, query)),
   graphDelta: graphDeltaOn,
 };
 
