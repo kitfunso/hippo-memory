@@ -104,7 +104,7 @@ describe('vector graph', () => {
   });
 
   it('keeps a unit vector as given and copies any other', () => {
-    const g = createVectorGraph({ dim: 2, seed: 1 });
+    const g = createVectorGraph({ dim: 2, efConstruction: 200, seed: 1 });
     const unit = Float32Array.from([0.6, 0.8]);
     const long = Float32Array.from([3, 4]);
     insertNode(g, 0, unit);

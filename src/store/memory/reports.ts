@@ -26,7 +26,7 @@ import { tokenUseIn } from './token-ledger.js';
 /** Every tenant's rows oldest first, the report order, so a float sum adds up the same under either store. */
 const inStoreOrder = (t: MemoryTables): MemoryEntry[] => [...t.entries.values()].sort(oldestFirst);
 
-function strengthTallies(t: MemoryTables, rules: LossAversion, tenantId: string, now: Date, line: number) {
+function strengthTallies(t: MemoryTables, rules: LossAversion, tenantId: string, now: Date, atRiskBelow: number) {
   const tallies: StrengthTallies = { total: 0, pinned: 0, errors: 0, strengthSum: 0, atRisk: 0 };
   for (const entry of inStoreOrder(t)) {
     if (entry.tenantId !== tenantId) continue;
@@ -35,15 +35,15 @@ function strengthTallies(t: MemoryTables, rules: LossAversion, tenantId: string,
     tallies.strengthSum += strength;
     if (entry.pinned) tallies.pinned += 1;
     if (entry.tags.includes('error')) tallies.errors += 1;
-    if (!entry.pinned && strength < line) tallies.atRisk += 1;
+    if (!entry.pinned && strength < atRiskBelow) tallies.atRisk += 1;
   }
   return tallies;
 }
 
-function statusCounts(t: MemoryTables, rules: LossAversion, now: Date, line: number): StatusCounts {
+function statusCounts(t: MemoryTables, rules: LossAversion, now: Date, atRiskBelow: number): StatusCounts {
   const embedded = [...t.vectors.keys()].filter((id) => t.entries.has(id)).length;
   return {
-    ...tallyStatus(inStoreOrder(t), now, line, rules),
+    ...tallyStatus(inStoreOrder(t), now, atRiskBelow, rules),
     openConflicts: openConflictsIn(t, ALL_TENANTS),
     embedded,
   };

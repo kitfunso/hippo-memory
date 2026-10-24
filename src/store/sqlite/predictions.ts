@@ -18,6 +18,7 @@ import {
   type PredictionListQuery,
   type SavePredictionOptions,
 } from '../port/objects.js';
+import { closeMissError, predictionCloseMetadata, predictionCreateMetadata } from '../rules/predictions.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -175,12 +176,7 @@ function auditPredictionCreate(
       actor: who.actor,
       op: 'predict_create',
       targetId: String(who.predictionId),
-      metadata: {
-        prediction_id: who.predictionId,
-        class_tag: opts.classTag,
-        has_estimate: opts.estimateValue !== undefined && opts.estimateValue !== null,
-        target_date: opts.targetDate ?? null,
-      },
+      metadata: predictionCreateMetadata(who.predictionId, opts),
     },
   ]);
 }
@@ -248,11 +244,7 @@ function closeOpenPredictionRow(
       actor,
       op: 'predict_close',
       targetId: String(id),
-      metadata: {
-        prediction_id: id,
-        closure_state: opts.closureState,
-        has_actual: opts.actualValue !== undefined && opts.actualValue !== null,
-      },
+      metadata: predictionCloseMetadata(id, opts),
     },
   ]);
   return row;
@@ -266,13 +258,7 @@ function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): nev
           SELECT closure_state FROM predictions WHERE id = ? AND tenant_id = ?
         `,
   ).get(id, tenantId) as { closure_state: string } | undefined;
-  if (!existing) {
-    throw new NotFoundError(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
-  }
-  throw new BadRequestError(
-    `closePrediction: prediction ${id} is already closed (state='${existing.closure_state}'); ` +
-      `cannot re-close. Open predictions only.`,
-  );
+  throw closeMissError(tenantId, id, existing?.closure_state ?? null);
 }
 
 function readPrediction(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {

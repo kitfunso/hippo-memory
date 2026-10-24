@@ -348,6 +348,22 @@ describe('Predictions.closePrediction', () => {
     ]);
   });
 
+  it('a close with a null actual and a save with a null estimate audit has_actual and has_estimate false', async () => {
+    // The port types these number | undefined, but an HTTP body can carry null; both stores must treat it as none.
+    const nothing: undefined = JSON.parse('null');
+    const input = claim('sprint', { estimateValue: nothing });
+    const side = await conforms([
+      at(T1, save(input)),
+      at(T2, close(1, { closureState: 'closed', actualValue: nothing })),
+      byId(1),
+    ]);
+    const audited = added(side).filter((e) => e.op.startsWith('predict_'));
+    expect(audited.map((e) => e.metadata)).toEqual([
+      { prediction_id: 1, class_tag: 'sprint', has_estimate: false, target_date: null },
+      { prediction_id: 1, closure_state: 'closed', has_actual: false },
+    ]);
+  });
+
   it('a second close rejects and the first close stands', async () => {
     const input = claim('sprint', { estimateValue: 3 });
     const side = await conforms([

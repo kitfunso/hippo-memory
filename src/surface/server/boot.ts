@@ -81,10 +81,6 @@ function isAddressInfo(a: string | import('node:net').AddressInfo | null): a is 
   return a !== null && typeof a !== 'string';
 }
 
-// Pinned at module load, bumped with package.json on releases; reading package.json synchronously here would couple the
-// daemon to its install path, which tests that mkdtemp a hippoRoot avoid.
-const VERSION = PACKAGE_VERSION;
-
 interface HandleRequestOptions {
   readonly startedAt: string;
   readonly streamSlots: Map<string, number>;
@@ -150,7 +146,7 @@ function sendHealth(
   if (isLocalCaller(req)) {
     sendJson(res, 200, {
       ok: true,
-      version: VERSION,
+      version: PACKAGE_VERSION,
       started_at: startedAt,
       pid: process.pid,
       audit_write_failures: auditWriteFailureCount(),

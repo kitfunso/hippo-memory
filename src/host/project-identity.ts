@@ -18,7 +18,7 @@ const MAX_WALK_DEPTH = 64;
  * switch would stamp one checkout two ways. */
 export type RemoteRule = () => boolean;
 
-const globalRemoteRule: RemoteRule = () => namesProjectsByRemote(resolveGlobalRootDir());
+const globalRemoteRule: RemoteRule = () => namesProjectsByRemote(hippoHomeDir());
 
 /** The id a root names itself by plus every rung that resolves; only the root's own `.git` is read, so a store nested
  * in another checkout keeps its folder name. */
@@ -168,16 +168,11 @@ export function isInitialized(hippoRoot: string): boolean {
   return fs.existsSync(path.join(hippoRoot, 'hippo.db'));
 }
 
-/** The global store's folder ($HIPPO_HOME > $XDG_DATA_HOME/hippo > ~/.hippo), which `getGlobalRoot` publishes. */
-export function resolveGlobalRootDir(): string {
-  return hippoHomeDir();
-}
-
 /** True when `p` IS the global store root, so a global store whose parent chain contains `.git`/`.hippo` (git-managed
  * HIPPO_HOME) still backfills as user-global ('') instead of being stamped with the surrounding repo's name, which
  * would hide the global corpus from every project. */
 export function isGlobalStoreRoot(p: string): boolean {
-  return samePath(realpathOrResolve(path.resolve(p)), realpathOrResolve(resolveGlobalRootDir()));
+  return samePath(realpathOrResolve(path.resolve(p)), realpathOrResolve(hippoHomeDir()));
 }
 
 /** Parses a memory's origin from its provenance `source`: `shared:<project>:<ts>` and `promoted:<localRoot>` name the

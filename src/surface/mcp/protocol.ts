@@ -9,7 +9,8 @@ import { currentRequestId } from '../../base/util/request-scope.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { Actor as ApiActor, Context as ApiContext, ContextReach } from '../../api/index.js';
 import { type ResolveProjectIdentityOpts } from '../../base/scope/project-identity.js';
-import { findHippoStoreDir, resolveGlobalRootDir } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
+import { findHippoStoreDir } from '../../host/project-identity.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
@@ -25,7 +26,7 @@ export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProject
   const local = findHippoStoreDir(cwd, opts);
   if (local !== null) return local;
   // Global fallback (respects $HIPPO_HOME / $XDG_DATA_HOME)
-  const global = resolveGlobalRootDir();
+  const global = hippoHomeDir();
   return fs.existsSync(global) ? global : null;
 }
 

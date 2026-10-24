@@ -15,7 +15,7 @@ import { graphFilePath } from '../../dist/db/vector-graph-file.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../dist/db/index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../dist/db/vector-store.js';
-import { createMemory } from '../../dist/base/memory/memory.js';
+import { createMemory } from '../../dist/entry/memory.js';
 import { writeEntryDbOnly } from '../../dist/entry/testing.js';
 import { initStore } from '../../dist/entry/testing.js';
 import { loadVectorCandidateEntriesAt } from '../../dist/entry/testing.js';

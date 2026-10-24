@@ -4,7 +4,7 @@ import { envActiveScope } from '../../base/util/env.js';
 import { confidenceFacets } from '../../base/memory/memory.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../../base/rank/search-types.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
-import { resolveGlobalRootDir } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
 import { recallRowOrigin, scopeHiddenCount } from '../../api/recall/rows.js';
 import { cliConfig, cliApiContext, cliSecondStore, cliStore } from './api-context.js';
@@ -57,7 +57,7 @@ async function explainQuery(hippoRoot: string, tenantId: string, query: string, 
   const asJson = boolFlag(flags, 'json');
   const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = hippoHomeDir();
   const ctx = cliApiContext(hippoRoot, tenantId);
   // Explain shows what recall would see, so it applies the same scope rule.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;

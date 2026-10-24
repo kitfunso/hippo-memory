@@ -5,12 +5,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
-import {
-  findHippoStoreDir,
-  isGlobalStoreRoot,
-  isInitialized,
-  resolveGlobalRootDir,
-} from '../../host/project-identity.js';
+import { findHippoStoreDir, isGlobalStoreRoot, isInitialized } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { realpathOrResolve } from '../../host/real-path.js';
 import { runDoctor, type DoctorOptions } from './doctor.js';
 import { loadConfig } from '../../host/config-file.js';
@@ -129,7 +125,7 @@ async function buildStores(opts: SupportBundleOptions): Promise<JsonValue[]> {
   const projectDir = findHippoStoreDir(opts.cwd, { homeDir: opts.home });
   if (projectDir !== null) stores.push(await buildStoreEntry(opts, 'project', projectDir));
 
-  const globalDir = resolveGlobalRootDir();
+  const globalDir = hippoHomeDir();
   const alreadyListed = projectDir !== null && isGlobalStoreRoot(projectDir);
   if (isInitialized(globalDir) && !alreadyListed) stores.push(await buildStoreEntry(opts, 'global', globalDir));
 
@@ -347,7 +343,7 @@ export async function buildSupportBundle(opts: SupportBundleOptions): Promise<Js
   };
   // Store paths found from the working folder arrive resolved; the global root arrives as HIPPO_HOME was typed, and log
   // lines often quote the temp folder, which usually sits under the home.
-  const redacted = redactStrings(bundle, buildHomePattern(opts.home, [resolveGlobalRootDir(), os.tmpdir()]));
+  const redacted = redactStrings(bundle, buildHomePattern(opts.home, [hippoHomeDir(), os.tmpdir()]));
   // SAFETY: the value built above is always a JsonObject; redactStrings preserves object shape.
   return redacted as JsonObject;
 }

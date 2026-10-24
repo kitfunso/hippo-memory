@@ -1,5 +1,4 @@
 // The in-memory Predictions group: forward claims and their closes, each save landing with its mirror memory.
-import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import {
   predictionBaserateOf,
   type Prediction,
@@ -9,12 +8,14 @@ import {
   type Predictions,
 } from '../port/objects.js';
 import type { PredictionBaserate } from '../port/types.js';
-import { byBytes, newestFirst } from '../rules/order.js';
+import { isBelow, newestFirst } from '../rules/order.js';
+import { closeMissError, predictionCloseMetadata, predictionCreateMetadata } from '../rules/predictions.js';
 import { appendAudit, nextId, ownedRow, peekId } from './rows.js';
 import { put, stage } from './staged.js';
 import type { MemoryTables } from './tables.js';
 
-const newestPrediction = newestFirst<Prediction>({ key: (p) => p.createdAt, intId: (p) => p.id });
+const predictionWalk = { key: (p: Prediction) => p.createdAt, intId: (p: Prediction) => p.id };
+const newestPrediction = newestFirst<Prediction>(predictionWalk);
 
 function saveIn(t: MemoryTables, tenantId: string, input: PredictionSave, actor: string): Prediction {
   const { mirror } = input;
@@ -37,12 +38,7 @@ function saveIn(t: MemoryTables, tenantId: string, input: PredictionSave, actor:
   return stage(t, actor, (tx) => {
     const at = tx.audit.length;
     put(t, tx, mirror, actor);
-    const metadata = {
-      prediction_id: id,
-      class_tag: input.classTag,
-      has_estimate: input.estimateValue !== undefined,
-      target_date: input.targetDate ?? null,
-    };
+    const metadata = predictionCreateMetadata(id, input);
     tx.audit.splice(at, 0, { tenantId, actor, op: 'predict_create', targetId: String(id), metadata });
     t.predictions.set(nextId(t, 'predictions'), row);
     return structuredClone(row);
@@ -51,13 +47,7 @@ function saveIn(t: MemoryTables, tenantId: string, input: PredictionSave, actor:
 
 function closeIn(t: MemoryTables, tenantId: string, id: number, close: PredictionClose, actor: string): Prediction {
   const row = ownedRow(t.predictions, tenantId, id);
-  if (!row) throw new NotFoundError(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
-  if (row.closureState !== 'open') {
-    throw new BadRequestError(
-      `closePrediction: prediction ${id} is already closed (state='${row.closureState}'); ` +
-        'cannot re-close. Open predictions only.',
-    );
-  }
+  if (!row || row.closureState !== 'open') throw closeMissError(tenantId, id, row?.closureState ?? null);
   const closed: Prediction = {
     ...row,
     actualValue: close.actualValue ?? null,
@@ -65,28 +55,19 @@ function closeIn(t: MemoryTables, tenantId: string, id: number, close: Predictio
     closedAt: new Date().toISOString(),
     closureNote: close.closureNote ?? null,
   };
-  const metadata = {
-    prediction_id: id,
-    closure_state: close.closureState,
-    has_actual: close.actualValue !== undefined,
-  };
+  const metadata = predictionCloseMetadata(id, close);
   appendAudit(t, [{ tenantId, actor, op: 'predict_close', targetId: String(id), metadata }]);
   t.predictions.set(id, closed);
   return structuredClone(closed);
 }
 
 function listIn(t: MemoryTables, tenantId: string, { classTag, closureState, limit, after }: PredictionListQuery) {
-  const below = (row: Prediction): boolean => {
-    if (!after) return true;
-    const byKey = byBytes(row.createdAt, String(after.key));
-    return byKey < 0 || (byKey === 0 && row.id < Number(after.id));
-  };
   const hits = [...t.predictions.values()].filter(
     (row) =>
       row.tenantId === tenantId &&
       (classTag === undefined || row.classTag === classTag) &&
       (closureState === undefined || row.closureState === closureState) &&
-      below(row),
+      (!after || isBelow(predictionWalk, row, after)),
   );
   return structuredClone(hits.sort(newestPrediction).slice(0, limit));
 }

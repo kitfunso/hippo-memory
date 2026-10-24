@@ -18,7 +18,7 @@ import { runDoctor, formatDoctor, type DoctorStore } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
-import { resolveGlobalRootDir } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import {
@@ -251,7 +251,7 @@ export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContex
 /** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions. */
 export async function handleFailures({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   // The store the capture-error hook writes to; a report never creates one.
-  const root = boolFlag(flags, 'global') ? resolveGlobalRootDir() : hookStoreRoot(hippoRoot);
+  const root = boolFlag(flags, 'global') ? hippoHomeDir() : hookStoreRoot(hippoRoot);
   requireInit(root);
   const ctx = cliApiContext(root, tenantId);
   const days = parseCountFlag(flags, 'days');

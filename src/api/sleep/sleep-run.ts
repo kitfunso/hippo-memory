@@ -3,7 +3,7 @@
 import { auditMemories, type AuditIssue } from '../../base/memory/memory-audit.js';
 import { AUTO_SHARE_MIN_SCORE, autoShare } from '../../domain/sharing/share.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
-import { deduplicateStore } from '../../domain/consolidate/dedupe.js';
+import { deduplicateStore, groupDedupPairs } from '../../domain/consolidate/dedupe.js';
 import { evalNow } from '../../base/memory/ablation.js';
 import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../base/memory/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';
@@ -173,14 +173,12 @@ function sleepResultFrom(consolidateResult: ConsolidateOutcome, dryRun: boolean)
 }
 
 function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['deduped']> {
-  const semDups = dedupResult.pairs.filter((p) => p.keptLayer === 'semantic' && p.removedLayer === 'semantic').length;
-  const epiDups = dedupResult.pairs.filter((p) => p.keptLayer === 'episodic' && p.removedLayer === 'episodic').length;
-  const crossDups = dedupResult.pairs.filter((p) => p.keptLayer !== p.removedLayer).length;
+  const groups = groupDedupPairs(dedupResult.pairs);
   return {
     removed: dedupResult.removed,
-    semDups,
-    epiDups,
-    crossDups,
+    semDups: groups.semantic.length,
+    epiDups: groups.episodic.length,
+    crossDups: groups.cross.length,
   };
 }
 

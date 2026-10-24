@@ -18,12 +18,12 @@ import { requireInit, learnFromRepo, runChurnStaleForRepo, skipLearnOnSharedStor
 import { printAgentImport } from './print.js';
 import { repairQualityOnce } from './quality-repair-once.js';
 import { printError } from './output.js';
-import { resolveGlobalRootDir } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { plural } from '../../base/util/format.js';
 
 /** Runs `hippo sleep`; `--global` sleeps the global store instead of the folder's. */
 export async function handleSleep({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
-  const root = boolFlag(flags, 'global') ? resolveGlobalRootDir() : hippoRoot;
+  const root = boolFlag(flags, 'global') ? hippoHomeDir() : hippoRoot;
   await sleepStore({ hippoRoot: root, tenantId, args, flags });
 }
 

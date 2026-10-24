@@ -16,7 +16,7 @@ import {
   validateIdSegment,
 } from '../validation.js';
 import { MAX_ARRAY_ITEMS, MAX_CONTENT_LEN, MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
-import { type JsonValue, isJsonString, isJsonBoolean } from '../../../base/util/json.js';
+import { isJsonBoolean } from '../../../base/util/json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);
 const MAX_OUTCOME_IDS = 1000;
@@ -114,26 +114,13 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
   if (!isJsonBoolean(good)) {
     throw new HttpError(400, 'good is required (boolean)');
   }
-  const idsRaw = body['ids'];
-  let ids: string[] | undefined;
-  if (idsRaw !== undefined) {
-    if (!Array.isArray(idsRaw)) {
-      throw new HttpError(400, 'ids must be an array of non-empty strings');
-    }
-    const isNonEmptyId = (item: JsonValue): item is string => isJsonString(item) && item.length > 0;
-    if (!idsRaw.every(isNonEmptyId)) {
-      throw new HttpError(400, 'ids must be an array of non-empty strings');
-    }
-    if (idsRaw.some((id) => id.length > MAX_ID_LEN)) {
-      throw new HttpError(400, `each ids entry exceeds ${MAX_ID_LEN}-character cap`);
-    }
-    // Bounds the ids one call binds and audits: outcome runs a fixed set of statements whatever the count, and writes
-    // the mirrors after its job. Auth runs first, so only a caller with a key reaches it.
-    if (idsRaw.length > MAX_OUTCOME_IDS) {
-      throw new HttpError(400, `ids exceeds ${MAX_OUTCOME_IDS}-id cap`);
-    }
-    ids = idsRaw;
-  }
+  // Bounds the ids one call binds and audits: outcome runs a fixed set of statements whatever the count, and writes
+  // the mirrors after its job. Auth runs first, so only a caller with a key reaches it.
+  const ids = getStringArray(body, 'ids', MAX_OUTCOME_IDS, MAX_ID_LEN, {
+    nonEmpty: 'raw',
+    rejectNull: true,
+    messages: { notArray: 'ids must be an array of non-empty strings', count: `ids exceeds ${MAX_OUTCOME_IDS}-id cap` },
+  });
   if (ids !== undefined) {
     const { applied } = await outcome(ctx, ids, good);
     sendJson(res, 200, { applied });

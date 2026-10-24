@@ -3,12 +3,8 @@
 
 import { ambientSecretAdmit } from '../base/scope/read-admission.js';
 import { isWorthSurfacing } from '../base/memory/memory-quality.js';
-import {
-  calculateStrength,
-  createMemoryWithDefaults,
-  type CreateMemoryOptions,
-  type DecayOptions,
-} from '../base/memory/memory.js';
+import { calculateStrength, type CreateMemoryOptions, type DecayOptions } from '../base/memory/memory.js';
+import { createMemory } from './memory.js';
 import { fromWire, toWire, type MemoryWire } from '../base/memory/memory-wire.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';
 import type { SearchResult } from '../base/rank/search-types.js';
@@ -34,7 +30,7 @@ export type WireStrengthInputs = Pick<
 >;
 
 export function createMemoryWire(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryWire {
-  return toWire(createMemoryWithDefaults(content, options));
+  return toWire(createMemory(content, options));
 }
 
 export function embedMemoryWire(hippoRoot: string, entry: MemoryWire): Promise<EmbedOutcome> {

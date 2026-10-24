@@ -2,7 +2,8 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { isInitialized, resolveGlobalRootDir } from '../../host/project-identity.js';
+import { isInitialized } from '../../host/project-identity.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { toWire } from '../../base/memory/memory-wire.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { embedCoverage, memoryEmbedMissing } from '../../api/embeddings.js';
@@ -180,7 +181,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
   const dryRun = boolFlag(flags, 'dry-run');
   const extraTags = stringListFlag(flags, 'tag') ?? [];
 
-  const targetRoot = useGlobal ? resolveGlobalRootDir() : hippoRoot;
+  const targetRoot = useGlobal ? hippoHomeDir() : hippoRoot;
 
   if (boolFlag(flags, 'agents')) return await importAgentMemories(hippoRoot, tenantId, { useGlobal, dryRun });
 
@@ -268,7 +269,7 @@ function importFromFile(targetRoot: string, args: string[], flags: CliFlags, opt
     backfillVectors(cliApiContext(targetRoot, tenantId), useGlobal ? 'hippo embed --global' : 'hippo embed');
   }
 
-  const storeLabel = useGlobal ? `global (${resolveGlobalRootDir()})` : targetRoot;
+  const storeLabel = useGlobal ? `global (${hippoHomeDir()})` : targetRoot;
   printFileImportSummary(result, importerName, filePath, storeLabel, dryRun);
 }
 
@@ -312,7 +313,7 @@ async function importAgentMemories(
   // A folder without a store of its own imports as session end would there, so its notes are not hidden.
   const report =
     useGlobal || isInitialized(hippoRoot)
-      ? await importForStore(useGlobal ? resolveGlobalRootDir() : hippoRoot, opts)
+      ? await importForStore(useGlobal ? hippoHomeDir() : hippoRoot, opts)
       : await importAtSessionEnd(process.cwd(), undefined, opts);
   for (const line of detailLines(report, dryRun)) console.log(line);
   for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
@@ -389,7 +390,7 @@ async function promoteMemory(hippoRoot: string, tenantId: string, id: string): P
   try {
     const result = await api.promote(ctx, id);
     console.log(`Promoted ${id} to global store as ${result.globalId}`);
-    console.log(`   Global store: ${resolveGlobalRootDir()}`);
+    console.log(`   Global store: ${hippoHomeDir()}`);
   } catch (err) {
     fail(`Failed to promote: ${errorMessage(err)}`);
   }
@@ -398,7 +399,7 @@ async function promoteMemory(hippoRoot: string, tenantId: string, id: string): P
 export async function handleSync({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
-  const globalRoot = resolveGlobalRootDir();
+  const globalRoot = hippoHomeDir();
   if (!isInitialized(globalRoot)) {
     console.log('No global store found. Run `hippo init --global` first.');
     return;
