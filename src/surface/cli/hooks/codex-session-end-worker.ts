@@ -34,7 +34,7 @@ async function sleepCodexProjectStore(hippoRoot: string, tenantId: string, logFi
     try {
       await (
         await import('../sleep.js')
-      ).handleSleep({
+      ).sleepStore({
         hippoRoot,
         tenantId,
         args: [],
