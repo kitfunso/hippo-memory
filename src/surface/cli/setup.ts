@@ -11,7 +11,7 @@ import {
   resolveJsonHookPaths,
   uninstallJsonHooks,
 } from '../hooks-install/json-hooks.js';
-import type { JsonHookTarget, ToolDetection } from '../../domain/hooks/shared.js';
+import type { JsonHookTarget, ToolDetection } from '../hooks-install/rules/shared.js';
 import { detectInstalledTools } from '../hooks-install/detect.js';
 import {
   ensureCodexWrapperInstalled,
@@ -36,7 +36,7 @@ import type {
   VscodeInstallResult,
   VscodeInstructionsInstallStatus,
   VscodeInstructionsRemoveStatus,
-} from '../../domain/hooks/copilot.js';
+} from '../hooks-install/rules/copilot.js';
 import {
   COPILOT_CLI_MCP,
   VSCODE_MCP,
@@ -191,7 +191,7 @@ function printClaudeHookInstall(result: ReturnType<typeof installJsonHooks>): vo
 }
 
 function installOpencodeHook(): void {
-  // opencode uses a TS plugin, not JSON hooks. See src/domain/hooks/opencode.ts.
+  // opencode uses a TS plugin, not JSON hooks. See src/surface/hooks-install/rules/opencode.ts.
   const result = installOpencodePlugin();
   if (result.installed) {
     console.log(`Installed hippo opencode plugin at ${result.pluginPath}`);
@@ -431,7 +431,7 @@ function setupDetectedTools(tools: ReturnType<typeof detectInstalledTools>, forc
 }
 
 // `hippo setup` -- one-shot configuration for every AI coding tool on the box.
-// Detection and install logic live in src/domain/hooks/.
+// Detection and install logic live in src/surface/hooks-install/.
 
 export async function handleSetup({ tenantId, flags }: CommandContext): Promise<void> {
   const dryRun = boolFlag(flags, 'dry-run');
@@ -478,8 +478,8 @@ function setupCopilot(dryRun: boolean): void {
 
 function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
   if (tool.name === 'copilot') return setupCopilot(dryRun);
-  // SAFETY: detectInstalledTools gives kind 'json-hook' only to claude-code and copilot (domain/hooks/shared.ts), and
-  // copilot returned above.
+  // SAFETY: detectInstalledTools gives kind 'json-hook' only to claude-code and copilot (rules/shared.ts), and copilot
+  // returned above.
   const target = tool.name as JsonHookTarget;
   if (dryRun) {
     // Resolve the real settings path so the filename is right for each tool (claude-code -> settings.json, opencode ->

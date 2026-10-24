@@ -356,7 +356,7 @@ function installClaudeCodeSettingsHooks(hook: 'claude-code'): void {
 
 function installOpencodeUserPlugin(): void {
   // opencode uses a TS plugin, not Claude Code's JSON-hook schema (see OPENCODE_PLUGIN_SOURCE in
-  // src/domain/hooks/opencode.ts).
+  // src/surface/hooks-install/rules/opencode.ts).
   const result = installOpencodePlugin();
   if (result.installed) {
     console.log(`   Auto-installed hippo opencode plugin -> ${result.pluginPath}`);

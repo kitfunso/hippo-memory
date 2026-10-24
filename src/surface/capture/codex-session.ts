@@ -1,7 +1,8 @@
 // Finds the transcript of the Codex session a `hippo codex-run` started, in Codex's sessions folder.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { codexSessionIds } from '../../domain/hooks/codex-session.js';
+import { isJsonObjectLiteral, isJsonString, parseJson } from '../../base/util/json.js';
+import { errorMessage, log, errorFields } from '../../base/util/log.js';
 
 export interface CodexSessionTranscriptOptions {
   codexHome: string;
@@ -27,6 +28,27 @@ function collectFiles(dir: string): string[] {
     }
   }
   return out;
+}
+
+/** Each session id in the history lines `delta` holds once, in first-seen order; `historyPath` only names the file in a
+ * warning. */
+function codexSessionIds(delta: string, historyPath: string): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const line of delta.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const parsed = parseJson(line);
+      const sessionId = isJsonObjectLiteral(parsed) ? parsed.session_id : undefined;
+      if (isJsonString(sessionId) && sessionId && !seen.has(sessionId)) {
+        seen.add(sessionId);
+        ordered.push(sessionId);
+      }
+    } catch (err) {
+      log.warn(`codex history ${historyPath}: skipped a malformed JSONL line (${errorMessage(err)})`, errorFields(err));
+    }
+  }
+  return ordered;
 }
 
 function readCodexSessionIdsFromHistoryDelta(historyPath: string, startOffsetBytes: number): string[] {
