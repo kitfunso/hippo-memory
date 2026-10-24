@@ -88,12 +88,22 @@ async def test_sleep_dry_run(hippo_server: str, hippo_admin_key: str):
         assert result.dry_run is True
 
 
-async def test_forget_removes_memory(hippo_server: str):
-    async with Hippo(base_url=hippo_server) as client:
+async def test_forget_removes_memory(hippo_server: str, hippo_admin_key: str):
+    async with Hippo(base_url=hippo_server, api_key=hippo_admin_key) as client:
         mem = await client.remember(content="forget-target canary")
         result = await client.forget(mem.id)
         assert result.ok is True
         assert result.id == mem.id
+
+
+async def test_keyless_forget_of_unowned_row_is_403(hippo_server: str):
+    """A keyless client is a member, and a row with no writer changes only with an admin key."""
+    async with Hippo(base_url=hippo_server) as client:
+        mem = await client.remember(content="keyless-forget canary")
+        with pytest.raises(HippoError) as exc_info:
+            await client.forget(mem.id)
+        assert exc_info.value.status_code == 403
+        assert "admin key" in str(exc_info.value)
 
 
 async def test_hippo_error_on_400(hippo_server: str):
