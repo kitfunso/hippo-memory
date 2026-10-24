@@ -3,6 +3,7 @@
  */
 
 import type { MemoryEntry } from './memory.js';
+import { isErrorTagged } from './ambient.js';
 import { textOverlap } from '../util/tokenize.js';
 import { duplicateKey, heldTextKeys } from '../util/same-text.js';
 
@@ -59,7 +60,7 @@ export function computeSalience(
     return { decision: 'skip', reason: 'content_too_short', score: 0 };
   }
 
-  const isError = tags.some((t) => t === 'error' || t === 'critical' || t.startsWith('error:'));
+  const isError = isErrorTagged(tags);
 
   const window = recentMemories.slice(-opts.recentWindow);
 
