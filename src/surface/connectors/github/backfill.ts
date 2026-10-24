@@ -14,7 +14,7 @@ import type {
 } from './types.js';
 import { type JsonValue, isJsonObject } from '../../../base/util/json.js';
 import { MINUTE_MS } from '../../../base/util/time.js';
-import type { HwmColumn } from '../../../store/port/connectors.js';
+import type { CursorKey, GitHubStream } from '../../../store/port/connectors.js';
 
 const API = 'https://api.github.com';
 
@@ -25,7 +25,7 @@ export interface BackfillOptions {
   token: string;
   /** Optional cap on items per stream. Useful for tests. */
   maxPerStream?: number;
-  /** First-run `--since`; seeds all three HWMs, COALESCE keeps any HWM a stream already saved. */
+  /** First-run `--since`; seeds all three HWMs, keeping any HWM a stream already saved. */
   sinceIso?: string;
   /** sleep ms — injectable so tests don't actually wait. */
   sleepMs?: (ms: number) => Promise<void>;
@@ -242,12 +242,38 @@ function prReviewCommentItemToEvent(item: JsonValue, repository: GitHubRepositor
   return { eventName: 'pull_request_review_comment', payload };
 }
 
+const GITHUB_STREAMS: readonly GitHubStream[] = ['issues', 'issueComments', 'prReviewComments'];
+
+const hwmOf = (ctx: Context, opts: BackfillOptions, stream: GitHubStream): CursorKey => ({
+  connector: 'github',
+  tenantId: ctx.tenantId,
+  repo: opts.repoFullName,
+  stream,
+});
+
+/** Each stream's HWM, after a first run's `--since` seeds the ones no run saved. */
+async function resumeFrom(ctx: Context, opts: BackfillOptions): Promise<Record<GitHubStream, string | null>> {
+  const events = ctx.store.connectorEvents;
+  const { sinceIso } = opts;
+  if (sinceIso) {
+    for (const stream of GITHUB_STREAMS) {
+      await events.saveCursor(hwmOf(ctx, opts, stream), sinceIso, { keepSaved: true });
+    }
+  }
+  const since = (stream: GitHubStream) => events.cursor(hwmOf(ctx, opts, stream));
+  return {
+    issues: await since('issues'),
+    issueComments: await since('issueComments'),
+    prReviewComments: await since('prReviewComments'),
+  };
+}
+
 /** Drains one stream, then persists its HWM only when the stream ran to the end. */
 async function backfillStream(
   ctx: Context,
   opts: BackfillOptions,
   sleep: (ms: number) => Promise<void>,
-  stream: { url: string; column: HwmColumn; toIngestEvent: (item: JsonValue) => IngestEvent | null },
+  stream: { url: string; name: GitHubStream; toIngestEvent: (item: JsonValue) => IngestEvent | null },
 ): Promise<{ ingested: number; pages: number }> {
   const res = await drainStream(ctx, stream.url, {
     toIngestEvent: stream.toIngestEvent,
@@ -258,16 +284,14 @@ async function backfillStream(
   });
   // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
-    await ctx.store.connectorEvents.saveGitHubHwm(ctx.tenantId, opts.repoFullName, stream.column, res.maxUpdatedAt);
+    await ctx.store.connectorEvents.saveCursor(hwmOf(ctx, opts, stream.name), res.maxUpdatedAt);
   }
   return { ingested: res.ingested, pages: res.pages };
 }
 
 export async function backfillRepo(ctx: Context, opts: BackfillOptions): Promise<BackfillResult> {
   const sleep = opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const events = ctx.store.connectorEvents;
-  if (opts.sinceIso) await events.seedGitHubCursors(ctx.tenantId, opts.repoFullName, opts.sinceIso);
-  const cursors = await events.githubCursors(ctx.tenantId, opts.repoFullName);
+  const cursors = await resumeFrom(ctx, opts);
   const repository = syntheticRepository(opts.repoFullName);
 
   const result: BackfillResult = {
@@ -279,7 +303,7 @@ export async function backfillRepo(ctx: Context, opts: BackfillOptions): Promise
     url:
       `${API}/repos/${opts.repoFullName}/issues?state=all&per_page=100` +
       (cursors.issues ? `&since=${encodeURIComponent(cursors.issues)}` : ''),
-    column: 'issues_hwm',
+    name: 'issues',
     toIngestEvent: (item) => issueItemToEvent(item, repository),
   });
   result.ingested.issues = issuesRes.ingested;
@@ -289,7 +313,7 @@ export async function backfillRepo(ctx: Context, opts: BackfillOptions): Promise
     url:
       `${API}/repos/${opts.repoFullName}/issues/comments?per_page=100` +
       (cursors.issueComments ? `&since=${encodeURIComponent(cursors.issueComments)}` : ''),
-    column: 'issue_comments_hwm',
+    name: 'issueComments',
     toIngestEvent: (item) => issueCommentItemToEvent(item, repository),
   });
   result.ingested.issueComments = commentsRes.ingested;
@@ -299,7 +323,7 @@ export async function backfillRepo(ctx: Context, opts: BackfillOptions): Promise
     url:
       `${API}/repos/${opts.repoFullName}/pulls/comments?per_page=100` +
       (cursors.prReviewComments ? `&since=${encodeURIComponent(cursors.prReviewComments)}` : ''),
-    column: 'pr_review_comments_hwm',
+    name: 'prReviewComments',
     toIngestEvent: (item) => prReviewCommentItemToEvent(item, repository),
   });
   result.ingested.prReviewComments = prCommentsRes.ingested;

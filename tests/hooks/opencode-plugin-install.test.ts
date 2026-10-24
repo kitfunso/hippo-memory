@@ -14,7 +14,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { withFakeHome } from '../_helpers/with-fake-home.js';
-import { HIPPO_OPENCODE_PLUGIN_MARKER } from '../../src/domain/hooks/opencode.js';
+import { HIPPO_OPENCODE_PLUGIN_MARKER } from '../../src/surface/hooks-install/rules/opencode.js';
 import { resolveOpencodePluginPath } from '../../src/surface/hooks-install/opencode.js';
 import { installOpencodePlugin, uninstallOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';
 import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
@@ -48,6 +48,11 @@ describe('the installed opencode plugin source', () => {
   it('handles session.idle and session.created events', () => {
     expect(source).toContain('session.idle');
     expect(source).toContain('session.created');
+  });
+
+  it('runs session-end as the opencode runtime, so its worker logs where the session start reads', () => {
+    expect(source).toContain('$`hippo session-end --runtime opencode`.quiet().nothrow()');
+    expect(source).toContain('$`hippo last-sleep`.quiet().nothrow()');
   });
 
   it('guards against non-Bun runtimes (typeof $ check)', () => {

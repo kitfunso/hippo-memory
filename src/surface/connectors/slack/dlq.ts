@@ -1,7 +1,7 @@
 import { adminActor, type Context } from '../../../api/index.js';
 import { replayParked, type ConnectorDlq, type Reingest, type ReplayResult, type SignatureRefusal } from '../dlq.js';
 import { ingestMessage } from './ingest.js';
-import { resolveTenantForSlackTeam, type SlackFallback } from './tenant-routing.js';
+import { resolveTenant, type RouteFallback } from '../tenant-route.js';
 import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { handleMessageDeleted } from './deletion.js';
@@ -85,9 +85,9 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal
 async function reingest(
   { store, config, infra }: Pick<Context, 'store' | 'config' | 'infra'>,
   envelope: JsonValue & SlackEventEnvelope,
-  fallback: SlackFallback,
+  fallback: RouteFallback,
 ): Promise<Reingest> {
-  const tenantId = await resolveTenantForSlackTeam(store, envelope.team_id, fallback);
+  const tenantId = await resolveTenant(store, { connector: 'slack', teamId: envelope.team_id }, fallback);
   if (!tenantId) return { ok: false, status: 'unroutable', reason: `team_id ${envelope.team_id} still unroutable` };
   const inner = envelope.event;
   if (!isSlackMessageEvent(inner)) return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };

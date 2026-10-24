@@ -3,7 +3,6 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { type Actor, type SleepOpts, type SleepResult, type Context } from '../../api/index.js';
-import { logPhaseFailures, type ConsolidationResult } from '../../domain/consolidate/run.js';
 import { StoreBusyError } from '../../store/port.js';
 import { envSleepTimeoutMs } from '../../base/util/env.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/util/http-util.js';
@@ -165,8 +164,9 @@ export function createSleepQueue(hippoRoot: string, onHippoDb: boolean): SleepQu
       onHippoDb
         ? inTurn<SleepResult>({ kind: 'sleep', hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor, opts })
         : Promise.reject(new HttpError(501, STORE_NOT_PORTED_MESSAGE)),
+    // The child logs the run's skipped passes to its stderr, which is this server's log.
     consolidate: async () => {
-      logPhaseFailures(await inTurn<ConsolidationResult>({ kind: 'consolidate', hippoRoot }));
+      await inTurn<unknown>({ kind: 'consolidate', hippoRoot });
     },
     settled: () => turn,
   };

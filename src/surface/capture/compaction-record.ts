@@ -1,13 +1,13 @@
 // What turns a compaction's summary into text the store keeps, and the replay that reads the spool and transcripts
 // for it; the SQL is the adapter's compactions-record.ts.
 import * as fs from 'fs';
-import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
+import { isObjectLike, isStringValue, type PostCompactPayload } from '../../base/session/capture-contract.js';
 import {
   COMPACTION_ITEM_MAX_CHARS,
   compactSummaryBody,
   parseCompactionItems,
 } from '../../base/util/compaction-items.js';
-import { importSpool, spool, type Log, type SpooledCompaction } from './compaction-spool.js';
+import { importSpool, spool, type Log, type SpooledCompaction } from '../../infra/compaction-spool.js';
 import type {
   CompactionHooks,
   CompactionSaveResult,
@@ -68,15 +68,6 @@ export function readCompactionText(compactSummary: string): ScrubbedSummary {
  * cut after it, as a mask can run longer than what it hides. */
 export function scrubCompactionItems(items: readonly string[]): string[] {
   return items.map((item) => truncateCodePointSafe(scrub(item), COMPACTION_ITEM_MAX_CHARS));
-}
-
-export interface PostCompactPayload {
-  sessionId: string;
-  trigger: string | null;
-  cwd: string | null;
-  transcriptPath: string | null;
-  /** null when Claude Code sent none; the transcript fills the record later. */
-  compactSummary: string | null;
 }
 
 interface SpoolSummaryOptions {

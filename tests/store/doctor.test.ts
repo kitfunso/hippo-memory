@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { runDoctor, formatDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies } from '../_helpers/cli-stores.js';
-import type { SpoolFs } from '../../src/surface/capture/compaction-spool.js';
+import type { SpoolFs } from '../../src/infra/compaction-spool.js';
 import { startCompaction } from '../../src/store/sqlite/compactions-record.js';
 import { projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';

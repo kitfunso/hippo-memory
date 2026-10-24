@@ -76,4 +76,16 @@ describe('session-end with no payload never scans other projects', () => {
     );
     expect(contents.filter((c) => c.includes(MARKER))).toEqual([]);
   });
+
+  it('logs the OpenCode run to the file its session start reads, with no --log-file', async () => {
+    // The worker's stdio is ignored, so this file is the only place its warnings survive.
+    const lastSleepLog = path.join(dir, '.hippo', 'logs', 'last-sleep.log');
+    expect(runHippo(['session-end', '--runtime', 'opencode'], dir, env, '').status).toBe(0);
+
+    await waitFor(() => fs.existsSync(lastSleepLog) && fs.readFileSync(lastSleepLog, 'utf8').includes(WORKER_DONE), {
+      ...WORKER_WAIT,
+      what: 'the worker skip line in last-sleep.log',
+    });
+    expect(fs.readFileSync(lastSleepLog, 'utf8')).toContain('consolidating memory...');
+  });
 });

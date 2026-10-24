@@ -407,7 +407,7 @@ describe('a recorder fault at the flush boundary', () => {
     async (fault) => {
       const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const ledger = sqliteStore(local).ledger;
-      const write = vi.spyOn(ledger, 'writeDeliveryEvent');
+      const write = vi.spyOn(ledger, 'recordTurn');
       const rec = recorder(fault, ledger);
       rec.queried('a query');
       await expect(flushDeliveryRecorder(rec)).resolves.toBeUndefined();

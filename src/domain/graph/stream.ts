@@ -10,13 +10,10 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { Relation } from '../../store/port/graph.js';
 import type { HippoStore } from '../../store/index.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './recall.js';
+import { DEFAULT_GRAPH_HOPS } from '../../base/rank/recall-defaults.js';
 
-/** Default hops expanded from each seed (MVP; hard cap MAX_HOPS=3 reused from graph recall). */
-export const DEFAULT_GRAPH_HOPS = 2;
 /** Default per-hop multiplicative decay applied to the seed strength. */
 export const DEFAULT_GRAPH_DECAY = 0.5;
-/** Default number of top lexical seeds expanded from. */
-export const DEFAULT_GRAPH_SEED_COUNT = 10;
 /** Recommended RRF weight for the graph stream, a CLI-only convenience default. The library `graphStream.weight` option
  *  stays REQUIRED (opt-in is explicit). */
 export const DEFAULT_GRAPH_STREAM_WEIGHT = 0.5;

@@ -35,8 +35,12 @@ describe('github DLQ', () => {
       repoFullName: 'octo/repo',
     });
     expect(id).toBe(1);
-    const item = await sqliteStore(root).connectorEvents.deadLetter('github', 'default', id);
-    expect(item).not.toBeNull();
+    const item = (
+      await sqliteStore(root).connectorEvents.deadLetters('github', 'default', {
+        id,
+      })
+    )[0];
+    expect(item).toBeDefined();
     expect(item!.tenantId).toBe('default');
     expect(item!.rawPayload).toBe('{"action":"opened"}');
     expect(item!.error).toBe('parse fail');
@@ -58,10 +62,12 @@ describe('github DLQ', () => {
       error: 'no tenant',
       bucket: 'unroutable',
     });
-    const item = await sqliteStore(root).connectorEvents.deadLetter('github', '__unroutable__', id);
+    const item = (await sqliteStore(root).connectorEvents.deadLetters('github', '__unroutable__', { id }))[0];
     expect(item!.tenantId).toBe('__unroutable__');
     expect(item!.bucket).toBe('unroutable');
-    const listed = await listDlq(githubDlq, sqliteStore(root), { tenantId: '__unroutable__' });
+    const listed = await listDlq(githubDlq, sqliteStore(root), {
+      tenantId: '__unroutable__',
+    });
     expect(listed).toHaveLength(1);
   });
 
@@ -75,7 +81,9 @@ describe('github DLQ', () => {
         bucket,
       });
     }
-    const items = await listDlq(githubDlq, sqliteStore(root), { tenantId: 'default' });
+    const items = await listDlq(githubDlq, sqliteStore(root), {
+      tenantId: 'default',
+    });
     expect(items).toHaveLength(4);
     const observed = items.map((i) => i.bucket).sort();
     expect(observed).toEqual([...buckets].sort());
@@ -84,27 +92,50 @@ describe('github DLQ', () => {
   it('listDlq filters by tenant and orders by received_at ASC', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
-    await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{"i":1}', error: 'first' });
+    await parkInDlq(githubDlq, sqliteStore(root), {
+      tenantId: 'default',
+      rawPayload: '{"i":1}',
+      error: 'first',
+    });
     // A later clock makes received_at differ without a sleep.
     vi.setSystemTime(new Date('2026-01-01T00:00:01.000Z'));
-    await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{"i":2}', error: 'second' });
-    await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'acme', rawPayload: '{"i":3}', error: 'other tenant' });
+    await parkInDlq(githubDlq, sqliteStore(root), {
+      tenantId: 'default',
+      rawPayload: '{"i":2}',
+      error: 'second',
+    });
+    await parkInDlq(githubDlq, sqliteStore(root), {
+      tenantId: 'acme',
+      rawPayload: '{"i":3}',
+      error: 'other tenant',
+    });
 
-    const defaults = await listDlq(githubDlq, sqliteStore(root), { tenantId: 'default' });
+    const defaults = await listDlq(githubDlq, sqliteStore(root), {
+      tenantId: 'default',
+    });
     expect(defaults).toHaveLength(2);
     expect(defaults[0].error).toBe('first');
     expect(defaults[1].error).toBe('second');
 
-    const acme = await listDlq(githubDlq, sqliteStore(root), { tenantId: 'acme' });
+    const acme = await listDlq(githubDlq, sqliteStore(root), {
+      tenantId: 'acme',
+    });
     expect(acme).toHaveLength(1);
     expect(acme[0].error).toBe('other tenant');
   });
 
   it('listDlq honors limit', async () => {
     for (let i = 0; i < 5; i += 1) {
-      await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'default', rawPayload: `{"i":${i}}`, error: `e${i}` });
+      await parkInDlq(githubDlq, sqliteStore(root), {
+        tenantId: 'default',
+        rawPayload: `{"i":${i}}`,
+        error: `e${i}`,
+      });
     }
-    const items = await listDlq(githubDlq, sqliteStore(root), { tenantId: 'default', limit: 2 });
+    const items = await listDlq(githubDlq, sqliteStore(root), {
+      tenantId: 'default',
+      limit: 2,
+    });
     expect(items).toHaveLength(2);
   });
 
@@ -114,18 +145,30 @@ describe('github DLQ', () => {
       rawPayload: '{}',
       error: 'boom',
     });
-    const found = await sqliteStore(root).connectorEvents.deadLetter('github', 'default', id);
-    expect(found).not.toBeNull();
+    const found = (
+      await sqliteStore(root).connectorEvents.deadLetters('github', 'default', {
+        id,
+      })
+    )[0];
+    expect(found).toBeDefined();
     expect(found!.id).toBe(id);
-    expect(await sqliteStore(root).connectorEvents.deadLetter('github', 'default', 9999)).toBeNull();
+    expect(
+      await sqliteStore(root).connectorEvents.deadLetters('github', 'default', {
+        id: 9999,
+      }),
+    ).toEqual([]);
   });
 
   it("reads and counts a retry on the caller's own rows only, so another tenant's id answers absent and stays unmarked", async () => {
     const events = sqliteStore(root).connectorEvents;
-    const id = await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{}', error: 'boom' });
-    expect(await events.deadLetter('github', 'other-tenant', id)).toBeNull();
+    const id = await parkInDlq(githubDlq, sqliteStore(root), {
+      tenantId: 'default',
+      rawPayload: '{}',
+      error: 'boom',
+    });
+    expect(await events.deadLetters('github', 'other-tenant', { id })).toEqual([]);
     await events.markDeadLetterRetried('github', 'other-tenant', id);
-    expect((await events.deadLetter('github', 'default', id))?.retryCount).toBe(0);
+    expect((await events.deadLetters('github', 'default', { id }))[0]?.retryCount).toBe(0);
   });
 
   it('replayGithubDlqEntry returns not_found for unknown ids', async () => {
@@ -149,19 +192,43 @@ describe('github DLQ', () => {
     expect(result.status).toBe('parse_error');
     expect(result.retryCount).toBe(1);
 
-    const after = await sqliteStore(root).connectorEvents.deadLetter('github', 'default', id);
+    const after = (
+      await sqliteStore(root).connectorEvents.deadLetters('github', 'default', {
+        id,
+      })
+    )[0];
     expect(after!.retryCount).toBe(1);
     expect(after!.retriedAt).not.toBeNull();
   });
 
   it("replayGithubDlqEntry finds an unroutable row and counts the retry on it, but answers not_found for another tenant's row", async () => {
     const store = sqliteStore(root);
-    const unroutable = await parkInDlq(githubDlq, store, { tenantId: null, rawPayload: 'x{', error: 'no tenant' });
-    const acmes = await parkInDlq(githubDlq, store, { tenantId: 'acme', rawPayload: 'x{', error: 'acme row' });
+    const unroutable = await parkInDlq(githubDlq, store, {
+      tenantId: null,
+      rawPayload: 'x{',
+      error: 'no tenant',
+    });
+    const acmes = await parkInDlq(githubDlq, store, {
+      tenantId: 'acme',
+      rawPayload: 'x{',
+      error: 'acme row',
+    });
 
-    expect(await replayGithubDlqEntry(ctx, unroutable)).toMatchObject({ status: 'parse_error', retryCount: 1 });
-    expect((await store.connectorEvents.deadLetter('github', '__unroutable__', unroutable))?.retryCount).toBe(1);
-    expect(await replayGithubDlqEntry(ctx, acmes)).toMatchObject({ status: 'not_found', retryCount: 0 });
-    expect((await store.connectorEvents.deadLetter('github', 'acme', acmes))?.retryCount).toBe(0);
+    expect(await replayGithubDlqEntry(ctx, unroutable)).toMatchObject({
+      status: 'parse_error',
+      retryCount: 1,
+    });
+    expect(
+      (
+        await store.connectorEvents.deadLetters('github', '__unroutable__', {
+          id: unroutable,
+        })
+      )[0]?.retryCount,
+    ).toBe(1);
+    expect(await replayGithubDlqEntry(ctx, acmes)).toMatchObject({
+      status: 'not_found',
+      retryCount: 0,
+    });
+    expect((await store.connectorEvents.deadLetters('github', 'acme', { id: acmes }))[0]?.retryCount).toBe(0);
   });
 });

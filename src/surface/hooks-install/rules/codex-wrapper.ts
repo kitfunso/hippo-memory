@@ -1,10 +1,10 @@
 // The Codex launcher wrapper: where its files go, which paths an install may touch, and the script text it writes;
 // surface/hooks-install/codex-wrapper.ts moves and writes the files.
 import * as path from 'path';
-import { PACKAGE_ROOT } from '../../base/config/package-root.js';
+import { PACKAGE_ROOT } from '../../../base/config/package-root.js';
 import { HIPPO_CODEX_WRAPPER_MARKER } from './shared.js';
-import { HIPPO_DIR, codexHomeDir, userHome, type Homes } from '../../base/util/agent-homes.js';
-import { isJsonString } from '../../base/util/json.js';
+import { HIPPO_DIR, codexHomeDir, userHome, type Homes } from '../../../base/util/agent-homes.js';
+import { isJsonString } from '../../../base/util/json.js';
 
 export interface CodexWrapperPaths {
   wrapperDir: string;

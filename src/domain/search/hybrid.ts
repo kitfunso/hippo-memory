@@ -5,6 +5,7 @@ import { tokenize } from '../../base/util/tokenize.js';
 import { evalNow, rankAblation } from '../../base/memory/ablation.js';
 import { pathTagsOf } from './path-context.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
+import { DEFAULT_EMBEDDING_WEIGHT } from '../../base/rank/recall-defaults.js';
 import type { RerankerFn, RerankerOptions } from '../../base/ports/reranker.js';
 import { bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';
 import { currentEntries } from './as-of.js';
@@ -135,9 +136,6 @@ export type HybridRankOptions = HybridRanking & {
   /** The global store the graph stream also walks; the published wrapper opens it from `graphStream.globalRoot`. */
   graphGlobal?: HippoStore;
 };
-
-// Share of the blended score that cosine takes.
-export const DEFAULT_EMBEDDING_WEIGHT = 0.6;
 
 /**
  * BM25 blended with cosine similarity when `source` holds vectors and a provider is available, BM25 * strength *

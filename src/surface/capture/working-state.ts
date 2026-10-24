@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import { errorMessage } from '../../base/util/log.js';
 import { tryParseJson } from '../../base/util/json.js';
-import { workingStateOf, type WorkingState } from '../../domain/capture/working-state.js';
+import { workingStateOf, type WorkingState } from '../../base/session/working-state.js';
 import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail } from '../../infra/transcript-tail.js';
 import { humanUserText, summariseTranscript } from './transcript.js';
 import { copilotTurn } from './copilot-transcript.js';

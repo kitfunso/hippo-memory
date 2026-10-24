@@ -1,5 +1,5 @@
 // Reads and writes hippo's GitHub Copilot files: the hooks file, the MCP configs and the instructions under the Copilot
-// home and each VS Code User folder. What goes in them is domain/hooks/copilot.ts.
+// home and each VS Code User folder. What goes in them is rules/copilot.ts.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../../host/atomic-write.js';
@@ -28,14 +28,14 @@ import {
   type McpRemoveStatus,
   type VscodeInstructionsInstallStatus,
   type VscodeInstructionsRemoveStatus,
-} from '../../domain/hooks/copilot.js';
-import { copilotHomeDir } from '../../domain/hooks/shared.js';
+} from './rules/copilot.js';
+import { copilotHomeDir } from './rules/shared.js';
 import { processHomes } from '../../host/agent-homes.js';
 import { vscodeUserDirs } from './detect.js';
 import { installJsonHooks, resolveJsonHookPaths, uninstallJsonHooks, writeSettingsFile } from './json-hooks.js';
 
 // The MCP hosts the installer merges into, and the snippet and failure test its caller prints from.
-export { COPILOT_CLI_MCP, VSCODE_MCP, copilotMcpSnippet, isMcpFailure } from '../../domain/hooks/copilot.js';
+export { COPILOT_CLI_MCP, VSCODE_MCP, copilotMcpSnippet, isMcpFailure } from './rules/copilot.js';
 
 function profileDirs(userDir: string): string[] {
   const dir = path.join(userDir, 'profiles');
