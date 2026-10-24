@@ -19,7 +19,7 @@ import { hookRuntime, hookStoreRoot, hostSessionId, payloadCwdRoot } from '../ho
 import { handleSessionEndWorker } from './session-end-worker.js';
 
 /** Copilot's hook command and OpenCode's plugin carry no path, since one quoted into them would need escaping for each
- * shell: Copilot's log goes where its hook table used to point, OpenCode's where its plugin's last-sleep reads. */
+ * shell. Copilot's log goes where its hook table used to point, OpenCode's where its plugin's last-sleep reads. */
 function runtimeLogFile(flags: CliFlags): string | null {
   const runtime = stringFlag(flags, 'runtime');
   if (runtime === 'copilot') return resolveJsonHookPaths('copilot').logFile;
