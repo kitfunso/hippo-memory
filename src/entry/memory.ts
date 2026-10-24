@@ -25,7 +25,10 @@ export {
 
 /** The published signature keeps `baseHalfLifeDays` optional; hippo's own writers use the strict one in memory.ts. */
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
-  return createMemoryStrict(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...options });
+  return createMemoryStrict(content, {
+    ...options,
+    baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS,
+  });
 }
 
 export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from '../base/session/handoff.js';
