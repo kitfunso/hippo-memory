@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { vi } from 'vitest';
 import { adminActor } from '../../src/api/index.js';
 import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js';
-import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/domain/agent-memories/report.js';
+import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/base/memory/agent-memory-report.js';
 import type { Machine } from '../../src/base/util/agent-homes.js';
 import type { ToolId } from '../../src/base/memory/agent-memory-tools.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';

@@ -6,7 +6,7 @@ import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { contextGet } from '../../src/api/index.js';
 import { containerId, containerPrefix } from '../../src/domain/agent-memories/source.js';
-import { importAtSessionEnd } from '../../src/domain/agent-memories/sync.js';
+import { importAtSessionEnd } from '../../src/api/agent-memories.js';
 import { saveItems } from '../../src/store/sqlite/compactions-record.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { runDoctor } from '../../src/surface/cli/doctor.js';
@@ -97,7 +97,7 @@ const sync = (cwd: string) =>
 async function nextProcess() {
   vi.resetModules();
   const [syncMod, projects, roots, importStores, config] = await Promise.all([
-    import('../../src/domain/agent-memories/sync.js'),
+    import('../../src/api/agent-memories.js'),
     import('../../src/api/objects/projects.js'),
     import('../../src/surface/cli/api-context.js'),
     import('../../src/store/sqlite/agent-import-stores.js'),

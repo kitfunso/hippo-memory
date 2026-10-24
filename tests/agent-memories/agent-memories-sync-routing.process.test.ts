@@ -15,10 +15,10 @@ import {
   importForStore,
   importProjectMemories,
   importSessionFolder,
-} from '../../src/domain/agent-memories/sync.js';
+} from '../../src/api/agent-memories.js';
 import { projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
-import type { ImportReport } from '../../src/domain/agent-memories/report.js';
+import type { ImportReport } from '../../src/base/memory/agent-memory-report.js';
 import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { deriveOriginProject, isInitialized } from '../../src/host/project-identity.js';
 import { autoShare } from '../../src/domain/sharing/share.js';

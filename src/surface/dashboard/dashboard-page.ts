@@ -1,4 +1,4 @@
-// The dashboard's pages: the React app and its assets, the not-built page, and the step off the token URL.
+// The dashboard's pages: the React app and its assets, the not-built page, and the step off the ticket URL.
 import { createHash } from 'crypto';
 import type * as http from 'http';
 import type { DashboardRouteRequest } from '../server/dashboard-types.js';
@@ -44,9 +44,9 @@ present.</p>
 }
 
 /**
- * Moves the browser off the URL that carries the token, so the token stays out of history, bookmarks and copied links.
+ * Moves the browser off the URL that carries the ticket, so the page's own address holds no spent secret.
  */
-function leaveTokenUrl(res: http.ServerResponse, pathname: string, query: URLSearchParams): void {
+function leaveTicketUrl(res: http.ServerResponse, pathname: string, query: URLSearchParams): void {
   const rest = new URLSearchParams(query);
   rest.delete('token');
   const text = rest.toString();
@@ -58,7 +58,7 @@ function leaveTokenUrl(res: http.ServerResponse, pathname: string, query: URLSea
 /** Any path outside the JSON API: an asset, else index.html, since the app routes in the browser. */
 export async function pageRoute(r: DashboardRouteRequest, match: RegExpMatchArray): Promise<void> {
   const pathname = match[0];
-  if (r.session === 'token') return leaveTokenUrl(r.res, pathname, r.query);
+  if (r.session === 'ticket') return leaveTicketUrl(r.res, pathname, r.query);
   const asset = r.staticFiles === null ? undefined : assetFor(r.staticFiles, pathname);
   if (asset === undefined) return notBuilt(r.res);
   sendAsset(r.req, r.res, asset);

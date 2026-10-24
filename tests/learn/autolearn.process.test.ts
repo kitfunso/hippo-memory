@@ -3,13 +3,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
-import {
-  captureError,
-  extractLessons,
-  partitionLessons,
-  fetchGitLog,
-  isGitRepo,
-} from '../../src/domain/learn/autolearn.js';
+import { captureError, extractLessons, partitionLessons, fetchGitLog } from '../../src/domain/learn/autolearn.js';
+import { isGitRepo } from '../../src/base/ports/git.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { extractInvalidationTarget, invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';

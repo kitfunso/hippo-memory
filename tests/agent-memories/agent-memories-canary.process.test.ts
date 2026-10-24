@@ -26,10 +26,10 @@ import { initTestStore } from '../_helpers/store-template.js';
 const WORKER = `
 const [, , syncUrl, mode, root, cleanHome, storeless] = process.argv;
 const { importForStore, importAtSessionEnd } = await import(syncUrl);
-const { currentMachine } = await import(new URL('../../infra/machine.js', syncUrl).href);
+const { currentMachine } = await import(new URL('../infra/machine.js', syncUrl).href);
 const { homedir } = await import('node:os');
-const { loadConfig } = await import(new URL('../../host/config-file.js', syncUrl).href);
-const { sqliteImportStores } = await import(new URL('../../store/sqlite/agent-import-stores.js', syncUrl).href);
+const { loadConfig } = await import(new URL('../host/config-file.js', syncUrl).href);
+const { sqliteImportStores } = await import(new URL('../store/sqlite/agent-import-stores.js', syncUrl).href);
 const machine = mode === 'negative' ? { ...currentMachine(), home: cleanHome, env: {} }
   : mode === 'env' ? currentMachine() : { ...currentMachine(), home: homedir(), env: {} };
 const warnings = [...(await importForStore(root, { configAt: loadConfig, tenantId: 'default', stores: sqliteImportStores({}), machine })).warnings];
@@ -171,14 +171,7 @@ function controlRun(name: string): Run {
 }
 
 function runWorker(mode: string, run: Run, extraEnv: NodeJS.ProcessEnv): Promise<WorkerOut> {
-  const args = [
-    join(w.dir, 'worker.mjs'),
-    distUrl('domain/agent-memories/sync.js'),
-    mode,
-    run.local,
-    w.home,
-    storeless,
-  ];
+  const args = [join(w.dir, 'worker.mjs'), distUrl('api/agent-memories.js'), mode, run.local, w.home, storeless];
   const env = { ...process.env, ...decoyEnv, HIPPO_HOME: run.global, ...extraEnv };
   return new Promise((resolve, fail) => {
     const child = spawn(process.execPath, args, { env, windowsHide: true });

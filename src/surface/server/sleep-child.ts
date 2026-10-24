@@ -1,8 +1,8 @@
 // Entry of the process that runs one POST /v1/sleep or MCP auto-sleep; sleep-offload.ts starts it and nothing imports
 // it. The sleep modules alone: the api barrel loads far more than one sleep needs, and every sleep pays for the start.
 import { sleepWholeStore } from '../../api/sleep/sleep.js';
-import { runConsolidation } from '../../domain/consolidate/sleep.js';
-import { anthropicLlmFromEnv, rootInfra } from '../../infra/ports.js';
+import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
+import { rootInfra } from '../../infra/ports.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { isStoreBusy } from '../../store/port.js';
 import { configReader } from '../../host/config-file.js';
@@ -13,9 +13,8 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { SleepJob, SleepMessage, SleepReply } from './sleep-offload.js';
 import type { SleepResult } from '../../api/sleep/sleep.js';
 import { contextReach } from '../../api/types.js';
-import type { ConsolidationResult } from '../../domain/consolidate/run.js';
 
-type JobResult = SleepResult | ConsolidationResult;
+type JobResult = SleepResult | Awaited<ReturnType<typeof autoSleepConsolidate>>;
 
 // The vector graph build gives up this long before the server's deadline, so the child exits before it is killed.
 const EXIT_MARGIN_MS = 5_000;
@@ -72,10 +71,11 @@ process.once('message', (message) => {
   const job = message as SleepMessage;
   const work = (): Promise<JobResult> =>
     job.kind === 'consolidate'
-      ? runConsolidation(storeAt(job.hippoRoot), {
+      ? autoSleepConsolidate({
+          store: storeAt(job.hippoRoot),
           config: loadConfig(job.hippoRoot),
           tenantId: envTenant(),
-          llm: anthropicLlmFromEnv(),
+          infra: childInfra(),
         })
       : sleepJob(job);
   // The server's own request scope and lock wait, so a busy store answers as it did when sleep ran in the server.

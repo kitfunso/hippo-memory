@@ -2,7 +2,8 @@
 import type { CaptureTarget } from '../../src/surface/capture/command.js';
 import type { CompactionFolder } from '../../src/surface/capture/compaction-record.js';
 import { cliDiagnostics, cliStore } from '../../src/surface/cli/api-context.js';
-import { folderEmbedTarget, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
+import type { EmbedTarget } from '../../src/domain/search/embed-memories.js';
+import { detachedEmbedder } from '../../src/api/embeddings.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { DoctorStore } from '../../src/surface/cli/doctor.js';
@@ -11,7 +12,7 @@ import type { StoreGroups } from '../../src/store/port.js';
 export function captureTarget(root: string): CaptureTarget {
   const config = loadConfig(root);
   const store = cliStore(root);
-  return { root, store, config, index: folderEmbedTarget({ store, config, embedderFor: resolveEmbeddingProvider }) };
+  return { root, store, config, embed: detachedEmbedder({ store, config, embedderFor: resolveEmbeddingProvider }) };
 }
 
 export function diagnosticsBodies(root: string): DoctorStore {

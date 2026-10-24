@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createRateLimiter } from '../../src/surface/server/rate-limit.js';
 
 // ratePerSec 10, burst 5: a fresh client may spend 5 at once, then 10/sec.
@@ -96,6 +96,22 @@ describe('createRateLimiter', () => {
     rl.check('later', 1000);
     rl.check('new', 1100); // refilled is full again, so it goes; spending holds two tokens and stays
     expect(Array.from({ length: 3 }, () => rl.check('spending', 1100))).toEqual([true, true, false]);
+  });
+
+  it('reads at most 64 buckets to free a slot for an unseen key at 10,000 keys, then drops the oldest', () => {
+    const rl = createRateLimiter({ ...OPTS, maxKeys: 10_000 });
+    for (let k = 0; k < 10_000; k++) for (let i = 0; i < 5; i++) rl.check(`drained-${k}`, 1000);
+    // Every walk of a Map steps this one iterator method, so its calls count the buckets a check reads in turn.
+    const mapIterator: Iterator<unknown> = Object.getPrototypeOf(new Map().keys());
+    const steps = vi.spyOn(mapIterator, 'next');
+    try {
+      expect(rl.check('new', 1000)).toBe(true); // every bucket is throttled, so none ends the walk early
+      expect(steps.mock.calls.length).toBeLessThanOrEqual(64);
+    } finally {
+      steps.mockRestore();
+    }
+    // drained-0 went and starts over with a full burst; drained-1 kept its empty bucket.
+    expect([rl.check('drained-1', 1000), rl.check('drained-0', 1000)]).toEqual([false, true]);
   });
 
   it('drops the oldest bucket only when every bucket is throttled', () => {

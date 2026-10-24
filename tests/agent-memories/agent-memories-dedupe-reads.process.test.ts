@@ -1,8 +1,8 @@
 // The agent memory sync's duplicate check against a real store: text another path holds, spacing aside or inside a
 // sleep-merged row, is skipped with the index in sync or not, and the rows read stay flat as unrelated rows grow.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { importForStore } from '../../src/domain/agent-memories/sync.js';
-import type { ImportReport } from '../../src/domain/agent-memories/report.js';
+import { importForStore } from '../../src/api/agent-memories.js';
+import type { ImportReport } from '../../src/base/memory/agent-memory-report.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { setFtsInSync } from '../../src/db/index.js';

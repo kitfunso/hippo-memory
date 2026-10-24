@@ -7,7 +7,7 @@ import { assertCallerProject, projectNames } from '../../base/scope/project-iden
 import { storedTextKeys } from '../../base/util/same-text.js';
 import { scrubForSharing } from './share-scrub.js';
 import { captureExtractedItems, type CaptureTally } from './command.js';
-import { folderEmbedTarget } from '../../domain/search/embed-memories.js';
+import { detachedEmbedder } from '../../api/embeddings.js';
 import { extractFromTexts } from './extract.js';
 import { withEntryInfra } from '../entry-infra.js';
 
@@ -67,7 +67,7 @@ export async function captureSessionTexts(
   );
   const { store, config } = ctx;
   const tally = await captureExtractedItems(
-    { store, config, index: folderEmbedTarget({ store, config, embedderFor: ctx.infra.embedderFor }) },
+    { store, config, embed: detachedEmbedder({ store, config, embedderFor: ctx.infra.embedderFor }) },
     {
       tenantId: ctx.tenantId,
       originProject: req.project,

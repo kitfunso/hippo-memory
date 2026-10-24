@@ -14,11 +14,11 @@ import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { cliApiContext, cliInitGlobal, cliSyncOptions } from './api-context.js';
-import { isGitRepo } from '../../domain/learn/autolearn.js';
+import { isGitRepo } from '../../base/ports/git.js';
 import { processGit } from '../../infra/git-runner.js';
-import { importForStore, importProjectMemories, importUserMemories } from '../../domain/agent-memories/sync.js';
+import { importForStore, importProjectMemories, importUserMemories } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
-import { emptyReport, mergeReports } from '../../domain/agent-memories/report.js';
+import { emptyReport, mergeReports } from '../../base/memory/agent-memory-report.js';
 import { registerWorkspace } from './scheduler.js';
 import { type CliFlags, numberFlag, stringFlag, type CommandContext, boolFlag } from './flag-values.js';
 import { printAgentImport } from './print.js';
@@ -357,7 +357,7 @@ function installClaudeCodeSettingsHooks(hook: 'claude-code'): void {
 
 function installOpencodeUserPlugin(): void {
   // opencode uses a TS plugin, not Claude Code's JSON-hook schema (see OPENCODE_PLUGIN_SOURCE in
-  // src/domain/hooks/opencode.ts).
+  // src/surface/hooks-install/rules/opencode.ts).
   const result = installOpencodePlugin();
   if (result.installed) {
     console.log(`   Auto-installed hippo opencode plugin -> ${result.pluginPath}`);

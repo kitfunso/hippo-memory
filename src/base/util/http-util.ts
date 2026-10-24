@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { TLSSocket } from 'node:tls';
 import { tryParseUrl } from './net.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
@@ -149,12 +150,10 @@ export function isCrossSite(req: IncomingMessage): boolean {
   const site = req.headers['sec-fetch-site'];
   if (site !== undefined && site !== 'same-origin' && site !== 'none') return true;
   const origin = req.headers.origin;
-  return origin !== undefined && originHost(origin) !== req.headers.host;
-}
-
-// Scheme is ignored so an https page behind a TLS-terminating proxy still matches its own Host.
-function originHost(origin: string): string | null {
-  return tryParseUrl(origin)?.host ?? null;
+  if (origin === undefined) return false;
+  const url = tryParseUrl(origin);
+  // The socket's own scheme, never a forwarded one: a page served over http must not drive an https listener.
+  return url?.protocol !== (req.socket instanceof TLSSocket ? 'https:' : 'http:') || url.host !== req.headers.host;
 }
 
 /** Per-request values a connector webhook receiver reads; ServeOpts and the /v1 RouteRequest both satisfy it. */

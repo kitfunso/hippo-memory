@@ -95,19 +95,6 @@ export function partitionLessons(lessons: string[]) {
   return { kept, dropped };
 }
 
-/** Check whether a directory is a git work tree. */
-export function isGitRepo(git: GitRunner, cwd: string): boolean {
-  const probe = git.run(['rev-parse', '--is-inside-work-tree'], {
-    cwd,
-    timeoutMs: GIT_CALL_TIMEOUT_MS,
-    stderr: 'drop',
-  });
-  if (probe.ok) return probe.stdout.trim() === 'true';
-  // Asking git about a folder that is no repo is the probe itself, so a failure is the expected answer.
-  log.debug(`autolearn: not a git repo: ${errorMessage(probe.error)}`, errorFields(probe.error));
-  return false;
-}
-
 /** Fetch recent git log lines (subject lines only).
  *  days: how many days of history to include. */
 export function fetchGitLog(git: GitRunner, cwd: string, days: number): string {
