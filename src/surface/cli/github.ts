@@ -85,7 +85,7 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
     console.log(JSON.stringify(result, null, 2));
   } catch (e) {
     console.error('backfill failed:', errorMessage(e));
-    log.error('github backfill failed', errorFields(e));
+    log.debug(`github backfill failed: ${errorMessage(e)}`, errorFields(e));
     throw new CliExit(3);
   }
 }
