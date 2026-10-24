@@ -223,8 +223,8 @@ describe('default half-life migration', () => {
   });
 
   // The migration holds the write lock throughout, so its work must grow with the store, not with its square.
-  it('runs one indexed update per moved memory and a fixed number of other statements', async () => {
-    const fixed: number[] = [];
+  it('moves every memory in one indexed update and a fixed number of other statements', async () => {
+    const total: number[] = [];
     for (const n of [20, 400]) {
       const root = bulkLegacyStore(n);
       const { result, statements } = await recordStatementsAsync(() => migrateDefaultHalfLife(local(root), 365));
@@ -232,12 +232,15 @@ describe('default half-life migration', () => {
       expect(migrateAudits(root)[0]).toHaveProperty('ids.length', n);
       expect(countMatching(statements, STORE_OPEN)).toBe(1);
       expect(countMatching(statements, MEMORY_SELECT_COLUMNS)).toBe(1);
-      const updates = statements.filter((sql) => sql.startsWith('UPDATE memories SET half_life_days'));
-      expect(updates).toHaveLength(n);
-      expect(queryPlan(root, updates[0]!)).toEqual([expect.stringMatching(/^SEARCH memories USING INDEX/)]);
-      fixed.push(statements.length - n);
+      const updates = statements.filter((sql) => sql.includes('UPDATE memories SET half_life_days'));
+      expect(updates).toHaveLength(1);
+      expect(queryPlan(root, updates[0]!)).toEqual([
+        expect.stringMatching(/^SCAN json_each VIRTUAL TABLE/),
+        expect.stringMatching(/^SEARCH memories USING (COVERING )?INDEX \S+ \(id=\?\)$/),
+      ]);
+      total.push(statements.length);
     }
-    expect(fixed[1]).toBe(fixed[0]);
+    expect(total[1]).toBe(total[0]);
   });
 
   // Statement counts miss work done in JS: copying the audit record once per memory runs no SQL at all.
