@@ -213,9 +213,9 @@ describe('Dormant', () => {
       (g) => g.list(TENANT_A, ALICE, {}),
       (g) => g.list(TENANT_A, 'personal:private:bob', {}),
       (g) => g.list(TENANT_B, null, {}),
-      (g) => g.holds(TENANT_A, null, rows.mine!.id),
-      (g) => g.holds(TENANT_A, ALICE, rows.mine!.id),
-      (g) => g.holds(TENANT_B, null, rows.d1!.id),
+      (g) => g.list(TENANT_A, null, { id: rows.mine!.id }),
+      (g) => g.list(TENANT_A, ALICE, { id: rows.mine!.id }),
+      (g) => g.list(TENANT_B, null, { id: rows.d1!.id }),
       restore('d1'),
       restore('d1'),
       restore('live'),
@@ -230,7 +230,8 @@ describe('Dormant', () => {
     const listed = (o: (typeof outcomes)[number]) =>
       'value' in o && Array.isArray(o.value) ? o.value.map((m: { content: string }) => m.content) : o;
     expect(listed(outcomes[1]!)).toEqual(['the Staging host moved to build-09', 'the staging host was build-07']);
-    expect(outcomes.slice(7, 10)).toEqual([{ value: false }, { value: true }, { value: false }]);
+    const found = (o: (typeof outcomes)[number]) => ('value' in o && Array.isArray(o.value) ? o.value.length : o);
+    expect(outcomes.slice(7, 10).map(found)).toEqual([0, 1, 0]);
     expect(outcomes[10]).toMatchObject({ value: { status: 'restored', entry: { id: rows.d1!.id } } });
     expect(outcomes.slice(11, 14)).toEqual([
       { value: { status: 'missing' } },

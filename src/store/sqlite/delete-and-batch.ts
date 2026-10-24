@@ -144,18 +144,6 @@ function deleteTargetRow(
   return { tenantId, dagParentId: row.dag_parent_id ?? null };
 }
 
-/** deleteEntry with `automatic` for each removal and its own forget row and reason. Returns the ids deleted, in
- * `removals` order; a missing, repeated, pinned, raw or object-backing id is left out. */
-export function deleteEntriesAutomatically(
-  db: DatabaseSyncLike,
-  files: StoreFiles,
-  removals: readonly { id: string; reason: string }[],
-  actor: string,
-): string[] {
-  const went = deleteEntriesInBatches(db, files, removals, { actor, automatic: true });
-  return removals.filter((_, i) => went[i]).map((removal) => removal.id);
-}
-
 /** Deletes each target with its own forget row and reason, one transaction per chunk after one read of its ids;
  * `true` where the row went, so a repeated id is true once. A host-wide pass: each row's own tenant goes into its
  * DELETE. */

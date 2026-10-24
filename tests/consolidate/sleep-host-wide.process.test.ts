@@ -13,14 +13,14 @@ import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { closeHippoDb, getMeta, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
-import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/sqlite/open.js';
+import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/rules/half-life.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { appendSessionEvent } from '../_helpers/root-forms.js';
+import { appendSessionEvent, replaceDetectedConflicts } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -156,7 +156,8 @@ async function seed(config: { memoryValue?: { enabled: boolean } }): Promise<str
       normalizedChars: normalizeValueForRejection(refused).length,
     });
   });
-  await sqliteStore(root).consolidation.replaceConflicts(
+  replaceDetectedConflicts(
+    root,
     [
       {
         memory_a_id: 'mem_acme_04',

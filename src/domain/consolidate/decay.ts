@@ -1,4 +1,4 @@
-import { MemoryEntry, calculateStrength, clockBasisOf } from '../../base/memory/memory.js';
+import { MemoryEntry, calculateStrength, clockBasisOf, type DecayOptions } from '../../base/memory/memory.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { chunked } from '../../base/util/chunked.js';
 import {
@@ -11,10 +11,29 @@ import {
 } from './memory-value.js';
 import type { ConsolidationResult, SleepRun } from './run.js';
 import { plural } from '../../base/util/format.js';
+import { DAY_MS } from '../../base/util/time.js';
+import type { SleepStart } from '../../store/port/consolidation.js';
 
 const STRENGTH_DECIMALS = 4;
 
 export const DECAY_THRESHOLD = 0.05;
+
+/** The sleep count (the stored one, else the runs on record) and the average days between the recent runs, 0 with
+ * fewer than two, which session-based and adaptive decay read. */
+export function sessionDecayContext({
+  sleepCount,
+  recentRuns,
+}: Pick<SleepStart, 'sleepCount' | 'recentRuns'>): Required<
+  Pick<DecayOptions, 'sleepCount' | 'avgSessionIntervalDays'>
+> {
+  const count = sleepCount || recentRuns.length;
+  if (recentRuns.length < 2) return { sleepCount: count, avgSessionIntervalDays: 0 };
+  const timestamps = recentRuns.map((at) => new Date(at).getTime()).reverse();
+  let totalInterval = 0;
+  for (let i = 1; i < timestamps.length; i++) totalInterval += timestamps[i] - timestamps[i - 1];
+  const avgMs = totalInterval / (timestamps.length - 1);
+  return { sleepCount: count, avgSessionIntervalDays: Math.max(0, avgMs / DAY_MS) };
+}
 
 /** What the decay pass hands to the conflict check and the rescue audit at the end of the run. */
 export interface DecayOutcome {

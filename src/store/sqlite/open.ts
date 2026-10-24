@@ -23,6 +23,7 @@ import { layerDir } from './mirrors.js';
 import { isJsonObject, type JsonValue } from '../../base/util/json.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { createHost, type Host } from '../../host/host.js';
+import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../rules/half-life.js';
 
 /** The folder a store keeps its mirror files in, beside hippo.db, with the ratio its root built it with; an adapter
  * hands it on and never reads it. `host` keeps the folder's project walk and shared flag for the store's life. */
@@ -63,12 +64,6 @@ export interface Handles {
 export function holdsMemory(db: DatabaseSyncLike): boolean {
   return db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined;
 }
-
-/** `meta` key holding the default half-life base a store's memories are on; see
- * src/domain/consolidate/half-life-migration.ts. */
-export const HALF_LIFE_BASE_META_KEY = 'default_half_life_base';
-/** `meta` key set once no memory of a decision, incident or other object sits on the old flat 90 days. */
-export const TYPED_HALF_LIFE_META_KEY = 'typed_half_life_on_default';
 
 /** A store with no memories starts on the current default half-life base so `hippo sleep` never migrates it; one that
  * holds memories but no recorded base predates the record and keeps the legacy 7-day base until sleep migrates it. */

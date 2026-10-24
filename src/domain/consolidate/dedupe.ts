@@ -11,6 +11,7 @@ import { canAutoDelete, type MemoryEntry } from '../../base/memory/memory.js';
 import { derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 import type { StoreWith } from '../../store/port.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export interface DedupPair {
   kept: string;
@@ -176,6 +177,7 @@ async function deletePairs(
   actor: string | undefined,
 ): Promise<DedupPair[]> {
   const targets = pairs.map((p) => ({ id: p.removed, reason: `dedup: duplicate of ${p.kept}` }));
-  const gone = await store.consolidation.deleteInBatches(targets, { actor, automatic: true });
-  return pairs.filter((_, i) => gone[i]);
+  const gone = new Set(await store.auditMaintenance.deleteAutomatically(targets, actor ?? CLI_ACTOR));
+  // A loser named twice went once, so only its first pair reports the delete.
+  return pairs.filter((p) => gone.delete(p.removed));
 }

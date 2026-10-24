@@ -1,9 +1,8 @@
-// The store work of one sleep, kept apart from port.ts. Each method is one call on the store; the two chunked writers
-// commit a transaction per chunk and pace the chunks with the store's own clock.
+// The store work of one sleep, kept apart from port.ts: reads and writes only, each one call on the store. What to
+// decay, merge, promote, rebuild and expire is decided in src/domain/consolidate.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
 import type { HalfLifeOutcome } from '../../base/memory/half-life-plan.js';
-import type { SessionEvent } from './sessions.js';
 import type { AppendAuditOpts, EntryCursor, EntryPage } from './types.js';
 import type { RejectedValueRow } from './rejections.js';
 
@@ -18,74 +17,125 @@ export type {
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */
 export interface Consolidation {
+  /** A sleep's opening upkeep, each write its own transaction as before: the half-life move to base `to` (nothing under
+   * dryRun), then the full-text re-sync (only counted under dryRun); then the reads its passes start from. */
+  begin(to: number, opts: SleepBegin): Promise<SleepStart>;
   /** Up to `page.limit` memory ids of every tenant, by created then id, after `page.after`. */
   entryIdsPage(page: { readonly limit: number; readonly after?: EntryCursor }): Promise<EntryIdPage>;
-  /** The full-text index counts when they drift from `memories` (re-synced when `repair`), else null. */
-  ftsDrift(repair: boolean): Promise<{ memories: number; fts: number } | null>;
-  /** The sleep count and the average interval between recent sleeps. */
-  sessionDecayContext(): Promise<SessionDecayContext>;
-  /** The tenant's tombstone for `digest`, or null when it has none. */
-  rejectedValue(tenantId: string, digest: string): Promise<RejectedValueRow | null>;
-  /** The digests among `digests` the tenant holds a tombstone for, in one read however many are asked. */
-  rejectedDigests(tenantId: string, digests: readonly string[]): Promise<Set<string>>;
-  /** Plans the moves to base `to` from one read of the rows and writes them, their audit rows and the new base in that
-   * one transaction (nothing under dryRun); `outcome` is null when no move is due. */
-  moveHalfLives(
-    to: number,
-    opts: { dryRun: boolean; actor: string },
-  ): Promise<{ from: number; outcome: HalfLifeOutcome | null }>;
-  /** The tenant's sessions completed since `sinceMs`. */
-  promotableSessions(tenantId: string, sinceMs: number): Promise<Array<{ session_id: string }>>;
-  /** True when the tenant already holds a trace for the session. */
-  traceExists(tenantId: string, sessionId: string): Promise<boolean>;
-  /** The tenant's session events, filtered as `listSessionEvents` filters them. */
-  sessionEvents(tenantId: string, opts: { session_id?: string; limit?: number }): Promise<SessionEvent[]>;
+  /** The tenant's tombstones among `digests`, in their order, in one read however many are asked. */
+  rejected(tenantId: string, digests: readonly string[]): Promise<RejectedValueRow[]>;
   /** The memory id of every stored physics particle, in load order. */
   particleIds(): Promise<string[]>;
-  /** The stored particles for `ids`, in that order; an id with no particle is skipped. */
-  particlesByIds(ids: readonly string[]): Promise<PhysicsParticle[]>;
   /** Writes the particles over their stored state, as one batch. */
   saveParticles(particles: PhysicsParticle[]): Promise<void>;
-  /** Commits each component whole, in transactions of about `holdMs` with a gap for other writers between them, under
-   * sleep's own lock wait; resolves to the ids it removed. A zero hold commits one component per transaction. */
-  commitFlush(
-    components: readonly FlushComponent[],
-    opts: { snapshot: ReadonlyMap<string, MemoryEntry>; holdMs: number },
-  ): Promise<string[]>;
-  /** Counts (dryRun) or deletes the dormant memories moved before `cutoffIso`, in transactions of about `holdMs`, under
-   * sleep's own lock wait. */
-  expireDormant(cutoffIso: string, opts: { dryRun: boolean; holdMs: number }): Promise<number>;
-  /** Replaces the detected conflicts with these. */
-  replaceConflicts(detected: DetectedConflict[], detectedAt: string): Promise<void>;
-  /** Appends one consolidation-run row. */
-  recordRun(run: { timestamp: string; decayed: number; merged: number; removed: number }): Promise<void>;
-  /** Adds one to the store's sleep count. */
-  countSleep(): Promise<void>;
+  /** The `limit` dirty summaries changed last, each with its live children by created then id, and whether more
+   * were waiting. */
+  dirtySummaries(limit: number): Promise<DirtySummaries>;
+  /** Up to `page.limit` of the L2 topic summaries with no L3 profile above them, oldest first, after `page.after`. */
+  unprofiledTopicSummaries(page: { readonly limit: number; readonly after?: EntryCursor }): Promise<EntryPage>;
+  /** Lands `settle` on a summary that is still dirty, with its audit rows, in one transaction. New content a tombstone
+   * names is kept out, with a refusal row, and the rest still lands. */
+  settleSummary(settle: SummarySettle): Promise<SummarySettled>;
+  /** The sleep's chunked writes under its own lock wait: the flush, each component whole, in transactions of about
+   * `holdMs` with a gap for other writers between them; then the dormant expiry in the same way. */
+  commit(commit: SleepCommit): Promise<SleepCommitted>;
+  /** Replaces the detected conflicts, appends the run row and adds one to the sleep count, each its own write. */
+  recordSleep(record: SleepRecord): Promise<void>;
   /** Appends each row as its own write; a failed row is logged and counted, and the failures returned as a count. */
   auditEachRow(events: readonly AppendAuditOpts[]): Promise<number>;
   /** The current distilled memories that may share a text with another, and the order partitions first appear in. */
   duplicateCandidates(): Promise<DuplicateCandidates>;
-  /** Deletes the targets, one transaction per chunk, each with its own forget row; true where the row went. */
-  deleteInBatches(
-    targets: readonly { id: string; reason: string }[],
-    opts: { actor?: string; automatic?: boolean },
-  ): Promise<boolean[]>;
   /** Tenants with pending graph work, each with its highest pending queue id. */
   dirtyGraphTenants(): Promise<{ tenantId: string; maxPendingId: number }[]>;
   /** Marks the tenant's pending graph work up to `maxId` processed; returns how many rows it marked. */
   markGraphDrained(tenantId: string, maxId: number): Promise<number>;
-  /** Up to `limit` summaries marked dirty. */
-  dirtySummaries(limit: number): Promise<MemoryEntry[]>;
-  /** The current children of one summary. */
-  childrenOfSummary(summaryId: string, tenantId: string): Promise<MemoryEntry[]>;
-  /** One read of the children of every summary given: one list per summary, in the order given. */
-  childrenOfSummaries(summaries: ReadonlyArray<{ id: string; tenantId: string }>): Promise<MemoryEntry[][]>;
-  /** Applies a rebuilt summary while it is still dirty; `refused` when its new content is tombstoned. */
-  applyRebuild(summary: MemoryEntry, patch: RebuildPatch): Promise<{ changed: boolean; refused: boolean }>;
-  /** Clears the dirty mark a fresh summary got from its own child links. */
-  clearSummaryDirty(summaryId: string, tenantId: string, actor: string, source?: string): Promise<void>;
-  /** Up to `page.limit` of the L2 topic summaries with no L3 profile above them, oldest first, after `page.after`. */
-  unprofiledTopicSummaries(page: { readonly limit: number; readonly after?: EntryCursor }): Promise<EntryPage>;
+}
+
+export interface SleepBegin {
+  readonly dryRun: boolean;
+  /** Who the half-life move's audit rows name. */
+  readonly actor: string;
+  /** The tenant whose sessions completed at or after `sinceMs` with no trace yet are read; unset, none are. */
+  readonly traces?: { readonly tenantId: string; readonly sinceMs: number };
+}
+
+export interface SleepStart {
+  /** The base the half-lives were on. */
+  readonly from: number;
+  /** Null when no move was due. */
+  readonly outcome: HalfLifeOutcome | null;
+  /** The full-text index's counts when they drifted from `memories`, else null. */
+  readonly fts: { readonly memories: number; readonly fts: number } | null;
+  /** The stored sleep count, 0 when none was recorded. */
+  readonly sleepCount: number;
+  /** The newest 20 run times, newest first. */
+  readonly recentRuns: readonly string[];
+  /** The session ids `traces` asked for. */
+  readonly sessions: readonly string[];
+}
+
+/** EntryPage with only each row's id. */
+export interface EntryIdPage {
+  readonly ids: string[];
+  readonly next: EntryCursor | null;
+}
+
+export interface DirtySummaries {
+  readonly summaries: ReadonlyArray<{ readonly summary: MemoryEntry; readonly children: MemoryEntry[] }>;
+  readonly more: boolean;
+}
+
+/** The fields one dirty summary settles to; its dirty mark is cleared with them. */
+export interface SummarySettle {
+  readonly id: string;
+  readonly tenantId: string;
+  /** Who a refusal row names. */
+  readonly actor: string;
+  /** The rebuilt fields; unset, only the dirty mark is cleared. */
+  readonly fields?: {
+    /** New content; the store stamps the rebuild time and adds one to the rebuild count with it. */
+    readonly content?: { readonly text: string; readonly rebuiltAt: string };
+    readonly descendantCount: number;
+    readonly earliestAt: string | null;
+    readonly latestAt: string | null;
+  };
+  /** Appended in order when the row changes, after a refusal row. */
+  readonly audit: readonly AppendAuditOpts[];
+}
+
+/** `changed` when this call's write hit the row; `refused` when a tombstone kept the new content out. */
+export interface SummarySettled {
+  readonly changed: boolean;
+  readonly refused: boolean;
+}
+
+export interface SleepCommit {
+  /** The flush, null for none; `snapshot` holds each changed row as sleep loaded it, a Map so it crosses threads. */
+  readonly flush: {
+    readonly components: readonly FlushComponent[];
+    readonly snapshot: ReadonlyMap<string, MemoryEntry>;
+  } | null;
+  /** Dormant rows moved before this ISO time are deleted for good, or only counted under dryRun; null keeps them. */
+  readonly expireBefore: string | null;
+  readonly dryRun: boolean;
+  /** How long one transaction may hold the write lock; zero commits one component per transaction. */
+  readonly holdMs: number;
+}
+
+export interface SleepCommitted {
+  /** The ids the flush removed from active memory. */
+  readonly removedIds: string[];
+  /** Dormant memories expired, or that would be under dryRun. */
+  readonly expired: number;
+}
+
+export interface SleepRecord {
+  readonly conflicts: DetectedConflict[];
+  /** The run's ISO time: the conflicts' detected time and the run row's. */
+  readonly at: string;
+  readonly decayed: number;
+  readonly merged: number;
+  readonly removed: number;
 }
 
 export type DetectedConflict = { memory_a_id: string; memory_b_id: string; reason: string; score: number };
@@ -123,33 +173,6 @@ export type DormantReason = 'decay' | 'source-deleted' | 'project-repair' | 'qua
 
 /** Each row as the caller loaded it, by id; a `ReadonlyMap` fits. */
 export type LoadedRows = Pick<ReadonlyMap<string, MemoryEntry>, 'get'>;
-
-/** EntryPage with only each row's id. */
-export interface EntryIdPage {
-  readonly ids: string[];
-  readonly next: EntryCursor | null;
-}
-
-/** Session decay context: the data needed for session-based and adaptive decay. */
-export interface SessionDecayContext {
-  /** Total number of sleep (consolidation) cycles completed. */
-  sleepCount: number;
-  /** Average interval between recent sleep cycles, in days. 0 if < 2 cycles. */
-  avgSessionIntervalDays: number;
-}
-
-/**
- * Patch applied by applyRebuildResult; `bumpRebuildCount` is false for the zero-child case, true for a normal rebuild.
- */
-export interface RebuildPatch {
-  content: string; // new content for normal rebuild; summary.content for zero-child
-  descendantCount: number;
-  earliestAt: string | null;
-  latestAt: string | null;
-  bumpRebuildCount: boolean;
-  zeroChildren: boolean;
-  actor: string;
-}
 
 /** Current distilled rows (no raw row, no superseded one) whose text, with all spacing taken out, another such row
  * also has, by created then id; and each (tenant, scope, origin) of every such row in the order it first appears by
