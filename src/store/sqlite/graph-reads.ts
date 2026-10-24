@@ -85,9 +85,33 @@ function readEntitiesByIds(db: DatabaseSyncLike, tenantId: string, ids: readonly
   return out;
 }
 
+function neighborRowsOf(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  slice: readonly number[],
+  limit: number,
+): RelationRow[] {
+  const ids = JSON.stringify(slice);
+  return cachedStatement(
+    db,
+    `
+      SELECT ${RELATION_COLS} FROM relations
+      WHERE tenant_id = ?
+        AND (from_entity_id IN (SELECT value FROM json_each(?)) OR to_entity_id IN (SELECT value FROM json_each(?)))
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `,
+  ).all(tenantId, ids, ids, limit) as RelationRow[];
+}
+
+function newestFirst(a: RelationRow, b: RelationRow): number {
+  if (a.created_at !== b.created_at) return a.created_at < b.created_at ? 1 : -1;
+  return b.id - a.id;
+}
+
 /** All relations touching ANY of `entityIds` in EITHER direction: the per-hop neighbor query for multi-hop traversal,
- * one query for the whole frontier (no N+1). `limit` caps rows and must be a non-negative integer (raw `LIMIT ?`
- * rejects a fraction). */
+ * one query for the whole frontier (no N+1). `limit` caps the rows of the whole call, not of each id chunk, and must
+ * be a non-negative integer (raw `LIMIT ?` rejects a fraction). */
 function listNeighborRelations(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -100,24 +124,14 @@ function listNeighborRelations(
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`listNeighborRelations: limit must be a non-negative integer; got ${limit}`);
   }
-  // `limit` applies PER CHUNK, so a frontier over one chunk of ids could return limit*chunks rows before the dedup
-  // below; harmless today (frontier <= maxNeighbors 200, one chunk, BFS re-enforces the fanout cap).
-  const byId = new Map<number, Relation>();
+  const byId = new Map<number, RelationRow>();
   for (const slice of chunked(entityIds, GRAPH_ID_BATCH)) {
-    const ids = JSON.stringify(slice);
-    const rows = cachedStatement(
-      db,
-      `
-      SELECT ${RELATION_COLS} FROM relations
-      WHERE tenant_id = ?
-        AND (from_entity_id IN (SELECT value FROM json_each(?)) OR to_entity_id IN (SELECT value FROM json_each(?)))
-      ORDER BY created_at DESC, id DESC
-      LIMIT ?
-    `,
-    ).all(tenantId, ids, ids, limit) as RelationRow[];
-    for (const r of rows) byId.set(r.id, rowToRelation(r));
+    for (const r of neighborRowsOf(db, tenantId, slice, limit)) byId.set(r.id, r);
   }
-  return Array.from(byId.values());
+  const merged = Array.from(byId.values());
+  // Each chunk's own LIMIT keeps its newest rows, so the newest `limit` of the union are all in `merged`.
+  if (merged.length > limit) merged.sort(newestFirst).length = limit;
+  return merged.map(rowToRelation);
 }
 
 /** Relations with BOTH endpoints in `entityIds` (edges AMONG the set), for the graph-view focus subgraph; `LIMIT` caps

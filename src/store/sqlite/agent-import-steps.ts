@@ -56,7 +56,9 @@ export function runSteps(db: DatabaseSyncLike, files: StoreFiles, plan: Containe
  * hold exactly the planned rows or an adopted row left its legacy source. */
 function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, MemoryEntry> | null {
   const rows = new Map<string, MemoryEntry>();
-  for (const prefix of plan.prefixes) for (const row of liveUnder(db, plan.tenantId, prefix)) rows.set(row.id, row);
+  for (const prefix of outermost(plan.prefixes)) {
+    for (const row of liveUnder(db, plan.tenantId, prefix)) rows.set(row.id, row);
+  }
   if (rows.size !== plan.rows.length) return null;
   for (const want of plan.rows) {
     const row = rows.get(want.id);
@@ -70,6 +72,12 @@ function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, M
     (step) => step.kind !== 'adopt' || (rows.get(step.id)?.source === step.from && !rows.get(step.id)?.supersededBy),
   );
   return adoptable ? rows : null;
+}
+
+/** A prefix under another listed one reads only rows that one already returns. */
+function outermost(prefixes: readonly string[]): string[] {
+  const unique = [...new Set(prefixes)];
+  return unique.filter((p) => !unique.some((q) => q !== p && p.startsWith(q)));
 }
 
 function namedIds(step: ImportStep): readonly string[] {
