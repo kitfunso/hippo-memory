@@ -419,11 +419,11 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     expect([direct.opens, port.opens]).toEqual([1, 1]);
   });
 
-  it('storedVectors returns what loadStoredVectors does, an 8-dim row and a vector without a row included', async () => {
+  it('stored vectors are what loadStoredVectors reads, an 8-dim row and a vector without a row included', async () => {
     const ids = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
     const { direct, port } = await parity(
       (s) => entriesOf(loadStoredVectors(s.root, ids)),
-      async (store) => entriesOf(await store.vectors.storedVectors(ids)),
+      async (store) => entriesOf(await store.vectors.stored('vectors', ids)).map(([id, v]) => [id, Array.from(v)]),
     );
     expect(direct.value.map(([id, v]) => [id, v.length])).toEqual([
       ['mem_p_noise', 8],
@@ -463,7 +463,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     expect(port.opens).toBe(direct.opens);
   });
 
-  it('physicsParticles reads only the ids asked for, as loadPhysicsState does, and opens nothing for none', async () => {
+  it('stored particles are only the ids asked for, as loadPhysicsState reads, and none opens nothing', async () => {
     const ids = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
     const { direct, port } = await parity(
       (s) => {
@@ -474,11 +474,11 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
           closeHippoDb(db);
         }
       },
-      async (store) => entriesOf(await store.vectors.physicsParticles(ids)),
+      async (store) => entriesOf(await store.vectors.stored('particles', ids)),
     );
     expect(direct.value.map(([id]) => id)).toEqual(['mem_p_noise', 'mem_p_plain']);
     expect(port.opens).toBe(direct.opens);
-    const none = await onCopy('local', async (s) => (await sqliteStore(s.root).vectors.physicsParticles([])).size);
+    const none = await onCopy('local', async (s) => (await sqliteStore(s.root).vectors.stored('particles', [])).size);
     expect([none.value, none.opens]).toEqual([0, 0]);
   });
 });

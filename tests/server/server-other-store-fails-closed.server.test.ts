@@ -102,8 +102,8 @@ describe('serve() under a store that is not hippo.db', () => {
           handler: async ({ ctx }) => ({ tenant: ctx.tenantId }),
         },
         {
-          path: '/v1/x-addon-vectorviews',
-          storeReady: 'vectorViews',
+          path: '/v1/x-addon-readiness',
+          storeReady: 'readiness',
           handler: async () => {
             addonRuns += 1;
             return {};
@@ -167,7 +167,7 @@ describe('serve() under a store that is not hippo.db', () => {
       });
     }
     expect((await post('/v1/x-addon-base', newKey())).status).toBe(401);
-    const refused = await post('/v1/x-addon-vectorviews', valid);
+    const refused = await post('/v1/x-addon-readiness', valid);
     expect({ status: refused.status, body: await refused.json() }).toEqual({
       status: 501,
       body: { error: STORE_NOT_PORTED_MESSAGE },

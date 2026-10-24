@@ -16,6 +16,9 @@ import {
 import type {
   EmbeddingIndex,
   HippoStore,
+  IndexStep,
+  IndexStepAnswers,
+  IndexStepKind,
   VectorRowWrite,
   VectorWrite,
   VectorWriteResult,
@@ -52,32 +55,29 @@ function embeddedRows(entries: readonly MemoryEntry[], vectors: readonly number[
   return rows;
 }
 
-/** Embeds every memory onto `rebuild`, a page of ids and then a page of rows at a time; answers how many it staged. */
-async function stageEmbeddingIndex(
-  { embeddingIndex: index, rows }: IndexOf,
-  rebuild: string,
-  provider: EmbeddingProvider,
-): Promise<number> {
+/** Embeds every memory onto the turn's rebuild, a page of ids and then a page of rows at a time; answers how many it
+ * staged. */
+async function stageEmbeddingIndex({ rows, step }: IndexTurn, provider: EmbeddingProvider): Promise<number> {
   let staged = 0;
   let afterId: string | undefined;
   do {
-    const page = await index.entryIdsById({ limit: ID_PAGE, afterId });
+    const page = await step({ kind: 'ids', page: { limit: ID_PAGE, afterId } });
     for await (const entries of entryPages(rows, page.ids)) {
       // A hard transport or auth failure throws here, before the commit, so the old index and identity stay.
       const vectors = await provider.embed(
         entries.map((e) => embeddingInputText(e)),
         'passage',
       );
-      staged += await index.stageRebuild(rebuild, embeddedRows(entries, vectors));
+      staged += await step({ kind: 'stage', rows: embeddedRows(entries, vectors) });
     }
     afterId = page.next ?? undefined;
   } while (afterId !== undefined);
   return staged;
 }
 
-async function resetPhysicsFromIndex(index: EmbeddingIndex): Promise<void> {
+async function resetPhysicsFromIndex({ step }: IndexTurn): Promise<void> {
   try {
-    await index.resetParticles();
+    await step({ kind: 'reset' });
   } catch (err) {
     // Best effort: retrieval still falls back without physics state.
     log.warn(`physics reset after reindex failed: ${errorMessage(err)}`, errorFields(err));
@@ -94,15 +94,14 @@ const EMBED_LOCK_WAIT_MS = 10_000;
 const EMBED_LOCK_FIRST_POLL_MS = 50;
 const EMBED_LOCK_MAX_POLL_MS = 1_000;
 
-// One turn at a time per hippo.db or store, then the index's own lock, which other processes and handles honour.
+// One turn at a time per hippo.db or store, then the index's own lock, which other processes and threads honour.
 const embedTurns = new SerialQueues<HippoStore | string>();
 
-/** Waits up to EMBED_LOCK_WAIT_MS for the index's lock; the token to release it with. */
-async function acquireIndexLock(index: EmbeddingIndex): Promise<string> {
+/** Waits up to EMBED_LOCK_WAIT_MS for the index's lock, which the turn's session holds until it closes. */
+async function acquireIndexLock({ step }: IndexTurn): Promise<void> {
   const deadline = Date.now() + EMBED_LOCK_WAIT_MS;
   for (let wait = EMBED_LOCK_FIRST_POLL_MS; ; wait = Math.min(wait * 2, EMBED_LOCK_MAX_POLL_MS)) {
-    const token = await index.tryLock();
-    if (token !== null) return token;
+    if (await step({ kind: 'lock' })) return;
     const left = deadline - Date.now();
     if (left <= 0) throw new Error('the embedding index is busy: another hippo process holds its lock');
     // The last poll lands on the deadline, so the wait never runs past the budget.
@@ -110,13 +109,19 @@ async function acquireIndexLock(index: EmbeddingIndex): Promise<string> {
   }
 }
 
-async function withEmbedLock<T>(index: EmbeddingIndex, fn: () => Promise<T>): Promise<T> {
-  return embedTurns.run(await index.lockKey(), async () => {
-    const token = await acquireIndexLock(index);
+// The close releases the lock inside the turn: a lock with this thread's own token reads as leaked to the next turn.
+async function withEmbedLock<T>(
+  { embeddingIndex: index, rows }: IndexOf,
+  fn: (turn: IndexTurn) => Promise<T>,
+): Promise<T> {
+  const { id, key } = await index.open();
+  const turn: IndexTurn = { rows, step: (step) => index.step(id, step) };
+  return embedTurns.run(key, async () => {
     try {
-      return await fn();
+      await acquireIndexLock(turn);
+      return await fn(turn);
     } finally {
-      await index.unlock(token);
+      await turn.step({ kind: 'close' });
     }
   });
 }
@@ -300,6 +305,12 @@ type IndexRows = Pick<HippoStore, 'entriesByIds'>;
 /** A store's own index with the rows it embeds. */
 type IndexOf = Pick<IndexEmbedTarget, 'embeddingIndex' | 'rows'>;
 
+/** One session on a store's own index under its lock, with the rows it embeds. */
+interface IndexTurn {
+  readonly rows: IndexRows;
+  readonly step: <K extends IndexStepKind>(step: IndexStep<K>) => Promise<IndexStepAnswers[K]>;
+}
+
 export interface IndexEmbedTarget extends EmbedWith {
   readonly embeddingIndex: EmbeddingIndex;
   readonly rows: IndexRows;
@@ -338,8 +349,7 @@ export async function embedMemoryInto(on: EmbedTarget, entry: MemoryEntry, model
   }
   if (!available) return 'off';
   if ('store' in on) return embedMemoryInStore(on, provider, entry);
-  const index = on.embeddingIndex;
-  return withEmbedLock(index, () => embedMemoryLocked(on, provider, entry)).catch((err): EmbedOutcome => {
+  return withEmbedLock(on, (turn) => embedMemoryLocked(turn, provider, entry)).catch((err): EmbedOutcome => {
     log.warn(`skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`, errorFields(err));
     return 'failed';
   });
@@ -354,14 +364,18 @@ export function embedMemoryDetached(on: EmbedTarget, entry: MemoryEntry): void {
 /** Best-effort: an embedding failure (API down, bad key, 5xx) must not reject the caller's write; the existing index is
  * left as-is.
  * Failures surface on the explicit `hippo embed` / `embedAll` path. */
-async function embedMemoryLocked(on: IndexOf, provider: EmbeddingProvider, entry: MemoryEntry): Promise<EmbedOutcome> {
-  const index = on.embeddingIndex;
+async function embedMemoryLocked(
+  on: IndexTurn,
+  provider: EmbeddingProvider,
+  entry: MemoryEntry,
+): Promise<EmbedOutcome> {
+  const { step } = on;
   try {
     const identity = provider.id;
-    if (await index.requiresReindex(identity)) {
+    if (await step({ kind: 'reindex', providerId: identity })) {
       // A fire-and-forget write heals a small index inline; a large one is left to `hippo embed`, so no write holds the
-      // lock for a whole-store embed.
-      if ((await index.entryCount()) > INLINE_REINDEX_MAX_ROWS) {
+      // lock for a whole-store embed. A next page means more than INLINE_REINDEX_MAX_ROWS rows.
+      if ((await step({ kind: 'ids', page: { limit: INLINE_REINDEX_MAX_ROWS } })).next !== null) {
         warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
         return 'failed';
       }
@@ -372,9 +386,9 @@ async function embedMemoryLocked(on: IndexOf, provider: EmbeddingProvider, entry
     const [vector] = await provider.embed([embeddingInputText(entry)], 'passage');
     if (!vector || vector.length === 0) return 'failed';
 
-    await index.saveVectors([[entry.id, vector]], embeddingIndexIdentity(identity));
-    await index.saveModel(identity);
-    await initializePhysicsIfMissing(index, entry, vector);
+    await step({ kind: 'save', rows: [[entry.id, vector]], model: embeddingIndexIdentity(identity) });
+    await step({ kind: 'saveModel', providerId: identity });
+    await initializePhysicsIfMissing(on, entry, vector);
     return 'indexed';
   } catch (err) {
     // Provider failure (API down / bad key). Best-effort: leave the index as-is, but say so once.
@@ -383,27 +397,21 @@ async function embedMemoryLocked(on: IndexOf, provider: EmbeddingProvider, entry
   }
 }
 
-// Every page is staged apart from the live index, then one transaction swaps the vectors and the identity in: a
-// provider failure or a crash before it leaves the old pair, so the next run rebuilds from the start.
-async function rebuildIndexForProvider(on: IndexOf, provider: EmbeddingProvider): Promise<number> {
-  const index = on.embeddingIndex;
+// Pages stage apart from the live index, then one transaction swaps vectors and identity in; a failure before it
+// leaves the old pair, the session's close drops the staging, and the next run rebuilds from the start.
+async function rebuildIndexForProvider(on: IndexTurn, provider: EmbeddingProvider): Promise<number> {
   // Host-wide rebuild: one embedding index per hippoRoot, keyed by tenant-scoped entry.id; per-tenant indices would be
   // a larger architecture change.
-  const rebuild = await index.beginRebuild();
-  let staged: number;
-  try {
-    staged = await stageEmbeddingIndex(on, rebuild, provider);
-    await index.commitRebuild(rebuild, embeddingIndexIdentity(provider.id));
-  } finally {
-    await index.closeRebuild(rebuild);
-  }
-  await resetPhysicsFromIndex(index);
+  await on.step({ kind: 'begin' });
+  const staged = await stageEmbeddingIndex(on, provider);
+  await on.step({ kind: 'commit', model: embeddingIndexIdentity(provider.id) });
+  await resetPhysicsFromIndex(on);
   return staged;
 }
 
-async function initializePhysicsIfMissing(index: EmbeddingIndex, entry: MemoryEntry, vector: number[]): Promise<void> {
+async function initializePhysicsIfMissing({ step }: IndexTurn, entry: MemoryEntry, vector: number[]): Promise<void> {
   try {
-    await index.seedParticle(entry, vector);
+    await step({ kind: 'seed', entry, vector });
   } catch (err) {
     // Physics init is best-effort and must not fail the embedding that just landed.
     log.warnThenDebug(
@@ -411,6 +419,19 @@ async function initializePhysicsIfMissing(index: EmbeddingIndex, entry: MemoryEn
       `physics state not initialised for ${entry.id}: ${errorMessage(err)}`,
       errorFields(err),
     );
+  }
+}
+
+/** One step on a session of its own, closed after, for an index read or write that takes no lock. */
+export async function indexStep<K extends IndexStepKind>(
+  index: EmbeddingIndex,
+  step: IndexStep<K>,
+): Promise<IndexStepAnswers[K]> {
+  const { id } = await index.open();
+  try {
+    return await index.step(id, step);
+  } finally {
+    await index.step(id, { kind: 'close' });
   }
 }
 
@@ -428,7 +449,7 @@ function throwIfProviderKeyMissing(cfg: EmbeddingsConfig, provider: EmbeddingPro
 // On a hard provider failure mid-backfill the chunks already embedded are persisted (paid progress), then it stops and
 // resumes next run.
 async function backfillPending(
-  { embeddingIndex: index, rows }: IndexOf,
+  { rows, step }: IndexTurn,
   provider: EmbeddingProvider,
   pending: readonly string[],
   model: string,
@@ -449,21 +470,21 @@ async function backfillPending(
       backfillError = err;
       break;
     }
-    count += await index.saveVectors(embeddedRows(chunk, vectors), model);
+    count += await step({ kind: 'save', rows: embeddedRows(chunk, vectors), model });
   }
   return { count, backfillError };
 }
 
 /** backfillPending over the whole backlog, one page of ids at a time; a hard failure stops after the page it hit. */
 async function backfillAllPending(
-  on: IndexOf,
+  on: IndexTurn,
   provider: EmbeddingProvider,
   model: string,
 ): Promise<{ count: number; backfillError: unknown }> {
   let count = 0;
   let afterId: string | undefined;
   do {
-    const page = await on.embeddingIndex.pendingIds({ limit: ID_PAGE, afterId });
+    const page = await on.step({ kind: 'pending', page: { limit: ID_PAGE, afterId } });
     const done = await backfillPending(on, provider, page.ids, model);
     count += done.count;
     if (done.backfillError) return { count, backfillError: done.backfillError };
@@ -483,17 +504,16 @@ export async function embedAll(on: EmbedTarget, model?: string, givenProvider?: 
     return 0;
   }
   if ('store' in on) return embedTurns.run(on.store, () => embedAllInStore(on.store, provider, on.strength));
-  const index = on.embeddingIndex;
-  return withEmbedLock(index, async () => {
+  return withEmbedLock(on, async (turn) => {
     const identity = provider.id;
-    if (await index.requiresReindex(identity)) return rebuildIndexForProvider(on, provider);
+    if (await turn.step({ kind: 'reindex', providerId: identity })) return rebuildIndexForProvider(turn, provider);
 
     // Host-wide by design: embedAll backfills all tenants' entries into the per-host index; per-tenant filtering would
     // produce partial indices and break recall.
-    await index.pruneOrphans();
-    const { count, backfillError } = await backfillAllPending(on, provider, embeddingIndexIdentity(identity));
+    await turn.step({ kind: 'prune' });
+    const { count, backfillError } = await backfillAllPending(turn, provider, embeddingIndexIdentity(identity));
 
-    await index.saveModel(identity);
+    await turn.step({ kind: 'saveModel', providerId: identity });
 
     // Partial progress is now persisted; surface a hard backfill failure so the explicit embed path reports it
     // (best-effort callers go via embedMemory).

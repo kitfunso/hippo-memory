@@ -14,6 +14,7 @@ import { sqliteStoreOn } from './store.js';
 import { restoreAllTenants } from './tenant-wire.js';
 import { PackedVectors, packVectors } from './vector-pack.js';
 import { sqliteVectorReads } from './vector-reads.js';
+import type { StoredPart } from '../port.js';
 import {
   type Job,
   type OpRoute,
@@ -24,18 +25,15 @@ import {
   WORKER_OPS,
 } from './worker-ops.js';
 
-/** Every method the op table can name, on the thread's store: each runs its body to its end on the thread's one
- * connection before it settles. The two reads that return vectors answer with a pack, which worker-store.ts turns back
- * into the port's Map. */
+/** Every method the op table can name, on the thread's store, each run to its end on the thread's one connection;
+ * stored vectors answer as a pack, which worker-store.ts turns back into the port's Map. */
 function workerOps({ hippoRoot, lossAversionRatio }: WorkerInit, graphs: VectorGraphs | undefined) {
   const handles = handlesOf(hippoRoot, { lossAversionRatio });
   const store = sqliteStoreOn(handles);
-  const packed = async (ids: readonly string[]) => packVectors(await store.vectorViews.storedVectorViews(ids));
-  return {
-    ...store,
-    vectors: { ...sqliteVectorReads(handles, graphs), storedVectors: packed },
-    vectorViews: { storedVectorViews: packed },
-  };
+  const vectors = sqliteVectorReads(handles, graphs);
+  const stored = async (part: StoredPart, ids: readonly string[]) =>
+    part === 'vectors' ? packVectors(await vectors.stored(part, ids)) : vectors.stored(part, ids);
+  return { ...store, vectors: { ...vectors, stored } };
 }
 
 type Ops = ReturnType<typeof workerOps>;

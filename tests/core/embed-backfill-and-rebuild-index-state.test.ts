@@ -297,10 +297,12 @@ describe('a model identity change on hippo.db', () => {
     const liveWhileStaging: IndexState[] = [];
     const watched: EmbeddingIndex = {
       ...index,
-      stageRebuild: (id, rows) => {
-        liveWhileStaging.push(indexOn(root));
-        staged.push(rows.length);
-        return index.stageRebuild(id, rows);
+      step: (id, step) => {
+        if (step.kind === 'stage' && 'rows' in step) {
+          liveWhileStaging.push(indexOn(root));
+          staged.push(step.rows.length);
+        }
+        return index.step(id, step);
       },
     };
     const target = {

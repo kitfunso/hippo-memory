@@ -69,7 +69,6 @@ import type {
   SleepGroups,
   StoreGroups,
   StoreReach,
-  VectorViews,
   VectorWrites,
 } from '../port.js';
 import { asHippoDb, isHippoDbStore } from './hippo-db-stores.js';
@@ -78,7 +77,7 @@ import { isGlobalStoreRoot, isInitialized } from '../../host/project-identity.js
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { listRecallEntries } from './search-rows.js';
 import { readActiveTaskSnapshot } from './task-snapshots.js';
-import { entriesWithoutVector, readStoredVectorViews, writeVectors } from './vector-index.js';
+import { entriesWithoutVector, writeVectors } from './vector-index.js';
 import type { ContinuityKey } from '../port/types.js';
 
 /** The groups that read and write hippo.db's own files beside its rows. */
@@ -108,7 +107,6 @@ export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
     keyAudit: sqliteKeyAudit(on),
     keyWrites: sqliteKeyWrites(on),
     keyGrants: sqliteKeyGrants(on),
-    vectorViews: sqliteVectorViews(on),
     vectorWrites: sqliteVectorWrites(on),
     entryWrites: sqliteEntryWrites(handles),
     contextReads: sqliteContextReads(handles),
@@ -189,10 +187,6 @@ function sqliteBaseMethods({ on, files }: Handles): BaseMethods {
       },
     }),
   };
-}
-
-function sqliteVectorViews(on: OnHandle): VectorViews {
-  return bound<VectorViews>(on, { storedVectorViews: readStoredVectorViews });
 }
 
 function sqliteVectorWrites(on: OnHandle): VectorWrites {
