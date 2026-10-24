@@ -179,14 +179,14 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RememberOpts.untrusted`: CD5: connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this.
 
 ### src/api/sleep/sleep.ts
-- `sleep` (section banner): sleep (extracted from cmdSleepCore Phase 2-6 — Task 4 of the api.ts refactor)
+- `sleepWholeStore` (section banner): sleep (extracted from cmdSleepCore Phase 2-6; Task 4 of the api.ts refactor)
 - `SleepResult.secretSkipped`: v1.25.0: count of memories the auto-share secret veto withheld this sleep
 - `SleepResult.rejectedSkipped`: AT1: count of auto-share candidates the GLOBAL store's rejection tombstone refused this sleep (docs/plans/2026-08-15-at1-rejected-value-tombstone.md plan §3 — copy paths must not let one rejected candidate abort the batch).
 - `SleepResult.graph`: E3 sleep enqueue-hook: graph re-extraction totals across the tenants rebuilt this sleep.
-- `sleep`: Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in it), matching the pre-refactor cmdSleepCore behavior. Correct for a CLI maintenance op invoked by the operator. Episode B (v1.11.4) exposed this over HTTP `/v1/sleep` with loopback-only enforcement (per-request guard in the handler plus serve()'s boot-time host check). The TODOS.md per-tenant scoping follow-up remains open for the day non-loopback serving lands — at that point the route will need an admin-role gate OR api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
+- `sleepWholeStore`: Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in it), matching the pre-refactor cmdSleepCore behavior. Correct for a CLI maintenance op invoked by the operator. Episode B (v1.11.4) exposed this over HTTP `/v1/sleep` with loopback-only enforcement (per-request guard in the handler plus serve()'s boot-time host check). The TODOS.md per-tenant scoping follow-up remains open for the day non-loopback serving lands; at that point the route will need an admin-role gate OR api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
 - `SleepPhases`: v1.12.2: Test-only DI seam shape for `sleep`'s phase dependencies. Since the serve autoSleep change it lives in `src/api/sleep/sleep-run.ts`, so the package root's declarations never name it.
-- `runSleep` (`src/api/sleep/sleep-run.ts`): its `overrides` argument replaces the old `SleepOpts.__phases` field; tests pass a throwing phase to cover mid-phase failures. `sleep` calls it with none.
-- `sleep`: v1.11.5: phase counters for the consolidate audit emit (in finally).
+- `runSleep` (`src/api/sleep/sleep-run.ts`): its `overrides` argument replaces the old `SleepOpts.__phases` field; tests pass a throwing phase to cover mid-phase failures. `sleepWholeStore` calls it with none.
+- `sleepWholeStore`: v1.11.5: phase counters for the consolidate audit emit (in finally).
 
 ### src/api/tokens.ts
 - `recordTokens`: Record memory text handed to an agent in the token ledger (ROADMAP TE0).
@@ -578,7 +578,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/domain/search/embed-memories.ts
 - module header: provider selection, the API-key check and vector computation moved here from src/store/embeddings/index.ts, which keeps only the stored index identity (src/store/port.ts VectorWrites: core computes each vector, the store only keeps it).
-- `embedMemory`: L9: host-wide rebuild. The embedding index is keyed by entry.id (which is tenant-scoped) but the index itself is one per hippoRoot.
+- `embedMemoryInto`: L9: host-wide rebuild. The embedding index is keyed by entry.id (which is tenant-scoped) but the index itself is one per hippoRoot.
 - `embedAll`: L9: host-wide by design. embedAll backfills vectors for all tenants' entries into the per-host embedding index.
 
 ### src/domain/eval/eval-stats.ts
@@ -738,7 +738,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `DEFAULT_HALF_LIFE_DAYS`: write-time multipliers. 365 since 1.46.0: the pre-registered E1 decision (docs/evals/2026-09-24-decay-default-result.md and prereg-2) found 7 days lost the current fact far more often (29% vs 75% in the top five), and 730 days and decay off tied with 365. `hippo sleep` moves memories still
 
 ### src/domain/search/multihop.ts
-- `multihopSearch`: T2 note: PLAIN stable score sort on purpose -- pass1/pass2 inputs are deterministically ordered (search() carries the content tail), stability inherits that, and ties keep pass-1 results ahead of pass-2 follow-ups.
+- `rankMultihop`: T2 note: PLAIN stable score sort on purpose -- pass1/pass2 inputs are deterministically ordered (search() carries the content tail), stability inherits that, and ties keep pass-1 results ahead of pass-2 follow-ups.
 
 ### src/surface/cli/owner-validation.ts
 - `module header`: --owner format validation (B2 v1.12.6).
@@ -899,8 +899,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/surface/server/routes/memories.ts
 - `handleApplyOutcome`: v1.11.5: DoS cap on ids.length.
-- `handleSleep`: v1.12.0 A5 v2 sub-1: admin-role gate. Forward-defensive — exists today under loopback-only enforcement
-- `handleSleep`: v1.12.0: sleepCtx already built above for the admin-role gate; reuse.
+- `handleRunSleep`: v1.12.0 A5 v2 sub-1: admin-role gate. Forward-defensive; exists today under loopback-only enforcement
+- `handleRunSleep`: v1.12.0: sleepCtx already built above for the admin-role gate; reuse.
 
 ### src/surface/server/routes/policies.ts
 - `section header`: ── policies (E2 first-class object, bi-temporal-first) ──
@@ -934,7 +934,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `ServerHandle.server`: Introspection-only (v1.26.2): the underlying node:http Server, exposed so tests can assert keep-alive/headers timeout hardening without reaching into serve()'s closure.
 
 ### src/surface/server/validation.ts
-- `parseListLimit`: Parse a `?limit=` query param for the E2 list routes. Defaults to 100; requires a positive INTEGER <= 1000. Number.isInteger rejects fractional values like "1.5" that Number.isFinite would pass but SQLite `LIMIT ?` rejects with a datatype mismatch (a 500).
+- `parseLimitParam`: Parse a `?limit=` query param for the E2 list routes. Defaults to 100; requires a positive INTEGER <= 1000. Number.isInteger rejects fractional values like "1.5" that Number.isFinite would pass but SQLite `LIMIT ?` rejects with a datatype mismatch (a 500).
 - `validateIdSegment`: v1.6.4: charset + length validation for `:id` route captures.
 
 ### src/domain/sharing/search-both.ts
@@ -990,7 +990,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `writeEntry` (stray doc above stampOriginProject): Used by E1.3+ connectors to stamp idempotency rows atomically with the memory write.
 
 ### src/store/entry-writes.ts
-- `writeEntry`: AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by the time this catch runs, so the refusal audit lands post-rollback in a fresh implicit transaction — then rethrow so the caller sees the refusal.
+- `writeEntryOn`: AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by the time this catch runs, so the refusal audit lands post-rollback in a fresh implicit transaction; then rethrow so the caller sees the refusal.
 - `writeEntryDbOnly`: v0.30 / E2 — DAG live-coupling: child write under a level-2 summary marks the parent dirty for E3 sleep-cycle rebuild. Early-exit on null dag_parent_id (vast majority of writes); cost is one null check on the hot path.
 
 ### src/store/handoffs.ts

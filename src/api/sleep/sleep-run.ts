@@ -1,4 +1,4 @@
-// The sleep pipeline behind `sleep`, with its phase dependencies injectable; kept out of the package root.
+// The sleep pipeline behind `sleepWholeStore`, with its phase dependencies injectable; kept out of the package root.
 
 import { auditMemories, type AuditIssue } from '../../base/memory/memory-audit.js';
 import { AUTO_SHARE_MIN_SCORE, autoShare } from '../../domain/sharing/share.js';
@@ -59,8 +59,8 @@ interface DirtyTenantSnapshot {
   error: string | null;
 }
 
-/** `sleep` with its phase dependencies overridable; tests pass stubs here, so the seam never touches the public
- * `SleepOpts`. */
+/** `sleepWholeStore` with its phase dependencies overridable; tests pass stubs here, so the seam never touches the
+ * public `SleepOpts`. */
 export async function runSleep(
   ctx: SleepContext,
   opts: SleepOpts,

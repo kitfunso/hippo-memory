@@ -29,7 +29,7 @@ export interface JudgeOptions {
   model?: string;
   /** Sends each request; a root passes the real one, a test one over its own fetch. */
   http: Http;
-  /** Bounded parallelism for `judgeAll`. */
+  /** Bounded parallelism for `judgeOver`. */
   concurrency?: number;
 }
 
