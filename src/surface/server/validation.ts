@@ -98,7 +98,7 @@ export function requiredString(body: Record<string, JsonValue>, key: string, rul
   return value;
 }
 
-/** Which items a string array refuses and what each refusal says; a route that published its own text passes it here. */
+/** Which items a string array refuses and what each refusal says; a route with published text passes its own. */
 export interface StringArrayRule {
   /** Refuse an item that is empty (after trim when `trimmed`). */
   readonly nonEmpty?: 'raw' | 'trimmed';

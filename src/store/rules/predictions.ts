@@ -38,6 +38,7 @@ export function closeMissError(tenantId: string, id: number, closureState: strin
     return new NotFoundError(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
   }
   return new BadRequestError(
-    `closePrediction: prediction ${id} is already closed (state='${closureState}'); cannot re-close. Open predictions only.`,
+    `closePrediction: prediction ${id} is already closed (state='${closureState}'); ` +
+      'cannot re-close. Open predictions only.',
   );
 }

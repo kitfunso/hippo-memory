@@ -91,6 +91,44 @@ function putInt8(unit: Float32Array, out: Int8Array): void {
   for (let i = 0; i < unit.length; i++) out[i] = Math.round(unit[i] * scale);
 }
 
+/** The links of levels 1 and up of one node, level by level from `base`. */
+function writeUpperLinks(view: DataView, base: number, links: readonly number[][], at: ArrayLike<number>, m: number) {
+  for (let level = 1; level < links.length; level++) {
+    const from = base + (level - 1) * upperLevelBytes(m);
+    view.setUint32(from, links[level].length, true);
+    links[level].forEach((to, j) => view.setUint32(from + 4 + 4 * j, at[to], true));
+  }
+}
+
+interface HeaderFields {
+  readonly dim: number;
+  readonly m: number;
+  readonly nodes: number;
+  readonly entry: number;
+  readonly maxLevel: number;
+}
+
+function writeHeader(
+  view: DataView,
+  graph: HeaderFields,
+  sizes: { jsonBytes: number; recordBytes: number; upperBytes: number; highRowid: number },
+): void {
+  const fields: readonly (readonly [number, number])[] = [
+    [HEADER_AT.magic, MAGIC],
+    [HEADER_AT.version, VERSION],
+    [HEADER_AT.dim, graph.dim],
+    [HEADER_AT.m, graph.m],
+    [HEADER_AT.nodes, graph.nodes],
+    [HEADER_AT.entry, graph.entry],
+    [HEADER_AT.maxLevel, graph.maxLevel],
+    [HEADER_AT.jsonBytes, sizes.jsonBytes],
+    [HEADER_AT.recordBytes, sizes.recordBytes],
+    [HEADER_AT.upperBytes, sizes.upperBytes],
+  ];
+  for (const [where, value] of fields) view.setUint32(where, value, true);
+  view.setFloat64(HEADER_AT.highRowid, sizes.highRowid, true);
+}
+
 /** The file's bytes for `rows`, yielding every ENCODE_TURN_NODES nodes so the caller can give a turn back. */
 export function* encodeGraphFile(rows: GraphRows): Generator<void, Uint8Array> {
   const { graph, ids, rowids, nodeOf } = rows;
@@ -108,20 +146,9 @@ export function* encodeGraphFile(rows: GraphRows): Generator<void, Uint8Array> {
   const upperAt = recordsAt + order.length * recordBytes;
   const bytes = new Uint8Array(upperAt + upperBytes);
   const view = new DataView(bytes.buffer);
-  const fields: readonly (readonly [number, number])[] = [
-    [HEADER_AT.magic, MAGIC],
-    [HEADER_AT.version, VERSION],
-    [HEADER_AT.dim, dim],
-    [HEADER_AT.m, m],
-    [HEADER_AT.nodes, order.length],
-    [HEADER_AT.entry, at[graph.entry]],
-    [HEADER_AT.maxLevel, graph.maxLevel],
-    [HEADER_AT.jsonBytes, json.length],
-    [HEADER_AT.recordBytes, recordBytes],
-    [HEADER_AT.upperBytes, upperBytes],
-  ];
-  for (const [where, value] of fields) view.setUint32(where, value, true);
-  view.setFloat64(HEADER_AT.highRowid, rowids[order[order.length - 1]], true);
+  const highRowid = rowids[order[order.length - 1]];
+  const head = { dim, m, nodes: order.length, entry: at[graph.entry], maxLevel: graph.maxLevel };
+  writeHeader(view, head, { jsonBytes: json.length, recordBytes, upperBytes, highRowid });
   bytes.set(json, HEADER_BYTES);
   let live = 0;
   for (let i = 0; i < order.length; i++) {
@@ -141,11 +168,7 @@ export function* encodeGraphFile(rows: GraphRows): Generator<void, Uint8Array> {
     view.setUint32(off + RECORD_AT.upperOffset, upperOf[node], true);
     data.links[0].forEach((to, j) => view.setUint32(off + RECORD_HEAD + 4 * j, at[to], true));
     putInt8(unit, new Int8Array(bytes.buffer, off + RECORD_HEAD + 8 * m, dim));
-    for (let level = 1; level <= data.level; level++) {
-      const base = upperAt + upperOf[node] + (level - 1) * upperLevelBytes(m);
-      view.setUint32(base, data.links[level].length, true);
-      data.links[level].forEach((to, j) => view.setUint32(base + 4 + 4 * j, at[to], true));
-    }
+    writeUpperLinks(view, upperAt + upperOf[node], data.links, at, m);
     if (i % ENCODE_TURN_NODES === ENCODE_TURN_NODES - 1) yield;
   }
   view.setUint32(HEADER_AT.live, live, true);
