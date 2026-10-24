@@ -8,7 +8,7 @@ import {
 } from '../../base/errors/api-errors.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
-import { readerReaches, targetReader } from '../../base/scope/recall-scope.js';
+import { readerMayChange, targetReader } from '../../base/scope/recall-scope.js';
 import type { EntryTarget, RawArchive } from '../port/entry-writes.js';
 import type { AppendAuditOpts } from '../port/types.js';
 import { appendAudit, bumpCounter, hippoDbNow, tenantKey } from './rows.js';
@@ -85,10 +85,10 @@ export function markParentDirty(tx: Tx, parentId: string, tenantId: string, acto
   tx.audit.push(summaryDirtyAudit(parentId, tenantId, actor, parent.dagLevel));
 }
 
-/** The row `id` when the target's tenant holds it in a scope the target may reach; NotFoundError otherwise. */
-export function inReach(tx: Tx, target: EntryTarget, id: string): MemoryEntry {
+/** The row `id` when the target's tenant holds it and the target may change it; NotFoundError otherwise. */
+export function changeable(tx: Tx, target: EntryTarget, id: string): MemoryEntry {
   const row = tx.rows.get(id);
-  if (!row || row.tenantId !== target.tenantId || !readerReaches(targetReader(target), row.scope)) {
+  if (!row || row.tenantId !== target.tenantId || !readerMayChange(targetReader(target), row)) {
     throw new NotFoundError(`memory not found: ${id}`);
   }
   return row;
@@ -130,7 +130,7 @@ export function archiveRow(tx: Tx, row: MemoryEntry, by: Pick<RawArchive, 'actor
 /** `archive` run as a staged write: the archive row lands, and the row counts as forgotten, only once it commits. */
 export function archiveOne(t: MemoryTables, archive: RawArchive, companion: () => void): string {
   const row = stage(t, archive.actor, (tx) => {
-    const done = archiveRow(tx, inReach(tx, archive, archive.id), archive);
+    const done = archiveRow(tx, changeable(tx, archive, archive.id), archive);
     companion();
     return done;
   });

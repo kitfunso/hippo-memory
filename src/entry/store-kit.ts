@@ -114,9 +114,11 @@ export { PROTECTED_ROWS, repairKeeps, type RepairProtection } from '../base/memo
 export { RejectedValueError } from '../base/errors/api-errors.js';
 export {
   ownScopeTouches,
+  readerMayChange,
   readerReaches,
   targetReader,
   type ScopeReader,
+  type WrittenRow,
   passesScopeFilterForRecall,
   RECALL_DEFAULT_DENY_SCOPES,
 } from '../base/scope/recall-scope.js';

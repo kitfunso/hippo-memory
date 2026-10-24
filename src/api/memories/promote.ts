@@ -7,7 +7,13 @@ import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';
 import { globalTargetOf } from '../infra.js';
 import { sharedStoreOf, type Context, type ContextWith } from '../types.js';
-import { canReadScope, isPersonalScope, isQuarantineScope, scopeReaderOf } from '../../base/scope/recall-scope.js';
+import {
+  canReadScope,
+  isPersonalScope,
+  isQuarantineScope,
+  readerMayChange,
+  scopeReaderOf,
+} from '../../base/scope/recall-scope.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote'
  * audit event so intent stays distinct. The copy keeps the entry's tenantId on the global side. */
@@ -113,9 +119,9 @@ export async function supersede(
   return { ok: true, oldId, newId: successor.id };
 }
 
-/** The tenant-scoped row to supersede; another tenant's id, or someone else's personal row, reads as not found. */
+/** The tenant-scoped row to supersede; another tenant's id, or a row the caller may not change, reads as not found. */
 function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null): MemoryEntry {
-  if (!old || !canReadScope(ctx.actor, old.scope ?? null)) {
+  if (!old || !readerMayChange(scopeReaderOf(ctx.actor), old)) {
     throw new NotFoundError(`Memory not found: ${oldId}`);
   }
   // The CAS UPDATE closes the race; this check only gives a clearer error in the common single-writer case.

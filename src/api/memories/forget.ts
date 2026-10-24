@@ -13,8 +13,8 @@ import { requireHostAdmin, type Context } from '../types.js';
 import { memoryGet } from './memories.js';
 import { canReadScope, personalScopeOf, scopeReaderOf } from '../../base/scope/recall-scope.js';
 
-/** Delete a memory by id. Reach is checked inside the delete's write scope, and a row out of reach answers as not
- * found, so a caller learns nothing about it. */
+/** Delete a memory by id. Write rights are checked inside the delete's write scope, and a row the caller may not
+ * change answers as not found, so a caller learns nothing about it. */
 export interface ForgetResult {
   ok: true;
   id: string;

@@ -368,6 +368,8 @@ describe('cli thin-client mode', () => {
       }
 
       server = await startServer(workspace);
+      // A keyless caller is a member, which may not change a row it does not own, so the CLI sends an admin key.
+      vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
 
       // With the server up, forget --archive now routes over HTTP like plain
       // forget does; the archive endpoint has existed since ea155d6.
@@ -381,7 +383,7 @@ describe('cli thin-client mode', () => {
         expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_rawthin'`).get()).toBeUndefined();
         const events = listAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
         expect(events).toHaveLength(1);
-        expect(events[0].actor).toBe('localhost:cli');
+        expect(events[0].actor).toMatch(/^api_key:/);
         // The counter lives in api.rawArchive so the routed path reaches it;
         // when it lived in the CLI, routing an archive silently lost the count.
         expect(getMeta(db2, 'total_forgotten', '0')).toBe('1');
@@ -450,6 +452,8 @@ describe('cli thin-client mode', () => {
       }
 
       server = await startServer(workspace);
+      // A keyless caller is a member, which may not change a row it does not own, so the CLI sends an admin key.
+      vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
 
       // raw-archive.ts throws "is not raw" for a non-raw kind; the routed
       // catch must wrap it the same way forgetMemory's direct catch does.
@@ -641,12 +645,14 @@ describe('cli thin-client mode', () => {
       const routedId = /Remembered \[([^\]]+)\]/.exec(routedRemember.stdout)?.[1];
       expect(routedId, `stdout: ${routedRemember.stdout} stderr: ${routedRemember.stderr}`).toMatch(/^mem_[0-9a-f]+$/);
 
+      // A keyless caller is a member, which may not change a row it does not own, so the CLI sends an admin key.
+      vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
       const routedForget = runCli(workspace, 'forget', routedId!);
       expect(routedForget.stdout, `stderr: ${routedForget.stderr}`).toMatch(/Forgot/);
       // Pins that this half really took HTTP, so the counter assertion below
       // cannot pass by silently running the direct path twice.
       const routedActor = getActorForId(workspace, routedId!);
-      expect(routedActor).toBe('localhost:cli');
+      expect(routedActor).toMatch(/^api_key:/);
 
       let db = openHippoDb(hippoRoot);
       try {

@@ -14,6 +14,7 @@ import {
 } from '../../src/db/index.js';
 import * as client from '../../src/surface/cli/client.js';
 import { mcpErrorResponse } from '../../src/surface/mcp/server.js';
+import { mintAdminKey } from '../_helpers/admin-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { updateStatsUnlessBusy, copyToGlobal } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -109,6 +110,7 @@ describe('routed writes under a busy store', () => {
   let url: string;
   let stop: () => Promise<void>;
   let busyErr: Error;
+  let adminKey: string;
 
   beforeAll(async () => {
     home = makeRoot('busy-after-commit');
@@ -116,6 +118,8 @@ describe('routed writes under a busy store', () => {
     vi.stubEnv('HIPPO_HOME', globalHome);
     initTestStore(globalHome);
     busyErr = realBusyError(home);
+    // A keyless caller is a member, which may not change a row it does not own, so forget and archive send an admin key.
+    adminKey = mintAdminKey(home);
     const handle = await serve({ hippoRoot: home, port: 0 });
     url = handle.url;
     stop = handle.stop;
@@ -143,7 +147,7 @@ describe('routed writes under a busy store', () => {
     async () => {
       const { id } = await client.postRemember(url, undefined, { content: 'forget-busy-canary', force: true });
       const before = await forgottenTotal(home);
-      await expect(landedOnRetry(home, () => client.postForget(url, undefined, id))).resolves.toEqual({
+      await expect(landedOnRetry(home, () => client.postForget(url, adminKey, id))).resolves.toEqual({
         result: { ok: true, id },
         statuses: [503, 200],
       });
@@ -160,12 +164,10 @@ describe('routed writes under a busy store', () => {
         kind: 'raw',
         force: true,
       });
-      await expect(landedOnRetry(home, () => client.postArchiveRaw(url, undefined, id, 'test'))).resolves.toMatchObject(
-        {
-          result: { ok: true },
-          statuses: [503, 200],
-        },
-      );
+      await expect(landedOnRetry(home, () => client.postArchiveRaw(url, adminKey, id, 'test'))).resolves.toMatchObject({
+        result: { ok: true },
+        statuses: [503, 200],
+      });
       expect(count(home, `SELECT COUNT(*) AS n FROM raw_archive WHERE memory_id = ?`, id)).toBe(1);
       expect(count(home, `SELECT COUNT(*) AS n FROM memories WHERE id = ?`, id)).toBe(0);
     },

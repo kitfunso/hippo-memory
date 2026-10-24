@@ -1,5 +1,6 @@
 // A member key reaches a restricted scope's rows by id only with a grant, as recall reads them: without one, DELETE and
-// archive answer 404 exactly as for a missing id and the row stays; with one, or as an admin, both succeed.
+// archive answer 404 exactly as for a missing id and the row stays; with one and the row's owner, or as an admin, both
+// succeed.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -12,6 +13,7 @@ import { loadEntriesByIds, writeEntry } from '../_helpers/root-forms.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 const OPS = 'slack:private:Cops';
+const OWNER = 'oid-ops';
 
 let root: string;
 let handle: ServerHandle;
@@ -19,10 +21,10 @@ let note: MemoryEntry;
 let raw: MemoryEntry;
 const keys = { member: '', granted: '', admin: '' };
 
-function mint(role: 'admin' | 'member', grant?: string): string {
+function mint(role: 'admin' | 'member', grant?: string, ownerSubject?: string): string {
   const db = openHippoDb(root);
   try {
-    const key = createApiKey(db, { tenantId: 'default', role });
+    const key = createApiKey(db, { tenantId: 'default', role, ownerSubject });
     if (grant) grantScope(db, key.keyId, grant);
     return key.plaintext;
   } finally {
@@ -51,11 +53,16 @@ const kept = (): string[] => loadEntriesByIds(root, [note.id, raw.id], 'default'
 
 beforeEach(async () => {
   root = makeRoot('restricted-writes', { config: { embeddings: { enabled: false } } });
-  note = createMemory('the ops rota sits in the locked channel', { tenantId: 'default', scope: OPS });
-  raw = createMemory('raw ops channel message about the rota', { tenantId: 'default', scope: OPS, kind: 'raw' });
+  note = createMemory('the ops rota sits in the locked channel', { tenantId: 'default', scope: OPS, owner: OWNER });
+  raw = createMemory('raw ops channel message about the rota', {
+    tenantId: 'default',
+    scope: OPS,
+    kind: 'raw',
+    owner: OWNER,
+  });
   for (const entry of [note, raw]) writeEntry(root, entry, { actor: 'cli' });
   keys.member = mint('member', 'slack:private:Cother');
-  keys.granted = mint('member', OPS);
+  keys.granted = mint('member', OPS, OWNER);
   keys.admin = mint('admin');
   handle = await serve({ hippoRoot: root, port: 0 });
 });
