@@ -75,7 +75,7 @@ export interface SessionTables {
   /** By tenantKey(tenant, memory id), each entry as it reads back from its stored snapshot. */
   readonly dormant: Map<string, DormantSnapshot>;
   tokenLedger: TokenRow[];
-  readonly recallTraces: RecallTrace[];
+  recallTraces: RecallTrace[];
 }
 
 export function emptySessionTables(): SessionTables {
