@@ -9,7 +9,7 @@ import type { StoreGroups } from '../../store/port.js';
 import { needsNewerHippo } from '../../base/errors/store-open.js';
 import { loadConfig } from '../../host/config-file.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from '../../base/session/compaction-timing.js';
-import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from '../capture/compaction-spool.js';
+import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from '../../infra/compaction-spool.js';
 import { isEmbeddingAvailable } from '../../base/embeddings/local.js';
 import { CODEX_TRUST_LINE } from '../hooks-install/json-hooks.js';
 import { isCodexPresent } from '../hooks-install/detect.js';
