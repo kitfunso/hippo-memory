@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../../base/memory/memory.js';
 import { remember, rawArchive, isPrivateScope, type Context } from '../../api/index.js';
 import type { HippoStore } from '../../store/port.js';
+import type { EntryCursor } from '../../store/port/types.js';
+import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { loadConfig } from '../../host/config-file.js';
@@ -13,15 +15,11 @@ import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { type ImportResult, type ImportOptions } from './core.js';
 import { splitMarkdownFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles } from './markdown-parse.js';
 import { realpathOrResolve } from '../../host/real-path.js';
-import { type JsonValue, isJsonString } from '../../base/util/json.js';
-import type { RawRefRow } from '../../store/port/context-reads.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 
 // K1 vault importer (markdown-vault FOLDER -> kind='raw' memories), following the connector pattern
 // (src/surface/connectors/slack|github). A changed note appends a new raw row after rawArchive of the old one; NEVER
 // `supersede` a raw row (it yields 'distilled' and escapes the deletion rescan).
-
-type VaultRow = RawRefRow;
 
 /** The store a vault import writes to and the batch a dry run's guard probes share; a composition root builds it. */
 export interface VaultTarget {
@@ -141,7 +139,7 @@ interface VaultImportRun {
   scope: string | null;
   extraTags: string[];
   dryRun: boolean;
-  existing: Map<string, VaultRow[]>;
+  existing: Map<string, MemoryEntry[]>;
   seen: Set<string>;
   baseHalfLifeDays: number;
   tally: VaultTally;
@@ -182,16 +180,20 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
   return { vaultName, scope };
 }
 
-async function loadVaultRows(ctx: Context, vaultName: string): Promise<Map<string, VaultRow[]>> {
+async function loadVaultRows(ctx: Context, vaultName: string): Promise<Map<string, MemoryEntry[]>> {
   // One load serves both per-file idempotency and the deletion diff.
-  const rows = await ctx.store.contextReads.rawRowsUnderRef(ctx.tenantId, `vault:${vaultName}:`);
+  const under = { tenantId: ctx.tenantId, kinds: ['raw'], artifactRefPrefix: `vault:${vaultName}:` } as const;
+  const rows = await readAll((after?: EntryCursor) =>
+    ctx.store.reports.entriesWhere(under, { limit: READ_PAGE_ROWS, after }),
+  );
   // Every live row per artifactRef (more than one only after a concurrent double-insert), because a later changed or
   // deletion pass must archive them all or older raw vault content stays searchable.
-  const existing = new Map<string, VaultRow[]>();
+  const existing = new Map<string, MemoryEntry[]>();
   for (const row of rows) {
-    const bucket = existing.get(row.artifact_ref);
+    if (row.artifactRef === null) continue;
+    const bucket = existing.get(row.artifactRef);
     if (bucket) bucket.push(row);
-    else existing.set(row.artifact_ref, [row]);
+    else existing.set(row.artifactRef, [row]);
   }
   return existing;
 }
@@ -235,7 +237,7 @@ async function importVaultNote(run: VaultImportRun, relpath: string): Promise<vo
 async function writeChangedNote(
   run: VaultImportRun,
   artifactRef: string,
-  priors: VaultRow[],
+  priors: MemoryEntry[],
   body: string,
   tags: string[],
 ): Promise<void> {
@@ -298,7 +300,7 @@ function vaultNoteTags(run: VaultImportRun, hashTag: string, fm: Record<string, 
   );
 }
 
-function vaultEnvelopeUnchanged(priors: VaultRow[], tags: string[], scope: string | null): boolean {
+function vaultEnvelopeUnchanged(priors: MemoryEntry[], tags: string[], scope: string | null): boolean {
   // Unchanged iff EVERY live raw row carries the EXACT same tag set AND scope; comparing the complete envelope (not
   // hash plus a subset) catches scope, added and removed tags. `length > 0` guards a never-seen file; archiving all
   // priors on a mismatch also clears concurrent double-inserts.
@@ -307,7 +309,7 @@ function vaultEnvelopeUnchanged(priors: VaultRow[], tags: string[], scope: strin
     priors.length > 0 &&
     priors.every((p) => {
       if ((p.scope ?? null) !== scope) return false;
-      const priorTags = parseJsonArrayLoose(p.tags_json);
+      const priorTags = p.tags;
       return priorTags.length === wantTags.size && priorTags.every((t) => wantTags.has(t));
     })
   );
@@ -345,22 +347,5 @@ async function storeVaultNote(
   } catch (err) {
     if (err instanceof RejectedValueError) return false;
     throw err;
-  }
-}
-
-/** Tolerant JSON-array parse for the loader's `tags_json` column (the store's `parseJsonArray` is not exported);
- * returns [] on null or garbage. */
-function parseJsonArrayLoose(value: string | null | undefined): string[] {
-  if (!value) return [];
-  try {
-    const parsed: JsonValue = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter(isJsonString) : [];
-  } catch (err) {
-    log.warnThenDebug(
-      'import-tags-json-unreadable',
-      `import: unreadable tags_json read as no tags: ${errorMessage(err)}`,
-      errorFields(err),
-    );
-    return [];
   }
 }

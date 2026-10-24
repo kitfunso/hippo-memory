@@ -160,7 +160,7 @@ function skipReason(chunk: string, target: OpenImport): 'too-short' | 'duplicate
 /** Only the rows holding the chunk's words can hold the chunk, so the store is asked for those alone. */
 function storeHolds({ files, tenantId }: OpenImport, chunk: string): boolean {
   const key = duplicateKey(chunk);
-  return files.textKeysHolding(tenantId, [chunk]).some((row) => heldTextKeys(row).includes(key));
+  return files.textKeysHolding({ tenantId }, [chunk]).some((row) => heldTextKeys(row).includes(key));
 }
 
 /** The secret-vetted chunk capped at MAX_IMPORT_CHARS, and whether vetting changed it. */

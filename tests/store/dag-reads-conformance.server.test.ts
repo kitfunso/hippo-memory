@@ -9,7 +9,9 @@ import { shareRoot } from '../_helpers/share-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
 import type { AuditEvent, HippoStore, MemoryEntry } from '../../src/entry/store-kit.js';
-import type { DescendantWalk, SessionRawCount, SessionRawWindow, SummaryDescendants } from '../../src/store/port.js';
+import type { DescendantWalk, SessionRawCount, SummaryDescendants } from '../../src/store/port.js';
+import type { EntryCursor } from '../../src/store/port/types.js';
+import { READ_PAGE_ROWS, readAll } from '../../src/base/util/pages.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
 import {
   onBothStores,
@@ -113,8 +115,11 @@ let fixture: TwoTenantFixture;
 let fixtureAudit: readonly AuditEvent[];
 
 /** Runs the calls on both stores, asserts they agree and wrote no audit row, and returns hippo.db's values. */
-async function conforms<R>(calls: readonly Call<R>[]): Promise<R[]> {
-  const sides = await onBothStores(fixture, 'dagReads', calls);
+async function conformsOn<G extends 'dagReads' | 'reports', R>(
+  group: G,
+  calls: readonly GroupCall<G, R>[],
+): Promise<R[]> {
+  const sides = await onBothStores(fixture, group, calls);
   expectSameOutcomes(sides);
   expect(sides.sqlite.audit).toEqual(fixtureAudit);
   return sides.sqlite.outcomes.map((o) => {
@@ -123,10 +128,27 @@ async function conforms<R>(calls: readonly Call<R>[]): Promise<R[]> {
   });
 }
 
+const conforms = <R>(calls: readonly Call<R>[]): Promise<R[]> => conformsOn('dagReads', calls);
+
+interface RawWindow {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly origins?: readonly string[];
+}
+
+// The read assemble makes: a session's live raw rows, the newest `cap` of them oldest first when `cap` is positive.
 const window =
-  (cap: number, over: Partial<SessionRawWindow> = {}): Call<string[]> =>
-  async (g) =>
-    (await g.sessionRawEntries({ tenantId: TENANT_A, sessionId: SESSION, cap, ...over })).map((r) => r.id);
+  (cap: number, over: Partial<RawWindow> = {}): GroupCall<'reports', string[]> =>
+  async (g) => {
+    const { tenantId, sessionId, origins } = { tenantId: TENANT_A, sessionId: SESSION, ...over };
+    const raws = { tenantId, kinds: ['raw'], live: true, sessionId, origins: origins && ['', ...origins] } as const;
+    const rows =
+      cap > 0
+        ? (await g.entriesWhere(raws, { limit: cap, newest: true })).entries.reverse()
+        : await readAll((after?: EntryCursor) => g.entriesWhere(raws, { limit: READ_PAGE_ROWS, after }));
+    return rows.map((r) => r.id);
+  };
+const raws = (calls: readonly GroupCall<'reports', string[]>[]): Promise<string[][]> => conformsOn('reports', calls);
 const count =
   (over: Partial<SessionRawCount> = {}): Call<number> =>
   (g) =>
@@ -158,10 +180,10 @@ afterAll(() => {
   rmSync(fixture.dir, { recursive: true, force: true });
 });
 
-describe('DagReads.sessionRawEntries', () => {
+describe("Reports.entriesWhere over a session's raw rows", () => {
   it('reads nothing for an empty session id, an unknown session and an unknown tenant', async () => {
     expect(
-      await conforms([
+      await raws([
         window(5, { sessionId: '' }),
         window(5, { sessionId: 'sess-none' }),
         window(5, { tenantId: 'nobody' }),
@@ -170,12 +192,12 @@ describe('DagReads.sessionRawEntries', () => {
   });
 
   it('reads a one-row session, and a whole session oldest first with a shared timestamp ordered by id', async () => {
-    expect(await conforms([window(5, { sessionId: 'sess-one' }), window(100)])).toEqual([['raw_a_solo'], SESSION_IDS]);
+    expect(await raws([window(5, { sessionId: 'sess-one' }), window(100)])).toEqual([['raw_a_solo'], SESSION_IDS]);
   });
 
   it('keeps the newest rows at, under and over the cap, and reads them all for a cap of zero or less', async () => {
     const n = SESSION_IDS.length;
-    const got = await conforms([window(n), window(n - 1), window(n + 1), window(1), window(0), window(-1)]);
+    const got = await raws([window(n), window(n - 1), window(n + 1), window(1), window(0), window(-1)]);
     expect(got).toEqual([
       SESSION_IDS,
       SESSION_IDS.slice(1),
@@ -187,13 +209,13 @@ describe('DagReads.sessionRawEntries', () => {
   });
 
   it('keeps the larger id of two rows sharing a timestamp when the cap falls between them', async () => {
-    const [kept] = await conforms([window(8)]);
+    const [kept] = await raws([window(8)]);
     expect(kept).toEqual(SESSION_IDS.slice(-8));
     expect(kept[0]).toBe('raw_a_tie_y');
   });
 
   it('keeps the named projects beside rows of no project, and drops a row with no recorded origin', async () => {
-    const got = await conforms([
+    const got = await raws([
       window(100, { origins: ['proj'] }),
       window(100, { origins: ['other', 'elsewhere'] }),
       window(100, { origins: [] }),
@@ -206,7 +228,7 @@ describe('DagReads.sessionRawEntries', () => {
   });
 
   it("reads only the asking tenant's rows of a session id two tenants share", async () => {
-    expect(await conforms([window(100, { tenantId: TENANT_B }), window(1, { tenantId: TENANT_B })])).toEqual([
+    expect(await raws([window(100, { tenantId: TENANT_B }), window(1, { tenantId: TENANT_B })])).toEqual([
       ['raw_b_0', 'raw_b_1'],
       ['raw_b_1'],
     ]);

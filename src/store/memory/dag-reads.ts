@@ -46,10 +46,6 @@ function descendantsIn(t: MemoryTables, tenantId: string, id: string, walk: Desc
 
 export function memoryDagReads(t: MemoryTables): DagReads {
   return {
-    async sessionRawEntries(query) {
-      const all = sessionRaws(t, query);
-      return structuredClone(query.cap > 0 ? all.slice(-query.cap) : all);
-    },
     async sessionRawCount(query) {
       const exact = query.scope !== undefined && query.scope !== '';
       const admitted = (e: MemoryEntry): boolean =>

@@ -1,15 +1,14 @@
 import { confirmedOutcomeTimes } from './audit.js';
-import { listCurrentEntriesFromOrigins, listEntriesMentioning, readEntry } from './entry-reads.js';
+import { listEntriesMentioning, readEntry } from './entry-reads.js';
 import { addTagToEntries } from './entry-writes.js';
 import type { Learning } from '../port/learning.js';
 import type { Handles } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 
-const learningReadsBodies: Bodies<Pick<Learning, 'entriesMentioning' | 'readEntry' | 'currentEntriesFromOrigins'>> = {
+const learningReadsBodies: Bodies<Pick<Learning, 'entriesMentioning' | 'readEntry'>> = {
   entriesMentioning: listEntriesMentioning,
   readEntry: readEntry,
-  currentEntriesFromOrigins: listCurrentEntriesFromOrigins,
 };
 
 /** The learn passes' store work on its hippo.db, each call on its own short-lived handle. */

@@ -1,0 +1,3 @@
+### Changed
+
+- **One filtered entry read, `reports.entriesWhere(filter, page)`, and two general dormant and compaction reads replace 19 single-use reads on `hippo-memory/store-kit`.** The `EntryFilter` it takes names a tenant and any of ids, origins, source, a source or artifact prefix, a tag, kinds, live rows and a session; hippo.db compiles it to one bound `WHERE`, and `memoryStore` runs it as a predicate. The `reports`, `learning`, `contextReads`, `dagReads`, `agentImport` and `projectTags` groups lose the folded reads, `projectTags` gains `dormantWhere` and `compactionOrigins`, and `sharing.textKeysHolding` takes an `EntryFilter`. See `docs/UPGRADING-3.0.md`.

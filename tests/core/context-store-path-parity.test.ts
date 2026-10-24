@@ -247,7 +247,7 @@ const CASES: readonly Case[] = [
       expect(p.result.activeSnapshot).toBeUndefined();
       expect(p.result.sessionHandoff?.summary).toBe('globex handoff');
     },
-    storeReads: ['unfinishedHandoff'],
+    storeReads: ['sessions.read'],
   },
 ];
 

@@ -1,7 +1,7 @@
 // The in-memory Reports group: the tallies, listings and usage totals the status verbs print.
 import { calculateStrength, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
 import { keysetPage } from '../../base/util/keyset.js';
-import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
+import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { CONSOLIDATION_RUNS_KEPT } from '../../db/tables.js';
 import type {
@@ -14,8 +14,8 @@ import type {
   StatusCounts,
   StrengthTallies,
 } from '../port/reports.js';
-import type { EntryCursor, EntryPage } from '../port/types.js';
 import { openConflictsIn } from './conflicts.js';
+import { entriesWhereIn } from './entry-filter.js';
 import { failureSummaryIn } from './failure-log.js';
 import { byBytes, oldestFirst } from '../rules/order.js';
 import { tallyStatus } from '../rules/status-tally.js';
@@ -47,25 +47,6 @@ function statusCounts(t: MemoryTables, rules: LossAversion, now: Date, atRiskBel
     openConflicts: openConflictsIn(t, ALL_TENANTS),
     embedded,
   };
-}
-
-/** Rows after `after` in (created, id) order; ALL_TENANTS pages every tenant's rows as one list. */
-function entriesPageIn(
-  t: MemoryTables,
-  tenantId: TenantId,
-  page: { readonly limit: number; readonly after?: EntryCursor },
-): EntryPage {
-  const { after } = page;
-  const later = (e: MemoryEntry): boolean =>
-    after === undefined ||
-    byBytes(e.created, after.created) > 0 ||
-    (e.created === after.created && byBytes(e.id, after.id) > 0);
-  const rows = inStoreOrder(t).filter((e) => (tenantId === ALL_TENANTS || e.tenantId === tenantId) && later(e));
-  const { rows: entries, next } = keysetPage(rows.slice(0, page.limit + 1), page.limit, (e) => ({
-    created: e.created,
-    id: e.id,
-  }));
-  return { entries: structuredClone(entries), next };
 }
 
 /** Each row of `rows` superseded by another of them, in `rows` order, with its successor's extraction source. */
@@ -136,7 +117,7 @@ export function memoryReports(t: MemoryTables, rules: LossAversion): Reports {
       ...strengthTallies(t, rules, tenantId, now, atRiskBelow),
       openConflicts: openConflictsIn(t, tenantId),
     }),
-    entriesPage: async (tenantId, page) => entriesPageIn(t, tenantId, page),
+    entriesWhere: async (filter, page) => entriesWhereIn(t, filter, page),
     countEntries: async () => t.entries.size,
     stats: async () => ({
       total_remembered: counter(t, 'total_remembered'),

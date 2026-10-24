@@ -14,3 +14,23 @@ export function* rowsInPages<T, C>(
     after = page.next ?? undefined;
   } while (after !== undefined);
 }
+
+/** A keyset-paged read that answers through a Promise, one page per call. */
+type PageRead<T, C> = (after: C | undefined) => Promise<{ readonly entries: readonly T[]; readonly next: C | null }>;
+
+/** Each page of `read`, in order, one held at a time. */
+export async function* readPages<T, C>(read: PageRead<T, C>): AsyncGenerator<readonly T[]> {
+  let after: C | undefined;
+  do {
+    const page = await read(after);
+    yield page.entries;
+    after = page.next ?? undefined;
+  } while (after !== undefined);
+}
+
+/** Every row of `read`, in order. */
+export async function readAll<T, C>(read: PageRead<T, C>): Promise<T[]> {
+  const rows: T[] = [];
+  for await (const page of readPages(read)) rows.push(...page);
+  return rows;
+}

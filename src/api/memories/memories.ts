@@ -43,7 +43,7 @@ export async function* memoryPages(
   const limit = Math.max(1, Math.trunc(pageSize));
   let after: EntryCursor | undefined;
   do {
-    const page = await store.reports.entriesPage(tenant, { limit, after });
+    const page = await store.reports.entriesWhere({ tenantId: tenant }, { limit, after });
     yield page.entries;
     after = page.next ?? undefined;
   } while (after);

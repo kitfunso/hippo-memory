@@ -1,22 +1,14 @@
-// AgentImport on hippo.db: reads on a bare handle, and a container's steps in one scope on a handle opened with
-// openStore, whose mirror folders the commit's mirror files need.
+// AgentImport on hippo.db: a container's steps in one scope on a handle opened with openStore, whose mirror folders the
+// commit's mirror files need.
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import { dormantSnapshotsBySourcePrefix } from './dormant-rows.js';
-import { listRowsHoldingOutsideSourcePrefix } from './copy-rows.js';
 import { writeEntryMirrors } from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
 import { openStore } from './handles.js';
 import { waitingOpener, type Handles, type StoreFiles } from './open.js';
-import { bound, type Bodies } from './bound.js';
-import { liveUnder, runSteps } from './agent-import-steps.js';
+import { bound } from './bound.js';
+import { runSteps } from './agent-import-steps.js';
 import type { AgentImport, ContainerApplied, ContainerApply, MirrorFailure } from '../port/agent-import.js';
-
-const importReadsBodies: Bodies<Omit<AgentImport, 'applyContainer'>> = {
-  liveBySourcePrefix: liveUnder,
-  dormantBySourcePrefix: dormantSnapshotsBySourcePrefix,
-  rowsHoldingOutsideSourcePrefix: listRowsHoldingOutsideSourcePrefix,
-};
 
 function applyContainer(db: DatabaseSyncLike, files: StoreFiles, plan: ContainerApply): ContainerApplied {
   const run = () => runSteps(db, files, plan);
@@ -43,12 +35,9 @@ function purgeMirrors(hippoRoot: string, ids: readonly string[]): MirrorFailure[
 
 /** The import's group; `busyWaitMs` replaces each handle's lock wait, as a compaction hook's import asks. */
 export function sqliteAgentImport({ on, files }: Handles, busyWaitMs?: number): AgentImport {
-  return {
-    ...bound(on, importReadsBodies, waitingOpener(busyWaitMs)),
-    ...bound<Pick<AgentImport, 'applyContainer'>>(
-      on,
-      { applyContainer: (db, plan) => applyContainer(db, files, plan) },
-      waitingOpener(busyWaitMs, openStore),
-    ),
-  };
+  return bound<AgentImport>(
+    on,
+    { applyContainer: (db, plan) => applyContainer(db, files, plan) },
+    waitingOpener(busyWaitMs, openStore),
+  );
 }

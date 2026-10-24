@@ -1,30 +1,11 @@
-// The agent-memories import's reads and its one write per container: the sync plans a container's writes as data, and
-// applyContainer runs them in one transaction once the rows they were planned on still stand.
+// The agent-memories import's one write per container: the sync plans a container's writes as data from entry pages,
+// and applyContainer runs them in one transaction once the rows they were planned on still stand.
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { SetAsideResult, SetAsideWhy } from './project-tags.js';
-import type { DormantSnapshot } from './types.js';
 
 export interface AgentImport {
-  /** The tenant's live rows whose source starts with `prefix`, oldest first. */
-  liveBySourcePrefix(tenantId: string, prefix: string): Promise<MemoryEntry[]>;
-  /** The tenant's readable dormant snapshots whose row's source starts with `prefix`. */
-  dormantBySourcePrefix(tenantId: string, prefix: string): Promise<DormantSnapshot[]>;
-  /** Per text, in order: live rows outside `prefix` that may hold it word for word, spacing aside; `origins` (global
-   * store only) keeps user-global rows and those projects. A superset the caller checks again. */
-  rowsHoldingOutsideSourcePrefix(
-    tenantId: string,
-    texts: readonly string[],
-    prefix: string,
-    origins: readonly string[] | null,
-  ): Promise<HeldRow[][]>;
   /** The steps in order in one write scope, or a trial scope that rolls back on `dryRun`; mirrors follow the commit. */
   applyContainer(plan: ContainerApply): Promise<ContainerApplied>;
-}
-
-interface HeldRow {
-  readonly id: string;
-  readonly content: string;
-  readonly source: string;
 }
 
 /** A live row as the plan read it. */

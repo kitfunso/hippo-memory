@@ -583,7 +583,7 @@ describe('markChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'a.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
     const broken = sqliteStore(brokenRoot);
-    vi.spyOn(broken.learning, 'currentEntriesFromOrigins').mockRejectedValue(new Error('disk gone'));
+    vi.spyOn(broken.reports, 'entriesWhere').mockRejectedValue(new Error('disk gone'));
 
     const stores = [
       { root: brokenRoot, store: broken },

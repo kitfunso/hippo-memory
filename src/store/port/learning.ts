@@ -15,8 +15,6 @@ export interface Learning {
   ): Promise<EntryPage>;
   /** The row with `id`; null when absent or in another tenant. */
   readEntry(id: string, tenantId: string): Promise<MemoryEntry | null>;
-  /** Rows of `tenantId` that are current and whose origin project is one of `origins`. */
-  currentEntriesFromOrigins(tenantId: string, origins: readonly string[]): Promise<MemoryEntry[]>;
   /** Adds `tag` to each of the tenant's rows `ids` names that lacks it, in one transaction. */
   addTagToEntries(tenantId: string, ids: readonly string[], tag: string): Promise<void>;
   /** When each memory was last confirmed by a good outcome at or after `since` (an ISO time), by id. */

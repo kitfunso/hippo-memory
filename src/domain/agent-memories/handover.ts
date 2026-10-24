@@ -4,7 +4,7 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { projectNames } from '../../base/scope/project-identity.js';
 import type { ContainerApply, ImportStep, MirrorFailure } from '../../store/port/agent-import.js';
-import type { ContainerWork } from './container-view.js';
+import { liveUnder, type ContainerWork } from './container-view.js';
 import { namesFoldedInto } from './project-folds.js';
 import { toolReport, type ImportReport } from '../../base/memory/agent-memory-report.js';
 import { containerId, containerPrefix, splitSource, type ContainerMachine } from './source.js';
@@ -25,7 +25,7 @@ export async function handOver(
     // A folder with no git and no marker wrote as '' before its store existed, and as its own name after.
     // Names folded into this project's in the global store were its rows too.
     const names = projectNames(opts.machine.projectIdentity(projectRoot));
-    const folded = await namesFoldedInto(store.projectTags, opts.tenantId, names);
+    const folded = await namesFoldedInto(store.auditLog, opts.tenantId, names);
     const origins = [...new Set([...names, ...folded, ''])];
     const at = { origins, tenantId: opts.tenantId, machine: opts.machine, report };
     for (const work of synced) await handOverContainer(store, work, at);
@@ -80,7 +80,7 @@ async function handOverPlan(
   const rows: MemoryEntry[] = [];
   const steps: ImportStep[] = [];
   for (const prefix of prefixes) {
-    for (const row of await store.agentImport.liveBySourcePrefix(tenantId, prefix)) {
+    for (const row of await liveUnder(store, tenantId, prefix)) {
       rows.push(row);
       if (row.tags.includes(tag) && !unread.has(splitSource(row.source, prefix).key)) {
         steps.push({ kind: 'setAside', id: row.id, why: 'handover' });
