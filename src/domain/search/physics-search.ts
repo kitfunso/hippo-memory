@@ -1,11 +1,6 @@
-import {
-  calculateStrength,
-  strengthOptionsOf,
-  type MemoryEntry,
-  type StrengthOptions,
-} from '../../base/memory/memory.js';
+import { calculateStrength, type MemoryEntry, type StrengthOptions } from '../../base/memory/memory.js';
 import { estimateTokens } from '../../base/util/token-text.js';
-import { evalNow } from '../../base/memory/ablation.js';
+import { switchedNow, type EvalSwitches } from '../../base/memory/eval-switches.js';
 import { indexedModel, indexNeedsRebuild } from '../../base/embeddings/index-identity.js';
 import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../../base/rank/physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../../base/rank/physics-config.js';
@@ -14,7 +9,7 @@ import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { HippoStore, VectorReads } from '../../base/ports/store-index.js';
-import { churnStaleFactor, summaryMultipliers, summaryScoring, type SummaryScoring } from './boosts.js';
+import { churnStaleFactor, rankStrength, summaryMultipliers, summaryScoring, type SummaryScoring } from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
 import { fitBudget } from './finalize.js';
 import { hybridSearch } from './hybrid.js';
@@ -59,6 +54,8 @@ export interface PhysicsSearchOptions {
   store?: HippoStore;
   /** The root's environment settings, as hybridSearch takes them. */
   runtime?: RuntimeSettings;
+  /** The eval switches and fake clock the caller runs under; absent, none of them, on the real clock. */
+  switches?: EvalSwitches;
   /** The folder whose path segments boost a memory, as hybridSearch takes it. */
   cwd?: string;
 }
@@ -90,7 +87,7 @@ export async function rankPhysics(
   entries: MemoryEntry[],
   options: PhysicsRankOptions = {},
 ): Promise<SearchResult[]> {
-  const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
+  const now = switchedNow(options.now, options.switches);
   const explain = options.explain ?? false;
   const scoring: PhysicsScoring = { now, explain, summary: summaryScoring(options) };
   const { source } = options;
@@ -111,7 +108,7 @@ export async function rankPhysics(
   const physicsMap = await loadCandidateParticles(store.vectors, pool);
   if (!physicsMap) return hybridSearch(query, pool, { ...hybrid, queryEmbedDeadline });
 
-  const pools = splitByParticle(pool, physicsMap, queryVector, now, strengthOptionsOf(options.runtime));
+  const pools = splitByParticle(pool, physicsMap, queryVector, now, rankStrength(options));
   const config = options.physicsConfig ?? DEFAULT_PHYSICS_CONFIG;
   const physicsResults = scorePhysicsPool(pools, queryVector, config, scoring);
   const classicResults =

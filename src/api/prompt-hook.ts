@@ -1,7 +1,8 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote
 // hook route's call). promptHookContext keeps the server-side copy of the CLI's contextGet flags
 // (surface/cli/context.ts); only the CLI parity case in tests/store/prompt-hook-context.process.test.ts ties the two.
-import { contextGet, type Context, type ContextResult, type ContextResultEntry } from './index.js';
+import type { Context, ContextResult, ContextResultEntry } from './index.js';
+import { assembleContext } from './context.js';
 import { sharedStoreOf } from './types.js';
 import { BadRequestError } from '../base/errors/api-errors.js';
 import type { HippoConfig } from '../base/config/config.js';
@@ -389,7 +390,7 @@ export async function buildPromptHookContext(
   const arm = await sessionPilotArm(ctx.tenantId, sessionId, !subagent, armOpts);
   if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
   const prompt = payload?.prompt;
-  const result = await contextGet(ctx, {
+  const result = await assembleContext(ctx, {
     budget: HOOK_BUDGET,
     pinnedOnly: true,
     includeRecent: HOOK_INCLUDE_RECENT,

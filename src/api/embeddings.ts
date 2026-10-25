@@ -5,20 +5,23 @@ import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { MemoryEntry } from '../base/memory/memory.js';
 import type { EmbeddingProvider } from '../base/ports/embedder.js';
 import { embedAll, embedMemoryDetached, folderEmbedTarget, indexStep } from '../domain/search/embed-memories.js';
+import { evalSwitches } from '../base/memory/ablation.js';
 import type { HippoStore, VectorCoverage } from '../base/ports/store.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
-/** Embeds each row a capture writes into `folder`'s index without holding the capture up; a failure is a warning. */
+/** Embeds each row a capture writes into `folder`'s index without holding the capture up; a failure is a warning. A
+ * capture runs outside any Context, so it reads the eval switches from the environment. */
 export function detachedEmbedder(folder: ConfiguredFolder<HippoStore>): (entry: MemoryEntry) => void {
-  const target = folderEmbedTarget(folder);
+  const target = folderEmbedTarget(folder, evalSwitches());
   return (entry) => embedMemoryDetached(target, entry);
 }
 
 /** Embed every memory that has no vector yet; resolves to how many it embedded. */
 export async function memoryEmbedMissing(ctx: Context, provider?: EmbeddingProvider): Promise<number> {
   requireHostAdmin(ctx, 'Embedding the store');
-  const { embedderFor } = ctx.infra;
-  return embedAll(folderEmbedTarget({ store: ctx.store, config: ctx.config, embedderFor }), undefined, provider);
+  const { embedderFor, evalSwitches: switches } = ctx.infra;
+  const target = folderEmbedTarget({ store: ctx.store, config: ctx.config, embedderFor }, switches);
+  return embedAll(target, undefined, provider);
 }
 
 /** How many vectors the store holds, live memory or not. */

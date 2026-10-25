@@ -129,8 +129,8 @@ describe('HIPPO_ABLATE_RECENCY / HIPPO_EVAL_RECENCY_DAYS', () => {
   it('outcomeMultiplier matches the breakdown outcomeBoost', async () => {
     const m = applyOutcome(createMemory('outcome parity memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), true);
     const [r] = await hybridSearch('outcome parity', [m], { budget: 10000, explain: true });
-    expect(outcomeMultiplier(m)).toBe(r.breakdown!.outcomeBoost);
-    expect(outcomeMultiplier(m)).toBeGreaterThan(1);
+    expect(outcomeMultiplier(m, false)).toBe(r.breakdown!.outcomeBoost);
+    expect(outcomeMultiplier(m, false)).toBeGreaterThan(1);
   });
 });
 

@@ -5,6 +5,7 @@ import { BlockList, isIP } from 'node:net';
 import { log } from '../../base/util/log.js';
 import type { RateLimiter } from './rate-limit.js';
 import { HttpError } from '../../base/util/http-util.js';
+import { blockHash } from '../../base/util/token-text.js';
 
 const IPV6_PREFIX_GROUPS = 3;
 
@@ -122,6 +123,12 @@ function subscriberKey(ip: string): string {
  * or evicts another client's. */
 export function clientLimitKey(req: IncomingMessage): string {
   return subscriberKey(clientIpForRateLimit(req));
+}
+
+/** Which client a request comes from, so its last shown ids never mix with another's. The bearer is hashed so the raw
+ * token is never logged; MCP over HTTP and the REST routes share the key, so a client's outcome finds its recall. */
+export function clientKeyOf(req: IncomingMessage, bearer: string | undefined): string {
+  return `http:${bearer === undefined ? 'noauth' : blockHash(bearer)}:${clientLimitKey(req)}`;
 }
 
 function isTrustedProxy(list: BlockList, ip: string): boolean {

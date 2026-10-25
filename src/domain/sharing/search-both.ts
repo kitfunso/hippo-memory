@@ -19,7 +19,8 @@ import {
   type ResultCost,
 } from '../../base/rank/search-types.js';
 import { startQueryEmbedDeadline, type HybridVectorCandidates, type VectorSource } from '../search/vector.js';
-import { evalNow } from '../../base/memory/ablation.js';
+import { evalSwitches } from '../../base/memory/ablation.js';
+import { switchedNow, type EvalSwitches } from '../../base/memory/eval-switches.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -55,6 +56,8 @@ export interface HybridSearchOptions extends SearchOptions {
   runtime?: RuntimeSettings;
   /** The folder the caller runs in, whose path segments boost a memory in both stores; absent, no path boost. */
   cwd?: string;
+  /** The eval switches and fake clock both stores rank under; absent, the environment's. */
+  switches?: EvalSwitches;
   /** Include superseded memories in results. Default false. */
   includeSuperseded?: boolean;
   /** Filter to memories current at this ISO date string. */
@@ -189,7 +192,7 @@ export async function rankBothStores(
 ): Promise<SearchResult[]> {
   const {
     budget = DEFAULT_RECALL_BUDGET,
-    now = evalNow(),
+    switches = evalSwitches(),
     embeddingWeight,
     explain,
     mmr,
@@ -207,7 +210,8 @@ export async function rankBothStores(
   // One deadline for both stores, so a provider that stalls on the first is not waited on again for the second.
   const shared = {
     budget,
-    now,
+    now: switchedNow(options.now, switches),
+    switches,
     embeddingWeight,
     explain,
     mmr,

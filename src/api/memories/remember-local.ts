@@ -66,7 +66,8 @@ async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
 /** Best-effort and slow (a model load or a network call), so the caller is not held for it; a row left out of the index
  * is logged. */
 function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutcome> {
-  const target = folderEmbedTarget({ store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor });
+  const folder = { store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor };
+  const target = folderEmbedTarget(folder, ctx.infra.evalSwitches);
   return embedMemoryInto(target, entry).then((outcome) => {
     if (outcome === 'failed') {
       log.warn(

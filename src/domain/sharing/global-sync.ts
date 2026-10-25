@@ -8,6 +8,7 @@ import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { classifyOriginProject, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedAll, folderEmbedTarget } from '../search/embed-memories.js';
+import { evalSwitches } from '../../base/memory/ablation.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { log } from '../../base/util/log.js';
 import type { EntryTextKey, Sharing } from '../../base/ports/store.js';
@@ -139,6 +140,6 @@ function finishSyncDown(into: ConfiguredFolder<SharingStore>, count: number, rej
   // Batch producer: one embedAll() on the destination rather than an embedMemory() per copied row (same batching
   // invariant as autoShare).
   if (count > 0) {
-    void embedAll(folderEmbedTarget(into)).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
+    void embedAll(folderEmbedTarget(into, evalSwitches())).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
   }
 }

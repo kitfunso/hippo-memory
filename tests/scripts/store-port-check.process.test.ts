@@ -433,7 +433,7 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('fails and names each surface file that records a recall itself, in a route or a CLI verb', () => {
+  it('fails and names each surface file that records a recall itself, in a route, a CLI verb or an MCP tool', () => {
     const route = [
       "import { noteRecall as n } from '../../../api/recall/finish.js';",
       'export const f = (s: any, ctx: any) => {',
@@ -442,7 +442,13 @@ describe('check-store-port.mjs', () => {
       '};',
     ].join('\n');
     const verb = "export const g = (store: any) => store.recordTokens({ surface: 'recall', items: 1 });\n";
-    withFixture({ 'src/surface/server/routes/recall.ts': route, 'src/surface/cli/recall.ts': verb }, {}, ({ run }) => {
+    const tool = "export const h = (ctx: any) => ctx.callers?.lastShown.set('k', []);\n";
+    const files = {
+      'src/surface/server/routes/recall.ts': route,
+      'src/surface/cli/recall.ts': verb,
+      'src/surface/mcp/recall-tools.ts': tool,
+    };
+    withFixture(files, {}, ({ run }) => {
       for (const args of [[], ['--list'], ['--update']]) {
         const r = run(...args);
         expect(r.status, args.join()).toBe(1);
@@ -450,17 +456,19 @@ describe('check-store-port.mjs', () => {
         expect(r.stderr).toContain('src/surface/server/routes/recall.ts:3 bumpRecallStats');
         expect(r.stderr).toContain('src/surface/server/routes/recall.ts:4 recordTokens with a recall label');
         expect(r.stderr).toContain('src/surface/cli/recall.ts:1 recordTokens with a recall label');
+        expect(r.stderr).toContain('src/surface/mcp/recall-tools.ts:1 lastShown');
         expect(r.stderr).toContain('recall/finish.ts');
       }
     });
   });
 
-  it('lets src/api and src/surface/mcp record a recall, and a route book another label or name a recorder in a comment or string', () => {
+  it('lets src/api record a recall, and a surface book another label or name a recorder in a comment or string', () => {
     const records = [
       'export const f = (s: any, ring: any, ctx: any) => {',
       '  noteRecall(ring);',
       '  s.bumpRecallStats(1);',
       "  recordTokens(ctx, 'mcp_recall', {});",
+      "  ctx.callers?.lastShown.set('k', []);",
       '};',
     ].join('\n');
     const route = [
@@ -471,7 +479,7 @@ describe('check-store-port.mjs', () => {
     withFixture(
       {
         'src/api/recall/finish.ts': records,
-        'src/surface/mcp/recall-tools.ts': records,
+        'src/surface/mcp/request.ts': "export const t = (ctx: any) => recordTokens(ctx, 'mcp_context', {});\n",
         'src/surface/server/routes/recall.ts': route,
       },
       {},

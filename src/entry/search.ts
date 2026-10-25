@@ -1,18 +1,19 @@
-// The `hippo-memory/search` entry's rankers. The ones that boost by path read the caller's working folder here, at the
-// entry, so the domain rankers take it as an input.
+// The `hippo-memory/search` entry's rankers. The caller's working folder and the eval switches in the environment are
+// read here, at the entry, so the domain rankers take both as inputs.
 import type { MemoryEntry } from '../base/memory/memory.js';
 import type { SearchResult } from '../base/rank/search-types.js';
 import { rankBm25, type SearchOptions } from '../domain/search/bm25-search.js';
 import { rankMultihop } from '../domain/search/multihop.js';
+import { withEvalSwitches } from './folder-search.js';
 
 /** BM25 * strength * recency with the rank boosts; path tags come from `options.cwd`, else the process's folder. */
 export function search(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {
-  return rankBm25(query, entries, { ...options, cwd: options.cwd ?? process.cwd() });
+  return rankBm25(query, entries, withEvalSwitches({ ...options, cwd: options.cwd ?? process.cwd() }));
 }
 
 /** Two BM25 passes, the second widened by the entities the first found; the working folder defaults as in search. */
 export function multihopSearch(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {
-  return rankMultihop(query, entries, { ...options, cwd: options.cwd ?? process.cwd() });
+  return rankMultihop(query, entries, withEvalSwitches({ ...options, cwd: options.cwd ?? process.cwd() }));
 }
 
 export { hybridSearch } from './folder-search.js';

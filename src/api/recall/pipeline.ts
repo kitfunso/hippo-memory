@@ -1,14 +1,13 @@
-// The one recall ranker: CLI, MCP and HTTP recall each load, search, expand, re-rank and filter here under their
-// profile, with no writes and no direct output. Callers own flag parsing, printing, budget fitting and persistence.
+// The one recall ranker: every recall loads, searches, expands, re-ranks and filters here under the profile its caller
+// picks, with no writes and no direct output. Callers own parsing, printing, budget fitting and persistence.
 
-import { evalNow } from '../../base/memory/ablation.js';
+import { switchedNow, type EvalSwitches } from '../../base/memory/eval-switches.js';
 import { oneCopyPerMemory } from '../context-select.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
-import { isEmbeddingAvailable } from '../../base/embeddings/local.js';
 import { boostByGoals } from '../../domain/search/goal-boost.js';
 import { graphExpandRecall } from '../../domain/graph/recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../domain/graph/stream.js';
-import { Layer, strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { rankMultihop } from '../../domain/search/multihop.js';
 import type { PhysicsConfig } from '../../base/rank/physics-config.js';
 import {
@@ -18,7 +17,7 @@ import {
 } from '../../base/scope/recall-scope.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import { currentEntries } from '../../domain/search/as-of.js';
-import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../../domain/search/boosts.js';
+import { rankStrength, STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../../domain/search/boosts.js';
 import { hybridSearch, vectorSourceOf } from '../../domain/search/hybrid.js';
 import { applyReranker } from '../../domain/search/rerank.js';
 import { searchByEngine } from '../../domain/search/engine.js';
@@ -68,6 +67,8 @@ export interface RankRecallCtx extends RankSource {
   embedderFor: EmbedderFor;
   /** The folder whose path segments boost a memory; absent, no path boost. */
   cwd?: string;
+  /** The eval switches and fake clock the context's root read; absent, none of them, on the real clock. */
+  switches?: EvalSwitches;
   /** Receives each operator note when the pipeline reaches it, so it interleaves with other stderr in order. */
   note?: (line: string) => void;
 }
@@ -108,9 +109,6 @@ export interface RecallReranker {
   topK: number;
 }
 
-/** A stage rankRecall can stop before, in pipeline order. */
-export type RankStage = 'expand' | 'rerank' | 'salience' | 'outcome' | 'layer';
-
 /** The rows a ranking may return, and the scope its boosts favour. */
 export interface RankRecallFilters {
   includeSuperseded: boolean;
@@ -140,9 +138,6 @@ export interface RankRecallStages {
   salienceThreshold?: number;
   outcome?: string;
   layer?: string;
-  /** The caller rejected a flag this stage reads; ranking stops before it so the notes and goal-log rows produced up to
-   *  there match the CLI's error path. */
-  haltBefore?: RankStage;
 }
 
 /** Everything that shapes one ranking, already parsed and validated. */
@@ -176,8 +171,6 @@ export interface RankRecallResult {
   /** The goals the ranked goal pass read, so a band pass need not read them again: null when the pass had no session
    *  to read for, absent when the profile runs no ranked pass. */
   goals?: ActiveGoals | null;
-  /** True when ranking stopped at `haltBefore`. */
-  halted: boolean;
 }
 
 interface RecallPool {
@@ -218,10 +211,11 @@ export function rankCtxOf(ctx: Context): RankRecallCtx {
     tenantId: ctx.tenantId,
     embedderFor: ctx.infra.embedderFor,
     cwd: ctx.infra.machine.cwd,
+    switches: ctx.infra.evalSwitches,
   };
 }
 
-/** Ranks memories for a query under the surface's `profile`; notes go to `ctx.note`, and the caller supplies the cost
+/** Ranks memories for a query under the caller's `profile`; notes go to `ctx.note`, and the caller supplies the cost
  * function and reranker in `request` and writes the returned goal-log rows. */
 export async function rankRecall(
   ctx: RankRecallCtx,
@@ -232,7 +226,12 @@ export async function rankRecall(
   const reach: RankRecallCtx = profile.globalReach ? ctx : { ...ctx, global: undefined };
   const pool = await loadRecallPool(reach, opts, profile);
   const state: RankState = { results: [], droppedPreRank: pool.dropped, graphAdded: 0, goalRecallLog: [] };
-  const done = (halted: boolean): RankRecallResult => ({
+  state.results = await searchPool(reach, opts, pool, profile);
+  // A request past its deadline during the search has no caller left for the later stages.
+  currentSignal()?.throwIfAborted();
+  await rankStages(reach, opts, state, profile);
+  if (opts.limit < state.results.length) state.results = state.results.slice(0, opts.limit);
+  return {
     results: state.results,
     localEntries: pool.local,
     globalEntries: pool.global,
@@ -241,67 +240,26 @@ export async function rankRecall(
     graphAdded: state.graphAdded,
     goalRecallLog: state.goalRecallLog,
     goals: state.goals,
-    halted,
-  });
-
-  state.results = await searchPool(reach, opts, pool, profile);
-  // A request past its deadline during the search has no caller left for the later stages.
-  currentSignal()?.throwIfAborted();
-  for (const stage of RANK_STAGES) {
-    if (opts.haltBefore === stage.name) return done(true);
-    await stage.run(reach, opts, state, profile);
-  }
-  if (opts.limit < state.results.length) state.results = state.results.slice(0, opts.limit);
-  return done(false);
+  };
 }
 
-/** The stages after the search, in order; `haltBefore` stops the walk ahead of the stage it names. */
-const RANK_STAGES: readonly {
-  readonly name: RankStage;
-  readonly run: (
-    ctx: RankRecallCtx,
-    opts: SettledOptions,
-    state: RankState,
-    profile: RecallProfile,
-  ) => void | Promise<void>;
-}[] = [
-  {
-    name: 'expand',
-    run: async (ctx, opts, state) => {
-      if (opts.graphHops) await expandGraph(ctx, opts, opts.graphHops, state);
-      reorderResults(opts, state);
-    },
-  },
-  {
-    name: 'rerank',
-    run: async (ctx, opts, state, profile) => {
-      if (opts.reranker) state.results = await applyRecallReranker(opts, opts.reranker, state.results, ctx.config);
-      if (profile.goalBoost.ranked) await applyGoalBoosts(ctx, opts, state);
-    },
-  },
-  {
-    name: 'salience',
-    run: (_ctx, opts, state) => {
-      if (opts.salienceThreshold !== undefined) {
-        state.results = applySalience(opts, opts.salienceThreshold, state.results);
-      }
-    },
-  },
-  {
-    name: 'outcome',
-    run: (_ctx, opts, state) => {
-      if (opts.outcome) {
-        dropUnless(state, (r) => r.entry.layer !== Layer.Trace || r.entry.traceOutcome === opts.outcome);
-      }
-    },
-  },
-  {
-    name: 'layer',
-    run: (_ctx, opts, state) => {
-      if (opts.layer) dropUnless(state, (r) => r.entry.layer === opts.layer);
-    },
-  },
-];
+/** The stages after the search, in order: graph expansion, re-rank, goal boost, salience, then the outcome and layer
+ * filters. */
+async function rankStages(
+  ctx: RankRecallCtx,
+  opts: SettledOptions,
+  state: RankState,
+  profile: RecallProfile,
+): Promise<void> {
+  if (opts.graphHops) await expandGraph(ctx, opts, opts.graphHops, state);
+  reorderResults(opts, state);
+  if (opts.reranker) state.results = await applyRecallReranker(opts, opts.reranker, state.results, ctx.config);
+  if (profile.goalBoost.ranked) await applyGoalBoosts(ctx, opts, state);
+  if (opts.salienceThreshold !== undefined) state.results = applySalience(opts, opts.salienceThreshold, state.results);
+  const { outcome, layer } = opts;
+  if (outcome) dropUnless(state, (r) => r.entry.layer !== Layer.Trace || r.entry.traceOutcome === outcome);
+  if (layer) dropUnless(state, (r) => r.entry.layer === layer);
+}
 
 interface PoolScope {
   /** An explicit --scope unlocks that envelope scope; the regex-only `<source>:private:*` deny is the JS half. */
@@ -369,7 +327,7 @@ function graphStreamSearch(
   const { query, budget, cost, includeSuperseded, asOf, search } = opts;
   const { mmr, mmrLambda, minResults } = search;
   // Without embeddings hybridSearch falls back to BM25-only and the stream is inert; say so rather than no-op.
-  if (!isEmbeddingAvailable()) {
+  if (!ctx.embedderFor(ctx.config.embeddings).isAvailable()) {
     ctx.note?.(
       '[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run ' +
         '`hippo embed` first.',
@@ -384,6 +342,7 @@ function graphStreamSearch(
     cost,
     runtime: ctx.config.runtime,
     cwd: ctx.cwd,
+    switches: ctx.switches,
     source: vectorSourceOf(ctx),
     mmr,
     mmrLambda,
@@ -405,7 +364,8 @@ function multihopPoolSearch(ctx: RankRecallCtx, opts: SettledOptions, pool: Reca
   const { query, budget, cost, includeSuperseded, asOf, search } = opts;
   const { minResults } = search;
   // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
-  const allEntries = oneCopyPerMemory(pool.local, pool.global, evalNow(), strengthOptionsOf(ctx.config.runtime)).flat();
+  const strength = rankStrength({ switches: ctx.switches, runtime: ctx.config.runtime });
+  const allEntries = oneCopyPerMemory(pool.local, pool.global, switchedNow(undefined, ctx.switches), strength).flat();
   const globalIds = new Set(pool.global.map((e) => e.id));
   const localIds = new Set(pool.local.map((e) => e.id));
   const fromGlobal = (id: string): boolean => globalIds.has(id) && !localIds.has(id);
@@ -418,6 +378,7 @@ function multihopPoolSearch(ctx: RankRecallCtx, opts: SettledOptions, pool: Reca
     scope: ctx.config.runtime?.activeScope ?? null,
     runtime: ctx.config.runtime,
     cwd: ctx.cwd,
+    switches: ctx.switches,
   });
   return results.map((r) => ({ ...r, isGlobal: fromGlobal(r.entry.id) }));
 }
@@ -463,6 +424,7 @@ async function engineSearch(ctx: RankRecallCtx, opts: SettledOptions, poolSearch
   if (search.graphStream) return graphStreamSearch(ctx, opts, search.graphStream, poolSearch);
   if (search.multihop) return multihopPoolSearch(ctx, opts, pool);
   const vectorCandidates = poolVectorCandidates(ctx, opts);
+  const shared = { budget, cost, explain, scope, runtime: ctx.config.runtime, cwd: ctx.cwd, switches: ctx.switches };
   if (ctx.global && pool.global.length > 0) {
     // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it rather than read both
     // stores again.
@@ -471,20 +433,7 @@ async function engineSearch(ctx: RankRecallCtx, opts: SettledOptions, poolSearch
       { local: vectorSourceOf(ctx), global: vectorSourceOf({ ...ctx.global, embedderFor: ctx.embedderFor }) },
       { local: pool.local, global: pool.global },
       vectorCandidates,
-      {
-        budget,
-        cost,
-        explain,
-        mmr,
-        mmrLambda,
-        localBump: search.localBump,
-        minResults,
-        scope,
-        runtime: ctx.config.runtime,
-        cwd: ctx.cwd,
-        includeSuperseded,
-        asOf,
-      },
+      { ...shared, mmr, mmrLambda, localBump: search.localBump, minResults, includeSuperseded, asOf },
     );
   }
   const physics = search.usePhysics ? search.physicsConfig : null;
@@ -495,16 +444,7 @@ async function engineSearch(ctx: RankRecallCtx, opts: SettledOptions, poolSearch
     : explain
       ? { asOf }
       : { minResults, includeSuperseded, asOf };
-  return searchByEngine(vectorSourceOf(ctx), query, pool.local, physics, {
-    budget,
-    cost,
-    scope,
-    runtime: ctx.config.runtime,
-    cwd: ctx.cwd,
-    explain,
-    vectorCandidates,
-    ...tuning,
-  });
+  return searchByEngine(vectorSourceOf(ctx), query, pool.local, physics, { ...shared, vectorCandidates, ...tuning });
 }
 
 /** `first`, then the rows of `second` that `first` does not hold. */

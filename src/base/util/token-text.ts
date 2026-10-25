@@ -33,21 +33,3 @@ export function tokenPurse(allowance: number) {
     left: (): number => left,
   };
 }
-
-/** Renders `count` rows, then drops the lowest-ranked one until the text fits `budget` or only `floor` rows remain. */
-export function shrinkToFit<R>(
-  count: number,
-  floor: number,
-  budget: number,
-  render: (kept: number) => R,
-  textOf: (rendered: R) => string,
-): R {
-  let kept = count;
-  let rendered = render(kept);
-  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after each drop.
-  while (kept > floor && estimateTokens(textOf(rendered)) > budget) {
-    kept--;
-    rendered = render(kept);
-  }
-  return rendered;
-}

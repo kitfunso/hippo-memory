@@ -3,6 +3,8 @@
 
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
+import { evalSwitches } from '../../base/memory/ablation.js';
+import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { searchBothHybrid } from '../sharing/search-both.js';
@@ -67,6 +69,8 @@ export interface RunEvalOptions {
   runtime?: RuntimeSettings;
   /** The folder whose path segments boost a memory, as recall's are. */
   cwd?: string;
+  /** The eval switches and fake clock the cases rank under; absent, the environment's. */
+  switches?: EvalSwitches;
 }
 
 /** Mean Reciprocal Rank for a single ranking given expected ids. */
@@ -152,6 +156,7 @@ export async function runEval(
 function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOptions) {
   const budget = options.budget ?? DEFAULT_EVAL_BUDGET;
   const { stores } = options;
+  const switches = options.switches ?? evalSwitches();
   return stores
     ? searchBothHybrid(query, stores.local, stores.global, {
         tenantId: ALL_TENANTS,
@@ -164,6 +169,7 @@ function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOpti
         localBump: options.localBump,
         runtime: options.runtime,
         cwd: options.cwd,
+        switches,
       })
     : hybridSearch(query, entries, {
         budget,
@@ -174,6 +180,7 @@ function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOpti
         mmrLambda: options.mmrLambda,
         runtime: options.runtime,
         cwd: options.cwd,
+        switches,
       });
 }
 

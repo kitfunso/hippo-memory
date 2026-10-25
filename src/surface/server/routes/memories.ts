@@ -3,7 +3,7 @@ import { graphEntityOf, graphView } from '../../../api/objects/graph.js';
 import { rawArchive, forget, outcome, promote, remember, supersede } from '../../../api/index.js';
 import { MEMORY_KINDS, type MemoryKind } from '../../../base/memory/memory.js';
 import { HttpError, sendJson } from '../../../base/util/http-util.js';
-import { restClientKey } from '../client-key.js';
+import { keptShownIds } from '../../../api/recall/last-recalled.js';
 import type { ContextWith } from '../../../api/types.js';
 import type { AuthedRouteRequest, RouteParams } from '../types.js';
 import {
@@ -125,7 +125,7 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
     const { applied } = await outcome(ctx, ids, good);
     sendJson(res, 200, { applied });
   } else {
-    const shown = ctx.callers?.lastShown.get(restClientKey(req, ctx)) ?? [];
+    const shown = keptShownIds(ctx);
     const { applied, appliedIds } = await outcome(ctx, shown, good);
     sendJson(res, 200, { applied, ids: appliedIds });
   }

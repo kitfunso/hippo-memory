@@ -5,7 +5,8 @@
  * repulsion and drag act on them, and nearby high-scoring memories amplify each other. */
 
 import { cosineOf } from './cosine.js';
-import { evalNow, NO_STRENGTH_ABLATION, type StrengthAblation } from '../memory/ablation.js';
+import { evalNow } from '../memory/ablation.js';
+import { NO_STRENGTH_ABLATION, type StrengthAblation } from '../memory/eval-switches.js';
 import {
   calculateStrength,
   FALLBACK_HALF_LIFE_DAYS,

@@ -1,7 +1,9 @@
 // Embeds memories into the vector index: asks the target's embedder for the configured provider, computes each vector
 // and hands it to the store, which only keeps it (src/base/ports/store.ts VectorWrites).
 
-import { strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../../base/memory/memory.js';
+import type { MemoryEntry, StrengthOptions } from '../../base/memory/memory.js';
+import type { EvalSwitches } from '../../base/memory/eval-switches.js';
+import { rankStrength } from './boosts.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { initializeParticle } from '../../base/rank/physics.js';
 import type { EmbedderFor, EmbeddingProvider } from '../../base/ports/embedder.js';
@@ -322,15 +324,18 @@ export interface StoreEmbedTarget extends EmbedWith {
   readonly strength: StrengthOptions;
 }
 
-/** The store's own index when it keeps one, else its vector groups. */
-export function folderEmbedTarget({ store, config, embedderFor }: ConfiguredFolder<HippoStore>): EmbedTarget {
+/** The store's own index when it keeps one, else its vector groups, whose seeded particles score under `switches`. */
+export function folderEmbedTarget(
+  { store, config, embedderFor }: ConfiguredFolder<HippoStore>,
+  switches: EvalSwitches | undefined,
+): EmbedTarget {
   const { embeddingIndex } = store;
   const { embeddings } = config;
   if (embeddingIndex !== undefined) {
     const rows: IndexRows = { entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
     return { embeddingIndex, rows, embeddings, embedderFor };
   }
-  return { store, embeddings, embedderFor, strength: strengthOptionsOf(config.runtime) };
+  return { store, embeddings, embedderFor, strength: rankStrength({ switches, runtime: config.runtime }) };
 }
 
 /** Embed a single memory entry and cache the result in the embedding index; with a store, through its vectorWrites.

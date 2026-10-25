@@ -16,13 +16,12 @@ import { continuityJson, sessionEventJson, snapshotJson } from '../../../api/con
 import { httpParams, parseContextRequest, parseRecallRequest } from '../../../api/recall/request.js';
 import { HttpError, sendJson } from '../../../base/util/http-util.js';
 import type { AuthedRouteRequest, RouteParams } from '../types.js';
-import { restClientKey } from '../client-key.js';
 import { sharedStoreOf, type Context } from '../../../api/types.js';
 import { MAX_LIST_LIMIT } from '../../../base/util/limits.js';
 import { parseIntParam, parseLimitParam, parseNumberParam, validateIdSegment } from '../validation.js';
 
 // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
-export async function handleRecallMemories({ req, res, ctx, query }: AuthedRouteRequest): Promise<void> {
+export async function handleRecallMemories({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const { opts: recallOpts, limit, mode, explain } = parseRecallRequest(httpParams(query));
   const result = await retrieve(ctx, {
     ...recallOpts,
@@ -30,10 +29,6 @@ export async function handleRecallMemories({ req, res, ctx, query }: AuthedRoute
     mode,
     trace: { explain, recordAs: RECALL_RECORDING.http },
   });
-  ctx.callers?.lastShown.set(
-    restClientKey(req, ctx),
-    result.results.map((r) => r.id),
-  );
 
   sendJson(res, 200, result.continuity ? { ...result, continuity: continuityJson(result.continuity) } : result);
   return;
@@ -115,17 +110,13 @@ function contextReader(ctx: Context, hippoRoot: string, query: URLSearchParams):
 // Bearer.
 // Pinned-only and '*' fallback skip the recall audit emit (as printContext does); a real-query hybrid search emits one
 // 'recall' row.
-export async function handleGetContext({ req, res, ctx, query, opts }: AuthedRouteRequest): Promise<void> {
+export async function handleGetContext({ res, ctx, query, opts }: AuthedRouteRequest): Promise<void> {
   const parsed = parseContextRequest(httpParams(query));
   const result = await contextGet(ctx, {
     ...parsed,
     currentProject: contextReader(ctx, opts.hippoRoot, query),
     cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
   });
-  ctx.callers?.lastShown.set(
-    restClientKey(req, ctx),
-    result.entries.map((r) => r.entry.id),
-  );
   await recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });
   sendJson(res, 200, {
     ...result,

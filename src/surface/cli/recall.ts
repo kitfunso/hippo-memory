@@ -4,7 +4,7 @@ import { envActiveScope, envHippoSessionId } from '../../base/util/env.js';
 import type { CallerState } from '../../api/callers.js';
 import { Layer } from '../../base/memory/memory.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../../base/rank/search-types.js';
-import { estimateTokens, shrinkToFit, tokenPurse } from '../../base/util/token-text.js';
+import { estimateTokens, tokenPurse } from '../../base/util/token-text.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
 import * as api from '../../api/index.js';
 import type {
@@ -18,7 +18,6 @@ import type { AvailabilityHint } from '../../api/availability.js';
 import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../../api/context-render.js';
 import type {
   RankRecallResult,
-  RankStage,
   RecallGraphHops,
   RecallGraphStream,
   RecallReranker,
@@ -35,7 +34,7 @@ import {
   recallRerankerPick,
   recallStoreSetting,
   DEFAULT_MAX_NEIGHBORS,
-  fitRecallRows,
+  fitRecall,
   loadScopedContinuity,
   MAX_HOPS,
   recallJsonRow,
@@ -48,6 +47,7 @@ import { printError } from './output.js';
 import {
   type CliFlags,
   type CommandContext,
+  type EngineFlags,
   type ParsedFlag,
   boolFlag,
   engineFlags,
@@ -92,19 +92,12 @@ function cutoffLine(shown: number, s: api.RecallSuppressionSummary): string | nu
     : null;
 }
 
-/** A bad flag a ranking stage reads fails once ranking halts before that stage, so earlier notes print first. */
-interface LateFlagError {
-  stage: RankStage;
-  fail: () => never;
-}
-
-interface RecallLateFlags {
+interface RecallStageFlags {
   graphHops?: RecallGraphHops;
   reranker?: RecallReranker;
   salienceThreshold?: number;
   outcome?: string;
   layer?: string;
-  error?: LateFlagError;
 }
 
 /** `--graph-stream` implies rrf fusion as well as the graph stream; the CLI fuses the local store only. */
@@ -132,7 +125,7 @@ function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
   try {
     picked = recallRerankerPick({ infra: cliInfra() }, name);
   } catch (err) {
-    // Deferred like every late flag: the unknown name reaches the top-level handler after earlier stages' notes.
+    // Deferred like the other stage flags, so a bad flag earlier in pipeline order fails first.
     return {
       fail: () => {
         throw err;
@@ -171,34 +164,20 @@ function parseChoiceFlag(flags: CliFlags, name: 'outcome' | 'layer', valid: read
   return { value };
 }
 
-/** Parses every flag a ranking stage reads; the first invalid one in pipeline order becomes `error`. */
-function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
+/** Parses every flag a ranking stage reads and fails on the first invalid one in pipeline order. */
+function parseStageFlags(flags: CliFlags): RecallStageFlags {
   const graphHops = parseHopsFlags(flags);
   const reranker = parseRerankerFlag(flags);
   const salience = parseSalienceFlag(flags);
   const outcome = parseChoiceFlag(flags, 'outcome', ['success', 'failure', 'partial']);
   const layer = parseChoiceFlag(flags, 'layer', Object.values(Layer));
-  const staged: ReadonlyArray<readonly [RankStage, (() => never) | undefined]> = [
-    ['expand', graphHops.fail],
-    ['rerank', reranker.fail],
-    ['salience', salience.fail],
-    ['outcome', outcome.fail],
-    ['layer', layer.fail],
-  ];
-  let error: LateFlagError | undefined;
-  for (const [stage, fail] of staged) {
-    if (fail) {
-      error = { stage, fail };
-      break;
-    }
-  }
+  for (const flag of [graphHops, reranker, salience, outcome, layer]) flag.fail?.();
   return {
     graphHops: graphHops.value,
     reranker: reranker.value,
     salienceThreshold: salience.value,
     outcome: outcome.value,
     layer: layer.value,
-    error,
   };
 }
 
@@ -233,8 +212,6 @@ async function printRecall(
       },
     },
   );
-  // A late flag is rejected where the ranking halted, after the notes its earlier stages printed.
-  parsed.late.error?.fail();
   if (!slot.presented) throw new Error('recall ranked but presented nothing');
   console.log(slot.presented.text);
 }
@@ -253,13 +230,15 @@ export interface ParsedRecallFlags {
   readonly config: HippoConfig;
   readonly minResults: number | undefined;
   readonly graphStream: RecallGraphStream | undefined;
-  readonly late: RecallLateFlags;
   readonly goalTag: string;
   readonly sessionId: string;
+  readonly engine: EngineFlags;
+  readonly stages: RecallStageFlags;
   readonly includeContinuity: boolean;
 }
 
-/** Every flag recall reads, parsed in a fixed order because the first invalid flag decides which error prints. */
+/** Every flag recall reads, parsed in a fixed order because the first invalid flag decides which error prints; all
+ * of them are checked before ranking starts. */
 function parseRecallFlags(ctx: api.Context, flags: CliFlags): ParsedRecallFlags {
   const budget = parseBudgetFlag(flags, DEFAULT_RECALL_BUDGET);
   const limit = parseLimitFlag(flags, 'limit');
@@ -273,9 +252,10 @@ function parseRecallFlags(ctx: api.Context, flags: CliFlags): ParsedRecallFlags 
   const config = ctx.config;
   const minResults = numberFlag(flags, 'min-results');
   const graphStream = boolFlag(flags, 'graph-stream') ? parseGraphStreamFlags(flags) : undefined;
-  const late = parseRecallLateFlags(flags);
   const goalTag = stringFlagOrExit(flags, 'goal') ?? '';
   const sessionId = (stringFlagOrExit(flags, 'session-id') ?? envHippoSessionId() ?? '').trim();
+  const engine = engineFlags(flags, config);
+  const stages = parseStageFlags(flags);
   return {
     budget,
     limit,
@@ -289,9 +269,10 @@ function parseRecallFlags(ctx: api.Context, flags: CliFlags): ParsedRecallFlags 
     config,
     minResults,
     graphStream,
-    late,
     goalTag,
     sessionId,
+    engine,
+    stages,
     includeContinuity: boolFlag(flags, 'continuity'),
   };
 }
@@ -310,7 +291,7 @@ function priceRecallEntries(ctx: api.Context, query: string, parsed: ParsedRecal
   return { globalOn: origin.globalOn, isGlobal, entryText, printCost };
 }
 
-/** The ranking core's options; a late flag error halts it before the stage that reads the flag. */
+/** The ranking core's options, from flags already checked. */
 function rankOptions(
   query: string,
   flags: CliFlags,
@@ -329,22 +310,21 @@ function rankOptions(
     explicitScope: parsed.explicitScope,
     activeScope: parsed.setting.activeScope,
     search: {
-      ...engineFlags(flags, parsed.config),
+      ...parsed.engine,
       multihop: boolFlag(flags, 'multihop') || parsed.config.multihop.enabled,
       graphStream: parsed.graphStream,
       minResults: parsed.minResults,
       explain: false,
     },
-    graphHops: parsed.late.graphHops,
+    graphHops: parsed.stages.graphHops,
     evcAdaptive: boolFlag(flags, 'evc-adaptive'),
     filterConflicts: boolFlag(flags, 'filter-conflicts'),
     valueAware: boolFlag(flags, 'value-aware'),
     rerankUtility: boolFlag(flags, 'rerank-utility'),
-    reranker: parsed.late.reranker,
-    salienceThreshold: parsed.late.salienceThreshold,
-    outcome: parsed.late.outcome,
-    layer: parsed.late.layer,
-    haltBefore: parsed.late.error?.stage,
+    reranker: parsed.stages.reranker,
+    salienceThreshold: parsed.stages.salienceThreshold,
+    outcome: parsed.stages.outcome,
+    layer: parsed.stages.layer,
   };
 }
 
@@ -440,21 +420,12 @@ interface RenderedRecall {
   readonly recallText: string;
 }
 
-/** Drops the lowest-ranked entry until the whole block, hints and header included, fits the budget. */
-function renderWithinBudget(
-  fitted: SearchResult[],
-  hintsFor: HintsFor,
-  view: RecallRenderView,
-  floor: number,
-  budget: number,
-): RenderedRecall {
+/** The block over one cut of the ranked rows. */
+function renderRows(rows: SearchResult[], hintsFor: HintsFor, view: RecallRenderView): RenderedRecall {
   // Copies go after every cut, so a merged row the budget drops never hides its sources.
-  const render = (kept: number): RenderedRecall => {
-    const results = dropHeldCopies(fitted.slice(0, kept), (r) => r.entry);
-    const hints = hintsFor(results, kept - results.length);
-    return { results, hints, recallText: renderRecallBlock(results, hints, view) };
-  };
-  return shrinkToFit(fitted.length, floor, budget, render, (r) => r.recallText);
+  const results = dropHeldCopies(rows, (r) => r.entry);
+  const hints = hintsFor(results, rows.length - results.length);
+  return { results, hints, recallText: renderRecallBlock(results, hints, view) };
 }
 
 interface FitRecallBlockOptions {
@@ -493,9 +464,6 @@ function fitRecallBlock(options: FitRecallBlockOptions): FittedRecall {
   const planningFallacyHint = showPlan ? (planning.hint ?? null) : null;
   const planningFallacyWatching = showPlan ? (planning.watching ?? null) : null;
 
-  // The first --min-results are kept whatever they cost (the documented exception); the rest skip and continue.
-  const floor = parsed.minResults ?? 1;
-  const fitted = fitRecallRows(ranked.rank.results, left, floor, ranked.printCost);
   const hintsFor = recallHinter(ctx, query, parsed, ranked.rank);
   const view: RecallRenderView = {
     query,
@@ -506,7 +474,15 @@ function fitRecallBlock(options: FitRecallBlockOptions): FittedRecall {
     continuity,
     entryText: ranked.entryText,
   };
-  const { results, hints, recallText } = renderWithinBudget(fitted, hintsFor, view, floor, budget);
+  const { results, hints, recallText } = fitRecall(ranked.rank.results, {
+    room: left,
+    budget,
+    // The first --min-results are kept whatever they cost (the documented exception); the rest skip and continue.
+    floor: parsed.minResults ?? 1,
+    cost: ranked.printCost,
+    render: (rows) => renderRows(rows, hintsFor, view),
+    textOf: (r) => r.recallText,
+  });
   return {
     results,
     hints,

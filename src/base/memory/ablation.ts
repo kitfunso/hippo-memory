@@ -2,6 +2,7 @@
 // production surface. Readers read the environment when called, so a per-row loop reads them once and hands them down.
 // See docs/ARCHITECTURE.md#srccoreablationts.
 
+import { NO_STRENGTH_ABLATION, type EvalSwitches, type RankAblation, type StrengthAblation } from './eval-switches.js';
 import {
   envAblateDecay,
   envAblateOutcome,
@@ -12,28 +13,6 @@ import {
   envEvalRecencyDays,
   envFakeNowMs,
 } from '../util/env.js';
-
-/** The three switches strength scoring honours, resolved by the entry layer and handed to base in DecayOptions. */
-export interface StrengthAblation {
-  readonly decay: boolean;
-  readonly recallBoost: boolean;
-  readonly outcomeSlow: boolean;
-}
-
-/** Production scoring: nothing ablated. Core falls back to this, so it never reads the environment. */
-export const NO_STRENGTH_ABLATION: StrengthAblation = Object.freeze({
-  decay: false,
-  recallBoost: false,
-  outcomeSlow: false,
-});
-
-/** The switches recall's rank boosts honour, read once per search and handed down in its boost context. */
-export interface RankAblation {
-  readonly recency: boolean;
-  /** HIPPO_EVAL_RECENCY_DAYS when it is a positive number, else null (the 30-day scale stays). */
-  readonly recencyDays: number | null;
-  readonly outcomeFast: boolean;
-}
 
 export function isDecayAblated(): boolean {
   return envAblateDecay();
@@ -61,8 +40,13 @@ export function strengthAblation(): StrengthAblation {
 }
 
 /** The rank switches as the environment holds them. */
-export function rankAblation(): RankAblation {
+function rankAblation(): RankAblation {
   return { recency: envAblateRecency(), recencyDays: envEvalRecencyDays(), outcomeFast: isOutcomeFastAblated() };
+}
+
+/** Every switch and the clock as the environment holds them, for a root to hand its rankings. */
+export function evalSwitches(): EvalSwitches {
+  return { strength: strengthAblation(), rank: rankAblation(), fakeNowMs: envFakeNowMs() };
 }
 
 /** The default `now` for lifecycle computations: HIPPO_FAKE_NOW when set and parseable, else the real clock; an

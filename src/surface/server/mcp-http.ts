@@ -16,7 +16,6 @@ import { assertCallerProject } from '../../base/scope/project-identity.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientLimitKey } from './client-ip.js';
-import { clientKeyOf } from './client-key.js';
 import { endReply, noteAccess, writeChunk } from './request.js';
 import type { ResolvedServeOptions } from './types.js';
 import { type JsonValue, isJsonString, isJsonObject, tryParseJson } from '../../base/util/json.js';
@@ -62,7 +61,7 @@ export function callerProjectFromHeaders(req: IncomingMessage, shared: boolean):
   return { name, legacyName: name, aliases };
 }
 
-function mcpContextFor(ctx: Context, hippoRoot: string, clientKey: string, project?: CallerProject): McpContext {
+function mcpContextFor(ctx: Context, hippoRoot: string, project?: CallerProject): McpContext {
   const mcpCtx: McpContext = {
     hippoRoot,
     tenantId: ctx.tenantId,
@@ -74,7 +73,7 @@ function mcpContextFor(ctx: Context, hippoRoot: string, clientKey: string, proje
     viaAuthResolver: ctx.actor.viaAuthResolver,
     hostAdmin: ctx.actor.hostAdmin,
     owner: ctx.actor.owner,
-    clientKey,
+    clientKey: ctx.clientKey,
     store: ctx.store,
     config: ctx.config,
     reach: ctx.reach,
@@ -106,7 +105,7 @@ export async function handleMcpPost(
   const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
   let mcpRes;
   try {
-    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, opts.hippoRoot, clientKeyOf(req), project));
+    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, opts.hippoRoot, project));
   } catch (err) {
     mcpRes = mcpErrorResponse(rpcReq.id, err, undefined, callName(rpcReq));
   }

@@ -65,6 +65,8 @@ Flags (set to `1` or `true`):
 - `HIPPO_EVAL_RECENCY_DAYS`: a positive number replaces the 30-day scale of that recency factor (tuning grids only). Unset, zero, negative or junk values keep 30.
 - `HIPPO_FAKE_NOW`: timestamp injected as the default `now` for strength computation and retrieval stamping (simulated-time protocols). It MUST be the exact `Date.toISOString()` form (`YYYY-MM-DDTHH:mm:ss.sssZ`); it is validated by round-trip, so junk, locale dates, non-UTC offsets and rolled-over dates (`2026-02-31`) all fall back to the real clock.
 
+The rankers in `src/domain/search` read none of these. They take the switches as `switches` (`EvalSwitches`, `src/base/memory/eval-switches.ts`) and the clock as `now`. The roots read the environment once: `realInfra` puts `evalSwitches()` on `ctx.infra` for each context, and the `./search` and `./testing` entries and `dist/entry/eval-scripts.js` fill it for a library caller, so a frozen eval that sets a flag still gets it.
+
 Formula notes (load-bearing for the experiments). Ablating decay has TWO intrinsic co-effects, because the unified formula routes other mechanisms THROUGH the decay term. Both are real properties of the architecture, not implementation accidents; experiment analysis must attribute accordingly (the decay-off arm is "decay + its dependents off", see prereg amendment A1):
 
 1. Read-side strengthening flattens: raw = retrievalBoost * emotionalMult >= 1, and the [0,1] clamp caps it at 1.0, so the recall boost can only offset decay, never exceed baseline. (Write-side still runs.)
@@ -692,7 +694,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `callTool tenantId`: A5: every store read in this server returns to the caller and is tenant-isolated.
 
 ### src/api/callers.ts
-- `CallerState`: what a root keeps for the callers it serves, handed down as `Context.callers`. The server, the stdio MCP host and each CLI command build one, so no module holds caller state. It holds each surface's J1 session rings (v0.33; one ring map per surface, no IPC), the ids each client was last shown (keyed by `resolveClientKey`, capped at 4096 clients) for an outcome with no ids, and the auto-sleep host a write starts a sleep through.
+- `CallerState`: what a root keeps for the callers it serves, handed down as `Context.callers`. The server, the stdio MCP host and each CLI command build one, so no module holds caller state. It holds each surface's J1 session rings (v0.33; one ring map per surface, no IPC), the ids each client was last shown (keyed by the `Context.clientKey` the HTTP and MCP surfaces set, capped at 4096 clients) for an outcome with no ids, and the auto-sleep host a write starts a sleep through.
 
 ### src/base/memory/memory-quality.ts
 - `CJK_LETTERS` (moved from src/store/audit.ts): SCOPE ... other spaceless scripts - Thai, Khmer, Burmese, Lao - still hit the original one-word failure. Their behavior is byte-identical to before this change, so nothing regressed; widening the script set is a separate, deliberately-scoped follow-up rather than another mid-episode guess at this predicate.
