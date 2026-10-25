@@ -209,7 +209,6 @@ entry/store-kit.d.ts: ListDormantOpts re-export
 entry/store-kit.d.ts: LoserFate re-export
 entry/store-kit.d.ts: MemoryConflict re-export
 entry/store-kit.d.ts: MemoryEntry re-export
-entry/store-kit.d.ts: MemoryTables re-export
 entry/store-kit.d.ts: NewApiKey re-export
 entry/store-kit.d.ts: OTHER_STORE_MARKER re-export
 entry/store-kit.d.ts: OptionalGroup re-export
@@ -288,7 +287,6 @@ entry/store-kit.d.ts: hasGroup re-export
 entry/store-kit.d.ts: heldTexts re-export
 entry/store-kit.d.ts: isSharedStore re-export
 entry/store-kit.d.ts: loadConfig re-export
-entry/store-kit.d.ts: memoryStore re-export
 entry/store-kit.d.ts: normalizeValueForRejection re-export
 entry/store-kit.d.ts: ownScopeTouches re-export
 entry/store-kit.d.ts: passesScopeFilterForRecall re-export
@@ -304,7 +302,6 @@ entry/store-kit.d.ts: requireGroup re-export
 entry/store-kit.d.ts: sqliteStore re-export
 entry/store-kit.d.ts: tallyAmbientEntries re-export
 entry/store-kit.d.ts: targetReader re-export
-entry/testing.d.ts: MemoryTables re-export
 entry/testing.d.ts: MemoryWire re-export
 entry/testing.d.ts: WireSearchResult re-export
 entry/testing.d.ts: WireStrengthInputs re-export
@@ -325,7 +322,6 @@ entry/testing.d.ts: loadAllEntriesWire function
 entry/testing.d.ts: loadEmbeddingIndex re-export
 entry/testing.d.ts: loadRecallSearchEntries re-export
 entry/testing.d.ts: loadVectorCandidateEntriesAt re-export
-entry/testing.d.ts: memoryStore re-export
 entry/testing.d.ts: recordTokenUse re-export
 entry/testing.d.ts: resolveTenantId re-export
 entry/testing.d.ts: tokensBySession re-export

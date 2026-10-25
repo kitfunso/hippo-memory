@@ -8,10 +8,22 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import type { EntryFilter } from '../../base/ports/store/reports.js';
 import type { EntryTextKey } from '../../base/ports/store/sharing.js';
 import { bareText } from '../rules/copies.js';
-import { openingPhrase } from '../rules/fts.js';
 import { narrowingAnd } from './entry-filter.js';
 import { bareTextSql } from './rule-sql.js';
 import { tenantAnd, TENANT_IS } from './tenant.js';
+import { duplicateKey } from '../../base/util/same-text.js';
+
+// Letters and digits in every Unicode table unicode61 has shipped (Latin, Greek, Cyrillic, Hebrew, Arabic, Devanagari,
+// Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
+const SURE_TOKEN_CHAR = new RegExp('[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-я' + 'א-תء-غف-يअ-हก-ะ' + 'ぁ-んァ-ヶ一-龥가-힣]');
+const PHRASE_WORDS = 32;
+
+/** The first words of `text`, which a row holding the text word for word holds in a row; null when they might name no
+ * token, since an empty phrase matches no row. */
+function openingPhrase(text: string): string | null {
+  const opening = duplicateKey(text).split(' ').slice(0, PHRASE_WORDS).join(' ');
+  return SURE_TOKEN_CHAR.test(opening) ? opening : null;
+}
 
 const IN_PHRASE_HITS = 'id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
 

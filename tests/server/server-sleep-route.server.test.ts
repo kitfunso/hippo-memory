@@ -31,13 +31,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
-
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: every call site below targets POST /v1/sleep under test in this
-  // file; the response is the SleepResult JSON contract, checked field-by-
-  // field by the assertions immediately following each call.
-  return res.json() as Promise<T>;
-}
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 describe('POST /v1/sleep', () => {
   let home: string;

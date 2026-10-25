@@ -3,7 +3,7 @@
 import { appendAuditEvents } from './audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { escapeLike } from '../../base/util/escape.js';
-import { keysetAfter } from '../../db/sql.js';
+import { keysetAfter, placeholders } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import {
   calculateStrength,
@@ -13,14 +13,6 @@ import {
   type MemoryEntry,
 } from '../../base/memory/memory.js';
 import { scopeAdmitSql } from './rule-sql.js';
-import {
-  closeAudit,
-  createAudit,
-  incidentOpenAudit,
-  isVersioned,
-  objectTable,
-  supersedeAudit,
-} from '../rules/objects.js';
 import { stampOriginProject, upsertEntryRow } from './entry-row.js';
 import { auditEntryWrite, writeEntryMirrors, auditingRefusal } from './entry-writes.js';
 import { markGraphDirty } from './graph-queue.js';
@@ -35,6 +27,8 @@ import {
   type Policy,
   type SavableKind,
   type Skill,
+  type IncidentFields,
+  type ObjectFields,
 } from '../../base/records/object-types.js';
 import type { Handles, OnHandle, StoreFiles } from './open.js';
 import { TYPED_HALF_LIFE_META_KEY } from '../rules/half-life.js';
@@ -56,7 +50,6 @@ import type {
   SkillsByNameQuery,
 } from '../../base/ports/store/objects.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
-import { placeholders } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import {
   closePrediction,
@@ -65,6 +58,103 @@ import {
   readPrediction,
   writePrediction,
 } from './predictions.js';
+import type { AuditOp } from '../../base/records/audit-ops.js';
+import type { JsonObject } from '../../base/util/json.js';
+
+// Each typed-object kind's table and audit rows: the table its ids follow, whether it keeps
+// versions, and the op, target and keys of its open, create, supersede and close rows.
+
+const KINDS = {
+  decision: { table: 'decisions', idKey: 'decision_id' },
+  incident: { table: 'incidents', idKey: 'incident_id' },
+  process: { table: 'processes', idKey: 'process_id' },
+  policy: { table: 'policies', idKey: 'policy_id' },
+  skill: { table: 'skills', idKey: 'skill_id' },
+  project_brief: { table: 'project_briefs', idKey: 'brief_id' },
+  customer_note: { table: 'customer_notes', idKey: 'note_id' },
+} as const satisfies Record<ObjectKind, { readonly table: string; readonly idKey: string }>;
+
+/** The kind's table, whose AUTOINCREMENT sequence its ids follow. */
+const objectTable = (kind: ObjectKind): string => KINDS[kind].table;
+
+interface SaveRule<K extends SavableKind> {
+  /** A successor takes its predecessor's version plus one and the caller's change note; a decision has no version. */
+  readonly versioned: boolean;
+  /** The create row's keys after the id, in stored order: ids, counts and flags, never the object's text. */
+  readonly createKeys: (fields: ObjectFields[K], version: number) => JsonObject;
+  /** Keys the supersede row stores after its own. */
+  readonly supersedeKeys?: (fields: ObjectFields[K]) => JsonObject;
+}
+
+const hasText = (text: string | null | undefined): boolean => text !== undefined && text !== null && text !== '';
+
+// Tells an auto-refresh from a manual write in the audit log without a fourth audit op.
+const refreshKeys = (f: ObjectFields['project_brief']): JsonObject =>
+  f.receiptCount === undefined ? { refreshed: false } : { refreshed: true, receipt_count: f.receiptCount };
+
+type SaveRules = { readonly [K in SavableKind]: SaveRule<K> };
+
+const SAVE_RULES: SaveRules = {
+  decision: { versioned: false, createKeys: (f) => ({ has_context: hasText(f.context) }) },
+  process: {
+    versioned: true,
+    createKeys: (f, version) => ({ version, step_count: f.steps.length, has_description: hasText(f.description) }),
+  },
+  policy: { versioned: true, createKeys: (f, version) => ({ version, open_ended: f.validTo === null }) },
+  skill: { versioned: true, createKeys: (f, version) => ({ version, has_trigger: f.trigger !== null }) },
+  project_brief: {
+    versioned: true,
+    createKeys: (f, version) => ({ repo: f.repo, version, ...refreshKeys(f) }),
+    supersedeKeys: refreshKeys,
+  },
+  customer_note: { versioned: true, createKeys: (f, version) => ({ customer: f.customer, version }) },
+};
+
+const isVersioned = (kind: SavableKind): boolean => SAVE_RULES[kind].versioned;
+
+/** One audit row's op, target and metadata; the adapter adds the tenant and actor. */
+interface ObjectAudit {
+  readonly op: AuditOp;
+  readonly targetId: string;
+  readonly metadata: JsonObject;
+}
+
+function createAudit<K extends SavableKind>(
+  kind: K,
+  id: number,
+  fields: ObjectFields[K],
+  version: number,
+): ObjectAudit {
+  const metadata = { [KINDS[kind].idKey]: id, ...SAVE_RULES[kind].createKeys(fields, version) };
+  return { op: `${kind}_create`, targetId: String(id), metadata };
+}
+
+/** The row for `replaced` giving way to `id`, which holds `version`. */
+function supersedeAudit<K extends SavableKind>(
+  kind: K,
+  replaced: number,
+  id: number,
+  version: number,
+  fields: ObjectFields[K],
+): ObjectAudit {
+  const rule = SAVE_RULES[kind];
+  const own: JsonObject = { [KINDS[kind].idKey]: replaced, superseded_by: id };
+  if (rule.versioned) own.new_version = version;
+  return { op: `${kind}_supersede`, targetId: String(replaced), metadata: { ...own, ...rule.supersedeKeys?.(fields) } };
+}
+
+function closeAudit(kind: ObjectKind, id: number): ObjectAudit {
+  return { op: `${kind}_close`, targetId: String(id), metadata: { [KINDS[kind].idKey]: id } };
+}
+
+function incidentOpenAudit(id: number, fields: IncidentFields): ObjectAudit {
+  const metadata = {
+    incident_id: id,
+    has_context: hasText(fields.context),
+    linked_memory_count: fields.linkedMemoryIds.length,
+  };
+  return { op: 'incident_open', targetId: String(id), metadata };
+}
 
 export function sqliteObjects({ on, files }: Handles): Objects {
   const objects: ObjectCalls = {

@@ -1,4 +1,4 @@
-// VectorWrites answers alike on hippo.db and on a store held in memory: the same values, the same errors and no audit rows.
+// VectorWrites answers: the same values, the same errors and no audit rows.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
@@ -16,14 +16,13 @@ import type {
 import { ALL_TENANTS } from '../../src/entry/store-kit.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -94,9 +93,7 @@ function seedMemories(dir: string): void {
 }
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'vectorWrites', calls);
-  expectSameOutcomes(sides);
-  return sides.sqlite;
+  return runOnFixture(fixture, 'vectorWrites', calls);
 }
 
 const missing =

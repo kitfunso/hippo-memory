@@ -1,10 +1,41 @@
-// hippo.db's side of the connector conformance tests: its store with reads of the event logs, quarantine records
-// and dead-letter queues straight from their tables, the same reads memorySide answers from its own.
+// The connector conformance tests' store with reads of the event logs, quarantine records and dead-letter queues
+// straight from their tables.
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import type { LoggedEvent, ParkedLetter } from '../../src/store/memory/tables.js';
+import type { ConnectorDeadLetter, ConnectorEvent } from '../../src/base/ports/store.js';
+import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { auditRowsOn } from './audit-rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { StoreSide } from './store-conformance.js';
+
+/** One connector event log row; the delivery id and event name are GitHub's and null for Slack. */
+export interface LoggedEvent {
+  readonly connector: ConnectorEvent['connector'];
+  readonly eventKey: string;
+  readonly memoryId: string | null;
+  readonly deliveryId: string | null;
+  readonly eventName: string | null;
+  readonly loggedAt: string;
+}
+
+/** One dead-letter row of either queue; the columns only the other connector's queue has are null. */
+export interface ParkedLetter {
+  readonly connector: ConnectorDeadLetter['connector'];
+  readonly id: number;
+  readonly tenantId: string;
+  readonly rawPayload: string;
+  readonly error: string;
+  readonly bucket: string;
+  readonly signature: string | null;
+  readonly receivedAt: string;
+  readonly teamId: string | null;
+  readonly slackTimestamp: string | null;
+  readonly eventName: string | null;
+  readonly deliveryId: string | null;
+  readonly installationId: string | null;
+  readonly repoFullName: string | null;
+  readonly retryCount: number;
+  readonly retriedAt: string | null;
+}
 
 /** One quarantine record, without the decision columns. */
 export interface HeldRecord {
@@ -53,16 +84,16 @@ export function rowsOf<T>(hippoRoot: string, sql: string): T[] {
   return onDb(hippoRoot, (db) => db.prepare(sql).all() as T[]).map((row) => ({ ...row }));
 }
 
-/** hippo.db's store with the same reads, straight from its tables. */
-export function sqliteConnectorSide(hippoRoot: string): ConnectorSide {
+/** `store`, hippo.db's by default, with the same reads straight from hippo.db's tables. */
+export function sqliteConnectorSide(hippoRoot: string, store: HippoStore = sqliteStore(hippoRoot)): ConnectorSide {
   return {
-    store: sqliteStore(hippoRoot),
+    store,
     auditRows: () => onDb(hippoRoot, (db) => auditRowsOn(db)),
     events: () => rowsOf<LoggedEvent>(hippoRoot, EVENTS_SQL),
     records: () => rowsOf<HeldRecord>(hippoRoot, RECORDS_SQL),
   };
 }
 
-export function sqliteConnectorEventsSide(hippoRoot: string): ConnectorEventsSide {
-  return { ...sqliteConnectorSide(hippoRoot), letters: () => rowsOf<ParkedLetter>(hippoRoot, LETTERS_SQL) };
+export function sqliteConnectorEventsSide(hippoRoot: string, store?: HippoStore): ConnectorEventsSide {
+  return { ...sqliteConnectorSide(hippoRoot, store), letters: () => rowsOf<ParkedLetter>(hippoRoot, LETTERS_SQL) };
 }

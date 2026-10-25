@@ -1,17 +1,16 @@
-// LessonWrites' word read and batch writes, and KeyWrites' scope change, answer alike on hippo.db and on a store held in memory,
+// LessonWrites' word read and batch writes, and KeyWrites' scope change, answer,
 // with the same refusal, remember and grant audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -27,7 +26,7 @@ const ALIAS = 'my deploy alias is dpl';
 
 let fixture: TwoTenantFixture;
 
-// An origin named, since a write naming none takes the folder's project on hippo.db and null in memory.
+// An origin named, so the row does not take the folder's project.
 const entry = (content: string, over: Partial<MemoryEntry> = {}): MemoryEntry => ({
   ...createMemory(content, { tenantId: TENANT_A, source: 'git-learn' }),
   originProject: 'proj',
@@ -60,9 +59,7 @@ async function conforms<G extends 'lessonWrites' | 'keyWrites'>(group: G, calls:
     vi.setSystemTime(START + i * 1000);
     return call(methods, store);
   });
-  const sides = await onBothStores(fixture, group, timed);
-  expectSameOutcomes(sides);
-  return sides.sqlite;
+  return runOnFixture(fixture, group, timed);
 }
 
 describe('LessonWrites', () => {

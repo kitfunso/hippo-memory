@@ -19,7 +19,7 @@ import {
   type ServeOpts,
   type Context,
 } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../../src/db/index.js';
@@ -237,16 +237,19 @@ describe('auth resolver tenant boundary', () => {
     expect((await get('/v1/audit?tenant=ext-tenant', apiKey.plaintext)).status).toBe(200);
   });
 
-  it('refuses host-wide sleep to a resolver admin but not to an API-key admin', async () => {
-    await start(tokenResolver({ role: 'admin' }));
-    expect((await post('/v1/sleep', EXT, {})).status).toBe(403);
-    const ok = await fetch(`${handle!.url}/v1/sleep`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${apiKey.plaintext}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ dry_run: true }),
-    });
-    expect(ok.status).toBe(200);
-  });
+  it.skipIf(needsHippoDb('sleep'))(
+    'refuses host-wide sleep to a resolver admin but not to an API-key admin',
+    async () => {
+      await start(tokenResolver({ role: 'admin' }));
+      expect((await post('/v1/sleep', EXT, {})).status).toBe(403);
+      const ok = await fetch(`${handle!.url}/v1/sleep`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${apiKey.plaintext}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ dry_run: true }),
+      });
+      expect(ok.status).toBe(200);
+    },
+  );
 });
 
 describe('auth resolver failure', () => {
@@ -426,18 +429,21 @@ describe('auth resolver and key routes', () => {
     expect((await del(`/v1/auth/keys/${body.keyId}`, EXT)).status).toBe(200);
   });
 
-  it('mints only member keys for a resolver admin, so a minted key cannot reach another tenant', async () => {
-    await start(tokenResolver({ role: 'admin' }));
-    expect((await post('/v1/auth/keys', EXT, { role: 'admin' })).status).toBe(403);
-    const created = await post('/v1/auth/keys', EXT, {});
-    expect(created.status).toBe(200);
-    // SAFETY: a 200 from POST /v1/auth/keys returns the created key record, asserted above.
-    const minted = (await created.json()) as { plaintext: string; role: string; tenantId: string };
-    expect(minted).toMatchObject({ role: 'member', tenantId: 'ext-tenant' });
-    expect((await get('/v1/audit?tenant=default', minted.plaintext)).status).toBe(403);
-    expect((await post('/v1/sleep', minted.plaintext, {})).status).toBe(403);
-    expect((await post('/v1/auth/keys', minted.plaintext, {})).status).toBe(403);
-  });
+  it.skipIf(needsHippoDb('sleep'))(
+    'mints only member keys for a resolver admin, so a minted key cannot reach another tenant',
+    async () => {
+      await start(tokenResolver({ role: 'admin' }));
+      expect((await post('/v1/auth/keys', EXT, { role: 'admin' })).status).toBe(403);
+      const created = await post('/v1/auth/keys', EXT, {});
+      expect(created.status).toBe(200);
+      // SAFETY: a 200 from POST /v1/auth/keys returns the created key record, asserted above.
+      const minted = (await created.json()) as { plaintext: string; role: string; tenantId: string };
+      expect(minted).toMatchObject({ role: 'member', tenantId: 'ext-tenant' });
+      expect((await get('/v1/audit?tenant=default', minted.plaintext)).status).toBe(403);
+      expect((await post('/v1/sleep', minted.plaintext, {})).status).toBe(403);
+      expect((await post('/v1/auth/keys', minted.plaintext, {})).status).toBe(403);
+    },
+  );
 
   it('lets a resolver admin revoke member keys in its tenant but not an admin key', async () => {
     const db = openHippoDb(home);

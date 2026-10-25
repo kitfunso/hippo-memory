@@ -16,7 +16,7 @@ import { withSharedStoreHandles } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { rawProvenanceOf } from '../../src/store/memory/reports.js';
+import { rawProvenanceAt } from '../_helpers/report-reads.js';
 
 const PUBLIC_REPO = {
   full_name: 'acme/public-repo',
@@ -86,7 +86,7 @@ describe('GitHub connector — provenance coverage parity', () => {
     });
 
     const entries = loadAllEntries(root, 'default');
-    const coverage = buildProvenanceCoverage(rawProvenanceOf(entries));
+    const coverage = buildProvenanceCoverage(await rawProvenanceAt(root));
 
     expect(coverage.rawTotal).toBeGreaterThanOrEqual(50);
     expect(coverage.gaps).toHaveLength(0);

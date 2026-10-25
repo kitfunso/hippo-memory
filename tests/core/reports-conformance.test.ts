@@ -1,4 +1,4 @@
-// The Reports reads behind status and auto-sleep answer alike on hippo.db and on a store held in memory, over two tenants,
+// The Reports reads behind status and auto-sleep answer, over two tenants,
 // superseded and raw rows, open and resolved conflicts, and a vector whose memory is gone.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -7,13 +7,12 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { listMemoryConflicts, writeEntry, updateStats } from '../_helpers/root-forms.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import {
   replaceDetectedConflicts,
@@ -76,9 +75,8 @@ async function seed(dir: string): Promise<void> {
 }
 
 async function conforms<R>(calls: readonly GroupCall<'reports', R>[]) {
-  const sides = await onBothStores(fixture, 'reports', calls);
-  expectSameOutcomes(sides);
-  return sides.sqlite.outcomes;
+  const sqlite = await runOnFixture(fixture, 'reports', calls);
+  return sqlite.outcomes;
 }
 
 beforeAll(() =>

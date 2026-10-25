@@ -15,14 +15,7 @@ import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/au
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { Incident } from '../../src/domain/objects/incidents.js';
 import { makeRoot } from '../_helpers/make-root.js';
-
-/** Parse a fetch Response body against a caller-declared shape. */
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: only used against this file's own /v1/incidents route responses,
-  // whose JSON shape is fixed by the handler in src/server.ts and checked by
-  // the assertions immediately following each call site.
-  return (await res.json()) as T;
-}
+import { jsonAs, authHeaders } from '../_helpers/http-objects-server.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -44,10 +37,6 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-function authHeaders(key: CreateApiKeyResult = apiKey) {
-  return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
-}
-
 async function createIncident(
   text: string,
   extra: { context?: string; linkedMemoryIds?: string[] } = {},
@@ -64,14 +53,14 @@ describe('HTTP /v1/incidents (incident first-class object)', () => {
   it('GET /v1/incidents lists and filters by status', async () => {
     await createIncident('open one');
     const toClose = (await jsonAs<{ incident: Incident }>(await createIncident('to close'))).incident;
-    await fetch(`${handle.url}/v1/incidents/${toClose.id}/close`, { method: 'POST', headers: authHeaders() });
+    await fetch(`${handle.url}/v1/incidents/${toClose.id}/close`, { method: 'POST', headers: authHeaders(apiKey) });
 
-    const allRes = await fetch(`${handle.url}/v1/incidents`, { headers: authHeaders() });
+    const allRes = await fetch(`${handle.url}/v1/incidents`, { headers: authHeaders(apiKey) });
     expect(allRes.status).toBe(200);
     const all = await jsonAs<{ incidents: Incident[] }>(allRes);
     expect(all.incidents.length).toBe(2);
 
-    const openRes = await fetch(`${handle.url}/v1/incidents?status=open`, { headers: authHeaders() });
+    const openRes = await fetch(`${handle.url}/v1/incidents?status=open`, { headers: authHeaders(apiKey) });
     const open = await jsonAs<{ incidents: Incident[] }>(openRes);
     expect(open.incidents.length).toBe(1);
     expect(open.incidents[0].status).toBe('open');
@@ -81,7 +70,7 @@ describe('HTTP /v1/incidents (incident first-class object)', () => {
     const inc = (await jsonAs<{ incident: Incident }>(await createIncident('API 500s'))).incident;
     const resRes = await fetch(`${handle.url}/v1/incidents/${inc.id}/resolve`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: authHeaders(apiKey),
       body: JSON.stringify({ resolutionText: 'restarted workers' }),
     });
     expect(resRes.status).toBe(200);
@@ -92,7 +81,7 @@ describe('HTTP /v1/incidents (incident first-class object)', () => {
     // re-resolving the already-resolved incident -> 409
     const conflict = await fetch(`${handle.url}/v1/incidents/${inc.id}/resolve`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: authHeaders(apiKey),
       body: JSON.stringify({ resolutionText: 'again' }),
     });
     expect(conflict.status).toBe(409);

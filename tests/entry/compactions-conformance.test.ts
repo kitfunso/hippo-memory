@@ -1,4 +1,4 @@
-// Compactions answers alike on hippo.db and on a store held in memory: a caller's record, its snapshot mark, and items
+// Compactions answers: a caller's record, its snapshot mark, and items
 // that restate held rows, meet a tombstone or fail the gate, over two tenants.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -9,12 +9,11 @@ import { normalizeValueForRejection, rejectionDigest } from '../../src/base/reco
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -84,16 +83,6 @@ async function seed(dir: string): Promise<void> {
   await compactions.saveCallerItems(TENANT_B, request({ sessionId: 'sB', requestId: 'req-b', items: [HELD] }));
 }
 
-/** Each side's ids, renamed in the order they first appear, since both stores mint their own. */
-function sameIds<T>(side: T): T {
-  const seen = new Map<string, string>();
-  const text = JSON.stringify(side).replace(/\b(mem|cmp)_[0-9a-f]{6,}\b/g, (id) => {
-    if (!seen.has(id)) seen.set(id, `${id.slice(0, 3)}#${seen.size}`);
-    return seen.get(id) ?? id;
-  });
-  return JSON.parse(text);
-}
-
 beforeAll(async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(SEEDED));
@@ -124,7 +113,7 @@ describe('Compactions', () => {
       'the token is [REDACTED] for now',
       'x'.repeat(501),
     ];
-    const sides = await onBothStores<'compactions', Value>(fixture, 'compactions', [
+    const sqlite = await runOnFixture<'compactions', Value>(fixture, 'compactions', [
       async (g) => {
         started = await g.start(TENANT_A, {
           sessionId: 'sP',
@@ -148,8 +137,7 @@ describe('Compactions', () => {
           lastRetrieved,
         })),
     ]);
-    expectSameOutcomes({ other: sameIds(sides.other), sqlite: sameIds(sides.sqlite) });
-    const outcomes = sides.sqlite.outcomes;
+    const outcomes = sqlite.outcomes;
     expect(outcomes[3]).toEqual({
       value: {
         written: 2,
@@ -167,6 +155,6 @@ describe('Compactions', () => {
     expect(outcomes[7]).toEqual({ value: { written: 0, notes: ['skipped 1 item(s) the store already holds'] } });
     // Restated twice, by sA and by sB2, each a session other than the row's own.
     expect(outcomes[8]).toEqual({ value: [{ retrievalCount: 2, lastRetrieved: NOW }] });
-    expect(sides.sqlite.audit.slice(-3).map((r) => r.op)).toEqual(['remember', 'remember', 'reject_refusal']);
+    expect(sqlite.audit.slice(-3).map((r) => r.op)).toEqual(['remember', 'remember', 'reject_refusal']);
   });
 });

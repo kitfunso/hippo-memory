@@ -1,13 +1,12 @@
-// Runs one store group's calls on hippo.db's store and on memoryStore, each over its own copy of a two-tenant fixture,
-// and returns each side's answers and audit rows so a test can assert the two equal.
+// Runs one store group's calls on sqliteStore over its own copy of a two-tenant fixture, and returns the answers and
+// the audit rows so a test can assert them.
 import { cpSync, mkdtempSync } from 'node:fs';
-import { expect } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { auditRowsOn } from './audit-rows.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
-import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import {
   requireGroup,
   type HippoStore,
@@ -18,7 +17,6 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { initTestStore } from './store-template.js';
 import { removeAfterRequest } from './one-request-per-test.js';
-import { memorySide } from './memory-side.js';
 
 export const TENANT_A = 'acme';
 export const TENANT_B = 'globex';
@@ -27,7 +25,7 @@ export const FIXTURE_REVOKED_AT = '2026-01-02T00:00:00.000Z';
 type FixtureKey = 'adminA' | 'memberA' | 'revokedA' | 'memberB';
 
 export interface TwoTenantFixture {
-  /** The template folder; each side runs on its own copy. */
+  /** The template folder; each run uses its own copy. */
   readonly dir: string;
   readonly keys: Readonly<Record<FixtureKey, string>>;
   /** Each key's bearer token, minted at seed time. */
@@ -103,31 +101,9 @@ export async function outcomeOf<R>(run: () => Promise<R>): Promise<Outcome<R>> {
   }
 }
 
-/** BM25 differs in the last bit between FTS5 and the memory store on some platforms, so floats compare at 12 digits. */
-function roundFloats<T>(value: T): T {
-  if (Number.isFinite(value) && !Number.isInteger(value)) {
-    // SAFETY: Number.isFinite on a non-number is false, so value is a number here.
-    return Number(Number(value).toPrecision(12)) as T;
-  }
-  if (Array.isArray(value)) {
-    // SAFETY: map returns an array of the same element shape.
-    return value.map(roundFloats) as T;
-  }
-  if (value != null && Object.getPrototypeOf(Object(value)) === Object.prototype) {
-    // SAFETY: the entries are rebuilt under the same keys with the same value shapes.
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, roundFloats(v)])) as T;
-  }
-  return value;
-}
-
-/** Asserts the two sides agree; the sides stay raw, only the compared copies have their floats rounded. */
-export function expectSameOutcomes<T>(sides: { readonly other: T; readonly sqlite: T }): void {
-  expect(roundFloats(sides.other)).toEqual(roundFloats(sides.sqlite));
-}
-
 export type RequiredGroup = Exclude<keyof StoreGroups, OptionalGroup>;
 
-/** A required group, the optional group both adapters set, or 'base' for the methods HippoStore declares itself. */
+/** A required group, the optional consolidation group, or 'base' for the methods HippoStore declares itself. */
 export type ConformanceGroup = RequiredGroup | 'consolidation' | 'base';
 
 /** What a call on `G` is handed: the group's methods, or the store itself for 'base'. */
@@ -161,39 +137,22 @@ function auditRowsAt(root: string): AuditEvent[] {
   }
 }
 
-async function runSide<G extends ConformanceGroup, R>(
-  side: StoreSide,
-  group: G,
-  calls: readonly GroupCall<G, R>[],
-  guard: <T>(fn: () => T) => T,
-): Promise<SideResult<R>> {
-  const methods = groupOf(side.store, group);
-  const outcomes: Outcome<R>[] = [];
-  for (const call of calls) outcomes.push(await outcomeOf(() => guard(() => call(methods, side.store))));
-  await side.store.close();
-  return { outcomes, audit: side.auditRows() };
-}
-
-/** The memory side's calls run with hippo.db blocked, so a method that falls back to it throws instead of matching by accident. */
-export async function onBothStores<G extends ConformanceGroup, R>(
+/** Runs the calls in order on sqliteStore over a copy of the fixture folder; a rejection becomes an outcome. */
+export async function runOnFixture<G extends ConformanceGroup, R>(
   fixture: TwoTenantFixture,
   group: G,
   calls: readonly GroupCall<G, R>[],
-): Promise<{ readonly sqlite: SideResult<R>; readonly other: SideResult<R> }> {
+): Promise<SideResult<R>> {
   const home = mkdtempSync(join(tmpdir(), 'hippo-conformance-'));
   try {
-    const roots = { sqlite: join(home, 'sqlite'), other: join(home, 'other') };
-    cpSync(fixture.dir, roots.sqlite, { recursive: true });
-    cpSync(fixture.dir, roots.other, { recursive: true });
-    const sqlite = await runSide(
-      { store: sqliteStore(roots.sqlite), auditRows: () => auditRowsAt(roots.sqlite) },
-      group,
-      calls,
-      (fn) => fn(),
-    );
-    const otherSide = memorySide(roots.other);
-    const other = await runSide(otherSide, group, calls, (fn) => withSqliteBlocked(otherSide.store.kind, fn));
-    return { sqlite, other };
+    const root = join(home, 'sqlite');
+    cpSync(fixture.dir, root, { recursive: true });
+    const store = sqliteStore(root);
+    const methods = groupOf(store, group);
+    const outcomes: Outcome<R>[] = [];
+    for (const call of calls) outcomes.push(await outcomeOf(() => call(methods, store)));
+    await store.close();
+    return { outcomes, audit: auditRowsAt(root) };
   } finally {
     removeAfterRequest(home);
   }

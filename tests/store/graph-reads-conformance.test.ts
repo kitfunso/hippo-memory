@@ -1,17 +1,16 @@
-// GraphReads answers alike on hippo.db and on a store held in memory: the same rows, the same order, the same rows hidden and the same truncated flag.
+// GraphReads answers: the same rows, the same order, the same rows hidden and the same truncated flag.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ScopeActor } from '../../src/base/scope/recall-scope.js';
 import type { GraphRows, GraphViewQuery, GraphWalkQuery } from '../../src/base/ports/store.js';
 import type { GraphOp } from '../../src/base/ports/store/graph.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -70,12 +69,11 @@ const ids = (entities: readonly number[], relations: readonly Edge[], truncated 
   truncated,
 });
 
-/** Both stores' answers, asserted equal, with nothing appended to either audit log. */
+/** The answers, with nothing appended to the audit log. */
 async function answers<R>(calls: readonly Call<R>[]): Promise<R[]> {
-  const sides = await onBothStores(fixture, 'graphReads', calls);
-  expectSameOutcomes(sides);
-  expect(sides.sqlite.audit).toEqual(auditBefore);
-  return sides.sqlite.outcomes.map((o) => {
+  const sqlite = await runOnFixture(fixture, 'graphReads', calls);
+  expect(sqlite.audit).toEqual(auditBefore);
+  return sqlite.outcomes.map((o) => {
     if ('error' in o) throw new Error(o.error);
     return o.value;
   });
@@ -126,8 +124,7 @@ beforeAll(async () => {
     entities: [e.hub, e.spoke1, e.spoke2, e.secret, e.shared],
     relations: without(newest.relations, newest.relations[1]!),
   };
-  // Unasserted here, so a store that disagrees fails the test that reads the rows and not the whole file.
-  auditBefore = (await onBothStores(fixture, 'graphReads', [])).sqlite.audit;
+  auditBefore = (await runOnFixture(fixture, 'graphReads', [])).audit;
 });
 
 afterAll(() => {
@@ -449,7 +446,7 @@ describe('GraphReads walk reads', () => {
 });
 
 describe('GraphReads.graphDelta', () => {
-  it('plans the same ops on both stores: deletes in id order, then updates and inserts in desired order', async () => {
+  it('plans the ops: deletes in id order, then updates and inserts in desired order', async () => {
     const { e, memories } = g;
     const [
       {

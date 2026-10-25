@@ -18,6 +18,7 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memo
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -26,12 +27,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: every call site awaits a `fetch()` response from the local test server started
-  // in this file's `beforeEach`, whose route handlers are exercised directly below.
-  return (await res.json()) as T;
-}
 
 let home: string;
 let handle: ServerHandle;

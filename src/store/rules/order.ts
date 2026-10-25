@@ -1,4 +1,4 @@
-// The row orders both adapters keep, each written once: hippo.db sorts by its ORDER BY text, the memory store with the
+// The row orders the adapter keeps, each written once: hippo.db sorts by its ORDER BY text, JS callers with the
 // comparator built from the same keys.
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';

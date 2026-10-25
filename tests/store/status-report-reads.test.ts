@@ -9,11 +9,10 @@ import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, writeEntriesTogether, loadAllEntries, loadStoredParticles } from '../_helpers/root-forms.js';
+import { writeEntry, writeEntriesTogether, loadStoredParticles } from '../_helpers/root-forms.js';
 import { vecNorm } from '../../src/base/rank/physics.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-import { correctionLinksOf, rawProvenanceOf } from '../../src/store/memory/reports.js';
 
 oneRequestPerTest();
 
@@ -53,18 +52,16 @@ function seed(): void {
 }
 
 describe('status report reads', () => {
-  it('builds the same correction-latency report from the join as from every row', async () => {
+  it('builds the correction-latency report from the join', async () => {
     seed();
     const report = buildCorrectionLatency((await sqliteStore(root).reports.correctionLinks({ limit: 500 })).links);
-    expect(report).toEqual(buildCorrectionLatency(correctionLinksOf(loadAllEntries(root, 'default'))));
     expect(report.count).toBe(2);
     expect(report.extractionCount).toBe(1);
   });
 
-  it('builds the same provenance report from the count and the gaps as from every row', async () => {
+  it('builds the provenance report from the count and the gaps', async () => {
     seed();
     const report = buildProvenanceCoverage(await sqliteStore(root).reports.rawProvenance({ limit: 500 }));
-    expect(report).toEqual(buildProvenanceCoverage(rawProvenanceOf(loadAllEntries(root, 'default'))));
     expect(report.rawTotal).toBe(2);
     expect(report.gaps).toHaveLength(1);
   });

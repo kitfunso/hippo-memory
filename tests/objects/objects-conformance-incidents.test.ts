@@ -1,4 +1,4 @@
-// The incident kind answers alike on hippo.db and on a store held in memory: open, resolve, close and links.
+// The incident kind answers: open, resolve, close and links.
 import { describe, expect, it } from 'vitest';
 import { TENANT_A, TENANT_B } from '../_helpers/store-conformance.js';
 import {

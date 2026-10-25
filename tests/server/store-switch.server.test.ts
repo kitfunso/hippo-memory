@@ -1,12 +1,12 @@
-// The memory-store job's own check: under HIPPO_TEST_STORE=memory a suite's serve() runs on memoryStore and leaves
-// hippo.db as it was; on the default run it writes hippo.db as always.
+// The port-only job's own check: under HIPPO_TEST_STORE=port-only a suite's serve() writes and reads through the port
+// of a store that is not hippo.db's; on the default run it serves hippo.db's store. Both leave one row in hippo.db.
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { ServerHandle } from '../../src/server.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { onMemory } from '../_helpers/store-switch.js';
+import { onPortOnly } from '../_helpers/store-switch.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -31,7 +31,7 @@ const rowsInHippoDb = (): number => {
   }
 };
 
-it(`serve() with no store runs on ${onMemory ? 'memoryStore' : 'hippo.db'}`, async () => {
+it(`serve() with no store runs on ${onPortOnly ? 'a port-only store' : 'hippo.db'}`, async () => {
   const res = await fetch(`${handle.url}/v1/memories`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -42,5 +42,5 @@ it(`serve() with no store runs on ${onMemory ? 'memoryStore' : 'hippo.db'}`, asy
   const { id } = (await res.json()) as { id: string };
   const listed = await (await fetch(`${handle.url}/v1/memories?q=switch`)).text();
   expect(listed).toContain(id);
-  expect(rowsInHippoDb()).toBe(onMemory ? 0 : 1);
+  expect(rowsInHippoDb()).toBe(1);
 });

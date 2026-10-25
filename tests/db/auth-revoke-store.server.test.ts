@@ -4,13 +4,12 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { authRevoke, ForbiddenError, NotFoundError, serve, type Actor, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { memorySide } from '../_helpers/memory-side.js';
+import { portOnlySide } from '../_helpers/port-only-store.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 let fixture: TwoTenantFixture;
@@ -27,28 +26,8 @@ function copyOf(): string {
 function markedFolder(): string {
   const root = join(home, `marked-${++n}`);
   mkdirSync(root);
-  writeFileSync(join(root, OTHER_STORE_MARKER), 'in-memory\n');
+  writeFileSync(join(root, OTHER_STORE_MARKER), 'port-only\n');
   return root;
-}
-
-interface HippoDbState {
-  readonly revokedAt: string | null;
-  readonly auditIds: readonly number[];
-}
-
-function hippoDbState(root: string, keyId: string): HippoDbState {
-  const db = openHippoDb(root);
-  try {
-    // SAFETY: each SELECT names exactly the columns of the row type it is read as, and the fixture minted keyId.
-    const key = db.prepare('SELECT revoked_at FROM api_keys WHERE key_id = ?').get(keyId) as {
-      revoked_at: string | null;
-    };
-    // SAFETY: as above.
-    const ids = db.prepare('SELECT id FROM audit_log ORDER BY id').all() as { id: number }[];
-    return { revokedAt: key.revoked_at, auditIds: ids.map((r) => r.id) };
-  } finally {
-    closeHippoDb(db);
-  }
 }
 
 const admin: Actor = { subject: 'cli', role: 'admin' };
@@ -75,17 +54,14 @@ describe('authRevoke with ctx.store', () => {
 
   it('revokes through keyAudit and creates no hippo.db in hippoRoot', async () => {
     const hippoRoot = markedFolder();
-    const memory = memorySide(copyOf());
+    const side = portOnlySide(copyOf());
     const { memberA } = fixture.keys;
     expect(
-      await authRevoke(
-        { tenantId: TENANT_A, actor: admin, store: memory.store, config: loadConfig(hippoRoot) },
-        memberA,
-      ),
+      await authRevoke({ tenantId: TENANT_A, actor: admin, store: side.store, config: loadConfig(hippoRoot) }, memberA),
     ).toEqual({ ok: true, revokedAt: NOW });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
-    expect((await memory.store.findApiKey(memberA))?.revokedAt).toBe(NOW);
-    expect(memory.auditRows().at(-1)).toMatchObject({
+    expect((await side.store.findApiKey(memberA))?.revokedAt).toBe(NOW);
+    expect(side.auditRows().at(-1)).toMatchObject({
       tenantId: TENANT_A,
       actor: 'cli',
       op: 'auth_revoke',
@@ -94,13 +70,13 @@ describe('authRevoke with ctx.store', () => {
   });
 
   it("keeps hippo.db's checks: a member key revokes only itself, a foreign key is unknown", async () => {
-    const memory = memorySide(copyOf());
+    const side = portOnlySide(copyOf());
     const { adminA, memberA, memberB } = fixture.keys;
     const member = {
       hippoRoot: markedFolder(),
       tenantId: TENANT_A,
       actor: { subject: `api_key:${memberA}`, role: 'member' as const },
-      store: memory.store,
+      store: side.store,
       config: DEFAULT_CONFIG,
     };
     await expect(authRevoke(member, adminA)).rejects.toThrow(ForbiddenError);
@@ -127,23 +103,21 @@ describe('DELETE /v1/auth/keys/:keyId under another store', () => {
 
   it('revokes through the store that has keyAudit, and the revoked key is refused at once', async () => {
     const root = copyOf();
-    const before = hippoDbState(root, fixture.keys.memberA);
-    const memory = memorySide(root);
-    handle = await serve({ hippoRoot: root, port: 0, store: memory.store });
-    // Sleep verifies the key before its admin check refuses a member, which puts the key in the verified-key cache.
+    const side = portOnlySide(root);
+    handle = await serve({ hippoRoot: root, port: 0, store: side.store });
+    // The audit read verifies the key before its admin check refuses a member, which puts the key in the verified-key cache.
     const { url } = handle;
-    const sleepAs = async (token: string): Promise<number> =>
-      (await fetch(`${url}/v1/sleep`, { method: 'POST', headers: bearer(token) })).status;
-    expect(await sleepAs(fixture.tokens.memberA)).toBe(403);
+    const auditAs = async (token: string): Promise<number> =>
+      (await fetch(`${url}/v1/audit`, { headers: bearer(token) })).status;
+    expect(await auditAs(fixture.tokens.memberA)).toBe(403);
     const res = await revokeVia(handle.url, fixture.keys.memberA, fixture.tokens.adminA);
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ ok: true, revokedAt: expect.any(String) });
-    expect(await sleepAs(fixture.tokens.memberA)).toBe(401);
-    expect(memory.auditRows().at(-1)).toMatchObject({
+    expect(await auditAs(fixture.tokens.memberA)).toBe(401);
+    expect(side.auditRows().at(-1)).toMatchObject({
       actor: `api_key:${fixture.keys.adminA}`,
       op: 'auth_revoke',
       targetId: fixture.keys.memberA,
     });
-    expect(hippoDbState(root, fixture.keys.memberA)).toEqual(before);
   });
 });

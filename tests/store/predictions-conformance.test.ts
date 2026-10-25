@@ -1,18 +1,17 @@
-// The prediction kind of Objects answers alike on hippo.db and on a store held in memory: the same rows, the same order, the same errors and the same audit rows.
+// The prediction kind of Objects answers: the same rows, the same order, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { auditHighId } from '../_helpers/root-forms.js';
 import type { PredictionClose, PredictionListQuery, PredictionSave } from '../../src/base/ports/store.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import type { AuditEvent, PredictionBaserate } from '../../src/base/ports/store/types.js';
 import type { Prediction, SavePredictionOptions } from '../../src/base/ports/store/objects.js';
@@ -46,18 +45,16 @@ let baseline: Side;
 let nextAuditId: number;
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'objects', calls);
-  expectSameOutcomes(sides);
-  return sides.sqlite;
+  return runOnFixture(fixture, 'objects', calls);
 }
 
-/** Built once per call list, so both stores are handed the same mirror id. */
+/** Built once per call list, so every call is handed the same mirror id. */
 function claim(classTag: string, fields: Partial<SavePredictionOptions> = {}, tenantId = TENANT_A): PredictionSave {
   const opts: SavePredictionOptions = { classTag, claimText: `the ${classTag} work lands on time`, ...fields };
   return { ...opts, mirror: predictionMirror(tenantId, opts, 30), actor: ACTOR };
 }
 
-/** Sets the clock inside the call, so each store reads the same time at the same step. */
+/** Sets the clock inside the call, so each step reads a time the test names. */
 const at =
   (iso: string, call: Call): Call =>
   (g, store) => {
@@ -351,7 +348,7 @@ describe('Objects, the prediction kind: closeObject', () => {
   });
 
   it('a close with a null actual and a save with a null estimate audit has_actual and has_estimate false', async () => {
-    // The port types these number | undefined, but an HTTP body can carry null; both stores must treat it as none.
+    // The port types these number | undefined, but an HTTP body can carry null; the store must treat it as none.
     const nothing: undefined = JSON.parse('null');
     const input = claim('sprint', { estimateValue: nothing });
     const side = await conforms([
