@@ -1,10 +1,10 @@
-// ConnectorEvents answers alike on hippo.db and on a store held in memory: the same answers, entries, event log rows, dead letters
+// ConnectorEvents answers: the answers, entries, event log rows, dead letters
 // and audit rows, over two tenants that hold rows under the same artifact refs.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import type { AuditEvent } from '../../src/entry/store-kit.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -24,14 +24,16 @@ import {
   type GroupCall,
   type Outcome,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { markGitHubEventSeen, markSlackEventSeen, writeEntry } from '../_helpers/root-forms.js';
 import type { CursorKey, GitHubStream, SlackWorkspace, TenantRoute } from '../../src/base/ports/store/connectors.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-import { memorySide } from '../_helpers/memory-side.js';
-import { sqliteConnectorEventsSide, type ConnectorEventsSide } from '../_helpers/connector-sides.js';
-import { type ParkedLetter, type LoggedEvent } from '../../src/store/memory/tables.js';
+import {
+  sqliteConnectorEventsSide,
+  type ConnectorEventsSide,
+  type LoggedEvent,
+  type ParkedLetter,
+} from '../_helpers/connector-sides.js';
 
 oneRequestPerTest();
 
@@ -154,10 +156,10 @@ async function copyOfFixture(prepare: (root: string) => void | Promise<void>): P
   return root;
 }
 
-async function runSide(side: ConnectorEventsSide, calls: readonly Call[], guard: <T>(fn: () => T) => T): Promise<Side> {
+async function runSide(side: ConnectorEventsSide, calls: readonly Call[]): Promise<Side> {
   const group = side.store.connectorEvents;
   const outcomes: Outcome<Value>[] = [];
-  for (const call of calls) outcomes.push(await outcomeOf(() => guard(() => call(group, side.store))));
+  for (const call of calls) outcomes.push(await outcomeOf(() => call(group, side.store)));
   await side.store.close();
   return {
     outcomes,
@@ -167,16 +169,11 @@ async function runSide(side: ConnectorEventsSide, calls: readonly Call[], guard:
   };
 }
 
-/** The other store's calls run with hippo.db blocked, so a method that falls back to it throws instead of matching by accident. */
 async function conforms(
   calls: readonly Call[],
   prepare: (root: string) => void | Promise<void> = () => undefined,
 ): Promise<Side> {
-  const sqlite = await runSide(sqliteConnectorEventsSide(await copyOfFixture(prepare)), calls, (fn) => fn());
-  const memory = memorySide(await copyOfFixture(prepare));
-  const other = await runSide(memory, calls, (fn) => withSqliteBlocked(memory.store.kind, fn));
-  expectSameOutcomes({ other, sqlite });
-  return sqlite;
+  return runSide(sqliteConnectorEventsSide(await copyOfFixture(prepare)), calls);
 }
 
 const slack = (eventId: string): ConnectorEvent => ({

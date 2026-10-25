@@ -1,4 +1,4 @@
-// Rejections answers alike on hippo.db and on a store held in memory: the same removals, tombstones, refusals and audit rows,
+// Rejections answers: the same removals, tombstones, refusals and audit rows,
 // over two tenants holding the same text.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -12,14 +12,13 @@ import type {
 } from '../../src/entry/store-kit.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -77,9 +76,7 @@ function seed(dir: string): Seeded {
 }
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'rejections', calls);
-  expectSameOutcomes(sides);
-  return sides.sqlite;
+  return runOnFixture(fixture, 'rejections', calls);
 }
 
 const added = (side: Side): Omit<AuditEvent, 'id' | 'ts'>[] =>
@@ -160,11 +157,11 @@ describe('Rejections.apply', () => {
 
   it('replaces a merged row holding the text with the successor built from its other texts', async () => {
     const { merged } = seeded;
-    const sides = await onBothStores(fixture, 'rejections', [
+    const sqlite = await runOnFixture(fixture, 'rejections', [
       async (g, store) => {
         const applied = await g.apply(rejection({ value: 'the office moves in june' }));
         const rows = await store.entriesByIds([merged.id, ...applied.successorIds], TENANT_A);
-        // A successor gets a fresh id as a new merge does, so the two sides compare it by its text.
+        // A successor gets a fresh id as a new merge does, so the test names it by its text.
         return rows.map((r) => ({
           id: r.id === merged.id ? r.id : 'successor',
           tenantId: r.tenantId,
@@ -174,9 +171,7 @@ describe('Rejections.apply', () => {
         }));
       },
     ]);
-    expectSameOutcomes({ other: sides.other.outcomes, sqlite: sides.sqlite.outcomes });
-    expect(sides.other.audit.map((r) => r.op)).toEqual(sides.sqlite.audit.map((r) => r.op));
-    const rows = value<Row[]>(sides.sqlite, 0);
+    const rows = value<Row[]>(sqlite, 0);
     expect(rows.map((r) => r.id)).toEqual(['successor']);
     expect(rows[0]?.content).toContain('badges are reissued in july');
     expect(rows[0]?.content).not.toContain('the office moves in june');

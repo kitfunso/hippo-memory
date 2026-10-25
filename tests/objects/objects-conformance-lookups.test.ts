@@ -1,4 +1,4 @@
-// Policy, skill and brief-receipt lookups answer alike on hippo.db and on a store held in memory.
+// Policy, skill and brief-receipt lookups answer.
 import { describe, expect, it, vi } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { objectMirror } from '../../src/domain/objects/lifecycle.js';

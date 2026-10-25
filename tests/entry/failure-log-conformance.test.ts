@@ -1,4 +1,4 @@
-// FailureLog and lessonWrites.contentsWithTag answer alike on hippo.db and on a store held in memory, over two tenants
+// FailureLog and lessonWrites.contentsWithTag answer, over two tenants
 // that log the same request id.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -6,13 +6,12 @@ import type { FailureEvent, FailureOutcome } from '../../src/entry/store-kit.js'
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -60,9 +59,8 @@ async function seed(dir: string): Promise<void> {
 }
 
 async function conforms<G extends 'failureLog' | 'lessonWrites'>(group: G, calls: readonly GroupCall<G, Value>[]) {
-  const sides = await onBothStores(fixture, group, calls);
-  expectSameOutcomes(sides);
-  return sides.sqlite.outcomes;
+  const sqlite = await runOnFixture(fixture, group, calls);
+  return sqlite.outcomes;
 }
 
 beforeAll(async () => {

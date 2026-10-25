@@ -16,14 +16,7 @@ import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/au
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { Skill } from '../../src/domain/objects/skills.js';
 import { makeRoot } from '../_helpers/make-root.js';
-
-/** Parse a fetch Response body against a caller-declared shape. */
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: only used against this file's own /v1/skills route responses,
-  // whose JSON shape is fixed by the handler in src/server.ts and checked by
-  // the assertions immediately following each call site.
-  return (await res.json()) as T;
-}
+import { jsonAs, authHeaders } from '../_helpers/http-objects-server.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -46,9 +39,6 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-function authHeaders(key: CreateApiKeyResult = apiKey) {
-  return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
-}
 interface CreateSkillBody {
   skillName: string;
   instructions: string;
@@ -64,13 +54,15 @@ describe('HTTP /v1/skills (executable/exportable first-class object)', () => {
     const v1 = (await jsonAs<{ skill: Skill }>(await createSkill({ skillName: 'S', instructions: 'a' }))).skill;
     await fetch(`${handle.url}/v1/skills/${v1.id}/supersede`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: authHeaders(apiKey),
       body: JSON.stringify({ instructions: 'b', changeSummary: 'c' }),
     });
-    const all = await jsonAs<{ skills: Skill[] }>(await fetch(`${handle.url}/v1/skills`, { headers: authHeaders() }));
+    const all = await jsonAs<{ skills: Skill[] }>(
+      await fetch(`${handle.url}/v1/skills`, { headers: authHeaders(apiKey) }),
+    );
     expect(all.skills.length).toBe(2);
     const active = await jsonAs<{ skills: Skill[] }>(
-      await fetch(`${handle.url}/v1/skills?status=active`, { headers: authHeaders() }),
+      await fetch(`${handle.url}/v1/skills?status=active`, { headers: authHeaders(apiKey) }),
     );
     expect(active.skills.length).toBe(1);
     expect(active.skills[0].version).toBe(2);
@@ -79,7 +71,7 @@ describe('HTTP /v1/skills (executable/exportable first-class object)', () => {
   it('GET /v1/skills/export renders active skills markdown (and is not captured as an :id)', async () => {
     await createSkill({ skillName: 'Alpha', instructions: 'do alpha', trigger: 'on start' });
     await createSkill({ skillName: 'Bravo', instructions: 'do bravo' });
-    const res = await fetch(`${handle.url}/v1/skills/export`, { headers: authHeaders() });
+    const res = await fetch(`${handle.url}/v1/skills/export`, { headers: authHeaders(apiKey) });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ markdown: string }>(res);
     expect(body.markdown).toContain('## Alpha');

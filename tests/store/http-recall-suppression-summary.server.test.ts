@@ -17,6 +17,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -25,14 +26,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: every call site below targets GET /v1/memories under test in
-  // this file; the response is the api.recall RecallResult contract
-  // (imported above), checked field-by-field by the assertions immediately
-  // following each call.
-  return res.json() as Promise<T>;
-}
 
 let home: string;
 let handle: ServerHandle;

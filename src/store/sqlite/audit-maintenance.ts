@@ -9,8 +9,7 @@ import { tableColumns } from '../../db/tables.js';
 import { assertBinaryCompatible } from '../../db/migrate.js';
 import { dormantSnapshotsByIds, insertDormantRow } from './dormant-rows.js';
 import { calculateStrength, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
-import { isRepairCandidate, previewDefect } from '../../base/memory/memory-audit.js';
-import { repairIssues } from '../rules/repair-issues.js';
+import { isRepairCandidate, previewDefect, repairDefect, repairKeeps } from '../../base/memory/memory-audit.js';
 import {
   deleteEntryCore,
   MEMORY_BACKED_TABLES,
@@ -30,6 +29,27 @@ import type { AuditMaintenance } from '../../base/ports/store.js';
 import { withUnmigratedDb } from '../../db/open.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+
+// Quality repair's issue list: which rows are defects and which of those a protection keeps.
+
+/** The issues among `entries` in their order, each defect kept when `protect` names the row. */
+function repairIssues(
+  entries: readonly MemoryEntry[],
+  parents: ReadonlyMap<string, MemoryEntry>,
+  backing: ReadonlySet<string>,
+  protect: RepairProtection,
+): QualityRepairIssue[] {
+  return entries.flatMap((entry): QualityRepairIssue[] => {
+    const defect = repairDefect(entry, parents);
+    if (defect === null) return [];
+    const kept = repairKeeps(entry, backing.has(entry.id), protect);
+    return [
+      kept === undefined
+        ? { id: entry.id, ...defect }
+        : { id: entry.id, ...defect, disposition: 'protected', protection: kept },
+    ];
+  });
+}
 
 /** The rows a repair judged and the issues it found among them, in store order. */
 interface RepairPlan {

@@ -1,5 +1,5 @@
-// AuditLog answers alike on hippo.db and on a store held in memory, with no audit row written, and GET /v1/audit built on
-// it answers the same over serve() on either store.
+// AuditLog answers, with no audit row written, and GET /v1/audit built on
+// it answers the same over serve().
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -13,17 +13,16 @@ import { serve } from '../../src/server.js';
 import { type AuditEvent, type HippoStore, type KeysetPosition } from '../../src/entry/store-kit.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import type { QueryAuditOptions } from '../../src/base/ports/store/audit.js';
-import { memorySide } from '../_helpers/memory-side.js';
+import { portOnlyStore } from '../_helpers/port-only-store.js';
 
 const HOST = '__host__';
 const at = (second: number): string => `2020-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;
@@ -56,12 +55,11 @@ let fixture: TwoTenantFixture;
 let fixtureAudit: readonly AuditEvent[];
 let hostAdminToken: string;
 
-/** Runs the calls on both stores, asserts they agree and wrote no audit row, and returns hippo.db's values. */
+/** Runs the calls, asserts they wrote no audit row, and returns hippo.db's values. */
 async function conforms<R>(calls: readonly Call<R>[]): Promise<R[]> {
-  const sides = await onBothStores(fixture, 'auditLog', calls);
-  expectSameOutcomes(sides);
-  expect(sides.sqlite.audit).toEqual(fixtureAudit);
-  return sides.sqlite.outcomes.map((o) => {
+  const sqlite = await runOnFixture(fixture, 'auditLog', calls);
+  expect(sqlite.audit).toEqual(fixtureAudit);
+  return sqlite.outcomes.map((o) => {
     if ('error' in o) throw new Error(o.error);
     return o.value;
   });
@@ -270,7 +268,7 @@ describe('GET /v1/audit over serve()', () => {
     vi.unstubAllEnvs();
   });
 
-  it('answers the same on hippo.db and on a store held in memory', async () => {
+  it('answers the same on hippo.db and through the port alone', async () => {
     const onHippoDb = await runServed();
     expect(onHippoDb.map((r) => r.status)).toEqual(SERVED.map(([, , status]) => status));
     // SAFETY: each reply read here answered 200 above, and a 200 from this route is an array of audit rows.
@@ -298,6 +296,6 @@ describe('GET /v1/audit over serve()', () => {
       false,
       false,
     ]);
-    expect(await runServed((root) => memorySide(root).store)).toEqual(onHippoDb);
+    expect(await runServed(portOnlyStore)).toEqual(onHippoDb);
   });
 });

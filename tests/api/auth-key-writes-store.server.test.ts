@@ -14,7 +14,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import type { ApiKeyListItem } from '../../src/base/ports/store/keys.js';
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { memorySide } from '../_helpers/memory-side.js';
+import { portOnlySide } from '../_helpers/port-only-store.js';
 import { OWNER, seedOwnedKeys, type OwnedKeys } from '../_helpers/owned-keys.js';
 import { testInfra } from '../_helpers/infra.js';
 
@@ -33,7 +33,7 @@ function copyOf(): string {
 function markedFolder(): string {
   const root = join(home, `marked-${++n}`);
   mkdirSync(root);
-  writeFileSync(join(root, OTHER_STORE_MARKER), 'in-memory\n');
+  writeFileSync(join(root, OTHER_STORE_MARKER), 'port-only\n');
   return root;
 }
 
@@ -87,24 +87,24 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
 
   it('mints through keyWrites, creates no hippo.db in hippoRoot, and stores only the hash', async () => {
     const hippoRoot = markedFolder();
-    const memory = memorySide(copyOf());
+    const side = portOnlySide(copyOf());
     const ctx = {
       hippoRoot,
       tenantId: TENANT_A,
       actor: admin,
-      store: memory.store,
+      store: side.store,
       config: loadConfig(hippoRoot),
       infra: testInfra(),
     };
     const minted = await authCreate(ctx, { label: 'ci', role: 'member' });
     expect(minted).toMatchObject({ tenantId: TENANT_A, role: 'member' });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
-    expect(await verifyApiKeyCached(minted.plaintext, memory.store)).toMatchObject({
+    expect(await verifyApiKeyCached(minted.plaintext, side.store)).toMatchObject({
       keyId: minted.keyId,
       tenantId: TENANT_A,
       role: 'member',
     });
-    expect(memory.auditRows().at(-1)).toMatchObject({
+    expect(side.auditRows().at(-1)).toMatchObject({
       tenantId: TENANT_A,
       actor: 'cli',
       op: 'auth_create',
@@ -113,9 +113,9 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     });
     const secret = minted.plaintext.slice(minted.keyId.length + 1);
     const stored = JSON.stringify([
-      await memory.store.findApiKey(minted.keyId),
+      await side.store.findApiKey(minted.keyId),
       await authListRows(ctx, { active: false }),
-      memory.auditRows(),
+      side.auditRows(),
     ]);
     expect(stored).toContain(minted.keyId);
     expect(stored).not.toContain(secret);
@@ -123,24 +123,24 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
 
   it('self-mints through keyWrites, and a key it replaces is refused at once despite the verified-key cache', async () => {
     const hippoRoot = markedFolder();
-    const memory = memorySide(copyOf());
+    const side = portOnlySide(copyOf());
     const ctx = {
       hippoRoot,
       tenantId: TENANT_A,
       actor: resolverMember,
-      store: memory.store,
+      store: side.store,
       config: loadConfig(hippoRoot),
     };
     const first = await authCreateSelf(ctx, { label: 'laptop', ttlDays: 30, perSubject: 3 });
     expect(first).toMatchObject({ tenantId: TENANT_A, role: 'member', expiresAt: expect.any(String) });
-    expect(await verifyApiKeyCached(first.plaintext, memory.store)).toMatchObject({
+    expect(await verifyApiKeyCached(first.plaintext, side.store)).toMatchObject({
       keyId: first.keyId,
       ownerSubject: OWNER,
     });
     const second = await authCreateSelf(ctx, { label: 'desk', ttlDays: 30, perSubject: 1 });
-    expect(await verifyApiKeyCached(first.plaintext, memory.store)).toBeNull();
-    expect(await verifyApiKeyCached(second.plaintext, memory.store)).toMatchObject({ keyId: second.keyId });
-    const revokes = memory
+    expect(await verifyApiKeyCached(first.plaintext, side.store)).toBeNull();
+    expect(await verifyApiKeyCached(second.plaintext, side.store)).toMatchObject({ keyId: second.keyId });
+    const revokes = side
       .auditRows()
       .filter((e) => e.op === 'auth_revoke')
       .map((e) => [e.targetId, e.metadata]);
@@ -177,14 +177,14 @@ describe('authListRows with ctx.store', () => {
 
   it.each(callers)('lists what hippo.db lists for %s', async (_name, actorOf, listsAny) => {
     const root = copyOf();
-    const memory = memorySide(root);
+    const side = portOnlySide(root);
     const actor = actorOf();
     for (const active of [true, false]) {
       const onHippoDb = await authListRows(apiCtx(root, TENANT_A, actor), { active });
       expect(onHippoDb.length > 0).toBe(listsAny);
       expect(
         await authListRows(
-          { tenantId: TENANT_A, actor, store: memory.store, config: DEFAULT_CONFIG, infra: testInfra() },
+          { tenantId: TENANT_A, actor, store: side.store, config: DEFAULT_CONFIG, infra: testInfra() },
           { active },
         ),
       ).toEqual(onHippoDb);
@@ -213,9 +213,8 @@ describe('POST and GET /v1/auth/keys under another store', () => {
   it('mints and lists through the store that has keyWrites, and the new key works at once', async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     const root = copyOf();
-    const before = hippoDbState(root);
-    const memory = memorySide(root);
-    handle = await serve({ hippoRoot: root, port: 0, store: memory.store });
+    const side = portOnlySide(root);
+    handle = await serve({ hippoRoot: root, port: 0, store: side.store });
     const res = await mintVia(handle.url, fixture.tokens.adminA);
     expect(res.status).toBe(200);
     // SAFETY: POST /v1/auth/keys answers 200 with an AuthCreateResult.
@@ -227,11 +226,10 @@ describe('POST and GET /v1/auth/keys under another store', () => {
     // SAFETY: GET /v1/auth/keys answers 200 with a bare array of ApiKeyListItem.
     const all = (await (await listVia(handle.url, fixture.tokens.adminA)).json()) as ApiKeyListItem[];
     expect(all[0]).toMatchObject({ keyId: minted.keyId });
-    expect(memory.auditRows().at(-1)).toMatchObject({
+    expect(side.auditRows().at(-1)).toMatchObject({
       actor: `api_key:${fixture.keys.adminA}`,
       op: 'auth_create',
       targetId: minted.keyId,
     });
-    expect(hippoDbState(root)).toEqual(before);
   });
 });

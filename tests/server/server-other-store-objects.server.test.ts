@@ -1,17 +1,16 @@
-// serve() under a store that has the objects group runs every route ported to it on that store and writes nothing to hippo.db.
+// serve() under a store that has the objects group runs every route ported to it on that store.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
 import { OBJECT_ROW, V1_ROWS } from '../_helpers/v1-route-rows.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { requestLine } from '../_helpers/other-store-server.js';
-import { type MemorySide, memorySide } from '../_helpers/memory-side.js';
+import { type PortOnlySide, portOnlySide } from '../_helpers/port-only-store.js';
 
 describe('serve() under a store that has the objects group', () => {
   let fixture: TwoTenantFixture;
-  let memory: MemorySide;
+  let side: PortOnlySide;
   let handle: ServerHandle;
 
   type RouteBody = Readonly<Record<string, string | boolean | readonly string[]>>;
@@ -76,34 +75,13 @@ describe('serve() under a store that has the objects group', () => {
       revised: 200,
     },
   ];
-  const TABLES = [
-    'decisions',
-    'incidents',
-    'processes',
-    'policies',
-    'skills',
-    'project_briefs',
-    'customer_notes',
-    'memories',
-    'audit_log',
-  ];
-
-  const hippoDbRows = (): number[] => {
-    const db = openHippoDb(fixture.dir);
-    try {
-      // SAFETY: each SELECT names the one column n.
-      return TABLES.map((table) => (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n);
-    } finally {
-      closeHippoDb(db);
-    }
-  };
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
-    memory = memorySide(fixture.dir);
-    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memory.store });
+    side = portOnlySide(fixture.dir);
+    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: side.store });
   });
 
   afterAll(async () => {
@@ -112,8 +90,7 @@ describe('serve() under a store that has the objects group', () => {
     rmSync(fixture.dir, { recursive: true, force: true });
   });
 
-  it("runs every route ported to the group on that store, inside the caller's tenant, and writes nothing to hippo.db", async () => {
-    const before = hippoDbRows();
+  it("runs every route ported to the group on that store, inside the caller's tenant", async () => {
     const { memberA, memberB } = fixture.tokens;
     const answered = new Set<string>();
     const call = async (
@@ -243,7 +220,7 @@ describe('serve() under a store that has the objects group', () => {
     expect([...answered].sort()).toEqual([...ported].sort());
     const actor = `api_key:${fixture.keys.memberA}`;
     expect(
-      memory
+      side
         .auditRows()
         .slice(-7)
         .map((e) => [e.op, e.actor, e.tenantId]),
@@ -256,6 +233,5 @@ describe('serve() under a store that has the objects group', () => {
       ['incident_resolve', actor, TENANT_A],
       ['incident_close', actor, TENANT_A],
     ]);
-    expect(hippoDbRows()).toEqual(before);
   });
 });

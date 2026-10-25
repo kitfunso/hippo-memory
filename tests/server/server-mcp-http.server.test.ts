@@ -4,6 +4,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { presentConnectionsAsRemote } from '../_helpers/listen.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -12,14 +13,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-
-/** Parse a fetch Response body against a caller-declared shape. */
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: only used against this file's own /mcp JSON-RPC responses, whose
-  // shape is fixed by handleMcpRequest and checked by the assertions
-  // immediately following each call site.
-  return (await res.json()) as T;
-}
 
 // MCP-over-HTTP/SSE transport (Task 11 of A1 plan).
 //

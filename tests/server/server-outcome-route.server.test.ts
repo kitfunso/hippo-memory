@@ -13,6 +13,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadLastRecall, readEntry, saveIndex } from '../_helpers/root-forms.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -38,13 +39,6 @@ async function recalledIds(url: string, q: string, bearer?: string): Promise<str
   const res = await fetch(`${url}/v1/memories?q=${encodeURIComponent(q)}`, { headers });
   expect(res.status).toBe(200);
   return (await jsonAs<{ results: { id: string }[] }>(res)).results.map((r) => r.id);
-}
-
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: every call site below targets POST /v1/outcome under test in
-  // this file; the response shape is checked field-by-field by the
-  // assertions immediately following each call.
-  return res.json() as Promise<T>;
 }
 
 describe('POST /v1/outcome', () => {

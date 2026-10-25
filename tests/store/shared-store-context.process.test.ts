@@ -15,6 +15,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -40,11 +41,6 @@ interface ContextBody {
 }
 interface McpBody {
   readonly result?: { readonly content: ReadonlyArray<{ readonly text: string }>; readonly isError?: boolean };
-}
-
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: only this file's /v1/context and /mcp replies, whose fields the callers assert on next.
-  return (await res.json()) as T;
 }
 
 let home: string;

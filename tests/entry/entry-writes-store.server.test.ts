@@ -17,7 +17,7 @@ import {
   type RememberResult,
   type SupersedeResult,
 } from '../../src/api/index.js';
-import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
+import { withSqliteBlocked } from '../../src/db/index.js';
 import { handleMcpRequest, type McpContext } from '../../src/surface/mcp/server.js';
 import { resolveClientKey } from '../../src/api/recall/last-recalled.js';
 import { createCallerState } from '../../src/api/callers.js';
@@ -25,7 +25,7 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { memorySide } from '../_helpers/memory-side.js';
+import { portOnlySide } from '../_helpers/port-only-store.js';
 import { testInfra } from '../_helpers/infra.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
@@ -44,18 +44,8 @@ function copyOf(): string {
 function markedFolder(): string {
   const root = join(home, `marked-${++n}`);
   mkdirSync(root);
-  writeFileSync(join(root, OTHER_STORE_MARKER), 'in-memory\n');
+  writeFileSync(join(root, OTHER_STORE_MARKER), 'port-only\n');
   return root;
-}
-
-function auditIdsOnHippoDb(root: string): number[] {
-  const db = openHippoDb(root);
-  try {
-    // SAFETY: the SELECT names one column, id.
-    return (db.prepare('SELECT id FROM audit_log ORDER BY id').all() as { id: number }[]).map((r) => r.id);
-  } finally {
-    closeHippoDb(db);
-  }
 }
 
 beforeAll(() => {
@@ -80,28 +70,27 @@ describe('the api with ctx.store', () => {
 
   it('writes through entryWrites with hippo.db blocked, and creates no hippo.db in hippoRoot', async () => {
     const hippoRoot = markedFolder();
-    const memory = memorySide(copyOf());
+    const side = portOnlySide(copyOf());
     const ctx = {
       hippoRoot,
       tenantId: TENANT_A,
       actor: admin,
-      store: memory.store,
+      store: side.store,
       config: loadConfig(hippoRoot),
       infra: testInfra(),
     };
-    await withSqliteBlocked('in-memory', async () => {
+    await withSqliteBlocked('port-only', async () => {
       const raw = await remember(ctx, { content: 'raw call transcript about the outage', kind: 'raw' });
       const note = await remember(ctx, { content: 'deploys go out on tuesdays' });
       expect(await outcome(ctx, [note.id, 'mem_missing'], true)).toEqual({ applied: 1, appliedIds: [note.id] });
       const { newId } = await supersede(ctx, note.id, 'deploys go out on wednesdays');
       expect(await rawArchive(ctx, raw.id, 'source deleted')).toEqual({ ok: true, archivedAt: NOW });
       expect(await forget(ctx, newId)).toEqual({ ok: true, id: newId });
-      const rows = await memory.store.entriesByIds([note.id, newId, raw.id], TENANT_A);
+      const rows = await side.store.entriesByIds([note.id, newId, raw.id], TENANT_A);
       expect(rows.map((r) => [r.id, r.supersededBy, r.outcomePositive])).toEqual([[note.id, newId, 1]]);
     });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
-    expect(memory.forgotten()).toBe(2);
-    const ops = memory
+    const ops = side
       .auditRows()
       .filter((r) => r.ts === NOW)
       .map((r) => r.op);
@@ -154,9 +143,8 @@ describe('the entry write routes', () => {
 
   it('serve every entry write through the store that has entryWrites; a no-ids outcome needs no last recall', async () => {
     const root = copyOf();
-    const before = auditIdsOnHippoDb(root);
-    const memory = memorySide(root);
-    handle = await serve({ hippoRoot: root, port: 0, store: memory.store });
+    const side = portOnlySide(root);
+    handle = await serve({ hippoRoot: root, port: 0, store: side.store });
     const token = fixture.tokens.adminA;
     const note = await json<RememberResult>(
       send('/v1/memories', 'POST', token, { content: 'deploys go out on tuesdays' }),
@@ -180,7 +168,7 @@ describe('the entry write routes', () => {
     ).toMatchObject({ ok: true });
     expect(await json<ForgetResult>(send(`/v1/memories/${newId}`, 'DELETE', token))).toEqual({ ok: true, id: newId });
     expect(
-      memory
+      side
         .auditRows()
         .slice(-4)
         .map((r) => [r.op, r.actor]),
@@ -190,7 +178,6 @@ describe('the entry write routes', () => {
       ['archive_raw', `api_key:${fixture.keys.adminA}`],
       ['forget', `api_key:${fixture.keys.adminA}`],
     ]);
-    expect(auditIdsOnHippoDb(root)).toEqual(before);
   });
 
   it("write and remove the markdown mirrors on serve()'s default hippo.db store", async () => {
@@ -214,7 +201,7 @@ describe('the entry write routes', () => {
 describe('hippo_remember and hippo_outcome under another store', () => {
   it('remember and apply an outcome through the store, with hippo.db blocked', async () => {
     const hippoRoot = markedFolder();
-    const memory = memorySide(copyOf());
+    const side = portOnlySide(copyOf());
     const callers = createCallerState();
     const ctx: McpContext = {
       hippoRoot,
@@ -222,14 +209,14 @@ describe('hippo_remember and hippo_outcome under another store', () => {
       actor: 'mcp',
       role: 'admin',
       hostAdmin: true,
-      store: memory.store,
+      store: side.store,
       clientKey: 'entry-writes-store',
       config: loadConfig(hippoRoot),
       infra: testInfra(),
       callers,
     };
     const call = (name: string, args: Record<string, string | boolean>) =>
-      withSqliteBlocked('in-memory', () =>
+      withSqliteBlocked('port-only', () =>
         handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx),
       );
     const textOf = (res: Awaited<ReturnType<typeof call>>): string | undefined =>
@@ -240,7 +227,7 @@ describe('hippo_remember and hippo_outcome under another store', () => {
     expect(id).toMatch(/^mem_[0-9a-f]+$/);
     callers.lastShown.set(resolveClientKey(ctx), [id ?? '']);
     expect(textOf(await call('hippo_outcome', { good: true }))).toBe('Applied positive outcome to 1 memories');
-    expect((await memory.store.entriesByIds([id ?? ''], TENANT_A)).map((r) => r.outcomePositive)).toEqual([1]);
+    expect((await side.store.entriesByIds([id ?? ''], TENANT_A)).map((r) => r.outcomePositive)).toEqual([1]);
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
   });
 });

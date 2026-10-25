@@ -7,18 +7,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: every call site below targets one of this file's routes under
-  // test (POST/GET/DELETE /v1/memories, /v1/auth/keys, /v1/audit); each
-  // response shape is checked field-by-field by the assertions immediately
-  // following each call.
-  return res.json() as Promise<T>;
-}
 
 describe('server HTTP routes — memories', () => {
   let home: string;

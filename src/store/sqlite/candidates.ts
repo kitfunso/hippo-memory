@@ -5,25 +5,27 @@ import {
   Layer,
   schemaFitFrom,
   type LossAversion,
+  calculateStrength,
+  confidenceFacets,
+  type ConfidenceInputs,
+  type StrengthInputs,
 } from '../../base/memory/memory.js';
-import { strengthSql } from './rule-sql.js';
+import { strengthSql, originInSql, rewardFactorSql, scopeAdmitSql } from './rule-sql.js';
 import { isOutcomeSlowAblated } from '../../base/memory/ablation.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../../db/decay-key.js';
 import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { sortableStamp } from '../../base/memory/created-stamp.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import { originInSql, rewardFactorSql, scopeAdmitSql } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { pickRarestFtsQuery, listRecallEntries } from './search-rows.js';
-import type { HeldText } from '../../base/ports/store/types.js';
+import type { HeldText, EntryCursor } from '../../base/ports/store/types.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import { oldestFirst } from '../rules/order.js';
 import { tenantAnd } from './tenant.js';
 import { rowsHoldingTexts } from './copy-rows.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { ENTRY_PAGE_ORDER, entryPage } from './keyset.js';
-import type { EntryCursor } from '../../base/ports/store/types.js';
 import type { AmbientRefusalReason } from '../../base/scope/read-admission.js';
 import type {
   AmbientCandidateRequest,
@@ -34,8 +36,38 @@ import type {
 } from '../../base/ports/store/context-reads.js';
 import type { SourceTally } from '../../base/ports/store/sharing.js';
 import type { StatusCounts, StrengthTallies } from '../../base/ports/store/reports.js';
-import { tallyStatus, type StatusInputs } from '../rules/status-tally.js';
 import { SCHEMA_FIT_WINDOW_ROWS } from '../rules/windows.js';
+
+// The status tally: each row scored by calculateStrength and confidenceFacets, summed in the order given so the
+// average rounds the same on every run.
+
+/** What one row's status reads: its strength and confidence inputs and its layer. */
+type StatusInputs = StrengthInputs & ConfidenceInputs & { readonly layer: Layer };
+
+/** The counts over `rows`; the caller adds the conflict and vector counts. */
+function tallyStatus(
+  rows: Iterable<StatusInputs>,
+  now: Date,
+  atRiskBelow: number,
+  rules: LossAversion,
+): Omit<StatusCounts, 'openConflicts' | 'embedded'> {
+  const byLayer = { [Layer.Buffer]: 0, [Layer.Episodic]: 0, [Layer.Semantic]: 0, [Layer.Trace]: 0 };
+  const byConfidence = { verified: 0, observed: 0, inferred: 0, stale: 0 };
+  const sums = { total: 0, strength: 0, pinned: 0, atRisk: 0, agedOut: 0 };
+  for (const row of rows) {
+    const strength = calculateStrength(row, now, rules);
+    const facets = confidenceFacets(row, now);
+    sums.total++;
+    sums.strength += strength;
+    byLayer[row.layer] = (byLayer[row.layer] ?? 0) + 1;
+    byConfidence[facets.tier] = (byConfidence[facets.tier] ?? 0) + 1;
+    if (row.pinned) sums.pinned++;
+    if (strength < atRiskBelow) sums.atRisk++;
+    if (facets.agedOut) sums.agedOut++;
+  }
+  const { total, pinned, atRisk, agedOut } = sums;
+  return { total, byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength: total > 0 ? sums.strength / total : 0 };
+}
 
 const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
 const AMBIENT_PINNED = 'pinned = 1 AND superseded_by IS NULL';

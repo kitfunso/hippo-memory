@@ -16,7 +16,8 @@ import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/sto
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-import { memorySide } from '../_helpers/memory-side.js';
+import { portOnlyStore } from '../_helpers/port-only-store.js';
+import { rowsOf, sqliteConnectorSide } from '../_helpers/connector-sides.js';
 import { testInfra } from '../_helpers/infra.js';
 
 oneRequestPerTest();
@@ -38,7 +39,7 @@ function copyOf(): string {
 function markedFolder(): string {
   const root = join(home, `marked-${String(++n)}`);
   mkdirSync(root);
-  writeFileSync(join(root, OTHER_STORE_MARKER), 'in-memory\n');
+  writeFileSync(join(root, OTHER_STORE_MARKER), 'port-only\n');
   return root;
 }
 
@@ -70,12 +71,13 @@ afterEach(() => {
 describe('a served store with connectorWrites takes connector traffic', () => {
   it('stores one Slack message and one GitHub event and archives on one Slack deletion, with hippo.db blocked and none created in hippoRoot', async () => {
     const hippoRoot = markedFolder();
-    const memory = memorySide(copyOf());
+    const served = copyOf();
+    const side = sqliteConnectorSide(served, portOnlyStore(served));
     const ctx = {
       hippoRoot,
       tenantId: TENANT_A,
       actor: connector,
-      store: memory.store,
+      store: side.store,
       config: loadConfig(hippoRoot),
       infra: testInfra(),
     };
@@ -106,7 +108,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       deliveryId: 'd-1',
       eventName: 'issues',
     };
-    const ids = await withSqliteBlocked('in-memory', async () => {
+    const ids = await withSqliteBlocked('port-only', async () => {
       const message = await remember(ctx, ingestOpts(slackMessage, { connector: 'slack', eventId: 'Ev_message' }));
       const redelivered = await remember(ctx, ingestOpts(slackMessage, { connector: 'slack', eventId: 'Ev_message' }));
       expect(redelivered.duplicate).toEqual({ memoryId: message.id });
@@ -116,20 +118,20 @@ describe('a served store with connectorWrites takes connector traffic', () => {
         event: { connector: 'slack', eventId: 'Ev_deleted' },
       });
       expect(deleted).toEqual({ ok: true, archivedAt: NOW });
-      const rows = await memory.store.entriesByIds([message.id, redelivered.id, opened.id], TENANT_A);
+      const rows = await side.store.entriesByIds([message.id, redelivered.id, opened.id], TENANT_A);
       expect(rows.map((r) => [r.id, r.kind, r.artifactRef])).toEqual([
         [opened.id, 'raw', 'github://acme/demo/issue/42'],
       ]);
       return { message: message.id, opened: opened.id };
     });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
-    expect(memory.events().map((e) => [e.connector, e.eventKey, e.memoryId, e.deliveryId])).toEqual([
+    expect(side.events().map((e) => [e.connector, e.eventKey, e.memoryId, e.deliveryId])).toEqual([
       ['slack', 'Ev_deleted', ids.message, null],
       ['slack', 'Ev_message', ids.message, null],
       ['github', 'key-issue-42', ids.opened, 'd-1'],
     ]);
-    expect(memory.forgotten()).toBe(1);
-    const rows = memory
+    expect(rowsOf(served, "SELECT value FROM meta WHERE key = 'total_forgotten'")).toEqual([{ value: '1' }]);
+    const rows = side
       .auditRows()
       .filter((r) => r.ts === NOW)
       .map((r) => [r.op, r.targetId, r.actor]);
@@ -141,12 +143,13 @@ describe('a served store with connectorWrites takes connector traffic', () => {
   });
 
   it('holds a flagged GitHub comment for review: quarantine scope on the entry, one pending record, the quarantine row ahead of the remember row', async () => {
-    const memory = memorySide(copyOf());
+    const served = copyOf();
+    const side = sqliteConnectorSide(served, portOnlyStore(served));
     const ctx = {
       hippoRoot: markedFolder(),
       tenantId: TENANT_A,
       actor: connector,
-      store: memory.store,
+      store: side.store,
       config: DEFAULT_CONFIG,
       infra: testInfra(),
     };
@@ -166,15 +169,15 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       deliveryId: 'd-2',
       eventName: 'issue_comment',
     };
-    const held = await withSqliteBlocked('in-memory', async () => {
+    const held = await withSqliteBlocked('port-only', async () => {
       const result = await remember(ctx, ingestOpts(comment, event));
-      expect((await memory.store.entriesByIds([result.id], TENANT_A)).map((r) => r.scope)).toEqual([
+      expect((await side.store.entriesByIds([result.id], TENANT_A)).map((r) => r.scope)).toEqual([
         'quarantine:private:github:public:acme/demo',
       ]);
       return result;
     });
     expect(held.quarantined).toEqual({ reason: expect.any(String) });
-    expect(memory.records()).toEqual([
+    expect(side.records()).toEqual([
       {
         tenantId: TENANT_A,
         memoryId: held.id,
@@ -185,7 +188,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       },
     ]);
     expect(
-      memory
+      side
         .auditRows()
         .filter((r) => r.ts === NOW)
         .map((r) => [r.op, r.targetId]),

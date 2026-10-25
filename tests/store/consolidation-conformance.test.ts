@@ -1,4 +1,4 @@
-// Consolidation answers alike on hippo.db and on a store held in memory: a sleep's opening, its reads, the settle of a
+// Consolidation answers: a sleep's opening, its reads, the settle of a
 // dirty summary, the flush and dormant expiry, and the run record.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -13,14 +13,13 @@ import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
   valueAt,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { appendSessionEvent, writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -132,9 +131,7 @@ async function conforms(calls: readonly GroupCall<'consolidation', unknown>[]) {
     vi.setSystemTime(START + i * 1000);
     return call(methods, store);
   });
-  const sides = await onBothStores(fixture, 'consolidation', timed);
-  expectSameOutcomes(sides);
-  return sides;
+  return runOnFixture(fixture, 'consolidation', timed);
 }
 
 const id = (name: string): string => rows[name]!.id;
@@ -156,7 +153,7 @@ function rebuilt(name: string, text: string): SummarySettle {
 describe('Consolidation', () => {
   it('opens a sleep: moves the half-lives once, and reads the history and the untraced sessions', async () => {
     const traces = (tenantId: string) => ({ tenantId, sinceMs: 0 });
-    const { sqlite } = await conforms([
+    const sqlite = await conforms([
       (g) => g.begin(30, { dryRun: true, actor: 'test', traces: traces(TENANT_A) }),
       (g) => g.begin(30, { dryRun: false, actor: 'test' }),
       (g) => g.begin(30, { dryRun: true, actor: 'test', traces: traces(TENANT_B) }),
@@ -168,7 +165,7 @@ describe('Consolidation', () => {
   });
 
   it('reads ids, tombstones, particles, duplicates and topic summaries, and writes particles and audit rows', async () => {
-    const { sqlite } = await conforms([
+    const sqlite = await conforms([
       (g) => g.entryIdsPage({ limit: 1000 }),
       (g) => g.entryIdsPage({ limit: 2 }),
       (g) => g.rejected(TENANT_A, [rejectionDigest(REFUSED), rejectionDigest('nothing'), rejectionDigest(REFUSED)]),
@@ -190,7 +187,7 @@ describe('Consolidation', () => {
 
   it('settles dirty summaries once each, keeping tombstoned content out with a refusal row', async () => {
     const clean = { tenantId: TENANT_A, actor: 'buildDag', op: 'summary_marked_clean' as const, targetId: id('fresh') };
-    const { sqlite } = await conforms([
+    const sqlite = await conforms([
       (g) => g.dirtySummaries(2),
       (g) => g.settleSummary(rebuilt('topic', 'alice runs billing and payroll for acme')),
       (g) => g.settleSummary(rebuilt('topic', 'a second rebuild that lost the race')),
@@ -231,7 +228,7 @@ describe('Consolidation', () => {
       snapshot: new Map([[id('edited'), rows.edited!]]),
     };
     const conflict = { memory_a_id: id('twin1'), memory_b_id: id('twin2'), reason: 'contradiction', score: 0.9 };
-    const { sqlite } = await conforms([
+    const sqlite = await conforms([
       (g) => g.commit({ flush, expireBefore: '2020-01-01T00:00:00.000Z', dryRun: false, holdMs: 0 }),
       (g) => g.commit({ flush: null, expireBefore: '2030-01-01T00:00:00.000Z', dryRun: true, holdMs: 0 }),
       (g) => g.recordSleep({ conflicts: [conflict], at: AT, decayed: 1, merged: 0, removed: 1 }),

@@ -233,7 +233,7 @@ export interface AuthRevokeResult {
 
 /** Revoke a key in the caller's tenant: a member API key may revoke only itself, a resolver member only the keys it
  *  minted.
- *  The revoke and its auth_revoke row commit together on either store, so a failed audit write leaves the key live. */
+ *  The revoke and its auth_revoke row commit together on any store, so a failed audit write leaves the key live. */
 export async function authRevoke(ctx: EntryContext, keyId: string): Promise<AuthRevokeResult> {
   const store = ctx.store;
   assertMemberKeyRevokesSelf(ctx, keyId);

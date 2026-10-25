@@ -16,9 +16,36 @@ import {
 } from './token-ledger-rows.js';
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import type { TokenSummary, TokenSurface, TokenSurfaceSummary, TokenUse } from '../../base/ports/store/ledger.js';
-import { ledgerCutoff, REREAD_SURFACES, TOKEN_SURFACES } from '../rules/token-ledger.js';
 import type { LastSent } from '../../base/session/skip-unchanged.js';
 import type { ApiCall } from '../../base/session/transcript-calls.js';
+import { DAY_MS } from '../../base/util/time.js';
+
+// The token ledger's surfaces and retention.
+
+/** Every surface a block is sent on, in report order. */
+const TOKEN_SURFACES: readonly TokenSurface[] = [
+  'hook',
+  'hook_recall',
+  'compact_resume',
+  'context',
+  'recall',
+  'mcp_recall',
+  'mcp_context',
+  'http_recall',
+  'http_context',
+  'http_assemble',
+];
+
+/** Surfaces whose re-reads are counted: only a hook payload tells a sub-agent's block from its parent's, as both carry
+ * one session id. */
+const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume'];
+
+/** Rows older than this are pruned on write. */
+const TOKEN_LEDGER_RETENTION_DAYS = 90;
+
+/** The stamp a row written at `ts` prunes before: {@link TOKEN_LEDGER_RETENTION_DAYS} earlier. */
+const ledgerCutoff = (ts: string): string =>
+  new Date(Date.parse(ts) - TOKEN_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
 
 /** Append one ledger row and prune rows past the retention window. */
 export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {

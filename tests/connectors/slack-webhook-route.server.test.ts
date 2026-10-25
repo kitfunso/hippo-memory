@@ -5,7 +5,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { rawProvenanceOf } from '../../src/store/memory/reports.js';
+import { rawProvenanceAt } from '../_helpers/report-reads.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -97,7 +97,7 @@ describe('POST /v1/connectors/slack/events', () => {
     expect(slackRow?.owner).toBe('user:U1');
     expect(slackRow?.artifactRef).toBe('slack://T1/C1/1700000000.000100');
 
-    const coverage = buildProvenanceCoverage(rawProvenanceOf(entries));
+    const coverage = buildProvenanceCoverage(await rawProvenanceAt(root));
     expect(coverage.rawTotal).toBe(1);
     expect(coverage.coverage).toBe(1);
     expect(coverage.gaps).toEqual([]);

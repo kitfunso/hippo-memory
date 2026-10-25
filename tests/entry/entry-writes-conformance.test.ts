@@ -1,4 +1,4 @@
-// EntryWrites answers alike on hippo.db and on a store held in memory: the same values, the same errors, the same rows read back
+// EntryWrites answers: the same values, the same errors, the same rows read back
 // and the same audit rows, over two tenants with personal, raw, summary and tombstoned rows.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,14 +9,13 @@ import { CHURN_STALE_TAG, type MemoryEntry } from '../../src/base/memory/memory.
 import type { AuditEvent, ScopeReader } from '../../src/entry/store-kit.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -29,7 +28,7 @@ const ALICE = 'personal:private:alice';
 const BANNED = 'the launch date is march third';
 const ACTOR = 'api_key:caller';
 
-/** The columns these writes change, so a row compares across stores without the fields each store fills its own way. */
+/** The columns these writes change, so a row compares to its expected value without the fields the store fills. */
 type Row = Pick<
   MemoryEntry,
   | 'id'
@@ -108,9 +107,7 @@ const project = (entries: MemoryEntry[]): Row[] =>
   }));
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'entryWrites', calls);
-  expectSameOutcomes(sides);
-  return sides.sqlite;
+  return runOnFixture(fixture, 'entryWrites', calls);
 }
 
 /** The audit rows a run added, without the ids and times both sides already matched on. */
@@ -478,7 +475,7 @@ describe('EntryWrites.forget', () => {
       forget(personal.id),
       forget(personal.id, ALICE),
       readBack(TENANT_A, raw.id, personal.id),
-      // The CLI and dashboard tell this refusal apart by its class, so both stores must throw the same one.
+      // The CLI and dashboard tell this refusal apart by its class, so the store must throw that class.
       (g) =>
         g.forget(target(raw.id)).then(
           () => 'kept',

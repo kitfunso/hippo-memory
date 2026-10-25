@@ -6,14 +6,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
-
-/** Parse a fetch Response body against a caller-declared shape. */
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: only used against this file's own /v1/memories route responses,
-  // whose JSON shape is fixed by the handler in src/server.ts and checked by
-  // the assertions immediately following each call site.
-  return (await res.json()) as T;
-}
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 let home: string;
 let handle: ServerHandle;

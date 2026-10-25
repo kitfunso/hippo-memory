@@ -1,4 +1,4 @@
-// HippoStore's own methods answer alike on hippo.db and on a store held in memory: key lookup, recall's candidate
+// HippoStore's own methods answer: key lookup, recall's candidate
 // search and writes, id and raw reads, continuity, the planning-fallacy read, audit appends, counters and the ledger.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -10,14 +10,13 @@ import type { ContinuityKey } from '../../src/base/ports/store/types.js';
 import type { PredictionSave } from '../../src/base/ports/store/objects.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
   valueAt,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -70,9 +69,7 @@ async function conforms(calls: readonly GroupCall<'base', unknown>[]) {
     vi.setSystemTime(START + i * 1000);
     return call(store, same);
   });
-  const sides = await onBothStores(fixture, 'base', timed);
-  expectSameOutcomes(sides);
-  return sides.sqlite;
+  return runOnFixture(fixture, 'base', timed);
 }
 
 const search = (over: Partial<RecallSearchArgs> = {}): RecallSearchArgs => ({

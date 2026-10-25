@@ -51,7 +51,7 @@ const trapDefs: TrapDefinition[] = JSON.parse(fs.readFileSync(TRAP_DEFS_PATH, 'u
 // ---------------------------------------------------------------------------
 
 let tmpDir: string;
-const memoryStore: Record<string, MemoryEntry> = {};
+const entriesByLabel: Record<string, MemoryEntry> = {};
 
 /** Seed memories that map to the trap prevention IDs */
 function seedTrapMemories(hippoRoot: string): void {
@@ -156,7 +156,7 @@ and compare actual output to claimed metrics before accepting any model upgrade.
     const entry = createMemory(m.content, m.opts);
     const withId: MemoryEntry = { ...entry, id: m.id };
     writeEntry(hippoRoot, withId);
-    memoryStore[m.label] = withId;
+    entriesByLabel[m.label] = withId;
   }
 }
 

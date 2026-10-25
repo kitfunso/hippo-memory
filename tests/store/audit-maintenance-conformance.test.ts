@@ -1,4 +1,4 @@
-// AuditMaintenance answers alike on hippo.db and on a store held in memory: the object-backed read, the guarded
+// AuditMaintenance answers: the object-backed read, the guarded
 // automatic deletes, the audit prune, and quality repair's plan, apply and once-per-store run.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -8,15 +8,13 @@ import type { QualityRepairResult } from '../../src/base/ports/store/audit.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
-  type SideResult,
   valueAt,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -69,16 +67,9 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 
 afterEach(() => vi.useRealTimers());
 
-// A repair's folder, schema version and backup file are hippo.db's files; a store with none answers '', 0 and null.
+// A repair's folder, schema version and backup file vary per run, so the tests compare the plan with them replaced.
 const planOf = (result: QualityRepairResult | null) =>
   result && { ...result, root: 'folder', schema: 'version', backup: 'kept by the store' };
-
-function withoutBackupFile(side: SideResult<unknown>): SideResult<unknown> {
-  const audit = side.audit.map((row) =>
-    row.op === 'quality_repair' ? { ...row, metadata: { ...row.metadata, backup: 'kept by the store' } } : row,
-  );
-  return { ...side, audit };
-}
 
 /** Each call one second after the one before. */
 async function conforms(calls: readonly GroupCall<'auditMaintenance', unknown>[]) {
@@ -86,16 +77,14 @@ async function conforms(calls: readonly GroupCall<'auditMaintenance', unknown>[]
     vi.setSystemTime(START + i * 1000);
     return call(methods, store);
   });
-  const sides = await onBothStores(fixture, 'auditMaintenance', timed);
-  expectSameOutcomes({ other: withoutBackupFile(sides.other), sqlite: withoutBackupFile(sides.sqlite) });
-  return sides;
+  return runOnFixture(fixture, 'auditMaintenance', timed);
 }
 
 const id = (name: string): string => rows[name]!.id;
 
 describe('AuditMaintenance', () => {
   it('reads object-backed ids, deletes only what the guard lets go, and prunes one tenant before a cutoff', async () => {
-    const { sqlite } = await conforms([
+    const sqlite = await conforms([
       (g) => g.objectBackedAmong([id('backed'), id('plain'), 'mem_none']).then((found) => [...found]),
       (g) =>
         g.deleteAutomatically(
@@ -147,7 +136,7 @@ describe('AuditMaintenance', () => {
   });
 
   it('plans repairs per tenant under each protection, applies the certain ones to dormant, and runs once per store', async () => {
-    const { sqlite } = await conforms([
+    const sqlite = await conforms([
       (g) => g.repairQuality(TENANT_A, false, PROTECTED_ROWS).then(planOf),
       (g) => g.repairQuality(TENANT_A, false, NO_PROTECTION).then(planOf),
       (g) => g.repairQuality(TENANT_B, false, PROTECTED_ROWS).then(planOf),
