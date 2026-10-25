@@ -274,7 +274,7 @@ describe('mcp tenant + client-key isolation', () => {
       content: 'cross-client http-mcp simulated bearer-isolation',
     });
 
-    // Simulate exactly what surface/server/client-key.ts clientKeyOf produces:
+    // Simulate exactly what surface/server/client-ip.ts clientKeyOf produces:
     //   `http:${sha256(bearer).slice(0,16)}:${remoteAddr}`
     const bearerA = 'hk_test_alpha_A';
     const bearerB = 'hk_test_alpha_B';

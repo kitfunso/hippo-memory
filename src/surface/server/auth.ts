@@ -7,7 +7,7 @@ import { API_KEY_PREFIX } from '../../base/scope/api-key.js';
 import { type Actor, type Context, contextReach, ownerOrSubject } from '../../api/index.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../../base/util/http-util.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
-import { clientLimitKey } from './client-ip.js';
+import { clientKeyOf, clientLimitKey } from './client-ip.js';
 import { keyCheckBounds } from './key-check-bounds.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOptions } from './types.js';
 import { isJsonString } from '../../base/util/json.js';
@@ -91,6 +91,12 @@ export function readAuthHeader(req: IncomingMessage): AuthHeader {
   if (scheme.toLowerCase() !== 'bearer') return { kind: 'malformed' };
   if (token.length === 0) return { kind: 'malformed' };
   return { kind: 'bearer', token };
+}
+
+/** The request's client key, from its bearer when it sends one. */
+function requestClientKey(req: IncomingMessage): string {
+  const auth = readAuthHeader(req);
+  return clientKeyOf(req, auth.kind === 'bearer' ? auth.token : undefined);
 }
 
 type AuthOptions = Pick<
@@ -320,7 +326,7 @@ function chargeCaller(tenantId: string, actor: Actor, opts: AuthOptions): void {
  * Reads the store only for an API-key-shaped Bearer (or any Bearer with no resolver), so keyless calls stay cheap. */
 export async function buildContextWithAuth(req: IncomingMessage, opts: ContextOptions): Promise<Context> {
   const id = await checkAuth(req, opts);
-  const ctx = contextFor(id, opts);
+  const ctx = contextFor(id, opts, requestClientKey(req));
   if (id !== null) chargeCaller(id.tenantId, ctx.actor, opts);
   return ctx;
 }
@@ -328,7 +334,7 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: ContextOp
 /** The auth check again, uncharged, for a handler that authenticated with requireAuth before a slow body read and must
  * re-check right before it acts. */
 export async function recheckContextWithAuth(req: IncomingMessage, opts: ContextOptions): Promise<Context> {
-  return contextFor(await checkAuth(req, opts), opts);
+  return contextFor(await checkAuth(req, opts), opts, requestClientKey(req));
 }
 
 /** The keyless local caller: any process on this machine can reach loopback, so it is always a member. */
@@ -336,7 +342,7 @@ function keylessLocalActor(): Actor {
   return { subject: 'localhost:cli', role: 'member' };
 }
 
-function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
+function contextFor(id: BearerIdentity | null, opts: ContextOptions, clientKey: string): Context {
   // A store other than hippo.db is a team's central server, so its folder's config.json must not decide shared-ness.
   const team = !opts.onHippoDb;
   // Per request, never cached at serve: the global store can be created while the server runs.
@@ -347,7 +353,7 @@ function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
   const infra = opts.infra();
   if (id !== null) {
     const actor = bearerActor(id);
-    return { tenantId: id.tenantId, actor, store: opts.store, reach, config, callers, infra };
+    return { tenantId: id.tenantId, actor, store: opts.store, reach, config, callers, clientKey, infra };
   }
   return {
     tenantId: envTenant(),
@@ -356,6 +362,7 @@ function contextFor(id: BearerIdentity | null, opts: ContextOptions): Context {
     reach,
     config,
     callers,
+    clientKey,
     infra,
   };
 }

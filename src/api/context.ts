@@ -36,6 +36,7 @@ import {
 } from './context-select.js';
 import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from './recall/finish.js';
+import { keepShownIds } from './recall/last-recalled.js';
 import { type Context, type ContextReach, ownerOrSubject } from './types.js';
 import type {
   ContextCandidateFilter,
@@ -151,10 +152,20 @@ interface TaskSections {
   left: number;
 }
 
-/** Assembles a budget-bounded, tenant-scoped context bundle; mutates `last_retrieval_ids` and emits a 'recall' audit
- * row for non-pinned, non-'*' queries. Returns an empty result when there are no memories, snapshot, handoff or recent
- * events. CLI rendering stays in `cli.ts`. */
+/** Assembles a budget-bounded, tenant-scoped context bundle and keeps its ids as the client's last shown list. */
 export async function contextGet(ctx: Context, opts: ContextOptions): Promise<ContextResult> {
+  const result = await assembleContext(ctx, opts);
+  keepShownIds(
+    ctx,
+    result.entries.map((r) => r.entry.id),
+  );
+  return result;
+}
+
+/** contextGet without the shown list, for the prompt hook, whose block is no answer an outcome should land on;
+ * mutates `last_retrieval_ids` and emits a 'recall' audit row for non-pinned, non-'*' queries. Returns an empty result
+ * when there are no memories, snapshot, handoff or recent events. */
+export async function assembleContext(ctx: Context, opts: ContextOptions): Promise<ContextResult> {
   const budget = opts.budget ?? DEFAULT_CONTEXT_BUDGET;
   assertScopeRequestAllowed(ctx.actor, opts.exactScope);
   if (budget <= 0) {

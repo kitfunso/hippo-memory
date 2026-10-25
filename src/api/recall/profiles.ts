@@ -1,4 +1,5 @@
-// How each recall surface ranks, as data the one ranker reads; docs/recall-surface-differences.md names each field.
+// The ways a recall can rank, as data the one ranker reads; each surface picks one, and
+// docs/recall-surface-differences.md names the surface behind each profile.
 
 export interface RecallProfile {
   /** 'engine' ranks with the engine (physics or hybrid) and keeps its list and scores; 'position' keeps every loaded
@@ -17,8 +18,8 @@ export interface RecallProfile {
   readonly goalBoost: { readonly ranked: boolean; readonly band: boolean };
 }
 
-/** `hippo recall` and `hippo explain`. */
-export const CLI_RECALL: RecallProfile = {
+/** The engine's list cut to a token budget, with the global store in reach. */
+export const BUDGET_RANKED: RecallProfile = {
   scoreForm: 'engine',
   scopeBoost: 'active',
   candidateFloor: 0,
@@ -27,8 +28,9 @@ export const CLI_RECALL: RecallProfile = {
   goalBoost: { ranked: true, band: false },
 };
 
-/** MCP `hippo_recall`. Tag, pin and recency boosts can lift a row from deep in the BM25 order, so it loads 1,000. */
-export const MCP_RECALL: RecallProfile = {
+/** The engine's whole list, cut by the band composed from it. Tag, pin and recency boosts can lift a row from deep in
+ * the BM25 order, so it loads 1,000. */
+export const BAND_RANKED: RecallProfile = {
   scoreForm: 'engine',
   scopeBoost: 'active',
   candidateFloor: 1000,
@@ -37,8 +39,8 @@ export const MCP_RECALL: RecallProfile = {
   goalBoost: { ranked: true, band: true },
 };
 
-/** HTTP `GET /v1/memories` and the `retrieve` library call. */
-export const HTTP_RECALL: RecallProfile = {
+/** Every loaded row in load order, scored by its place and cut by the band; an engine the request names reorders it. */
+export const POSITION_BAND: RecallProfile = {
   scoreForm: 'position',
   scopeBoost: 'filter',
   candidateFloor: 0,

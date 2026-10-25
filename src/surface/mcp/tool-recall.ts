@@ -1,23 +1,23 @@
 // The recall an agent's tool prints: the ranked list cut to the caller's token budget, with the hints and the Cutoff
-// block that describe that list. The shown ids are kept for the caller's next outcome.
+// block that describe that list.
 
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
-import { estimateTokens, shrinkToFit, tokenPurse } from '../../base/util/token-text.js';
+import { estimateTokens, tokenPurse } from '../../base/util/token-text.js';
 import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { Context } from '../../api/types.js';
 import {
   callerOf,
   hashQueryText,
-  noteRecall,
+  RECALL_RECORDING,
   sessionRing,
   shownRecallRows,
   type HintConfig,
   type RingBuffer,
 } from '../../api/recall/finish.js';
 import { retrieveRanking } from '../../api/recall/recall.js';
-import { fitRecallRows } from '../../api/recall/rows.js';
+import { fitRecall } from '../../api/recall/rows.js';
 import {
   availabilityPool,
   cutoffClauses,
@@ -36,7 +36,7 @@ import {
   type RenderedRecall,
   type RenderSlot,
 } from './tool-text.js';
-import type { RecallSuppressionSummary, ShowRanking } from '../../api/recall/types.js';
+import type { RecallResultItem, RecallSuppressionSummary, ShowRanking } from '../../api/recall/types.js';
 
 /**
  * Builds the presenter that renders the list the tool shows, parks the render in `out` and hands back its hint rows.
@@ -93,19 +93,12 @@ function suppressionCounts(i: SuppressionInputs): SuppressionCounts {
   };
 }
 
-function fitToolRecall(
-  ranked: SearchResult[],
-  limits: { room: number; budget: number },
-  render: (cut: SearchResult[]) => RenderedRecall,
-): RenderedRecall {
-  const fitted = fitRecallRows(ranked, Math.max(0, limits.room), 1, memoryCost);
-  return shrinkToFit(
-    fitted.length,
-    1,
-    limits.budget,
-    (n) => render(fitted.slice(0, n)),
-    (r) => r.text,
-  );
+/** The window band's fresh-tail and summary rows that the shown list holds neither by id nor by text. */
+function unshownTail(list: SearchResult[], tailRows: RecallResultItem[]): RecallResultItem[] {
+  const shownIds = new Set(list.map((r) => r.entry.id));
+  const shownKeys = storedTextKeys(list.map((r) => r.entry));
+  const unshown = tailRows.filter((r) => !shownIds.has(r.id) && !shownKeys.has(duplicateKey(r.content)));
+  return dropHeldCopies(unshown, (r) => r);
 }
 
 function recallPresenter(budget: number, options: RecallPresenterOptions): ShowRanking {
@@ -129,14 +122,7 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): ShowR
       // After every cut, so a merged row cut here never hides its sources.
       const list = dropHeldCopies(cut, (r) => r.entry);
       const { anchoring, availability } = detectRecallHints({ list, pool: hintPool, anchorRing, queryHash });
-      const shownIds = new Set(list.map((r) => r.entry.id));
-      const shownKeys = storedTextKeys(list.map((r) => r.entry));
-      const tail = showTail
-        ? dropHeldCopies(
-            tailRows.filter((r) => !shownIds.has(r.id) && !shownKeys.has(duplicateKey(r.content))),
-            (r) => r,
-          )
-        : [];
+      const tail = showTail ? unshownTail(list, tailRows) : [];
       const counts = suppressionCounts({ poolSize: pool.length, droppedByScope, cut, list, tail });
       const s = suppressionSummary(counts, anchoring);
       // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list, where the agent reads
@@ -148,9 +134,15 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): ShowR
       text += formatMemories(list) + tailSection(tail) + (showContinuity ? continuityPiece : '');
       return { anchoring, availability, text, list };
     };
-    const rendered = fitToolRecall(ranked, { room: purse.left(), budget }, render);
+    const fit = { room: Math.max(0, purse.left()), budget, floor: 1, cost: memoryCost };
+    const rendered = fitRecall(ranked, { ...fit, render, textOf: (r) => r.text });
     out.rendered = rendered;
-    return { ids: rendered.list.map((r) => r.entry.id), audit: hintRows(rendered) };
+    return {
+      ids: rendered.list.map((r) => r.entry.id),
+      audit: hintRows(rendered),
+      anchoredOn: rendered.anchoring?.memoryId,
+      tokens: estimateTokens(rendered.text),
+    };
   };
 }
 
@@ -160,14 +152,12 @@ export interface ToolRecallRequest {
   readonly budget: number | undefined;
   /** The caller's project on a shared store, which keeps the list to its rows and user-global ones. */
   readonly project: CallerProject | undefined;
-  /** The client the shown ids are kept for, so its next outcome lands on them. */
-  readonly clientKey: string;
 }
 
 /** hippo_recall's text. The tool keeps its own band size and search mode, and a RecallContractError reaches the caller
  * raw, as mcp-recall-fresh-tail-policy.test.ts pins. */
 export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Promise<string> {
-  const { opts, project, clientKey } = req;
+  const { opts, project } = req;
   const {
     query,
     window: { includeContinuity },
@@ -187,6 +177,7 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
       filter: { ...opts.filter, keepHeldCopies: true, project },
       // The hint is computed below over the list the tool shows; the window's copy would emit its audit row twice.
       hints: { suppressAvailabilityHint: true },
+      trace: { recordAs: RECALL_RECORDING.mcp },
     },
     recallPresenter(budget, {
       config: ctx.config,
@@ -206,12 +197,5 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
   );
   const { rendered } = out;
   if (!rendered) throw new Error('hippo_recall: api.retrieveRanking returned without calling its presenter');
-  ctx.callers?.lastShown.set(
-    clientKey,
-    rendered.list.map((r) => r.entry.id),
-  );
-  // Fed once the recall's rows are written, after the final detect: anchoredOn feeds the cooldown for the next recall
-  // on this session.
-  if (anchorRing) noteRecall(anchorRing, query, rendered.list[0]?.entry.id ?? null, rendered.anchoring?.memoryId);
   return rendered.text;
 }

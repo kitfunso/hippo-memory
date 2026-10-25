@@ -1,13 +1,20 @@
-import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { tokenize } from '../../base/util/tokenize.js';
-import { evalNow, rankAblation } from '../../base/memory/ablation.js';
+import { switchedNow, type EvalSwitches } from '../../base/memory/eval-switches.js';
 import { pathTagsOf } from './path-context.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { bm25Score, buildCorpus, entryText } from './bm25.js';
 import { currentEntries } from './as-of.js';
-import { applyRankBoosts, strengthRecencyMultipliers, NO_SUMMARY_SCORING, type BoostContext } from './boosts.js';
+import {
+  applyRankBoosts,
+  rankAblationOf,
+  rankStrength,
+  strengthRecencyMultipliers,
+  NO_SUMMARY_SCORING,
+  type BoostContext,
+} from './boosts.js';
 import { temporalContext } from './temporal.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../../base/rank/search-types.js';
@@ -24,6 +31,8 @@ export interface SearchOptions {
   scope?: string | null;
   /** The root's settings; `lossAversionRatio` scales an error memory's strength. */
   runtime?: RuntimeSettings;
+  /** The eval switches and fake clock the caller runs under; absent, none of them, on the real clock. */
+  switches?: EvalSwitches;
   /** The folder the caller runs in: memories tagged with its path segments rank higher. Absent, no path boost. */
   cwd?: string;
 }
@@ -46,7 +55,7 @@ function corpusFor(entries: MemoryEntry[], pool: MemoryEntry[]): Corpus {
  * Synchronous BM25 search: relevance * strength * recency and the rank boosts, without embeddings or the outcome nudge.
  */
 export function rankBm25(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {
-  const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
+  const now = switchedNow(options.now, options.switches);
   const pool = currentEntries(entries, options);
   if (pool.length === 0) return [];
   const queryTerms = tokenize(query);
@@ -60,8 +69,8 @@ export function rankBm25(query: string, entries: MemoryEntry[], options: SearchO
     temporal: temporalContext(query, pool),
     outcome: false,
     summary: NO_SUMMARY_SCORING,
-    strength: strengthOptionsOf(options.runtime),
-    ablation: rankAblation(),
+    strength: rankStrength(options),
+    ablation: rankAblationOf(options),
   };
   const scored: SearchResult[] = [];
   for (let i = 0; i < pool.length; i++) {

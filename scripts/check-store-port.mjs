@@ -9,7 +9,7 @@
 // storeImportsInCli counts value imports of src/store or src/db in src/surface/cli files other than the CLI's composition root.
 // groupChecksInApi counts requireGroup and hasGroup calls in files that layers.json puts in the api or a domain layer.
 // portFunctionParams fails outright on any parameter of a method on a port interface whose type holds a function, through aliases, unions, object properties and imports: no function crosses to a store worker, so a rule goes to the store as data. No baseline.
-// A file under src/surface/server/routes or src/surface/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
+// A file under src/surface that feeds a recall ring, counts recall stats, books a recall token row or keeps a client's last shown ids fails outright.
 // folderFormsAboveAdapter lists exported src/store functions outside src/store/sqlite that open hippo.db from a folder; any one fails outright.
 // A .ts file directly in src/store fails outright (the port lives in src/base/ports): a group's SQL goes in src/store/sqlite, a pure rule in src/base.
 // A src/store function or port method whose tenant, or an argument's tenant property, is optional, defaulted or admits undefined or null fails outright.
@@ -54,10 +54,10 @@ const DB_DEFINITION_FILES = {
 const DB_TOUCH_NAMES = new Set([...OPENERS, ...HANDLE_TYPES, 'withWriteScope', 'withWriteScopeOr']);
 const TX_OWNER = 'src/db/busy.ts';
 const CARRIER_NAMES = new Set(['andThen', 'onStore', 'StoreReply']);
-// What src/api/recall/finish.ts does for a surface that passes `recordAs`. No baseline: one hit fails. src/surface/mcp is pending and not read.
-const RECALL_RECORDERS = new Set(['bumpRecallStats', 'noteRecall']);
+// What src/api/recall/finish.ts does for a surface that passes `recordAs`, and the shown list the api keeps per client. No baseline: one hit fails.
+const RECALL_RECORDERS = new Set(['bumpRecallStats', 'noteRecall', 'lastShown']);
 const RECALL_LEDGER_LABELS = new Set(['recall', 'http_recall', 'mcp_recall']);
-const recordsItsOwnRecall = (f) => f.startsWith('src/surface/server/routes/') || f.startsWith('src/surface/cli/');
+const recordsItsOwnRecall = (f) => f.startsWith('src/surface/');
 
 function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -440,7 +440,7 @@ function recallRecordsIn(file, sf) {
   return hits;
 }
 
-/** Every surface file outside src/surface/mcp that records a recall itself. */
+/** Every surface file that records a recall itself. */
 function strayRecallRecords() {
   return (existsSync('src') ? tsFiles('src') : [])
     .filter(recordsItsOwnRecall)
@@ -696,7 +696,7 @@ if (strays.length > 0) {
   console.error('A surface records a recall itself:');
   for (const hit of strays) console.error(`  ${hit}`);
   console.error(
-    'Pass `recordAs` to retrieve() (or call retrieveWithCliCore()) instead: src/api/recall/finish.ts feeds the ring, counts the stats and books the token row.',
+    'Pass `recordAs` to retrieve() or retrieveRanking() (or call retrieveWithCliCore()) instead: src/api/recall/finish.ts feeds the ring, counts the stats, books the token row and keeps the shown list.',
   );
   process.exit(1);
 }

@@ -12,6 +12,7 @@ import { type ResolveProjectIdentityOpts } from '../../base/scope/project-identi
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { findHippoStoreDir } from '../../host/project-identity.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
+import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import { errorReply, INTERNAL_ERROR, type McpRequest, type McpResponse } from './json-rpc.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
@@ -86,8 +87,8 @@ export interface McpContext {
   callers?: CallerState;
   /** The outside services the transport's root built; every tool call's api Context carries them. */
   infra: InfraPorts;
-  /** Per-client key for state isolation under HTTP-MCP: 'stdio-${pid}' for stdio, hash(bearer + remoteAddr) for HTTP
-   * (built in src/surface/server/mcp-http.ts); defaults to `${tenantId}:default`. */
+  /** Per-client key for state isolation under HTTP-MCP, a hash of bearer and address built in
+   * src/surface/server/mcp-http.ts; absent on stdio, which keys by process and tenant. */
   clientKey?: string;
 }
 
@@ -115,8 +116,16 @@ export function mcpApiContext(ctx: McpContext): ApiContext {
     reach: ctx.reach,
     config: ctx.config,
     callers: ctx.callers,
+    clientKey: mcpClientKey(ctx),
     infra: ctx.infra,
   };
+}
+
+/** The transport's client key, else `stdio-<pid>:<tenant>`; a caller's project narrows either, so two repos on one
+ * shared store keep apart lists. */
+function mcpClientKey(ctx: McpContext): string {
+  const base = ctx.clientKey || `stdio-${process.pid}:${ctx.tenantId || DEFAULT_TENANT_ID}`;
+  return ctx.project ? `${base}:${ctx.project.name}` : base;
 }
 
 /** Stdio or a host admin: the only callers whose server cwd and git history are their own to read. */

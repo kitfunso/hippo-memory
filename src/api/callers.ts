@@ -24,7 +24,7 @@ export function autoSleepHost(start: AutoSleepStart): AutoSleepHost {
 export interface CallerState {
   /** Each surface's session rings, so a repeat on one surface is a first recall on another. */
   readonly rings: Readonly<Record<RecallSurface, Map<string, RingBuffer>>>;
-  /** The ids each client was last shown, keyed by resolveClientKey, so its next outcome with no ids lands on them. */
+  /** Each client's last shown ids, keyed by `Context.clientKey`, so its next outcome with no ids lands on them. */
   readonly lastShown: Map<string, string[]>;
   /** Absent where a write starts no sleep: the CLI, or a server started with `autoSleep: false`. */
   readonly autoSleep?: AutoSleepHost;

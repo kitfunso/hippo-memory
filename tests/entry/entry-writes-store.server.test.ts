@@ -19,7 +19,6 @@ import {
 } from '../../src/api/index.js';
 import { withSqliteBlocked } from '../../src/db/index.js';
 import { handleMcpRequest, type McpContext } from '../../src/surface/mcp/server.js';
-import { resolveClientKey } from '../../src/api/recall/last-recalled.js';
 import { createCallerState } from '../../src/api/callers.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
@@ -225,7 +224,7 @@ describe('hippo_remember and hippo_outcome under another store', () => {
     const remembered = textOf(await call('hippo_remember', { text: 'deploys go out on tuesdays', tag: 'deploy' }));
     const id = /^Remembered \[(\w+)\] \(half-life: \d+d, tags: deploy\)$/.exec(remembered ?? '')?.[1];
     expect(id).toMatch(/^mem_[0-9a-f]+$/);
-    callers.lastShown.set(resolveClientKey(ctx), [id ?? '']);
+    callers.lastShown.set('entry-writes-store', [id ?? '']);
     expect(textOf(await call('hippo_outcome', { good: true }))).toBe('Applied positive outcome to 1 memories');
     expect((await side.store.entriesByIds([id ?? ''], TENANT_A)).map((r) => r.outcomePositive)).toEqual([1]);
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);

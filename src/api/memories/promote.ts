@@ -40,7 +40,7 @@ export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Prom
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
   // A promote may create the global store, which only the write target names before it exists.
-  embedMemoryDetached(folderEmbedTarget(target), globalEntry);
+  embedMemoryDetached(folderEmbedTarget(target, ctx.infra.evalSwitches), globalEntry);
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 

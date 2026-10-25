@@ -84,7 +84,7 @@ export interface RecallTraceOptions {
   suppressRecallTrace?: boolean;
   // Rows this recall writes first in its one write, so a failed recall writes none; `recordAs` fills it.
   leadingAudit?: readonly AppendAuditOpts[];
-  // The default ranker then records the recall in full (recall-finish.ts) and fills `recallHistory` and `leadingAudit`.
+  // The ranker then records the recall in full (finish.ts); `retrieve` also fills `recallHistory` and `leadingAudit`.
   recordAs?: RecallRecording;
 }
 
@@ -100,8 +100,8 @@ export interface RecallOptions {
   trace?: RecallTraceOptions;
 }
 
-/** MCP recall's presenter: `retrieveRanking` hands it the full MCP_RECALL ranking and strengthens and traces (pipeline
- * 'mcp') just the ids it returns; `results` stays the top window of that ranking. */
+/** The presenter `retrieveRanking` hands the full BAND_RANKED ranking to; it strengthens and traces (pipeline 'mcp')
+ * just the ids returned, and `results` stays the top window of that ranking. */
 export type ShowRanking = (ranking: StoreRanking, result: RecallResult) => ShownRanking;
 
 /** The part of RecallOptions the CLI ranking core reads. It has no scope, so `retrieveWithCliCore` needs no scope
@@ -116,8 +116,7 @@ interface CliCoreRanking {
   note?: (line: string) => void;
 }
 
-/** A recall the caller prints. `show` runs once ranking ends, unless it halted; `retrieveWithCliCore` then records the
- * list it returns. */
+/** A recall the caller prints: `show` runs once ranking ends, then `retrieveWithCliCore` records what it returns. */
 export interface CliCoreRecall extends CliCoreRanking {
   /** The host agent's session: it stamps the token ledger row, and the trace when the recall names no session. */
   hostSessionId?: string;
@@ -148,6 +147,9 @@ export interface ShownCliCore {
 export interface ShownRanking {
   ids: readonly string[];
   audit: readonly AppendAuditOpts[];
+  /** Read only under `recordAs`: the memory the shown list's anchoring hint named, and the shown text's tokens. */
+  anchoredOn?: string;
+  tokens?: number;
 }
 
 /** `ranked`: every scored row, best first, goal boost applied, entries as loaded; `pool`: the store after the scope

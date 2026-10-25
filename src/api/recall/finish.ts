@@ -1,5 +1,5 @@
 // What a recall remembers and records: the anchoring detector and query history, the session rings and audit rows, then
-// the write around one recall (history, ring, recalled counter and token ledger row).
+// the write around one recall (history, ring, recalled counter, token ledger row and the client's shown list).
 import { isRecallBoostAblated } from '../../base/memory/ablation.js';
 import { auditQueryFields } from '../../base/records/audit-report.js';
 import type { HippoStore, RecallWrites } from '../../base/ports/store.js';
@@ -9,6 +9,7 @@ import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';
 import type { Context } from '../types.js';
 import type { CallerState } from '../callers.js';
+import { keepShownIds } from './last-recalled.js';
 import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 
@@ -417,16 +418,16 @@ export interface RecallRecording {
   /** The label of its token ledger row. */
   readonly ledger: TokenSurface;
   /** 'every': an empty list still reaches the stats write, which then only rewrites stats.json; 'shown': an empty list
-   * skips it. */
-  readonly stats: 'every' | 'shown';
+   * skips it; 'none': no stats write, and the ledger row books 0 items. */
+  readonly counts: 'every' | 'shown' | 'none';
 }
 
-/** The surfaces `retrieve` records in full. MCP is pending: src/surface/mcp still feeds its own ring and books its own
- * ledger row, and counts no stats. */
+/** Each surface's recording; docs/recall-surface-differences.md names why they differ. */
 export const RECALL_RECORDING = {
-  http: { ring: 'http', ledger: 'http_recall', stats: 'every' },
-  cli: { ring: 'cli', ledger: 'recall', stats: 'shown' },
-} as const satisfies Record<string, RecallRecording>;
+  http: { ring: 'http', ledger: 'http_recall', counts: 'every' },
+  cli: { ring: 'cli', ledger: 'recall', counts: 'shown' },
+  mcp: { ring: 'mcp', ledger: 'mcp_recall', counts: 'none' },
+} as const satisfies Record<RecallSurface, RecallRecording>;
 
 /** What a recorded recall takes into ranking. */
 export interface RecallLead {
@@ -455,18 +456,18 @@ export interface ShownList {
   readonly query: string;
   /** The recall's session, which keys the ring. */
   readonly sessionId: string | undefined;
-  readonly topId: string | null;
+  /** The ids shown, best first. */
+  readonly ids: readonly string[];
   /** The memory this recall's anchoring hint named; the next recall's cooldown reads it. */
   readonly anchoredOn: string | undefined;
-  readonly items: number;
   readonly tokens: number;
-  /** The session the ledger row names: the recall's own on HTTP, the host agent's on the CLI. */
+  /** The session the ledger row names: the recall's own on HTTP, the host agent's on the CLI, none on MCP. */
   readonly ledgerSessionId: string | null;
   /** False when the audit rows could not be written and the caller answers anyway. */
   readonly written: boolean;
 }
 
-/** Runs after the recall's own write, in this order: the ring, then the counter, then the ledger. */
+/** Runs after the recall's own write, in order: the ring, the counter, the ledger, then the client's shown list. */
 export async function recordShownRecall(
   ctx: Context,
   store: HippoStore,
@@ -476,9 +477,11 @@ export async function recordShownRecall(
   // A surface that only peeked has its ring created here, after the write, so a recall that fails cannot LRU-evict a
   // live session.
   const ring = sessionRing(ctx, how.ring, shown.sessionId);
-  if (ring) noteRecall(ring, shown.query, shown.topId, shown.anchoredOn);
+  if (ring) noteRecall(ring, shown.query, shown.ids[0] ?? null, shown.anchoredOn);
+  const items = how.counts === 'none' ? 0 : shown.ids.length;
   // A recall with no audit row counts nothing, as it strengthens and traces nothing.
-  if (shown.written && (how.stats === 'every' || shown.items > 0)) await store.bumpRecallStats(shown.items);
+  if (shown.written && (how.counts === 'every' || items > 0)) await store.bumpRecallStats(items);
   // The ledger books text that was sent, so its row does not wait on the audit write.
-  await recordTokens(ctx, how.ledger, { items: shown.items, tokens: shown.tokens, sessionId: shown.ledgerSessionId });
+  await recordTokens(ctx, how.ledger, { items, tokens: shown.tokens, sessionId: shown.ledgerSessionId });
+  keepShownIds(ctx, shown.ids);
 }

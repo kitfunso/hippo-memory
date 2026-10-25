@@ -1,5 +1,6 @@
-// The published hybridSearch and physicsSearch: each fills the hippo.db folder and working-folder defaults, then calls
-// the domain ranker of that name. The eval kit's embedMemory and loadRecallSearchEntries take a folder the same way.
+// The published hybridSearch and physicsSearch: each fills the hippo.db folder, working-folder and eval-switch
+// defaults, then calls the domain ranker of that name. The eval kit's embedMemory and loadRecallSearchEntries take a
+// folder the same way.
 
 import type { MemoryEntry } from '../base/memory/memory.js';
 import type { SearchResult } from '../base/rank/search-types.js';
@@ -13,6 +14,13 @@ import { loadConfig } from '../host/config-file.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { rankPhysics, type PhysicsSearchOptions } from '../domain/search/physics-search.js';
 import type { VectorSource } from '../domain/search/vector.js';
+import { evalSwitches } from '../base/memory/ablation.js';
+import type { EvalSwitches } from '../base/memory/eval-switches.js';
+
+/** A published ranker's options under the eval switches the environment holds, unless the caller names its own. */
+export function withEvalSwitches<O extends { readonly switches?: EvalSwitches }>(options: O): O {
+  return { ...options, switches: options.switches ?? evalSwitches() };
+}
 
 /** hippo.db under `hippoRoot` when the caller passed no store. */
 export function folderVectorSource({
@@ -42,7 +50,7 @@ export async function hybridSearch(
   // GraphStreamOptions names the global store by folder, so it opens here.
   const globalRoot = options.graphStream?.globalRoot;
   return rankHybrid(query, entries, {
-    ...options,
+    ...withEvalSwitches(options),
     cwd: options.cwd ?? process.cwd(),
     source: options.source ?? folderVectorSource(options),
     graphGlobal: globalRoot && globalRoot !== options.hippoRoot ? defaultStore(globalRoot) : undefined,
@@ -59,7 +67,7 @@ export async function physicsSearch(
   options: PhysicsSearchOptions = {},
 ): Promise<SearchResult[]> {
   const source = entries.length > 0 ? folderVectorSource(options) : undefined;
-  return rankPhysics(query, entries, { ...options, cwd: options.cwd ?? process.cwd(), source });
+  return rankPhysics(query, entries, { ...withEvalSwitches(options), cwd: options.cwd ?? process.cwd(), source });
 }
 
 /** The eval kit's folder form of embedMemory, for frozen scripts written against it. */
@@ -67,7 +75,8 @@ export async function embedMemory(hippoRoot: string, entry: MemoryEntry): Promis
   const store = defaultStore(hippoRoot);
   try {
     const config = loadConfig(hippoRoot);
-    return await embedMemoryInto(folderEmbedTarget({ store, config, embedderFor: resolveEmbeddingProvider }), entry);
+    const target = folderEmbedTarget({ store, config, embedderFor: resolveEmbeddingProvider }, evalSwitches());
+    return await embedMemoryInto(target, entry);
   } finally {
     await store.close();
   }

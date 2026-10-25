@@ -7,7 +7,12 @@ import {
   type StrengthOptions,
 } from '../../base/memory/memory.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
-import { isOutcomeFastAblated, type RankAblation } from '../../base/memory/ablation.js';
+import {
+  NO_RANK_ABLATION,
+  NO_STRENGTH_ABLATION,
+  type EvalSwitches,
+  type RankAblation,
+} from '../../base/memory/eval-switches.js';
 import { pathBoostMultiplier } from './path-context.js';
 import { scopeMatch } from '../../base/rank/active-scope.js';
 import { temporalBoost, type TemporalDirection, type TemporalRange } from './temporal.js';
@@ -47,7 +52,7 @@ function recencyBoost(entry: MemoryEntry, now: Date, ablation: RankAblation): nu
 }
 
 /** Retrieval-time outcome nudge in [0.85, 1.15]; the bm25-outcome eval baseline ranks with it too. */
-export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean = isOutcomeFastAblated()): number {
+export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean): number {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
   if (ablated || (pos === 0 && neg === 0)) return 1.0; // EVAL-ONLY ablation (see ablation.ts)
@@ -109,6 +114,22 @@ export function strengthRecencyMultipliers(
     strength: STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrength(entry, ctx.now, ctx.strength),
     recency: RECENCY_RANK_FLOOR + RECENCY_RANK_SPAN * recencyBoost(entry, ctx.now, ctx.ablation),
   };
+}
+
+/** What a ranking's strength and recency read from its caller: the eval switches and the root's settings. */
+export interface RankRun {
+  readonly switches?: EvalSwitches;
+  readonly runtime?: RuntimeSettings;
+}
+
+/** Strength scoring under the caller's switches and the root's loss-aversion ratio. */
+export function rankStrength({ switches, runtime }: RankRun): StrengthOptions {
+  return { ablation: switches?.strength ?? NO_STRENGTH_ABLATION, lossAversionRatio: runtime?.lossAversionRatio };
+}
+
+/** The rank boosts' switches under the caller's run. */
+export function rankAblationOf({ switches }: RankRun): RankAblation {
+  return switches?.rank ?? NO_RANK_ABLATION;
 }
 
 /** The rank multiplier for a scopeMatch signal: match, mismatch or neutral. */

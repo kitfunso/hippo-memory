@@ -1,10 +1,17 @@
-// Read path: the HTTP and MCP recall entries. Each ranks with rankRecall under its profile, then composes the band and
-// writes the recall; the CLI's entry is in request.ts.
+// Read path: the recall entries that cut a band. Each ranks with rankRecall under its profile, then composes the band
+// and writes the recall; the budget-cut entry, retrieveWithCliCore, is in request.ts.
 
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { assertScopeRequestAllowed, personalScopeOf } from '../../base/scope/recall-scope.js';
-import type { RecallOptions, RecallResult, RecallWindowOptions, ShowRanking, StoreRanking } from './types.js';
+import type {
+  RecallOptions,
+  RecallResult,
+  RecallWindowOptions,
+  ShownRanking,
+  ShowRanking,
+  StoreRanking,
+} from './types.js';
 import { type Context, ownerOrSubject, RecallContractError, sharedStoreOf } from '../types.js';
 import {
   callerOf,
@@ -24,15 +31,15 @@ import {
   type RecallReads,
 } from './compose.js';
 import { rankCtxOf, rankRecall, withMissing, type RankRecallOptions, type RankRecallResult } from './pipeline.js';
-import { HTTP_RECALL, MCP_RECALL } from './profiles.js';
+import { POSITION_BAND, BAND_RANKED } from './profiles.js';
 import type { ActiveGoals, ContinuityKey } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
 import type { RecallWrites } from '../../base/ports/store.js';
 
 const CONTINUITY_EVENT_LIMIT = 5;
 
-/** HTTP recall: ranks under HTTP_RECALL, composes the band, then writes the recall; a surface that sets `recordAs`
- * also has the recall recorded in full. */
+/** Ranks under POSITION_BAND, composes the band, then writes the recall; a caller that sets `recordAs` also has the
+ * recall recorded in full. */
 export async function retrieve(ctx: Context, opts: RecallOptions): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.filter?.scope);
   const windowSize = recallWindowSize(ctx, opts.window);
@@ -47,17 +54,18 @@ export async function retrieve(ctx: Context, opts: RecallOptions): Promise<Recal
   return result;
 }
 
-/** MCP recall: ranks under MCP_RECALL, hands the ranking to `show`, and audits, strengthens and traces the ids `show`
- * returns. `results` stays the top window of that ranking. `recordAs` is not read here. */
+/** Ranks under BAND_RANKED, hands the ranking to `show`, and audits, strengthens and traces the ids `show` returns;
+ * `results` stays the top window of that ranking. Under `recordAs`, `show` judges the hints, so only the shown list is
+ * recorded. */
 export async function retrieveRanking(ctx: Context, opts: RecallOptions, show: ShowRanking): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.filter?.scope);
   const windowSize = recallWindowSize(ctx, opts.window);
   const personalScope = personalScopeOf(ctx.actor) ?? undefined;
-  const ranking = await rankRecall(rankCtxOf(ctx), rankRequestOf(ctx, opts, windowSize, personalScope), MCP_RECALL);
+  const ranking = await rankRecall(rankCtxOf(ctx), rankRequestOf(ctx, opts, windowSize, personalScope), BAND_RANKED);
   const window = ranking.results.slice(0, windowSize).map((r) => r.entry);
   // The caller traces and audits the rows it shows, so the window writes neither.
   const windowOpts = { ...opts, trace: { ...opts.trace, suppressRecallTrace: true } };
-  const plan = planRecall(ctx, windowOpts, window, personalScope, MCP_RECALL);
+  const plan = planRecall(ctx, windowOpts, window, personalScope, BAND_RANKED);
   const reads = await readRecall(ctx, windowOpts, plan, ranking.goals);
   const composed = composeRecall(ctx, windowOpts, {
     windowSize,
@@ -67,8 +75,24 @@ export async function retrieveRanking(ctx: Context, opts: RecallOptions, show: S
     auditWindow: false,
   });
   const cut = { show, ranking: storeRankingOf(ranking), goalLog: ranking.goalRecallLog };
-  await finishShownRecall(ctx, opts, cut, composed);
+  const shown = await finishShownRecall(ctx, opts, cut, composed);
+  const recordAs = opts.trace?.recordAs;
+  if (recordAs) await recordShownRecall(ctx, ctx.store, recordAs, presentedList(opts, shown));
   return composed.result;
+}
+
+/** What `retrieveRanking` records: the list its presenter showed, priced as printed. */
+function presentedList(opts: RecallOptions, shown: ShownRanking): ShownList {
+  return {
+    query: opts.query,
+    sessionId: opts.boost?.sessionId,
+    ids: shown.ids,
+    anchoredOn: shown.anchoredOn,
+    tokens: shown.tokens ?? 0,
+    ledgerSessionId: null,
+    // finishShownRecall throws when its audit write fails, so this point is never reached without the rows.
+    written: true,
+  };
 }
 
 /** What `retrieve` records: the rows it returns, and the continuity block the reply carries beside them. */
@@ -76,9 +100,8 @@ function returnedList(opts: RecallOptions, result: RecallResult): ShownList {
   return {
     query: opts.query,
     sessionId: opts.boost?.sessionId,
-    topId: result.results[0]?.id ?? null,
+    ids: result.results.map((r) => r.id),
     anchoredOn: result.anchoringHint?.memoryId,
-    items: result.results.length,
     tokens: result.tokens + (result.continuityTokens ?? 0),
     ledgerSessionId: opts.boost?.sessionId ?? null,
     // A failed audit write throws out of recallFromWindow, so this point is never reached without the rows.
@@ -92,9 +115,9 @@ async function recallFromWindow(
   windowSize: number,
   personalScope: string | undefined,
 ): Promise<RecallResult> {
-  const ranking = await rankRecall(rankCtxOf(ctx), rankRequestOf(ctx, opts, windowSize, personalScope), HTTP_RECALL);
+  const ranking = await rankRecall(rankCtxOf(ctx), rankRequestOf(ctx, opts, windowSize, personalScope), POSITION_BAND);
   const candidates = ranking.results.map((r) => r.entry);
-  const plan = planRecall(ctx, opts, candidates, personalScope, HTTP_RECALL);
+  const plan = planRecall(ctx, opts, candidates, personalScope, POSITION_BAND);
   const reads = await readRecall(ctx, opts, plan, ranking.goals);
   const composed = composeRecall(ctx, opts, { windowSize, all: candidates, plan, reads });
   await finishRecall(
@@ -171,7 +194,7 @@ async function finishShownRecall(
   opts: RecallOptions,
   cut: CallerCut,
   composed: ComposedRecall,
-): Promise<void> {
+): Promise<ShownRanking> {
   const shown = cut.show(cut.ranking, composed.result);
   const { shownRow, trace } = shownAuditAndTrace(ctx, opts, shown.ids, cut.ranking.ranked);
   const { writes } = composed;
@@ -185,6 +208,7 @@ async function finishShownRecall(
     },
     shown.ids,
   );
+  return shown;
 }
 
 function shownAuditAndTrace(ctx: Context, opts: RecallOptions, shownIds: readonly string[], ranked: SearchResult[]) {

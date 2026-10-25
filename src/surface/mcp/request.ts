@@ -4,7 +4,6 @@ import { currentSignal } from '../../base/util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../base/util/http-util.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
 import { hasGroup } from '../../base/ports/store-index.js';
-import type { TokenSurface } from '../../base/ports/store/ledger.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { validateToolArgs } from './tool-args.js';
@@ -37,17 +36,11 @@ import { type JsonValue, isJsonString, isJsonObject } from '../../base/util/json
 
 // ── Token ledger ──
 
-const MCP_TOKEN_SURFACES = new Map<string, TokenSurface>([
-  ['hippo_recall', 'mcp_recall'],
-  ['hippo_context', 'mcp_context'],
-]);
-
-/** Records the memory text a recall or context tool returned; best-effort (a ledger failure never fails the call),
- * other tools are not recorded. */
+/** Records the memory text hippo_context returned; best-effort (a ledger failure never fails the call). hippo_recall's
+ * row is booked by the api with the rest of the recall, and other tools are not recorded. */
 async function recordMcpTokens(toolName: string, output: string, ctx: McpContext): Promise<void> {
-  const surface = MCP_TOKEN_SURFACES.get(toolName);
-  if (!surface || !output) return;
-  await recordTokens(mcpApiContext(ctx), surface, { items: 0, tokens: estimateTokens(output) });
+  if (toolName !== 'hippo_context' || !output) return;
+  await recordTokens(mcpApiContext(ctx), 'mcp_context', { items: 0, tokens: estimateTokens(output) });
 }
 
 // ── Tool execution ──

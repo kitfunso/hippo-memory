@@ -4,7 +4,7 @@ import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_
 import { processGit } from '../../infra/git-runner.js';
 import { ERROR_TAG } from '../../base/memory/memory.js';
 import { mcpApiContext, type ToolCall } from './protocol.js';
-import { resolveClientKey } from '../../api/recall/last-recalled.js';
+import { keptShownIds } from '../../api/recall/last-recalled.js';
 import { DEFAULT_LEARN_DAYS, MAX_CONTENT_LEN, MAX_ID_LEN } from '../../base/util/limits.js';
 import { boolArg, numberArg, stringArg } from './tool-args.js';
 
@@ -31,13 +31,13 @@ export async function runRememberTool({ args, ctx }: ToolCall): Promise<string> 
 
 export async function runOutcomeTool({ args, ctx }: ToolCall): Promise<string> {
   const good = boolArg(args, 'good');
-  const clientKey = resolveClientKey(ctx);
-  const ids = ctx.callers?.lastShown.get(clientKey) ?? [];
+  const apiCtx = mcpApiContext(ctx);
+  const ids = keptShownIds(apiCtx);
   if (ids.length === 0) return 'No recent recalls to apply outcome to.';
 
   // Route through src/api/index.ts so audit_log captures the caller identity (auth-resolved ctx.actor under HTTP-MCP,
   // 'mcp' for stdio) and tenant scoping is uniform; outcome() also skips cross-tenant ids silently.
-  const { applied } = await apiOutcome(mcpApiContext(ctx), ids, good);
+  const { applied } = await apiOutcome(apiCtx, ids, good);
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
 }
 

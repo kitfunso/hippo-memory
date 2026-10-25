@@ -56,6 +56,9 @@ export interface Context {
   /** The root's per-caller state: recall rings, each client's last shown ids, and how a write starts a sleep. Absent, a
    * recall keeps no session history and a write starts no sleep. */
   readonly callers?: CallerState;
+  /** The key `callers` keeps this client's last shown ids under, set by the surface that knows the client. Absent, a
+   * recall or context call keeps none. */
+  readonly clientKey?: string;
   /** The machine, model, embedder and rerankers this context reaches past the store, set by its composition root. */
   readonly infra: InfraPorts;
 }

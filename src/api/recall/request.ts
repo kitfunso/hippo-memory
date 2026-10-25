@@ -1,5 +1,5 @@
 // The recall and context input rules in one copy, so MCP and HTTP reject the same inputs with the same messages.
-// retrieveWithCliCore is the CLI's entry: it ranks with rankRecall under CLI_RECALL, then records the list shown once.
+// retrieveWithCliCore ranks with rankRecall under BUDGET_RANKED, then records the list shown once.
 import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import {
@@ -16,7 +16,7 @@ import { estimateTokens } from '../../base/util/token-text.js';
 import type { ContextOptions } from '../context-types.js';
 import type { Context } from '../types.js';
 import { rankCtxOf, rankRecall, type RankRecallResult, type RankSource } from './pipeline.js';
-import { CLI_RECALL } from './profiles.js';
+import { BUDGET_RANKED } from './profiles.js';
 import {
   callerOf,
   heldIds,
@@ -205,7 +205,7 @@ export function parseContextRequest(params: RequestParams): ParsedContextRequest
   return { q, budget, limit, pinnedOnly, scope, includeRecent, crossProject };
 }
 
-/** The CLI recall: ranks with rankRecall under CLI_RECALL, then records what `core.show` prints. */
+/** Ranks with rankRecall under BUDGET_RANKED, then records what `core.show` prints; host admin only. */
 export async function retrieveWithCliCore(
   ctx: Context,
   opts: CliCoreQuery,
@@ -218,13 +218,8 @@ export async function retrieveWithCliCore(
   const ranking = await rankRecall(
     { ...rankCtxOf(ctx), global: rankGlobal(ctx, core.sources), note: core.note },
     { ...core.rank, query: opts.query, boost: opts.boost },
-    CLI_RECALL,
+    BUDGET_RANKED,
   );
-  if (ranking.halted) {
-    // The stages that ran earned these rows, so the caller's flag error does not drop them.
-    if (ranking.goalRecallLog.length > 0) await store.finishRecall({ goalLog: ranking.goalRecallLog, audit: [] });
-    return resultOf(ranking, []);
-  }
   if ('inspect' in core) {
     core.inspect(ranking);
     return resultOf(ranking, ranking.results);
@@ -304,9 +299,8 @@ async function recordShown(
   await recordShownRecall(ctx, store, RECALL_RECORDING.cli, {
     query: opts.query,
     sessionId: opts.boost?.sessionId,
-    topId: ids[0] ?? null,
+    ids,
     anchoredOn: shown.anchoredOn,
-    items: ids.length,
     tokens: shown.tokens,
     ledgerSessionId: core.hostSessionId ?? null,
     written: audited,

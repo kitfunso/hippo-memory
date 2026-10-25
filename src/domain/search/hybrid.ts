@@ -1,15 +1,15 @@
-import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { EmbeddingsConfig, HippoConfig, RuntimeSettings } from '../../base/config/config.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
 import { tokenize } from '../../base/util/tokenize.js';
-import { evalNow, rankAblation } from '../../base/memory/ablation.js';
+import { switchedNow, type EvalSwitches } from '../../base/memory/eval-switches.js';
 import { pathTagsOf } from './path-context.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { DEFAULT_EMBEDDING_WEIGHT } from '../../base/rank/recall-defaults.js';
 import type { RerankerFn, RerankerOptions } from '../../base/ports/reranker.js';
 import { bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';
 import { currentEntries } from './as-of.js';
-import { summaryScoring, type BoostContext } from './boosts.js';
+import { rankAblationOf, rankStrength, summaryScoring, type BoostContext } from './boosts.js';
 import { temporalContext } from './temporal.js';
 import {
   denseScores,
@@ -106,6 +106,8 @@ export interface HybridSettings {
   now?: Date;
   /** The root's environment settings: the scope, summary deboost and query-embedding budget a call names none of. */
   runtime?: RuntimeSettings;
+  /** The eval switches and fake clock the caller runs under; absent, none of them, on the real clock. */
+  switches?: EvalSwitches;
   /** The folder the caller runs in: memories tagged with its path segments rank higher. Absent, no path boost. */
   cwd?: string;
 }
@@ -146,7 +148,7 @@ export async function hybridSearch(
   entries: MemoryEntry[],
   options: HybridRankOptions = {},
 ): Promise<SearchResult[]> {
-  const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
+  const now = switchedNow(options.now, options.switches);
   const embeddingWeight = options.embeddingWeight ?? DEFAULT_EMBEDDING_WEIGHT;
   const pool = currentEntries(entries, options);
   if (pool.length === 0) return [];
@@ -206,8 +208,8 @@ function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, optio
     temporal: temporalContext(query, pool),
     outcome: true,
     summary: summaryScoring(options),
-    strength: strengthOptionsOf(options.runtime),
-    ablation: rankAblation(),
+    strength: rankStrength(options),
+    ablation: rankAblationOf(options),
   };
 }
 

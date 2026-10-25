@@ -155,7 +155,7 @@ const CASES: Case[] = [
   { name: 'recall invalid --graph-seeds', args: ['recall', 'deploy', '--graph-stream', '--graph-seeds', 'x'] },
   { name: 'recall invalid --reranker', args: ['recall', 'deploy', '--reranker', 'bogus'] },
   {
-    name: 'recall graph-stream note then invalid --layer',
+    name: 'recall --graph-stream then invalid --layer',
     args: ['recall', 'deploy', '--graph-stream', '--layer', 'bogus'],
     global: true,
   },
@@ -362,16 +362,15 @@ describe('cli recall and explain golden output', () => {
     expect(rows.memories.every((m) => m['strength'] === 1)).toBe(true);
   });
 
-  it('rows a goal-stack recall with an invalid late flag writes', async () => {
+  it('rows a goal-stack recall with an invalid stage flag writes', async () => {
     const { status, rows } = await rowsAfter({
-      name: 'late-invalid',
+      name: 'stage-invalid',
       args: ['recall', 'deploy', '--layer', 'bogus'],
       session: true,
     });
     expect(status).toBe(1);
-    // The goal stage logs its row before the late flag is checked; nothing after that point writes.
-    expect(rows.goalRecallLog).toEqual([goalLogged(expect.any(Number))]);
-    expect(Number(rows.goalRecallLog[0]!['score'])).toBeGreaterThan(0);
+    // Stage flags are checked before ranking, so not even the goal stage logs a row.
+    expect(rows.goalRecallLog).toEqual([]);
     expect(auditOps(rows)).toEqual(SEEDED);
     expect([rows.traces, rows.traceResults, rows.ledger]).toEqual([[], [], []]);
   });
