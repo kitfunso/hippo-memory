@@ -6,7 +6,7 @@ import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { assertTrigger, bindCaller, callerInHoldout, checkedWorkingState } from './caller-session.js';
 import { mergeWorkingState, type WorkingState } from '../../base/session/working-state.js';
-import type { ContinuityKey } from '../../store/port/types.js';
+import type { ContinuityKey } from '../../base/ports/store/types.js';
 import { withEntryInfra } from '../entry-infra.js';
 
 export interface CallerPreCompactRequest {

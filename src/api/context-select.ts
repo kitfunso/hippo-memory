@@ -3,7 +3,7 @@
 import { recallScopeFilter } from '../base/scope/recall-scope.js';
 import { calculateStrength, strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../base/memory/memory.js';
 import { auditQueryFields } from '../base/records/audit-report.js';
-import type { ContextReads, HippoStore } from '../store/port.js';
+import type { ContextReads, HippoStore } from '../base/ports/store.js';
 import { isWorthSurfacing } from '../base/memory/memory-quality.js';
 import { rankBothStores } from '../domain/sharing/search-both.js';
 import { evalNow } from '../base/memory/ablation.js';
@@ -22,8 +22,8 @@ import type { DeliveryObserver } from './delivery-recorder.js';
 import type { ContextCost, ContextOptions, ContextResultEntry } from './context-types.js';
 import { heldIds } from './recall/finish.js';
 import type { Context, GlobalInReach } from './types.js';
-import type { AmbientLoadResult } from '../store/port/context-reads.js';
-import type { AppendAuditOpts } from '../store/port/types.js';
+import type { AmbientLoadResult } from '../base/ports/store/context-reads.js';
+import type { AppendAuditOpts } from '../base/ports/store/types.js';
 
 import {
   admitWithinBudget,

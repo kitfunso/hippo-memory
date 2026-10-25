@@ -5,8 +5,8 @@ import { ownScopeTouches, passesScopeFilterForRecall } from '../../base/scope/re
 import { errorFields, log } from '../../base/util/log.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { chunked } from '../../base/util/chunked.js';
-import type { LessonWrites } from '../port/entry-writes.js';
-import type { HeldText } from '../port/types.js';
+import type { LessonWrites } from '../../base/ports/store/entry-writes.js';
+import type { HeldText } from '../../base/ports/store/types.js';
 import { bareText, mayHoldCopy } from '../rules/copies.js';
 import { contentHoldsPhrase, openingPhrase } from '../rules/fts.js';
 import { bumpCounter } from './rows.js';

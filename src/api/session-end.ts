@@ -5,7 +5,7 @@
 import * as path from 'path';
 import type { HandoffEvidence } from '../base/session/handoff.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';
-import type { SessionEvent } from '../store/port/sessions.js';
+import type { SessionEvent } from '../base/ports/store/sessions.js';
 import type { TranscriptCalls } from '../base/session/transcript-calls.js';
 import { truncateCodePointSafe } from '../base/util/code-point-cut.js';
 import { errorMessage, log, errorFields } from '../base/util/log.js';
@@ -13,7 +13,7 @@ import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactRes
 import { autoSleepDue } from './sleep/auto-sleep.js';
 import { snapshotFields, type WorkingState } from '../base/session/working-state.js';
 import type { Context } from './types.js';
-import type { Ledger } from '../store/port.js';
+import type { Ledger } from '../base/ports/store.js';
 
 /** What closing one ended session needs from the host; the two readers run only when the handoff is written. */
 export interface SessionClose {

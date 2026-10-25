@@ -5,7 +5,7 @@ import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { MemoryEntry } from '../base/memory/memory.js';
 import type { EmbeddingProvider } from '../base/ports/embedder.js';
 import { embedAll, embedMemoryDetached, folderEmbedTarget, indexStep } from '../domain/search/embed-memories.js';
-import type { HippoStore, VectorCoverage } from '../store/port.js';
+import type { HippoStore, VectorCoverage } from '../base/ports/store.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
 
 /** Embeds each row a capture writes into `folder`'s index without holding the capture up; a failure is a warning. */

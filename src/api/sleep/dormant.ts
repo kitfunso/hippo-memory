@@ -1,7 +1,7 @@
 // Dormant memories: list, restore, forget and check.
 
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import type { DormantMemory, ListDormantOpts } from '../../store/port/dormant.js';
+import type { DormantMemory, ListDormantOpts } from '../../base/ports/store/dormant.js';
 import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';
 import type { Context } from '../types.js';

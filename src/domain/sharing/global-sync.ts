@@ -10,7 +10,7 @@ import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedAll, folderEmbedTarget } from '../search/embed-memories.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { log } from '../../base/util/log.js';
-import type { EntryTextKey, Sharing } from '../../store/port.js';
+import type { EntryTextKey, Sharing } from '../../base/ports/store.js';
 import { logEmbedAllFailure } from './search-both.js';
 import { textKeyPages, type SharingStore } from './text-keys.js';
 

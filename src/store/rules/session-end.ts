@@ -1,7 +1,7 @@
 // What a session end writes, once for both adapters: the snapshot or transcript read it writes from, and the handoff it
 // builds; each adapter loads the rows these read and stores the result.
 import type { HandoffEvidence, HandoffOutcome, SessionHandoff } from '../../base/session/handoff.js';
-import type { SessionEndHandoffRequest, TaskSnapshot } from '../port/sessions.js';
+import type { SessionEndHandoffRequest, TaskSnapshot } from '../../base/ports/store/sessions.js';
 
 type Derived = Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'>;
 

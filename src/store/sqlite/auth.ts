@@ -15,8 +15,8 @@ import { keysetAfter } from '../../db/sql.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../../base/util/version.js';
-import type { ApiKeyRecord } from '../port/types.js';
-import type { ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../port/keys.js';
+import type { ApiKeyRecord } from '../../base/ports/store/types.js';
+import type { ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../../base/ports/store/keys.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
 function verifyKey(plaintext: string, stored: string): boolean {

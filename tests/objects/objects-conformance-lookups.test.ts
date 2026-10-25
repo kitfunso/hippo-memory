@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { objectMirror } from '../../src/domain/objects/lifecycle.js';
 import type { BriefReceipt, ObjectFields, SavableKind } from '../../src/base/records/object-types.js';
-import type { ObjectSave } from '../../src/store/port.js';
+import type { ObjectSave } from '../../src/base/ports/store.js';
 import { TENANT_A, TENANT_B } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import {

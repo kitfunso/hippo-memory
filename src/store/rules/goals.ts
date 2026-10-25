@@ -1,8 +1,8 @@
 // The goal stack's rules, once for both adapters: its ids, its depth cap, the parent check, a new goal and policy, and
 // the strength a completed goal passes to the memories recalled under it.
 import { generateId } from '../../base/memory/memory.js';
-import type { PushGoalOpts } from '../port/goals.js';
-import type { Goal, RetrievalPolicy } from '../port/types.js';
+import type { PushGoalOpts } from '../../base/ports/store/goals.js';
+import type { Goal, RetrievalPolicy } from '../../base/ports/store/types.js';
 
 // The CLI prints these ids and the sequential-learning adapter reads them back as 16 hex characters.
 const GOAL_ID_CHARS = 16;

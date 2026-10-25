@@ -1,7 +1,7 @@
 // The Conflicts group's types: a conflict read with both members' columns, and the keyset page that carries them.
-import type { KeysetPosition } from '../../base/util/keyset.js';
-import type { TenantId } from '../../base/util/tenant.js';
-import type { MemoryConflict } from '../../base/memory/conflict-wire.js';
+import type { KeysetPosition } from '../../util/keyset.js';
+import type { TenantId } from '../../util/tenant.js';
+import type { MemoryConflict } from '../../memory/conflict-wire.js';
 
 export type { MemoryConflict };
 

@@ -1,7 +1,7 @@
 // The in-memory Goals group and the base activeGoals read: the goal stack held as a list, under the shared goal rules.
-import type { CompleteGoalOpts, PushGoalOpts, Goals } from '../port/goals.js';
-import type { GoalRecallLogRow } from '../port/recall-writes.js';
-import type { ActiveGoals, GetActiveGoalsOpts, Goal, RetrievalPolicy } from '../port/types.js';
+import type { CompleteGoalOpts, PushGoalOpts, Goals } from '../../base/ports/store/goals.js';
+import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
+import type { ActiveGoals, GetActiveGoalsOpts, Goal, RetrievalPolicy } from '../../base/ports/store/types.js';
 import {
   assertParentInSession,
   goalOverflow,

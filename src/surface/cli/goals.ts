@@ -14,7 +14,7 @@ import {
   stringFlagOrExit,
 } from './flag-values.js';
 import { fail } from './exit.js';
-import type { PolicyType } from '../../store/port/types.js';
+import type { PolicyType } from '../../base/ports/store/types.js';
 
 // `hippo goal <push|list|complete|suspend|resume>`
 

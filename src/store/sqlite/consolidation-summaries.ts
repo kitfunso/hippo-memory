@@ -13,8 +13,8 @@ import { keysetPage } from '../../base/util/keyset.js';
 import { recordAuditEventsRowByRow } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import type { DirtySummaries, SummarySettle, SummarySettled } from '../port/consolidation.js';
-import type { AppendAuditOpts, EntryCursor, EntryPage } from '../port/types.js';
+import type { DirtySummaries, SummarySettle, SummarySettled } from '../../base/ports/store/consolidation.js';
+import type { AppendAuditOpts, EntryCursor, EntryPage } from '../../base/ports/store/types.js';
 
 /** One keyset page of the L2 topic summaries without an L3 parent, across all tenants; a SQL filter, since sleep's
  * survivors lack the L2s its own DAG pass just wrote. */

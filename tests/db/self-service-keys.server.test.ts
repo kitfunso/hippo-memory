@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createApiKey, validateApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { auditRowsOn } from '../_helpers/audit-rows.js';
-import type { AuditEvent } from '../../src/store/port/types.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import {
   adminActor,
   authCreate,

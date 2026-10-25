@@ -8,7 +8,12 @@ import { openStore } from './handles.js';
 import { waitingOpener, type Handles, type StoreFiles } from './open.js';
 import { bound } from './bound.js';
 import { runSteps } from './agent-import-steps.js';
-import type { AgentImport, ContainerApplied, ContainerApply, MirrorFailure } from '../port/agent-import.js';
+import type {
+  AgentImport,
+  ContainerApplied,
+  ContainerApply,
+  MirrorFailure,
+} from '../../base/ports/store/agent-import.js';
 
 function applyContainer(db: DatabaseSyncLike, files: StoreFiles, plan: ContainerApply): ContainerApplied {
   const run = () => runSteps(db, files, plan);

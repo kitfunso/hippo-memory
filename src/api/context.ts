@@ -2,7 +2,7 @@
 
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../base/rank/search-types.js';
 import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../base/session/session-snapshot.js';
-import type { SessionEvent, TaskSnapshot } from '../store/port/sessions.js';
+import type { SessionEvent, TaskSnapshot } from '../base/ports/store/sessions.js';
 import type { SessionHandoff } from '../base/session/handoff.js';
 import { estimateTokens, tokenPurse } from '../base/util/token-text.js';
 import { markRetrieved, strengthOptionsOf, type MemoryEntry } from '../base/memory/memory.js';
@@ -21,7 +21,7 @@ import {
   type AmbientState,
   type AmbientTallies,
 } from '../base/memory/ambient.js';
-import type { HippoStore } from '../store/port.js';
+import type { HippoStore } from '../base/ports/store.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall-scope.js';
 import { finiteOr } from '../domain/context/select-policy.js';
 import {
@@ -43,9 +43,9 @@ import type {
   AmbientLoadResult,
   AmbientRefusal,
   RecentOrigins,
-} from '../store/port/context-reads.js';
-import type { ContinuityKey } from '../store/port/types.js';
-import type { RecallTraceInput } from '../store/port/recall-writes.js';
+} from '../base/ports/store/context-reads.js';
+import type { ContinuityKey } from '../base/ports/store/types.js';
+import type { RecallTraceInput } from '../base/ports/store/recall-writes.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 

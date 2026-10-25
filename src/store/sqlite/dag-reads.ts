@@ -5,7 +5,7 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { readEntriesByIds, countSessionRawMemories, readChildrenByParent } from './entry-reads.js';
 import { TENANT_IS } from './tenant.js';
 import { chunked } from '../../base/util/chunked.js';
-import type { DescendantOrigin, SummaryDescendants, DagReads, DescendantWalk } from '../port.js';
+import type { DescendantOrigin, SummaryDescendants, DagReads, DescendantWalk } from '../../base/ports/store.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { descendantAdmits } from '../../base/scope/read-admission.js';
 import type { OnHandle } from './open.js';

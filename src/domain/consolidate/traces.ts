@@ -1,8 +1,8 @@
 import { isRecallBoostAblated } from '../../base/memory/ablation.js';
 import { MemoryEntry, Layer, clockBasisOf, createMemory, markRetrieved } from '../../base/memory/memory.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
-import type { SessionEvent } from '../../store/port/sessions.js';
-import type { SleepBegin } from '../../store/port/consolidation.js';
+import type { SessionEvent } from '../../base/ports/store/sessions.js';
+import type { SleepBegin } from '../../base/ports/store/consolidation.js';
 import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
 import { commonDerivationScope } from '../../base/scope/recall-scope.js';

@@ -1,6 +1,6 @@
 // The in-memory AuditLog group: the tenant's audit rows, filtered, ordered and paged by the port's auditRowsRead.
-import { auditRowsRead, type AuditLog, type QueryAuditOptions } from '../port/audit.js';
-import type { AuditEvent } from '../port/types.js';
+import { auditRowsRead, type AuditLog, type QueryAuditOptions } from '../../base/ports/store/audit.js';
+import type { AuditEvent } from '../../base/ports/store/types.js';
 import { byBytes, isBelow, newestFirst, type DescendingKeyset } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 

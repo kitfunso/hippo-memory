@@ -21,7 +21,7 @@ import { initializeParticle } from '../../base/rank/physics.js';
 import { float32ToBuffer } from '../../base/util/vector-codec.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
-import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from '../port.js';
+import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from '../../base/ports/store.js';
 import {
   EMBEDDING_MODEL_META_KEY,
   countVectors,
@@ -41,7 +41,13 @@ import { afterIdAnd, idPageOf } from './keyset.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { chunked } from '../../base/util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
-import type { IdPage, IdPageRequest, ParticleStats, StoredVectorSummary, VectorCoverage } from '../port/vectors.js';
+import type {
+  IdPage,
+  IdPageRequest,
+  ParticleStats,
+  StoredVectorSummary,
+  VectorCoverage,
+} from '../../base/ports/store/vectors.js';
 import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';

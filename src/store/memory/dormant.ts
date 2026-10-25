@@ -10,9 +10,9 @@ import {
   type DormantMemory,
   type DormantRestoreOutcome,
   type ListDormantOpts,
-} from '../port/dormant.js';
-import type { Dormant, DormantRestoreRequest } from '../port/dormant.js';
-import type { DormantSnapshot } from '../port/types.js';
+} from '../../base/ports/store/dormant.js';
+import type { Dormant, DormantRestoreRequest } from '../../base/ports/store/dormant.js';
+import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import { comparing, DORMANT_ORDER } from '../rules/order.js';
 import { appendAudit, asciiFolded, bumpCounter, tenantKey } from './rows.js';
 import { put, stage } from './staged.js';

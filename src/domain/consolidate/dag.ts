@@ -6,7 +6,7 @@ import { derivationScope, derivationPartitionKey } from '../../base/scope/recall
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type { StoreWith } from '../../store/port.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import { applyRebuild, settleFreshSummary } from './summary-settle.js';
 
 const SUMMARY_FALLBACK_CHARS = 40;

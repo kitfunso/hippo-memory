@@ -8,7 +8,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memo
 import { serve, type ServerHandle } from '../../src/server.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../src/base/errors/api-errors.js';
 import { mapApiError } from '../../src/api/error-reply.js';
-import { StoreBusyError } from '../../src/store/port.js';
+import { StoreBusyError } from '../../src/base/ports/store.js';
 import {
   BodyTimeoutError,
   BodyTooLargeError,

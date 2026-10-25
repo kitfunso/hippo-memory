@@ -1,7 +1,7 @@
 // Where a store records the half-life base its memories are on, and the audit rows a move leaves, once for both
 // adapters; the move itself is planned in src/base/memory/half-life-plan.ts.
 import type { HalfLifeMove } from '../../base/memory/half-life-plan.js';
-import type { AppendAuditOpts } from '../port/types.js';
+import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 
 /** `meta` key holding the default half-life base a store's memories are on; see
  * src/domain/consolidate/half-life-migration.ts. */

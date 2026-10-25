@@ -10,9 +10,9 @@ import { rerankerWithClef } from '../../api/recall/rows.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { ImportFiles } from '../importers/core.js';
-import type { HippoStore, StoreGroups } from '../../store/index.js';
-import type { OptionalGroup } from '../../store/port.js';
-import type { ProjectTagReads } from '../../store/port/project-tags.js';
+import type { HippoStore, StoreGroups } from '../../base/ports/store-index.js';
+import type { OptionalGroup } from '../../base/ports/store.js';
+import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
 import {
   askingNearestFirst,
   defaultDiagnostics,

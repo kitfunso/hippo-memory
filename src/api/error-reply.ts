@@ -9,7 +9,7 @@ import {
   STORE_NOT_PORTED_MESSAGE,
 } from '../base/util/http-util.js';
 import { StoreBlockedError } from '../base/util/store-blocked.js';
-import { isStoreBusy, STORE_BUSY_MESSAGE } from '../store/port.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from '../base/ports/store.js';
 
 /** The status and client-facing message for one failed request. */
 export interface ApiErrorReply {

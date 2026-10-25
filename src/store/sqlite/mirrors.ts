@@ -20,10 +20,10 @@ import {
   type MemoryConflictRow,
   rowToMemoryConflict,
 } from './rows.js';
-import type { LegacyStats } from '../port/reports.js';
-import type { MemoryConflict } from '../port/conflicts.js';
+import type { LegacyStats } from '../../base/ports/store/reports.js';
+import type { MemoryConflict } from '../../base/ports/store/conflicts.js';
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
-import type { TaskSnapshot, SessionEvent } from '../port/sessions.js';
+import type { TaskSnapshot, SessionEvent } from '../../base/ports/store/sessions.js';
 import { serializeEntry } from '../../base/memory/markdown.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { cachedStatement } from '../../db/statement-cache.js';

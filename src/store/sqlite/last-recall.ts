@@ -7,11 +7,11 @@ import { localGoalRecallRows, writeGoalRecallLog } from './goals.js';
 import { saveIndex } from './index-and-stats.js';
 import { readLastRecall } from './mirrors.js';
 import type { Handles, StoreFiles } from './open.js';
-import type { EntryTarget } from '../port/entry-writes.js';
+import type { EntryTarget } from '../../base/ports/store/entry-writes.js';
 import { answered, bound } from './bound.js';
 import type { LossAversion } from '../../base/memory/memory.js';
 import { openStore } from './handles.js';
-import type { LastRecall, RecallWrites } from '../port.js';
+import type { LastRecall, RecallWrites } from '../../base/ports/store.js';
 import { writeRecallTrace } from './recall-trace.js';
 
 /** What a finished recall wrote after its audit rows: the trace's id, null when none was asked or its write failed, and

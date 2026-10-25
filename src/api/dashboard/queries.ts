@@ -1,6 +1,6 @@
 // One page of a project's memories and the cross-project search, each one bounded store read at the stamp's instant.
 import { round1 } from '../../base/util/format.js';
-import type { DashboardReads, DashboardSortKey, ListedRow } from '../../store/port/dashboard-reads.js';
+import type { DashboardReads, DashboardSortKey, ListedRow } from '../../base/ports/store/dashboard-reads.js';
 import { BANDS, LAYERS, originOfKey, projectIdentity, round3, type Chip } from './live.js';
 import type { Stamp } from './snapshot-clock.js';
 import type { MemoryPage, MemoryRow, SearchResult } from './types.js';

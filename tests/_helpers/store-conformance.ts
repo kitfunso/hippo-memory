@@ -8,9 +8,14 @@ import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { auditRowsOn } from './audit-rows.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
-import { requireGroup, type HippoStore, type OptionalGroup, type StoreGroups } from '../../src/store/index.js';
+import {
+  requireGroup,
+  type HippoStore,
+  type OptionalGroup,
+  type StoreGroups,
+} from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import type { AuditEvent } from '../../src/store/port/types.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { initTestStore } from './store-template.js';
 import { removeAfterRequest } from './one-request-per-test.js';
 import { memorySide } from './memory-side.js';

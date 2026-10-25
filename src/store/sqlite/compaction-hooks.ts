@@ -41,7 +41,7 @@ import type {
   SpooledSummary,
   StalledOptions,
   StalledSaved,
-} from '../port/capture.js';
+} from '../../base/ports/store/capture.js';
 
 const noteTo =
   (notes: string[]): Log =>

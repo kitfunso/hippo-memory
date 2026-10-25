@@ -13,7 +13,7 @@ import type {
   RelationType,
   SourceObjectRef,
   SourceObjectType,
-} from '../../src/store/port/graph.js';
+} from '../../src/base/ports/store/graph.js';
 import {
   diffGraph,
   memoryIdsOf,

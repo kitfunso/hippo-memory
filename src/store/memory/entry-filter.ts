@@ -3,8 +3,8 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { keysetPage } from '../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import type { EntryFilter, EntryNarrowing, PageRequest } from '../port/reports.js';
-import type { EntryCursor, EntryPage } from '../port/types.js';
+import type { EntryFilter, EntryNarrowing, PageRequest } from '../../base/ports/store/reports.js';
+import type { EntryCursor, EntryPage } from '../../base/ports/store/types.js';
 import { oldestFirst } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';
 

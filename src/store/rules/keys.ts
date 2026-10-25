@@ -1,7 +1,7 @@
 // A key write's checks, once for both adapters: an unknown key and another tenant's key fail alike, so a caller learns
 // nothing about keys it does not own, and a grant on a revoked key is refused since it would never apply.
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import type { ScopeGrantChange } from '../port/keys.js';
+import type { ScopeGrantChange } from '../../base/ports/store/keys.js';
 
 /** `key` when the tenant owns it; NotFoundError otherwise. */
 export function ownedKey<K extends { readonly tenantId: string }>(key: K | undefined, tenantId: string, keyId: string) {

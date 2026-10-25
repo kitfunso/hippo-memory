@@ -1,4 +1,4 @@
-// The store keeps vectors; picking a provider, reading its config and checking its API key happen in the layer above (src/store/port.ts VectorWrites).
+// The store keeps vectors; picking a provider, reading its config and checking its API key happen in the layer above (src/base/ports/store.ts VectorWrites).
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';

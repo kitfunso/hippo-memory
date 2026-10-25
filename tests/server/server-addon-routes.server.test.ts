@@ -6,7 +6,7 @@ import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { HttpError, type AddonCall, type AddonRoute, type ServerHandle } from '../../src/server.js';
-import type { HippoStore } from '../../src/store/index.js';
+import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { log } from '../../src/base/util/log.js';

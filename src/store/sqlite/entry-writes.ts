@@ -28,14 +28,21 @@ import { mirrorBestEffort, writeMarkdownMirror, purgeMirrorBestEffort, removeEnt
 import { deferDueMirrors, markMirrorsDue } from './due-mirrors.js';
 import type { Handles, StoreFiles } from './open.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type { RenameSourceOptions } from '../port/agent-import.js';
-import type { StrengthenOptions } from '../port/recall-writes.js';
+import type { RenameSourceOptions } from '../../base/ports/store/agent-import.js';
+import type { StrengthenOptions } from '../../base/ports/store/recall-writes.js';
 import { archiveRawMemory, type ArchiveOptions } from './raw-archive.js';
 import { assertWriteRight, readerReaches, targetReader } from '../../base/scope/recall-scope.js';
 import { recordTraceOutcome } from './recall-trace.js';
-import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite } from '../port.js';
-import type { PinWrite } from '../port/entry-writes.js';
-import type { AppendAuditOpts } from '../port/types.js';
+import type {
+  EntryTarget,
+  EntryWrite,
+  EntryWrites,
+  OutcomeWrite,
+  RawArchive,
+  SupersedeWrite,
+} from '../../base/ports/store.js';
+import type { PinWrite } from '../../base/ports/store/entry-writes.js';
+import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { updateStatsUnlessBusy } from './index-and-stats.js';
 import { openStore } from './handles.js';

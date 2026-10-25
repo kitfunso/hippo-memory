@@ -1,6 +1,12 @@
 // The graph rebuild's diff: the ops that turn the stored rows into the derived graph, so a rebuild writes only what
 // changed and an entity keeps the id its relations hang on. hippo.db runs the same rule in SQL (sqlite/graph-delta.ts).
-import type { DesiredEntity, DesiredGraph, DesiredRelation, GraphOp, NaturalKey } from '../port/graph.js';
+import type {
+  DesiredEntity,
+  DesiredGraph,
+  DesiredRelation,
+  GraphOp,
+  NaturalKey,
+} from '../../base/ports/store/graph.js';
 
 /** The entity columns a rebuild diffs against. */
 export interface StoredEntity {

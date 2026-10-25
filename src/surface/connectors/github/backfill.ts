@@ -14,7 +14,7 @@ import type {
 } from './types.js';
 import { type JsonValue, isJsonObject } from '../../../base/util/json.js';
 import { MINUTE_MS } from '../../../base/util/time.js';
-import type { CursorKey, GitHubStream } from '../../../store/port/connectors.js';
+import type { CursorKey, GitHubStream } from '../../../base/ports/store/connectors.js';
 
 const API = 'https://api.github.com';
 

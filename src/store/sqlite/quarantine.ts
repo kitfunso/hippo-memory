@@ -11,13 +11,13 @@ import type {
   QuarantineRejection,
   QuarantinedMemory,
   Quarantine,
-} from '../port.js';
+} from '../../base/ports/store.js';
 import {
   QUARANTINE_LIST_LIMIT,
   type QuarantineCalls,
   type QuarantineRow,
   type QuarantineStatus,
-} from '../port/quarantine.js';
+} from '../../base/ports/store/quarantine.js';
 import { QUARANTINE_SCOPE_PREFIX, quarantineScopeFor } from '../../base/scope/recall-scope.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { Handles, StoreFiles } from './open.js';

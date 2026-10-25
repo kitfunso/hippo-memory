@@ -10,7 +10,7 @@ import type {
   SleepCommit,
   SleepCommitted,
   StrengthRefresh,
-} from '../port/consolidation.js';
+} from '../../base/ports/store/consolidation.js';
 import { refusalAudit } from '../rules/audit-rows.js';
 import { byBytes } from '../rules/order.js';
 import { backedAmong } from './audit-maintenance.js';

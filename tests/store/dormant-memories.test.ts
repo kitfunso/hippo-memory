@@ -38,7 +38,7 @@ import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
-import type { AuditEvent } from '../../src/store/port/types.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { cliSave } from '../_helpers/cli-save-site.js';

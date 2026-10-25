@@ -4,7 +4,7 @@ import { assertCardTransition, type Card, type CardStatus } from '../../base/rec
 import type { CardComment, CardRun } from '../../base/records/card.js';
 import { rowToSessionHandoff, type HandoffOutcome } from '../../base/session/handoff.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import type { CardDetail, CardCreate, CardListQuery, CardPage, Cards } from '../port/cards.js';
+import type { CardDetail, CardCreate, CardListQuery, CardPage, Cards } from '../../base/ports/store/cards.js';
 import { keysetPage } from '../../base/util/keyset.js';
 import {
   assertCardCreate,

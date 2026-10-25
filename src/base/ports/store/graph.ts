@@ -1,5 +1,5 @@
 // The graph groups: the entity graph's reads and the rebuild's writes.
-import type { ScopeActor } from '../../base/scope/recall-scope.js';
+import type { ScopeActor } from '../../scope/recall-scope.js';
 
 /** How many ids one graph read takes at a time: results come back in this order per batch, and a `limit` holds per
  * batch, so every implementation must use the same size. */

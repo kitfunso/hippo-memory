@@ -28,7 +28,7 @@ import {
   type ResultCost,
   type SearchResult,
 } from '../../base/rank/search-types.js';
-import type { HippoStore } from '../../store/index.js';
+import type { HippoStore } from '../../base/ports/store-index.js';
 
 /** How BM25 and cosine combine, and whether the score breakdown is kept. */
 export interface HybridBlend {

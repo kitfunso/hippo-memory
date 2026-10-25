@@ -17,7 +17,7 @@ import {
 } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb, SqliteBlockedError } from '../../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
-import type { HippoStore } from '../../src/store/index.js';
+import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

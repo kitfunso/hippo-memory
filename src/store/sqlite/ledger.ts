@@ -17,7 +17,7 @@ import {
   deliveryPruneSchedule,
   writeDeliveryEventVia,
 } from './recall-trace.js';
-import type { Ledger, LedgerTurn, PilotArmOptions } from '../port/ledger.js';
+import type { Ledger, LedgerTurn, PilotArmOptions } from '../../base/ports/store/ledger.js';
 import type { DeliveryEventInput } from '../../base/session/delivery.js';
 import type { OnHandle } from './open.js';
 import { answered, bound } from './bound.js';

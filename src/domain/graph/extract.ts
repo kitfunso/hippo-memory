@@ -11,13 +11,13 @@ import type {
   NaturalKey,
   SourceObjectRef,
   SourceObjectType,
-} from '../../store/port/graph.js';
+} from '../../base/ports/store/graph.js';
 import { WRITE_BUDGET, type WriteBudget } from '../../base/util/write-budget.js';
 import { loadDecisions } from '../objects/decisions.js';
 import { loadPolicies } from '../objects/policies.js';
 import { loadCustomerNotes } from '../objects/customer-notes.js';
 import { loadProjectBriefs } from '../objects/project-briefs.js';
-import type { Objects, StoreWith } from '../../store/port.js';
+import type { Objects, StoreWith } from '../../base/ports/store.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { escapeRegex } from '../../base/util/escape.js';
 

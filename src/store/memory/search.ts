@@ -3,7 +3,7 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { recallScopeFilter } from '../../base/scope/recall-scope.js';
 import { tokenize } from '../../base/util/tokenize.js';
-import type { RecallSearchArgs } from '../port/recall-writes.js';
+import type { RecallSearchArgs } from '../../base/ports/store/recall-writes.js';
 import { byBytes, oldestFirst } from '../rules/order.js';
 import { asciiFolded } from './rows.js';
 import type { MemoryTables } from './tables.js';

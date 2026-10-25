@@ -7,7 +7,7 @@
 // layers.json `adapter`: any import, re-export or import() (type-only too) into its folder from a file outside it, its
 // one `root` and its `testKit` fails, as does a root import past its `doors`, a kit import past its one `door`, a
 // sqliteStoreOn name outside them, and any identifier or string naming SQLite in an `unnamedIn` layer.
-// So does any import from src/api/** into src/store other than the port (port.ts, port-groups.ts, port/**) and local/**, which the next rule covers: the api reads the store through the port and takes shared rules from src/base.
+// So does any import from src/api/** into src/store other than local/**, which the next rule covers: the api reads the store through the port in src/base/ports and takes shared rules from src/base.
 // So does any import from src/api/** or src/domain/** into src/store/local/**, with no list, any isLocalStore there, and any hippoRoot in src/api/**: both read the store through its port groups.
 // So does any import, runtime or type-only, from src/surface/dashboard/** into src/store, src/db or src/surface/cli: the dashboard reads through src/api, with no baseline.
 // layers.json `apart`: a folder named there imports nothing, type-only too, from the folders it lists (the api reads
@@ -175,9 +175,7 @@ function cliStoreProblems(srcDir) {
   ];
 }
 
-const API_PORT_FILES = new Set(['store/port.ts', 'store/port-groups.ts']);
-
-/** Imports from src/api into a src/store file that is not part of the port, one per (file, target), runtime or type-only. */
+/** Imports from src/api into a src/store file outside local/, one per (file, target), runtime or type-only. */
 function findApiStoreReaches(srcDir) {
   const root = resolve(srcDir);
   const rel = (p) => relative(root, p).replace(/\\/g, '/');
@@ -188,11 +186,7 @@ function findApiStoreReaches(srcDir) {
     for (const { spec, line } of importsOf(readFileSync(file, 'utf8'))) {
       const target = resolveSpecifier(file, spec);
       const to = target && rel(target);
-      const outsidePort =
-        to?.startsWith('store/') &&
-        !API_PORT_FILES.has(to) &&
-        !to.startsWith('store/port/') &&
-        !to.startsWith('store/local/');
+      const outsidePort = to?.startsWith('store/') && !to.startsWith('store/local/');
       const key = `${from}\t${to}`;
       if (outsidePort && !out.has(key)) out.set(key, { file: from, target: to, line });
     }
@@ -518,7 +512,7 @@ if (dbReach.reaches.length + dbReach.stale.length > 0 && !args.includes('--updat
   for (const r of dbReach.reaches) console.error(`  ${r}`);
   for (const s of dbReach.stale) console.error(`  ${MAP} dbReach.allowed: ${s}`);
   console.error(
-    `A file outside src/${layer} and src/${map.dbReach.through} reaches the ${layer} layer through a src/${map.dbReach.through} function, the door src/store/sqlite/index.ts or the store errors in src/store/port.ts.`,
+    `A file outside src/${layer} and src/${map.dbReach.through} reaches the ${layer} layer through a src/${map.dbReach.through} function, the door src/store/sqlite/index.ts or the store errors in src/base/ports/store.ts.`,
   );
   console.error(
     `Move the ${layer} work into src/store; an import that must stay goes in ${MAP} dbReach.allowed with its why, and an unused one leaves it.`,

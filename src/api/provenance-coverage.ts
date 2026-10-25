@@ -1,4 +1,4 @@
-import type { RawProvenance } from '../store/port/reports.js';
+import type { RawProvenance } from '../base/ports/store/reports.js';
 
 export interface ProvenanceCoverage {
   rawTotal: number;

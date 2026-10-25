@@ -11,8 +11,8 @@ export {
   passesCliRecallScopeFilter,
   ScopeForbiddenError,
 } from '../base/scope/recall-scope.js';
-export type { TokenSummary, TokenSurface, TokenSurfaceSummary } from '../store/port/ledger.js';
-export type { FailureSummary } from '../store/port/rejections.js';
+export type { TokenSummary, TokenSurface, TokenSurfaceSummary } from '../base/ports/store/ledger.js';
+export type { FailureSummary } from '../base/ports/store/rejections.js';
 
 // classifyOriginProject lives in project-identity.ts (leaf) for the same reason.
 export { classifyOriginProject } from '../base/scope/project-identity.js';

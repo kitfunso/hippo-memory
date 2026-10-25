@@ -2,7 +2,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { auditHighId } from '../_helpers/root-forms.js';
-import type { PredictionClose, PredictionListQuery, PredictionSave } from '../../src/store/port.js';
+import type { PredictionClose, PredictionListQuery, PredictionSave } from '../../src/base/ports/store.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import {
   onBothStores,
@@ -14,8 +14,8 @@ import {
   type TwoTenantFixture,
   expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
-import type { AuditEvent, PredictionBaserate } from '../../src/store/port/types.js';
-import type { Prediction, SavePredictionOptions } from '../../src/store/port/objects.js';
+import type { AuditEvent, PredictionBaserate } from '../../src/base/ports/store/types.js';
+import type { Prediction, SavePredictionOptions } from '../../src/base/ports/store/objects.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();

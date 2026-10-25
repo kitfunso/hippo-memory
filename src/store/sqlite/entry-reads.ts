@@ -21,12 +21,17 @@ import {
   type EntryRows,
   type EntryRowsRead,
 } from './keyset.js';
-import type { DuplicateCandidates, EntryIdPage, HalfLifeRow, ObjectLink } from '../port/consolidation.js';
-import type { IdPage, IdPageRequest } from '../port/vectors.js';
-import type { SessionRawCount, SessionRawQuery } from '../port/context-reads.js';
-import type { OriginTally } from '../port/project-tags.js';
-import type { EntrySignals, EntryTextKeyPage } from '../port/sharing.js';
-import type { EntryCursor, EntryPage } from '../port/types.js';
+import type {
+  DuplicateCandidates,
+  EntryIdPage,
+  HalfLifeRow,
+  ObjectLink,
+} from '../../base/ports/store/consolidation.js';
+import type { IdPage, IdPageRequest } from '../../base/ports/store/vectors.js';
+import type { SessionRawCount, SessionRawQuery } from '../../base/ports/store/context-reads.js';
+import type { OriginTally } from '../../base/ports/store/project-tags.js';
+import type { EntrySignals, EntryTextKeyPage } from '../../base/ports/store/sharing.js';
+import type { EntryCursor, EntryPage } from '../../base/ports/store/types.js';
 
 /** Read a memory entry by ID; a row in another tenant reads as null. */
 export function readEntry(db: DatabaseSyncLike, id: string, tenantId: TenantId): MemoryEntry | null {

@@ -3,8 +3,8 @@ import { Layer, type MemoryEntry, type ConfidenceLevel, type MemoryKind } from '
 import { log } from '../../base/util/log.js';
 import { type JsonValue, tryParseJson } from '../../base/util/json.js';
 import { parseStoredObject, warnDamagedColumn, type StoredJsonSite } from '../../base/util/stored-json.js';
-import type { SessionEvent, TaskSnapshot } from '../port/sessions.js';
-import type { MemoryConflict } from '../port/conflicts.js';
+import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
+import type { MemoryConflict } from '../../base/ports/store/conflicts.js';
 import { storedEntry, type StoredColumns } from '../rules/stored-entry.js';
 
 export interface IndexEntry {

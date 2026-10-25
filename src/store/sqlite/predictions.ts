@@ -10,14 +10,14 @@ import type { KeysetPosition } from '../../base/util/keyset.js';
 import { keysetAfter } from '../../db/sql.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../../base/records/prediction.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type { PredictionBaserate } from '../port/types.js';
+import type { PredictionBaserate } from '../../base/ports/store/types.js';
 import type {
   Prediction,
   PredictionClose,
   PredictionListQuery,
   PredictionSave,
   SavePredictionOptions,
-} from '../port/objects.js';
+} from '../../base/ports/store/objects.js';
 import {
   closeMissError,
   predictionBaserateOf,

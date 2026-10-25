@@ -4,7 +4,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { closeHippoDb, getHippoDbPath, openHippoDb } from '../../src/db/index.js';
 import { log } from '../../src/base/util/log.js';
 import type { ServerHandle } from '../../src/server.js';
-import type { HippoStore } from '../../src/store/index.js';
+import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
 import { sqliteObjects } from '../../src/store/sqlite/objects.js';

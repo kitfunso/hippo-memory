@@ -16,7 +16,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction } from '../_helpers/root-forms.js';
-import type { PredictionBaserate } from '../../src/store/port/types.js';
+import type { PredictionBaserate } from '../../src/base/ports/store/types.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 let home: string;

@@ -4,7 +4,7 @@
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { estimateTokens, shrinkToFit, tokenPurse } from '../../base/util/token-text.js';
-import type { AppendAuditOpts } from '../../store/port/types.js';
+import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { Context } from '../../api/types.js';
 import {

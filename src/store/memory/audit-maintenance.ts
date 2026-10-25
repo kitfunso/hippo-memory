@@ -8,7 +8,7 @@ import type {
   QualityRepairIssue,
   QualityRepairResult,
   RepairProtection,
-} from '../port/audit.js';
+} from '../../base/ports/store/audit.js';
 import { setAside } from './dormant.js';
 import { byBytes, oldestFirst } from '../rules/order.js';
 import { appendAudit, tenantKey } from './rows.js';

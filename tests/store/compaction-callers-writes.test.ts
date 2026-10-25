@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isStoreBusy } from '../../src/store/port.js';
+import { isStoreBusy } from '../../src/base/ports/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { captureToolFailure } from '../../src/surface/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';

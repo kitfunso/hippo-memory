@@ -5,7 +5,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/store/port.js';
+import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/base/ports/store.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { log, type LogFields } from '../../src/base/util/log.js';
 import { currentSignal } from '../../src/base/util/request-scope.js';

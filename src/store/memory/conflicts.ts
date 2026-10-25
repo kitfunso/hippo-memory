@@ -12,7 +12,7 @@ import type {
   ConflictRowPage,
   MemoryConflict,
   Conflicts,
-} from '../port/conflicts.js';
+} from '../../base/ports/store/conflicts.js';
 import { isBelow, newestFirst, type DescendingKeyset } from '../rules/order.js';
 import { keepTombstone } from './rejections.js';
 import { ownedRow } from './rows.js';

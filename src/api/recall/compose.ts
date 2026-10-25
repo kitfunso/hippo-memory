@@ -5,7 +5,7 @@ import { formatHandoffEvidenceLine } from '../../base/session/handoff.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/memory.js';
 import { boostByGoals, type GoalStackBoostOptions } from '../../domain/search/goal-boost.js';
 import type { ForwardClaimMatch } from '../../domain/learn/forward-claim-detector.js';
-import type { RecallWrites } from '../../store/port.js';
+import type { RecallWrites } from '../../base/ports/store.js';
 import { churnStaleFactor } from '../../domain/search/boosts.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
@@ -39,8 +39,8 @@ import {
   recallAuditRow,
   type AnchoringHint,
 } from './finish.js';
-import type { ActiveGoals, PlanningFallacyEvidence } from '../../store/port/types.js';
-import type { RecallTraceInput, GoalRecallLogRow } from '../../store/port/recall-writes.js';
+import type { ActiveGoals, PlanningFallacyEvidence } from '../../base/ports/store/types.js';
+import type { RecallTraceInput, GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
 
 const DEFAULT_RECALL_LIMIT = 10;
 

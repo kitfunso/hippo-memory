@@ -10,7 +10,7 @@ import {
 } from '../../base/memory/ambient.js';
 import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT, type LossAversion } from '../../base/memory/memory.js';
 import { placeholders, type SqlFragment } from '../../db/sql.js';
-import type { AmbientStoreFilter } from '../port/context-reads.js';
+import type { AmbientStoreFilter } from '../../base/ports/store/context-reads.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { isJsonNumber, isJsonString, parseJson } from '../../base/util/json.js';
 

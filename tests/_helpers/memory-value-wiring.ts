@@ -10,7 +10,7 @@ import { type HippoConfig } from '../../src/base/config/config.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import type { AuditEvent } from '../../src/store/port/types.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 export const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>

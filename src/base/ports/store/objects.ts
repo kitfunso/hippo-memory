@@ -9,10 +9,10 @@ import type {
   Policy,
   SavableKind,
   Skill,
-} from '../../base/records/object-types.js';
-import type { KeysetPosition } from '../../base/util/keyset.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { ClosureState } from '../../base/records/prediction.js';
+} from '../../records/object-types.js';
+import type { KeysetPosition } from '../../util/keyset.js';
+import type { MemoryEntry } from '../../memory/memory.js';
+import type { ClosureState } from '../../records/prediction.js';
 import type { PredictionBaserate } from './types.js';
 
 /** Which of a tenant's rows of one kind a list reads: every status when `status` is unset, every value of the kind's

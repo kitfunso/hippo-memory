@@ -1,7 +1,7 @@
 // When a write starts a background sleep and what that sleep runs; api remember and the session-close hook share it.
 
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import type { HippoStore } from '../../store/port.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { logPhaseFailures, type ConsolidationResult } from '../../domain/consolidate/run.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';

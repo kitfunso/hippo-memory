@@ -22,7 +22,7 @@ import type {
   DeadLetterRows,
   RouteQuery,
   TenantRoute,
-} from '../port/connectors.js';
+} from '../../base/ports/store/connectors.js';
 
 const queueOf = (connector: DeadLetterConnector) => (connector === 'slack' ? SLACK_DLQ : GITHUB_DLQ);
 

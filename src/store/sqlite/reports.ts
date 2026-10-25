@@ -6,7 +6,13 @@ import { summarizeTokenUse } from './token-ledger.js';
 import { summarizeFailures } from './failure-log.js';
 import { keysetPage } from '../../base/util/keyset.js';
 import type { SqlFragment } from '../../db/sql.js';
-import type { CorrectionLinkPage, RawProvenancePage, ReportPage, Reports, StrengthTallies } from '../port/reports.js';
+import type {
+  CorrectionLinkPage,
+  RawProvenancePage,
+  ReportPage,
+  Reports,
+  StrengthTallies,
+} from '../../base/ports/store/reports.js';
 import { statusCounts, strengthTallies } from './candidates.js';
 import { countOpenConflicts } from './conflicts.js';
 import { countAllEntries } from './entry-reads.js';

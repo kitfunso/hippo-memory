@@ -1,10 +1,10 @@
 // The reject, unreject and list flow the CLI verbs and the api functions share: the rules and their wording live here,
 // and the store's rejections group runs each one in one write.
 
-import type { HippoStore } from '../../store/index.js';
+import type { HippoStore } from '../../base/ports/store-index.js';
 import { normalizeValueForRejection } from '../../base/records/rejection-digest.js';
-import type { AppliedRejection, LiftedRejection } from '../../store/port/rejections.js';
-import type { RejectedValueRow } from '../../store/port/rejections.js';
+import type { AppliedRejection, LiftedRejection } from '../../base/ports/store/rejections.js';
+import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
 
 export interface RejectFlowOptions {
   tenantId: string;

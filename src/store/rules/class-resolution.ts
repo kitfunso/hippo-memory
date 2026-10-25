@@ -1,5 +1,5 @@
 // A claim's prediction class, once for both adapters: the tenant's class tags scored by lower-cased token overlap.
-import type { ClassResolution } from '../port/types.js';
+import type { ClassResolution } from '../../base/ports/store/types.js';
 
 /** A unique best of at least one shared token wins; a tie at the top resolves no class, since an alphabetical pick
  * would name the wrong class on an ambiguous claim. The result does not depend on the order of `classTags`. */

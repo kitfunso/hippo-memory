@@ -23,7 +23,7 @@ import {
   strengthBucket,
 } from '../../base/memory/memory-facts.js';
 import { AT_RISK_BELOW } from '../../base/memory/strength-bands.js';
-import { SCATTER_COLS, SCATTER_ROWS } from '../port/dashboard-reads.js';
+import { SCATTER_COLS, SCATTER_ROWS } from '../../base/ports/store/dashboard-reads.js';
 import { type MemoryRow, parseJsonArray } from './rows.js';
 
 /** The columns each fact function reads first, in this order. */

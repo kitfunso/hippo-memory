@@ -12,7 +12,13 @@ import {
   type HalfLifeRow,
   type HalfLifeRows,
 } from '../../base/memory/half-life-plan.js';
-import type { Consolidation, SleepBegin, SleepCommit, SleepCommitted, SleepStart } from '../port/consolidation.js';
+import type {
+  Consolidation,
+  SleepBegin,
+  SleepCommit,
+  SleepCommitted,
+  SleepStart,
+} from '../../base/ports/store/consolidation.js';
 import { appendAuditEvents } from './audit.js';
 import { conflictResolveAudits, resolvedConflicts, replaceDetectedConflicts } from './conflicts.js';
 import {

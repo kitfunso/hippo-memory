@@ -11,7 +11,7 @@ import type {
   QuarantineListQuery,
   QuarantineRejection,
   QuarantinedMemory,
-} from '../../src/store/port.js';
+} from '../../src/base/ports/store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -23,7 +23,7 @@ import {
   expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import type { AuditEvent } from '../../src/store/port/types.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
   BULK_RECORDS,

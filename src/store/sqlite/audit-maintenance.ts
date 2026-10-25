@@ -23,12 +23,12 @@ import { ftsRowExists } from './entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
 import type { StoreFiles, Handles } from './open.js';
-import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../port/audit.js';
+import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../../base/ports/store/audit.js';
 import { openStore } from './handles.js';
 import { answered, bound, skipEmpty } from './bound.js';
-import type { AuditMaintenance } from '../port.js';
+import type { AuditMaintenance } from '../../base/ports/store.js';
 import { withUnmigratedDb } from '../../db/open.js';
-import type { EntryCursor } from '../port/types.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
 /** The rows a repair judged and the issues it found among them, in store order. */

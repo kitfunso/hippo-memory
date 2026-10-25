@@ -9,7 +9,7 @@ import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { listObjects, saveObject } from './lifecycle.js';
 import type { Policy, PolicyStatus } from '../../base/records/object-types.js';
-import type { Objects, PoliciesInForceQuery } from '../../store/port.js';
+import type { Objects, PoliciesInForceQuery } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export type { Policy, PolicyStatus } from '../../base/records/object-types.js';

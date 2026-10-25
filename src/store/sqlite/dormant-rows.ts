@@ -8,13 +8,18 @@ import type { SqlFragment } from '../../db/sql.js';
 import { EVERY_SCOPE } from './rule-sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import { escapeLike } from '../../base/util/escape.js';
-import type { EntryFilter } from '../port/reports.js';
+import type { EntryFilter } from '../../base/ports/store/reports.js';
 import { parseStoredJson, warnDamagedColumn } from '../../base/util/stored-json.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import type { DormantMove } from '../port/consolidation.js';
-import { dormantListCap, dormantTerms, type DormantMemory, type ListDormantOpts } from '../port/dormant.js';
+import type { DormantMove } from '../../base/ports/store/consolidation.js';
+import {
+  dormantListCap,
+  dormantTerms,
+  type DormantMemory,
+  type ListDormantOpts,
+} from '../../base/ports/store/dormant.js';
 import { DORMANT_ORDER, orderSql } from '../rules/order.js';
-import type { DormantSnapshot } from '../port/types.js';
+import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import { narrowingAnd, type FilterColumn } from './entry-filter.js';
 import { tenantAnd } from './tenant.js';
 

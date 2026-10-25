@@ -2,14 +2,14 @@
 // the write around one recall (history, ring, recalled counter and token ledger row).
 import { isRecallBoostAblated } from '../../base/memory/ablation.js';
 import { auditQueryFields } from '../../base/records/audit-report.js';
-import type { HippoStore, RecallWrites } from '../../store/port.js';
-import type { TokenSurface } from '../../store/port/ledger.js';
+import type { HippoStore, RecallWrites } from '../../base/ports/store.js';
+import type { TokenSurface } from '../../base/ports/store/ledger.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';
 import type { Context } from '../types.js';
 import type { CallerState } from '../callers.js';
-import type { AppendAuditOpts } from '../../store/port/types.js';
+import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 
 /**

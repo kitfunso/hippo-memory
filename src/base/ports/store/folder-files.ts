@@ -1,6 +1,6 @@
 // A store kept as files in a folder: creating them, and the facts about that folder its rows record, so no caller holds
 // the folder's path.
-import type { ProjectIdentity } from '../../base/scope/project-identity.js';
+import type { ProjectIdentity } from '../../scope/project-identity.js';
 
 export interface FolderFiles {
   /** Creates the store's files when they are missing, as `hippo init`, a first share or a global capture needs. */

@@ -9,7 +9,7 @@ import {
   startCompaction,
   type Log,
 } from './compactions-record.js';
-import type { CallerItems, CallerItemsSaved, Compactions } from '../port/capture.js';
+import type { CallerItems, CallerItemsSaved, Compactions } from '../../base/ports/store/capture.js';
 import { bound, type Bodies } from './bound.js';
 
 /** A caller's items, already scrubbed, under its record: a retry of a finished request answers with the first count,

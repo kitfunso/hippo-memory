@@ -21,7 +21,7 @@ import type {
   CompactionCounts,
   TokenTally,
   Diagnostics,
-} from '../port/diagnostics.js';
+} from '../../base/ports/store/diagnostics.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';

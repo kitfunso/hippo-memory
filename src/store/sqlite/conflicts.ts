@@ -15,7 +15,7 @@ import { deleteEntryCore } from './delete-and-batch.js';
 import { keysetPage } from '../../base/util/keyset.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import type { DetectedConflict } from '../port/consolidation.js';
+import type { DetectedConflict } from '../../base/ports/store/consolidation.js';
 import type {
   ConflictListQuery,
   ConflictMember,
@@ -24,7 +24,7 @@ import type {
   ConflictRowPage,
   LoserFate,
   Conflicts,
-} from '../port/conflicts.js';
+} from '../../base/ports/store/conflicts.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';

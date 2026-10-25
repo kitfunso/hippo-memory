@@ -8,8 +8,8 @@ import { handlesOf, openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 import { rethrowInPortTerms } from './port-errors.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { StoredPart, StoredParts, VectorReads } from '../port.js';
-import type { NearestIdsAsk } from '../port/vectors.js';
+import type { StoredPart, StoredParts, VectorReads } from '../../base/ports/store.js';
+import type { NearestIdsAsk } from '../../base/ports/store/vectors.js';
 import { entriesInOrder, listVectorCandidateEntries } from './search-rows.js';
 import { readStoredVectorViews, storedIndexState } from './vector-index.js';
 

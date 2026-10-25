@@ -11,11 +11,11 @@ import type {
   KeyWrites,
   ScopeGrantChange,
   SelfKeyMint,
-} from '../port/keys.js';
+} from '../../base/ports/store/keys.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { readApiKeyOwner } from './tenant-lookup.js';
-import type { AppendAuditOpts } from '../port/types.js';
+import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 
 /** The auth_create row a mint writes; the plaintext never reaches it. */
 function createAuditOf({ key, actor, metadata }: KeyMint): AppendAuditOpts {

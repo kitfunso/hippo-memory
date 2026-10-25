@@ -2,11 +2,11 @@
 // tables.ts so each file stays one screen of shapes.
 import type { Card, CardComment, CardRun } from '../../base/records/card.js';
 import type { SessionHandoffRow } from '../../base/session/handoff.js';
-import type { MemoryConflict } from '../port/conflicts.js';
-import type { GoalRecallLogRow } from '../port/recall-writes.js';
-import type { SessionEvent, TaskSnapshot, WorkingMemoryItem } from '../port/sessions.js';
-import type { TokenEvent, TokenSurface } from '../port/ledger.js';
-import type { DormantSnapshot, Goal, RetrievalPolicy } from '../port/types.js';
+import type { MemoryConflict } from '../../base/ports/store/conflicts.js';
+import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
+import type { SessionEvent, TaskSnapshot, WorkingMemoryItem } from '../../base/ports/store/sessions.js';
+import type { TokenEvent, TokenSurface } from '../../base/ports/store/ledger.js';
+import type { DormantSnapshot, Goal, RetrievalPolicy } from '../../base/ports/store/types.js';
 
 /** A row and the tenant it was written under; `row` is replaced whole on an update. */
 export interface Tenanted<R> {

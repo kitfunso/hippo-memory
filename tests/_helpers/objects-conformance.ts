@@ -14,7 +14,7 @@ import type {
   ObjectRefusal,
   SavableKind,
 } from '../../src/base/records/object-types.js';
-import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave } from '../../src/store/port.js';
+import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave } from '../../src/base/ports/store.js';
 import {
   onBothStores,
   seedTwoTenants,
@@ -26,7 +26,7 @@ import {
   expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import type { AuditEvent } from '../../src/store/port/types.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 

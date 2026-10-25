@@ -1,6 +1,6 @@
 // What share, auto-share, sync down and the two-store search read on a store; their writes go through lessonWrites.
-import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { TenantId } from '../../base/util/tenant.js';
+import type { MemoryEntry } from '../../memory/memory.js';
+import type { TenantId } from '../../util/tenant.js';
 import type { EntryFilter, PageRequest } from './reports.js';
 import type { EntryCursor, EntryPage, OriginFilter } from './types.js';
 

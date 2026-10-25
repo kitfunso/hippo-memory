@@ -7,7 +7,7 @@ import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
 import type { Skill, SkillStatus } from '../../base/records/object-types.js';
-import type { Objects } from '../../store/port.js';
+import type { Objects } from '../../base/ports/store.js';
 
 export type { Skill, SkillStatus } from '../../base/records/object-types.js';
 

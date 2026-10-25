@@ -1,7 +1,7 @@
 // The base store's planning-fallacy read: a claim's tokens resolved to one prediction class, and that class's baserate.
 import { computePredictionBaserate } from './predictions.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { PlanningFallacyEvidence } from '../port/types.js';
+import type { PlanningFallacyEvidence } from '../../base/ports/store/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { resolveClass } from '../rules/class-resolution.js';
 

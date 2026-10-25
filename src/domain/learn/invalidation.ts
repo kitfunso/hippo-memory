@@ -1,6 +1,6 @@
-import type { HippoStore } from '../../store/index.js';
-import type { StoreWith } from '../../store/port.js';
-import type { Learning } from '../../store/port/learning.js';
+import type { HippoStore } from '../../base/ports/store-index.js';
+import type { StoreWith } from '../../base/ports/store.js';
+import type { Learning } from '../../base/ports/store/learning.js';
 import { INVALIDATION_STOPWORDS } from '../../base/util/stopwords.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../../base/memory/memory.js';
@@ -14,7 +14,7 @@ import {
   type ChurnCommit,
   type ChurnRepo,
 } from './churn-git.js';
-import type { EntryCursor } from '../../store/port/types.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 
 const HEADLINE_CHARS = 60;

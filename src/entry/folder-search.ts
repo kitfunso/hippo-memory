@@ -3,7 +3,7 @@
 
 import type { MemoryEntry } from '../base/memory/memory.js';
 import type { SearchResult } from '../base/rank/search-types.js';
-import type { OriginFilter } from '../store/port/types.js';
+import type { OriginFilter } from '../base/ports/store/types.js';
 import { defaultStore } from '../surface/open-store.js';
 import { listRecallEntriesInFolder } from '../surface/testing-kit.js';
 import type { TenantId } from '../base/util/tenant.js';

@@ -11,7 +11,7 @@ import {
   withSqliteBlocked,
   withSqliteOffLoop,
 } from '../../db/index.js';
-import type { HippoStore } from '../port.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import { isHippoDbStore } from './hippo-db-stores.js';
 import { runSqliteRequest } from './request-scope.js';
 import { runsOffLoop } from './worker-store.js';

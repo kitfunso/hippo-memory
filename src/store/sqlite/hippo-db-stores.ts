@@ -1,6 +1,6 @@
 // Which stores are hippo.db. The mark is an own enumerable symbol, so a caller's copy that spreads sqliteStore and
 // swaps a method stays hippo.db.
-import type { HippoStore } from '../port.js';
+import type { HippoStore } from '../../base/ports/store.js';
 
 /** Kept off the store's type, so the published store shape is unchanged. */
 const HIPPO_DB_MARK: unique symbol = Symbol('hippo.db');

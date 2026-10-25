@@ -7,7 +7,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
-import type { EmbeddingIndex } from '../../src/store/port.js';
+import type { EmbeddingIndex } from '../../src/base/ports/store.js';
 import { cliStore } from '../../src/surface/cli/api-context.js';
 import { hashedVector } from '../_helpers/hashed-embedding-server.js';
 import { makeRoot } from '../_helpers/make-root.js';

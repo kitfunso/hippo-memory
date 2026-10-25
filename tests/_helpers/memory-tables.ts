@@ -3,11 +3,11 @@
 import { closeHippoDb, openHippoDb, withSqliteAllowed, type DatabaseSyncLike } from '../../src/db/index.js';
 import { loadPhysicsState } from '../../src/db/physics-state.js';
 import type { SessionHandoffRow } from '../../src/base/session/handoff.js';
-import type { FailureOutcome, RoutineRule, RejectedValueRow } from '../../src/store/port/rejections.js';
-import type { QuarantineRow, QuarantineStatus } from '../../src/store/port/quarantine.js';
-import type { GitHubStream, SlackWorkspace } from '../../src/store/port/connectors.js';
+import type { FailureOutcome, RoutineRule, RejectedValueRow } from '../../src/base/ports/store/rejections.js';
+import type { QuarantineRow, QuarantineStatus } from '../../src/base/ports/store/quarantine.js';
+import type { GitHubStream, SlackWorkspace } from '../../src/base/ports/store/connectors.js';
 import { cursorSlot } from '../../src/store/memory/connector-events.js';
-import type { Prediction } from '../../src/store/port/objects.js';
+import type { Prediction } from '../../src/base/ports/store/objects.js';
 import { auditRowsOn } from './audit-rows.js';
 import { readApiKeyRecord } from '../../src/store/sqlite/auth.js';
 import { readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';

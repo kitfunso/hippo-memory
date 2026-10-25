@@ -39,7 +39,7 @@ import {
   type SearchResult,
 } from '../../base/rank/search-types.js';
 import { rankBothStores } from '../../domain/sharing/search-both.js';
-import type { HippoStore } from '../../store/port.js';
+import type { HippoStore } from '../../base/ports/store.js';
 import { isJsonNumber } from '../../base/util/json.js';
 import { currentSignal } from '../../base/util/request-scope.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../../base/util/tokenize.js';
@@ -48,8 +48,8 @@ import type { HybridVectorCandidates } from '../../domain/search/vector.js';
 import type { RecallBoostOptions, RecallWindowOptions } from './types.js';
 import type { Context } from '../types.js';
 import type { RecallProfile } from './profiles.js';
-import type { GoalRecallLogRow } from '../../store/port/recall-writes.js';
-import type { ActiveGoals } from '../../store/port/types.js';
+import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
+import type { ActiveGoals } from '../../base/ports/store/types.js';
 
 /** A store rankRecall reads, with the config that names its embedding model. */
 export interface RankSource {

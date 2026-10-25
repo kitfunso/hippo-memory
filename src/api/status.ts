@@ -1,14 +1,14 @@
 // Store-wide status reads: counts, stats, vector index state and the correction and provenance reports.
 
 import { isJsonObject, isJsonString } from '../base/util/json.js';
-import type { LegacyStats } from '../store/port/reports.js';
-import type { CorrectionLink, RawProvenance, ReportPage, StatusCounts } from '../store/port/reports.js';
+import type { LegacyStats } from '../base/ports/store/reports.js';
+import type { CorrectionLink, RawProvenance, ReportPage, StatusCounts } from '../base/ports/store/reports.js';
 import { READ_PAGE_ROWS } from '../base/util/pages.js';
-import type { Reports } from '../store/port/reports.js';
+import type { Reports } from '../base/ports/store/reports.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
 import { buildProvenanceCoverage, type ProvenanceCoverage } from './provenance-coverage.js';
 import { requireHostAdmin, type Context, type ContextWith } from './types.js';
-import type { ParticleStats, StoredVectorSummary } from '../store/port.js';
+import type { ParticleStats, StoredVectorSummary } from '../base/ports/store.js';
 import { indexStep } from '../domain/search/embed-memories.js';
 
 export interface StoreStatus {

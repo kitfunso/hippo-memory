@@ -13,7 +13,7 @@ import type { RuntimeSettings } from '../../base/config/config.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
-import type { HippoStore, VectorReads } from '../../store/index.js';
+import type { HippoStore, VectorReads } from '../../base/ports/store-index.js';
 import { churnStaleFactor, summaryMultipliers, summaryScoring, type SummaryScoring } from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
 import { fitBudget } from './finalize.js';

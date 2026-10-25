@@ -10,7 +10,7 @@ import { DEFAULT_RERANK_TOP_K } from '../../domain/search/rerank.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import { explainMatch } from '../../domain/search/explain.js';
 import { fitBudget } from '../../domain/search/finalize.js';
-import type { ContinuityBlock, HippoStore } from '../../store/port.js';
+import type { ContinuityBlock, HippoStore } from '../../base/ports/store.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import type { Context, ContextWith } from '../types.js';
 

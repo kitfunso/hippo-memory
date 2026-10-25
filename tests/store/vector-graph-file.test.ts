@@ -9,7 +9,7 @@ import { saveVectorGraphFile } from '../../src/db/vector-graph-build.js';
 import { VectorGraphs } from '../../src/db/vector-graph-index.js';
 import { GraphFileIndex } from '../../src/db/vector-graph-reader.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors, type VectorIndex } from '../../src/db/vector-store.js';
-import type { VectorCandidateSpec } from '../../src/store/port/vectors.js';
+import type { VectorCandidateSpec } from '../../src/base/ports/store/vectors.js';
 import { listVectorCandidateEntries } from '../../src/store/sqlite/search-rows.js';
 import { log } from '../../src/base/util/log.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';

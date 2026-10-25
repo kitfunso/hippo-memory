@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { closeHippoDb } from '../../db/index.js';
 import { listEveryTenantEntryIds } from './entry-reads.js';
-import type { EmbeddingIndex, IndexStep, IndexStepAnswers, IndexStepKind } from '../port/vectors.js';
+import type { EmbeddingIndex, IndexStep, IndexStepAnswers, IndexStepKind } from '../../base/ports/store/vectors.js';
 import {
   type VectorRebuild,
   beginVectorRebuild,

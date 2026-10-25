@@ -10,7 +10,7 @@ import { assertCallerProject, projectNames } from '../../base/scope/project-iden
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { bindSessionOwner } from '../../api/auth/session-owners.js';
 import { fitWorkingState, WORKING_STATE_CAPS, type WorkingState } from '../../base/session/working-state.js';
-import type { ContinuityKey } from '../../store/port/types.js';
+import type { ContinuityKey } from '../../base/ports/store/types.js';
 
 /**
  * Checks the ids, then binds the session to the caller's owner (a ConflictError when another owner holds it). Returns

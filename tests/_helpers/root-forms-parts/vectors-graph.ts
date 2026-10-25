@@ -2,7 +2,7 @@
 
 import type { MemoryEntry } from '../../../src/base/memory/memory.js';
 import { READ_PAGE_ROWS } from '../../../src/base/util/pages.js';
-import type { EntryCursor } from '../../../src/store/port/types.js';
+import type { EntryCursor } from '../../../src/base/ports/store/types.js';
 import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import type { PhysicsParticle } from '../../../src/base/rank/physics.js';
 import { getMeta } from '../../../src/db/index.js';
@@ -24,7 +24,7 @@ import {
   type RelationRow,
 } from '../../../src/store/sqlite/graph-rows.js';
 import { DEFAULT_LIST_LIMIT } from '../../../src/base/util/limits.js';
-import type { Entity, EntityType, Relation } from '../../../src/store/port/graph.js';
+import type { Entity, EntityType, Relation } from '../../../src/base/ports/store/graph.js';
 import { handlesOf, onHandle, openStore } from '../../../src/store/sqlite/handles.js';
 import * as searchRowsSql from '../../../src/store/sqlite/search-rows.js';
 import type { ApiCall } from '../../../src/base/session/transcript-calls.js';
@@ -33,7 +33,7 @@ import { particleStats } from '../../../src/store/sqlite/vector-index.js';
 import * as vectorIndexSql from '../../../src/store/sqlite/vector-index.js';
 import { applyRebuild, type RebuildPatch } from '../../../src/domain/consolidate/summary-settle.js';
 import { loadEveryTenantEntries } from './entries.js';
-import type { VectorCandidateSpec, StoredVectorSummary } from '../../../src/store/port/vectors.js';
+import type { VectorCandidateSpec, StoredVectorSummary } from '../../../src/base/ports/store/vectors.js';
 
 /** The tenant's newest entities, `entityType` only when named. */
 export function loadEntities(

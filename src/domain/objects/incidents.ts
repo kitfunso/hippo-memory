@@ -12,7 +12,7 @@ import {
   type IncidentStatus,
   type ObjectRefusal,
 } from '../../base/records/object-types.js';
-import type { IncidentOpen, IncidentOpenRefusal, IncidentResolve, Objects } from '../../store/port.js';
+import type { IncidentOpen, IncidentOpenRefusal, IncidentResolve, Objects } from '../../base/ports/store.js';
 
 export type { Incident, IncidentStatus } from '../../base/records/object-types.js';
 

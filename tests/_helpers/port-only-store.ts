@@ -1,7 +1,7 @@
 // A store that answers only through the port: the server blocks hippo.db for any other kind, so a recall
 // path that still opens hippo.db directly throws, while the port's own methods reach the same rows.
 import { withSqliteAllowed } from '../../src/db/index.js';
-import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/store/index.js';
+import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 
 /** The groups only a store kept as files in a folder serves, which an add-on store holds none of. */

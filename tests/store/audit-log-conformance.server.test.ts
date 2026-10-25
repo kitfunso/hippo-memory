@@ -22,7 +22,7 @@ import {
   expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
-import type { QueryAuditOptions } from '../../src/store/port/audit.js';
+import type { QueryAuditOptions } from '../../src/base/ports/store/audit.js';
 import { memorySide } from '../_helpers/memory-side.js';
 
 const HOST = '__host__';

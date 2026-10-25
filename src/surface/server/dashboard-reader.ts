@@ -5,7 +5,7 @@ import { SHARE_ENV, Worker } from 'node:worker_threads';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { MemoryQuery } from '../../api/dashboard/queries.js';
 import type { MemoryDetail, MemoryPage, Overview, ProjectDetail, SearchResult } from '../../api/dashboard/types.js';
-import { StoreBusyError } from '../../store/port.js';
+import { StoreBusyError } from '../../base/ports/store.js';
 import { errorFields, log } from '../../base/util/log.js';
 
 /** What the dashboard routes read; each call is dated by the dashboard's clocks when it is sent. */

@@ -3,13 +3,13 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import type { PhysicsParticle } from '../../base/rank/physics.js';
 import type { ObjectByKind, ObjectKind } from '../../base/records/object-types.js';
-import type { ConnectorDeadLetter, ConnectorEvent, SlackWorkspace } from '../port/connectors.js';
-import type { Entity, Relation } from '../port/graph.js';
-import type { NewApiKey } from '../port/keys.js';
-import type { FailureOutcome, RoutineRule, RejectedValueRow } from '../port/rejections.js';
-import type { Prediction } from '../port/objects.js';
-import type { QuarantineRow } from '../port/quarantine.js';
-import type { AuditEvent } from '../port/types.js';
+import type { ConnectorDeadLetter, ConnectorEvent, SlackWorkspace } from '../../base/ports/store/connectors.js';
+import type { Entity, Relation } from '../../base/ports/store/graph.js';
+import type { NewApiKey } from '../../base/ports/store/keys.js';
+import type { FailureOutcome, RoutineRule, RejectedValueRow } from '../../base/ports/store/rejections.js';
+import type { Prediction } from '../../base/ports/store/objects.js';
+import type { QuarantineRow } from '../../base/ports/store/quarantine.js';
+import type { AuditEvent } from '../../base/ports/store/types.js';
 import { emptySessionTables, type SessionTables } from './session-tables.js';
 
 /** One api key; a stored role stays as written, since findApiKey returns it raw and only a list reads it. */

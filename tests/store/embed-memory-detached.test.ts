@@ -5,7 +5,7 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { sharedLocalEmbedder } from '../../src/infra/local-embedder.js';
 import { embedMemoryDetached, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
-import type { HippoStore } from '../../src/store/port.js';
+import type { HippoStore } from '../../src/base/ports/store.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

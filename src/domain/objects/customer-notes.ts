@@ -4,7 +4,7 @@
 
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
-import type { Objects } from '../../store/port.js';
+import type { Objects } from '../../base/ports/store.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
 import { listObjects, saveObject } from './lifecycle.js';

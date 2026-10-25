@@ -10,8 +10,8 @@ import type { MemoryEntry } from '../../base/memory/memory.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
-import type { Entity } from '../../store/port/graph.js';
-import type { HippoStore } from '../../store/index.js';
+import type { Entity } from '../../base/ports/store/graph.js';
+import type { HippoStore } from '../../base/ports/store-index.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 
 /** Hard cap on `--hops` (a higher value just walks more of a finite graph; this bounds worst-case work and keeps the

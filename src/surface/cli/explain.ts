@@ -25,7 +25,7 @@ import { requireInit } from './shared.js';
 import { fmt, recallEntryText, recallHeading } from './print.js';
 import { fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
-import type { HippoStore } from '../../store/port.js';
+import type { HippoStore } from '../../base/ports/store.js';
 
 const EXPLAIN_PREVIEW_CHARS = 48;
 

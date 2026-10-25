@@ -10,7 +10,7 @@ import type {
   WorkingMemoryFilter,
   WorkingMemoryPush,
   WorkingMemoryItem,
-} from '../port/sessions.js';
+} from '../../base/ports/store/sessions.js';
 import { handoffByIdIn, latestHandoffIn, saveHandoffIn, stampOutcomeIn, writeSessionEndIn } from './handoffs.js';
 import { byBytes } from '../rules/order.js';
 import { WM_MAX_ENTRIES } from '../rules/windows.js';

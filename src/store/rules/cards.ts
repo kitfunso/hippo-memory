@@ -2,7 +2,7 @@
 // message under either store.
 import { CARD_LEASE_MS } from '../../base/records/card.js';
 import { isHandoffOutcome, type HandoffOutcome } from '../../base/session/handoff.js';
-import type { CardCreate } from '../port/cards.js';
+import type { CardCreate } from '../../base/ports/store/cards.js';
 
 /** The lease a move to running or a heartbeat at `now` sets. */
 export const leaseUntilFrom = (now: string): string => new Date(Date.parse(now) + CARD_LEASE_MS).toISOString();

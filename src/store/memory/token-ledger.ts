@@ -1,5 +1,5 @@
 // The in-memory token ledger: the base recordTokens write and the reports group's tokenUse summary.
-import type { TokenSummary, TokenSurface, TokenSurfaceSummary, TokenUse } from '../port/ledger.js';
+import type { TokenSummary, TokenSurface, TokenSurfaceSummary, TokenUse } from '../../base/ports/store/ledger.js';
 import { byBytes } from '../rules/order.js';
 import { ledgerCutoff, REREAD_SURFACES, TOKEN_SURFACES } from '../rules/token-ledger.js';
 import { nextId } from './rows.js';

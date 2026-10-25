@@ -13,7 +13,11 @@ A file imports only from its own layer or a lower one. `layers.json` is the map 
 
 ### Async port
 
-node:sqlite is synchronous, and the store port is async so another store can do I/O. Every api function is async and reaches the store through `storeFor(ctx)`, with or without `ctx.store`. `sqliteStore` runs each method's synchronous body when it is called and resolves the result, so an api function's first store call has run by the time the function returns. Every store group is required except the ones `OptionalGroup` in `src/store/port.ts` names, such as `readiness` and `lastRecall`; a path that needs one of those on a store without it gives `StoreNotPortedError`, a 501. The last recall and its trace sit in the optional `lastRecall` group, which only the sqlite stores have. `scripts/check-floating-api.mjs` fails on any call to an api write function whose Promise nothing awaits.
+node:sqlite is synchronous, and the store port is async so another store can do I/O. Every api function is async and reaches the store through `storeFor(ctx)`, with or without `ctx.store`. `sqliteStore` runs each method's synchronous body when it is called and resolves the result, so an api function's first store call has run by the time the function returns. Every store group is required except the ones `OptionalGroup` in `src/base/ports/store.ts` names, such as `readiness` and `lastRecall`; a path that needs one of those on a store without it gives `StoreNotPortedError`, a 501. The last recall and its trace sit in the optional `lastRecall` group, which only the sqlite stores have. `scripts/check-floating-api.mjs` fails on any call to an api write function whose Promise nothing awaits.
+
+### Where the port lives
+
+The port is `src/base/ports/store.ts`, with its groups in `src/base/ports/store/` and `store-groups.ts`, and its published type entry in `store-index.ts`. It sits in `src/base`, below both layers, so src/domain and the two adapters in src/store import the same port and src/domain imports nothing from src/store (`apart` in `layers.json`).
 
 ### What lives in src/store
 
@@ -80,7 +84,7 @@ Tests use `port: 0` to bind an ephemeral port and read the actual port back via 
 
 ## The dashboard's reads
 
-The dashboard reads hippo.db through `DashboardReads` (src/store/port/dashboard-reads.ts), served by `sqliteDashboardReads`. No read hands JavaScript a number of rows that grows with the tenant. Per-project counts come from SQL aggregates. A memory list is one sorted `LIMIT ... OFFSET` page. A project with more than 4,000 live rows draws a 64 by 32 grid per layer in place of its points. `tests/dashboard-reads-bounded.server.test.ts` holds this: five times the rows reads the same rows. Before wave 1020g, a reader thread held an in-memory snapshot of every live row of the tenant and rebuilt it on each new snapshot id.
+The dashboard reads hippo.db through `DashboardReads` (src/base/ports/store/dashboard-reads.ts), served by `sqliteDashboardReads`. No read hands JavaScript a number of rows that grows with the tenant. Per-project counts come from SQL aggregates. A memory list is one sorted `LIMIT ... OFFSET` page. A project with more than 4,000 live rows draws a 64 by 32 grid per layer in place of its points. `tests/dashboard-reads-bounded.server.test.ts` holds this: five times the rows reads the same rows. Before wave 1020g, a reader thread held an in-memory snapshot of every live row of the tenant and rebuilt it on each new snapshot id.
 
 - The SQL calls the dashboard's rules as SQL functions (src/store/sqlite/dashboard-functions.ts). Each runs the strength, band and age code of src/base, so a count and a listed row judge a memory the same way. A pure-SQL strength was tried first and rejected: julianday arithmetic drifts by about 5e-10 days, which moves a memory on an exact cut point into the next band.
 - An aggregate keeps its state in a fixed Float64Array, returned as a BLOB, because node:sqlite requires the state to be a SQL value.
@@ -577,7 +581,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - module header: Local provider `id` is the BARE model string. (Historical note: this originally guaranteed NO identity change on upgrade; since the embed-text-format versioning in embeddings.ts (`embeddingIndexIdentity`, `${id}#t2`, docs/plans/2026-07-09-recall-determinism.md T1), the STORED identity carries a `#t<N>` suffix and pre-#t2 stores get exactly one forced reindex on their next embed-touching operation — deliberate, because their vectors were computed over path-contaminated text.)
 
 ### src/domain/search/embed-memories.ts
-- module header: provider selection, the API-key check and vector computation moved here from src/store/embeddings/index.ts, which keeps only the stored index identity (src/store/port.ts VectorWrites: core computes each vector, the store only keeps it).
+- module header: provider selection, the API-key check and vector computation moved here from src/store/embeddings/index.ts, which keeps only the stored index identity (src/base/ports/store.ts VectorWrites: core computes each vector, the store only keeps it).
 - `embedMemoryInto`: L9: host-wide rebuild. The embedding index is keyed by entry.id (which is tenant-scoped) but the index itself is one per hippoRoot.
 - `embedAll`: L9: host-wide by design. embedAll backfills vectors for all tenants' entries into the per-host embedding index.
 

@@ -4,8 +4,8 @@ import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue, type PostCompactPayload } from '../base/session/capture-contract.js';
-import type { CompactionText, StepFailure } from '../store/port/capture.js';
-import { isStoreBusy } from '../store/port.js';
+import type { CompactionText, StepFailure } from '../base/ports/store/capture.js';
+import { isStoreBusy } from '../base/ports/store.js';
 import { errorCode, errorMessage } from '../base/util/log.js';
 import { tryParseJson } from '../base/util/json.js';
 

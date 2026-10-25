@@ -12,7 +12,7 @@ import { printGitHubBackfillUsage } from './surface/cli/github.js';
 import { printError } from './surface/cli/output.js';
 import { exitAfterFlush } from './base/util/crash-handlers.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './base/util/log.js';
-import { isStoreBusy, STORE_BUSY_MESSAGE } from './store/port.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from './base/ports/store.js';
 import { type CliFlags, boolFlag, isBooleanFlag, isStringFlag } from './surface/cli/flag-values.js';
 import {
   USAGE_HEADER,

@@ -15,7 +15,7 @@ import type {
   ContextCandidateFilter,
   ContextReads,
   RecentOrigins,
-} from '../port/context-reads.js';
+} from '../../base/ports/store/context-reads.js';
 import { byBytes, newestFirst, oldestFirst, type DescendingKeyset } from '../rules/order.js';
 import { rowTerms } from '../rules/fts.js';
 import { SCHEMA_FIT_WINDOW_ROWS } from '../rules/windows.js';

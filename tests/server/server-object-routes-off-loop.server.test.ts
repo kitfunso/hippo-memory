@@ -5,7 +5,7 @@ import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import type { ServerHandle } from '../../src/server.js';
-import type { HippoStore } from '../../src/store/index.js';
+import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import type { JsonValue } from '../../src/base/util/json.js';

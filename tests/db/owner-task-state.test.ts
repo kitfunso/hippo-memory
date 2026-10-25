@@ -16,7 +16,7 @@ import {
   saveActiveTaskSnapshot,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
-import type { ContinuityKey } from '../../src/store/port/types.js';
+import type { ContinuityKey } from '../../src/base/ports/store/types.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();

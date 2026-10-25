@@ -1,6 +1,11 @@
 // The in-memory prediction rows: forward claims and their closes, each save landing with its mirror memory.
-import type { Prediction, PredictionClose, PredictionListQuery, PredictionSave } from '../port/objects.js';
-import type { PredictionBaserate } from '../port/types.js';
+import type {
+  Prediction,
+  PredictionClose,
+  PredictionListQuery,
+  PredictionSave,
+} from '../../base/ports/store/objects.js';
+import type { PredictionBaserate } from '../../base/ports/store/types.js';
 import { isBelow, newestFirst } from '../rules/order.js';
 import {
   closeMissError,

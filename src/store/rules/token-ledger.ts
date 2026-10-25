@@ -1,6 +1,6 @@
 // The token ledger's surfaces and retention, once for both adapters.
 import { DAY_MS } from '../../base/util/time.js';
-import type { TokenSurface } from '../port/ledger.js';
+import type { TokenSurface } from '../../base/ports/store/ledger.js';
 
 /** Every surface a block is sent on, in report order. */
 export const TOKEN_SURFACES: readonly TokenSurface[] = [

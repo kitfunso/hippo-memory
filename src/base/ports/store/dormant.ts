@@ -1,6 +1,6 @@
 // The dormant-memory shapes the Dormant group takes and returns.
-import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { DormantRevival } from '../../base/memory/dormant-revival.js';
+import type { MemoryEntry } from '../../memory/memory.js';
+import type { DormantRevival } from '../../memory/dormant-revival.js';
 
 /** A dormant memory as listed to a user. */
 export interface DormantMemory {

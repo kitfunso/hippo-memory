@@ -13,7 +13,7 @@ import type {
   EventMarked,
   RouteQuery,
   TenantRoute,
-} from '../port/connectors.js';
+} from '../../base/ports/store/connectors.js';
 import { NotFoundError } from '../../base/errors/api-errors.js';
 import { byBytes } from '../rules/order.js';
 import { archiveRow, stage } from './staged.js';

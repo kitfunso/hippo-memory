@@ -1,5 +1,5 @@
 // What crosses between the server thread and a store worker, and which kind of worker runs each store method.
-import type { BaseMethods, HippoStore, StoreGroups } from '../port.js';
+import type { BaseMethods, HippoStore, StoreGroups } from '../../base/ports/store.js';
 import type { WireError } from './error-codec.js';
 import type { TenantMark } from './tenant-wire.js';
 

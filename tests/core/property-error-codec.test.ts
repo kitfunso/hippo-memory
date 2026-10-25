@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../src/base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../src/base/errors/raw-append-only.js';
 import { IncompatibleBinaryError, OtherStoreFolderError, SqliteBlockedError } from '../../src/db/index.js';
-import { StoreBusyError } from '../../src/store/port.js';
+import { StoreBusyError } from '../../src/base/ports/store.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../src/base/util/http-util.js';
 import { ScopeForbiddenError } from '../../src/base/scope/recall-scope.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';

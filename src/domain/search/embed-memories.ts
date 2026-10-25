@@ -1,5 +1,5 @@
 // Embeds memories into the vector index: asks the target's embedder for the configured provider, computes each vector
-// and hands it to the store, which only keeps it (src/store/port.ts VectorWrites).
+// and hands it to the store, which only keeps it (src/base/ports/store.ts VectorWrites).
 
 import { strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../../base/memory/memory.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
@@ -23,7 +23,7 @@ import type {
   VectorWrite,
   VectorWriteResult,
   VectorWrites,
-} from '../../store/port.js';
+} from '../../base/ports/store.js';
 import { chunked } from '../../base/util/chunked.js';
 import { errorCode, errorMessage, log, errorFields } from '../../base/util/log.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';

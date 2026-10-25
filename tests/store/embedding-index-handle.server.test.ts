@@ -3,8 +3,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
-import type { EmbeddingIndex } from '../../src/store/port.js';
-import type { EmbeddingIndexState } from '../../src/store/port/vectors.js';
+import type { EmbeddingIndex } from '../../src/base/ports/store.js';
+import type { EmbeddingIndexState } from '../../src/base/ports/store/vectors.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';

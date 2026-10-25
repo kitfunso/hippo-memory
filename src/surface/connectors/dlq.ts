@@ -3,8 +3,8 @@
 
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { DLQ_REDACTED_NOTE, redactPayload } from '../../base/util/secret-detect.js';
-import type { HippoStore } from '../../store/index.js';
-import type { ConnectorDeadLetter, DeadLetterConnector, DeadLetterRows } from '../../store/port.js';
+import type { HippoStore } from '../../base/ports/store-index.js';
+import type { ConnectorDeadLetter, DeadLetterConnector, DeadLetterRows } from '../../base/ports/store.js';
 import type { JsonValue } from '../../base/util/json.js';
 import { errorMessage } from '../../base/util/log.js';
 

@@ -1,10 +1,10 @@
 // The vector groups: recall's vector arm, the stored vectors and particles, their writes and a store's own index.
-import type { MemoryEntry } from '../../base/memory/memory.js';
-import type { PhysicsParticle } from '../../base/rank/physics.js';
-import type { RecallScopeFilter } from '../../base/scope/recall-scope.js';
-import type { EmbeddingIndexState } from '../../base/embeddings/index-identity.js';
+import type { MemoryEntry } from '../../memory/memory.js';
+import type { PhysicsParticle } from '../../rank/physics.js';
+import type { RecallScopeFilter } from '../../scope/recall-scope.js';
+import type { EmbeddingIndexState } from '../../embeddings/index-identity.js';
 import type { OriginFilter } from './types.js';
-import type { TenantId } from '../../base/util/tenant.js';
+import type { TenantId } from '../../util/tenant.js';
 
 export type { EmbeddingIndexState, RecallScopeFilter };
 

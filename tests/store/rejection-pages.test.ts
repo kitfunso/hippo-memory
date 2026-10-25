@@ -7,7 +7,7 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import type { Rejection } from '../../src/store/port/rejections.js';
+import type { Rejection } from '../../src/base/ports/store/rejections.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import type { OnHandle } from '../../src/store/sqlite/open.js';

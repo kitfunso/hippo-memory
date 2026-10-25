@@ -24,7 +24,7 @@ import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/au
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../../src/db/index.js';
 import { auditRowsOn } from '../_helpers/audit-rows.js';
-import type { AuditEvent } from '../../src/store/port/types.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';

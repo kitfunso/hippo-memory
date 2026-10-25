@@ -1,6 +1,6 @@
 // The dashboard's reads. Each answers per-project counts, one page, a capped point set or a fixed grid, so what a read
 // hands back never grows with the tenant's row count. Strengths are judged at the `nowMs` each read names.
-import type { MemoryFacts } from '../../base/memory/memory-facts.js';
+import type { MemoryFacts } from '../../memory/memory-facts.js';
 import type { ConflictRow } from './conflicts.js';
 
 /** A project's scatter lists each row up to this many rows, and counts grid cells past it. */

@@ -181,7 +181,7 @@ const STORE_KIT_TYPES = [
   'VectorWrite',
   'VectorWriteResult',
   'VectorWrites',
-  // The session and admin groups (port-groups.ts).
+  // The session and admin groups (store-groups.ts).
   'Card',
   'CardComment',
   'CardCreate',

@@ -1,6 +1,6 @@
 // A sleep's conflict refresh over plain tables, as hippo.db's replaceDetectedConflicts runs it: stale open conflicts
 // resolve, detected ones open, and each member's conflictsWith lists its open partners; a pair across tenants never.
-import type { DetectedConflict } from '../port/consolidation.js';
+import type { DetectedConflict } from '../../base/ports/store/consolidation.js';
 import { nextId } from './rows.js';
 import { stage } from './staged.js';
 import type { MemoryTables } from './tables.js';

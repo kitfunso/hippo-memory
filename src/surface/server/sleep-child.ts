@@ -4,7 +4,7 @@ import { sleepWholeStore } from '../../api/sleep/sleep.js';
 import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
 import { rootInfra } from '../../infra/ports.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
-import { isStoreBusy } from '../../store/port.js';
+import { isStoreBusy } from '../../base/ports/store.js';
 import { configReader } from '../../host/config-file.js';
 import { createHost } from '../../host/host.js';
 import { defaultReach, defaultStore, runStoreRequest, saveVectorGraphFile } from '../open-store.js';

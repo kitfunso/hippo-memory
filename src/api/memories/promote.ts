@@ -1,7 +1,7 @@
 // Promote to the global store, supersede with a successor, and archive raw memories.
 
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import type { ConnectorEvent, StoreHome } from '../../store/port.js';
+import type { ConnectorEvent, StoreHome } from '../../base/ports/store.js';
 import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';

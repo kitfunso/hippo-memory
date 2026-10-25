@@ -13,7 +13,7 @@ import {
   type ObjectRefusal,
   type SavableKind,
 } from '../../base/records/object-types.js';
-import type { ObjectClose, ObjectListQuery, Objects, ObjectSave } from '../../store/port.js';
+import type { ObjectClose, ObjectListQuery, Objects, ObjectSave } from '../../base/ports/store.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { ObjectDescriptor, ObjectDraft, ObjectListOptions, SavableDescriptor } from './descriptor.js';
 

@@ -1,7 +1,7 @@
 // A container plan as the store's steps, the rows each writes built here, and the tally read back from the outcomes.
 import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../../base/memory/memory.js';
-import type { ImportStep, StepOutcome } from '../../store/port/agent-import.js';
-import type { DormantSnapshot } from '../../store/port/types.js';
+import type { ImportStep, StepOutcome } from '../../base/ports/store/agent-import.js';
+import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import type { ContainerWork, StoreSession } from './container-view.js';
 import type { ContainerPlan } from './plan.js';
 import type { Tally } from '../../base/memory/agent-memory-report.js';

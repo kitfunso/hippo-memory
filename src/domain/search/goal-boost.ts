@@ -2,8 +2,8 @@
 import { compareScoresDesc } from '../../base/rank/compare.js';
 import { DEFAULT_SCHEMA_FIT, type MemoryEntry } from '../../base/memory/memory.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
-import type { ActiveGoals, Goal, RetrievalPolicy } from '../../store/port/types.js';
-import type { GoalRecallLogRow } from '../../store/port/recall-writes.js';
+import type { ActiveGoals, Goal, RetrievalPolicy } from '../../base/ports/store/types.js';
+import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
 
 const MAX_FINAL_MULTIPLIER = 3.0;
 const FIRST_MATCH_BOOST = 2.0;

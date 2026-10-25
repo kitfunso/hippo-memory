@@ -5,8 +5,14 @@ import { planHalfLifeMoves, type HalfLifeRows, type ObjectLink } from '../../bas
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { keysetPage } from '../../base/util/keyset.js';
 import { CONSOLIDATION_RUNS_KEPT } from '../../db/tables.js';
-import type { Consolidation, SleepBegin, SleepStart, SummarySettle, SummarySettled } from '../port/consolidation.js';
-import type { EntryCursor } from '../port/types.js';
+import type {
+  Consolidation,
+  SleepBegin,
+  SleepStart,
+  SummarySettle,
+  SummarySettled,
+} from '../../base/ports/store/consolidation.js';
+import type { EntryCursor } from '../../base/ports/store/types.js';
 import { refusalAudit } from '../rules/audit-rows.js';
 import { bareText } from '../rules/copies.js';
 import {

@@ -64,7 +64,7 @@ import {
   appendSessionEvent,
   saveActiveTaskSnapshot,
 } from '../_helpers/root-forms.js';
-import type { AppendAuditOpts } from '../../src/store/port/types.js';
+import type { AppendAuditOpts } from '../../src/base/ports/store/types.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 

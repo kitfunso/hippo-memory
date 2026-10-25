@@ -19,7 +19,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction } from '../_helpers/root-forms.js';
-import type { Prediction } from '../../src/store/port/objects.js';
+import type { Prediction } from '../../src/base/ports/store/objects.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */

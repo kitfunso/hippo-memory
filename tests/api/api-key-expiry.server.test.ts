@@ -15,14 +15,14 @@ import {
 } from '../../src/api/index.js';
 import { handleAuth } from '../../src/surface/cli/auth.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import type { HippoStore } from '../../src/store/index.js';
+import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../../src/base/util/version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import type { ApiKeyRecord } from '../../src/store/port/types.js';
+import type { ApiKeyRecord } from '../../src/base/ports/store/types.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 
 afterEach(() => {

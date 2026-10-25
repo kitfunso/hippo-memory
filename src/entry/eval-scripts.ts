@@ -2,7 +2,7 @@
 // frozen script re-points its import line here and keeps every call as written.
 import { folderEmbedTarget, type EmbedTarget } from '../domain/search/embed-memories.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
-import type { HippoStore } from '../store/port.js';
+import type { HippoStore } from '../base/ports/store.js';
 import { judgeOver, type JudgeOptions, type Judgment } from '../infra/judgment.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { httpOver } from '../infra/http.js';

@@ -2,7 +2,7 @@
 // kept, wherever it escapes: a served store call, a request scope, a hook scope and a batch.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, isSqliteBusy, openHippoDb, runWithRequestStores } from '../../src/db/index.js';
-import { isStoreBusy, StoreBusyError } from '../../src/store/port.js';
+import { isStoreBusy, StoreBusyError } from '../../src/base/ports/store.js';
 import { portError } from '../../src/store/sqlite/port-errors.js';
 import { runSqliteBatch, runSqliteHookRequest, runSqliteRequest } from '../../src/store/sqlite/request-scope.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

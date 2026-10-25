@@ -1,7 +1,7 @@
 // The root entry's sleep and consolidation: each opens one handle per store and fills the outside services that a
 // caller's Context or options leave out.
 import { defaultStore, withSharedStoreHandles } from '../surface/open-store.js';
-import type { SleepStore } from '../store/port.js';
+import type { SleepStore } from '../base/ports/store.js';
 import { runConsolidation, type ConsolidateOptions } from '../domain/consolidate/sleep.js';
 import { anthropicLlmFromEnv } from '../infra/ports.js';
 import { loadConfig } from '../host/config-file.js';

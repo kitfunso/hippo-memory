@@ -26,7 +26,7 @@ import {
 import { extractPathTags } from '../../domain/search/path-context.js';
 import { canReadScope, personalScopeOf } from '../../base/scope/recall-scope.js';
 import { duplicateKey, heldTextKeys, storedTextKeys } from '../../base/util/same-text.js';
-import type { LessonWrites } from '../../store/port.js';
+import type { LessonWrites } from '../../base/ports/store.js';
 import { memoryPages } from '../memories/memories.js';
 import type { Context, ContextWith } from '../types.js';
 

@@ -8,7 +8,7 @@ import {
   type GraphViewQuery,
   type GraphWalkQuery,
   type Relation,
-} from '../port/graph.js';
+} from '../../base/ports/store/graph.js';
 import { diffGraph, memoryIdsOf, type StoredGraph } from '../rules/graph-delta.js';
 import { newestFirst } from '../rules/order.js';
 import type { MemoryTables } from './tables.js';

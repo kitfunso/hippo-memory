@@ -1,7 +1,7 @@
 // The in-memory task snapshots and session events, with the continuity key that scopes the snapshots and handoffs.
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot } from '../port/sessions.js';
-import { continuityStamp, type ContinuityKey } from '../port/types.js';
+import type { SessionEvent, SessionEventInput, SnapshotInput, TaskSnapshot } from '../../base/ports/store/sessions.js';
+import { continuityStamp, type ContinuityKey } from '../../base/ports/store/types.js';
 import { keyProjects } from '../rules/continuity.js';
 import { newestFirst } from '../rules/order.js';
 import { SESSION_EVENT_LIMIT } from '../rules/windows.js';

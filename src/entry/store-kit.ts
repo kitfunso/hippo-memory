@@ -1,4 +1,4 @@
-export type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../store/port/keys.js';
+export type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../base/ports/store/keys.js';
 export type {
   ApiKeyRecord,
   AppendAuditOpts,
@@ -15,15 +15,15 @@ export type {
   DormantSnapshot,
   EntryCursor,
   EntryPage,
-} from '../store/port/types.js';
-export type { GoalRecallLogRow, RecallTraceInput, StrengthenOptions } from '../store/port/recall-writes.js';
+} from '../base/ports/store/types.js';
+export type { GoalRecallLogRow, RecallTraceInput, StrengthenOptions } from '../base/ports/store/recall-writes.js';
 export type {
   RecallScopeFilter,
   VectorCandidateSpec,
   EmbeddingIndexState,
   StoredPart,
   StoredParts,
-} from '../store/port/vectors.js';
+} from '../base/ports/store/vectors.js';
 export type {
   AmbientCandidates,
   AmbientLoadResult,
@@ -32,7 +32,7 @@ export type {
   ContextCandidateFilter,
   RecentOrigins,
   AmbientStoreFilter,
-} from '../store/port/context-reads.js';
+} from '../base/ports/store/context-reads.js';
 export type {
   FailureEvent,
   FailureOutcome,
@@ -42,7 +42,7 @@ export type {
   LiftedRejection,
   Rejection,
   RejectionSource,
-} from '../store/port/rejections.js';
+} from '../base/ports/store/rejections.js';
 
 // The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types, hippo.db's rule
 // helpers), so a store built on it applies hippo.db's rules with the same code.
@@ -107,7 +107,7 @@ export {
   type VectorWrites,
   type WorkingMemoryFilter,
   type WorkingMemoryPush,
-} from '../store/index.js';
+} from '../base/ports/store-index.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
 export { entryAfterOutcome } from '../base/memory/memory.js';
 export { normalizeValueForRejection, rejectionDigest } from '../base/records/rejection-digest.js';
@@ -139,12 +139,12 @@ export type {
   SessionEventInput,
   SnapshotInput,
   WorkingMemoryItem,
-} from '../store/port/sessions.js';
+} from '../base/ports/store/sessions.js';
 export type { HandoffOutcome, SessionHandoff } from '../base/session/handoff.js';
 // The types the Sessions, Cards, Goals, Conflicts, Dormant and Reports groups take and return.
 export type { Card, CardComment, CardRun, CardStatus } from '../base/records/card.js';
-export type { CardDetail } from '../store/port/cards.js';
-export type { CompleteGoalOpts, PushGoalOpts } from '../store/port/goals.js';
+export type { CardDetail } from '../base/ports/store/cards.js';
+export type { CompleteGoalOpts, PushGoalOpts } from '../base/ports/store/goals.js';
 export type {
   ConflictListQuery,
   ConflictMember,
@@ -154,9 +154,9 @@ export type {
   ConflictSide,
   LoserFate,
   MemoryConflict,
-} from '../store/port/conflicts.js';
-export type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from '../store/port/dormant.js';
-export type { CallerItems, CompactionStart } from '../store/port/capture.js';
+} from '../base/ports/store/conflicts.js';
+export type { DormantMemory, DormantRestoreOutcome, ListDormantOpts } from '../base/ports/store/dormant.js';
+export type { CallerItems, CompactionStart } from '../base/ports/store/capture.js';
 export type {
   CorrectionLink,
   EntryFilter,
@@ -165,13 +165,13 @@ export type {
   StatusCounts,
   StrengthTallies,
   LegacyStats,
-} from '../store/port/reports.js';
-export type { TokenSummary, TokenUse } from '../store/port/ledger.js';
+} from '../base/ports/store/reports.js';
+export type { TokenSummary, TokenUse } from '../base/ports/store/ledger.js';
 export type { AmbientTallies } from '../base/memory/ambient.js';
 export type { PhysicsParticle } from '../base/rank/physics.js';
 // An add-on ranks its own particles by physics with hippo.db's code, by passing its store and root in the options.
 export { physicsSearch } from './folder-search.js';
-export { StoreBusyError } from '../store/port.js';
+export { StoreBusyError } from '../base/ports/store.js';
 // A port method that can read every tenant takes ALL_TENANTS there, so an add-on store tells it from a missed tenant.
 export { ALL_TENANTS, type TenantId } from '../base/util/tenant.js';
 // An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its

@@ -8,7 +8,7 @@ import { projectNames } from '../base/scope/project-identity.js';
 import { eligibleSummaryParents } from './summary-parents.js';
 import type { CallerProject } from './prompt-hook.js';
 import type { Context } from './types.js';
-import type { EntryCursor } from '../store/port/types.js';
+import type { EntryCursor } from '../base/ports/store/types.js';
 
 const DEFAULT_FRESH_TAIL_COUNT = 10;
 const DEFAULT_ROW_CAP = 5000;

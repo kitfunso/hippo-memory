@@ -13,7 +13,7 @@ import type { McpHost } from '../../src/surface/mcp/protocol.js';
 import { startStdioLoop } from '../../src/surface/mcp/stdio.js';
 import { TOOLS } from '../../src/surface/mcp/tools.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';
-import type { HippoStore } from '../../src/store/index.js';
+import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
