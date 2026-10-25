@@ -17,7 +17,7 @@ import {
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-import { correctionLinksOf, rawProvenanceOf } from '../../src/store/memory/reports.js';
+import { correctionLinksOfRows, rawProvenanceAt } from '../_helpers/report-reads.js';
 
 oneRequestPerTest();
 
@@ -264,7 +264,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
 });
 
 describe('Company Brain provenance coverage scorecard', () => {
-  it('drops below 1.0 when any raw receipt is missing owner or artifact_ref', () => {
+  it('drops below 1.0 when any raw receipt is missing owner or artifact_ref', async () => {
     initTestStore(tmpDir);
 
     writeEntry(
@@ -305,7 +305,7 @@ describe('Company Brain provenance coverage scorecard', () => {
     );
 
     const entries = loadAllEntries(tmpDir, 'default');
-    const coverage = buildProvenanceCoverage(rawProvenanceOf(entries));
+    const coverage = buildProvenanceCoverage(await rawProvenanceAt(tmpDir));
 
     expect(coverage.rawTotal).toBe(3);
     expect(coverage.rawWithEnvelope).toBe(2);
@@ -319,7 +319,7 @@ describe('Company Brain provenance coverage scorecard', () => {
     expect(distilledLeak).toBe(false);
   });
 
-  it('reaches the 100% gate once every raw receipt carries owner and artifact_ref', () => {
+  it('reaches the 100% gate once every raw receipt carries owner and artifact_ref', async () => {
     initTestStore(tmpDir);
 
     writeEntry(
@@ -343,7 +343,7 @@ describe('Company Brain provenance coverage scorecard', () => {
       }),
     );
 
-    const coverage = buildProvenanceCoverage(rawProvenanceOf(loadAllEntries(tmpDir, 'default')));
+    const coverage = buildProvenanceCoverage(await rawProvenanceAt(tmpDir));
 
     expect(coverage.rawTotal).toBe(2);
     expect(coverage.coverage).toBe(1);
@@ -352,9 +352,9 @@ describe('Company Brain provenance coverage scorecard', () => {
 });
 
 describe('Company Brain correction-latency scorecard', () => {
-  it('returns an empty report when no supersessions exist', () => {
+  it('returns an empty report when no supersessions exist', async () => {
     const a = createMemory('belief: pricing tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    const report = buildCorrectionLatency(correctionLinksOf([a]));
+    const report = buildCorrectionLatency(await correctionLinksOfRows([a]));
     expect(report.count).toBe(0);
     expect(report.manualCount).toBe(0);
     expect(report.extractionCount).toBe(0);
@@ -364,14 +364,14 @@ describe('Company Brain correction-latency scorecard', () => {
     expect(report.pairs).toEqual([]);
   });
 
-  it('flags direct supersedes as manual with zero measurable latency', () => {
+  it('flags direct supersedes as manual with zero measurable latency', async () => {
     const oldEntry = createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     oldEntry.created = '2026-04-01T00:00:00.000Z';
     const newEntry = createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     newEntry.created = '2026-04-02T00:00:00.000Z';
     oldEntry.supersededBy = newEntry.id;
 
-    const report = buildCorrectionLatency(correctionLinksOf([oldEntry, newEntry]));
+    const report = buildCorrectionLatency(await correctionLinksOfRows([oldEntry, newEntry]));
 
     expect(report.count).toBe(1);
     expect(report.manualCount).toBe(1);
@@ -381,7 +381,7 @@ describe('Company Brain correction-latency scorecard', () => {
     expect(report.pairs[0].latencyMs).toBe(0);
   });
 
-  it('measures extraction-driven latency from receipt to supersession', () => {
+  it('measures extraction-driven latency from receipt to supersession', async () => {
     const rawReceipt = createMemory('slack: pricing tier moved to 120 today', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       kind: 'raw',
@@ -400,7 +400,7 @@ describe('Company Brain correction-latency scorecard', () => {
     newFact.created = '2026-04-01T10:30:00.000Z';
     oldFact.supersededBy = newFact.id;
 
-    const report = buildCorrectionLatency(correctionLinksOf([rawReceipt, oldFact, newFact]));
+    const report = buildCorrectionLatency(await correctionLinksOfRows([rawReceipt, oldFact, newFact]));
 
     expect(report.count).toBe(1);
     expect(report.extractionCount).toBe(1);
@@ -411,28 +411,28 @@ describe('Company Brain correction-latency scorecard', () => {
     expect(report.maxMs).toBe(30 * 60 * 1000);
   });
 
-  it('skips pairs with malformed timestamps so NaN never reaches percentiles', () => {
+  it('skips pairs with malformed timestamps so NaN never reaches percentiles', async () => {
     const oldEntry = createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     oldEntry.created = '2026-04-01T00:00:00.000Z';
     const newEntry = createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     newEntry.created = 'not-a-date';
     oldEntry.supersededBy = newEntry.id;
 
-    const report = buildCorrectionLatency(correctionLinksOf([oldEntry, newEntry]));
+    const report = buildCorrectionLatency(await correctionLinksOfRows([oldEntry, newEntry]));
     expect(report.count).toBe(0);
     expect(report.p50Ms).toBeNull();
   });
 
-  it('handles dangling superseded_by pointers without throwing', () => {
+  it('handles dangling superseded_by pointers without throwing', async () => {
     const oldEntry = createMemory('belief points at a missing successor', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     oldEntry.supersededBy = 'mem-does-not-exist';
 
-    const report = buildCorrectionLatency(correctionLinksOf([oldEntry]));
+    const report = buildCorrectionLatency(await correctionLinksOfRows([oldEntry]));
     expect(report.count).toBe(0);
     expect(report.pairs).toEqual([]);
   });
 
-  it('computes p50/p95/max across multiple extraction-driven corrections', () => {
+  it('computes p50/p95/max across multiple extraction-driven corrections', async () => {
     const entries: MemoryEntry[] = [];
     const baseRaw = '2026-04-01T00:00:00.000Z';
     const lagsMin = [5, 10, 15, 20, 25, 30, 60, 120, 300, 600];
@@ -459,7 +459,7 @@ describe('Company Brain correction-latency scorecard', () => {
       entries.push(raw, oldFact, newFact);
     });
 
-    const report = buildCorrectionLatency(correctionLinksOf(entries));
+    const report = buildCorrectionLatency(await correctionLinksOfRows(entries));
 
     expect(report.extractionCount).toBe(10);
     expect(report.maxMs).toBe(600 * 60 * 1000);

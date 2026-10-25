@@ -1,18 +1,17 @@
-// The prediction kind of Objects answers alike on hippo.db and on a store held in memory: the same rows, the same order, the same errors and the same audit rows.
+// The prediction kind of Objects answers: the same rows, the same order, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { auditHighId } from '../_helpers/root-forms.js';
 import type { PredictionClose, PredictionListQuery, PredictionSave } from '../../src/base/ports/store.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import type { AuditEvent, PredictionBaserate } from '../../src/base/ports/store/types.js';
 import type { Prediction, SavePredictionOptions } from '../../src/base/ports/store/objects.js';
@@ -46,9 +45,7 @@ let baseline: Side;
 let nextAuditId: number;
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'objects', calls);
-  expectSameOutcomes(sides);
-  return sides.sqlite;
+  return runOnFixture(fixture, 'objects', calls);
 }
 
 /** Built once per call list, so both stores are handed the same mirror id. */

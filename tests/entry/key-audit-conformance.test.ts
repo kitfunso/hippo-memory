@@ -1,15 +1,14 @@
-// KeyWrites' revoke answers alike on hippo.db and on a store held in memory: the same values, the same errors and the same audit rows.
+// KeyWrites' revoke answers: the same values, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
   FIXTURE_REVOKED_AT,
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { auditHighId } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -29,9 +28,7 @@ let baseline: Side;
 
 /** Runs the calls on both stores, asserts they agree, and returns hippo.db's side. */
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'keyWrites', calls);
-  expectSameOutcomes(sides);
-  return sides.sqlite;
+  return runOnFixture(fixture, 'keyWrites', calls);
 }
 
 const revoke =

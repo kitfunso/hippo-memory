@@ -1,4 +1,4 @@
-// ContextReads answers alike on hippo.db and on a store held in memory: the same values, the same errors, no audit row.
+// ContextReads answers: the same values, the same errors, no audit row.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { auditRowsOn } from '../_helpers/audit-rows.js';
@@ -15,14 +15,13 @@ import type {
 import { CONTEXT_NOW, OWN_SCOPE, OWNER, PROJECT, seedContextRows } from '../_helpers/context-fixture.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type Outcome,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -41,14 +40,13 @@ async function conformsOn<G extends 'contextReads' | 'sessions'>(
   named: readonly (readonly [string, GroupCall<G, unknown>])[],
   on = fixture,
 ): Promise<Map<string, Outcome<unknown>>> {
-  const sides = await onBothStores(
+  const sqlite = await runOnFixture(
     on,
     group,
     named.map(([, call]) => call),
   );
-  expectSameOutcomes(sides);
-  if (on === fixture) expect(sides.sqlite.audit).toEqual(fixtureAudit);
-  return new Map(named.map(([name], i) => [name, sides.sqlite.outcomes[i]]));
+  if (on === fixture) expect(sqlite.audit).toEqual(fixtureAudit);
+  return new Map(named.map(([name], i) => [name, sqlite.outcomes[i]]));
 }
 
 const conforms = (named: readonly Named[], on = fixture): Promise<Map<string, Outcome<unknown>>> =>

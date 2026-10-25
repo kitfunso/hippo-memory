@@ -5,7 +5,7 @@ import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 import { readyProbeFor } from '../../src/surface/server/ready.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -43,7 +43,7 @@ function inlineCheckpointPages(root: string): number {
   }
 }
 
-describe('hippo serve store connection', () => {
+describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
   it('keeps the WAL between requests while running, and releases the store on stop', async () => {
     const root = makeRoot('srv-conn');
     dirs.push(root);
@@ -144,20 +144,23 @@ describe('GET /ready', () => {
     return { status: res.status, body: await res.text() };
   }
 
-  it('answers 200 once the served store answers a read, and never creates a store to find out', async () => {
-    const root = makeRoot('srv-ready', { init: false });
-    dirs.push(root);
-    const handle = await serve({ hippoRoot: root, port: 0 });
-    try {
-      expect(await ready(handle)).toEqual({ status: 200, body: '{"ok":true}' });
-      expect(existsSync(join(root, 'hippo.db'))).toBe(false);
-      expect(await post(handle, 'the staging queue drains at midnight')).toBe(200);
-      expect(await ready(handle)).toEqual({ status: 200, body: '{"ok":true}' });
-      expect((await ready(handle, 'POST')).status).toBe(404);
-    } finally {
-      await handle.stop();
-    }
-  });
+  it.skipIf(needsHippoDb('db'))(
+    'answers 200 once the served store answers a read, and never creates a store to find out',
+    async () => {
+      const root = makeRoot('srv-ready', { init: false });
+      dirs.push(root);
+      const handle = await serve({ hippoRoot: root, port: 0 });
+      try {
+        expect(await ready(handle)).toEqual({ status: 200, body: '{"ok":true}' });
+        expect(existsSync(join(root, 'hippo.db'))).toBe(false);
+        expect(await post(handle, 'the staging queue drains at midnight')).toBe(200);
+        expect(await ready(handle)).toEqual({ status: 200, body: '{"ok":true}' });
+        expect((await ready(handle, 'POST')).status).toBe(404);
+      } finally {
+        await handle.stop();
+      }
+    },
+  );
 
   it('runs one store read for any number of calls in the window, and a broken store flips the answer after it', async () => {
     const root = makeRoot('srv-ready-window');
@@ -206,23 +209,26 @@ describe('GET /ready', () => {
     }
   });
 
-  it('answers 503 store_unavailable and warns with the error class when hippo.db is not a database, while /health stays 200', async () => {
-    const root = makeRoot('srv-ready-broken', { init: false });
-    dirs.push(root);
-    writeFileSync(join(root, 'hippo.db'), 'this file is not a database. '.repeat(400));
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const handle = await serve({ hippoRoot: root, port: 0 });
-    try {
-      expect(await ready(handle)).toEqual({ status: 503, body: '{"ok":false,"error":"store_unavailable"}' });
-      const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('GET /ready'));
-      expect(warned).toHaveLength(1);
-      expect(warned[0]).toMatch(
-        /^\[hippo\] warn: GET \/ready: the store did not answer: .* ts=\S+ requestId=\S+ errorClass=\w+ stack=\S/,
-      );
-      expect((await fetch(`${handle.url}/health`)).status).toBe(200);
-    } finally {
-      stderrSpy.mockRestore();
-      await handle.stop();
-    }
-  });
+  it.skipIf(needsHippoDb('db'))(
+    'answers 503 store_unavailable and warns with the error class when hippo.db is not a database, while /health stays 200',
+    async () => {
+      const root = makeRoot('srv-ready-broken', { init: false });
+      dirs.push(root);
+      writeFileSync(join(root, 'hippo.db'), 'this file is not a database. '.repeat(400));
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const handle = await serve({ hippoRoot: root, port: 0 });
+      try {
+        expect(await ready(handle)).toEqual({ status: 503, body: '{"ok":false,"error":"store_unavailable"}' });
+        const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('GET /ready'));
+        expect(warned).toHaveLength(1);
+        expect(warned[0]).toMatch(
+          /^\[hippo\] warn: GET \/ready: the store did not answer: .* ts=\S+ requestId=\S+ errorClass=\w+ stack=\S/,
+        );
+        expect((await fetch(`${handle.url}/health`)).status).toBe(200);
+      } finally {
+        stderrSpy.mockRestore();
+        await handle.stop();
+      }
+    },
+  );
 });

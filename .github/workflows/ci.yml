@@ -217,9 +217,10 @@ jobs:
       - name: Open-core line
         run: node scripts/check-open-core.mjs
 
-  # The HTTP server and MCP suites again with serve() on memoryStore, the second store adapter, so the port holds
-  # for a store that is not hippo.db. A test that needs hippo.db's folder skips with its reason (tests/_helpers/store-switch.ts).
-  memory-store:
+  # The HTTP server and MCP suites again with serve() on hippo.db's store through the port alone, under a kind that is
+  # not 'sqlite', so the port holds for a store that is not hippo.db. A test that needs hippo.db's folder skips with its
+  # reason (tests/_helpers/store-switch.ts).
+  port-only:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -230,10 +231,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: Server and MCP suites on memoryStore
+      - name: Server and MCP suites on a port-only store
         run: npx vitest run --project server tests/server tests/mcp
         env:
-          HIPPO_TEST_STORE: memory
+          HIPPO_TEST_STORE: port-only
 
   # Tier-1 micro-eval (benchmarks/micro). Its ranking fixtures are calibrated
   # with the local embedding backend present, so this job installs it without

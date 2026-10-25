@@ -17,7 +17,8 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { OTHER_STORE_MARKER, type HippoStore } from '../../src/entry/store-kit.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { type MemorySide, memorySide } from '../_helpers/memory-side.js';
+import { portOnlyStore } from '../_helpers/port-only-store.js';
+import { sqliteConnectorEventsSide, type ConnectorEventsSide } from '../_helpers/connector-sides.js';
 import { testInfra } from '../_helpers/infra.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
@@ -40,7 +41,7 @@ function copyOf(): string {
 function markedFolder(): string {
   const root = join(home, `marked-${String(++n)}`);
   mkdirSync(root);
-  writeFileSync(join(root, OTHER_STORE_MARKER), 'in-memory\n');
+  writeFileSync(join(root, OTHER_STORE_MARKER), 'port-only\n');
   return root;
 }
 
@@ -61,13 +62,13 @@ async function copyWithRoutes(): Promise<string> {
   return root;
 }
 
-const slackRows = (memory: MemorySide) =>
-  memory
+const slackRows = (side: ConnectorEventsSide) =>
+  side
     .events()
     .filter((e) => e.connector === 'slack')
     .map((e) => [e.eventKey, e.memoryId]);
-const githubRows = (memory: MemorySide) =>
-  memory
+const githubRows = (side: ConnectorEventsSide) =>
+  side
     .events()
     .filter((e) => e.connector === 'github')
     .map((e) => [e.deliveryId, e.eventName, e.memoryId])
@@ -95,11 +96,12 @@ describe('the connector entry points on a store with connectorEvents', () => {
 
   it('ingest, redelivery, empty body, deletion and unknown deletion answer from the store with hippo.db blocked and none created in hippoRoot', async () => {
     const hippoRoot = markedFolder();
-    const memory = memorySide(copyOf());
+    const served = copyOf();
+    const side = sqliteConnectorEventsSide(served, portOnlyStore(served));
     const slack: Context = {
       tenantId: TENANT_A,
       actor: slackActor,
-      store: memory.store,
+      store: side.store,
       config: loadConfig(hippoRoot),
       infra: testInfra(),
     };
@@ -135,7 +137,7 @@ describe('the connector entry points on a store with connectorEvents', () => {
         eventName: 'issue_comment',
       });
 
-    const ids = await withSqliteBlocked('in-memory', async () => {
+    const ids = await withSqliteBlocked('port-only', async () => {
       const stored = await message('Ev_message', 'the release is frozen until friday', '1700.000001');
       expect(stored).toEqual({ status: 'ingested', memoryId: expect.any(String) });
       expect(await message('Ev_message', 'the release is frozen until friday', '1700.000001')).toEqual({
@@ -147,7 +149,7 @@ describe('the connector entry points on a store with connectorEvents', () => {
       const noted = await comment('d-1');
       expect(noted).toEqual({ status: 'ingested', memoryId: expect.any(String) });
       expect(await comment('d-2')).toEqual({ status: 'duplicate', memoryId: noted.memoryId });
-      const held = await memory.store.entriesByIds([stored.memoryId ?? '', noted.memoryId ?? ''], TENANT_A);
+      const held = await side.store.entriesByIds([stored.memoryId ?? '', noted.memoryId ?? ''], TENANT_A);
       expect(new Map(held.map((r) => [r.id, [r.kind, r.artifactRef]]))).toEqual(
         new Map([
           [stored.memoryId, ['raw', MESSAGE_REF]],
@@ -161,23 +163,23 @@ describe('the connector entry points on a store with connectorEvents', () => {
       expect(await deleted('Ev_unknown', '1700.999999')).toEqual({ status: 'duplicate', memoryId: null });
       expect(await commentDeleted('d-3')).toEqual({ status: 'archived', archivedCount: 1 });
       expect(await commentDeleted('d-4')).toEqual({ status: 'duplicate', archivedCount: 0 });
-      expect(await memory.store.entriesByIds([stored.memoryId ?? '', noted.memoryId ?? ''], TENANT_A)).toEqual([]);
+      expect(await side.store.entriesByIds([stored.memoryId ?? '', noted.memoryId ?? ''], TENANT_A)).toEqual([]);
       return { message: stored.memoryId, comment: noted.memoryId };
     });
 
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
-    expect(slackRows(memory)).toEqual([
+    expect(slackRows(side)).toEqual([
       ['Ev_deleted', ids.message],
       ['Ev_empty', null],
       ['Ev_message', ids.message],
       ['Ev_unknown', null],
     ]);
-    expect(githubRows(memory)).toEqual([
+    expect(githubRows(side)).toEqual([
       ['d-1', 'issue_comment', ids.comment],
       ['d-3', 'issue_comment', ids.comment],
     ]);
     expect(
-      memory
+      side
         .auditRows()
         .filter((r) => r.ts === NOW)
         .map((r) => [r.op, r.targetId, r.actor, r.tenantId]),
@@ -187,7 +189,7 @@ describe('the connector entry points on a store with connectorEvents', () => {
       ['archive_raw', ids.message, 'connector:slack', TENANT_A],
       ['archive_raw', ids.comment, 'connector:github', TENANT_A],
     ]);
-    expect(memory.letters()).toEqual([]);
+    expect(side.letters()).toEqual([]);
   });
 });
 
@@ -195,7 +197,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
   // Generated per run, so no signing secret is ever written down.
   const secrets = { slack: randomBytes(24).toString('hex'), github: randomBytes(24).toString('hex') };
   const handles: ServerHandle[] = [];
-  let memory: MemorySide;
+  let side: ConnectorEventsSide;
   let served: { readonly root: string; readonly url: string };
   let baseline: number;
 
@@ -269,14 +271,14 @@ describe('both webhooks under a store that is not hippo.db', () => {
     },
   });
   const added = () =>
-    memory
+    side
       .auditRows()
       .slice(baseline)
       .map((r) => [r.op, r.targetId, r.actor, r.tenantId]);
   const rows = () => ({
-    slack: slackRows(memory),
-    github: githubRows(memory),
-    letters: memory.letters().length,
+    slack: slackRows(side),
+    github: githubRows(side),
+    letters: side.letters().length,
     audit: added().length,
   });
 
@@ -284,9 +286,10 @@ describe('both webhooks under a store that is not hippo.db', () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('SLACK_SIGNING_SECRET', secrets.slack);
     vi.stubEnv('GITHUB_WEBHOOK_SECRET', secrets.github);
-    memory = memorySide(await copyWithRoutes());
-    served = await serveOn(memory.store);
-    baseline = memory.auditRows().length;
+    const folder = await copyWithRoutes();
+    side = sqliteConnectorEventsSide(folder, portOnlyStore(folder));
+    served = await serveOn(side.store);
+    baseline = side.auditRows().length;
   });
 
   afterAll(async () => {
@@ -321,11 +324,11 @@ describe('both webhooks under a store that is not hippo.db', () => {
       body: { ok: true, status: 'archived', archivedCount: 1 },
     });
 
-    expect(slackRows(memory)).toEqual([
+    expect(slackRows(side)).toEqual([
       ['Ev_deleted', memoryId],
       ['Ev_message', memoryId],
     ]);
-    expect(githubRows(memory)).toEqual([
+    expect(githubRows(side)).toEqual([
       ['d-1', 'issue_comment', commentId],
       ['d-2', 'issue_comment', commentId],
     ]);
@@ -335,7 +338,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
       ['remember', commentId, 'connector:github', TENANT_A],
       ['archive_raw', commentId, 'connector:github', TENANT_A],
     ]);
-    expect(memory.letters()).toMatchObject([
+    expect(side.letters()).toMatchObject([
       {
         connector: 'slack',
         id: 1,

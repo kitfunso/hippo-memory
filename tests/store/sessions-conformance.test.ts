@@ -1,4 +1,4 @@
-// Sessions answers alike on hippo.db and on a store held in memory: snapshots and handoffs under continuity keys,
+// Sessions answers: snapshots and handoffs under continuity keys,
 // events, the session-end handoff, working memory and the session-owner binding.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -6,13 +6,12 @@ import type { SessionHandoff } from '../../src/base/session/handoff.js';
 import type { SnapshotInput } from '../../src/base/ports/store/sessions.js';
 import type { ContinuityKey } from '../../src/base/ports/store/types.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -41,9 +40,8 @@ async function conforms(calls: readonly GroupCall<'sessions', unknown>[]) {
     vi.setSystemTime(START + i * 1000);
     return call(group, store);
   });
-  const sides = await onBothStores(fixture, 'sessions', timed);
-  expectSameOutcomes(sides);
-  return sides.sqlite.outcomes;
+  const sqlite = await runOnFixture(fixture, 'sessions', timed);
+  return sqlite.outcomes;
 }
 
 const snap = (task: string, session: string | null, over: Partial<SnapshotInput> = {}): SnapshotInput => ({

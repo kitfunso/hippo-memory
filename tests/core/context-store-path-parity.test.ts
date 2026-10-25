@@ -1,4 +1,4 @@
-// contextGet on hippo.db returns and records what each case lists; on a store held in memory it answers the same through
+// contextGet on hippo.db returns and records what each case lists; on a port-only store it answers the same through
 // the store, with hippo.db blocked.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -31,8 +31,7 @@ import { contextReach } from '../../src/api/types.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { testInfra } from '../_helpers/infra.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-import { type MemorySide, memorySide } from '../_helpers/memory-side.js';
-import { memoryContextRowsOf } from '../_helpers/memory-recall-rows.js';
+import { type PortOnlySide, portOnlySide } from '../_helpers/port-only-store.js';
 
 oneRequestPerTest();
 
@@ -64,7 +63,7 @@ interface Case {
   readonly physicsOn?: true;
   /** Shows the case reached the branch it names, on the hippo.db pass that reads the global store too. */
   readonly reaches?: (pass: Pass) => void;
-  /** Reads the in-memory store must have answered, so the case cannot pass on hippo.db's copy. */
+  /** Reads the port-only store must have answered, so the case cannot pass on hippo.db's copy. */
   readonly storeReads?: readonly string[];
 }
 
@@ -355,7 +354,7 @@ interface PassConfig {
 async function runPass(
   c: Omit<Case, 'name' | 'expected'>,
   { withGlobal, embedded, prepare }: PassOptions,
-  makeSide?: (root: string) => MemorySide,
+  makeSide?: (root: string) => PortOnlySide,
 ): Promise<Pass> {
   const home = makeRoot('context-parity', { init: false });
   const root = join(home, 'store');
@@ -367,7 +366,7 @@ async function runPass(
   if (embedded) config.embeddings = { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url };
   if (c.physicsOff) config.physics = { enabled: false };
   else if (c.physicsOn && embedded) config.physics = { enabled: true };
-  // The store's own flag, which the hippo.db reach and an in-memory store's ctx.config both read.
+  // The store's own flag, which the hippo.db reach and a port-only store's ctx.config both read.
   if (c.shared) config.sharedStore = true;
   if (Object.keys(config).length > 0) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
   prepare?.(root, globalRoot);
@@ -397,7 +396,7 @@ async function runPass(
   return {
     result,
     rows: {
-      local: side ? memoryContextRowsOf(side.tables) : contextRowsOf(root),
+      local: contextRowsOf(root),
       global: withGlobal ? contextRowsOf(globalRoot) : null,
     },
     lastRecall: lastRecallMeta(root),
@@ -481,21 +480,19 @@ describe('the recall contextGet records on hippo.db', () => {
   });
 });
 
-describe('contextGet on a store held in memory, with hippo.db blocked', () => {
+describe('contextGet on a port-only store, with hippo.db blocked', () => {
   it.each(CASES.map((c) => [c.name, c] as const))('%s', async (_name, c) => {
     const onHippoDb = await runPass(c, { withGlobal: false, embedded: true });
     const before = embeddings.requests();
-    let memory: MemorySide | undefined;
+    let port: PortOnlySide | undefined;
     // The operator's global store sits under HIPPO_HOME here, and a store other than hippo.db must neither read nor write it.
-    const inMemory = await runPass(c, { withGlobal: true, embedded: true }, (root) => (memory = memorySide(root)));
-    expect(rounded(inMemory.result)).toEqual(rounded(onHippoDb.result));
-    expect(inMemory.rows.local).toEqual(onHippoDb.rows.local);
-    expect(inMemory.rows.global).toEqual(globalRows);
-    // stats.json is hippo.db's folder mirror; the counters themselves are in rows.local.stats.
-    expect(inMemory.stats).toBeNull();
+    const onPort = await runPass(c, { withGlobal: true, embedded: true }, (root) => (port = portOnlySide(root)));
+    expect(rounded(onPort.result)).toEqual(rounded(onHippoDb.result));
+    expect(onPort.rows.local).toEqual(onHippoDb.rows.local);
+    expect(onPort.rows.global).toEqual(globalRows);
     // The last-recall ids feed only POST /v1/outcome, which no other store serves, so the store path leaves them as seeded.
-    expect(inMemory.lastRecall).toEqual(seededLastRecall);
-    expect(memory?.calls).toEqual(expect.arrayContaining([...(c.storeReads ?? [])]));
+    expect(onPort.lastRecall).toEqual(seededLastRecall);
+    expect(port?.calls).toEqual(expect.arrayContaining([...(c.storeReads ?? [])]));
     if (c.storeReads?.includes('stored:particles') || c.storeReads?.includes('nearestEntries')) {
       expect(embeddings.requests()).toBeGreaterThan(before);
     }

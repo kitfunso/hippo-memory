@@ -1,4 +1,4 @@
-// Cards and Goals answer alike on hippo.db and on a store held in memory: the card board's moves, leases, runs and
+// Cards and Goals answer: the card board's moves, leases, runs and
 // promotions, and the goal stack's depth cap and the strength a completed goal passes on.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -10,14 +10,13 @@ import { keysetPages } from '../../src/api/pages.js';
 import type { PushGoalOpts } from '../../src/base/ports/store/goals.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type Outcome,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -73,9 +72,8 @@ async function conforms<G extends 'cards' | 'goals'>(group: G, calls: readonly G
     vi.setSystemTime(START + i * 1000);
     return namedCall(call, methods, store);
   });
-  const sides = await onBothStores(fixture, group, timed);
-  expectSameOutcomes(sides);
-  return sides.sqlite.outcomes;
+  const sqlite = await runOnFixture(fixture, group, timed);
+  return sqlite.outcomes;
 }
 
 describe('Cards', () => {

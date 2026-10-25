@@ -43,8 +43,8 @@ export function authHeaders(key: CreateApiKeyResult = apiKey) {
 }
 
 export async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: every response here comes from a typed-object route under test, whose envelope is { <field>: row } or
-  // { <listField>: row[] }; the assertions after each call pin the fields read.
+  // SAFETY: every response here comes from a route under test, and each call site's T names the JSON envelope that
+  // route sends; the assertions after each call pin the fields read.
   return (await res.json()) as T;
 }
 

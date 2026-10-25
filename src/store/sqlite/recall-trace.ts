@@ -6,16 +6,25 @@
 import { getMeta, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import type { OnHandle } from './open.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
-import { DELIVERY_LEDGER_VERSION, isBoundaryEvent } from '../../base/session/delivery.js';
-import type { DeliveryEventInput } from '../../base/session/delivery.js';
+import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from '../../base/session/delivery.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { blockHash } from '../../base/util/token-text.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import { deliveryCutoff } from '../rules/recall-traces.js';
 import { parseLastTraceId } from './rows.js';
+import { DAY_MS } from '../../base/util/time.js';
+
+// How long the delivery ledger and the recall traces stay, once for both adapters.
+
+/** Delivery events, and recall traces with no outcome that are not the store's last recall, are kept this long. */
+const RETENTION_DAYS = 90;
+
+/** The stamp a prune deletes rows before, counted back from the write's `ts` capped at the real clock, so a far-future
+ * fake time spares real rows. */
+const deliveryCutoff = (ts: string, nowMs: number): string =>
+  new Date(Math.min(Date.parse(ts), nowMs) - RETENTION_DAYS * DAY_MS).toISOString();
 
 /** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the CLI goal-boost step
  * embeds goal tag text) and would leak user content into `rerank_json`; an allowlist, so any future free-form field is

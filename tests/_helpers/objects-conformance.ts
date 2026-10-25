@@ -16,14 +16,13 @@ import type {
 } from '../../src/base/records/object-types.js';
 import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectSave } from '../../src/base/ports/store.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
@@ -158,9 +157,7 @@ let baseline: Side;
 let nextAuditId: number;
 
 export async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'objects', calls);
-  expectSameOutcomes(sides);
-  return sides.sqlite;
+  return runOnFixture(fixture, 'objects', calls);
 }
 
 /** One save, built once per call list so both stores are handed the same mirror id. */

@@ -1,21 +1,18 @@
 // hippo.db's Cards group: the agent work board.
 import { generateId } from '../../base/memory/memory.js';
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
-import { SessionHandoff, rowToSessionHandoff, HandoffOutcome } from '../../base/session/handoff.js';
-import { Card, CardStatus, CardRun, CardComment, assertCardTransition } from '../../base/records/card.js';
+import { SessionHandoff, rowToSessionHandoff, HandoffOutcome, isHandoffOutcome } from '../../base/session/handoff.js';
+import {
+  Card,
+  CardStatus,
+  CardRun,
+  CardComment,
+  assertCardTransition,
+  CARD_LEASE_MS,
+} from '../../base/records/card.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { chunked } from '../../base/util/chunked.js';
 import { HANDOFF_COLUMNS, type SessionHandoffDbRow } from './handoffs.js';
-import {
-  assertCardCreate,
-  assertCardOutcome,
-  assertFilled,
-  assertRunId,
-  isLiveRun,
-  leaseUntilFrom,
-  unknownCard,
-  unknownParentCard,
-} from '../rules/cards.js';
 import { placeholders } from '../../db/sql.js';
 import type { CardDetail, CardCreate, CardListQuery, CardPage, Cards } from '../../base/ports/store/cards.js';
 import { keysetPage } from '../../base/util/keyset.js';
@@ -23,6 +20,46 @@ import type { OnHandle } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+
+// The card board's argument checks, run lookup and lease, once for both adapters, so a bad call fails with the same
+// message under either store.
+
+/** The lease a move to running or a heartbeat at `now` sets. */
+const leaseUntilFrom = (now: string): string => new Date(Date.parse(now) + CARD_LEASE_MS).toISOString();
+
+const unknownCard = (id: string): Error => new Error(`unknown card id: ${id}`);
+
+const unknownParentCard = (id: string): Error => new Error(`unknown parent card id: ${id}`);
+
+/** Throws when the text argument `field` is blank. */
+function assertFilled(field: 'title' | 'runtime' | 'reason' | 'body', value: string): void {
+  if (value.trim() === '') throw new Error(`${field} must not be empty`);
+}
+
+function assertCardCreate(input: CardCreate): void {
+  assertFilled('title', input.title);
+  if (input.budget !== undefined && !(Number.isSafeInteger(input.budget) && input.budget > 0)) {
+    throw new Error(`Invalid budget: ${input.budget} (expected a positive integer)`);
+  }
+}
+
+function assertRunId(runId: number): void {
+  if (!Number.isSafeInteger(runId) || runId <= 0) {
+    throw new Error(`Invalid run id: ${runId} (expected a positive integer)`);
+  }
+}
+
+/** Throws on an outcome a caller outside TypeScript sent that is none of the handoff outcomes. */
+function assertCardOutcome(outcome: HandoffOutcome): void {
+  if (!isHandoffOutcome(outcome)) throw new Error(`invalid card outcome: ${String(outcome)}`);
+}
+
+/** Whether `runId` is the card's run that has not ended. A second such run means a corrupt store, so this throws
+ * rather than guess which run the caller means. */
+function isLiveRun(cardId: string, liveRunIds: readonly number[], runId: number): boolean {
+  if (liveRunIds.length > 1) throw new Error(`card ${cardId} has ${liveRunIds.length} runs that have not ended`);
+  return liveRunIds[0] === runId;
+}
 
 // SAFETY: every read cast to this row selects CARD_COLUMNS; scripts/check-row-casts.mjs proves it.
 // The status column only ever holds a CardStatus value.

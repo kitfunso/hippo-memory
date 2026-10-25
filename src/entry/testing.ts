@@ -12,9 +12,6 @@ export { ambientSecretAdmit } from '../base/scope/read-admission.js';
 export { initStore, loadAllEntries, loadEmbeddingIndex, writeEntry } from '../surface/testing-kit.js';
 export type { WriteEntryOptions } from '../surface/testing-kit.js';
 export { embedMemory, loadRecallSearchEntries } from './folder-search.js';
-// A second adapter of every required store group, held in memory, so an add-on's tests can run without a folder.
-export { memoryStore } from '../store/memory/store.js';
-export type { MemoryTables } from '../store/memory/tables.js';
 // Frozen eval scripts read and write the snake_case keys; a re-pointed import line takes these forms.
 export type { MemoryWire } from '../base/memory/memory-wire.js';
 export {

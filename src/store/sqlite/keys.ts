@@ -1,5 +1,4 @@
 // hippo.db's KeyWrites group: every key write with its audit rows, and the key list.
-import { assertGrantable, ownedKey } from '../rules/keys.js';
 import { appendAuditEvents } from './audit.js';
 import { grantScope, insertApiKey, listApiKeyRows, listLiveOwnedKeyIds, revokeApiKey, ungrantScope } from './auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
@@ -16,6 +15,20 @@ import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { readApiKeyOwner } from './tenant-lookup.js';
 import type { AppendAuditOpts } from '../../base/ports/store/types.js';
+import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
+
+// A key write's checks, once for both adapters: an unknown key and another tenant's key fail alike, so a caller learns
+// nothing about keys it does not own, and a grant on a revoked key is refused since it would never apply.
+
+/** `key` when the tenant owns it; NotFoundError otherwise. */
+function ownedKey<K extends { readonly tenantId: string }>(key: K | undefined, tenantId: string, keyId: string) {
+  if (!key || key.tenantId !== tenantId) throw new NotFoundError(`Unknown key_id: ${keyId}`);
+  return key;
+}
+
+function assertGrantable({ op, keyId }: Pick<ScopeGrantChange, 'op' | 'keyId'>, revokedAt: string | null): void {
+  if (op === 'auth_grant' && revokedAt) throw new ConflictError(`${keyId} is revoked; a grant on it would never apply`);
+}
 
 /** The auth_create row a mint writes; the plaintext never reaches it. */
 function createAuditOf({ key, actor, metadata }: KeyMint): AppendAuditOpts {

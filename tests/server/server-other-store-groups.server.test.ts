@@ -1,37 +1,25 @@
-// serve() under a store that has the predictions, quarantine or graphReads group runs those routes on it and writes nothing to hippo.db.
+// serve() under a store that has the predictions, quarantine or graphReads group runs those routes on it.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
-import { type MemorySide, memorySide } from '../_helpers/memory-side.js';
+import { type PortOnlySide, portOnlySide } from '../_helpers/port-only-store.js';
 import { seedGraphRows, type SeededGraph } from '../_helpers/graph-reads-seed.js';
 import { HELD, heldAt, heldContent, seedQuarantineRecords } from '../_helpers/quarantine-seed.js';
 
 describe('serve() under a store that has the predictions group', () => {
   let fixture: TwoTenantFixture;
-  let memory: MemorySide;
+  let side: PortOnlySide;
   let handle: ServerHandle;
-
-  const hippoDbRows = () => {
-    const db = openHippoDb(fixture.dir);
-    try {
-      // SAFETY: each SELECT names the one column n.
-      const count = (table: string): number =>
-        (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
-      return { predictions: count('predictions'), memories: count('memories'), audit: count('audit_log') };
-    } finally {
-      closeHippoDb(db);
-    }
-  };
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
-    memory = memorySide(fixture.dir);
-    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memory.store });
+    side = portOnlySide(fixture.dir);
+    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: side.store });
   });
 
   afterAll(async () => {
@@ -40,8 +28,7 @@ describe('serve() under a store that has the predictions group', () => {
     rmSync(fixture.dir, { recursive: true, force: true });
   });
 
-  it("runs the five predictions routes on that store, inside the caller's tenant, and writes nothing to hippo.db", async () => {
-    const before = hippoDbRows();
+  it("runs the five predictions routes on that store, inside the caller's tenant", async () => {
     const call = async (
       token: string,
       method: string,
@@ -88,7 +75,7 @@ describe('serve() under a store that has the predictions group', () => {
     expect((await call(memberB, 'POST', '/v1/predictions/1/close', '{"state":"closed","actual":3}')).status).toBe(404);
     const actor = `api_key:${fixture.keys.memberA}`;
     expect(
-      memory
+      side
         .auditRows()
         .slice(-4)
         .map((e) => [e.op, e.actor, e.tenantId]),
@@ -98,39 +85,22 @@ describe('serve() under a store that has the predictions group', () => {
       ['predict_close', actor, TENANT_A],
       ['predict_baserate', actor, TENANT_A],
     ]);
-    expect(hippoDbRows()).toEqual(before);
   });
 });
 
 describe('serve() under a store that has the quarantine group', () => {
   let fixture: TwoTenantFixture;
-  let memory: MemorySide;
+  let side: PortOnlySide;
   let handle: ServerHandle;
   let adminB: string;
-
-  const hippoDbRows = () => {
-    const db = openHippoDb(fixture.dir);
-    try {
-      // SAFETY: each SELECT names exactly the columns of the type it is read as.
-      const records = db
-        .prepare('SELECT tenant_id, memory_id, status, decided_at FROM memory_quarantine ORDER BY tenant_id, memory_id')
-        .all() as object[];
-      // SAFETY: as above.
-      const scopes = db.prepare('SELECT id, scope FROM memories ORDER BY id').all() as object[];
-      // SAFETY: the SELECT names the one column n.
-      return { records, scopes, audit: (db.prepare('SELECT COUNT(*) AS n FROM audit_log').get() as { n: number }).n };
-    } finally {
-      closeHippoDb(db);
-    }
-  };
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
     adminB = seedQuarantineRecords(fixture.dir);
-    memory = memorySide(fixture.dir);
-    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memory.store });
+    side = portOnlySide(fixture.dir);
+    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: side.store });
   });
 
   afterAll(async () => {
@@ -139,8 +109,7 @@ describe('serve() under a store that has the quarantine group', () => {
     rmSync(fixture.dir, { recursive: true, force: true });
   });
 
-  it("runs the three quarantine routes on that store, inside the caller's tenant, and writes nothing to hippo.db", async () => {
-    const before = hippoDbRows();
+  it("runs the three quarantine routes on that store, inside the caller's tenant", async () => {
     const call = async (token: string, method: string, path: string): Promise<{ status: number; body: unknown }> => {
       const res = await fetch(`${handle.url}${path}`, { method, headers: { authorization: `Bearer ${token}` } });
       return { status: res.status, body: await res.json() };
@@ -216,7 +185,7 @@ describe('serve() under a store that has the quarantine group', () => {
     });
     const actor = `api_key:${fixture.keys.adminA}`;
     expect(
-      memory
+      side
         .auditRows()
         .slice(-2)
         .map((e) => [e.op, e.actor, e.tenantId, e.targetId]),
@@ -224,7 +193,6 @@ describe('serve() under a store that has the quarantine group', () => {
       ['quarantine_approve', actor, TENANT_A, HELD.a1],
       ['quarantine_reject', actor, TENANT_A, HELD.a2],
     ]);
-    expect(hippoDbRows()).toEqual(before);
   });
 });
 
@@ -255,7 +223,7 @@ describe('serve() under a store that has the graphReads group', () => {
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
     graph = await seedGraphRows(fixture.dir);
-    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memorySide(fixture.dir).store });
+    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: portOnlySide(fixture.dir).store });
   });
 
   afterAll(async () => {

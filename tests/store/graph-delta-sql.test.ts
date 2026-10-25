@@ -16,7 +16,6 @@ import type {
 } from '../../src/base/ports/store/graph.js';
 import {
   diffGraph,
-  memoryIdsOf,
   type StoredEntity,
   type StoredGraph,
   type StoredRelation,
@@ -109,6 +108,12 @@ function seedGraph(
   }));
   // Exact copies, so a key can hold two edges that both match the wanted one in full.
   for (const edge of [...edges, ...edges.filter(() => r() < 0.3)]) insertRelationRow(db, tenant, edge);
+}
+
+function memoryIdsOf(desired: DesiredGraph): string[] {
+  const ids = new Set<string>();
+  for (const row of [...desired.entities, ...desired.relations]) if (row.memoryId !== null) ids.add(row.memoryId);
+  return [...ids];
 }
 
 /** Every stored row of the tenant and the kind of each memory `desired` names: the read before graphDelta. */

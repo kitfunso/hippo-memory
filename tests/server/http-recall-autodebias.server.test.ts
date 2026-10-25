@@ -16,6 +16,7 @@ import type { RecallResult } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction } from '../_helpers/root-forms.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -53,13 +54,6 @@ afterEach(async () => {
   await handle.stop();
   rmSync(home, { recursive: true, force: true });
 });
-
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: T is pinned by each call site to Partial<RecallResult> (the
-  // /v1/memories response envelope defined in src/api/index.ts); every call site
-  // asserts the specific fields it reads immediately after this call.
-  return res.json() as Promise<T>;
-}
 
 describe('HTTP /v1/memories planningFallacyHint', () => {
   it.skipIf(needsHippoDb('db'))(

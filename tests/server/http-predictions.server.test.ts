@@ -21,14 +21,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction } from '../_helpers/root-forms.js';
 import type { Prediction } from '../../src/base/ports/store/objects.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-/** Parse a fetch Response body against a caller-declared shape. */
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: only used against this file's own /v1/predictions route
-  // responses, whose JSON shape is fixed by the handler in src/server.ts and
-  // checked by the assertions immediately following each call site.
-  return (await res.json()) as T;
-}
+import { jsonAs, authHeaders } from '../_helpers/http-objects-server.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -51,15 +44,11 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-function authHeaders() {
-  return { authorization: `Bearer ${apiKey.plaintext}`, 'content-type': 'application/json' };
-}
-
 describe('HTTP /v1/predictions (prediction first-class object)', () => {
   it('POST /v1/predictions creates a prediction (201 + Prediction body)', async () => {
     const res = await fetch(`${handle.url}/v1/predictions`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: authHeaders(apiKey),
       body: JSON.stringify({
         claim: 'migration takes 2 days',
         classTag: 'migration-effort',
@@ -85,12 +74,12 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
     for (const claim of ['first claim text', 'second claim text']) {
       await fetch(`${handle.url}/v1/predictions`, {
         method: 'POST',
-        headers: authHeaders(),
+        headers: authHeaders(apiKey),
         body: JSON.stringify({ claim, classTag: 'list-test', estimate: 1 }),
       });
     }
     const res = await fetch(`${handle.url}/v1/predictions?class=list-test&status=open`, {
-      headers: authHeaders(),
+      headers: authHeaders(apiKey),
     });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ predictions: Prediction[] }>(res);
@@ -109,7 +98,7 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
         estimateValue: 2,
       });
       await closePrediction(home, 'default', done.id, { closureState: 'closed', actualValue: 3 });
-      const res = await fetch(`${handle.url}/v1/predictions`, { headers: authHeaders() });
+      const res = await fetch(`${handle.url}/v1/predictions`, { headers: authHeaders(apiKey) });
       expect(res.status).toBe(200);
       const body = await jsonAs<{ predictions: Prediction[] }>(res);
       expect(body.predictions.map((p) => [p.id, p.closureState]).sort()).toEqual(
@@ -124,31 +113,31 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
   it('GET /v1/predictions/:id returns single + 404 on missing', async () => {
     const create = await fetch(`${handle.url}/v1/predictions`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: authHeaders(apiKey),
       body: JSON.stringify({ claim: 'show test claim', classTag: 'show-test' }),
     });
     const created = (await jsonAs<{ prediction: Prediction }>(create)).prediction;
 
-    const getRes = await fetch(`${handle.url}/v1/predictions/${created.id}`, { headers: authHeaders() });
+    const getRes = await fetch(`${handle.url}/v1/predictions/${created.id}`, { headers: authHeaders(apiKey) });
     expect(getRes.status).toBe(200);
     const fetched = (await jsonAs<{ prediction: Prediction }>(getRes)).prediction;
     expect(fetched.id).toBe(created.id);
 
-    const missingRes = await fetch(`${handle.url}/v1/predictions/99999`, { headers: authHeaders() });
+    const missingRes = await fetch(`${handle.url}/v1/predictions/99999`, { headers: authHeaders(apiKey) });
     expect(missingRes.status).toBe(404);
   });
 
   it('POST /v1/predictions/:id/close updates the row', async () => {
     const create = await fetch(`${handle.url}/v1/predictions`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: authHeaders(apiKey),
       body: JSON.stringify({ claim: 'close test claim', classTag: 'close-test', estimate: 1 }),
     });
     const created = (await jsonAs<{ prediction: Prediction }>(create)).prediction;
 
     const closeRes = await fetch(`${handle.url}/v1/predictions/${created.id}/close`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: authHeaders(apiKey),
       body: JSON.stringify({ state: 'closed', actual: 3, note: 'took longer' }),
     });
     expect(closeRes.status).toBe(200);
@@ -161,7 +150,7 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
 
   it('status filter validation: invalid status → 400', async () => {
     const res = await fetch(`${handle.url}/v1/predictions?class=x&status=invalid-state`, {
-      headers: authHeaders(),
+      headers: authHeaders(apiKey),
     });
     expect(res.status).toBe(400);
     const body = await jsonAs<{ error: string }>(res);
@@ -172,7 +161,7 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
     const longClaim = 'x'.repeat(5000);
     const res = await fetch(`${handle.url}/v1/predictions`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: authHeaders(apiKey),
       body: JSON.stringify({ claim: longClaim, classTag: 'x' }),
     });
     expect(res.status).toBe(400);

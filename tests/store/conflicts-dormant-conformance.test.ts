@@ -1,4 +1,4 @@
-// Conflicts and Dormant answer alike on hippo.db and on a store held in memory: conflict pages and resolutions with
+// Conflicts and Dormant answer: conflict pages and resolutions with
 // their audit rows, and dormant rows listed, restored and forgotten within reach of the caller's own scope.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -9,14 +9,13 @@ import type { ConflictResolution, ConflictRowPage, ConflictSide } from '../../sr
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
   valueAt,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { listMemoryConflicts, replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -76,7 +75,7 @@ function seedDormant(): void {
   const db = openHippoDb(fixture.dir);
   try {
     const dormant = (name: string, content: string, at: string, over: Partial<MemoryEntry> = {}) => {
-      // An origin named, since a write naming none takes the folder's project on hippo.db and null in memory.
+      // An origin named, so the row does not take the folder's project.
       const entry = { ...createMemory(content, { tenantId: TENANT_A }), originProject: 'proj', ...over };
       insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: at });
       rows[name] = entry;
@@ -114,9 +113,8 @@ async function conforms<G extends 'conflicts' | 'dormant'>(group: G, calls: read
     vi.setSystemTime(START + i * 1000);
     return stamped((await call(methods, store)) ?? null);
   });
-  const sides = await onBothStores(fixture, group, timed);
-  expectSameOutcomes(sides);
-  return sides.sqlite.outcomes;
+  const sqlite = await runOnFixture(fixture, group, timed);
+  return sqlite.outcomes;
 }
 
 const side = (name: string): ConflictSide => ({ id: rows[name]!.id, scope: rows[name]!.scope ?? null });

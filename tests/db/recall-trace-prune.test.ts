@@ -8,8 +8,6 @@ import {
   writeRecallTrace,
 } from '../../src/store/sqlite/recall-trace.js';
 import type { DeliveryEventInput } from '../../src/base/session/delivery.js';
-import { memoryStore } from '../../src/store/memory/store.js';
-import { emptyTables } from '../../src/store/memory/tables.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -216,31 +214,5 @@ describe('the delivery event prune', () => {
       .join(' | ');
     expect(plan).toMatch(/idx_delivery_events_ts/);
     expect(plan).not.toMatch(/SCAN delivery_events/);
-  });
-});
-
-describe('the memory store', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('drops traces past 90 days when it writes a trace, and keeps the rest', async () => {
-    const tables = emptyTables();
-    const store = memoryStore(tables);
-    const recallAt = async (ms: number): Promise<void> => {
-      vi.setSystemTime(ms);
-      await store.finishRecall({
-        goalLog: [],
-        audit: [],
-        trace: { tenantId: 'default', pipeline: 'context', query: 'deploy', results: [{ memoryId: 'm1', score: 1 }] },
-      });
-    };
-    vi.useFakeTimers({ toFake: ['Date'] });
-    const now = Date.now();
-    await recallAt(now - 91 * DAY_MS);
-    await recallAt(now - 89 * DAY_MS);
-    expect(tables.recallTraces.map((r) => r.id)).toEqual([1, 2]);
-    await recallAt(now);
-    expect(tables.recallTraces.map((r) => r.id)).toEqual([2, 3]);
   });
 });

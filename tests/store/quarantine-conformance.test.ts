@@ -1,4 +1,4 @@
-// Quarantine answers alike on hippo.db and on a store held in memory: the same records, the same order, the same refusals and the same audit rows.
+// Quarantine answers: the same records, the same order, the same refusals and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -13,14 +13,13 @@ import type {
   QuarantinedMemory,
 } from '../../src/base/ports/store.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
@@ -58,9 +57,7 @@ let baseline: Side;
 let nextAuditId: number;
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'quarantine', calls);
-  expectSameOutcomes(sides);
-  return sides.sqlite;
+  return runOnFixture(fixture, 'quarantine', calls);
 }
 
 /** Sets the clock inside the call, so each store reads the same time at the same step. */
@@ -165,8 +162,7 @@ beforeAll(async () => {
   fixture = seedTwoTenants();
   seedQuarantineRecords(fixture.dir);
   nextAuditId = auditHighId(fixture.dir) + 1;
-  // Unasserted here, so a store that disagrees fails the test that reads the state and not the whole file.
-  baseline = (await onBothStores(fixture, 'quarantine', STATE)).sqlite;
+  baseline = await runOnFixture(fixture, 'quarantine', STATE);
 });
 
 afterAll(() => {

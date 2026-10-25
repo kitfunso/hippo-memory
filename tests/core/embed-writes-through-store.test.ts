@@ -21,7 +21,7 @@ import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-import { memorySide } from '../_helpers/memory-side.js';
+import { portOnlySide } from '../_helpers/port-only-store.js';
 
 oneRequestPerTest();
 
@@ -72,7 +72,7 @@ function on(hippoRoot: string, store: HippoStore): EmbedTarget {
 function markedFolder(config?: ConfigFile): string {
   const root = join(home, `marked-${++n}`);
   mkdirSync(root);
-  writeFileSync(join(root, OTHER_STORE_MARKER), 'in-memory\n');
+  writeFileSync(join(root, OTHER_STORE_MARKER), 'port-only\n');
   if (config) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
   return root;
 }
@@ -137,20 +137,20 @@ afterEach(() => {
 describe('embedAll with a store', () => {
   it("embeds every tenant's memories through vectorWrites and leaves hippoRoot holding only its marker", async () => {
     const hippoRoot = markedFolder();
-    const memory = memorySide(copyOf());
+    const side = portOnlySide(copyOf());
     const run = (): Promise<number> =>
-      withSqliteBlocked(memory.store.kind, () => embedAll(on(hippoRoot, memory.store), undefined, provider('fake-a')));
+      withSqliteBlocked(side.store.kind, () => embedAll(on(hippoRoot, side.store), undefined, provider('fake-a')));
     expect(await run()).toBe(4);
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     expect(await run()).toBe(0);
-    const left = await memory.store.vectorWrites.entriesWithoutVector({
+    const left = await side.store.vectorWrites.entriesWithoutVector({
       tenantId: ALL_TENANTS,
       model: embeddingIndexIdentity('fake-a'),
       limit: 500,
     });
     expect(left.map((e) => e.content)).toEqual(['unembeddable row the provider gives up on']);
     const [a] = seeded;
-    expect(Array.from((await memory.store.vectors.stored('vectors', [a.id])).get(a.id) ?? [])).toEqual(
+    expect(Array.from((await side.store.vectors.stored('vectors', [a.id])).get(a.id) ?? [])).toEqual(
       hashedVector(`fake-a ${embeddingInputText(a)}`).map(Math.fround),
     );
   });
@@ -196,11 +196,11 @@ describe('embedAll with a store', () => {
   });
 
   it('stops with an error, keeping the other index, when another process rebuilds under its own model mid-run', async () => {
-    const memory = memorySide(copyOf());
+    const side = portOnlySide(copyOf());
     const [first] = seeded;
     const other = embeddingIndexIdentity('fake-other');
     const racing = provider('fake-a', async (texts) => {
-      await memory.store.vectorWrites.writeVectors({
+      await side.store.vectorWrites.writeVectors({
         tenantId: first.tenantId,
         model: other,
         replaceIndex: true,
@@ -208,14 +208,14 @@ describe('embedAll with a store', () => {
       });
       return vectorsFor('fake-a', texts);
     });
-    const running = withSqliteBlocked(memory.store.kind, () =>
-      embedAll(on(markedFolder(), memory.store), undefined, racing),
+    const running = withSqliteBlocked(side.store.kind, () =>
+      embedAll(on(markedFolder(), side.store), undefined, racing),
     );
     await expect(running).rejects.toThrow(
       "the vector index was built by another embedding model; run 'hippo embed' to rebuild it",
     );
-    expect(await memory.store.vectors.embeddingIndexState()).toEqual({ storedModel: other, hasVectors: true });
-    const left = await memory.store.vectors.stored(
+    expect(await side.store.vectors.embeddingIndexState()).toEqual({ storedModel: other, hasVectors: true });
+    const left = await side.store.vectors.stored(
       'vectors',
       seeded.map((e) => e.id),
     );
@@ -226,20 +226,18 @@ describe('embedAll with a store', () => {
 describe('embedMemory with a store', () => {
   it('stores the vector and a first particle through the store, opening no hippo.db', async () => {
     const hippoRoot = markedFolder(hashedConfig());
-    const memory = memorySide(copyOf());
+    const side = portOnlySide(copyOf());
     const entry = seeded[1];
-    await withSqliteBlocked(memory.store.kind, () => embedMemoryInto(on(hippoRoot, memory.store), entry));
+    await withSqliteBlocked(side.store.kind, () => embedMemoryInto(on(hippoRoot, side.store), entry));
     expect(readdirSync(hippoRoot).sort()).toEqual(['config.json', OTHER_STORE_MARKER]);
     const expected = hashedVector(embeddingInputText(entry)).map(Math.fround);
-    expect(Array.from((await memory.store.vectors.stored('vectors', [entry.id])).get(entry.id) ?? [])).toEqual(
-      expected,
-    );
-    expect((await memory.store.vectors.stored('particles', [entry.id])).get(entry.id)).toMatchObject({
+    expect(Array.from((await side.store.vectors.stored('vectors', [entry.id])).get(entry.id) ?? [])).toEqual(expected);
+    expect((await side.store.vectors.stored('particles', [entry.id])).get(entry.id)).toMatchObject({
       memoryId: entry.id,
       position: expected,
       lastSimulation: FAKE_NOW,
     });
-    expect(await memory.store.vectors.embeddingIndexState()).toEqual({ storedModel: HASHED_MODEL, hasVectors: true });
+    expect(await side.store.vectors.embeddingIndexState()).toEqual({ storedModel: HASHED_MODEL, hasVectors: true });
   });
 
   it.each([
@@ -248,21 +246,21 @@ describe('embedMemory with a store', () => {
   ])(
     "leaves every tenant's vectors to embedAll when another model built the index and $name",
     async ({ stale, asked }) => {
-      const memory = memorySide(copyOf(oldIndexed));
+      const side = portOnlySide(copyOf(oldIndexed));
       const staleVectors = {
-        ...memory.store.vectors,
+        ...side.store.vectors,
         embeddingIndexState: async () => ({ storedModel: HASHED_MODEL, hasVectors: true }),
       };
-      const store: HippoStore = stale ? { ...memory.store, vectors: staleVectors } : memory.store;
+      const store: HippoStore = stale ? { ...side.store, vectors: staleVectors } : side.store;
       const ids = seeded.map((e) => e.id);
-      const [before, requests] = [await memory.store.vectors.stored('vectors', ids), embeddings.requests()];
-      await withSqliteBlocked(memory.store.kind, () =>
+      const [before, requests] = [await side.store.vectors.stored('vectors', ids), embeddings.requests()];
+      await withSqliteBlocked(side.store.kind, () =>
         embedMemoryInto(on(markedFolder(hashedConfig()), store), seeded[0]),
       );
       expect(embeddings.requests() - requests).toBe(asked);
-      expect(await memory.store.vectors.stored('vectors', ids)).toEqual(before);
+      expect(await side.store.vectors.stored('vectors', ids)).toEqual(before);
       expect(before.size).toBe(4);
-      expect(await memory.store.vectors.embeddingIndexState()).toEqual({
+      expect(await side.store.vectors.embeddingIndexState()).toEqual({
         storedModel: embeddingIndexIdentity('fake-old'),
         hasVectors: true,
       });

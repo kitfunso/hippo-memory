@@ -1,4 +1,4 @@
-// DagReads answers alike on hippo.db and on a store held in memory, with no audit row written, and the assemble and drill
+// DagReads answers, with no audit row written, and the assemble and drill
 // routes built on it answer the same over serve() on either store.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
@@ -14,16 +14,15 @@ import type { EntryCursor } from '../../src/base/ports/store/types.js';
 import { READ_PAGE_ROWS, readAll } from '../../src/base/util/pages.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
 import {
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { memorySide } from '../_helpers/memory-side.js';
+import { portOnlyStore } from '../_helpers/port-only-store.js';
 
 const SESSION = 'sess-dag';
 const PRIVATE = 'slack:private:C1';
@@ -119,10 +118,9 @@ async function conformsOn<G extends 'dagReads' | 'reports', R>(
   group: G,
   calls: readonly GroupCall<G, R>[],
 ): Promise<R[]> {
-  const sides = await onBothStores(fixture, group, calls);
-  expectSameOutcomes(sides);
-  expect(sides.sqlite.audit).toEqual(fixtureAudit);
-  return sides.sqlite.outcomes.map((o) => {
+  const sqlite = await runOnFixture(fixture, group, calls);
+  expect(sqlite.audit).toEqual(fixtureAudit);
+  return sqlite.outcomes.map((o) => {
     if ('error' in o) throw new Error(o.error);
     return o.value;
   });
@@ -395,7 +393,7 @@ describe('assemble and drill over serve()', () => {
     vi.unstubAllEnvs();
   });
 
-  it('answer the same on hippo.db and on a store held in memory', async () => {
+  it('answer the same on hippo.db and through the port alone', async () => {
     const onHippoDb = await runServed();
     expect(onHippoDb.map((r) => r.status)).toEqual(SERVED.map(([, status]) => status));
     expect(onHippoDb[0]?.body).toMatchObject({
@@ -414,6 +412,6 @@ describe('assemble and drill over serve()', () => {
       { totalChildren: 12, truncated: true },
       { totalChildren: 1, truncated: false, children: [{ id: 'loop_b' }] },
     ]);
-    expect(await runServed((root) => memorySide(root).store)).toEqual(onHippoDb);
+    expect(await runServed(portOnlyStore)).toEqual(onHippoDb);
   });
 });

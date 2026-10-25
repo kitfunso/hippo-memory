@@ -61,12 +61,6 @@ export function provenanceOf(memoryId: string | null, kinds: MemoryKinds): strin
   return kind === undefined ? '|distilled' : `${memoryId}|${kind}`;
 }
 
-export function memoryIdsOf(desired: DesiredGraph): string[] {
-  const ids = new Set<string>();
-  for (const row of [...desired.entities, ...desired.relations]) if (row.memoryId !== null) ids.add(row.memoryId);
-  return [...ids];
-}
-
 function firstByKey<T>(rows: readonly T[], keyOf: (row: T) => string): Map<string, T> {
   const out = new Map<string, T>();
   for (const row of rows) {
