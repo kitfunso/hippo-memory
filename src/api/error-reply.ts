@@ -7,7 +7,7 @@ import {
   HttpError,
   INTERNAL_ERROR_MESSAGE,
   STORE_NOT_PORTED_MESSAGE,
-} from '../base/util/http-util.js';
+} from '../base/errors/http-errors.js';
 import { StoreBlockedError } from '../base/util/store-blocked.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from '../base/ports/store.js';
 

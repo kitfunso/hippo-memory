@@ -58,9 +58,11 @@ export {
   type VectorRow,
   OTHER_STORE_MARKER,
 } from '../surface/open-store.js';
+export { runStoreConformance, type ConformanceRunner } from './store-conformance.js';
 export {
   hasGroup,
   requireGroup,
+  type RequiredStore,
   type AmbientCandidateRequest,
   type CallerItemsSaved,
   type CardCreate,

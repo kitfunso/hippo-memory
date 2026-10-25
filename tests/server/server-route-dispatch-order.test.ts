@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { routeLookup } from '../../src/surface/server/route-lookup.js';
-import { routeLabel, routeMatches, V1_ROUTES } from '../../src/surface/server/route-table.js';
+import { routeLabel, routeServes, V1_ROUTES } from '../../src/surface/server/route-table.js';
 import type { Route } from '../../src/surface/server/types.js';
 
 const METHODS = ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'] as const;
+/** The matcher the lookup takes, over the raw rows: a row's run is not under test, only which row serves. */
+const routeMatches = (route: Route, method: string, path: string): (() => Promise<void>) | null =>
+  routeServes(route, method, path) ? async () => {} : null;
 const findV1Route = routeLookup(V1_ROUTES, routeMatches);
 
 /** The dispatch before the literal-path Map: every row in table order, first match wins. */

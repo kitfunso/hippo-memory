@@ -14,7 +14,7 @@ import {
   BodyTooLargeError,
   HttpError,
   INTERNAL_ERROR_MESSAGE,
-} from '../../src/base/util/http-util.js';
+} from '../../src/base/errors/http-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 

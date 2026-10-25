@@ -1,7 +1,8 @@
 // /v1/policies routes.
 import { policiesInForce } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
-import { HttpError, sendJson } from '../../../base/util/http-util.js';
+import { HttpError } from '../../../base/errors/http-errors.js';
+import { sendJson } from '../../http/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { getString, requiredString } from '../validation.js';
 import { MAX_DATE_LEN, MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';

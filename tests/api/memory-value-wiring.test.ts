@@ -39,6 +39,7 @@ import {
   auditRescueRows,
 } from '../_helpers/memory-value-wiring.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 oneRequestPerTest();
 
@@ -208,7 +209,7 @@ describe('(c) weights-sync vs the committed JSON artifact', () => {
 describe('(d) flag-off byte-identical', () => {
   it('bigger mixed store (~40 entries, pinned/condemned/healthy, 3 tenants): survivor set, counts, and full details match a predicate-computed expectation', async () => {
     initTestStore(dir);
-    // Disable the other decay-adjacent passes so result.details is
+    // Disable the other decay-adjacent passes so detailLines(result) is
     // decay-pass-only and directly comparable to the predicate below
     // (review-round F8 wants the FULL details array checked, not just
     // counts). memoryValue stays unset -> DEFAULT_CONFIG's false.
@@ -283,11 +284,11 @@ describe('(d) flag-off byte-identical', () => {
 
     expect(result.removed).toBe(expectedRemovedIds.size);
     expect(result.decayed).toBe(expectedSurvivorIds.size);
-    expect(result.details.some((l) => l.includes('🛟'))).toBe(false);
+    expect(detailLines(result).some((l) => l.includes('🛟'))).toBe(false);
     // Full details array: with replay/physics/autoTraceCapture off and no
     // Episodic/conflicting content, decay's removed lines are the entirety
-    // of result.details, in loadAllEntries order.
-    expect(result.details).toEqual(expectedRemovedDetails);
+    // of detailLines(result), in loadAllEntries order.
+    expect(detailLines(result)).toEqual(expectedRemovedDetails);
 
     const remainingIds = new Set(loadEveryTenantEntries(dir).map((e) => e.id));
     expect(remainingIds).toEqual(expectedSurvivorIds);

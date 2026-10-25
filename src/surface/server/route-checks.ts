@@ -1,5 +1,5 @@
 import type { JsonValue } from '../../base/util/json.js';
-import { V1_ROUTES, routeMatches } from './route-table.js';
+import { V1_ROUTES, routeServes } from './route-table.js';
 import type { AddonRoute } from './types.js';
 
 const PLAIN_SEGMENT_RE = /^[A-Za-z0-9._~-]+$/;
@@ -17,7 +17,7 @@ function isPlainV1Path(path: string): boolean {
 
 // A plain path never holds a `%`, so matchPath cannot throw here.
 function isCorePath(method: string, path: string): boolean {
-  return V1_ROUTES.some((route) => routeMatches(route, method, path) !== null);
+  return V1_ROUTES.some((route) => routeServes(route, method, path));
 }
 
 /**

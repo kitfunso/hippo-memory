@@ -5,7 +5,7 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
 import { type ChurnStaleResult, detectChurnStale } from '../../domain/learn/invalidation.js';
 import type { StoreWith } from '../../base/ports/store.js';
-import type { Context } from '../types.js';
+import type { Context, ContextWith } from '../types.js';
 
 export type { ChurnStaleResult };
 
@@ -17,7 +17,7 @@ export interface ChurnStore {
 
 /** Tags, in each store, the memories of `repoDir`'s project whose files git says have churned. A store that fails gives
  * a result with `error` set, so it never skips the next store or a sleep's later phases. */
-export async function markChurnStale(
+async function markChurnStale(
   ctx: Pick<Context, 'tenantId' | 'infra'>,
   stores: readonly ChurnStore[],
   opts: { readonly repoDir: string; readonly dryRun: boolean },
@@ -40,4 +40,19 @@ export async function markChurnStale(
     }
   }
   return results;
+}
+
+/** `markChurnStale` over the stores the context reaches: its own, named `root` in the report, and the operator's global
+ * store when it is readable and another folder. */
+export function markChurnStaleInReach(
+  ctx: Pick<ContextWith<'learning'>, 'tenantId' | 'infra' | 'store' | 'reach'>,
+  opts: { readonly root: string; readonly repoDir: string; readonly dryRun: boolean },
+): Promise<{ root: string; result: ChurnStaleResult }[]> {
+  const { global } = ctx.reach ?? {};
+  const stores: ChurnStore[] = [{ root: opts.root, store: ctx.store }];
+  if (global !== undefined && global.root !== opts.root) {
+    // SAFETY: a reach's global store is opened by sqliteReach as hippo.db, which sets every group.
+    stores.push({ root: global.root, store: global.store as StoreWith<'learning'> });
+  }
+  return markChurnStale(ctx, stores, opts);
 }
