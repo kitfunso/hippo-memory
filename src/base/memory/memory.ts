@@ -98,6 +98,12 @@ export const DAG_LEVEL = { extracted: 1, topic: 2, entity: 3 } as const;
 /** Tag on a memory whose named file/symbol/script changed after it was stored. */
 export const CHURN_STALE_TAG = 'churn-stale';
 
+/** Tag on a memory that records a failure or mistake. */
+export const ERROR_TAG = 'error';
+
+/** Tag on a fact the extractor pulled out of a longer source. */
+export const EXTRACTED_TAG = 'extracted';
+
 // Losses weigh ~2x gains (Lovallo-Kahneman), so negative is 2.0; HIPPO_LOSS_AVERSION_RATIO scales it per process.
 export const EMOTIONAL_MULTIPLIERS = {
   neutral: 1.0,
@@ -296,7 +302,7 @@ const RETRIEVAL_HALF_LIFE_GAIN_DAYS = 2;
 export function deriveHalfLife(base: number, entry: Partial<MemoryEntry>): number {
   let hl = base;
 
-  if (entry.tags?.includes('error')) {
+  if (entry.tags?.includes(ERROR_TAG)) {
     hl *= ERROR_TAG_HALF_LIFE_FACTOR;
   }
 
@@ -611,7 +617,7 @@ export function schemaFitFrom(content: string, tags: readonly string[], source: 
 
 function inferValence(tags: string[]): EmotionalValence {
   if (tags.includes('critical')) return 'critical';
-  if (tags.includes('error')) return 'negative';
+  if (tags.includes(ERROR_TAG)) return 'negative';
   if (tags.includes('success') || tags.includes('win')) return 'positive';
   return 'neutral';
 }

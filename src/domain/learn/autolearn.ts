@@ -1,7 +1,7 @@
 /** Auto-learn from errors and git history.
  *  Agents learn from failures without explicit hippo remember calls. */
 
-import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../base/memory/memory.js';
+import { MemoryEntry, ERROR_TAG, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../base/memory/memory.js';
 import { assessAutomaticMemory } from '../../base/memory/memory-quality.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -26,7 +26,7 @@ export function captureError(exitCode: number, stderr: string, command: string, 
 
   // Derive a sanitized tag from the command name (first word, strip path)
   const cmdBase = safeCmd.split(/\s+/)[0].replace(/[^a-zA-Z0-9-]/g, '');
-  const tags = ['error', 'autolearn'];
+  const tags = [ERROR_TAG, 'autolearn'];
   if (cmdBase) tags.push(cmdBase.toLowerCase().slice(0, AUTOLEARN_TAG_CHARS));
 
   return createMemory(content, {

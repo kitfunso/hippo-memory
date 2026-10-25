@@ -10,7 +10,6 @@ import { getHippoRoot } from './host/project-identity.js';
 import { readPackageVersion } from './host/package-version.js';
 import { printGitHubBackfillUsage } from './surface/cli/github.js';
 import { printError } from './surface/cli/output.js';
-import { exitAfterFlush } from './base/util/crash-handlers.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './base/util/log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './base/ports/store.js';
 import { type CliFlags, boolFlag, isBooleanFlag, isStringFlag } from './surface/cli/flag-values.js';
@@ -262,8 +261,12 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   try {
     await main(command, args, flags, getHippoRoot(process.cwd()));
   } catch (err) {
-    // The verb printed its own message before it threw, so this branch adds no line.
-    if (err instanceof CliExit) return exitAfterFlush(err.code);
+    // The verb printed its own message. The process ends as a success does, never by process.exit, which on Windows
+    // aborts Node (libuv async.c) while a fetch still has work in flight.
+    if (err instanceof CliExit) {
+      process.exitCode = err.code;
+      return;
+    }
     printError('Error:', isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err);
     // The message alone rarely says where it came from; debug is the level that asks for the rest.
     if (isLevelEnabled('debug')) {
@@ -272,7 +275,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
       const cause = fields.cause ? `\n  caused by ${fields.cause}` : '';
       printError(`  thrown as ${fields.errorClass}${stack}${cause}`);
     }
-    exitAfterFlush(1);
+    process.exitCode = 1;
   }
 }
 
@@ -282,6 +285,6 @@ if (entryPath && fs.existsSync(entryPath) && fs.realpathSync(entryPath) === file
   // runCli reports a verb's failure itself; a throw from before its try (argument parsing, the store root) lands here.
   runCli().catch((err) => {
     log.error('hippo: the command could not start', errorFields(err));
-    exitAfterFlush(1);
+    process.exitCode = 1;
   });
 }

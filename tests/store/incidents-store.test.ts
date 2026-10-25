@@ -207,7 +207,7 @@ describe('incidents store (first-class object)', () => {
       'cli',
     );
     await expect(resolveOpenIncident(objectsAt(home), 'default', inc.id, '   ', 'cli')).rejects.toThrow(
-      /resolutionText is required/,
+      /resolutionText must not be blank/,
     );
     // The failed resolve left the incident open.
     expect((await objectById(objectsAt(home), INCIDENT, 'default', inc.id))!.status).toBe('open');

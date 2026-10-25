@@ -18,6 +18,7 @@ import type { JsonValue } from '../base/util/json.js';
 import { readCappedJson, readCappedText } from '../base/util/capped-json.js';
 import { parseOutboundUrl } from '../base/util/net.js';
 import { withRequestSignal } from '../base/util/request-scope.js';
+import { ZERO_NORM, norm } from '../base/rank/cosine.js';
 import { fetchWithRetry } from './http-retry.js';
 import {
   createLocalEmbedder,
@@ -171,11 +172,9 @@ function redactedCause<E>(err: E, key: string | undefined): Error {
 }
 
 function l2normalize(v: number[]): number[] {
-  let norm = 0;
-  for (const x of v) norm += x * x;
-  norm = Math.sqrt(norm);
-  if (norm < 1e-12) return v;
-  return v.map((x) => x / norm);
+  const length = norm(v);
+  if (length < ZERO_NORM) return v;
+  return v.map((x) => x / length);
 }
 
 class ApiEmbeddingProvider implements EmbeddingProvider {

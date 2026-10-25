@@ -11,6 +11,7 @@ import { detachedEmbedder } from '../../api/embeddings.js';
 import type { CaptureTarget } from '../capture/command.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../../base/util/hook-payload.js';
 import { importAtSessionEnd } from '../../api/agent-memories.js';
+import type { HeldLog } from '../../api/session-end.js';
 import { currentMachine } from '../../infra/machine.js';
 import { summaryLine } from '../../base/memory/agent-memory-report.js';
 import { getHippoRoot, isInitialized } from '../../host/project-identity.js';
@@ -61,6 +62,16 @@ export function appendSessionEndCloseLog(
   } catch (err) {
     // Best-effort only: a log-write failure must never fail the hook.
     log.debug(`session-end log not written: ${errorMessage(err)}`, errorFields(err));
+  }
+}
+
+/** Runs `run` with the held lines written on exit too, as sleep may end the process before the run writes them. */
+export async function flushingOnExit(held: HeldLog, run: () => Promise<void>): Promise<void> {
+  process.once('exit', held.flush);
+  try {
+    await run();
+  } finally {
+    process.off('exit', held.flush);
   }
 }
 

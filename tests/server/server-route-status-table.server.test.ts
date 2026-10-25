@@ -109,12 +109,7 @@ const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
   ['POST', '/v1/decisions', [401, 'invalid api key'], [400, 'text is required (non-empty string)']],
   ['GET', '/v1/decisions', [401, 'invalid api key'], [200]],
   ['POST', '/v1/decisions/:n/supersede', [401, 'invalid api key'], [400, 'text is required (non-empty string)']],
-  [
-    'POST',
-    '/v1/decisions/:n/close',
-    [401, 'invalid api key'],
-    [404, 'closeDecision: decision 999999 not found for tenant default'],
-  ],
+  ['POST', '/v1/decisions/:n/close', [401, 'invalid api key'], [404, 'decision 999999 not found for tenant default']],
   ['GET', '/v1/decisions/:n', [401, 'invalid api key'], [404, 'decision 999999 not found']],
   ['POST', '/v1/incidents', [401, 'invalid api key'], [400, 'text is required (non-empty string)']],
   ['GET', '/v1/incidents', [401, 'invalid api key'], [200]],
@@ -124,12 +119,7 @@ const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
     [401, 'invalid api key'],
     [400, 'resolutionText is required (non-empty string)'],
   ],
-  [
-    'POST',
-    '/v1/incidents/:n/close',
-    [401, 'invalid api key'],
-    [404, 'closeIncident: incident 999999 not found for tenant default'],
-  ],
+  ['POST', '/v1/incidents/:n/close', [401, 'invalid api key'], [404, 'incident 999999 not found for tenant default']],
   ['GET', '/v1/incidents/:n', [401, 'invalid api key'], [404, 'incident 999999 not found']],
   ['POST', '/v1/processes', [401, 'invalid api key'], [400, 'processName is required (non-empty string)']],
   ['GET', '/v1/processes', [401, 'invalid api key'], [200]],
@@ -139,34 +129,19 @@ const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
     [401, 'invalid api key'],
     [400, 'steps is required (at least one step) for a supersession'],
   ],
-  [
-    'POST',
-    '/v1/processes/:n/close',
-    [401, 'invalid api key'],
-    [404, 'closeProcess: process 999999 not found for tenant default'],
-  ],
+  ['POST', '/v1/processes/:n/close', [401, 'invalid api key'], [404, 'process 999999 not found for tenant default']],
   ['GET', '/v1/processes/:n', [401, 'invalid api key'], [404, 'process 999999 not found']],
   ['POST', '/v1/policies', [401, 'invalid api key'], [400, 'policyName is required (non-empty string)']],
   ['GET', '/v1/policies', [401, 'invalid api key'], [200]],
   ['GET', '/v1/policies/asof', [401, 'invalid api key'], [400, 'date is required (ISO-8601 valid-time)']],
   ['POST', '/v1/policies/:n/supersede', [401, 'invalid api key'], [400, 'policyText is required (non-empty string)']],
-  [
-    'POST',
-    '/v1/policies/:n/close',
-    [401, 'invalid api key'],
-    [404, 'closePolicy: policy 999999 not found for tenant default'],
-  ],
+  ['POST', '/v1/policies/:n/close', [401, 'invalid api key'], [404, 'policy 999999 not found for tenant default']],
   ['GET', '/v1/policies/:n', [401, 'invalid api key'], [404, 'policy 999999 not found']],
   ['POST', '/v1/skills', [401, 'invalid api key'], [400, 'skillName is required (non-empty string)']],
   ['GET', '/v1/skills', [401, 'invalid api key'], [200]],
   ['GET', '/v1/skills/export', [401, 'invalid api key'], [200]],
   ['POST', '/v1/skills/:n/supersede', [401, 'invalid api key'], [400, 'instructions are required (non-empty string)']],
-  [
-    'POST',
-    '/v1/skills/:n/close',
-    [401, 'invalid api key'],
-    [404, 'closeSkill: skill 999999 not found for tenant default'],
-  ],
+  ['POST', '/v1/skills/:n/close', [401, 'invalid api key'], [404, 'skill 999999 not found for tenant default']],
   ['GET', '/v1/skills/:n', [401, 'invalid api key'], [404, 'skill 999999 not found']],
   ['POST', '/v1/project-briefs', [401, 'invalid api key'], [400, 'repo is required (non-empty string)']],
   ['GET', '/v1/project-briefs', [401, 'invalid api key'], [200]],
@@ -177,22 +152,12 @@ const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
     [401, 'invalid api key'],
     [400, 'summary is required (non-empty string)'],
   ],
-  [
-    'POST',
-    '/v1/project-briefs/:n/close',
-    [401, 'invalid api key'],
-    [404, 'closeProjectBrief: brief 999999 not found for tenant default'],
-  ],
+  ['POST', '/v1/project-briefs/:n/close', [401, 'invalid api key'], [404, 'brief 999999 not found for tenant default']],
   ['GET', '/v1/project-briefs/:n', [401, 'invalid api key'], [404, 'project brief 999999 not found']],
   ['POST', '/v1/customer-notes', [401, 'invalid api key'], [400, 'customer is required (non-empty string)']],
   ['GET', '/v1/customer-notes', [401, 'invalid api key'], [200]],
   ['POST', '/v1/customer-notes/:n/supersede', [401, 'invalid api key'], [400, 'note is required (non-empty string)']],
-  [
-    'POST',
-    '/v1/customer-notes/:n/close',
-    [401, 'invalid api key'],
-    [404, 'closeCustomerNote: note 999999 not found for tenant default'],
-  ],
+  ['POST', '/v1/customer-notes/:n/close', [401, 'invalid api key'], [404, 'note 999999 not found for tenant default']],
   ['GET', '/v1/customer-notes/:n', [401, 'invalid api key'], [404, 'customer note 999999 not found']],
 ];
 
@@ -408,7 +373,7 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.decision, 200, { decision: { status: 'active' } });
     shows(out.supersedeDecision, 201, { decision: { decisionText: 'use postgres' } });
     shows(out.closeDecision, 409, {
-      error: "closeDecision: decision 1 is not active (status='superseded'); only active decisions can be closed.",
+      error: "decision 1 is not active (status='superseded'); only active decisions can be closed.",
     });
   });
 
@@ -442,7 +407,7 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.processById, 200, { process: { description: 'parity' } });
     shows(out.supersedeProcess, 200, { process: { version: 2 } });
     shows(out.closeProcess, 409, {
-      error: "closeProcess: process 1 is not active (status='superseded'); only active processes can be closed.",
+      error: "process 1 is not active (status='superseded'); only active processes can be closed.",
     });
   });
 
@@ -475,7 +440,7 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.policyById, 200, { policy: { version: 1 } });
     shows(out.supersedePolicy, 200, { policy: { policyText: 'keep 60 days' } });
     shows(out.closePolicy, 409, {
-      error: "closePolicy: policy 1 is not active (status='superseded'); only active policies can be closed.",
+      error: "policy 1 is not active (status='superseded'); only active policies can be closed.",
     });
     shows(out.skill, 201, { skill: { skillName: 'triage' } });
     shows(out.skills, 200, { skills: [{ trigger: 'on page' }] });
@@ -483,7 +448,7 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.skillById, 200, { skill: { instructions: 'read logs first' } });
     shows(out.supersedeSkill, 200, { skill: { instructions: 'read logs, then metrics' } });
     shows(out.closeSkill, 409, {
-      error: "closeSkill: skill 1 is not active (status='superseded'); only active skills can be closed.",
+      error: "skill 1 is not active (status='superseded'); only active skills can be closed.",
     });
   });
 
@@ -507,14 +472,14 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.briefById, 200, { brief: { version: 1 } });
     shows(out.supersedeBrief, 200, { brief: { summary: 'parity brief v2' } });
     shows(out.closeBrief, 409, {
-      error: "closeProjectBrief: brief 1 is not active (status='superseded'); only active briefs can be closed.",
+      error: "brief 1 is not active (status='superseded'); only active briefs can be closed.",
     });
     shows(out.note, 201, { note: { note: 'likes sqlite' } });
     shows(out.notes, 200, { notes: [{ customer: 'acme' }] });
     shows(out.noteById, 200, { note: { status: 'active' } });
     shows(out.supersedeNote, 200, { note: { note: 'likes postgres' } });
     shows(out.closeNote, 409, {
-      error: "closeCustomerNote: note 1 is not active (status='superseded'); only active notes can be closed.",
+      error: "note 1 is not active (status='superseded'); only active notes can be closed.",
     });
   });
 

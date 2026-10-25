@@ -195,8 +195,8 @@ describe('embedding after a local write (built CLI, local embeddings server)', (
     await embeddings.close();
   });
 
-  // Spawned: watch exits before its embedding lands, which only a process that ends can show.
-  it('remember leaves a vector for its row; watch exits before its own lands', async () => {
+  // Spawned: a failed command ends after its embedding lands, as a success does; only a process that ends shows it.
+  it('remember and a failed watch each leave a vector for their row', async () => {
     const s = new Store({ spawned: true });
     s.env['OPENAI_API_KEY'] = 'test-key-not-secret';
     configure(s.root, { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } });
@@ -206,7 +206,7 @@ describe('embedding after a local write (built CLI, local embeddings server)', (
     const rows = s.rows();
     expect(first).toEqual(remembered(rows[0]!));
     expect(rows.map((r) => r['source'])).toEqual(['cli', 'autolearn']);
-    expect(Object.keys(loadEmbeddingIndex(s.root))).toEqual([String(rows[0]!['id'])]);
+    expect(Object.keys(loadEmbeddingIndex(s.root)).sort()).toEqual(ids(rows).sort());
     expect(s.counters()['total_remembered']).toBe('2');
   });
 });

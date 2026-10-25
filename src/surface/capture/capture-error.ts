@@ -3,7 +3,7 @@
 // feedback confirms it. Every failure, stored or not, goes to the failure log.
 import type { Context } from '../../api/types.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import { createMemory } from '../../base/memory/memory.js';
+import { createMemory, ERROR_TAG } from '../../base/memory/memory.js';
 import {
   failureHash,
   failureSignature,
@@ -87,7 +87,7 @@ export async function storeLesson(
   const held = await store.lessonWrites.contentsWithTag(tenantId, 'auto-captured', caller?.origins);
   if (held.some((content) => failureSignature(content) === sig)) return 'duplicate';
   const entry = createMemory(text, {
-    tags: ['error', 'auto-captured'],
+    tags: [ERROR_TAG, 'auto-captured'],
     source: 'tool-failure',
     confidence: 'observed',
     tenantId,

@@ -2,6 +2,7 @@
 
 import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN } from '../../api/index.js';
 import { processGit } from '../../infra/git-runner.js';
+import { ERROR_TAG } from '../../base/memory/memory.js';
 import { mcpApiContext, type ToolCall } from './protocol.js';
 import { keptShownIds } from '../../api/recall/last-recalled.js';
 import { DEFAULT_LEARN_DAYS, MAX_CONTENT_LEN, MAX_ID_LEN } from '../../base/util/limits.js';
@@ -11,7 +12,7 @@ export async function runRememberTool({ args, ctx }: ToolCall): Promise<string> 
   const text = stringArg(args, 'text', MAX_CONTENT_LEN);
   if (!text) return 'No text provided.';
   const tags: string[] = [];
-  if (boolArg(args, 'error')) tags.push('error');
+  if (boolArg(args, 'error')) tags.push(ERROR_TAG);
   const tag = stringArg(args, 'tag', MAX_ID_LEN);
   if (tag) tags.push(tag);
   // Route through api/index.ts so audit_log captures the caller identity like CLI/REST: the auth-resolved ctx.actor

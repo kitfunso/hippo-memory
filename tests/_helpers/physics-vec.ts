@@ -1,5 +1,6 @@
 // Allocating vector helpers, the reference the in-place physics step is held to bit for bit.
-import { vecNorm, vecScale } from '../../src/base/rank/physics.js';
+import { vecScale } from '../../src/base/rank/physics.js';
+import { norm } from '../../src/base/rank/cosine.js';
 
 export function vecAdd(a: number[], b: number[]): number[] {
   const out = a.slice();
@@ -8,7 +9,7 @@ export function vecAdd(a: number[], b: number[]): number[] {
 }
 
 export function vecClampMagnitude(v: number[], maxMag: number): number[] {
-  const mag = vecNorm(v);
+  const mag = norm(v);
   if (mag <= maxMag) return v;
   return vecScale(v, maxMag / mag);
 }

@@ -10,7 +10,7 @@ import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, writeEntriesTogether, loadStoredParticles } from '../_helpers/root-forms.js';
-import { vecNorm } from '../../src/base/rank/physics.js';
+import { norm } from '../../src/base/rank/cosine.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -141,7 +141,7 @@ describe('physics status stats', () => {
     await seedParticles(3);
     const index = sqliteStore(root).embeddingIndex;
     const whole = loadStoredParticles(root);
-    const mean = whole.reduce((sum, p) => sum + vecNorm(p.velocity), 0) / whole.length;
+    const mean = whole.reduce((sum, p) => sum + norm(p.velocity), 0) / whole.length;
     expect(await indexStep(index, { kind: 'particles', fullUpTo: 3 })).toEqual({
       count: 3,
       meanSpeed: mean,

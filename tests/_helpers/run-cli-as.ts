@@ -38,13 +38,11 @@ function routeStdFdWrites(): () => void {
   };
 }
 
-/** A verb that sets process.exitCode and returns exits with it, as a spawned hippo would; this reads it and puts the prior one back. */
+/** `hippo <args>` in this process, with its exit code as a spawned hippo would have ended with it. */
 export async function runCliAs(args: readonly string[], opts: CliAsOptions = {}): Promise<InProcessResult> {
   const savedArgv = process.argv;
   const savedCwd = process.cwd();
   const savedEnv = { ...process.env };
-  const priorExitCode = process.exitCode;
-  process.exitCode = undefined;
   // A verb that starts a worker re-runs process.argv[1], which must be the bin a spawned hippo was started from.
   const argv = [process.execPath, HIPPO_BIN, ...args];
   process.argv = argv;
@@ -52,11 +50,9 @@ export async function runCliAs(args: readonly string[], opts: CliAsOptions = {})
   if (opts.env) replaceEnv(opts.env);
   const unrouteFdWrites = routeStdFdWrites();
   try {
-    const r = await withHookStdin(opts.input, () => runInProcess(() => runCli(argv)));
-    return { ...r, status: r.status || Number(process.exitCode ?? 0) };
+    return await withHookStdin(opts.input, () => runInProcess(() => runCli(argv)));
   } finally {
     unrouteFdWrites();
-    process.exitCode = priorExitCode;
     process.argv = savedArgv;
     process.chdir(savedCwd);
     if (opts.env) replaceEnv(savedEnv);

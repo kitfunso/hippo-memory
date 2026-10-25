@@ -3,7 +3,7 @@
  * detection against a saved baseline.
  * Zero API calls (no LLM judge, no embeddings), deterministic (fixed timestamps, content, IDs) and fast. */
 
-import { DAG_LEVEL, Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { rankBm25 } from '../search/bm25-search.js';
 import { evalSwitches } from '../../base/memory/ablation.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
@@ -146,7 +146,7 @@ function dagChildEntries(): MemoryEntry[] {
       {
         created: dateOffset(15),
         layer: Layer.Semantic,
-        tags: ['topic:api-performance', 'extracted'],
+        tags: ['topic:api-performance', EXTRACTED_TAG],
         dagLevel: DAG_LEVEL.extracted,
       },
     ),
@@ -156,7 +156,7 @@ function dagChildEntries(): MemoryEntry[] {
       {
         created: dateOffset(15),
         layer: Layer.Semantic,
-        tags: ['topic:api-performance', 'extracted'],
+        tags: ['topic:api-performance', EXTRACTED_TAG],
         dagLevel: DAG_LEVEL.extracted,
       },
     ),
@@ -166,7 +166,7 @@ function dagChildEntries(): MemoryEntry[] {
       {
         created: dateOffset(15),
         layer: Layer.Semantic,
-        tags: ['topic:api-performance', 'extracted'],
+        tags: ['topic:api-performance', EXTRACTED_TAG],
         dagLevel: DAG_LEVEL.extracted,
       },
     ),

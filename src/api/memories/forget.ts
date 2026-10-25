@@ -1,6 +1,8 @@
 // Forget a memory, and reject or unreject a value so it cannot be stored again.
 
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
+import { rawRemovalRefusal } from '../../base/errors/raw-append-only.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import {
   listRejectionsForTenant,
   rejectValue,
@@ -28,6 +30,16 @@ export async function forget(ctx: Context, id: string): Promise<ForgetResult> {
     id,
   });
   return { ok: true, id };
+}
+
+/** The row `forget`, or with `archive` `rawArchive`, would remove now; throws the refusal that call would throw. Reads
+ * only. */
+export async function removalTarget(ctx: Context, id: string, archive: boolean): Promise<MemoryEntry> {
+  const entry = await memoryGet(ctx, id);
+  if (entry === null) throw new NotFoundError(`memory not found: ${id}`);
+  const refusal = rawRemovalRefusal(entry, archive);
+  if (refusal !== null) throw refusal;
+  return entry;
 }
 
 // Reject administration is Context-based and tenant-checked; it shares one transaction flow with `hippo reject` via

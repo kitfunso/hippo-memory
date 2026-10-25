@@ -71,7 +71,15 @@ export type {
 } from './objects/drill-down.js';
 export { outcome, outcomeForLastRecall } from './memories/outcome.js';
 export type { OutcomeForLastRecallResult, OutcomeResult } from './memories/outcome.js';
-export { forget, liftRejection, listRejections, reject, rejectOnHost, unreject } from './memories/forget.js';
+export {
+  forget,
+  liftRejection,
+  listRejections,
+  reject,
+  rejectOnHost,
+  removalTarget,
+  unreject,
+} from './memories/forget.js';
 export {
   AUTO_SHARE_MIN_SCORE,
   autoShareToGlobal,

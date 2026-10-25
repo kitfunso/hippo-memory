@@ -72,10 +72,25 @@ export const LAYOUT_H = 700;
 
 type Point = { x: number; y: number };
 
+/** Share of the shorter viewport side that the seed circle fills. */
+const SEED_RADIUS_FRACTION = 0.4;
+/** Stand-in for a zero length, so coincident points divide by it rather than by zero. */
+const MIN_DISTANCE = 0.01;
+/** Keeps nodes this many pixels off the viewport edge. */
+const EDGE_MARGIN_PX = 20;
+
+/** Distance from pj to pi and the unit vector between them, with a zero length floored at MIN_DISTANCE. */
+function separation(pi: Point, pj: Point) {
+  const dx = pi.x - pj.x;
+  const dy = pi.y - pj.y;
+  const dist = Math.hypot(dx, dy) || MIN_DISTANCE;
+  return { dist, ux: dx / dist, uy: dy / dist };
+}
+
 function seedCircle(nodes: GraphNode[], width: number, height: number): Map<number, Point> {
   const pos = new Map<number, Point>();
   const n = nodes.length;
-  const radius = Math.min(width, height) * 0.4;
+  const radius = Math.min(width, height) * SEED_RADIUS_FRACTION;
   nodes.forEach((node, i) => {
     const angle = (2 * Math.PI * i) / n;
     pos.set(node.id, {
@@ -131,13 +146,9 @@ function addRepulsion(
 }
 
 function repel(pi: Point, pj: Point, di: Point, dj: Point, k: number): void {
-  const dx = pi.x - pj.x;
-  const dy = pi.y - pj.y;
-  const dist = Math.hypot(dx, dy) || 0.01;
+  const { dist, ux, uy } = separation(pi, pj);
   if (dist >= REPULSION_REACH_K * k) return;
   const rep = (k * k) / dist;
-  const ux = dx / dist;
-  const uy = dy / dist;
   di.x += ux * rep;
   di.y += uy * rep;
   dj.x -= ux * rep;
@@ -157,12 +168,8 @@ function addAttraction(
     if (i === undefined || j === undefined) continue;
     const pi = pos.get(e.from)!;
     const pj = pos.get(e.to)!;
-    const dx = pi.x - pj.x;
-    const dy = pi.y - pj.y;
-    const dist = Math.hypot(dx, dy) || 0.01;
+    const { dist, ux, uy } = separation(pi, pj);
     const att = (dist * dist) / k;
-    const ux = dx / dist;
-    const uy = dy / dist;
     disp[i].x -= ux * att;
     disp[i].y -= uy * att;
     disp[j].x += ux * att;
@@ -183,13 +190,13 @@ function applyDisplacement(options: DisplacementOptions): void {
   const { nodes, pos, disp, temp, width, height } = options;
   nodes.forEach((node, i) => {
     const p = pos.get(node.id)!;
-    const dl = Math.hypot(disp[i].x, disp[i].y) || 0.01;
+    const dl = Math.hypot(disp[i].x, disp[i].y) || MIN_DISTANCE;
     let nx = p.x + (disp[i].x / dl) * Math.min(dl, temp);
     let ny = p.y + (disp[i].y / dl) * Math.min(dl, temp);
     if (!Number.isFinite(nx)) nx = width / 2;
     if (!Number.isFinite(ny)) ny = height / 2;
-    p.x = Math.max(20, Math.min(width - 20, nx));
-    p.y = Math.max(20, Math.min(height - 20, ny));
+    p.x = Math.max(EDGE_MARGIN_PX, Math.min(width - EDGE_MARGIN_PX, nx));
+    p.y = Math.max(EDGE_MARGIN_PX, Math.min(height - EDGE_MARGIN_PX, ny));
   });
 }
 

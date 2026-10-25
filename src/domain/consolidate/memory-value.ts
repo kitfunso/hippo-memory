@@ -76,18 +76,18 @@ function computeMvFeatures(
   };
 }
 
+function isFiniteWeightValue(value: number): boolean {
+  return Number.isFinite(value);
+}
+
+function isNonEmptyDigestString(value: string): boolean {
+  return (value?.length ?? 0) > 0;
+}
+
 /**
  * Throws on a malformed weight constant (wrong dims, non-finite weight, missing digest): flag-on with a broken constant
  * must throw, never act as flag-off.
  * Parameterized (default: the frozen singleton) so the throw paths are unit-testable. */
-function isFiniteWeightValue(value: number): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-function isNonEmptyDigestString(value: string): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
 export function validateWeights(
   weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
   digest: string = SOURCE_ARTIFACT_SHA256,

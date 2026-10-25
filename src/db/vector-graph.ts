@@ -2,6 +2,7 @@
 // the same graph.
 
 import { stepMulberry32 } from '../base/util/prng.js';
+import { ZERO_NORM, cosineToQuery, dot, norm } from '../base/rank/cosine.js';
 
 export interface VectorGraphOptions {
   dim: number;
@@ -129,45 +130,12 @@ class Heap {
   }
 }
 
-// Four running sums, which V8 runs faster than one: inserts spend most of their time here.
-function dot(a: Float32Array, b: Float32Array): number {
-  let s0 = 0;
-  let s1 = 0;
-  let s2 = 0;
-  let s3 = 0;
-  const whole = a.length & ~3;
-  let i = 0;
-  for (; i < whole; i += 4) {
-    s0 += a[i] * b[i];
-    s1 += a[i + 1] * b[i + 1];
-    s2 += a[i + 2] * b[i + 2];
-    s3 += a[i + 3] * b[i + 3];
-  }
-  for (; i < a.length; i++) s0 += a[i] * b[i];
-  return s0 + s1 + (s2 + s3);
-}
-
-function normOf(v: Float32Array): number {
-  return Math.sqrt(dot(v, v));
-}
-
 function toUnit(v: Float32Array): Float32Array {
-  const n = normOf(v);
-  if (n < 1e-10) return new Float32Array(v.length);
+  const n = norm(v);
+  if (n < ZERO_NORM) return new Float32Array(v.length);
   const out = new Float32Array(v.length);
   for (let i = 0; i < v.length; i++) out[i] = v[i] / n;
   return out;
-}
-
-// Same arithmetic as rankVectorRows in src/db/vector-store.ts: float64 sums, zero-norm rows score 0.
-function cosine(q: Float32Array, qNorm: number, v: Float32Array): number {
-  let d = 0;
-  let n = 0;
-  for (let i = 0; i < v.length; i++) {
-    d += q[i] * v[i];
-    n += v[i] * v[i];
-  }
-  return n < 1e-20 || qNorm < 1e-10 ? 0 : d / (qNorm * Math.sqrt(n));
 }
 
 interface WalkContext {
@@ -247,8 +215,10 @@ export function searchView(
   opts: SearchOptions & { vectorOf: VectorLookup },
 ): SearchResult {
   if (graph.entry < 0 || opts.k <= 0 || query.length !== graph.dim) return { aborted: false, hits: [], visited: 0 };
-  const qNorm = normOf(query);
+  const qNorm = norm(query);
   const vectorOf = opts.vectorOf;
+  // A directionless query or row scores 0, where the full scan in vector-store.ts drops it.
+  const score = (n: number): number => (qNorm < ZERO_NORM ? 0 : (cosineToQuery(query, qNorm, vectorOf(n)) ?? 0));
   const seen = new Map<number, boolean>();
   const admit = opts.admit;
   const memo = admit
@@ -262,7 +232,7 @@ export function searchView(
     : undefined;
   const ctx: WalkContext = {
     graph,
-    score: (n) => cosine(query, qNorm, vectorOf(n)),
+    score,
     admit: memo,
     budget: { left: opts.visitBudget ?? -1 },
     visited: 0,

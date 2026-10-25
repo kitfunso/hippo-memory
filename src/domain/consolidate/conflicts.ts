@@ -1,4 +1,4 @@
-import { MemoryEntry, Layer, calculateStrength, type DecayOptions } from '../../base/memory/memory.js';
+import { MemoryEntry, EXTRACTED_TAG, Layer, calculateStrength, type DecayOptions } from '../../base/memory/memory.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
 import { isPersonalScope } from '../../base/scope/recall-scope.js';
@@ -83,7 +83,7 @@ function conflictRow(place: number, e: MemoryEntry): ConflictRow {
     id: e.id,
     trace: e.layer === Layer.Trace,
     superseded: Boolean(e.supersededBy),
-    restated: e.tags.includes('extracted') || e.tags.includes('session-digest'),
+    restated: e.tags.includes(EXTRACTED_TAG) || e.tags.includes('session-digest'),
     scope: e.scope,
     tenantId: e.tenantId,
     originProject: e.originProject,

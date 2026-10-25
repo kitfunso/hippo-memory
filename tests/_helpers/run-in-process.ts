@@ -17,7 +17,8 @@ export interface InProcessResult {
   readonly status: number;
 }
 
-/** Captures console and stream writes while `fn` runs; the first process.exit(n) or thrown CliExit(n) ends the run with status n. */
+/** Captures console and stream writes while `fn` runs; the first process.exit(n) or thrown CliExit(n) ends the run with
+ * status n, and a run that sets process.exitCode and returns (as runCli does) ends with that, as a spawned hippo would. */
 export async function runInProcess(fn: () => void | Promise<void>): Promise<InProcessResult> {
   const out: string[] = [];
   const err: string[] = [];
@@ -38,6 +39,8 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
     for (const arg of rest) if (arg instanceof Function) arg();
   };
   const priorExitCode = process.exitCode;
+  process.exitCode = undefined;
+  let status = 0;
   const spies = [
     vi.spyOn(console, 'log').mockImplementation(toStdout),
     vi.spyOn(console, 'error').mockImplementation(toStderr),
@@ -64,8 +67,8 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
     if (!exited) throw error;
   } finally {
     for (const spy of spies) spy.mockRestore();
-    // Only an exit restores it: a verb that sets exitCode and returns leaves it for the caller to read.
-    if (exited) process.exitCode = priorExitCode;
+    status = exited?.code ?? Number(process.exitCode ?? 0);
+    process.exitCode = priorExitCode;
   }
-  return { stdout: out.join(''), stderr: err.join(''), status: exited?.code ?? 0 };
+  return { stdout: out.join(''), stderr: err.join(''), status };
 }

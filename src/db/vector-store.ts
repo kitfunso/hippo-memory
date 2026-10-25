@@ -10,6 +10,7 @@ import { withWriteScope } from './busy.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
 import { chunked } from '../base/util/chunked.js';
 import { tryParseJson } from '../base/util/json.js';
+import { ZERO_NORM, cosineToQuery, norm } from '../base/rank/cosine.js';
 import { cachedStatement } from './statement-cache.js';
 
 /** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a renamed backup. */
@@ -229,10 +230,8 @@ interface BestMatches {
 function bestMatches(query: readonly number[], k: number): BestMatches | null {
   if (k <= 0 || query.length === 0) return null;
   const q = Float32Array.from(query);
-  let qNorm = 0;
-  for (let i = 0; i < q.length; i++) qNorm += q[i] * q[i];
-  qNorm = Math.sqrt(qNorm);
-  if (qNorm < 1e-10) return null;
+  const qNorm = norm(q);
+  if (qNorm < ZERO_NORM) return null;
   const kept = new MatchHeap(k);
   return {
     top: () => kept.sorted(),
@@ -240,14 +239,8 @@ function bestMatches(query: readonly number[], k: number): BestMatches | null {
     oneEachId: () => kept.oneEachId(),
     offer(id, v) {
       if (v.length !== q.length) return;
-      let dot = 0;
-      let norm = 0;
-      for (let i = 0; i < v.length; i++) {
-        dot += q[i] * v[i];
-        norm += v[i] * v[i];
-      }
-      if (norm < 1e-20) return;
-      kept.offer({ id, score: dot / (qNorm * Math.sqrt(norm)) });
+      const score = cosineToQuery(q, qNorm, v);
+      if (score !== null) kept.offer({ id, score });
     },
   };
 }

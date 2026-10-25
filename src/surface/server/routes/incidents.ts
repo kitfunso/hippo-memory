@@ -37,7 +37,7 @@ export const INCIDENT_ROUTES: ObjectRouteConfig<'incident'> = {
   listField: 'incidents',
   create: (ctx, body) =>
     incidentOpen(ctx, {
-      incidentText: requiredString(body, 'text', { max: MAX_SHORT_FIELD_LEN, untrimmed: true }),
+      incidentText: requiredString(body, 'text', { max: MAX_SHORT_FIELD_LEN }),
       context: getString(body, 'context', MAX_SHORT_FIELD_LEN),
       linkedMemoryIds: linkedMemoryIds(body),
     }),

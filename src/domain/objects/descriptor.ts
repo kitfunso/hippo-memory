@@ -10,8 +10,6 @@ export interface ObjectDescriptor<K extends ObjectKind> {
   /** The nouns error text uses: "brief 3 not found", "only active briefs". */
   readonly label: string;
   readonly plural: string;
-  /** Each call's error-text prefix; HTTP and CLI replies carry it, so it stays fixed whatever the call is named. */
-  readonly fn: { readonly get: string; readonly close: string; readonly list: string };
   readonly states: ReadonlySet<ObjectByKind[K]['status']>;
   /** The statuses a close may start from. */
   readonly closableFrom: readonly ObjectByKind[K]['status'][];
@@ -35,7 +33,6 @@ export interface ObjectDraft<K extends SavableKind> {
 
 /** A kind the shared save writes: active rows, replaced by supersede. `W` is the options its module's save takes. */
 export interface SavableDescriptor<K extends SavableKind, W> extends ObjectDescriptor<K> {
-  readonly fn: { readonly get: string; readonly close: string; readonly list: string; readonly save: string };
   /** Throws BadRequestError for options the kind refuses. */
   readonly draft: (opts: W) => ObjectDraft<K>;
 }

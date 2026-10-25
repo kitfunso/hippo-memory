@@ -1,5 +1,6 @@
 import { duplicateKey } from '../../base/util/same-text.js';
 import { assessAutomaticMemory } from '../../base/memory/memory-quality.js';
+import { ERROR_TAG } from '../../base/memory/memory.js';
 
 export interface ExtractedItem {
   content: string;
@@ -34,7 +35,7 @@ const PREFERENCE_PATTERNS = [
 const CATEGORIES = [
   ['decision', DECISION_PATTERNS],
   ['rule', RULE_PATTERNS],
-  ['error', ERROR_PATTERNS],
+  [ERROR_TAG, ERROR_PATTERNS],
   ['preference', PREFERENCE_PATTERNS],
 ] as const;
 const MAX_CHARS = 500;

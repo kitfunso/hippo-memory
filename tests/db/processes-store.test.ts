@@ -155,9 +155,9 @@ describe('processes store (first-class object)', () => {
   it('steps validation: rejects non-array / non-string / empty / cap breaches; trims-then-stores', async () => {
     expect(() => validateProcessSteps('not an array')).toThrow(/must be an array/);
     expect(() => validateProcessSteps([1, 2])).toThrow(/not a string/);
-    expect(() => validateProcessSteps(['ok', '   '])).toThrow(/is empty/);
+    expect(() => validateProcessSteps(['ok', '   '])).toThrow(/must not be blank/);
     expect(() => validateProcessSteps(Array(MAX_PROCESS_STEPS + 1).fill('x'))).toThrow(/step cap/);
-    expect(() => validateProcessSteps(['y'.repeat(MAX_PROCESS_STEP_LEN + 1)])).toThrow(/char cap/);
+    expect(() => validateProcessSteps(['y'.repeat(MAX_PROCESS_STEP_LEN + 1)])).toThrow(/must be at most/);
     // trim-then-store: a padded step is stored trimmed.
     expect(validateProcessSteps(['  spaced  '])).toEqual(['spaced']);
 
@@ -174,7 +174,7 @@ describe('processes store (first-class object)', () => {
         processName: 'Bad',
         steps: ['', 'x'],
       }),
-    ).rejects.toThrow(/is empty/);
+    ).rejects.toThrow(/must not be blank/);
     expect(countRows(home, 'processes')).toBe(before);
   });
 

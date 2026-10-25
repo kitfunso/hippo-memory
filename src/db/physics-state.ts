@@ -8,7 +8,8 @@ import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
 import { strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../base/memory/memory.js';
 import type { PhysicsParticle } from '../base/rank/physics.js';
-import { initializeParticle, vecNorm } from '../base/rank/physics.js';
+import { initializeParticle } from '../base/rank/physics.js';
+import { norm } from '../base/rank/cosine.js';
 import { chunked } from '../base/util/chunked.js';
 import { bufferToFloat32, float32ToBuffer } from '../base/util/vector-codec.js';
 import { cachedStatement } from './statement-cache.js';
@@ -95,7 +96,7 @@ export function physicsSpeedSum(db: DatabaseSyncLike) {
   }>;
   for (const row of rows) {
     count++;
-    speedSum += vecNorm(bufferToFloat32(row.velocity_blob));
+    speedSum += norm(bufferToFloat32(row.velocity_blob));
   }
   return { count, speedSum };
 }

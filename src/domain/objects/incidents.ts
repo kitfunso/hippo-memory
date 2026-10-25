@@ -2,9 +2,11 @@
  * linked receipts. The `incidents` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET
  * NULL) is for recall. linked_memory_ids must all exist in the SAME tenant or save throws before the insert. */
 
-import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
+import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
+import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import type { ObjectDescriptor } from './descriptor.js';
+import { requireText } from './fields.js';
 import { objectMirror } from './lifecycle.js';
 import {
   isObjectRefusal,
@@ -37,7 +39,6 @@ export const INCIDENT: ObjectDescriptor<'incident'> = {
   kind: 'incident',
   label: 'incident',
   plural: 'incidents',
-  fn: { get: 'loadIncidentById', close: 'closeIncident', list: 'loadIncidents' },
   states: VALID_INCIDENT_STATES,
   closableFrom: ['open', 'resolved'],
   closeRefusal: 'already closed',
@@ -50,13 +51,13 @@ function incidentOpen(
   opts: SaveIncidentOptions,
   actor: string,
 ): IncidentOpen {
-  assertTenantId('saveIncident', tenantId);
-  if (!opts.incidentText) throw new BadRequestError('saveIncident: incidentText is required');
+  assertTenantId('openIncident', tenantId);
+  const incidentText = requireText(opts.incidentText, MAX_SHORT_FIELD_LEN, 'incidentText');
   const at = new Date().toISOString();
-  const content = opts.context ? `${opts.incidentText}\n\nContext: ${opts.context}` : opts.incidentText;
+  const content = opts.context ? `${incidentText}\n\nContext: ${opts.context}` : incidentText;
   const mirror = objectMirror(baseHalfLifeDays, tenantId, 'incident', { content, tags: opts.extraTags ?? [] });
   const fields = {
-    incidentText: opts.incidentText,
+    incidentText,
     context: opts.context ?? undefined,
     linkedMemoryIds: opts.linkedMemoryIds ?? [],
   };
@@ -67,9 +68,9 @@ function opened(tenantId: string, written: Incident | IncidentOpenRefusal): Inci
   if (!('refused' in written)) return written;
   // A linked id of another tenant reads as missing, so an unverifiable receipt is never recorded.
   if (written.refused === 'unlinked') {
-    throw new NotFoundError(`saveIncident: linked memory ${written.memoryId} not found for tenant ${tenantId}`);
+    throw new NotFoundError(`linked memory ${written.memoryId} not found for tenant ${tenantId}`);
   }
-  throw new Error('saveIncident: failed to reload saved incident row');
+  throw new Error('failed to reload saved incident row');
 }
 
 /** Opens an incident with its mirror memory (content "<text>
@@ -87,21 +88,19 @@ export async function openIncident(
 }
 
 function resolving(tenantId: string, resolutionText: string, actor: string): IncidentResolve {
-  assertTenantId('resolveIncident', tenantId);
-  if (!resolutionText || !resolutionText.trim()) {
-    throw new BadRequestError('resolveIncident: resolutionText is required (non-empty)');
-  }
-  return { text: resolutionText, actor, at: new Date().toISOString() };
+  assertTenantId('resolveOpenIncident', tenantId);
+  const text = requireText(resolutionText, MAX_SHORT_FIELD_LEN, 'resolutionText');
+  return { text, actor, at: new Date().toISOString() };
 }
 
 function resolved(tenantId: string, id: number, written: Incident | ObjectRefusal): Incident {
   if (!isObjectRefusal(written)) return written;
   if (written.refused === 'missing') {
-    throw new NotFoundError(`resolveIncident: incident ${id} not found for tenant ${tenantId}`);
+    throw new NotFoundError(`incident ${id} not found for tenant ${tenantId}`);
   }
-  if (written.refused !== 'status') throw new NotFoundError(`resolveIncident: incident ${id} not found after UPDATE`);
+  if (written.refused !== 'status') throw new NotFoundError(`incident ${id} not found after UPDATE`);
   throw new ConflictError(
-    `resolveIncident: incident ${id} is not open (status='${written.status}'); only open incidents can be resolved.`,
+    `incident ${id} is not open (status='${written.status}'); only open incidents can be resolved.`,
   );
 }
 

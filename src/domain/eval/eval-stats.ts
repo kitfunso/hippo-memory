@@ -410,10 +410,13 @@ export interface HarmGate {
   readonly resolveOk: boolean;
 }
 
+/** Smallest resolve-rate drop the gate tolerates: 5 points below the baseline. */
+const RESOLVE_DIFF_FLOOR = -0.05;
+
 /** Cost ratio's upper bound below 1.10, resolve difference's lower bound (a fraction) above -0.05.
  * Both estimates must use alpha 0.05, the conservative reading of "upper 95% bound"; a NaN bound fails. */
 export function harmGate(costRatio: Estimate, resolveDiff: Estimate): HarmGate {
   const costOk = costRatio.high < 1.1;
-  const resolveOk = resolveDiff.low > -0.05;
+  const resolveOk = resolveDiff.low > RESOLVE_DIFF_FLOOR;
   return { pass: costOk && resolveOk, costOk, resolveOk };
 }

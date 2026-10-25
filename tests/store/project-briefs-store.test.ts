@@ -157,10 +157,10 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
   it('validation: missing repo/summary; single-line repo; caps', async () => {
     await expect(
       saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: '   ', summary: 'x' }),
-    ).rejects.toThrow(/repo is required/);
+    ).rejects.toThrow(/repo must not be blank/);
     await expect(
       saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'r', summary: '  ' }),
-    ).rejects.toThrow(/summary is required/);
+    ).rejects.toThrow(/summary must not be blank/);
     await expect(
       saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
         repo: 'bad\nrepo',
@@ -172,7 +172,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
         repo: 'big',
         summary: 'y'.repeat(MAX_BRIEF_SUMMARY_LEN + 1),
       }),
-    ).rejects.toThrow(/summary exceeds/);
+    ).rejects.toThrow(/summary must be at most/);
     await expect(
       saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
         repo: 'r',
@@ -180,7 +180,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
         changeSummary: 'z'.repeat(4097),
         supersedesBriefId: 1,
       }),
-    ).rejects.toThrow(/changeSummary exceeds/);
+    ).rejects.toThrow(/changeSummary must be at most/);
   });
 
   it('assembleBriefFromReceipts: tenant-isolated path tag match, excludes own brief mirror, DESC order, truncation', async () => {

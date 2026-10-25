@@ -1,6 +1,6 @@
 /** Hand-written memories and builders for the synthetic feature corpus in eval-suite.ts. */
 
-import { createMemory, Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { createMemory, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { DAY_MS } from '../../base/util/time.js';
 
 const BASE_DATE = new Date('2026-01-15T10:00:00Z');
@@ -54,7 +54,7 @@ export function infrastructureMeetingEntries(): MemoryEntry[] {
       {
         created: dateOffset(10),
         layer: Layer.Semantic,
-        tags: ['speaker:Alice', 'topic:infrastructure', 'extracted'],
+        tags: ['speaker:Alice', 'topic:infrastructure', EXTRACTED_TAG],
         extractedFrom: 'ep-src-1',
       },
     ),
@@ -81,7 +81,7 @@ export function monitoringMeetingEntries(): MemoryEntry[] {
       {
         created: dateOffset(11),
         layer: Layer.Semantic,
-        tags: ['speaker:Bob', 'topic:monitoring', 'extracted'],
+        tags: ['speaker:Bob', 'topic:monitoring', EXTRACTED_TAG],
         extractedFrom: 'ep-src-2',
       },
     ),
@@ -108,7 +108,7 @@ export function authMeetingEntries(): MemoryEntry[] {
       {
         created: dateOffset(12),
         layer: Layer.Semantic,
-        tags: ['speaker:Carol', 'topic:auth', 'extracted'],
+        tags: ['speaker:Carol', 'topic:auth', EXTRACTED_TAG],
         extractedFrom: 'ep-src-3',
       },
     ),
