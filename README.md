@@ -801,14 +801,16 @@ On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked aga
 
 | Framework | Detected by | Patches |
 |-----------|------------|---------|
-| [Claude Code](https://hippo-memory.com/claude-code/) | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + 7 hook entries in `~/.claude/settings.json` (listed below) |
-| [Codex](https://hippo-memory.com/codex/) | `AGENTS.md` or `.codex` | `AGENTS.md` + `UserPromptSubmit`/`SessionStart(compact)` hooks in Codex's `hooks.json` when Codex is installed (trust them once in `/hooks`); session capture is opt-in with `hippo hook install codex`, which wraps the Codex launcher |
-| [Cursor](https://hippo-memory.com/cursor/) | `AGENTS.md` | `AGENTS.md`, which Cursor reads from the project root |
+| Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + 7 hook entries in `~/.claude/settings.json` (listed below) |
+| Codex | `AGENTS.md` or `.codex` | `AGENTS.md` + `UserPromptSubmit`/`SessionStart(compact)` hooks in Codex's `hooks.json` when Codex is installed (trust them once in `/hooks`); session capture is opt-in with `hippo hook install codex`, which wraps the Codex launcher |
+| Cursor | `AGENTS.md` | `AGENTS.md`, which Cursor reads from the project root |
 | OpenClaw | `.openclaw` or `AGENTS.md` | `AGENTS.md`; the native plugin is a separate install: `openclaw plugins install hippo-memory` |
 | OpenCode | `.opencode/` or `opencode.json` | `AGENTS.md` + TS plugin at `~/.config/opencode/plugins/hippo.ts` (subscribes to `session.idle` + `session.created`) |
 | Pi | `.pi` or `.pi/agent` | `AGENTS.md`; copy the [Pi extension](https://github.com/kitfunso/hippo-memory/tree/master/extensions/pi-extension) for session hooks |
 
 Init patches an instruction file only if it already exists. It also sets up a daily run and imports your coding agents' own memories; [What hippo init changes](#what-hippo-init-changes) lists everything.
+
+Setup guides on the website: [Claude Code](https://hippo-memory.com/claude-code/) · [Codex](https://hippo-memory.com/codex/) · [Cursor](https://hippo-memory.com/cursor/).
 
 ### Manual install
 
