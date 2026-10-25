@@ -20,12 +20,12 @@ function supersededId(body: Record<string, JsonValue>): number | undefined {
   return raw;
 }
 
-// The id is read last, so a bad text or context is reported before a bad supersedesDecisionId.
-function decisionOptions(body: Record<string, JsonValue>, supersedesDecisionId: () => number | undefined) {
+// A supersede takes the id from its path. A create reads the body field last, so a bad text is reported first.
+function decisionOptions(body: Record<string, JsonValue>, pathId?: number) {
   return {
     decisionText: requiredString(body, 'text', TEXT),
     context: getString(body, 'context', MAX_SHORT_FIELD_LEN),
-    supersedesDecisionId: supersedesDecisionId(),
+    supersedesDecisionId: pathId ?? supersededId(body),
   };
 }
 
@@ -34,7 +34,7 @@ function decisionOptions(body: Record<string, JsonValue>, supersedesDecisionId: 
 async function handleSupersedeDecision(rr: AuthedRouteRequest, id: number): Promise<void> {
   const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);
-  const decision = await objectCreate(ctx, 'decision', decisionOptions(body, () => id));
+  const decision = await objectCreate(ctx, 'decision', decisionOptions(body, id));
   sendJson(rr.res, 201, { decision });
 }
 
@@ -44,6 +44,6 @@ export const DECISION_ROUTES: ObjectRouteConfig<'decision'> = {
   noun: 'decision',
   field: 'decision',
   listField: 'decisions',
-  create: (ctx, body) => objectCreate(ctx, 'decision', decisionOptions(body, () => supersededId(body))),
+  create: (ctx, body) => objectCreate(ctx, 'decision', decisionOptions(body)),
   actions: { supersede: handleSupersedeDecision },
 };
