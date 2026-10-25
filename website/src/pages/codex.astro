@@ -73,9 +73,34 @@ const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
         checked 2026-09-28).
       </p>
       <p>
+        Codex memories are off by default. Turn them on with <code>memories = true</code> under <code>[features]</code>
+        in <code>config.toml</code>, and use <code>/memories</code> in a session to choose whether that chat uses them
+        (<a class="link" href={codexMemories} target="_blank" rel="noopener noreferrer">OpenAI docs<span class="sr-only"> (opens in new tab)</span></a>,
+        checked 2026-10-25).
+      </p>
+      <p>
+        When they are on, hippo reads them too. <code>hippo init</code>, every <code>hippo sleep</code> and the daily run
+        import the User Profile, preferences and general tips from <code>~/.codex/memories/memory_summary.md</code> into
+        your global store, so your other agents can recall them. Hippo only reads that file and never writes to Codex's
+        folders.
+      </p>
+      <p>
         Hippo is a recall layer too, with two differences. You can mark a lesson wrong with <code>hippo outcome --bad</code>
         or replace one with <code>hippo supersede</code>. And the store sits in your project, with markdown mirrors you can
         commit, shared with Claude Code, Cursor and any MCP client.
+      </p>
+    </Section>
+
+    <Section title="What the Codex wrapper does" alt>
+      <p>
+        After <code>hippo hook install codex</code>, each Codex launch goes through <code>hippo codex-run</code>. It shows
+        the summary of the last session-end run, notes where Codex's <code>history.jsonl</code> ends, and then starts the
+        real Codex.
+      </p>
+      <p>
+        When Codex exits, a background worker takes over. If the folder has its own store, the worker runs
+        <code>hippo sleep</code> on it. Then it finds this session's transcript and captures lessons from it into the
+        folder's store, or into the global store when the folder has none. With no store at all, it does nothing.
       </p>
     </Section>
 

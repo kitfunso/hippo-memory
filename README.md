@@ -78,7 +78,7 @@ claim we retracted.
 
 ## Quick start
 
-Start in one project. [What hippo init changes](#what-hippo-init-changes) lists everything the second command writes.
+Start in one project. [What hippo init changes](#what-hippo-init-changes) lists everything the second command writes. A step-by-step version is on the website: [hippo-memory.com/quickstart](https://hippo-memory.com/quickstart/).
 
 ```bash
 npm install -g hippo-memory
@@ -801,9 +801,9 @@ On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked aga
 
 | Framework | Detected by | Patches |
 |-----------|------------|---------|
-| Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + 7 hook entries in `~/.claude/settings.json` (listed below) |
-| Codex | `AGENTS.md` or `.codex` | `AGENTS.md` + `UserPromptSubmit`/`SessionStart(compact)` hooks in Codex's `hooks.json` when Codex is installed (trust them once in `/hooks`); session capture is opt-in with `hippo hook install codex`, which wraps the Codex launcher |
-| Cursor | `AGENTS.md` | `AGENTS.md`, which Cursor reads from the project root |
+| [Claude Code](https://hippo-memory.com/claude-code/) | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + 7 hook entries in `~/.claude/settings.json` (listed below) |
+| [Codex](https://hippo-memory.com/codex/) | `AGENTS.md` or `.codex` | `AGENTS.md` + `UserPromptSubmit`/`SessionStart(compact)` hooks in Codex's `hooks.json` when Codex is installed (trust them once in `/hooks`); session capture is opt-in with `hippo hook install codex`, which wraps the Codex launcher |
+| [Cursor](https://hippo-memory.com/cursor/) | `AGENTS.md` | `AGENTS.md`, which Cursor reads from the project root |
 | OpenClaw | `.openclaw` or `AGENTS.md` | `AGENTS.md`; the native plugin is a separate install: `openclaw plugins install hippo-memory` |
 | OpenCode | `.opencode/` or `opencode.json` | `AGENTS.md` + TS plugin at `~/.config/opencode/plugins/hippo.ts` (subscribes to `session.idle` + `session.created`) |
 | Pi | `.pi` or `.pi/agent` | `AGENTS.md`; copy the [Pi extension](https://github.com/kitfunso/hippo-memory/tree/master/extensions/pi-extension) for session hooks |
@@ -876,6 +876,8 @@ ends, so there is nothing to run before you finish.
 ````
 
 ### MCP Server
+
+Setup for each client: [hippo-memory.com/mcp](https://hippo-memory.com/mcp/).
 
 For any MCP-compatible client (Cursor, Windsurf (now Devin Desktop), Cline, Claude Desktop):
 
@@ -990,6 +992,8 @@ The AI-memory category matured fast in 2026. Hippo's specific take (bio-decay, s
 \*\* Different metric: these are end-to-end answer scores, not retrieval R@5. Mem0's 94.4 comes from its hosted platform, which its README says includes optimizations the open-source SDK lacks. Zep's 90.2% and 94.7% are accuracy figures from its homepage. Memoria's 88.78% and EverMind's 83% are overall accuracy with a reader LLM. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@5 numbers above. The Mem0, Zep and Letta columns were last checked against each vendor's own pages on 2026-09-28.
 
 Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace implements "store everything, organize spatially for retrieval." gbrain, Zep, and Cognee implement "extract typed entities and relationships into a knowledge graph." Letta implements "the agent edits its own memory blocks." Memoria implements "Git-style version control over the memory state itself." EverMind implements "self-evolving Skill Memory + multi-modal retrieval over hierarchical scopes." Hippo implements "learn what is wrong and stop repeating it." These are complementary takes, not a single-axis ranking: bio-lifecycle (Hippo) + GraphRAG (gbrain/Cognee/Zep) + agent-self-edit (Letta) + memory-VCS (Memoria) + skill-distillation (EverMind) cover different parts of the same problem.
+
+Side-by-side pages on the website: [hippo vs mem0](https://hippo-memory.com/vs/mem0/) · [hippo vs Zep](https://hippo-memory.com/vs/zep/) · [hippo vs Letta](https://hippo-memory.com/vs/letta/) · [CLAUDE.md vs MEMORY.md](https://hippo-memory.com/vs/claude-memory/).
 
 ---
 
