@@ -1,20 +1,18 @@
-// The entry filter's two halves agree: hippo.db's WHERE terms (sqlite/entry-filter.ts) and the memory store's
-// predicate (memory/entry-filter.ts) keep the same rows in the same order, over memories and dormant snapshots alike.
+// The entry filter's WHERE terms (sqlite/entry-filter.ts) keep the rows each field means, in order, over memories and
+// dormant snapshots alike.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { MemoryEntry } from '../../src/base/memory/memory.js';
 import { readAll } from '../../src/base/util/pages.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { keeps } from '../../src/store/memory/entry-filter.js';
 import type { EntryFilter } from '../../src/base/ports/store/reports.js';
 import type { EntryCursor, EntryPage } from '../../src/base/ports/store/types.js';
 import { dormantSnapshotsWhere, insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import {
-  expectSameOutcomes,
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
@@ -121,7 +119,7 @@ const walk =
   (g) =>
     readAll((after?: EntryCursor) => g.entriesWhere(filter, { limit: 2, after, newest }));
 
-describe('reports.entriesWhere on both stores', () => {
+describe('reports.entriesWhere', () => {
   let fixture: TwoTenantFixture;
   let kept: Map<string, string[]>;
 
@@ -133,15 +131,14 @@ describe('reports.entriesWhere on both stores', () => {
       [`${name} newest`, walk(filter, true)],
       [`${name} first page`, (g) => g.entriesWhere(filter, { limit: 3 })],
     ]);
-    const sides = await onBothStores(
+    const sqlite = await runOnFixture(
       fixture,
       'reports',
       named.map(([, call]) => call),
     );
-    expectSameOutcomes(sides);
     kept = new Map(
       named.map(([name], i) => {
-        const outcome = sides.sqlite.outcomes[i];
+        const outcome = sqlite.outcomes[i];
         if (outcome === undefined || !('value' in outcome)) throw new Error(`${name} did not resolve`);
         const rows = Array.isArray(outcome.value) ? outcome.value : outcome.value.entries;
         return [name, rows.map((e) => e.id)];
@@ -182,21 +179,22 @@ describe('dormant snapshots under the same filter', () => {
 
   afterAll(() => rmSync(fixture.dir, { recursive: true, force: true }));
 
-  it('keeps, for each filter, the snapshots the memory predicate keeps', () => {
+  it('keeps, for each filter, the snapshots whose fields it names', () => {
     const db = openHippoDb(fixture.dir);
     try {
       const every = dormantSnapshotsWhere(db, { tenantId: ALL_TENANTS });
       expect(every.map((snap) => snap.entry.id)).toEqual(['mem_d01', 'mem_d02', 'mem_d04', 'mem_d03']);
-      const got = Object.entries(FILTERS).map(([name, filter]) => [
-        name,
-        dormantSnapshotsWhere(db, filter).map((snap) => snap.entry.id),
-      ]);
-      const want = Object.entries(FILTERS).map(([name, filter]) => [
-        name,
-        every.filter((snap) => keeps(filter, snap.entry)).map((snap) => snap.entry.id),
-      ]);
-      expect(got).toEqual(want);
-      expect(Object.fromEntries(got)['prefix in an origin']).toEqual(['mem_d01']);
+      const kept = (name: keyof typeof FILTERS): string[] =>
+        dormantSnapshotsWhere(db, FILTERS[name]).map((snap) => snap.entry.id);
+      expect(kept('one tenant')).toEqual(['mem_d01', 'mem_d02', 'mem_d04']);
+      expect(kept('one origin')).toEqual(['mem_d01']);
+      expect(kept('prefix')).toEqual(['mem_d01', 'mem_d04']);
+      expect(kept('prefix of every tenant')).toEqual(['mem_d01', 'mem_d04', 'mem_d03']);
+      expect(kept('prefix in an origin')).toEqual(['mem_d01']);
+      expect(kept('one kind')).toEqual(['mem_d04']);
+      expect(kept('live')).toEqual(['mem_d01', 'mem_d02']);
+      expect(kept('session')).toEqual(['mem_d02']);
+      expect(kept('no such origin')).toEqual([]);
     } finally {
       closeHippoDb(db);
     }

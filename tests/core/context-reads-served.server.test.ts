@@ -1,5 +1,5 @@
-// GET /v1/context and the hippo_context MCP tool answer the same over serve() on hippo.db and on a store held in memory,
-// and a store without contextReads answers store_not_ported on both.
+// GET /v1/context and the hippo_context MCP tool answer the same over serve() on hippo.db's default store, in process
+// and through the port alone.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,9 +10,7 @@ import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
 import { CONTEXT_NOW, contextRowsOf, PROJECT, rounded, seedContextRows } from '../_helpers/context-fixture.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, type TwoTenantFixture } from '../_helpers/store-conformance.js';
-import { memorySide } from '../_helpers/memory-side.js';
-import type { MemoryTables } from '../../src/store/memory/tables.js';
-import { memoryContextRowsOf } from '../_helpers/memory-recall-rows.js';
+import { portOnlyStore } from '../_helpers/port-only-store.js';
 
 type Call =
   | { readonly via: 'http'; readonly query: string }
@@ -44,22 +42,16 @@ async function send(url: string, call: Call): Promise<Reply> {
   return { status: res.status, body: await res.json() };
 }
 
-/** The store a run serves; the in-memory one's writes are read back from its tables. */
-interface Served {
-  readonly store: HippoStore;
-  readonly tables?: MemoryTables;
-}
-
 /** Every call over serve() on a fresh copy of the fixture, with no global store. */
-async function runServed(makeStore?: (root: string) => Served) {
+async function runServed(makeStore?: (root: string) => HippoStore) {
   const home = mkdtempSync(join(tmpdir(), 'hippo-context-served-'));
   try {
     const root = join(home, 'store');
     cpSync(fixture.dir, root, { recursive: true });
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
-    // serve() reads another store as shared, so the hippo.db pass is shared too to compare like with like.
+    // serve() reads a store that is not hippo.db as shared, so the hippo.db pass is shared too to compare like with like.
     shareRoot(root);
-    const { store, tables } = makeStore?.(root) ?? {};
+    const store = makeStore?.(root);
     const handle = await serve({ hippoRoot: root, port: 0, store });
     const replies: Reply[] = [];
     try {
@@ -68,7 +60,7 @@ async function runServed(makeStore?: (root: string) => Served) {
       await handle.stop();
       await store?.close();
     }
-    return { replies: rounded(replies), rows: tables ? memoryContextRowsOf(tables) : contextRowsOf(root) };
+    return { replies: rounded(replies), rows: contextRowsOf(root) };
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
@@ -99,15 +91,15 @@ afterEach(() => {
 });
 
 describe('context over serve()', () => {
-  it('answers and writes the same on hippo.db and on a store held in memory', async () => {
+  it('answers and writes the same on hippo.db and through the port alone', async () => {
     const onHippoDb = await runServed();
     expect(onHippoDb.replies.map((r) => r.status)).toEqual([200, 200, 200, 200, 200]);
     expect(JSON.stringify(onHippoDb.replies)).toContain('rollout');
-    const inMemory = await runServed(memorySide);
-    expect(inMemory.replies).toEqual(onHippoDb.replies);
-    expect(inMemory.rows).toEqual(onHippoDb.rows);
+    const onPort = await runServed(portOnlyStore);
+    expect(onPort.replies).toEqual(onHippoDb.replies);
+    expect(onPort.rows).toEqual(onHippoDb.rows);
     // The default store answers the data-only context reads from worker threads; the same store in process must agree with it.
-    const inProcess = await runServed((root) => ({ store: sqliteStore(root) }));
+    const inProcess = await runServed(sqliteStore);
     expect(onHippoDb.replies).toEqual(inProcess.replies);
     expect(onHippoDb.rows).toEqual(inProcess.rows);
   });

@@ -20,7 +20,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-import { rawProvenanceOf } from '../../src/store/memory/reports.js';
+import { rawProvenanceAt } from '../_helpers/report-reads.js';
 
 oneRequestPerTest();
 
@@ -62,7 +62,7 @@ describe('Slack connector — provenance coverage parity', () => {
         });
       }
     });
-    const coverage = buildProvenanceCoverage(rawProvenanceOf(loadAllEntries(root, 'default')));
+    const coverage = buildProvenanceCoverage(await rawProvenanceAt(root));
     expect(coverage.gaps).toHaveLength(0);
     expect(coverage.coverage).toBe(1);
 
@@ -99,7 +99,7 @@ describe('Slack connector — provenance coverage parity', () => {
       message: userless,
       eventId: 'EvBot',
     });
-    const coverage = buildProvenanceCoverage(rawProvenanceOf(loadAllEntries(root, 'default')));
+    const coverage = buildProvenanceCoverage(await rawProvenanceAt(root));
     expect(coverage.gaps).toHaveLength(0);
     const botRow = loadAllEntries(root, 'default').find(
       (e) => e.tags.includes('source:slack') && e.owner?.startsWith('bot:'),
@@ -119,7 +119,7 @@ describe('Slack connector — provenance coverage parity', () => {
     });
     const replyRow = loadAllEntries(root, 'default').find((e) => e.tags.includes('thread:1700000000.000001'));
     expect(replyRow?.owner).toMatch(/^user:U/);
-    expect(buildProvenanceCoverage(rawProvenanceOf(loadAllEntries(root, 'default'))).gaps).toHaveLength(0);
+    expect(buildProvenanceCoverage(await rawProvenanceAt(root)).gaps).toHaveLength(0);
   });
 
   it('message_changed edits do not create coverage gaps', async () => {
@@ -142,6 +142,6 @@ describe('Slack connector — provenance coverage parity', () => {
       message: edited,
       eventId: 'EvEdit',
     });
-    expect(buildProvenanceCoverage(rawProvenanceOf(loadAllEntries(root, 'default'))).gaps).toHaveLength(0);
+    expect(buildProvenanceCoverage(await rawProvenanceAt(root)).gaps).toHaveLength(0);
   });
 });

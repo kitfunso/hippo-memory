@@ -10,6 +10,7 @@ import type { RememberResult } from '../../src/api/index.js';
 import { presentConnectionsAsRemote } from '../_helpers/listen.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -18,13 +19,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: T is pinned by each call site to the exact JSON envelope the
-  // route handler (src/server.ts) returns for that request; every call
-  // site asserts the specific fields it reads immediately after this call.
-  return res.json() as Promise<T>;
-}
 
 describe('server auth middleware', () => {
   let home: string;

@@ -4,20 +4,13 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
 const SECRET = 'github-webhook-secret';
-
-/** Parse a fetch Response body against a caller-declared shape. */
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: only used against this file's own webhook route responses, whose
-  // JSON shape is fixed by the handler in src/server.ts and checked by the
-  // assertions immediately following each call site.
-  return (await res.json()) as T;
-}
 
 /** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string): T {

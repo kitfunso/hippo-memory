@@ -16,6 +16,7 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memo
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -24,14 +25,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-
-/** Parse a fetch Response body against a caller-declared shape. */
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: only used against this file's own /v1/memories route responses,
-  // whose JSON shape is fixed by the handler in src/server.ts and checked by
-  // the assertions immediately following each call site.
-  return (await res.json()) as T;
-}
 
 let home: string;
 let handle: ServerHandle;

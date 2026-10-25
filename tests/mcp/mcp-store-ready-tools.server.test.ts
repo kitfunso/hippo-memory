@@ -16,7 +16,7 @@ import { predictionMirror } from '../../src/base/records/prediction.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { memorySide } from '../_helpers/memory-side.js';
+import { portOnlySide } from '../_helpers/port-only-store.js';
 import { testInfra } from '../_helpers/infra.js';
 
 let root: string;
@@ -148,20 +148,20 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
   }
 
   it("hippo_predict_baserate reads the store's closed rows inside the caller's tenant and leaves its audit row there", async () => {
-    const memory = memorySide(fixture.dir);
+    const side = portOnlySide(fixture.dir);
     const claim = { classTag: 'cutover', claimText: 'the cutover takes two days', estimateValue: 2 };
-    const saved = await memory.store.objects.saveObject(TENANT_A, 'prediction', {
+    const saved = await side.store.objects.saveObject(TENANT_A, 'prediction', {
       ...claim,
       mirror: predictionMirror(TENANT_A, claim, 30),
       actor: 'seed',
     });
-    await memory.store.objects.closeObject(TENANT_A, 'prediction', saved.id, {
+    await side.store.objects.closeObject(TENANT_A, 'prediction', saved.id, {
       closureState: 'closed',
       actualValue: 3,
       actor: 'seed',
     });
     const { memberA, memberB } = fixture.tokens;
-    expect(await callServed(memory.store, memberA, 'hippo_predict_baserate', { class_tag: 'cutover' })).toBe(
+    expect(await callServed(side.store, memberA, 'hippo_predict_baserate', { class_tag: 'cutover' })).toBe(
       [
         'Last 1 estimate in class cutover averaged 1.50x actual (MAE 1.00).',
         '',
@@ -174,11 +174,11 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
         'mae:              1.000',
       ].join('\n'),
     );
-    expect(await callServed(memory.store, memberB, 'hippo_predict_baserate', { class_tag: 'cutover' })).toMatch(
+    expect(await callServed(side.store, memberB, 'hippo_predict_baserate', { class_tag: 'cutover' })).toMatch(
       /^No closed predictions in class "cutover" yet\./,
     );
     expect(
-      memory
+      side
         .auditRows()
         .slice(-2)
         .map((e) => [e.op, e.actor, e.tenantId, e.targetId, e.metadata]),
@@ -200,7 +200,7 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
     ]);
   });
 
-  it("hippo_assemble builds the window from the store's rows, without a row only hippo.db holds", async () => {
+  it("hippo_assemble builds the window from the store's rows", async () => {
     for (const entry of [
       raw(TENANT_A, 'raw_1', 1),
       raw(TENANT_A, 'raw_2', 2),
@@ -209,15 +209,14 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
     ]) {
       writeEntry(fixture.dir, entry);
     }
-    const { store } = memorySide(fixture.dir);
-    writeEntry(fixture.dir, raw(TENANT_A, 'raw_late', 4));
+    const { store } = portOnlySide(fixture.dir);
     const text = await callServed(store, fixture.tokens.memberA, 'hippo_assemble', { session_id: 'sess-mcp' });
     const [heading, ...lines] = text.split('\n');
     expect(heading).toMatch(/^Session sess-mcp \u2014 3 items, \d+ tokens \(raw=3, summarized=0, evicted=0\)$/);
     expect(lines).toEqual([1, 2, 3].map((m) => `  [tail] ${minute(m)} raw_${m} - ${note(`raw_${m}`)}`));
   });
 
-  it("hippo_drill lists the store's children of a summary, without a child only hippo.db holds", async () => {
+  it("hippo_drill lists the store's children of a summary", async () => {
     const child = (tenantId: string, id: string, m: number): MemoryEntry =>
       row(tenantId, id, m, { dagParentId: 'sum_1', dagLevel: 1 });
     for (const entry of [
@@ -228,8 +227,7 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
     ]) {
       writeEntry(fixture.dir, entry);
     }
-    const { store } = memorySide(fixture.dir);
-    writeEntry(fixture.dir, child(TENANT_A, 'fact_late', 4));
+    const { store } = portOnlySide(fixture.dir);
     expect(await callServed(store, fixture.tokens.memberA, 'hippo_drill', { summary_id: 'sum_1' })).toBe(
       [
         'Summary sum_1 \u2014 2 descendants',

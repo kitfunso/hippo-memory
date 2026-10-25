@@ -18,6 +18,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction } from '../_helpers/root-forms.js';
 import type { PredictionBaserate } from '../../src/base/ports/store/types.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { jsonAs, authHeaders } from '../_helpers/http-objects-server.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -39,17 +40,6 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-function authHeaders() {
-  return { authorization: `Bearer ${apiKey.plaintext}`, 'content-type': 'application/json' };
-}
-
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: T is pinned by each call site to the exact JSON envelope the
-  // /v1/predictions/stats route handler (src/server.ts) returns; every call
-  // site asserts the specific fields it reads immediately after this call.
-  return res.json() as Promise<T>;
-}
-
 describe('HTTP /v1/predictions/stats', () => {
   it.skipIf(needsHippoDb('db'))('returns baserate JSON for a class with closed predictions', async () => {
     // Seed: 2 closed predictions in class "http-test"
@@ -66,7 +56,7 @@ describe('HTTP /v1/predictions/stats', () => {
     }
 
     const res = await fetch(`${handle.url}/v1/predictions/stats?class=http-test`, {
-      headers: authHeaders(),
+      headers: authHeaders(apiKey),
     });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ baserate: PredictionBaserate }>(res);
@@ -78,7 +68,7 @@ describe('HTTP /v1/predictions/stats', () => {
   });
 
   it('missing class param returns 400', async () => {
-    const res = await fetch(`${handle.url}/v1/predictions/stats`, { headers: authHeaders() });
+    const res = await fetch(`${handle.url}/v1/predictions/stats`, { headers: authHeaders(apiKey) });
     expect(res.status).toBe(400);
     const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toMatch(/class param is required/);
@@ -92,7 +82,7 @@ describe('HTTP /v1/predictions/stats', () => {
     });
     await closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: 2 });
 
-    await fetch(`${handle.url}/v1/predictions/stats?class=audit-http`, { headers: authHeaders() });
+    await fetch(`${handle.url}/v1/predictions/stats?class=audit-http`, { headers: authHeaders(apiKey) });
 
     const db = openHippoDb(home);
     try {
@@ -110,7 +100,7 @@ describe('HTTP /v1/predictions/stats', () => {
   });
 
   it('empty class returns baserate with nClosed=0', async () => {
-    const res = await fetch(`${handle.url}/v1/predictions/stats?class=never-existed`, { headers: authHeaders() });
+    const res = await fetch(`${handle.url}/v1/predictions/stats?class=never-existed`, { headers: authHeaders(apiKey) });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ baserate: PredictionBaserate }>(res);
     expect(body.baserate.nClosed).toBe(0);

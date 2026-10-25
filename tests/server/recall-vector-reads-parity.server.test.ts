@@ -1,4 +1,4 @@
-// Recall's vector arm on a store other than hippo.db: an in-memory store with the vector reads must give the replies, ids and rows
+// Recall's vector arm through the port alone: a port-only store must give the replies, ids and rows
 // hippo.db gives, over GET /v1/memories and MCP hippo_recall, with a local hashed-embedding server as the provider.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
@@ -36,8 +36,7 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { memorySide } from '../_helpers/memory-side.js';
-import { memoryRowsOf } from '../_helpers/memory-recall-rows.js';
+import { portOnlySide } from '../_helpers/port-only-store.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 beforeEach(() => {
@@ -167,8 +166,8 @@ function shownIds(pass: Pass): string[] {
 let templates: Templates;
 let embeddings: HashedEmbeddings;
 
-/** hippo.db on store workers, as serve() runs it by default, hippo.db in process, or the in-memory store. */
-type Backing = 'workers' | 'in process' | 'memory';
+/** hippo.db on store workers, as serve() runs it by default, hippo.db in process, or the port alone. */
+type Backing = 'workers' | 'in process' | 'port';
 
 /** One recall run on a fresh copy, with every module-level ring, cache and once-key cleared. */
 async function runPass(
@@ -188,8 +187,8 @@ async function runPass(
     prepare?.(s.root);
     // serve() reads a port store as shared, so the hippo.db pass must be shared too to compare like with like.
     shareRoot(s.root);
-    const memory = backing === 'memory' ? memorySide(s.root) : undefined;
-    const store = memory?.store ?? (backing === 'in process' ? sqliteStore(s.root) : undefined);
+    const port = backing === 'port' ? portOnlySide(s.root) : undefined;
+    const store = port?.store ?? (backing === 'in process' ? sqliteStore(s.root) : undefined);
     const before = embeddings.requests();
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
       lines.push(String(chunk));
@@ -216,8 +215,7 @@ async function runPass(
       sampled.mockRestore();
     }
     const requests = embeddings.requests() - before;
-    const rows = memory ? memoryRowsOf(memory.tables) : rowsOf(s.root);
-    return normalize({ replies, rows, requests, log: lines.join(''), calls: memory?.calls ?? [] }, s);
+    return normalize({ replies, rows: rowsOf(s.root), requests, log: lines.join(''), calls: port?.calls ?? [] }, s);
   } finally {
     rmSync(s.home, { recursive: true, force: true });
   }
@@ -251,7 +249,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe.skipIf(needsHippoDb('parity'))('recall through the vector reads of a store other than hippo.db', () => {
+describe.skipIf(needsHippoDb('parity'))('recall through the vector reads of a port-only store', () => {
   it.each([
     ['GET /v1/memories mode=hybrid', [http('hybrid')], false, 'nearestEntries'],
     ['GET /v1/memories mode=physics', [http('physics')], true, 'stored:particles'],
@@ -261,7 +259,7 @@ describe.skipIf(needsHippoDb('parity'))('recall through the vector reads of a st
     '%s: same ids in the same order, same rows written, same provider calls',
     async (_name, calls, physics, read) => {
       const onHippoDb = await runPass(calls, physics, 'workers');
-      const onMemory = await runPass(calls, physics, 'memory');
+      const onPort = await runPass(calls, physics, 'port');
       const inProcess = await runPass(calls, physics, 'in process');
       expect([onHippoDb.replies, onHippoDb.rows, onHippoDb.requests]).toEqual([
         inProcess.replies,
@@ -269,10 +267,10 @@ describe.skipIf(needsHippoDb('parity'))('recall through the vector reads of a st
         inProcess.requests,
       ]);
       expect(onHippoDb.log).not.toContain('fell back to BM25');
-      expect(onMemory.replies).toEqual(onHippoDb.replies);
-      expect(onMemory.rows).toEqual(onHippoDb.rows);
-      expect(onMemory.requests).toBe(onHippoDb.requests);
-      expect(onMemory.calls).toContain(read);
+      expect(onPort.replies).toEqual(onHippoDb.replies);
+      expect(onPort.rows).toEqual(onHippoDb.rows);
+      expect(onPort.requests).toBe(onHippoDb.requests);
+      expect(onPort.calls).toContain(read);
       // hippo.db's own reply shows the vector arm ran: a row no query word matches is in it, and no filtered row is.
       const shown = shownIds(onHippoDb);
       expect(onHippoDb.replies.every((r) => r.status === 200)).toBe(true);
@@ -285,74 +283,52 @@ describe.skipIf(needsHippoDb('parity'))('recall through the vector reads of a st
   );
 });
 
-describe.skipIf(needsHippoDb('parity'))('when the vector arm cannot run, both stores fall back to BM25 alike', () => {
-  const emptyIndex = (root: string): void =>
-    withDb(root, (db) => db.exec('DELETE FROM memory_vectors; DELETE FROM memory_physics;'));
-  const staleModel = (root: string): void =>
-    withDb(root, (db) => setMeta(db, EMBEDDING_MODEL_META_KEY, embeddingIndexIdentity('openai:old-model')));
+describe.skipIf(needsHippoDb('parity'))(
+  'when the vector arm cannot run, hippo.db and a port-only store fall back to BM25 alike',
+  () => {
+    const emptyIndex = (root: string): void =>
+      withDb(root, (db) => db.exec('DELETE FROM memory_vectors; DELETE FROM memory_physics;'));
+    const staleModel = (root: string): void =>
+      withDb(root, (db) => setMeta(db, EMBEDDING_MODEL_META_KEY, embeddingIndexIdentity('openai:old-model')));
 
-  // Physics embeds the query before it reads the index, so an empty index still costs it one call; hybrid spends none.
-  it.each([
-    ['an empty index under a stored model', emptyIndex, 200, 'hybrid', 0],
-    ['an empty index under a stored model', emptyIndex, 200, 'physics', 1],
-    ['an index built by another model', staleModel, 200, 'hybrid', 0],
-    ['an index built by another model', staleModel, 200, 'physics', 0],
-    ['a provider that answers 500', undefined, 500, 'hybrid', 3],
-    ['a provider that answers 500', undefined, 500, 'physics', 6],
-  ] as const)('%s, mode=%s', async (_name, prepare, status, mode, requests) => {
-    embeddings.setStatus(status);
-    const onHippoDb = await runPass([http(mode)], true, 'workers', prepare);
-    const onMemory = await runPass([http(mode)], true, 'memory', prepare);
-    expect(onMemory.replies).toEqual(onHippoDb.replies);
-    expect(onMemory.rows).toEqual(onHippoDb.rows);
-    expect([onHippoDb.requests, onMemory.requests]).toEqual([requests, requests]);
-    expect(onHippoDb.replies[0]!.status).toBe(200);
-    expect(shownIds(onHippoDb)).not.toContain(VECTOR_ONLY);
-  });
+    // Physics embeds the query before it reads the index, so an empty index still costs it one call; hybrid spends none.
+    it.each([
+      ['an empty index under a stored model', emptyIndex, 200, 'hybrid', 0],
+      ['an empty index under a stored model', emptyIndex, 200, 'physics', 1],
+      ['an index built by another model', staleModel, 200, 'hybrid', 0],
+      ['an index built by another model', staleModel, 200, 'physics', 0],
+      ['a provider that answers 500', undefined, 500, 'hybrid', 3],
+      ['a provider that answers 500', undefined, 500, 'physics', 6],
+    ] as const)('%s, mode=%s', async (_name, prepare, status, mode, requests) => {
+      embeddings.setStatus(status);
+      const onHippoDb = await runPass([http(mode)], true, 'workers', prepare);
+      const onPort = await runPass([http(mode)], true, 'port', prepare);
+      expect(onPort.replies).toEqual(onHippoDb.replies);
+      expect(onPort.rows).toEqual(onHippoDb.rows);
+      expect([onHippoDb.requests, onPort.requests]).toEqual([requests, requests]);
+      expect(onHippoDb.replies[0]!.status).toBe(200);
+      expect(shownIds(onHippoDb)).not.toContain(VECTOR_ONLY);
+    });
 
-  it('a stale index names the rebuild each store needs', async () => {
-    const onHippoDb = await runPass([http('hybrid')], false, 'workers', staleModel);
-    const onMemory = await runPass([http('hybrid')], false, 'memory', staleModel);
-    expect(onHippoDb.log).toContain("is being rebuilt; run 'hippo embed'\n");
-    expect(onMemory.log).toContain(
-      "run 'hippo embed' on the folder's hippo.db, then rebuild the 'memory' database from it",
-    );
-  });
-});
+    it('a stale index names the rebuild hippo.db needs', async () => {
+      const onHippoDb = await runPass([http('hybrid')], false, 'workers', staleModel);
+      expect(onHippoDb.log).toContain("is being rebuilt; run 'hippo embed'\n");
+    });
+  },
+);
 
-describe('the in-memory vector reads answer as sqliteStore does', () => {
+describe('the vector reads of sqliteStore', () => {
   let sqlite: VectorReads;
-  let memory: VectorReads;
 
   beforeAll(() => {
     const root = join(templates.dir, 'local');
     sqlite = sqliteStore(root).vectors;
-    memory = memorySide(root).store.vectors;
   });
 
   const ids = async (reads: VectorReads, q: readonly number[], spec: VectorCandidateSpec): Promise<string[]> =>
     (await reads.nearestEntries(q, spec)).map((e) => e.id);
 
-  it.each([
-    [
-      'tenant, default-deny scope, current rows',
-      NEAR,
-      { tenantId: 'default', scope: { mode: 'default-deny' }, includeSuperseded: false },
-    ],
-    ['superseded rows kept', NEAR, { tenantId: 'default', includeSuperseded: true }],
-    [
-      'a private scope asked for exactly',
-      NEAR,
-      { tenantId: 'default', scope: { mode: 'exact', value: 'slack:private:C1' }, includeSuperseded: false },
-    ],
-    ['an origin filter', NEAR, { tenantId: 'default', includeSuperseded: false, origin: ['no-such-project'] }],
-    ['every tenant, a 51-way tie cut at 5', NEAR, { tenantId: ALL_TENANTS, includeSuperseded: false, limit: 5 }],
-    ['a two-way tie cut at 1', TIE, { tenantId: 'default', includeSuperseded: false, limit: 1 }],
-  ] as const)('nearestEntries: %s', async (_name, q, spec) => {
-    expect(await ids(memory, q, spec)).toEqual(await ids(sqlite, q, spec));
-  });
-
-  it('a tie at the cut goes to the smaller id on both', async () => {
+  it('a tie at the cut goes to the smaller id', async () => {
     const spec = { tenantId: 'default', includeSuperseded: false, limit: 1 };
     expect(await ids(sqlite, TIE, spec)).toEqual(['mem_v_tie_a']);
     expect(await ids(sqlite, NEAR, { tenantId: ALL_TENANTS, includeSuperseded: false, limit: 2 })).toEqual([
@@ -420,11 +396,10 @@ describe('the in-memory vector reads answer as sqliteStore does', () => {
 
   it('stored vectors and particles, and embeddingIndexState', async () => {
     const some = ['mem_l_8d', 'mem_l_api', 'mem_l_zero', ORPHAN, 'mem_missing'];
-    expect(await memory.stored('vectors', some)).toEqual(await sqlite.stored('vectors', some));
-    expect((await sqlite.stored('vectors', some)).get('mem_l_8d')).toHaveLength(8);
-    expect(await memory.embeddingIndexState()).toEqual(await sqlite.embeddingIndexState());
-    expect(await memory.stored('particles', some)).toEqual(await sqlite.stored('particles', some));
-    const none = [(await sqlite.stored('particles', [])).size, (await memory.stored('particles', [])).size];
-    expect(none).toEqual([0, 0]);
+    const vectors = await sqlite.stored('vectors', some);
+    expect(vectors.get('mem_l_8d')).toHaveLength(8);
+    expect(vectors.has('mem_missing')).toBe(false);
+    expect(await sqlite.embeddingIndexState()).toMatchObject({ hasVectors: true });
+    expect((await sqlite.stored('particles', [])).size).toBe(0);
   });
 });

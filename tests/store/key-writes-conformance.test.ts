@@ -1,4 +1,4 @@
-// KeyWrites answers alike on hippo.db and on a store held in memory: the same values, the same errors and the same audit rows.
+// KeyWrites answers: the same values, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
@@ -6,14 +6,13 @@ import { auditHighId } from '../_helpers/root-forms.js';
 import type { ApiKeyListRow, ApiKeyRecord, AuditEvent, KeyListQuery, NewApiKey } from '../../src/entry/store-kit.js';
 import {
   FIXTURE_REVOKED_AT,
-  onBothStores,
+  runOnFixture,
   seedTwoTenants,
   TENANT_A,
   TENANT_B,
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
-  expectSameOutcomes,
 } from '../_helpers/store-conformance.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -35,9 +34,7 @@ let baseline: Side;
 let nextAuditId: number;
 
 async function conforms(calls: readonly Call[]): Promise<Side> {
-  const sides = await onBothStores(fixture, 'keyWrites', calls);
-  expectSameOutcomes(sides);
-  return sides.sqlite;
+  return runOnFixture(fixture, 'keyWrites', calls);
 }
 
 function newKey(fields: Partial<NewApiKey> = {}): NewApiKey {

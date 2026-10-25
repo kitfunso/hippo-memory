@@ -1,6 +1,8 @@
 // A store that answers only through the port: the server blocks hippo.db for any other kind, so a recall
 // path that still opens hippo.db directly throws, while the port's own methods reach the same rows.
-import { withSqliteAllowed } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, withSqliteAllowed } from '../../src/db/index.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
+import { auditRowsOn } from './audit-rows.js';
 import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 
@@ -68,4 +70,60 @@ export function portOnlyStore(hippoRoot: string): HippoStore {
     OptionalGroup
   >;
   return { ...base, ...required };
+}
+
+/** The store with the name of each recall and context read it answers pushed onto `calls`: the two base reads,
+ * contextReads, vectors and the sessions read. */
+function logged(store: HippoStore, calls: string[]): HippoStore {
+  const log =
+    <A extends unknown[], R>(name: string, fn: (...args: A) => R) =>
+    (...args: A): R => {
+      calls.push(name);
+      return fn(...args);
+    };
+  const { contextReads: c, vectors: v, sessions } = store;
+  return {
+    ...store,
+    continuity: log('continuity', store.continuity),
+    searchRecallEntries: log('searchRecallEntries', store.searchRecallEntries),
+    // SAFETY: log passes every argument through and returns read's own answer, so each overload still holds.
+    sessions: { ...sessions, read: log('sessions.read', sessions.read) as HippoStore['sessions']['read'] },
+    contextReads: {
+      ambientCandidates: log('ambientCandidates', c.ambientCandidates),
+      contextCandidates: log('contextCandidates', c.contextCandidates),
+      ambientTallies: log('ambientTallies', c.ambientTallies),
+      schemaFit: log('schemaFit', c.schemaFit),
+    },
+    vectors: {
+      embeddingIndexState: log('embeddingIndexState', v.embeddingIndexState),
+      stored: (part, ids) => {
+        calls.push(`stored:${part}`);
+        return v.stored(part, ids);
+      },
+      nearestEntries: log('nearestEntries', v.nearestEntries),
+    },
+  };
+}
+
+/** A port-only store that logs its recall reads, and a read of every audit row it holds, oldest first. */
+export interface PortOnlySide {
+  readonly store: HippoStore;
+  readonly calls: readonly string[];
+  readonly auditRows: () => AuditEvent[];
+}
+
+export function portOnlySide(hippoRoot: string): PortOnlySide {
+  const calls: string[] = [];
+  return {
+    store: logged(portOnlyStore(hippoRoot), calls),
+    calls,
+    auditRows: () => {
+      const db = openHippoDb(hippoRoot);
+      try {
+        return auditRowsOn(db);
+      } finally {
+        closeHippoDb(db);
+      }
+    },
+  };
 }

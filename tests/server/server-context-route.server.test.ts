@@ -32,6 +32,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { jsonAs } from '../_helpers/http-objects-server.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -47,12 +48,6 @@ afterEach(() => {
  * `/v1/context` route under test in this file, immediately followed by
  * assertions on the exact fields named in `T`.
  */
-async function jsonAs<T>(res: Response): Promise<T> {
-  // SAFETY: see doc comment above — caller supplies T for a body this file
-  // asserts on immediately after calling jsonAs.
-  return (await res.json()) as T;
-}
-
 describe('GET /v1/context', () => {
   let home: string;
   let globalHome: string;
