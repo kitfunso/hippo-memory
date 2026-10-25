@@ -1,4 +1,4 @@
-// The row windows and caps both adapters read, each set once so the two stores answer with the same rows.
+// The row windows and caps the store reads, each set once so every read that shares one answers the same rows.
 
 /** Fresh raw rows one read returns at most. */
 export const MAX_FRESH_RAW = 200;

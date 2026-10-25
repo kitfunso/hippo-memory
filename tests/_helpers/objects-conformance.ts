@@ -160,7 +160,7 @@ export async function conforms(calls: readonly Call[]): Promise<Side> {
   return runOnFixture(fixture, 'objects', calls);
 }
 
-/** One save, built once per call list so both stores are handed the same mirror id. */
+/** One save, built once per call list so every call is handed the same mirror id. */
 interface Draft {
   readonly n: number;
   readonly group: string;
@@ -197,7 +197,7 @@ export function saving(c: KindCase, n: number, opts: DraftOptions = {}): Draft {
   };
 }
 
-/** Each write sets the clock inside the call, so both stores stamp its audit rows with the same time. */
+/** Each write sets the clock inside the call, so its audit rows carry a time the test names. */
 export const save =
   (c: KindCase, d: Draft): Call =>
   (g) => {
@@ -330,7 +330,7 @@ export function auditRowsAt(root: string): AuditEvent[] {
   }
 }
 
-/** One incident to open, built once per call list so both stores are handed the same mirror id. */
+/** One incident to open, built once per call list so every call is handed the same mirror id. */
 interface Opening {
   readonly n: number;
   readonly tenantId: string;

@@ -48,13 +48,13 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
   return runOnFixture(fixture, 'objects', calls);
 }
 
-/** Built once per call list, so both stores are handed the same mirror id. */
+/** Built once per call list, so every call is handed the same mirror id. */
 function claim(classTag: string, fields: Partial<SavePredictionOptions> = {}, tenantId = TENANT_A): PredictionSave {
   const opts: SavePredictionOptions = { classTag, claimText: `the ${classTag} work lands on time`, ...fields };
   return { ...opts, mirror: predictionMirror(tenantId, opts, 30), actor: ACTOR };
 }
 
-/** Sets the clock inside the call, so each store reads the same time at the same step. */
+/** Sets the clock inside the call, so each step reads a time the test names. */
 const at =
   (iso: string, call: Call): Call =>
   (g, store) => {
@@ -348,7 +348,7 @@ describe('Objects, the prediction kind: closeObject', () => {
   });
 
   it('a close with a null actual and a save with a null estimate audit has_actual and has_estimate false', async () => {
-    // The port types these number | undefined, but an HTTP body can carry null; both stores must treat it as none.
+    // The port types these number | undefined, but an HTTP body can carry null; the store must treat it as none.
     const nothing: undefined = JSON.parse('null');
     const input = claim('sprint', { estimateValue: nothing });
     const side = await conforms([

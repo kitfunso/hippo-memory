@@ -1,5 +1,5 @@
 // AuditLog answers, with no audit row written, and GET /v1/audit built on
-// it answers the same over serve() on either store.
+// it answers the same over serve().
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -55,7 +55,7 @@ let fixture: TwoTenantFixture;
 let fixtureAudit: readonly AuditEvent[];
 let hostAdminToken: string;
 
-/** Runs the calls on both stores, asserts they agree and wrote no audit row, and returns hippo.db's values. */
+/** Runs the calls, asserts they wrote no audit row, and returns hippo.db's values. */
 async function conforms<R>(calls: readonly Call<R>[]): Promise<R[]> {
   const sqlite = await runOnFixture(fixture, 'auditLog', calls);
   expect(sqlite.audit).toEqual(fixtureAudit);

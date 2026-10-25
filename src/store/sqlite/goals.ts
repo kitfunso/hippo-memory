@@ -14,7 +14,7 @@ import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { generateId } from '../../base/memory/memory.js';
 
-// The goal stack's rules, once for both adapters: its ids, its depth cap, the parent check, a new goal and policy, and
+// The goal stack's rules: its ids, its depth cap, the parent check, a new goal and policy, and
 // the strength a completed goal passes to the memories recalled under it.
 
 // The CLI prints these ids and the sequential-learning adapter reads them back as 16 hex characters.

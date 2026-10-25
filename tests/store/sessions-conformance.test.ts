@@ -34,7 +34,7 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 
 afterEach(() => vi.useRealTimers());
 
-/** Each call one second after the one before, so both stores stamp the same times and order rows the same. */
+/** Each call one second after the one before, so the store stamps known times and orders rows by them. */
 async function conforms(calls: readonly GroupCall<'sessions', unknown>[]) {
   const timed = calls.map((call, i): GroupCall<'sessions', unknown> => (group, store) => {
     vi.setSystemTime(START + i * 1000);

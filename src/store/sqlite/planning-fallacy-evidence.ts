@@ -4,7 +4,7 @@ import type { DatabaseSyncLike } from '../../db/index.js';
 import type { PlanningFallacyEvidence, ClassResolution } from '../../base/ports/store/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
-// A claim's prediction class, once for both adapters: the tenant's class tags scored by lower-cased token overlap.
+// A claim's prediction class: the tenant's class tags scored by lower-cased token overlap.
 
 /** A unique best of at least one shared token wins; a tie at the top resolves no class, since an alphabetical pick
  * would name the wrong class on an ambiguous claim. The result does not depend on the order of `classTags`. */

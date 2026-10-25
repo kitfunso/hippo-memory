@@ -102,7 +102,7 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 
 afterEach(() => vi.useRealTimers());
 
-// Each store stamps a write's memory rows with its own clock in SQL's datetime form, so that value is named by format.
+// The store stamps a write's memory rows with its own clock in SQL's datetime form, so that value is named by format.
 function stamped<T>(value: T): T {
   return JSON.parse(JSON.stringify(value).replace(/"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d"/g, '"stamped"'));
 }

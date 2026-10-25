@@ -15,8 +15,8 @@ import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../..
 import type { HandoffFilter, SessionEndHandoffRequest, TaskSnapshot } from '../../base/ports/store/sessions.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
-// What a session end writes, once for both adapters: the snapshot or transcript read it writes from, and the handoff it
-// builds; each adapter loads the rows these read and stores the result.
+// What a session end writes: the snapshot or transcript read it writes from, and the handoff it builds; the store
+// loads the rows these read and stores the result.
 
 type Derived = Pick<TaskSnapshot, 'task' | 'summary' | 'nextStep'>;
 

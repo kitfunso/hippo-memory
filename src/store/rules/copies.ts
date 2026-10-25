@@ -1,4 +1,4 @@
-// Which rows a store read may answer as holding a text, once for both adapters: equal once every space is gone, or a
+// Which rows a store read may answer as holding a text: equal once every space is gone, or a
 // sleep-merged row holding it. Every copy heldTextKeys finds passes, so a caller that checks again keeps its answer.
 
 /** The code points JavaScript's \s matches, which duplicateKey folds; the SQL twin removes the same list. */

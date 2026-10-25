@@ -16,7 +16,7 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import { parseLastTraceId } from './rows.js';
 import { DAY_MS } from '../../base/util/time.js';
 
-// How long the delivery ledger and the recall traces stay, once for both adapters.
+// How long the delivery ledger and the recall traces stay.
 
 /** Delivery events, and recall traces with no outcome that are not the store's last recall, are kept this long. */
 const RETENTION_DAYS = 90;

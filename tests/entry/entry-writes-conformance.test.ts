@@ -28,7 +28,7 @@ const ALICE = 'personal:private:alice';
 const BANNED = 'the launch date is march third';
 const ACTOR = 'api_key:caller';
 
-/** The columns these writes change, so a row compares across stores without the fields each store fills its own way. */
+/** The columns these writes change, so a row compares to its expected value without the fields the store fills. */
 type Row = Pick<
   MemoryEntry,
   | 'id'
@@ -475,7 +475,7 @@ describe('EntryWrites.forget', () => {
       forget(personal.id),
       forget(personal.id, ALICE),
       readBack(TENANT_A, raw.id, personal.id),
-      // The CLI and dashboard tell this refusal apart by its class, so both stores must throw the same one.
+      // The CLI and dashboard tell this refusal apart by its class, so the store must throw that class.
       (g) =>
         g.forget(target(raw.id)).then(
           () => 'kept',

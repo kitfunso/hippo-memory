@@ -22,7 +22,7 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import type { JsonObject } from '../../base/util/json.js';
 import { plural } from '../../base/util/format.js';
 
-// What both adapters say when a prediction is saved, closed or summed, once: audit metadata, refusal texts, baserate.
+// What the store says when a prediction is saved, closed or summed: audit metadata, refusal texts, baserate.
 
 const present = (value: number | null | undefined): boolean => value !== undefined && value !== null;
 

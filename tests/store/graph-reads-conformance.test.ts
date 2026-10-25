@@ -69,7 +69,7 @@ const ids = (entities: readonly number[], relations: readonly Edge[], truncated 
   truncated,
 });
 
-/** Both stores' answers, asserted equal, with nothing appended to either audit log. */
+/** The answers, with nothing appended to the audit log. */
 async function answers<R>(calls: readonly Call<R>[]): Promise<R[]> {
   const sqlite = await runOnFixture(fixture, 'graphReads', calls);
   expect(sqlite.audit).toEqual(auditBefore);
@@ -446,7 +446,7 @@ describe('GraphReads walk reads', () => {
 });
 
 describe('GraphReads.graphDelta', () => {
-  it('plans the same ops on both stores: deletes in id order, then updates and inserts in desired order', async () => {
+  it('plans the ops: deletes in id order, then updates and inserts in desired order', async () => {
     const { e, memories } = g;
     const [
       {

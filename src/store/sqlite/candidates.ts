@@ -37,8 +37,8 @@ import type { SourceTally } from '../../base/ports/store/sharing.js';
 import type { StatusCounts, StrengthTallies } from '../../base/ports/store/reports.js';
 import { SCHEMA_FIT_WINDOW_ROWS } from '../rules/windows.js';
 
-// The status tally, once for both adapters: each row scored by calculateStrength and confidenceFacets, summed in the
-// order given so the average rounds the same under either store.
+// The status tally: each row scored by calculateStrength and confidenceFacets, summed in the order given so the
+// average rounds the same on every run.
 
 /** What one row's status reads: its strength and confidence inputs and its layer. */
 type StatusInputs = StrengthInputs & ConfidenceInputs & { readonly layer: Layer };

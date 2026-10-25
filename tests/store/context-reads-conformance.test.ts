@@ -34,7 +34,7 @@ type Named = readonly [string, Call];
 let fixture: TwoTenantFixture;
 let fixtureAudit: readonly AuditEvent[];
 
-/** Runs the calls on both stores, asserts they agree and wrote no audit row, and returns hippo.db's outcomes by name. */
+/** Runs the calls, asserts they wrote no audit row, and returns hippo.db's outcomes by name. */
 async function conformsOn<G extends 'contextReads' | 'sessions'>(
   group: G,
   named: readonly (readonly [string, GroupCall<G, unknown>])[],
@@ -234,7 +234,7 @@ describe('ContextReads.contextCandidates', () => {
   });
 });
 
-/** Tag order follows each store's row order and the strength sum is floating point, so both are put in one form first. */
+/** Tag order follows the store's row order and the strength sum is floating point, so both go into one form first. */
 const comparable = (t: AmbientTallies) => ({
   ...t,
   strengthSum: Number(t.strengthSum.toFixed(6)),

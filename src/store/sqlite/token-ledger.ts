@@ -20,7 +20,7 @@ import type { LastSent } from '../../base/session/skip-unchanged.js';
 import type { ApiCall } from '../../base/session/transcript-calls.js';
 import { DAY_MS } from '../../base/util/time.js';
 
-// The token ledger's surfaces and retention, once for both adapters.
+// The token ledger's surfaces and retention.
 
 /** Every surface a block is sent on, in report order. */
 const TOKEN_SURFACES: readonly TokenSurface[] = [

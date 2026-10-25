@@ -26,7 +26,7 @@ type Side = SideResult<KeyAuditValue>;
 let fixture: TwoTenantFixture;
 let baseline: Side;
 
-/** Runs the calls on both stores, asserts they agree, and returns hippo.db's side. */
+/** Runs the calls on a copy of the fixture and returns their outcomes and audit rows. */
 async function conforms(calls: readonly Call[]): Promise<Side> {
   return runOnFixture(fixture, 'keyWrites', calls);
 }

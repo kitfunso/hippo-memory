@@ -17,7 +17,7 @@ import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-reten
 import { MAX_HOOK_FIELD_LEN } from '../../base/util/limits.js';
 import { DAY_MS } from '../../base/util/time.js';
 
-// The failure log's row and totals, once for both adapters: what a failure stores, how long it stays, and how a
+// The failure log's row and totals: what a failure stores, how long it stays, and how a
 // window's outcomes and repeats add up.
 
 /** The outcomes a repeat is counted among: a failure the hook judged worth a lesson. */

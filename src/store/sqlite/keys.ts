@@ -17,7 +17,7 @@ import { readApiKeyOwner } from './tenant-lookup.js';
 import type { AppendAuditOpts } from '../../base/ports/store/types.js';
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 
-// A key write's checks, once for both adapters: an unknown key and another tenant's key fail alike, so a caller learns
+// A key write's checks: an unknown key and another tenant's key fail alike, so a caller learns
 // nothing about keys it does not own, and a grant on a revoked key is refused since it would never apply.
 
 /** `key` when the tenant owns it; NotFoundError otherwise. */

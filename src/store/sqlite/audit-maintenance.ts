@@ -30,7 +30,7 @@ import { withUnmigratedDb } from '../../db/open.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
-// Quality repair's issue list, once for both adapters: which rows are defects and which of those a protection keeps.
+// Quality repair's issue list: which rows are defects and which of those a protection keeps.
 
 /** The issues among `entries` in their order, each defect kept when `protect` names the row. */
 function repairIssues(

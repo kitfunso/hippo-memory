@@ -1,5 +1,5 @@
 // DagReads answers, with no audit row written, and the assemble and drill
-// routes built on it answer the same over serve() on either store.
+// routes built on it answer the same over serve().
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -113,7 +113,7 @@ type Call<R> = GroupCall<'dagReads', R>;
 let fixture: TwoTenantFixture;
 let fixtureAudit: readonly AuditEvent[];
 
-/** Runs the calls on both stores, asserts they agree and wrote no audit row, and returns hippo.db's values. */
+/** Runs the calls, asserts they wrote no audit row, and returns hippo.db's values. */
 async function conformsOn<G extends 'dagReads' | 'reports', R>(
   group: G,
   calls: readonly GroupCall<G, R>[],

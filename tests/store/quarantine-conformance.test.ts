@@ -60,7 +60,7 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
   return runOnFixture(fixture, 'quarantine', calls);
 }
 
-/** Sets the clock inside the call, so each store reads the same time at the same step. */
+/** Sets the clock inside the call, so each step reads a time the test names. */
 const at =
   (iso: string, call: Call): Call =>
   (g, store) => {

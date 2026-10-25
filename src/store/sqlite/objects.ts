@@ -61,7 +61,7 @@ import {
 import type { AuditOp } from '../../base/records/audit-ops.js';
 import type { JsonObject } from '../../base/util/json.js';
 
-// Each typed-object kind's table and audit rows, once for both adapters: the table its ids follow, whether it keeps
+// Each typed-object kind's table and audit rows: the table its ids follow, whether it keeps
 // versions, and the op, target and keys of its open, create, supersede and close rows.
 
 const KINDS = {

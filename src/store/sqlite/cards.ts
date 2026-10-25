@@ -21,8 +21,8 @@ import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
-// The card board's argument checks, run lookup and lease, once for both adapters, so a bad call fails with the same
-// message under either store.
+// The card board's argument checks, run lookup and lease, shared by every card write so a bad call fails with one
+// message.
 
 /** The lease a move to running or a heartbeat at `now` sets. */
 const leaseUntilFrom = (now: string): string => new Date(Date.parse(now) + CARD_LEASE_MS).toISOString();

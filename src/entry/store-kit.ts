@@ -172,7 +172,7 @@ export { StoreBusyError } from '../base/ports/store.js';
 // A port method that can read every tenant takes ALL_TENANTS there, so an add-on store tells it from a missed tenant.
 export { ALL_TENANTS, type TenantId } from '../base/util/tenant.js';
 // An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its
-// rule, so both stores keep the same bytes and return the same ids in the same order.
+// rule, so an add-on store and hippo.db keep the same bytes and return the same ids in the same order.
 export { bufferToFloat32, float32ToBuffer } from '../base/util/vector-codec.js';
 export { replacesIndex } from '../base/embeddings/index-identity.js';
 // An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the same code.

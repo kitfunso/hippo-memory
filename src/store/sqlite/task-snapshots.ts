@@ -13,7 +13,7 @@ import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../..
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { SqlFragment } from '../../db/sql.js';
 
-// The continuity key's match, once for both adapters: all or nothing, so a key missing its owner or every project name
+// The continuity key's match: all or nothing, so a key missing its owner or every project name
 // matches no row, never the tenant's newest.
 
 /** The project names a row's origin must be one of, or null when the key matches no row. */
