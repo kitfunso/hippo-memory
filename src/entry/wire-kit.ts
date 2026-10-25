@@ -51,20 +51,8 @@ export function calculateStrengthWire(
   now: Date = evalNow(),
   options: DecayOptions = {},
 ): number {
-  return calculateStrength(
-    {
-      pinned: entry.pinned,
-      created: entry.created,
-      lastRetrieved: entry.last_retrieved,
-      halfLifeDays: entry.half_life_days,
-      retrievalCount: entry.retrieval_count,
-      emotionalValence: entry.emotional_valence,
-      outcomePositive: entry.outcome_positive,
-      outcomeNegative: entry.outcome_negative,
-    },
-    now,
-    options,
-  );
+  // SAFETY: calculateStrength reads only the eight keys WireStrengthInputs carries; fromWire leaves the rest undefined.
+  return calculateStrength(fromWire(entry as MemoryWire), now, options);
 }
 
 export function isWorthSurfacingWire(entry: MemoryWire): boolean {

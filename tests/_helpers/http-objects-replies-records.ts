@@ -13,11 +13,10 @@ export type Reply = readonly [
 export const over = (cap: number): string => 'x'.repeat(cap + 1);
 export const at = (cap: number): string => 'x'.repeat(cap);
 export const BAD_STATUS = 'status must be one of: active | superseded | closed | all (got "retired")';
-const SHORT = 'Memory content too short (0 chars, minimum 3): ""';
 
 const DEC = '/v1/decisions';
 const DEC_MISSING = '/v1/decisions/99999/supersede';
-const DEC_NO_TARGET = 'saveDecision: decision 99999 to supersede not found for tenant default';
+const DEC_NO_TARGET = 'decision 99999 to supersede not found for tenant default';
 // Each row also sends every later field invalid, and every superseded id is missing,
 // so a row pins which check answers first as well as the reply text.
 export const DECISION_REPLIES: readonly Reply[] = [
@@ -86,7 +85,7 @@ export const DECISION_REPLIES: readonly Reply[] = [
     409,
     DEC_NO_TARGET,
   ],
-  ['create: spaces-only text passes the route check', 'POST', DEC, { text: '  ' }, 400, SHORT],
+  ['create: spaces-only text', 'POST', DEC, { text: '  ' }, 400, 'text is required (non-empty string)'],
   ['supersede: empty text', 'POST', DEC_MISSING, { text: '', context: 7 }, 400, 'text is required (non-empty string)'],
   [
     'supersede: text over the cap',
@@ -121,7 +120,7 @@ export const DECISION_REPLIES: readonly Reply[] = [
     404,
     DEC_NO_TARGET,
   ],
-  ['supersede: spaces-only text passes the route check', 'POST', DEC_MISSING, { text: '  ' }, 400, SHORT],
+  ['supersede: spaces-only text', 'POST', DEC_MISSING, { text: '  ' }, 400, 'text is required (non-empty string)'],
 ];
 
 const NOTE = '/v1/customer-notes';
@@ -200,7 +199,7 @@ export const NOTE_REPLIES: readonly Reply[] = [
 
 const INC = '/v1/incidents';
 const INC_MISSING = '/v1/incidents/99999/resolve';
-const INC_NO_MEMORY = 'saveIncident: linked memory mem_missing not found for tenant default';
+const INC_NO_MEMORY = 'linked memory mem_missing not found for tenant default';
 // Each row also sends every later field invalid, and every linked memory or resolved id is missing,
 // so a row pins which check answers first as well as the reply text.
 export const INCIDENT_REPLIES: readonly Reply[] = [
@@ -284,7 +283,7 @@ export const INCIDENT_REPLIES: readonly Reply[] = [
     409,
     INC_NO_MEMORY,
   ],
-  ['create: spaces-only text passes the route check', 'POST', INC, { text: '  ' }, 400, SHORT],
+  ['create: spaces-only text', 'POST', INC, { text: '  ' }, 400, 'text is required (non-empty string)'],
   ['resolve: no resolutionText', 'POST', INC_MISSING, {}, 400, 'resolutionText is required (non-empty string)'],
   [
     'resolve: blank resolutionText',
@@ -308,7 +307,7 @@ export const INCIDENT_REPLIES: readonly Reply[] = [
     INC_MISSING,
     { resolutionText: at(4096) },
     404,
-    'resolveIncident: incident 99999 not found for tenant default',
+    'incident 99999 not found for tenant default',
   ],
 ];
 

@@ -4,12 +4,11 @@
  *  NULL) is for recall. */
 
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
-import { BadRequestError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import type { SavableDescriptor } from './descriptor.js';
-import { checkText, requireLine } from './fields.js';
+import { capText, requireLine, requireText } from './fields.js';
 import { listObjects, type ObjectSaveSite, saveObject } from './lifecycle.js';
 import type { BriefReceipt, BriefStatus, ProjectBrief } from '../../base/records/object-types.js';
 import type { ObjectListQuery, Objects } from '../../base/ports/store.js';
@@ -56,26 +55,16 @@ export const PROJECT_BRIEF: SavableDescriptor<'project_brief', SaveProjectBriefO
   kind: 'project_brief',
   label: 'brief',
   plural: 'briefs',
-  fn: { get: 'loadProjectBriefById', close: 'closeProjectBrief', list: 'loadProjectBriefs', save: 'saveProjectBrief' },
   states: VALID_BRIEF_STATES,
   closableFrom: ['active'],
   draft(opts) {
     // The repo becomes a path tag on the refresh match and a heading in the digest, so it must be one line.
-    const repo = requireLine(opts.repo, MAX_REPO_LEN, {
-      required: 'saveProjectBrief: repo is required',
-      singleLine: 'saveProjectBrief: repo must be a single line (no newlines)',
-      tooLong: `saveProjectBrief: repo exceeds the ${MAX_REPO_LEN}-char cap`,
-    });
-    checkText(opts.summary, MAX_BRIEF_SUMMARY_LEN, {
-      required: 'saveProjectBrief: summary is required',
-      tooLong: `saveProjectBrief: summary exceeds the ${MAX_BRIEF_SUMMARY_LEN}-char cap`,
-    });
-    checkText(opts.changeSummary, MAX_SHORT_FIELD_LEN, {
-      tooLong: `saveProjectBrief: changeSummary exceeds the ${MAX_SHORT_FIELD_LEN}-char cap`,
-    });
+    const repo = requireLine(opts.repo, MAX_REPO_LEN, 'repo');
+    const summary = requireText(opts.summary, MAX_BRIEF_SUMMARY_LEN, 'summary');
+    capText(opts.changeSummary, MAX_SHORT_FIELD_LEN, 'changeSummary');
     return {
-      fields: { repo, summary: opts.summary, receiptCount: opts.refreshReceiptCount },
-      content: buildBriefContent(repo, opts.summary),
+      fields: { repo, summary, receiptCount: opts.refreshReceiptCount },
+      content: buildBriefContent(repo, summary),
       tags: opts.extraTags ?? [],
       supersedesId: opts.supersedesBriefId,
       changeSummary: opts.changeSummary,
@@ -190,7 +179,7 @@ function renderBriefDigest(normalizedRepo: string, receiptCount: number, receipt
  *  empty (summary is NOT NULL). The brief's own mirror (source='project_brief') is excluded; the quotes in the
  *  JSON-array LIKE are load-bearing (`hip` must not match `path:hippo`). */
 export async function briefFromReceipts(objects: Objects, tenantId: string, repo: string): Promise<BriefDigest> {
-  const normalizedRepo = requiredRepo('assembleBriefFromReceipts', tenantId, repo);
+  const normalizedRepo = requiredRepo('briefFromReceipts', tenantId, repo);
   const receipts = await objects.briefReceipts(tenantId, receiptTag(normalizedRepo), MAX_BRIEF_RECEIPTS);
   return briefDigest(normalizedRepo, receipts);
 }
@@ -202,9 +191,7 @@ export interface BriefDigest {
 
 function requiredRepo(fn: string, tenantId: string, repo: string): string {
   assertTenantId(fn, tenantId);
-  const normalizedRepo = (repo ?? '').trim();
-  if (normalizedRepo.length === 0) throw new BadRequestError(`${fn}: repo is required`);
-  return normalizedRepo;
+  return requireLine(repo, MAX_REPO_LEN, 'repo');
 }
 
 function briefDigest(normalizedRepo: string, receipts: readonly BriefReceipt[]): BriefDigest {
@@ -235,7 +222,7 @@ function refreshWrite(
 /** Saves a new version of the repo's brief from its receipts. The receipts are read before the save's transaction, so a
  * receipt written in between shows in the next refresh. */
 export async function refreshedBrief(objects: Objects, site: ObjectSaveSite, repo: string): Promise<ProjectBrief> {
-  const normalizedRepo = requiredRepo('refreshBrief', site.tenantId, repo);
+  const normalizedRepo = requiredRepo('refreshedBrief', site.tenantId, repo);
   const digest = await briefFromReceipts(objects, site.tenantId, normalizedRepo);
   const [active = null] = await objects.listObjects(site.tenantId, 'project_brief', newestActive(normalizedRepo));
   return saveObject(objects, PROJECT_BRIEF, site, refreshWrite(normalizedRepo, digest, active));

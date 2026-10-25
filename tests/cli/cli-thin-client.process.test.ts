@@ -458,8 +458,7 @@ describe('cli thin-client mode', () => {
       // A keyless caller is a member, which may not change a row it does not own, so the CLI sends an admin key.
       vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
 
-      // raw-archive.ts throws "is not raw" for a non-raw kind; the routed
-      // catch must wrap it the same way forgetMemory's direct catch does.
+      // raw-archive.ts throws "is not raw" for a non-raw kind; the server's refusal must read as the store's does.
       const run = runCli(workspace, 'forget', 'mem_notraw', '--archive', '--reason', 'non-raw archive test');
       expect(run.stdout + run.stderr).toMatch(/Could not archive mem_notraw: /);
       expect(run.stdout + run.stderr).toMatch(/is not raw/);
@@ -700,8 +699,8 @@ describe('cli thin-client mode', () => {
       expect(id, `stdout: ${remembered.stdout} stderr: ${remembered.stderr}`).toMatch(/^mem_[0-9a-f]+$/);
 
       const refused = runCli(workspace, 'forget', id!);
-      // Not 1 exactly: on Windows a routed refusal, a missing id's too, can end in a libuv abort after the message.
-      expect(refused.status).not.toBe(0);
+      // Exactly 1: a refused routed write once ended in a libuv abort on Windows, with a crash code.
+      expect(refused.status, refused.stderr).toBe(1);
       expect(refused.stderr).toContain(
         `memory ${id} records no writer: change it with an admin key. hippo serve is running, so the CLI acts as ` +
           'the key in HIPPO_API_KEY, or as a member without one: set HIPPO_API_KEY to that key or an admin key.',

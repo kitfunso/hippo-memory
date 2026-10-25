@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  vecDot,
-  vecNorm,
   vecScale,
   vecZero,
   vecNormalize,
@@ -20,6 +18,7 @@ import {
   type ForceContext,
 } from '../../src/base/rank/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
+import { dot, norm } from '../../src/base/rank/cosine.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -51,15 +50,15 @@ function makeCtx(overrides?: Partial<ForceContext>): ForceContext {
 // ---------------------------------------------------------------------------
 
 describe('Vector math', () => {
-  describe('vecDot', () => {
+  describe('dot', () => {
     it('computes dot product of two vectors', () => {
-      expect(vecDot([1, 2, 3], [4, 5, 6])).toBe(32);
+      expect(dot([1, 2, 3], [4, 5, 6])).toBe(32);
     });
   });
 
-  describe('vecNorm', () => {
+  describe('norm', () => {
     it('computes Euclidean norm', () => {
-      expect(vecNorm([3, 4, 0])).toBe(5);
+      expect(norm([3, 4, 0])).toBe(5);
     });
   });
 
@@ -82,7 +81,7 @@ describe('Vector math', () => {
   describe('vecNormalize', () => {
     it('normalizes a vector to unit length', () => {
       const n = vecNormalize([3, 4, 0]);
-      expect(vecNorm(n)).toBeCloseTo(1, 10);
+      expect(norm(n)).toBeCloseTo(1, 10);
       expect(n[0]).toBeCloseTo(0.6, 10);
       expect(n[1]).toBeCloseTo(0.8, 10);
     });
@@ -240,14 +239,14 @@ describe('Force computations', () => {
       const pj = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.2, 0]) });
       const force = attractionForce(pi, pj, 0.01);
       // The force is a unit direction times G * m_i * m_j * cos^3, with cos = 1.02 / sqrt(1.01 * 1.04).
-      expect(vecNorm(force)).toBeCloseTo(0.01 * (1.02 / Math.sqrt(1.01 * 1.04)) ** 3, 10);
+      expect(norm(force)).toBeCloseTo(0.01 * (1.02 / Math.sqrt(1.01 * 1.04)) ** 3, 10);
     });
 
     it('opposing particles get zero attraction', () => {
       const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
       const pj = makeParticle({ memoryId: 'b', position: [-1, 0, 0] });
       const force = attractionForce(pi, pj, 0.01);
-      expect(vecNorm(force)).toBe(0);
+      expect(norm(force)).toBe(0);
     });
 
     it('magnitude scales with mass product', () => {
@@ -255,8 +254,8 @@ describe('Force computations', () => {
       const pj1 = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.2, 0]), mass: 1 });
       const pi2 = makeParticle({ memoryId: 'c', position: vecNormalize([1, 0.1, 0]), mass: 2 });
       const pj2 = makeParticle({ memoryId: 'd', position: vecNormalize([1, 0.2, 0]), mass: 3 });
-      const f1 = vecNorm(attractionForce(pi1, pj1, 1.0));
-      const f2 = vecNorm(attractionForce(pi2, pj2, 1.0));
+      const f1 = norm(attractionForce(pi1, pj1, 1.0));
+      const f2 = norm(attractionForce(pi2, pj2, 1.0));
       expect(f2).toBeCloseTo(f1 * 6, 5);
     });
 
@@ -267,7 +266,7 @@ describe('Force computations', () => {
       const force = attractionForce(pi, pj, 1.0);
       // Direction of (pj - pi) = [0,0,0] -> normalized to zero -> magnitude * zero = zero
       // Identical positions means difference is zero, so force is zero despite high cosine
-      expect(vecNorm(force)).toBe(0);
+      expect(norm(force)).toBe(0);
     });
 
     it('force direction points from i toward j', () => {
@@ -288,7 +287,7 @@ describe('Force computations', () => {
       // pi is at [~1, ~0.1, 0], pj is at [~1, ~0.2, 0]
       // Direction away from pj should have negative y component relative to pj
       // 1 - cos is about 0.0048, under the 0.01 floor, so the magnitude is K / 0.01^2.
-      expect(vecNorm(force)).toBeCloseTo(5000, 6);
+      expect(norm(force)).toBeCloseTo(5000, 6);
     });
 
     it('scales with mass product', () => {
@@ -296,8 +295,8 @@ describe('Force computations', () => {
       const pj1 = makeParticle({ memoryId: 'b', position: [0, 1, 0], mass: 1 });
       const pi2 = makeParticle({ memoryId: 'c', position: [1, 0, 0], mass: 2 });
       const pj2 = makeParticle({ memoryId: 'd', position: [0, 1, 0], mass: 3 });
-      const f1 = vecNorm(repulsionForce(pi1, pj1, 1.0));
-      const f2 = vecNorm(repulsionForce(pi2, pj2, 1.0));
+      const f1 = norm(repulsionForce(pi1, pj1, 1.0));
+      const f2 = norm(repulsionForce(pi2, pj2, 1.0));
       expect(f2).toBeCloseTo(f1 * 6, 5);
     });
 
@@ -307,8 +306,8 @@ describe('Force computations', () => {
       const close_j = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.1, 0]) });
       const far_i = makeParticle({ memoryId: 'c', position: [1, 0, 0] });
       const far_j = makeParticle({ memoryId: 'd', position: [0, 1, 0] });
-      const fClose = vecNorm(repulsionForce(close_i, close_j, 1.0));
-      const fFar = vecNorm(repulsionForce(far_i, far_j, 1.0));
+      const fClose = norm(repulsionForce(close_i, close_j, 1.0));
+      const fFar = norm(repulsionForce(far_i, far_j, 1.0));
       expect(fClose).toBeGreaterThan(fFar);
     });
 
@@ -335,20 +334,20 @@ describe('Force computations', () => {
     it('zero velocity gives zero drag', () => {
       const p = makeParticle({ memoryId: 'a', velocity: [0, 0, 0] });
       const fd = dragForce(p, 0.3, 7);
-      expect(vecNorm(fd)).toBe(0);
+      expect(norm(fd)).toBe(0);
     });
 
     it('higher drag coefficient = stronger drag', () => {
       const p = makeParticle({ memoryId: 'a', velocity: [1, 0, 0] });
-      const f1 = vecNorm(dragForce(p, 0.1, 7));
-      const f2 = vecNorm(dragForce(p, 0.5, 7));
+      const f1 = norm(dragForce(p, 0.1, 7));
+      const f2 = norm(dragForce(p, 0.5, 7));
       expect(f2).toBeGreaterThan(f1);
     });
 
     it('longer half-life = weaker drag', () => {
       const p = makeParticle({ memoryId: 'a', velocity: [1, 0, 0] });
-      const fShort = vecNorm(dragForce(p, 0.3, 2));
-      const fLong = vecNorm(dragForce(p, 0.3, 30));
+      const fShort = norm(dragForce(p, 0.3, 2));
+      const fLong = norm(dragForce(p, 0.3, 30));
       expect(fShort).toBeGreaterThan(fLong);
     });
 
@@ -504,8 +503,8 @@ describe('Simulation', () => {
       });
       simulate([p1, p2], ctx);
 
-      expect(vecNorm(p1.velocity)).toBeLessThanOrEqual(0.1 + 1e-10);
-      expect(vecNorm(p2.velocity)).toBeLessThanOrEqual(0.1 + 1e-10);
+      expect(norm(p1.velocity)).toBeLessThanOrEqual(0.1 + 1e-10);
+      expect(norm(p2.velocity)).toBeLessThanOrEqual(0.1 + 1e-10);
     });
 
     it('positions stay normalized to unit sphere', () => {
@@ -518,7 +517,7 @@ describe('Simulation', () => {
       simulate(particles, ctx);
 
       for (const p of particles) {
-        expect(vecNorm(p.position)).toBeCloseTo(1.0, 5);
+        expect(norm(p.position)).toBeCloseTo(1.0, 5);
       }
     });
 
@@ -571,13 +570,13 @@ describe('Simulation', () => {
 
     it('single particle with drag slows down', () => {
       const p = makeParticle({ memoryId: 'a', position: [1, 0, 0], velocity: [0, 0.08, 0] });
-      const initialSpeed = vecNorm(p.velocity);
+      const initialSpeed = norm(p.velocity);
       const ctx = makeCtx({
         config: { ...DEFAULT_PHYSICS_CONFIG, substeps: 20, drag: 1.0 },
         halfLives: new Map([['a', 1]]),
       });
       simulate([p], ctx);
-      expect(vecNorm(p.velocity)).toBeLessThan(initialSpeed);
+      expect(norm(p.velocity)).toBeLessThan(initialSpeed);
     });
   });
 

@@ -1,5 +1,6 @@
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
-import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
+import { NotFoundError } from '../../base/errors/api-errors.js';
+import { rawRemovalRefusal } from '../../base/errors/raw-append-only.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { isFtsAvailable, withWriteScope } from '../../db/index.js';
 import { appendAuditEvents } from './audit.js';
@@ -42,7 +43,8 @@ function readRawRows(db: DatabaseSyncLike, ids: readonly string[]): ArchivedMemo
   return ids.map((id) => {
     const row = byId.get(id);
     if (!row) throw new NotFoundError(`memory not found: ${id}`);
-    if (row.kind !== 'raw') throw new BadRequestError(`memory ${id} is not raw (kind=${String(row.kind)})`);
+    const refusal = rawRemovalRefusal(row, true);
+    if (refusal !== null) throw refusal;
     return row;
   });
 }

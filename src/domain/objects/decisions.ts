@@ -4,12 +4,13 @@
  * one `objects` transaction.
  */
 
-import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { MemoryEntry } from '../../base/memory/memory.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
+import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import type { EntryWrites, Objects } from '../../base/ports/store.js';
 import type { SavableDescriptor } from './descriptor.js';
+import { requireText } from './fields.js';
 import { listObjects, saveObject } from './lifecycle.js';
 import type { Decision, DecisionStatus } from '../../base/records/object-types.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -45,14 +46,13 @@ export const DECISION: SavableDescriptor<'decision', SaveDecisionOptions> = {
   kind: 'decision',
   label: 'decision',
   plural: 'decisions',
-  fn: { get: 'loadDecisionById', close: 'closeDecision', list: 'loadDecisions', save: 'saveDecision' },
   states: VALID_DECISION_STATES,
   closableFrom: ['active'],
   draft(opts) {
-    if (!opts.decisionText) throw new BadRequestError('saveDecision: decisionText is required');
+    const decisionText = requireText(opts.decisionText, MAX_SHORT_FIELD_LEN, 'decisionText');
     return {
-      fields: { decisionText: opts.decisionText, context: opts.context },
-      content: opts.context ? `${opts.decisionText}\n\nContext: ${opts.context}` : opts.decisionText,
+      fields: { decisionText, context: opts.context },
+      content: opts.context ? `${decisionText}\n\nContext: ${opts.context}` : decisionText,
       tags: opts.extraTags ?? [],
       supersedesId: opts.supersedesDecisionId,
       at: new Date().toISOString(),

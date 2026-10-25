@@ -4,7 +4,7 @@
  * Memories are particles on the unit hypersphere in embedding space (384-dim); query gravity, attraction, conflict
  * repulsion and drag act on them, and nearby high-scoring memories amplify each other. */
 
-import { cosineOf } from './cosine.js';
+import { ZERO_NORM, cosineOf, norm } from './cosine.js';
 import { evalNow, NO_STRENGTH_ABLATION, type StrengthAblation } from '../memory/ablation.js';
 import {
   calculateStrength,
@@ -52,17 +52,6 @@ const MIN_MASS = 0.01;
 const MIN_COSINE_DISTANCE = 0.01;
 // Mass gained per doubling of the retrieval count.
 const RETRIEVAL_MASS_GAIN = 0.1;
-const NEAR_ZERO = 1e-10;
-
-export function vecDot(a: number[], b: number[]): number {
-  let sum = 0;
-  for (let i = 0; i < a.length; i++) sum += a[i] * b[i];
-  return sum;
-}
-
-export function vecNorm(v: number[]): number {
-  return Math.sqrt(vecDot(v, v));
-}
 
 export function vecScale(v: number[], s: number): number[] {
   const out = v.slice();
@@ -74,10 +63,10 @@ export function vecZero(dim: number): number[] {
   return Array<number>(dim).fill(0);
 }
 
-/** Normalize to unit length. Returns zero vector if magnitude < epsilon. */
+/** Normalize to unit length; a vector with no direction becomes the zero vector. */
 export function vecNormalize(v: number[]): number[] {
-  const mag = vecNorm(v);
-  if (mag < NEAR_ZERO) return vecZero(v.length);
+  const mag = norm(v);
+  if (mag < ZERO_NORM) return vecZero(v.length);
   return vecScale(v, 1 / mag);
 }
 
@@ -119,12 +108,7 @@ export function queryGravityMagnitude(particle: PhysicsParticle, queryEmbedding:
 
 /** Momentum bonus in [0, 1]: how aligned the particle's velocity is with the query direction. */
 export function velocityAlignmentBonus(particle: PhysicsParticle, queryEmbedding: number[]): number {
-  if (particle.velocity.length === 0 || particle.velocity.length !== queryEmbedding.length) return 0;
-  const velMag = vecNorm(particle.velocity);
-  const qNorm = vecNorm(queryEmbedding);
-  if (velMag < NEAR_ZERO || qNorm < NEAR_ZERO) return 0;
-  const alignment = vecDot(particle.velocity, queryEmbedding) / (velMag * qNorm);
-  return Math.max(0, alignment);
+  return Math.max(0, cosineOf(particle.velocity, queryEmbedding));
 }
 
 /**
@@ -145,9 +129,9 @@ export function attractionForce(
   const magnitude = gMemory * pi.mass * pj.mass * Math.pow(cos, 3);
   // Direction: from i toward j (tangent projection handled by normalization after integration)
   for (let k = 0; k < out.length; k++) diff[k] = pj.position[k] - pi.position[k];
-  const norm = vecNorm(diff);
-  if (norm < NEAR_ZERO) return out;
-  const inv = 1 / norm;
+  const length = norm(diff);
+  if (length < ZERO_NORM) return out;
+  const inv = 1 / length;
   for (let k = 0; k < out.length; k++) out[k] += diff[k] * inv * magnitude;
   return out;
 }
@@ -168,14 +152,9 @@ export function repulsionForce(
   const magnitude = (kRepulsion * pi.mass * pj.mass) / (dist * dist);
   // Direction: away from j
   for (let k = 0; k < out.length; k++) diff[k] = pi.position[k] - pj.position[k];
-  const norm = vecNorm(diff);
-  if (norm < NEAR_ZERO) {
-    for (let k = 0; k < out.length; k++) {
-      out[k] += 0;
-    }
-    return out;
-  }
-  const inv = 1 / norm;
+  const length = norm(diff);
+  if (length < ZERO_NORM) return out;
+  const inv = 1 / length;
   for (let k = 0; k < out.length; k++) out[k] += diff[k] * inv * magnitude;
   return out;
 }
@@ -233,8 +212,8 @@ function computeAccelerations(particles: PhysicsParticle[], ctx: ForceContext, i
 
 /** vecNormalize in place. */
 function normalizeInPlace(v: number[]): void {
-  const mag = vecNorm(v);
-  if (mag < NEAR_ZERO) {
+  const mag = norm(v);
+  if (mag < ZERO_NORM) {
     v.fill(0);
     return;
   }
@@ -244,7 +223,7 @@ function normalizeInPlace(v: number[]): void {
 
 /** vecClampMagnitude in place. */
 function clampInPlace(v: number[], maxMag: number): void {
-  const mag = vecNorm(v);
+  const mag = norm(v);
   if (mag <= maxMag) return;
   const scale = maxMag / mag;
   for (let k = 0; k < v.length; k++) v[k] *= scale;
@@ -315,7 +294,7 @@ export function simulate(particles: PhysicsParticle[], ctx: ForceContext): Simul
   let sumVelMag = 0;
   let maxVelMag = 0;
   for (const p of particles) {
-    const mag = vecNorm(p.velocity);
+    const mag = norm(p.velocity);
     sumVelMag += mag;
     if (mag > maxVelMag) maxVelMag = mag;
   }
@@ -334,7 +313,7 @@ export function computeSystemEnergy(particles: PhysicsParticle[], gMemory: numbe
   let potential = 0;
 
   for (const p of particles) {
-    const velMag = vecNorm(p.velocity);
+    const velMag = norm(p.velocity);
     kinetic += 0.5 * p.mass * velMag * velMag;
   }
 

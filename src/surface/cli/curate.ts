@@ -1,19 +1,18 @@
 // Verbs that weaken, suppress or retire memories: outcome, forget, conflicts, reject, dormant, quarantine, invalidate.
 
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
+import type { MemoryEntry } from '../../base/memory/memory.js';
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import * as path from 'path';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { isGitRepo } from '../../base/ports/git.js';
 import { processGit } from '../../infra/git-runner.js';
 import * as api from '../../api/index.js';
 import { memoryGet } from '../../api/memories/memories.js';
-import * as client from './client.js';
+import { archiveRefusal, forgetRefusal, pickWrites } from './memory-writes.js';
 import { cliConfig, cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {
-  type CliFlags,
   type CommandContext,
   boolFlag,
   flagValueless,
@@ -24,7 +23,7 @@ import {
   stringFlag,
   stringFlagOrExit,
 } from './flag-values.js';
-import { requireInit, runChurnStaleForRepo, runViaServerIfAvailable, resolveAuthRoot } from './shared.js';
+import { requireInit, runChurnStaleForRepo, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { printJsonList } from './json-list.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -66,77 +65,17 @@ export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandConte
   console.log(`Applied ${good ? 'positive' : 'negative'} outcome to ${plural(updated, 'memory', 'memories')}`);
 }
 
-// Shared between the forget dispatch and forgetMemory so the message can't drift.
 const ARCHIVE_REASON_REQUIRED = 'hippo forget --archive requires --reason "<why>" (recorded on the archive).';
-const SERVED_KEY_HINT =
-  'hippo serve is running, so the CLI acts as the key in HIPPO_API_KEY, or as a member without one: ' +
-  'set HIPPO_API_KEY to that key or an admin key.';
 
-async function forgetMemory(hippoRoot: string, tenantId: string, id: string, flags: CliFlags): Promise<void> {
-  requireInit(hippoRoot);
-
-  const ctx = cliApiContext(hippoRoot, tenantId);
-
-  // Raw memories (connector ingestion) are append-only: a BEFORE-DELETE trigger aborts any delete, so rawArchive is the
-  // sanctioned removal path and records ctx.actor as the archiver.
-  if (boolFlag(flags, 'archive')) {
-    await archiveForgottenRaw(ctx, id, stringFlag(flags, 'reason') ?? null);
-    return;
-  }
-
-  try {
-    await api.forget(ctx, id);
-    console.log(`Forgot ${id}`);
-  } catch (err) {
-    await reportForgetFailure(ctx, id, err);
-    throw new CliExit(1);
-  }
-}
-
-async function archiveForgottenRaw(ctx: api.Context, id: string, reason: string | null): Promise<void> {
-  if (!reason) {
-    fail(ARCHIVE_REASON_REQUIRED);
-  }
-  try {
-    await api.rawArchive(ctx, id, reason);
-    console.log(`Archived ${id}`);
-  } catch (err) {
-    fail(`Could not archive ${id}: ${errorMessage(err)}`);
-  }
-}
-
-async function reportForgetFailure(ctx: api.Context, id: string, cause: unknown): Promise<void> {
-  if (cause instanceof RawAppendOnlyError) {
-    // The delete was refused by the append-only trigger: this is a raw memory, not a missing one. Point the user at the
-    // archive path.
-    printError(rawForgetRefusal(id));
-  } else if (await api.isDormant(ctx, id)) {
-    // Sleep moved it to the dormant store: it is not in active memory, so point at the command that owns it.
-    printError(
-      `${id} is dormant, not in active memory. Delete it for good: hippo dormant forget ${id} ` +
-        `(or bring it back: hippo dormant restore ${id})`,
-    );
-  } else {
-    printError(`Memory not found: ${id}`);
-  }
-}
-
-function rawForgetRefusal(id: string): string {
-  return `Cannot forget ${id}: it is a raw, append-only memory. Archive it instead: hippo forget ${id} --archive --reason "<why>"`;
-}
-
-// Refuses exactly where the real run would, so "Would forget" is a promise, not a guess.
+// Refuses exactly where the real run would, with its words, so "Would forget" is a promise, not a guess.
 async function previewForget(hippoRoot: string, tenantId: string, id: string, archive: boolean): Promise<void> {
   requireInit(hippoRoot);
-  const entry = await memoryGet(cliApiContext(hippoRoot, tenantId), id);
-  if (!entry) {
-    fail(`Memory not found: ${id}`);
-  }
-  if (!archive && entry.kind === 'raw') {
-    fail(rawForgetRefusal(id));
-  }
-  if (archive && entry.kind !== 'raw') {
-    fail(`Could not archive ${id}: memory ${id} is not raw (kind=${entry.kind})`);
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  let entry: MemoryEntry;
+  try {
+    entry = await api.removalTarget(ctx, id, archive);
+  } catch (err) {
+    fail(archive ? archiveRefusal(id, errorMessage(err)) : await forgetRefusal(ctx, id, err));
   }
   const snippet = truncateWithEllipsis(entry.content, CONTENT_PREVIEW_CHARS);
   console.log(`Would ${archive ? 'archive' : 'forget'} ${id} (dry run, nothing changed): "${snippet}"`);
@@ -492,10 +431,8 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
   if (!id) {
     fail('Please provide a memory ID.');
   }
-  // Archive has its own HTTP route (POST /v1/memories/:id/archive); route both branches the same way the direct path
-  // does.
   const archive = boolFlag(flags, 'archive');
-  const reason = stringFlag(flags, 'reason') ?? null;
+  const reason = stringFlag(flags, 'reason') ?? '';
   if (archive && !reason) {
     fail(ARCHIVE_REASON_REQUIRED);
   }
@@ -503,26 +440,14 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
     await previewForget(hippoRoot, tenantId, id, archive);
     return;
   }
-  const routed = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
-    try {
-      if (archive) {
-        await client.postArchiveRaw(info.url, apiKey, id, reason!);
-        console.log(`Archived ${id}`);
-      } else {
-        await client.postForget(info.url, apiKey, id);
-        console.log(`Forgot ${id}`);
-      }
-    } catch (err) {
-      // A server that died after the health probe is the caller's transport fallback to handle, not an error to report
-      // to the user.
-      if (err instanceof Error && client.classifyTransportFailure(err) !== 'none') throw err;
-      const refused = err instanceof client.HttpResponseError && err.status === 403;
-      const msg = refused ? `${errorMessage(err)}. ${SERVED_KEY_HINT}` : errorMessage(err);
-      fail(archive ? `Could not archive ${id}: ${msg}` : msg);
-    }
-  });
-  if (routed) return;
-  await forgetMemory(hippoRoot, tenantId, id, flags);
+  const writes = await pickWrites(hippoRoot, tenantId);
+  if (archive) {
+    await writes.archive(id, reason);
+    console.log(`Archived ${id}`);
+  } else {
+    await writes.forget(id);
+    console.log(`Forgot ${id}`);
+  }
 }
 
 async function invalidateChurn(

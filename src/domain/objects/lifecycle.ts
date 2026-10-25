@@ -23,11 +23,9 @@ function listQuery<K extends ObjectKind>(
   tenantId: string,
   opts: ObjectListOptions<K>,
 ): ObjectListQuery<K> {
-  assertTenantId(d.fn.list, tenantId);
+  assertTenantId('listObjects', tenantId);
   if (opts.status && !d.states.has(opts.status)) {
-    throw new BadRequestError(
-      `${d.fn.list}: status must be one of ${Array.from(d.states).join('|')}; got ${opts.status}`,
-    );
+    throw new BadRequestError(`status must be one of ${Array.from(d.states).join('|')}; got ${opts.status}`);
   }
   return {
     status: opts.status || undefined,
@@ -53,12 +51,12 @@ export async function objectById<K extends ObjectKind>(
   tenantId: string,
   id: number,
 ): Promise<ObjectByKind[K] | null> {
-  assertTenantId(d.fn.get, tenantId);
+  assertTenantId('objectById', tenantId);
   return objects.objectById(tenantId, d.kind, id);
 }
 
 function closing<K extends ObjectKind>(d: ObjectDescriptor<K>, tenantId: string, actor: string): ObjectClose<K> {
-  assertTenantId(d.fn.close, tenantId);
+  assertTenantId('closeObject', tenantId);
   return { from: d.closableFrom, actor, at: new Date().toISOString() };
 }
 
@@ -70,12 +68,12 @@ function closed<K extends ObjectKind>(
 ): ObjectByKind[K] {
   if (!isObjectRefusal(written)) return written;
   if (written.refused === 'missing') {
-    throw new NotFoundError(`${d.fn.close}: ${d.label} ${id} not found for tenant ${tenantId}`);
+    throw new NotFoundError(`${d.label} ${id} not found for tenant ${tenantId}`);
   }
-  if (written.refused !== 'status') throw new NotFoundError(`${d.fn.close}: ${d.label} ${id} not found after UPDATE`);
+  if (written.refused !== 'status') throw new NotFoundError(`${d.label} ${id} not found after UPDATE`);
   const closable = d.closableFrom.join(' or ');
   throw new ConflictError(
-    `${d.fn.close}: ${d.label} ${id} is ${d.closeRefusal ?? `not ${closable}`} (status='${written.status}'); only ${closable} ${d.plural} can be closed.`,
+    `${d.label} ${id} is ${d.closeRefusal ?? `not ${closable}`} (status='${written.status}'); only ${closable} ${d.plural} can be closed.`,
   );
 }
 
@@ -136,17 +134,15 @@ function saved<K extends SavableKind, W>(
   if (!isObjectRefusal(written)) return written;
   switch (written.refused) {
     case 'missing':
-      throw new NotFoundError(`${d.fn.save}: ${d.label} ${replaced} to supersede not found for tenant ${tenantId}`);
+      throw new NotFoundError(`${d.label} ${replaced} to supersede not found for tenant ${tenantId}`);
     case 'status':
       throw new ConflictError(
-        `${d.fn.save}: ${d.label} ${replaced} is not active (status='${written.status}'); only active ${d.plural} can be superseded.`,
+        `${d.label} ${replaced} is not active (status='${written.status}'); only active ${d.plural} can be superseded.`,
       );
     case 'raced':
-      throw new ConflictError(
-        `${d.fn.save}: ${d.label} ${replaced} could not be superseded (no longer active or self-reference).`,
-      );
+      throw new ConflictError(`${d.label} ${replaced} could not be superseded (no longer active or self-reference).`);
     case 'vanished':
-      throw new Error(`${d.fn.save}: failed to reload saved ${d.label} row`);
+      throw new Error(`failed to reload saved ${d.label} row`);
   }
 }
 
@@ -157,7 +153,7 @@ export async function saveObject<K extends SavableKind, W>(
   site: ObjectSaveSite,
   opts: W,
 ): Promise<ObjectByKind[K]> {
-  assertTenantId(d.fn.save, site.tenantId);
+  assertTenantId('saveObject', site.tenantId);
   const draft = d.draft(opts);
   return saved(
     d,

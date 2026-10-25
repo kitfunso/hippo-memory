@@ -12,12 +12,13 @@ import {
   turnsAfter,
   type WorkerMode,
 } from '../../capture/session-worker.js';
-import { sessionEndWork as runSessionEnd } from '../../../api/session-end.js';
+import { type HeldLog, heldLog, sessionEndWork as runSessionEnd } from '../../../api/session-end.js';
 import { cliApiContext } from '../api-context.js';
 import { type CliFlags, type CommandContext, boolFlag, stringFlag } from '../flag-values.js';
 import {
   appendSessionEndCloseLog,
   captureTarget,
+  flushingOnExit,
   logSessionEndImport,
   reportSessionEndFailure,
 } from '../hook-runtime.js';
@@ -28,7 +29,19 @@ export async function handleSessionEndWorker({ hippoRoot, tenantId, flags }: Com
   );
 }
 
-function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mode: WorkerMode): Promise<void> {
+async function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mode: WorkerMode): Promise<void> {
+  const logFile = stringFlag(flags, 'log-file') ?? null;
+  const held = heldLog((line) => appendSessionEndCloseLog(logFile, line));
+  await flushingOnExit(held, () => runSessionEndWork(hippoRoot, tenantId, flags, mode, held));
+}
+
+function runSessionEndWork(
+  hippoRoot: string,
+  tenantId: string,
+  flags: CliFlags,
+  mode: WorkerMode,
+  held: HeldLog,
+): Promise<void> {
   const transcriptPath = stringFlag(flags, 'transcript');
   const logFile = stringFlag(flags, 'log-file') ?? null;
   const sessionId = stringFlag(flags, 'session-id') ?? null;
@@ -39,6 +52,7 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
     sessionId,
     transcriptPath,
     log: (line, opts) => appendSessionEndCloseLog(logFile, line, opts),
+    held,
     sleep: () => sleepFolderStore(hippoRoot, tenantId, flags, logFile),
     importAgentNotes: () => logSessionEndImport(logFile, tenantId, transcriptPath),
     readScan: (log) => (transcriptPath ? readSessionScan(transcriptPath, log) : null),

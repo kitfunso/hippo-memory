@@ -214,7 +214,7 @@ describe('serve() under a store that has the objects group', () => {
       await call(memberA, 'POST', '/v1/incidents', { text: 'no evidence', linkedMemoryIds: ['mem_never_written'] }),
     ).toEqual({
       status: 409,
-      body: { error: `saveIncident: linked memory mem_never_written not found for tenant ${TENANT_A}` },
+      body: { error: `linked memory mem_never_written not found for tenant ${TENANT_A}` },
     });
     expect(await call(memberA, 'GET', '/v1/incidents')).toMatchObject({
       status: 200,

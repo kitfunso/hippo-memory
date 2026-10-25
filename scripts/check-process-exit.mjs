@@ -20,7 +20,6 @@ export const ALLOWED = {
     count: 2,
     reason: 'child-process event callbacks of the Codex wrapper, where a throw has no caller',
   },
-  'surface/cli/shared.ts': { count: 1, reason: OTHER_PR },
   'surface/capture/compact.ts': { count: 1, reason: OTHER_PR },
 };
 

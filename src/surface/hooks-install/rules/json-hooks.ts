@@ -21,6 +21,11 @@ import { HIPPO_DIR, claudeConfigDir, codexHomeDir, userHome, type Homes } from '
 import { type JsonValue, isJsonString, isJsonObjectLiteral, type JsonObject } from '../../../base/util/json.js';
 import { escapeRegex } from '../../../base/util/escape.js';
 
+// Hook timeouts by cost: a local read or write, a short store lookup, a pass that may compact.
+const HOOK_SHORT_TIMEOUT_SECONDS = 5;
+const HOOK_MEDIUM_TIMEOUT_SECONDS = 10;
+const HOOK_LONG_TIMEOUT_SECONDS = 30;
+
 /** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display name. */
 export interface JsonHookPaths {
   settings: string;
@@ -219,11 +224,11 @@ function planCodexHooks(settingsPath: string, settings: JsonValue): HookInstallP
     return true;
   };
   const installedUserPromptSubmit = append('UserPromptSubmit', HIPPO_PINNED_INJECT_MARKER, {
-    hooks: [codexCommandHook(HIPPO_PINNED_INJECT_COMMAND, 5)],
+    hooks: [codexCommandHook(HIPPO_PINNED_INJECT_COMMAND, HOOK_SHORT_TIMEOUT_SECONDS)],
   });
   const installedCompactResume = append('SessionStart', HIPPO_COMPACT_RESUME_MARKER, {
     matcher: 'compact',
-    hooks: [codexCommandHook(HIPPO_COMPACT_RESUME_MARKER, 10)],
+    hooks: [codexCommandHook(HIPPO_COMPACT_RESUME_MARKER, HOOK_MEDIUM_TIMEOUT_SECONDS)],
   });
   return {
     result: { ...result, installedUserPromptSubmit, installedCompactResume },
@@ -243,15 +248,18 @@ function copilotHooksTable(): JsonObject {
   return {
     version: 1,
     hooks: {
-      sessionStart: copilotCommandHook('context --pinned-only --include-recent 5 --format copilot', 10),
-      postToolUseFailure: copilotCommandHook('capture-error --runtime copilot', 10),
-      preCompact: copilotCommandHook('pre-compact --runtime copilot', 30),
+      sessionStart: copilotCommandHook(
+        'context --pinned-only --include-recent 5 --format copilot',
+        HOOK_MEDIUM_TIMEOUT_SECONDS,
+      ),
+      postToolUseFailure: copilotCommandHook('capture-error --runtime copilot', HOOK_MEDIUM_TIMEOUT_SECONDS),
+      preCompact: copilotCommandHook('pre-compact --runtime copilot', HOOK_LONG_TIMEOUT_SECONDS),
       // VS Code maps no camelCase preCompact. The Copilot CLI may run both names, so pre-compact skips a snapshot saved
       // seconds before.
-      PreCompact: copilotCommandHook('pre-compact --runtime copilot', 30),
+      PreCompact: copilotCommandHook('pre-compact --runtime copilot', HOOK_LONG_TIMEOUT_SECONDS),
       // VS Code's per-reply Stop. --turn acts on a VS Code payload only, so the Copilot CLI's agentStop does nothing.
-      agentStop: copilotCommandHook('session-end --runtime copilot --turn', 30),
-      sessionEnd: copilotCommandHook('session-end --runtime copilot', 30),
+      agentStop: copilotCommandHook('session-end --runtime copilot --turn', HOOK_LONG_TIMEOUT_SECONDS),
+      sessionEnd: copilotCommandHook('session-end --runtime copilot', HOOK_LONG_TIMEOUT_SECONDS),
     },
   };
 }
@@ -361,13 +369,13 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
     hooks,
     'SessionEnd',
     HIPPO_SESSION_END_MARKER,
-    claudeCommandGroup(`hippo session-end --log-file "${logFile}"`, 5),
+    claudeCommandGroup(`hippo session-end --log-file "${logFile}"`, HOOK_SHORT_TIMEOUT_SECONDS),
   );
   const installedSessionStart = appendHookIfMissing(
     hooks,
     'SessionStart',
     HIPPO_LAST_SLEEP_MARKER,
-    claudeCommandGroup(`hippo last-sleep --path "${logFile}"`, 5),
+    claudeCommandGroup(`hippo last-sleep --path "${logFile}"`, HOOK_SHORT_TIMEOUT_SECONDS),
   );
 
   // Mid-session pinned-rule re-injection: UserPromptSubmit runs every turn, so pinned memories stay in context; the
@@ -377,7 +385,7 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
     hooks,
     'UserPromptSubmit',
     HIPPO_PINNED_INJECT_MARKER,
-    claudeCommandGroup(HIPPO_PINNED_INJECT_COMMAND, 5),
+    claudeCommandGroup(HIPPO_PINNED_INJECT_COMMAND, HOOK_SHORT_TIMEOUT_SECONDS),
   );
   return { installedSessionEnd, installedSessionStart, migratedPinnedInjectRecent, installedUserPromptSubmit };
 }
@@ -390,7 +398,7 @@ function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
     hooks,
     'PreCompact',
     HIPPO_PRE_COMPACT_MARKER,
-    claudeCommandGroup(`hippo pre-compact --log-file "${compactLog}"`, 30),
+    claudeCommandGroup(`hippo pre-compact --log-file "${compactLog}"`, HOOK_LONG_TIMEOUT_SECONDS),
   );
 
   // SessionStart(compact): a second SessionStart entry beside the unmatched last-sleep one. The matcher is an
@@ -400,7 +408,7 @@ function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
     hooks,
     'SessionStart',
     HIPPO_COMPACT_RESUME_MARKER,
-    claudeCommandGroup('hippo compact-resume', 10, 'compact'),
+    claudeCommandGroup('hippo compact-resume', HOOK_MEDIUM_TIMEOUT_SECONDS, 'compact'),
   );
 
   // PostCompact: saves the memories the summarizer listed and prints one line, which Claude Code only shows. PreCompact
@@ -409,7 +417,7 @@ function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
     hooks,
     'PostCompact',
     HIPPO_POST_COMPACT_MARKER,
-    claudeCommandGroup(`hippo post-compact --log-file "${compactLog}"`, 10),
+    claudeCommandGroup(`hippo post-compact --log-file "${compactLog}"`, HOOK_MEDIUM_TIMEOUT_SECONDS),
   );
   return { installedPreCompact, installedCompactResume, installedPostCompact };
 }
@@ -441,7 +449,7 @@ function planClaudeCodeHooks(
     hooks,
     'PostToolUseFailure',
     HIPPO_CAPTURE_ERROR_MARKER,
-    claudeCommandGroup('hippo capture-error', 10, '.*'),
+    claudeCommandGroup('hippo capture-error', HOOK_MEDIUM_TIMEOUT_SECONDS, '.*'),
   );
 
   const result: InstallResult = {

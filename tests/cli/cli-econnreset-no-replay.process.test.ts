@@ -147,7 +147,7 @@ describe('remember over HTTP when the socket resets after the commit', () => {
     try {
       expect(posts.count, `the CLI never routed to the stub server; stderr: ${stderr}`).toBe(1);
       expect(countMemories(hippoRoot, content)).toBe(1);
-      expect(status).not.toBe(0);
+      expect(status, stderr).toBe(1);
       expect(stderr).toContain('may already have been applied');
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));

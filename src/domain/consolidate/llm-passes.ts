@@ -1,4 +1,4 @@
-import { DAG_LEVEL, Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
@@ -165,7 +165,7 @@ async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Pro
   const extractedFacts: MemoryEntry[] = [];
   let facts = 0;
   for await (const e of run.survivors.rows()) {
-    if (!(e.tags.includes('extracted') && e.dagLevel === DAG_LEVEL.extracted && !e.supersededBy && isReusable(e))) {
+    if (!(e.tags.includes(EXTRACTED_TAG) && e.dagLevel === DAG_LEVEL.extracted && !e.supersededBy && isReusable(e))) {
       continue;
     }
     facts++;

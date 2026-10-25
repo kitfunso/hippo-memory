@@ -1,5 +1,6 @@
 import {
   type MemoryEntry,
+  ERROR_TAG,
   FALLBACK_HALF_LIFE_DAYS,
   Layer,
   schemaFitFrom,
@@ -408,17 +409,18 @@ export function strengthTallies(
   // An unparseable date scores NULL in SQL and 0 in calculateStrength.
   const bound = strengthSql(now, rules);
   const strength = `COALESCE(${bound.sql}, 0)`;
+  const params = [ERROR_TAG, ...bound.params, ...bound.params, atRiskBelow, tenantId];
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = cachedStatement(
     db,
     `SELECT
       COUNT(*) AS total,
       COALESCE(SUM(pinned != 0), 0) AS pinned,
-      COALESCE(SUM(EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')}) WHERE value = 'error')), 0) AS errors,
+      COALESCE(SUM(EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')}) WHERE value = ?)), 0) AS errors,
       COALESCE(SUM(${strength}), 0) AS strengthSum,
       COALESCE(SUM(COALESCE(pinned, 0) = 0 AND ${strength} < ?), 0) AS atRisk
       FROM memories WHERE tenant_id = ?`,
-  ).get(...bound.params, ...bound.params, atRiskBelow, tenantId) as Record<keyof StrengthTallies, number | bigint>;
+  ).get(...params) as Record<keyof StrengthTallies, number | bigint>;
   return {
     total: Number(row.total),
     pinned: Number(row.pinned),

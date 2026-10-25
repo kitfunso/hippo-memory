@@ -6,7 +6,7 @@
 import { evalNow } from './ablation.js';
 import type { MemoryEntry } from './memory.js';
 import { Layer } from './memory.js';
-import { calculateStrength, HIGH_SCHEMA_FIT, strengthOptionsOf, type StrengthOptions } from './memory.js';
+import { calculateStrength, ERROR_TAG, HIGH_SCHEMA_FIT, strengthOptionsOf, type StrengthOptions } from './memory.js';
 import { DAY_MS } from '../util/time.js';
 
 const STATE_DECIMALS = 3;
@@ -82,7 +82,7 @@ export function addAmbientTallies(a: AmbientTallies, b: AmbientTallies): Ambient
 }
 
 /** The tags that mark a memory as an error, and the prefix of a family of them. */
-export const ERROR_TAGS: readonly string[] = ['error', 'critical'];
+export const ERROR_TAGS: readonly string[] = [ERROR_TAG, 'critical'];
 export const ERROR_TAG_PREFIX = 'error:';
 
 /** Whether a tag list marks its memory as an error for errorDensity. */

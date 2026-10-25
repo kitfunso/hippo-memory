@@ -1,4 +1,4 @@
-import { MemoryEntry, Layer, EmotionalValence, createMemory } from '../../base/memory/memory.js';
+import { MemoryEntry, EXTRACTED_TAG, Layer, EmotionalValence, createMemory } from '../../base/memory/memory.js';
 import type { StoreWith } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
@@ -150,7 +150,7 @@ function buildExtractedEntry(
   inheritedTags: string[],
   baseHalfLifeDays: number,
 ): MemoryEntry {
-  const tags = ['extracted', ...inheritedTags, ...fact.tags];
+  const tags = [EXTRACTED_TAG, ...inheritedTags, ...fact.tags];
   return {
     ...createMemory(fact.content, {
       layer: Layer.Semantic,

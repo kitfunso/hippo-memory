@@ -2,6 +2,7 @@ import {
   calculateStrength,
   CHURN_STALE_TAG,
   DAG_LEVEL,
+  EXTRACTED_TAG,
   type MemoryEntry,
   type StrengthOptions,
 } from '../../base/memory/memory.js';
@@ -145,7 +146,7 @@ export function applyRankBoosts(score: number, entry: MemoryEntry, ctx: BoostCon
   const pathBoost = pathBoostMultiplier(entry.tags, ctx.pathTags);
   const outcomeBoost = ctx.outcome ? outcomeMultiplier(entry, ctx.ablation.outcomeFast) : 1.0;
   const scopeBoost = scopeBoostFor(scopeMatch(entry.tags, ctx.scope));
-  const extractionBoost = entry.tags.includes('extracted') ? EXTRACTION_TAG_BOOST : 1.0;
+  const extractionBoost = entry.tags.includes(EXTRACTED_TAG) ? EXTRACTION_TAG_BOOST : 1.0;
   const summary = summaryMultipliers(entry, ctx.now, ctx.summary);
   let s = score;
   s *= decisionBoost;

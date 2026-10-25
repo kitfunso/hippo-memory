@@ -17,6 +17,7 @@ import {
 } from '../../domain/learn/invalidation.js';
 import {
   createMemory,
+  ERROR_TAG,
   Layer,
   schemaFitFrom,
   strengthOptionsOf,
@@ -40,7 +41,7 @@ export interface LearnProfile {
 
 // SHORTCUT: two profiles keep each surface's rows as they were; fold MCP onto the CLI profile once it may invalidate.
 export const CLI_LEARN: LearnProfile = Object.freeze({
-  tags: Object.freeze(['error', 'git-learned']),
+  tags: Object.freeze([ERROR_TAG, 'git-learned']),
   source: 'git-learn',
   full: true,
 });

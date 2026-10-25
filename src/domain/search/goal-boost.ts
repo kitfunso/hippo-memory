@@ -1,6 +1,6 @@
 // src/domain/search/goal-boost.ts: the goal-stack boost over goals already read; it ranks rows and touches no store.
 import { compareScoresDesc } from '../../base/rank/compare.js';
-import { DEFAULT_SCHEMA_FIT, type MemoryEntry } from '../../base/memory/memory.js';
+import { DEFAULT_SCHEMA_FIT, ERROR_TAG, type MemoryEntry } from '../../base/memory/memory.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
 import type { ActiveGoals, Goal, RetrievalPolicy } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
@@ -42,7 +42,7 @@ function goalBoostMultiplier(
     const goal = goalsByTag.get(tag)!;
     const policy = policiesByGoalId.get(goal.id);
     if (!policy) continue;
-    if (policy.policyType === 'error-prioritized' && tags.includes('error')) {
+    if (policy.policyType === 'error-prioritized' && tags.includes(ERROR_TAG)) {
       multiplier *= policy.errorPriority;
     } else if (policy.policyType === 'schema-fit-biased') {
       // Linearly weight schema_fit in [0,1] up to (weightSchemaFit)x.

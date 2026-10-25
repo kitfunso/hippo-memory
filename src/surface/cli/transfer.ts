@@ -19,7 +19,7 @@ import type { ImportOptions, ImportResult, TargetedImport } from '../importers/c
 import * as api from '../../api/index.js';
 import { memoryGet, memoryList } from '../../api/memories/memories.js';
 import { rememberFailedCommand } from '../../api/memories/remember-local.js';
-import * as client from './client.js';
+import { pickWrites } from './memory-writes.js';
 import {
   cliApiContext,
   cliBatch,
@@ -33,7 +33,7 @@ import {
 } from './api-context.js';
 import { printError } from './output.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
+import { requireInit, learnFromRepo } from './shared.js';
 import { fmt } from './print.js';
 import {
   type CliFlags,
@@ -370,23 +370,6 @@ function printVaultSummary(vaultResult: ImportResult, folderPath: string, ctx: C
   if (!dryRun && vaultResult.imported >= 1) backfillVectors(ctx, 'hippo embed');
 }
 
-async function promoteMemory(hippoRoot: string, tenantId: string, id: string): Promise<void> {
-  requireInit(hippoRoot);
-
-  if (!id) {
-    fail('Usage: hippo promote <id>');
-  }
-
-  const ctx = cliApiContext(hippoRoot, tenantId);
-  try {
-    const result = await api.promote(ctx, id);
-    console.log(`Promoted ${id} to global store as ${result.globalId}`);
-    console.log(`   Global store: ${hippoHomeDir()}`);
-  } catch (err) {
-    fail(`Failed to promote: ${errorMessage(err)}`);
-  }
-}
-
 export async function handleSync({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
@@ -408,16 +391,9 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
   if (!id) {
     fail('Please provide a memory ID.');
   }
-  const promoted = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
-    try {
-      const result = await client.postPromote(info.url, apiKey, id);
-      console.log(`Promoted ${id} to global store as ${result.globalId}`);
-    } catch (err) {
-      fail(`Failed to promote: ${errorMessage(err)}`);
-    }
-  });
-  if (promoted) return;
-  await promoteMemory(hippoRoot, tenantId, id);
+  const { globalId, globalStore } = await (await pickWrites(hippoRoot, tenantId)).promote(id);
+  console.log(`Promoted ${id} to global store as ${globalId}`);
+  if (globalStore !== undefined) console.log(`   Global store: ${globalStore}`);
 }
 
 export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {

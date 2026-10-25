@@ -3,7 +3,7 @@
 import { envActiveScope } from '../../base/util/env.js';
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import * as fs from 'fs';
-import { Layer, ConfidenceLevel, strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
+import { ERROR_TAG, Layer, ConfidenceLevel, strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
 import * as api from '../../api/index.js';
 import { memoryGet, memoryListByIds } from '../../api/memories/memories.js';
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
@@ -13,11 +13,11 @@ import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { parseSteps, traceRecord, traceStats } from '../../api/memories/trace.js';
 import { extractPathTags } from '../../api/memories/remember-local.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
-import * as client from './client.js';
+import { type MemoryWrites, type RememberRequest, type Remembered, localWrites, pickWrites } from './memory-writes.js';
 import { cliApiContext, cliConfig, cliInitGlobal } from './api-context.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
-import { requireInit, runViaServerIfAvailable } from './shared.js';
+import { requireInit } from './shared.js';
 import { fmt } from './print.js';
 import {
   type CliFlags,
@@ -42,10 +42,10 @@ interface RememberTags {
   all: string[];
 }
 
-// Shared by the direct write and the routed request so both store the same tags.
+// The routed write sends the same tags, so a row's tags do not depend on whether a server took it.
 function rememberTags(flags: CliFlags, cwd: string): RememberTags {
   const requested = [...repeatedFlag(flags, 'tag')];
-  if (boolFlag(flags, 'error')) requested.push('error');
+  if (boolFlag(flags, 'error')) requested.push(ERROR_TAG);
   const all = [...requested];
   for (const pt of extractPathTags(cwd)) {
     if (!all.includes(pt)) all.push(pt);
@@ -83,77 +83,67 @@ function parseKindFlag(flags: CliFlags): UserVisibleKind | undefined {
   return kindFlag;
 }
 
-interface RememberEnvelope {
-  kind: UserVisibleKind | undefined;
-  owner: string | null;
-  artifactRef: string | null;
-  scope: string | null;
-}
+type RememberEnvelope = Pick<RememberRequest, 'kind' | 'owner' | 'artifactRef' | 'scope'>;
 
 function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   const kind = parseKindFlag(flags);
-  const ownerRaw = stringFlag(flags, 'owner') ?? null;
-  const ownerCheck = validateOwner(ownerRaw, { strict: isStrictOwnerEnv() });
+  const ownerCheck = validateOwner(stringFlag(flags, 'owner') ?? null, { strict: isStrictOwnerEnv() });
   if (!ownerCheck.ok) {
     fail(ownerCheck.message);
   }
   if (ownerCheck.message) printError(ownerCheck.message);
-  const owner = ownerCheck.value ?? null;
-  const artifactRef = stringFlag(flags, 'artifact-ref') ?? null;
-  const scope = stringFlag(flags, 'scope')?.trim() || null;
+  const scope = stringFlag(flags, 'scope')?.trim() || undefined;
   assertClientScope(scope);
-  return { kind, owner, artifactRef, scope };
+  return { kind, owner: ownerCheck.value ?? undefined, artifactRef: stringFlag(flags, 'artifact-ref'), scope };
 }
 
-async function writeMemory(hippoRoot: string, tenantId: string, text: string, flags: CliFlags): Promise<void> {
-  const useGlobal = boolFlag(flags, 'global');
-  const targetRoot = useGlobal ? hippoHomeDir() : hippoRoot;
-
-  if (useGlobal) {
-    cliInitGlobal();
-  } else {
-    requireInit(hippoRoot);
-  }
-
-  const { requested: requestedTags, all: allTags } = rememberTags(flags, process.cwd());
-  const envelope = parseRememberEnvelope(flags);
-
-  const ctx = cliApiContext(targetRoot, tenantId);
-  const outcome = await api.rememberLocally(ctx, {
-    content: text,
-    kind: envelope.kind,
-    scope: envelope.scope ?? undefined,
-    owner: envelope.owner ?? undefined,
-    artifactRef: envelope.artifactRef ?? undefined,
-    tags: allTags,
-    // Schema fit is scored on the tags the caller typed, without the path and scope tags added from this process.
-    fitTags: requestedTags,
-    layer: Layer.Episodic,
+function rememberRequest(content: string, flags: CliFlags, useGlobal: boolean): RememberRequest {
+  const tags = rememberTags(flags, process.cwd());
+  return {
+    content,
+    tags: tags.all,
+    fitTags: tags.requested,
+    ...parseRememberEnvelope(flags),
     pinned: boolFlag(flags, 'pin'),
-    source: useGlobal ? 'cli-global' : 'cli',
     confidence: rememberConfidence(flags),
     force: boolFlag(flags, 'force'),
-  });
+    extract: boolFlag(flags, 'extract'),
+    source: useGlobal ? 'cli-global' : 'cli',
+  };
+}
+
+/** The switches only a write on the store honours (with --layer), so a command that sets one never goes to a server. */
+const STORE_ONLY_SWITCHES = ['pin', 'extract', 'force', 'observed', 'inferred', 'verified'] as const;
+
+async function rememberWrites(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<MemoryWrites> {
+  if (boolFlag(flags, 'global')) {
+    cliInitGlobal();
+    return localWrites(hippoHomeDir(), tenantId);
+  }
+  if (STORE_ONLY_SWITCHES.some((name) => boolFlag(flags, name)) || hasFlag(flags, 'layer')) {
+    return localWrites(hippoRoot, tenantId);
+  }
+  return pickWrites(hippoRoot, tenantId);
+}
+
+async function printRemembered(outcome: Remembered, useGlobal: boolean): Promise<void> {
   if (outcome.status === 'skipped') {
-    printSkipped(outcome);
+    console.log(`Skipped (salience: ${outcome.reason}, score ${outcome.score.toFixed(2)})`);
     return;
   }
-  if (outcome.startedWeak) printWeakened(outcome.startedWeak);
-  printRemembered(outcome.entry, useGlobal, outcome.warnings);
-
-  const request = { requested: boolFlag(flags, 'extract') };
-  printExtraction(await api.extractRememberedFacts(ctx, outcome.entry, request));
+  const weak = outcome.startedWeak;
+  if (weak) console.log(`Weakened (salience: ${weak.reason}, strength ${weak.strength.toFixed(2)})`);
+  if (outcome.status === 'relayed') {
+    console.log(`Remembered [${outcome.id}] (via ${outcome.via})`);
+    console.log(`   Kind: ${outcome.kind} | Tenant: ${outcome.tenantId}`);
+  } else {
+    printEntry(outcome.entry, useGlobal);
+  }
+  for (const w of outcome.warnings) printError(`Warning: ${w}`);
+  if (outcome.status === 'stored') printExtraction(await outcome.extraction());
 }
 
-function printSkipped({ reason, score }: { reason: string; score: number }): void {
-  console.log(`Skipped (salience: ${reason}, score ${score.toFixed(2)})`);
-}
-
-function printWeakened({ reason, strength }: { reason: string; strength: number }): void {
-  console.log(`Weakened (salience: ${reason}, strength ${strength.toFixed(2)})`);
-}
-
-function printRemembered(entry: MemoryEntry, useGlobal: boolean, warnings: readonly string[]): void {
+function printEntry(entry: MemoryEntry, useGlobal: boolean): void {
   const prefix = useGlobal ? '[global] ' : '';
   console.log(`${prefix}Remembered [${entry.id}]`);
   console.log(
@@ -162,7 +152,6 @@ function printRemembered(entry: MemoryEntry, useGlobal: boolean, warnings: reado
   );
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
   if (entry.pinned) console.log('   Pinned (no decay)');
-  for (const w of warnings) printError(`Warning: ${w}`);
 }
 
 function printExtraction(extraction: api.FactExtraction): void {
@@ -419,60 +408,14 @@ function printTraceText(t: TraceView): void {
 }
 
 export async function handleRemember({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
-  let text: string;
-  if (args.length === 1 && args[0] === '-') {
-    text = fs.readFileSync(0, 'utf-8').trim();
-  } else {
-    text = args.join(' ').trim();
-  }
+  const text = args.length === 1 && args[0] === '-' ? fs.readFileSync(0, 'utf-8').trim() : args.join(' ').trim();
   if (!text || text.length < 3) {
     fail('Memory content too short (minimum 3 characters).');
   }
-  // Thin-client routing: simple `remember` calls go over HTTP so the daemon stays the single writer; rich flags need
-  // the direct path. Both paths ask the api for the same salience gate.
-  const richFlag =
-    boolFlag(flags, 'pin') ||
-    boolFlag(flags, 'global') ||
-    boolFlag(flags, 'extract') ||
-    boolFlag(flags, 'force') ||
-    boolFlag(flags, 'observed') ||
-    boolFlag(flags, 'inferred') ||
-    boolFlag(flags, 'verified') ||
-    hasFlag(flags, 'layer');
-  if (!richFlag && (await rememberViaThinClient(hippoRoot, text, flags))) return;
-  await writeMemory(hippoRoot, tenantId, text, flags);
-}
-
-async function rememberViaThinClient(hippoRoot: string, text: string, flags: CliFlags): Promise<boolean> {
-  const rememberKindRaw = stringFlag(flags, 'kind')?.toLowerCase();
-  if (rememberKindRaw !== undefined && !isOneOf(USER_VISIBLE_KINDS, rememberKindRaw)) return false;
-  const tags = rememberTags(flags, process.cwd()).all;
-  // Validate --owner on the thin-client path too, so validation is the same whether or not a server is up.
-  const thinOwnerRaw = stringFlag(flags, 'owner');
-  const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
-  if (!thinOwnerCheck.ok) {
-    fail(thinOwnerCheck.message);
-  }
-  if (thinOwnerCheck.message) printError(thinOwnerCheck.message);
-  return runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
-    const result = await client.postRemember(info.url, apiKey, {
-      content: text,
-      kind: rememberKindRaw,
-      scope: stringFlag(flags, 'scope'),
-      owner: thinOwnerCheck.value,
-      artifactRef: stringFlag(flags, 'artifact-ref'),
-      tags,
-    });
-    if ('skipped' in result) {
-      printSkipped(result.skipped);
-      return;
-    }
-    const weak = result.startedWeak;
-    if (weak) printWeakened(weak);
-    console.log(`Remembered [${result.id}] (via ${info.url})`);
-    console.log(`   Kind: ${result.kind} | Tenant: ${result.tenantId}`);
-    for (const w of result.warnings ?? []) printError(`Warning: ${w}`);
-  });
+  const useGlobal = boolFlag(flags, 'global');
+  const request = rememberRequest(text, flags, useGlobal);
+  const writes = await rememberWrites(hippoRoot, tenantId, flags);
+  await printRemembered(await writes.remember(request), useGlobal);
 }
 
 export async function handleSupersede({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {

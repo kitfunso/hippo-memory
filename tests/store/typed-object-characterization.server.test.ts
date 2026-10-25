@@ -112,7 +112,7 @@ interface TypeRow {
   readonly path: string;
   /** A valid create body whose name-like field carries two spaces on each side. */
   readonly create: Body;
-  /** That field as the create reply returns it. */
+  /** That field as the create reply returns it, trimmed. */
   readonly stored: string;
   /** The step after create: a supersede makes row 2, a resolve keeps row 1. */
   readonly next: 'supersede' | 'resolve';
@@ -130,11 +130,11 @@ const TYPES: readonly TypeRow[] = [
     path: '/v1/decisions',
     next: 'supersede',
     create: { text: '  Use Postgres  ', context: 'cheaper to run' },
-    stored: '"decisionText":"  Use Postgres  "',
+    stored: '"decisionText":"Use Postgres"',
     nextBody: { text: 'Use SQLite' },
-    nextAgain: "saveDecision: decision 1 is not active (status='superseded'); only active decisions can be superseded.",
-    nextMissing: 'saveDecision: decision 9999 to supersede not found for tenant default',
-    closeAgain: "closeDecision: decision 2 is not active (status='closed'); only active decisions can be closed.",
+    nextAgain: "decision 1 is not active (status='superseded'); only active decisions can be superseded.",
+    nextMissing: 'decision 9999 to supersede not found for tenant default',
+    closeAgain: "decision 2 is not active (status='closed'); only active decisions can be closed.",
     audit: [
       'decision_create key 1 {"decision_id":1,"has_context":true}',
       'remember key <mem> {"kind":"distilled","scope":null}',
@@ -149,12 +149,11 @@ const TYPES: readonly TypeRow[] = [
     path: '/v1/incidents',
     next: 'resolve',
     create: { text: '  Checkout returned 500s  ' },
-    stored: '"incidentText":"  Checkout returned 500s  "',
+    stored: '"incidentText":"Checkout returned 500s"',
     nextBody: { resolutionText: 'rolled back' },
-    nextAgain: "resolveIncident: incident 1 is not open (status='resolved'); only open incidents can be resolved.",
-    nextMissing: 'resolveIncident: incident 9999 not found for tenant default',
-    closeAgain:
-      "closeIncident: incident 1 is already closed (status='closed'); only open or resolved incidents can be closed.",
+    nextAgain: "incident 1 is not open (status='resolved'); only open incidents can be resolved.",
+    nextMissing: 'incident 9999 not found for tenant default',
+    closeAgain: "incident 1 is already closed (status='closed'); only open or resolved incidents can be closed.",
     audit: [
       'incident_open key 1 {"incident_id":1,"has_context":false,"linked_memory_count":0}',
       'remember key <mem> {"kind":"distilled","scope":null}',
@@ -167,11 +166,11 @@ const TYPES: readonly TypeRow[] = [
     path: '/v1/processes',
     next: 'supersede',
     create: { processName: '  Release  ', steps: ['run the tests'] },
-    stored: '"processName":"  Release  "',
+    stored: '"processName":"Release"',
     nextBody: { steps: ['sign the build'] },
-    nextAgain: "saveProcess: process 1 is not active (status='superseded'); only active processes can be superseded.",
+    nextAgain: "process 1 is not active (status='superseded'); only active processes can be superseded.",
     nextMissing: 'process 9999 not found',
-    closeAgain: "closeProcess: process 2 is not active (status='closed'); only active processes can be closed.",
+    closeAgain: "process 2 is not active (status='closed'); only active processes can be closed.",
     audit: [
       'process_create key 1 {"process_id":1,"version":1,"step_count":1,"has_description":false}',
       'remember key <mem> {"kind":"distilled","scope":null}',
@@ -186,11 +185,11 @@ const TYPES: readonly TypeRow[] = [
     path: '/v1/policies',
     next: 'supersede',
     create: { policyName: '  Retention  ', policyText: 'Delete logs after 90 days' },
-    stored: '"policyName":"  Retention  "',
+    stored: '"policyName":"Retention"',
     nextBody: { policyText: 'Delete logs after 30 days' },
-    nextAgain: "savePolicy: policy 1 is not active (status='superseded'); only active policies can be superseded.",
+    nextAgain: "policy 1 is not active (status='superseded'); only active policies can be superseded.",
     nextMissing: 'policy 9999 not found',
-    closeAgain: "closePolicy: policy 2 is not active (status='closed'); only active policies can be closed.",
+    closeAgain: "policy 2 is not active (status='closed'); only active policies can be closed.",
     audit: [
       'policy_create key 1 {"policy_id":1,"version":1,"open_ended":true}',
       'remember key <mem> {"kind":"distilled","scope":null}',
@@ -207,9 +206,9 @@ const TYPES: readonly TypeRow[] = [
     create: { skillName: '  Review  ', instructions: 'Check the down path' },
     stored: '"skillName":"Review"',
     nextBody: { instructions: 'Check both paths' },
-    nextAgain: "saveSkill: skill 1 is not active (status='superseded'); only active skills can be superseded.",
+    nextAgain: "skill 1 is not active (status='superseded'); only active skills can be superseded.",
     nextMissing: 'skill 9999 not found',
-    closeAgain: "closeSkill: skill 2 is not active (status='closed'); only active skills can be closed.",
+    closeAgain: "skill 2 is not active (status='closed'); only active skills can be closed.",
     audit: [
       'skill_create key 1 {"skill_id":1,"version":1,"has_trigger":false}',
       'remember key <mem> {"kind":"distilled","scope":null}',
@@ -226,9 +225,9 @@ const TYPES: readonly TypeRow[] = [
     create: { customer: '  Acme Ltd  ', note: 'Prefers email' },
     stored: '"customer":"Acme Ltd"',
     nextBody: { note: 'Prefers a call' },
-    nextAgain: "saveCustomerNote: note 1 is not active (status='superseded'); only active notes can be superseded.",
+    nextAgain: "note 1 is not active (status='superseded'); only active notes can be superseded.",
     nextMissing: 'customer note 9999 not found',
-    closeAgain: "closeCustomerNote: note 2 is not active (status='closed'); only active notes can be closed.",
+    closeAgain: "note 2 is not active (status='closed'); only active notes can be closed.",
     audit: [
       'customer_note_create key 1 {"note_id":1,"customer":"Acme Ltd","version":1}',
       'remember key <mem> {"kind":"distilled","scope":null}',
@@ -245,9 +244,9 @@ const TYPES: readonly TypeRow[] = [
     create: { repo: '  acme/web  ', summary: 'Storefront app' },
     stored: '"repo":"acme/web"',
     nextBody: { summary: 'Storefront and admin app' },
-    nextAgain: "saveProjectBrief: brief 1 is not active (status='superseded'); only active briefs can be superseded.",
+    nextAgain: "brief 1 is not active (status='superseded'); only active briefs can be superseded.",
     nextMissing: 'project brief 9999 not found',
-    closeAgain: "closeProjectBrief: brief 2 is not active (status='closed'); only active briefs can be closed.",
+    closeAgain: "brief 2 is not active (status='closed'); only active briefs can be closed.",
     audit: [
       'project_brief_create key 1 {"brief_id":1,"repo":"acme/web","version":1,"refreshed":false}',
       'remember key <mem> {"kind":"distilled","scope":null}',
@@ -369,12 +368,12 @@ describe('typed objects over HTTP, one shared store', () => {
   );
 
   it.each(['/v1/decisions', '/v1/incidents'])(
-    '%s takes a text of spaces only when a context comes with it',
+    '%s refuses a text of spaces only, with or without a context',
     async (path) => {
-      expect((await api.send('POST', path, { text: '   ' })).status).toBe(400);
-      const made = await api.send('POST', path, { text: '   ', context: 'cheaper to run' });
-      expect(made.status).toBe(201);
-      expect(made.text).toContain('Text":"   "');
+      const bare = await api.send('POST', path, { text: '   ' });
+      const withContext = await api.send('POST', path, { text: '   ', context: 'cheaper to run' });
+      expect([bare.status, withContext.status]).toEqual([400, 400]);
+      expect(withContext.text).toContain('text is required (non-empty string)');
     },
   );
 
@@ -403,8 +402,8 @@ const strict =
   (label: string) =>
   (raw: string): string =>
     `exit 1: Invalid ${label} id: "${raw}" (expected a positive integer).`;
-const again = (fn: string, label: string, plural: string): string =>
-  `${fn}: ${label} 1 is not active (status='superseded'); only active ${plural} can be superseded.`;
+const again = (label: string, plural: string): string =>
+  `${label} 1 is not active (status='superseded'); only active ${plural} can be superseded.`;
 
 const NOUNS: readonly NounRow[] = [
   {
@@ -435,7 +434,7 @@ const NOUNS: readonly NounRow[] = [
     refuses: strict('process'),
     loose: strict('process'),
     revise: ['--step', 'sign the build'],
-    reviseAgain: `exit 1: ${again('saveProcess', 'process', 'processes')}`,
+    reviseAgain: `exit 1: ${again('process', 'processes')}`,
   },
   {
     noun: 'policy',
@@ -444,7 +443,7 @@ const NOUNS: readonly NounRow[] = [
     refuses: strict('policy'),
     loose: strict('policy'),
     revise: ['--text', 'Delete logs after 30 days'],
-    reviseAgain: `exit 1: ${again('savePolicy', 'policy', 'policies')}`,
+    reviseAgain: `exit 1: ${again('policy', 'policies')}`,
   },
   {
     noun: 'skill',
@@ -453,7 +452,7 @@ const NOUNS: readonly NounRow[] = [
     refuses: strict('skill'),
     loose: strict('skill'),
     revise: ['--instructions', 'Check both paths'],
-    reviseAgain: `exit 1: ${again('saveSkill', 'skill', 'skills')}`,
+    reviseAgain: `exit 1: ${again('skill', 'skills')}`,
   },
   {
     noun: 'brief',
@@ -462,7 +461,7 @@ const NOUNS: readonly NounRow[] = [
     refuses: strict('brief'),
     loose: strict('brief'),
     revise: ['--summary', 'Storefront and admin app'],
-    reviseAgain: `exit 1: ${again('saveProjectBrief', 'brief', 'briefs')}`,
+    reviseAgain: `exit 1: ${again('brief', 'briefs')}`,
   },
   {
     noun: 'note',
@@ -471,7 +470,7 @@ const NOUNS: readonly NounRow[] = [
     refuses: strict('note'),
     loose: strict('note'),
     revise: ['--text', 'Prefers a call'],
-    reviseAgain: `exit 1: ${again('saveCustomerNote', 'note', 'notes')}`,
+    reviseAgain: `exit 1: ${again('note', 'notes')}`,
   },
 ];
 

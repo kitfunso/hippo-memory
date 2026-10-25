@@ -124,7 +124,7 @@ describe('versioned object CLI verbs', () => {
     expect((await hippo('process', 'new', 'Release', '--step', 'run the tests')).status).toBe(0);
     expect(await hippo('process', ...args)).toEqual({
       stdout: '',
-      stderr: 'saveProcess: step 1 is empty\n',
+      stderr: 'step 1 must not be blank\n',
       status: 1,
     });
   });

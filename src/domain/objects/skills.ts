@@ -2,10 +2,9 @@
  *  `skillsMarkdown` renders ACTIVE skills into AGENTS.md / CLAUDE.md rules; running code from a skill is deferred
  *  (security). `trigger` is stored in `trigger_text` because it is an SQL reserved keyword. */
 
-import { BadRequestError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { SavableDescriptor } from './descriptor.js';
-import { checkText, requireLine } from './fields.js';
+import { capText, oneLine, requireLine, requireText } from './fields.js';
 import type { Skill, SkillStatus } from '../../base/records/object-types.js';
 import type { Objects } from '../../base/ports/store.js';
 
@@ -39,13 +38,7 @@ export interface SaveSkillOptions {
  *  **When:** line. */
 function checkTrigger(trigger: string | undefined): string | null {
   if (trigger === undefined || trigger === null || trigger.trim().length === 0) return null;
-  if (trigger.length > MAX_SKILL_TRIGGER_LEN) {
-    throw new BadRequestError(`saveSkill: trigger exceeds the ${MAX_SKILL_TRIGGER_LEN}-char cap`);
-  }
-  if (/[\r\n]/.test(trigger)) {
-    throw new BadRequestError('saveSkill: trigger must be a single line (no newlines)');
-  }
-  return trigger;
+  return oneLine(capText(trigger, MAX_SKILL_TRIGGER_LEN, 'trigger'), 'trigger');
 }
 
 /** Recall-surface content for the memory mirror: name, optional trigger, instructions. */
@@ -60,24 +53,16 @@ export const SKILL: SavableDescriptor<'skill', SaveSkillOptions> = {
   kind: 'skill',
   label: 'skill',
   plural: 'skills',
-  fn: { get: 'loadSkillById', close: 'closeSkill', list: 'loadSkills', save: 'saveSkill' },
   states: VALID_SKILL_STATES,
   closableFrom: ['active'],
   draft(opts) {
     // The name becomes an H2 header in the export, so it must be one line.
-    const name = requireLine(opts.skillName, MAX_SKILL_NAME_LEN, {
-      required: 'saveSkill: skillName is required',
-      singleLine: 'saveSkill: skillName must be a single line (no newlines)',
-      tooLong: `saveSkill: skillName exceeds the ${MAX_SKILL_NAME_LEN}-char cap`,
-    });
-    checkText(opts.instructions, MAX_SKILL_INSTRUCTIONS_LEN, {
-      required: 'saveSkill: instructions are required',
-      tooLong: `saveSkill: instructions exceed the ${MAX_SKILL_INSTRUCTIONS_LEN}-char cap`,
-    });
+    const name = requireLine(opts.skillName, MAX_SKILL_NAME_LEN, 'skillName');
+    const instructions = requireText(opts.instructions, MAX_SKILL_INSTRUCTIONS_LEN, 'instructions');
     const trigger = checkTrigger(opts.trigger);
     return {
-      fields: { name, instructions: opts.instructions, trigger },
-      content: buildSkillContent(name, opts.instructions, trigger),
+      fields: { name, instructions, trigger },
+      content: buildSkillContent(name, instructions, trigger),
       tags: opts.extraTags ?? [],
       supersedesId: opts.supersedesSkillId,
       changeSummary: opts.changeSummary,
@@ -89,7 +74,7 @@ export const SKILL: SavableDescriptor<'skill', SaveSkillOptions> = {
 /** Render the tenant's ACTIVE skills into one AGENTS.md / CLAUDE.md-style markdown block (H2 per skill, ordered by
  *  skill_name) and return it; writes no file. Bounded by MAX_EXPORT_SKILLS rows; instructions are emitted verbatim. */
 export async function skillsMarkdown(objects: Objects, tenantId: string): Promise<string> {
-  assertTenantId('exportSkills', tenantId);
+  assertTenantId('skillsMarkdown', tenantId);
   const query = { byName: true, status: 'active', limit: MAX_EXPORT_SKILLS } as const;
   return skillsBlock(await objects.listObjects(tenantId, 'skill', query));
 }

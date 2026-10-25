@@ -2,7 +2,7 @@
 // cursor policy decided by the api.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
-import { sessionEndWork, type SessionEndWork } from '../../src/api/session-end.js';
+import { heldLog, sessionEndWork, type SessionEndWork } from '../../src/api/session-end.js';
 import type { Context } from '../../src/api/types.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -38,6 +38,7 @@ function work(over: Partial<Work> = {}): Work {
     log: (line) => {
       lines.push(line);
     },
+    held: heldLog((line) => lines.push(line)),
     sleep: async () => {
       steps.push('sleep');
     },
@@ -152,8 +153,8 @@ describe('sessionEndWork', () => {
     expect(steps).toContain('digest:3:abc');
   });
 
-  // A worker process runs many sessions, so a listener per call would pile up until the process exits.
-  it('leaves no exit listener behind once the re-read lines are logged', async () => {
+  // The process belongs to the host, which owns the exit listener; a worker running many sessions gains none here.
+  it('adds no exit listener, and logs the re-read lines after sleep', async () => {
     saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
     const before = process.listenerCount('exit');
     const transcriptPath = `${root}-missing.jsonl`;
@@ -166,7 +167,7 @@ describe('sessionEndWork', () => {
     expect(closed).toBeGreaterThan(lines.indexOf(reread[0]!));
   });
 
-  it('logs the re-read lines and leaves no exit listener when sleep throws', async () => {
+  it('logs the re-read lines and adds no exit listener when sleep throws', async () => {
     const before = process.listenerCount('exit');
     const sleep = async (): Promise<void> => {
       throw new Error('sleep failed');

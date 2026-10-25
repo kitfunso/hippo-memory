@@ -52,7 +52,7 @@ Project brief #3 recorded (v2), superseding #1.
 $ brief supersede 1 --summary Storefront and admin app -> 1
 --- stdout
 --- stderr
-saveProjectBrief: brief 1 is not active (status='superseded'); only active briefs can be superseded.
+brief 1 is not active (status='superseded'); only active briefs can be superseded.
 
 $ brief list -> 0
 --- stdout
@@ -156,7 +156,7 @@ Customer note #3 recorded (v2), superseding #1.
 $ note supersede 1 --text Prefers a call -> 1
 --- stdout
 --- stderr
-saveCustomerNote: note 1 is not active (status='superseded'); only active notes can be superseded.
+note 1 is not active (status='superseded'); only active notes can be superseded.
 
 $ note list -> 0
 --- stdout
@@ -260,7 +260,7 @@ Policy #3 recorded (v2), superseding #1.
 $ policy supersede 1 --text Delete logs after 30 days --from 2026-02-01T00:00:00.000Z -> 1
 --- stdout
 --- stderr
-savePolicy: policy 1 is not active (status='superseded'); only active policies can be superseded.
+policy 1 is not active (status='superseded'); only active policies can be superseded.
 
 $ policy list -> 0
 --- stdout
@@ -370,7 +370,7 @@ Process #3 recorded (v2), superseding #1.
 $ process supersede 1 --step sign the build --description signed -> 1
 --- stdout
 --- stderr
-saveProcess: process 1 is not active (status='superseded'); only active processes can be superseded.
+process 1 is not active (status='superseded'); only active processes can be superseded.
 
 $ process list -> 0
 --- stdout
@@ -477,7 +477,7 @@ Skill #3 recorded (v2), superseding #1.
 $ skill supersede 1 --instructions Check both paths --trigger on merge -> 1
 --- stdout
 --- stderr
-saveSkill: skill 1 is not active (status='superseded'); only active skills can be superseded.
+skill 1 is not active (status='superseded'); only active skills can be superseded.
 
 $ skill list -> 0
 --- stdout

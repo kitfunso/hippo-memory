@@ -1,4 +1,4 @@
-import { createMemory, DAG_LEVEL, Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { createMemory, DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { generateDagSummary, type DagSummaryOptions } from './dag-summary.js';
 import { overlapPartners } from './overlap-index.js';
@@ -158,7 +158,7 @@ export async function buildDag(store: DagStore, facts: MemoryEntry[], opts: DagB
   const { baseHalfLifeDays } = opts;
 
   const unparented = facts.filter(
-    (f) => f.dagLevel === DAG_LEVEL.extracted && !f.dagParentId && f.tags.includes('extracted'),
+    (f) => f.dagLevel === DAG_LEVEL.extracted && !f.dagParentId && f.tags.includes(EXTRACTED_TAG),
   );
 
   for (const [, tenantFacts] of partitionFactsByTenant(unparented)) {

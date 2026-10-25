@@ -6,7 +6,9 @@ import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
+import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import type { SavableDescriptor } from './descriptor.js';
+import { requireText } from './fields.js';
 import { listObjects, saveObject } from './lifecycle.js';
 import type { Policy, PolicyStatus } from '../../base/records/object-types.js';
 import type { Objects, PoliciesInForceQuery } from '../../base/ports/store.js';
@@ -68,23 +70,18 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOptions> = {
   kind: 'policy',
   label: 'policy',
   plural: 'policies',
-  fn: { get: 'loadPolicyById', close: 'closePolicy', list: 'loadPolicies', save: 'savePolicy' },
   states: VALID_POLICY_STATES,
   closableFrom: ['active'],
   draft(opts) {
-    if (!opts.policyName || opts.policyName.trim().length === 0) {
-      throw new BadRequestError('savePolicy: policyName is required');
-    }
-    if (!opts.policyText || opts.policyText.trim().length === 0) {
-      throw new BadRequestError('savePolicy: policyText is required');
-    }
+    const policyName = requireText(opts.policyName, MAX_SHORT_FIELD_LEN, 'policyName');
+    const policyText = requireText(opts.policyText, MAX_SHORT_FIELD_LEN, 'policyText');
     const at = new Date().toISOString();
     // valid_from defaults to the creation instant. A date-only as-of is widened to end-of-day on the read side, because
     // backdating valid_from to midnight would report the policy in force earlier that day.
     const { validFrom, validTo } = validatePolicyDates(opts.validFrom, opts.validTo, at);
     return {
-      fields: { policyName: opts.policyName, policyText: opts.policyText, validFrom, validTo },
-      content: buildPolicyContent(opts.policyName, opts.policyText, validFrom, validTo),
+      fields: { policyName, policyText, validFrom, validTo },
+      content: buildPolicyContent(policyName, policyText, validFrom, validTo),
       tags: opts.extraTags ?? [],
       supersedesId: opts.supersedesPolicyId,
       changeSummary: opts.changeSummary,
@@ -127,7 +124,7 @@ function inForceQuery(
   asOfDate: string,
   opts: { name?: string; limit?: number },
 ): PoliciesInForceQuery {
-  assertTenantId('loadPoliciesAsOf', tenantId);
+  assertTenantId('policiesAsOf', tenantId);
   // A bare date means the whole of that day, so it reads as the day's last instant; a datetime is used as given.
   const asOf = /^\d{4}-\d{2}-\d{2}$/.test(asOfDate.trim())
     ? normalizePolicyDate(`${asOfDate.trim()}T23:59:59.999Z`, 'asOfDate')

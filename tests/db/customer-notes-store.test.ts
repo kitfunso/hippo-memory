@@ -137,10 +137,10 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
         customer: '   ',
         note: 'x',
       }),
-    ).rejects.toThrow(/customer is required/);
+    ).rejects.toThrow(/customer must not be blank/);
     await expect(
       saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'c', note: '  ' }),
-    ).rejects.toThrow(/note is required/);
+    ).rejects.toThrow(/note must not be blank/);
     await expect(
       saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
         customer: 'bad\ncustomer',
@@ -152,7 +152,7 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
         customer: 'big',
         note: 'y'.repeat(8192 + 1),
       }),
-    ).rejects.toThrow(/note exceeds/);
+    ).rejects.toThrow(/note must be at most/);
     await expect(
       saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
         customer: 'c',
@@ -160,6 +160,6 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
         changeSummary: 'z'.repeat(4097),
         supersedesNoteId: 1,
       }),
-    ).rejects.toThrow(/changeSummary exceeds/);
+    ).rejects.toThrow(/changeSummary must be at most/);
   });
 });

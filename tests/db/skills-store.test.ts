@@ -133,13 +133,13 @@ describe('skills store (executable/exportable first-class object)', () => {
         skillName: '   ',
         instructions: 'x',
       }),
-    ).rejects.toThrow(/skillName is required/);
+    ).rejects.toThrow(/skillName must not be blank/);
     await expect(
       cliSave(home, 'default', SKILL, {
         skillName: 'n',
         instructions: '  ',
       }),
-    ).rejects.toThrow(/instructions are required/);
+    ).rejects.toThrow(/instructions must not be blank/);
     await expect(
       cliSave(home, 'default', SKILL, {
         skillName: 'bad\nname',
@@ -158,7 +158,7 @@ describe('skills store (executable/exportable first-class object)', () => {
         skillName: 'big',
         instructions: 'y'.repeat(8192 + 1),
       }),
-    ).rejects.toThrow(/instructions exceed/);
+    ).rejects.toThrow(/instructions must be at most/);
   });
 
   it('exportSkills: active-only, name-ASC, trigger omitted when null, markdown verbatim, empty -> ""', async () => {

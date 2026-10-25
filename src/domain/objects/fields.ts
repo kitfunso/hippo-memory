@@ -1,34 +1,29 @@
-// Field checks the typed objects share. The module passes each error text in full, because the wording differs per
-// type.
+// Field checks every typed object shares, so each kind refuses the same input in the same words.
 
 import { BadRequestError } from '../../base/errors/api-errors.js';
 
-export interface LineMessages {
-  readonly required: string;
-  readonly singleLine: string;
-  readonly tooLong: string;
+/** Required text, trimmed: blank is refused, and so is text over `max` once trimmed. The caller stores the trimmed
+ * text. */
+export function requireText(value: string | undefined, max: number, field: string): string {
+  const text = (value ?? '').trim();
+  if (text.length === 0) throw new BadRequestError(`${field} must not be blank`);
+  return capText(text, max, field);
 }
 
-/**
- * A one-line name such as a repo or a customer: trimmed first, because the trimmed value is what gets stored and
- * matched.
- */
-export function requireLine(value: string, max: number, m: LineMessages): string {
-  const line = (value ?? '').trim();
-  if (line.length === 0) throw new BadRequestError(m.required);
-  if (/[\r\n]/.test(line)) throw new BadRequestError(m.singleLine);
-  if (line.length > max) throw new BadRequestError(m.tooLong);
-  return line;
+/** Required text that becomes a tag, a heading or a filter value, so it must also fit on one line. */
+export function requireLine(value: string | undefined, max: number, field: string): string {
+  return oneLine(requireText(value, max, field), field);
 }
 
-export interface TextMessages {
-  /** Leave out for an optional field. */
-  readonly required?: string;
-  readonly tooLong: string;
+/** Optional text, kept as written: only its length is checked. */
+export function capText<T extends string | undefined>(value: T, max: number, field: string): T {
+  if (value !== undefined && value.length > max) {
+    throw new BadRequestError(`${field} must be at most ${max} characters`);
+  }
+  return value;
 }
 
-/** A body stored as written: blank fails a required one, and the cap counts the untrimmed length. */
-export function checkText(value: string | undefined, max: number, m: TextMessages): void {
-  if (m.required !== undefined && (!value || value.trim().length === 0)) throw new BadRequestError(m.required);
-  if (value !== undefined && value.length > max) throw new BadRequestError(m.tooLong);
+export function oneLine(value: string, field: string): string {
+  if (/[\r\n]/.test(value)) throw new BadRequestError(`${field} must be a single line (no newlines)`);
+  return value;
 }

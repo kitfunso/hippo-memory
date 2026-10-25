@@ -145,6 +145,25 @@ export async function compactResumeBlock(ctx: Context, payloadSessionId: string 
   return compactResumeText(snapshot, events);
 }
 
+/** Log lines held until sleep has restarted the log file. Each line is written once, so the host may also flush on
+ * process exit, in case a step ends the process before the run flushes. */
+export interface HeldLog {
+  hold(lines: readonly string[]): void;
+  flush(): void;
+}
+
+export function heldLog(write: (line: string) => void): HeldLog {
+  const lines: string[] = [];
+  return {
+    hold(more) {
+      lines.push(...more);
+    },
+    flush() {
+      for (const line of lines.splice(0)) write(line);
+    },
+  };
+}
+
 /** What one session-end run needs from its host: the transcript, the sleep and the capture it runs, and the log it
  * writes. This module decides which store the run writes to, whether sleep runs and which turns are captured. */
 export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Turn[] }> {
@@ -153,6 +172,8 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
   transcriptPath: string | undefined;
   /** One line to the session-end log; `startFresh` restarts the file. */
   log: (line: string, opts?: { startFresh?: boolean }) => void;
+  /** Where the re-read count's lines wait for sleep. */
+  held: HeldLog;
   /** Sleeps the folder's own store; reports its own failure. */
   sleep: () => Promise<void>;
   /** Imports the session's agent notes into the global store, for a folder that does not sleep here. */
@@ -265,16 +286,10 @@ export async function sessionEndWork<Turn, Scan extends { readonly turns: readon
     log.warn(`session-end: re-read count failed: ${errorMessage(err)}`, errorFields(err));
     return [`re-read count failed: ${errorMessage(err)}`];
   });
-  // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process. A
-  // flushed log drops its exit listener, so a long-lived host does not gain one per session; it stays only while lines
-  // wait.
-  const flushRereadLog = (): void => {
-    process.off('exit', flushRereadLog);
-    for (const line of rereadLog.splice(0)) w.log(line);
-  };
+  // Sleep starts the log file afresh, so the lines go in after it.
+  w.held.hold(rereadLog);
   // A folder with neither a project nor a global store must not get one made.
   const into = endStore(ctx);
-  process.once('exit', flushRereadLog);
   try {
     if (into === null) {
       w.log('skip: no hippo store for this folder or globally', { startFresh: true });
@@ -282,7 +297,7 @@ export async function sessionEndWork<Turn, Scan extends { readonly turns: readon
     }
     await sleepStep(ctx, w);
   } finally {
-    flushRereadLog();
+    w.held.flush();
   }
   const scan = w.readScan((line) => w.log(line));
   await captureStep(ctx, into, scan, w);

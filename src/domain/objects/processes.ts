@@ -7,7 +7,9 @@
 
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
+import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import type { SavableDescriptor } from './descriptor.js';
+import { requireText } from './fields.js';
 import type { ProcessStatus } from '../../base/records/object-types.js';
 
 export type { Process, ProcessStatus } from '../../base/records/object-types.js';
@@ -37,25 +39,16 @@ export interface SaveProcessOptions {
 /** Validate and trim the steps body; throws on a non-array, a non-string or empty element, or a cap breach. */
 export function validateProcessSteps(steps: JsonValue): string[] {
   if (!Array.isArray(steps)) {
-    throw new BadRequestError('saveProcess: steps must be an array of strings');
+    throw new BadRequestError('steps must be an array of strings');
   }
   if (steps.length > MAX_PROCESS_STEPS) {
-    throw new BadRequestError(`saveProcess: steps exceeds the ${MAX_PROCESS_STEPS}-step cap (got ${steps.length})`);
+    throw new BadRequestError(`steps exceeds the ${MAX_PROCESS_STEPS}-step cap (got ${steps.length})`);
   }
   const out: string[] = [];
   for (let i = 0; i < steps.length; i++) {
     const raw = steps[i];
-    if (!isJsonString(raw)) {
-      throw new BadRequestError(`saveProcess: step ${i + 1} is not a string`);
-    }
-    const trimmed = raw.trim();
-    if (trimmed.length === 0) {
-      throw new BadRequestError(`saveProcess: step ${i + 1} is empty`);
-    }
-    if (trimmed.length > MAX_PROCESS_STEP_LEN) {
-      throw new BadRequestError(`saveProcess: step ${i + 1} exceeds the ${MAX_PROCESS_STEP_LEN}-char cap`);
-    }
-    out.push(trimmed);
+    if (!isJsonString(raw)) throw new BadRequestError(`step ${i + 1} is not a string`);
+    out.push(requireText(raw, MAX_PROCESS_STEP_LEN, `step ${i + 1}`));
   }
   return out;
 }
@@ -74,18 +67,14 @@ export const PROCESS: SavableDescriptor<'process', SaveProcessOptions> = {
   kind: 'process',
   label: 'process',
   plural: 'processes',
-  fn: { get: 'loadProcessById', close: 'closeProcess', list: 'loadProcesses', save: 'saveProcess' },
   states: VALID_PROCESS_STATES,
   closableFrom: ['active'],
   draft(opts) {
-    // The name is stored as written, so only a blank one is refused.
-    if (!opts.processName || opts.processName.trim().length === 0) {
-      throw new BadRequestError('saveProcess: processName is required');
-    }
+    const processName = requireText(opts.processName, MAX_SHORT_FIELD_LEN, 'processName');
     const steps = validateProcessSteps(opts.steps);
     return {
-      fields: { processName: opts.processName, description: opts.description, steps },
-      content: buildProcessContent(opts.processName, steps, opts.description),
+      fields: { processName, description: opts.description, steps },
+      content: buildProcessContent(processName, steps, opts.description),
       tags: opts.extraTags ?? [],
       supersedesId: opts.supersedesProcessId,
       changeSummary: opts.changeSummary,

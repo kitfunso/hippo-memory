@@ -26,27 +26,29 @@ export const AUDIT_OPS = [
   'recall_anchor_detected_memory_dominance',
   'recall_anchor_skipped_no_session', // telemetry: no sessionId, so ring tracking was skipped
   'recall_availability_detected', // emitted when the availability/recency-bias hint fires
-  'decision_create', // emitted by saveDecision
-  'decision_supersede', // emitted by saveDecision when --supersedes resolves to an active decision
-  'decision_close', // emitted by closeDecision
-  'incident_open', // emitted by saveIncident
-  'incident_resolve', // emitted by resolveIncident
-  'incident_close', // emitted by closeIncident
-  'process_create', // emitted by saveProcess
-  'process_supersede', // emitted by saveProcess on a supersession
-  'process_close', // emitted by closeProcess
-  'policy_create', // emitted by savePolicy
-  'policy_supersede', // emitted by savePolicy on a supersession
-  'policy_close', // emitted by closePolicy
-  'skill_create', // emitted by saveSkill
-  'skill_supersede', // emitted by saveSkill on a supersession
-  'skill_close', // emitted by closeSkill
-  'project_brief_create', // emitted by saveProjectBrief
-  'project_brief_supersede', // emitted by saveProjectBrief on a supersession, including a refresh
-  'project_brief_close', // emitted by closeProjectBrief
-  'customer_note_create', // emitted by saveCustomerNote
-  'customer_note_supersede', // emitted by saveCustomerNote on a supersession
-  'customer_note_close', // emitted by closeCustomerNote
+  // The typed-object ops: the objects store group writes each one with its row, from saveObject (a create, or a
+  // supersede when the save replaces an active row), closeObject, openIncident and resolveOpenIncident.
+  'decision_create',
+  'decision_supersede',
+  'decision_close',
+  'incident_open',
+  'incident_resolve',
+  'incident_close',
+  'process_create',
+  'process_supersede',
+  'process_close',
+  'policy_create',
+  'policy_supersede',
+  'policy_close',
+  'skill_create',
+  'skill_supersede',
+  'skill_close',
+  'project_brief_create',
+  'project_brief_supersede',
+  'project_brief_close',
+  'customer_note_create',
+  'customer_note_supersede',
+  'customer_note_close',
   'mv_rescue', // emitted by consolidate() per rescued entry when config.memoryValue.enabled
   'reject_value', // emitted by the `hippo reject` verb
   'reject_refusal', // emitted when the rejection guard refuses a write

@@ -2,7 +2,14 @@
 
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import * as path from 'path';
-import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG, strengthOptionsOf } from '../../base/memory/memory.js';
+import {
+  MemoryEntry,
+  generateId,
+  COMPACTION_MEMORY_TAG,
+  ERROR_TAG,
+  EXTRACTED_TAG,
+  strengthOptionsOf,
+} from '../../base/memory/memory.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../../base/memory/agent-memory-tools.js';
 import { isPersonalScope, isQuarantineScope } from '../../base/scope/recall-scope.js';
@@ -37,7 +44,7 @@ const PROJECT_SPECIFIC_TAGS = new Set([
 
 /** Tags that indicate transferable memories (good transfer candidates) */
 const TRANSFERABLE_TAGS = new Set([
-  'error',
+  ERROR_TAG,
   'platform',
   'windows',
   'encoding',
@@ -68,7 +75,7 @@ export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
 /** Tags whose rows sleep keeps as written: never merged, never sent to LLM extraction. Conflict detection keeps its own
  * list. */
 export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
-  'extracted',
+  EXTRACTED_TAG,
   'session-digest',
   COMPACTION_MEMORY_TAG,
   ...AGENT_MEMORY_TAGS,
