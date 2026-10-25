@@ -5,6 +5,8 @@
 
 import { DAG_LEVEL, Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { rankBm25 } from '../search/bm25-search.js';
+import { evalSwitches } from '../../base/memory/ablation.js';
+import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { rankMultihop } from '../search/multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
 import {
@@ -441,7 +443,11 @@ function featureAverages(
   });
 }
 
-export async function runFeatureEval(version: string): Promise<EvalSuiteResult> {
+/** Ranks the synthetic corpus under `switches`, the environment's when the caller names none. */
+export async function runFeatureEval(
+  version: string,
+  switches: EvalSwitches = evalSwitches(),
+): Promise<EvalSuiteResult> {
   const start = Date.now();
   const { entries, cases } = buildSyntheticCorpus();
 
@@ -450,9 +456,9 @@ export async function runFeatureEval(version: string): Promise<EvalSuiteResult> 
   for (const c of cases) {
     let results;
     if (c.category === 'multi-hop') {
-      results = rankMultihop(c.query, entries, { budget: EVAL_TOKEN_BUDGET });
+      results = rankMultihop(c.query, entries, { budget: EVAL_TOKEN_BUDGET, switches });
     } else {
-      results = rankBm25(c.query, entries, { budget: EVAL_TOKEN_BUDGET });
+      results = rankBm25(c.query, entries, { budget: EVAL_TOKEN_BUDGET, switches });
     }
     const returnedIds = results.map((r) => r.entry.id);
 

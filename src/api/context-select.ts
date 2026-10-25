@@ -396,6 +396,7 @@ async function searchBothStores(
       scope: plan.activeScope,
       runtime: ctx.config.runtime,
       cwd: ctx.infra.machine.cwd,
+      switches: ctx.infra.evalSwitches,
     },
   );
   return merged.map((r) => ({
@@ -455,6 +456,7 @@ async function searchLocalRows(
       scope: plan.activeScope,
       runtime: ctx.config.runtime,
       cwd: ctx.infra.machine.cwd,
+      switches: ctx.infra.evalSwitches,
       vectorCandidates,
     },
   );

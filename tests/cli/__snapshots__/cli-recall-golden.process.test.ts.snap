@@ -391,6 +391,15 @@ deploy goal work: migrate the rollout scripts to the new runner
 }
 `;
 
+exports[`cli recall and explain golden output > recall --graph-stream then invalid --la… 1`] = `
+{
+  "status": 1,
+  "stderr": "Invalid --layer: "bogus". Must be one of: buffer, episodic, semantic, trace.
+",
+  "stdout": "",
+}
+`;
+
 exports[`cli recall and explain golden output > recall --hops 1 1`] = `
 {
   "status": 0,
@@ -694,17 +703,6 @@ deploy target is the new staging cluster in eu west
 deploy goal work: migrate the rollout scripts to the new runner
 
 ",
-}
-`;
-
-exports[`cli recall and explain golden output > recall graph-stream note then invalid -… 1`] = `
-{
-  "status": 1,
-  "stderr": "[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run \`hippo embed\` first.
-[note] --graph-stream searches the local store only; global graph fusion is a follow-up.
-Invalid --layer: "bogus". Must be one of: buffer, episodic, semantic, trace.
-",
-  "stdout": "",
 }
 `;
 

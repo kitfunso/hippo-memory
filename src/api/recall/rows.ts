@@ -10,6 +10,7 @@ import { DEFAULT_RERANK_TOP_K } from '../../domain/search/rerank.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import { explainMatch } from '../../domain/search/explain.js';
 import { fitBudget } from '../../domain/search/finalize.js';
+import { estimateTokens } from '../../base/util/token-text.js';
 import type { ContinuityBlock, HippoStore } from '../../base/ports/store.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import type { Context, ContextWith } from '../types.js';
@@ -109,9 +110,32 @@ export function rerankerWithClef(
   return (query, results, options) => fn(query, results, { ...options, clef: options?.clef ?? clef });
 }
 
-/** The ranked rows a print budget holds, best first; the first `floor` stay whatever they cost. */
-export function fitRecallRows(ranked: SearchResult[], budget: number, floor: number, cost: ResultCost): SearchResult[] {
-  return fitBudget(ranked, budget, floor, cost);
+/** How a shown list is cut to a token budget: each row by its own cost, then the rendered text as a whole. */
+export interface RecallFit<R> {
+  /** Tokens the rows may spend: the budget less what prints ahead of them. */
+  readonly room: number;
+  /** Tokens the whole rendered text may spend. */
+  readonly budget: number;
+  /** The first `floor` rows stay whatever they cost. */
+  readonly floor: number;
+  readonly cost: ResultCost;
+  readonly render: (rows: SearchResult[]) => R;
+  /** The text `render` printed, which the budget measures. */
+  readonly textOf: (rendered: R) => string;
+}
+
+/** Renders the ranked rows `room` holds, then drops the lowest-ranked one until the text fits `budget` or only `floor`
+ * rows remain. */
+export function fitRecall<R>(ranked: SearchResult[], fit: RecallFit<R>): R {
+  const fitted = fitBudget(ranked, fit.room, fit.floor, fit.cost);
+  let kept = fitted.length;
+  let rendered = fit.render(fitted.slice(0, kept));
+  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after each drop.
+  while (kept > fit.floor && estimateTokens(fit.textOf(rendered)) > fit.budget) {
+    kept--;
+    rendered = fit.render(fitted.slice(0, kept));
+  }
+  return rendered;
 }
 
 /** One result row; the optional keys are set in the order the JSON prints them. */

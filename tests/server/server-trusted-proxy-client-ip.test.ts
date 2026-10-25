@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { clientIpForRateLimit } from '../../src/server.js';
-import { clientKeyOf } from '../../src/surface/server/client-key.js';
+import { clientKeyOf } from '../../src/surface/server/client-ip.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -81,18 +81,18 @@ describe("the client key, which scopes each client's last shown ids, behind a pr
     for (const k of ENV_KEYS) vi.stubEnv(k, undefined);
   });
 
-  const proxied = () =>
-    fakeReq({ authorization: 'Bearer hk_client_key_test', 'x-forwarded-for': '203.0.113.7' }, '127.0.0.1');
+  const proxied = () => fakeReq({ 'x-forwarded-for': '203.0.113.7' }, '127.0.0.1');
+  const bearer = 'hk_client_key_test';
 
   it('keys on the forwarded client address, as the rate limiter does, when the peer is a listed trusted proxy', () => {
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
     vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
-    expect(clientKeyOf(proxied())).toMatch(/^http:[0-9a-f]+:203\.0\.113\.7$/);
+    expect(clientKeyOf(proxied(), bearer)).toMatch(/^http:[0-9a-f]+:203\.0\.113\.7$/);
   });
 
   it('ignores the forwarded header when the peer is not a listed trusted proxy', () => {
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
     vi.stubEnv('HIPPO_TRUSTED_PROXIES', '192.0.2.1');
-    expect(clientKeyOf(proxied())).toMatch(/^http:[0-9a-f]+:127\.0\.0\.1$/);
+    expect(clientKeyOf(proxied(), bearer)).toMatch(/^http:[0-9a-f]+:127\.0\.0\.1$/);
   });
 });

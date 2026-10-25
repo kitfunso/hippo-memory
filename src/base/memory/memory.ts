@@ -3,7 +3,8 @@
 import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import { BadRequestError } from '../errors/api-errors.js';
 import { randomUUID } from 'crypto';
-import { evalNow, NO_STRENGTH_ABLATION, strengthAblation, type StrengthAblation } from './ablation.js';
+import { evalNow, strengthAblation } from './ablation.js';
+import { NO_STRENGTH_ABLATION, type StrengthAblation } from './eval-switches.js';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';
 import { isJsonString } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';

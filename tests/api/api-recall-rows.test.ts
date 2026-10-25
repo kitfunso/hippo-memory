@@ -4,18 +4,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { join } from 'node:path';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
+import { estimateTokens } from '../../src/base/util/token-text.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { rankRecall } from '../../src/api/recall/pipeline.js';
-import { CLI_RECALL } from '../../src/api/recall/profiles.js';
+import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import { handoffText, snapshotText } from '../../src/api/context-render.js';
 import {
   recallRowOrigin,
   recallRerankerPick,
   recallStoreSetting,
-  fitRecallRows,
+  fitRecall,
   loadScopedContinuity,
   recallJsonRow,
   type RecallStoreSetting,
@@ -61,7 +62,7 @@ async function rankDeploy() {
         explain: false,
       },
     },
-    CLI_RECALL,
+    BUDGET_RANKED,
   );
 }
 
@@ -121,17 +122,31 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('fitRecallRows', () => {
-  it('keeps a recall inside the budget it is given, and the floor whatever it costs', async () => {
+describe('fitRecall', () => {
+  const textOf = (rows: SearchResult[]): string => rows.map((r) => r.entry.content).join(' ');
+  const plain = { render: (rows: SearchResult[]) => rows, textOf };
+  const idsOf = (rows: SearchResult[]): string[] => rows.map((r) => r.entry.id);
+
+  it('keeps the rows the room holds, and the floor whatever it costs', async () => {
     const ranked = (await rankDeploy()).results;
     expect(ranked.length).toBe(4);
     const cost = (r: { tokens: number }): number => r.tokens;
-    const budget = cost(ranked[0]!) + cost(ranked[1]!);
-    const fitted = fitRecallRows(ranked, budget, 1, cost);
+    const room = cost(ranked[0]!) + cost(ranked[1]!);
+    const fitted = fitRecall(ranked, { ...plain, room, budget: Infinity, floor: 1, cost });
     expect(fitted.length).toBeGreaterThanOrEqual(1);
     expect(fitted.length).toBeLessThan(ranked.length);
-    expect(fitted.reduce((sum, r) => sum + cost(r), 0)).toBeLessThanOrEqual(budget);
-    expect(fitRecallRows(ranked, 0, 1, cost).map((r) => r.entry.id)).toEqual([ranked[0]!.entry.id]);
+    expect(fitted.reduce((sum, r) => sum + cost(r), 0)).toBeLessThanOrEqual(room);
+    expect(idsOf(fitRecall(ranked, { ...plain, room: 0, budget: Infinity, floor: 1, cost }))).toEqual(
+      idsOf(ranked.slice(0, 1)),
+    );
+  });
+
+  it('drops the lowest-ranked row until the rendered text fits the budget, and never below the floor', async () => {
+    const ranked = (await rankDeploy()).results;
+    const free = { ...plain, room: 0, cost: () => 0 };
+    const budget = estimateTokens(textOf(ranked.slice(0, 2)));
+    expect(idsOf(fitRecall(ranked, { ...free, budget, floor: 0 }))).toEqual(idsOf(ranked.slice(0, 2)));
+    expect(idsOf(fitRecall(ranked, { ...free, budget: 0, floor: 1 }))).toEqual(idsOf(ranked.slice(0, 1)));
   });
 });
 
@@ -186,7 +201,7 @@ describe('recallStoreSetting and recallRowOrigin', () => {
           explain: false,
         },
       },
-      CLI_RECALL,
+      BUDGET_RANKED,
     );
     const origin = recallRowOrigin(ctx(), recallStoreSetting(ctx(), null));
     const byId = new Map(ranked.results.map((r) => [r.entry.id, origin.isGlobal(r)]));

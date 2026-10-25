@@ -3,6 +3,7 @@
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG, strengthOptionsOf } from '../../base/memory/memory.js';
+import { evalSwitches } from '../../base/memory/ablation.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../../base/memory/agent-memory-tools.js';
 import { isPersonalScope, isQuarantineScope } from '../../base/scope/recall-scope.js';
@@ -374,7 +375,7 @@ export async function autoShare(
   const shared = await shareCandidates(await from.store.folderFiles.home(), to, candidates, options.stats);
 
   if (shared.length > 0) {
-    void embedAll(folderEmbedTarget(global)).catch((err) => logEmbedAllFailure('autoShare', err));
+    void embedAll(folderEmbedTarget(global, evalSwitches())).catch((err) => logEmbedAllFailure('autoShare', err));
   }
 
   return shared;

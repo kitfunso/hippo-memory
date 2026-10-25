@@ -4,6 +4,7 @@ import type { EmbedderFor } from './embedder.js';
 import type { Llm } from './llm.js';
 import type { RerankerLookup } from './reranker.js';
 import type { ReadApiCalls } from '../session/transcript-calls.js';
+import type { EvalSwitches } from '../memory/eval-switches.js';
 
 export interface InfraPorts {
   /** The disk the agent-memory and project-repair reads look at, with its git. */
@@ -16,4 +17,7 @@ export interface InfraPorts {
   readonly reranker?: RerankerLookup;
   /** Reads the model calls of a session's transcript for its re-read count; absent, the count is skipped. */
   readonly transcriptCalls?: ReadApiCalls;
+  /** The eval-only switches and fake clock the root read from its environment; absent, recall ranks with none of them
+   * on the real clock. */
+  readonly evalSwitches?: EvalSwitches;
 }

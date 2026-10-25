@@ -1,7 +1,7 @@
 // The ids each client was last shown, so its next outcome lands on them. Keyed per client, so two HTTP clients on one
 // tenant cannot poison each other; the root's CallerState holds the map.
 
-import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
+import type { Context } from '../types.js';
 
 const MAX_RECALL_CLIENTS = 4096;
 
@@ -16,11 +16,15 @@ export class RecentRecalls extends Map<string, string[]> {
   }
 }
 
-/** The HTTP transport's client key (a hash of bearer and address), else `stdio-<pid>:<tenant>`; a caller's project
- * narrows either. */
-export function resolveClientKey(
-  ctx: { clientKey?: string; tenantId: string; project?: { name: string } } | undefined,
-): string {
-  const base = ctx?.clientKey ? ctx.clientKey : `stdio-${process.pid}:${ctx?.tenantId || DEFAULT_TENANT_ID}`;
-  return ctx?.project ? `${base}:${ctx.project.name}` : base;
+/** The root's map and the key its surface set for this client. */
+type ShownKeeper = Pick<Context, 'callers' | 'clientKey'>;
+
+/** Keeps the ids a recall or context call just showed this client; a context with no client key keeps none. */
+export function keepShownIds(ctx: ShownKeeper, ids: readonly string[]): void {
+  if (ctx.clientKey) ctx.callers?.lastShown.set(ctx.clientKey, [...ids]);
+}
+
+/** The ids this client was last shown, for an outcome that names none. */
+export function keptShownIds(ctx: ShownKeeper): readonly string[] {
+  return (ctx.clientKey && ctx.callers?.lastShown.get(ctx.clientKey)) || [];
 }

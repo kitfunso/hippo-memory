@@ -11,7 +11,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../sr
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
-import { CLI_RECALL } from '../../src/api/recall/profiles.js';
+import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { finishRecall } from '../../src/store/sqlite/last-recall.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
@@ -99,7 +99,7 @@ describe('rankRecall with a global store', () => {
     const ctx = { ...at(local), global: at(global), tenantId: 'default', embedderFor: resolveEmbeddingProvider };
     // Recency reads the clock, so both rankings see one instant.
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
-    const { result, statements } = await recordStatementsAsync(() => rankRecall(ctx, recallOpts(local), CLI_RECALL));
+    const { result, statements } = await recordStatementsAsync(() => rankRecall(ctx, recallOpts(local), BUDGET_RANKED));
     expect(countMatching(statements, /memories_fts MATCH|LOWER\(content\) LIKE/)).toBe(2);
 
     const reloaded = await searchBothHybrid('zephyrine cache', ...sharingStores(local, global), {
