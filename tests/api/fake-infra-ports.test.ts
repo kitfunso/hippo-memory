@@ -1,5 +1,5 @@
 // The api runs remember, recall, context and sleep on the ports its Context carries: fakes here and a real SQLite
-// store. check-layers keeps src/infra out of src/api's imports; this proves the calls go to the fakes.
+// store. .dependency-cruiser.cjs keeps src/infra out of src/api's imports; this proves the calls go to the fakes.
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { adminActor, contextGet, remember, sleepWholeStore } from '../../src/api/index.js';

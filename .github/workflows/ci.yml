@@ -62,14 +62,12 @@ jobs:
       # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
       - run: node scripts/check-manifest-versions.mjs
       - run: node scripts/check-graph-writes.mjs
-      - name: No runtime import cycles between src folders
-        run: node scripts/check-folder-cycles.mjs
-      # Files over 800 lines and functions over 50 in src/ (80 in scripts/) may shrink but never grow, and no new one may appear.
-      - name: Size ratchet
-        run: node scripts/check-size-ratchet.mjs
-      # Six or more positional parameters on a src declaration become one options object; there is no baseline.
-      - name: Positional parameters
-        run: node scripts/check-positional-params.mjs
+      # Layer order from layers.json and runtime cycles between src folders (dependency-cruiser). File, function and
+      # parameter limits are oxlint rules, so the lint ratchet above holds them.
+      - name: Import rules
+        run: npm run check:deps
+      - name: No new src line over 120 characters
+        run: node scripts/check-long-lines.mjs
       - name: API root-keyed store call ratchet
         run: node scripts/check-api-root-calls.mjs
       - name: config.json read only by the surface layer
@@ -86,8 +84,6 @@ jobs:
         run: node scripts/check-floating-api.mjs
       - name: Store-port ratchet
         run: node scripts/check-store-port.mjs
-      - name: Layer order
-        run: node scripts/check-layers.mjs
       - name: No fs or child_process import in src/domain or src/api
         run: node scripts/check-domain-io.mjs
       - name: No test-only exports
