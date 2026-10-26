@@ -14,6 +14,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 let home: string;
 let project: string;
@@ -143,7 +144,7 @@ describe('SessionStart hooks', () => {
       .split('\n')
       .map((l) => l.trim())
       .filter(Boolean);
-    fs.mkdirSync(path.join(project, '.hippo', 'compactions-spool'), { recursive: true });
+    fs.mkdirSync(path.join(project, '.hippo', 'compactions-spool'), PRIVATE_DIR);
     fs.writeFileSync(path.join(project, '.hippo', 'compactions-spool', 'x.unreadable.bad'), '{');
 
     const runs = [];

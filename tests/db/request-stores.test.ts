@@ -11,6 +11,7 @@ import {
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { StoreRuntime } from '../../src/db/store-runtime.js';
 
 let root: string;
 
@@ -104,11 +105,42 @@ describe('runWithRequestStores', () => {
     });
   });
 
-  it('installs one exit listener however many scopes open stores', async () => {
-    await runWithRequestStores(() => openHippoDb(root));
+  it('installs no process listener however many scopes open stores', async () => {
     const before = process.listenerCount('exit');
     for (let i = 0; i < 5; i++) await runWithRequestStores(() => openHippoDb(root));
     expect(process.listenerCount('exit')).toBe(before);
+  });
+
+  it("inside a runtime, a closed scope's handle serves the next scope, and dispose closes it", async () => {
+    const runtime = new StoreRuntime();
+    const first = await runtime.run(() => runWithRequestStores(() => openHippoDb(root)));
+    expect(first.isOpen).toBe(true);
+    const second = await runtime.run(() => runWithRequestStores(() => openHippoDb(root)));
+    expect(second).toBe(first);
+    runtime.dispose();
+    expect(first.isOpen).toBe(false);
+  });
+
+  it('dispose closes a scope still open when the process leaves', async () => {
+    const runtime = new StoreRuntime();
+    let held: DatabaseSyncLike | undefined;
+    let release = (): void => undefined;
+    const done = runtime.run(() =>
+      runWithRequestStores(async () => {
+        held = openHippoDb(root);
+        await new Promise<void>((resolve) => (release = resolve));
+      }),
+    );
+    await vi.waitFor(() => expect(held).toBeDefined());
+    runtime.dispose();
+    expect(held!.isOpen).toBe(false);
+    release();
+    await done;
+  });
+
+  it('outside a runtime a closed scope closes its handle', async () => {
+    const db = await runWithRequestStores(() => openHippoDb(root));
+    expect(db.isOpen).toBe(false);
   });
 
   it('a busy store drops the lock wait only in a fail-fast scope', async () => {

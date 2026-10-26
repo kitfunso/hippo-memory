@@ -23,6 +23,7 @@ import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 oneRequestPerTest();
 
@@ -48,7 +49,7 @@ interface StoreConfig {
 
 function makeHome(config?: StoreConfig): string {
   const home = makeRoot('mcp-ranking', { init: false });
-  mkdirSync(join(home, '.hippo'), { recursive: true });
+  mkdirSync(join(home, '.hippo'), PRIVATE_DIR);
   if (config) writeFileSync(join(home, 'config.json'), JSON.stringify(config), 'utf8');
   initTestStore(home);
   return home;

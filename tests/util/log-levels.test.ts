@@ -184,9 +184,10 @@ describe('a command that fails at the top level', () => {
   it('prints only the message by default, and adds the error class and stack under HIPPO_LOG=debug', async () => {
     vi.useRealTimers();
     const dir = makeRoot('cli-top-error', { init: false });
-    // A store file that is not a database makes the first read throw past every verb.
-    mkdirSync(join(dir, '.hippo'));
-    writeFileSync(join(dir, '.hippo', 'hippo.db'), 'x'.repeat(4096));
+    // A store file that is not a database makes the first read throw past every verb; owner-only modes, as hippo makes
+    // them, keep the wide-mode warn out of the output.
+    mkdirSync(join(dir, '.hippo'), { mode: 0o700 });
+    writeFileSync(join(dir, '.hippo', 'hippo.db'), 'x'.repeat(4096), { mode: 0o600 });
     const run = (level: string) =>
       runCliAs(['recall', 'anything'], {
         cwd: dir,

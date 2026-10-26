@@ -15,6 +15,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { testInfra } from '../_helpers/infra.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -77,7 +78,7 @@ function expectNoCanary(): void {
 
 beforeEach(async () => {
   home = makeRoot('audit-privacy', { init: false });
-  mkdirSync(join(home, '.hippo'), { recursive: true });
+  mkdirSync(join(home, '.hippo'), PRIVATE_DIR);
   localRoot = join(home, '.hippo');
   globalRoot = join(home, 'global-hippo');
   vi.stubEnv('HIPPO_HOME', globalRoot);

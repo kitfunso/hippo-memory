@@ -22,6 +22,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -300,7 +301,7 @@ describe("a read still running at its request's deadline", () => {
     const executor = createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS });
     const server = await start(root, { store: workerSqliteStore(root, executor) });
     const before = await counts(server);
-    mkdirSync(join(root, '.hippo'), { recursive: true });
+    mkdirSync(join(root, '.hippo'), PRIVATE_DIR);
     initTestStore(root);
     // The setup runs on the writer before any read. It is asked of the executor, since after any response the server would hold a connection, as the idle writer would.
     await executor.call('readiness.ping', [], { mode: 'write', requestId: undefined });

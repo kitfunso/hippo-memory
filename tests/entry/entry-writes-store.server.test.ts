@@ -1,7 +1,7 @@
 // With ctx.store, remember, outcome, supersede, rawArchive and forget write through its entryWrites group and never open hippo.db;
 // their routes and the hippo_remember and hippo_outcome tools run under another store only when it has the group.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -26,6 +26,7 @@ import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/sto
 import { loadConfig } from '../../src/host/config-file.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
 import { testInfra } from '../_helpers/infra.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const admin: Actor = { subject: 'cli', role: 'admin' };
@@ -35,7 +36,7 @@ let n = 0;
 
 function copyOf(): string {
   const root = join(home, `copy-${++n}`);
-  cpSync(fixture.dir, root, { recursive: true });
+  copyTree(fixture.dir, root);
   return root;
 }
 

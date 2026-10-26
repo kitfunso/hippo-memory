@@ -1,7 +1,7 @@
 // contextGet on hippo.db returns and records what each case lists; on a port-only store it answers the same through
 // the store, with hippo.db blocked.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contextGet, type Actor, type ContextOptions, type ContextResult } from '../../src/api/index.js';
@@ -32,6 +32,7 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import { testInfra } from '../_helpers/infra.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { type PortOnlySide, portOnlySide } from '../_helpers/port-only-store.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 oneRequestPerTest();
 
@@ -306,7 +307,7 @@ beforeAll(async () => {
   const local = seedTwoTenants().dir;
   seedContextRows(local);
   const vectors = mkdtempSync(join(tmpdir(), 'hippo-context-vectors-'));
-  cpSync(local, vectors, { recursive: true });
+  copyTree(local, vectors);
   seedVectors(vectors);
   const global = mkdtempSync(join(tmpdir(), 'hippo-context-global-'));
   seedContextGlobal(global);
@@ -359,8 +360,8 @@ async function runPass(
   const home = makeRoot('context-parity', { init: false });
   const root = join(home, 'store');
   const globalRoot = join(home, 'global');
-  cpSync(embedded ? templates.vectors : templates.local, root, { recursive: true });
-  if (withGlobal) cpSync(templates.global, globalRoot, { recursive: true });
+  copyTree(embedded ? templates.vectors : templates.local, root);
+  if (withGlobal) copyTree(templates.global, globalRoot);
   vi.stubEnv('HIPPO_HOME', globalRoot);
   const config: PassConfig = {};
   if (embedded) config.embeddings = { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url };

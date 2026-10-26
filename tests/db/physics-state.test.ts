@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { loadPhysicsState, savePhysicsState, resetAllPhysicsState } from '../../src/db/physics-state.js';
+import {
+  loadAllPhysicsState,
+  loadPhysicsState,
+  savePhysicsState,
+  resetAllPhysicsState,
+} from '../../src/db/physics-state.js';
 import { refreshParticleProperties } from '../../src/base/rank/particle-refresh.js';
 import { float32ToBuffer, bufferToFloat32 } from '../../src/base/util/vector-codec.js';
 import { initializeParticle } from '../../src/base/rank/physics.js';
@@ -195,7 +200,7 @@ describe('save and load round-trip', () => {
       };
 
       savePhysicsState(db, [particle]);
-      const loaded = loadPhysicsState(db);
+      const loaded = loadAllPhysicsState(db);
 
       expect(loaded.size).toBe(1);
       const p = loaded.get('mem_rt1')!;
@@ -224,7 +229,7 @@ describe('save and load round-trip', () => {
 
       const particles = [makeParticle('mem_a'), makeParticle('mem_b')];
       savePhysicsState(db, particles);
-      const loaded = loadPhysicsState(db);
+      const loaded = loadAllPhysicsState(db);
 
       expect(loaded.size).toBe(2);
       expect(loaded.has('mem_a')).toBe(true);
@@ -238,7 +243,7 @@ describe('save and load round-trip', () => {
     const db = openHippoDb(tmpDir);
     try {
       savePhysicsState(db, []);
-      const loaded = loadPhysicsState(db);
+      const loaded = loadAllPhysicsState(db);
       expect(loaded.size).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -281,17 +286,15 @@ describe('loadPhysicsState with memoryIds filter', () => {
     }
   });
 
-  it('returns empty map for empty memoryIds array', () => {
+  it('reads no row for an empty id list', () => {
     const db = openHippoDb(tmpDir);
     try {
       insertMemoryRow(db, 'mem_has');
       savePhysicsState(db, [makeParticle('mem_has')]);
 
-      // Empty array should match the branch condition and return nothing
+      // physics-search passes an empty pool when every candidate was superseded; that pool names no particle.
       const loaded = loadPhysicsState(db, []);
-      // Per code: if memoryIds.length === 0, falls through to load all
-      // Actually: memoryIds && memoryIds.length > 0 is false for [], so loads all
-      expect(loaded.size).toBe(1);
+      expect(loaded.size).toBe(0);
     } finally {
       closeHippoDb(db);
     }
@@ -314,7 +317,7 @@ describe('loadPhysicsState with memoryIds filter', () => {
 // 5. Load all
 // ---------------------------------------------------------------------------
 
-describe('loadPhysicsState without filter', () => {
+describe('loadAllPhysicsState', () => {
   it('returns all saved particles', () => {
     const db = openHippoDb(tmpDir);
     try {
@@ -324,7 +327,7 @@ describe('loadPhysicsState without filter', () => {
 
       savePhysicsState(db, [makeParticle('mem_1'), makeParticle('mem_2'), makeParticle('mem_3')]);
 
-      const loaded = loadPhysicsState(db);
+      const loaded = loadAllPhysicsState(db);
       expect(loaded.size).toBe(3);
       expect([...loaded.keys()].sort()).toEqual(['mem_1', 'mem_2', 'mem_3']);
     } finally {
@@ -335,7 +338,7 @@ describe('loadPhysicsState without filter', () => {
   it('returns empty map from empty table', () => {
     const db = openHippoDb(tmpDir);
     try {
-      const loaded = loadPhysicsState(db);
+      const loaded = loadAllPhysicsState(db);
       expect(loaded.size).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -376,7 +379,7 @@ describe('upsert behavior', () => {
       };
       savePhysicsState(db, [particle2]);
 
-      const loaded = loadPhysicsState(db);
+      const loaded = loadAllPhysicsState(db);
       expect(loaded.size).toBe(1);
 
       const p = loaded.get('mem_upsert')!;
@@ -403,13 +406,13 @@ describe('CASCADE delete', () => {
       savePhysicsState(db, [makeParticle('mem_cascade')]);
 
       // Verify it exists
-      expect(loadPhysicsState(db).size).toBe(1);
+      expect(loadAllPhysicsState(db).size).toBe(1);
 
       // Delete the parent memory
       db.prepare('DELETE FROM memories WHERE id = ?').run('mem_cascade');
 
       // Physics row should be gone due to ON DELETE CASCADE
-      expect(loadPhysicsState(db).size).toBe(0);
+      expect(loadAllPhysicsState(db).size).toBe(0);
     } finally {
       closeHippoDb(db);
     }
@@ -422,11 +425,11 @@ describe('CASCADE delete', () => {
       insertMemoryRow(db, 'mem_drop');
 
       savePhysicsState(db, [makeParticle('mem_keep'), makeParticle('mem_drop')]);
-      expect(loadPhysicsState(db).size).toBe(2);
+      expect(loadAllPhysicsState(db).size).toBe(2);
 
       db.prepare('DELETE FROM memories WHERE id = ?').run('mem_drop');
 
-      const loaded = loadPhysicsState(db);
+      const loaded = loadAllPhysicsState(db);
       expect(loaded.size).toBe(1);
       expect(loaded.has('mem_keep')).toBe(true);
       expect(loaded.has('mem_drop')).toBe(false);
@@ -512,7 +515,7 @@ describe('resetAllPhysicsState', () => {
       const oldParticle = makeParticle('mem_r1');
       oldParticle.mass = 99.9;
       savePhysicsState(db, [oldParticle]);
-      expect(loadPhysicsState(db).size).toBe(1);
+      expect(loadAllPhysicsState(db).size).toBe(1);
 
       // Reset
       const entries = [makeMemoryEntry('mem_r1'), makeMemoryEntry('mem_r2')];
@@ -524,7 +527,7 @@ describe('resetAllPhysicsState', () => {
       const count = resetAllPhysicsState(db, entries, embeddingIndex, NOW);
       expect(count).toBe(2);
 
-      const loaded = loadPhysicsState(db);
+      const loaded = loadAllPhysicsState(db);
       expect(loaded.size).toBe(2);
 
       // Old mass (99.9) should be gone, replaced by freshly computed mass
@@ -551,7 +554,7 @@ describe('resetAllPhysicsState', () => {
       const count = resetAllPhysicsState(db, entries, embeddingIndex, NOW);
       expect(count).toBe(1);
 
-      const loaded = loadPhysicsState(db);
+      const loaded = loadAllPhysicsState(db);
       expect(loaded.size).toBe(1);
       expect(loaded.has('mem_has_emb')).toBe(true);
     } finally {
@@ -581,7 +584,7 @@ describe('resetAllPhysicsState', () => {
     try {
       const count = resetAllPhysicsState(db, [], {}, NOW);
       expect(count).toBe(0);
-      expect(loadPhysicsState(db).size).toBe(0);
+      expect(loadAllPhysicsState(db).size).toBe(0);
     } finally {
       closeHippoDb(db);
     }

@@ -18,6 +18,7 @@ import { readLastRecall } from '../../../src/store/sqlite/mirrors.js';
 import { onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/handles.js';
 import type { HippoIndex } from '../../../src/store/sqlite/rows.js';
 import * as sessionsSql from '../../../src/store/sqlite/sessions.js';
+import type { UntracedSession } from '../../../src/base/ports/store/consolidation.js';
 import * as taskSnapshotsSql from '../../../src/store/sqlite/task-snapshots.js';
 import { freshActiveSnapshot } from '../../../src/base/session/session-snapshot.js';
 import type { ContinuityKey } from '../../../src/base/ports/store/types.js';
@@ -160,12 +161,8 @@ export function listSessionEvents(
   return onHandle(hippoRoot, (db) => sessionsSql.listSessionEvents(db, tenantId, options), openStore);
 }
 
-export function findPromotableSessions(
-  hippoRoot: string,
-  tenantId: string,
-  sinceMs: number,
-): Array<{ session_id: string }> {
-  return onHandle(hippoRoot, (db) => sessionsSql.listPromotableSessions(db, tenantId, sinceMs), openStore);
+export function findUntracedSessions(hippoRoot: string, tenantId: string, sinceMs: number): UntracedSession[] {
+  return onHandle(hippoRoot, (db) => sessionsSql.listUntracedSessions(db, tenantId, sinceMs), openStore);
 }
 
 export async function wmPush(

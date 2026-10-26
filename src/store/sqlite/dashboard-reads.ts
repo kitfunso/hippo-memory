@@ -30,8 +30,7 @@ import { openConflictsNaming } from './conflicts.js';
 import {
   FACT_COLUMNS,
   GRID_CELLS,
-  HOLDS_TEXT,
-  holdsTextBinds,
+  textFilter,
   PROJECT_SLOTS,
   tallyOf,
   useDashboardFunctions,
@@ -188,13 +187,14 @@ function project(
 }
 
 function search(db: DatabaseSyncLike, tenantId: string, needle: string): SearchTally[] {
+  const holds = textFilter(db, needle);
   // SAFETY: one row per origin_project, each a count and a sum.
   const rows = cachedStatement(
     db,
     `SELECT origin_project AS origin, COUNT(*) AS live, ` +
-      `SUM(${HOLDS_TEXT}) AS hits, ${SEEN} ` +
+      `SUM(${holds.sql}) AS hits, ${SEEN} ` +
       `FROM memories WHERE tenant_id = :tenant AND ${LIVE} GROUP BY origin_project ORDER BY seen`,
-  ).all({ tenant: tenantId, ...holdsTextBinds(needle) }) as Array<{
+  ).all({ tenant: tenantId, ...holds.binds }) as Array<{
     origin: Origin;
     live: number;
     hits: number;

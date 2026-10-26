@@ -75,7 +75,7 @@ describe('confirmedOutcomeTimes', () => {
     expect((await learning.confirmedOutcomeTimes('default', '2019-01-01T00:00:00.000Z')).size).toBe(OLD_TARGETS + 2);
   });
 
-  it('plans the read as a range on the (tenant_id, ts) index, so rows before the bound are never visited', async () => {
+  it('plans the read as a range on the (tenant_id, op, ts) index, so rows before the bound are never visited', async () => {
     const root = newRoot();
     seedHistory(root);
     const { statements } = await recordStatementsAsync(
@@ -91,7 +91,7 @@ describe('confirmedOutcomeTimes', () => {
         detail: string;
       }>;
       expect(rows.map((row) => row.detail).join('\n')).toMatch(
-        /SEARCH audit_log USING INDEX idx_audit_log_tenant_ts \(tenant_id=\? AND ts>\?\)/,
+        /SEARCH audit_log USING INDEX idx_audit_log_tenant_op_ts \(tenant_id=\? AND op=\? AND ts>\?\)/,
       );
     } finally {
       closeHippoDb(db);

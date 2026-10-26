@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { snapshot, watchedStoreDirs } from '../_real-store-guard.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -31,7 +32,7 @@ beforeAll(() => {
   outer = path.join(home, 'outer');
   checkout = path.join(outer, 'checkout');
   fixture = path.join(checkout, 'fixture');
-  fs.mkdirSync(path.join(outer, '.hippo'), { recursive: true });
+  fs.mkdirSync(path.join(outer, '.hippo'), PRIVATE_DIR);
   fs.mkdirSync(fixture, { recursive: true });
   offWalkHome = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-guard-offwalk-')));
 });

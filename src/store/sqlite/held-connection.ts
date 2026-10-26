@@ -16,6 +16,7 @@ import { isHippoDbStore } from './hippo-db-stores.js';
 import { runSqliteRequest } from './request-scope.js';
 import { runsOffLoop } from './worker-store.js';
 import { startWalCheckpointer, type WalCheckpointer } from '../../db/wal-checkpointer.js';
+import { currentStoreRuntime } from '../../db/store-runtime.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 
 /** What the server calls around its responses to keep its store connection. */
@@ -29,6 +30,8 @@ export interface StoreHolder {
 
 /** Holds a connection to the hippo.db under `hippoRoot` once it exists, so serving never creates one. */
 function holdSqliteConnection(hippoRoot: string): StoreHolder {
+  // Captured here: the response listener that holds the connection may run outside the runtime's context.
+  const runtime = currentStoreRuntime();
   // Handlers open and close their own connections; while this one is held, none of those closes is SQLite's last, which
   // checkpoints and deletes the WAL.
   let heldDb: DatabaseSyncLike | undefined;
@@ -43,7 +46,7 @@ function holdSqliteConnection(hippoRoot: string): StoreHolder {
       heldDb = outsideSqliteOffLoop(() =>
         outsideRequestStores(() => openHippoDb(hippoRoot, { busyWaitMs: SERVER_DB_WAIT_MS })),
       );
-      checkpointer = startWalCheckpointer(getHippoDbPath(hippoRoot));
+      checkpointer = startWalCheckpointer(getHippoDbPath(hippoRoot), runtime);
     } catch (err) {
       stopHolding = true;
       log.warn(

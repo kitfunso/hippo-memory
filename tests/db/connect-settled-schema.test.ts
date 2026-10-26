@@ -7,6 +7,7 @@ import { DatabaseSync } from '../../src/db/sqlite.js';
 import { getCurrentSchemaVersion, repairFtsDrift } from '../../src/db/migrate.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 
 // SAFETY: node:sqlite has no bundled types; the spy only needs prepare's SQL argument.
@@ -36,13 +37,15 @@ function probesPrepared(fn: () => void): number {
 }
 
 describe('connection open after the schema is proven', () => {
-  it('a store opened twice in one process runs the schema probe once', () => {
+  it('a store opened twice in one store runtime runs the schema probe once', () => {
     const root = makeRoot('settled-probe', { init: false });
-    const probes = probesPrepared(() => {
-      closeHippoDb(openHippoDb(root));
-      closeHippoDb(openHippoDb(root));
-      closeHippoDb(openHippoDb(root));
-    });
+    const probes = probesPrepared(() =>
+      new StoreRuntime().run(() => {
+        closeHippoDb(openHippoDb(root));
+        closeHippoDb(openHippoDb(root));
+        closeHippoDb(openHippoDb(root));
+      }),
+    );
     expect(probes).toBe(1);
   });
 

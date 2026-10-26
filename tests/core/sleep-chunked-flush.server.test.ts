@@ -32,6 +32,7 @@ import { WRITE_BUDGET, type WriteBudget } from '../../src/base/util/write-budget
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 const yieldOnce = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
@@ -301,7 +302,7 @@ describe('chunked consolidation flush', () => {
     const fx = seed({ clusters: 30, dormant: 20, filler: 40 });
     const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-chunked-flush-'));
     roots.push(copy);
-    fs.cpSync(fx.root, copy, { recursive: true });
+    copyTree(fx.root, copy);
 
     const chunked = await withCountedIds(() => consolidate(fx.root, { now: NOW, budget: budget(0) }));
     const whole = await withCountedIds(() => consolidate(copy, { now: NOW, budget: budget(Infinity) }));

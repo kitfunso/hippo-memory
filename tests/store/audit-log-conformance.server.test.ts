@@ -1,7 +1,7 @@
 // AuditLog answers, with no audit row written, and GET /v1/audit built on
 // it answers the same over serve().
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
@@ -23,6 +23,7 @@ import {
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import type { QueryAuditOptions } from '../../src/base/ports/store/audit.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 const HOST = '__host__';
 const at = (second: number): string => `2020-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;
@@ -227,7 +228,7 @@ async function runServed(makeStore?: (root: string) => HippoStore): Promise<Repl
   const home = mkdtempSync(join(tmpdir(), 'hippo-audit-served-'));
   try {
     const root = join(home, 'store');
-    cpSync(fixture.dir, root, { recursive: true });
+    copyTree(fixture.dir, root);
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
     // serve() reads another store as shared, so the hippo.db pass is shared too to compare like with like.
     shareRoot(root);

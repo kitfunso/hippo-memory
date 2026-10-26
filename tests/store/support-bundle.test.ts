@@ -21,6 +21,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 pinClock();
 
@@ -282,7 +283,7 @@ describe('buildSupportBundle', () => {
     const home = join(tmp('hippo-bundle-home-'), 'José Q');
     const cwd = join(home, 'proj');
     mkdirSync(cwd, { recursive: true });
-    mkdirSync(join(home, '.hippo', 'logs'), { recursive: true });
+    mkdirSync(join(home, '.hippo', 'logs'), PRIVATE_DIR);
     vi.stubEnv('HIPPO_HOME', join(home, 'unused-global'));
     writeFileSync(
       join(home, '.hippo', 'logs', 'hook.log'),
@@ -532,7 +533,7 @@ describe('buildSupportBundle', () => {
     expect(parsed.stores).toEqual([]);
     expect(parsed.doctor.checks.find((c: { id: string }) => c.id === 'store').status).toBe('fail');
 
-    mkdirSync(join(cwd, '.hippo'));
+    mkdirSync(join(cwd, '.hippo'), PRIVATE_DIR);
     const bare = JSON.parse(
       JSON.stringify(
         await buildSupportBundle({
@@ -553,7 +554,7 @@ describe('buildSupportBundle', () => {
   it('a hippo.db that is not a database is one error entry with the open error', async () => {
     const home = tmp('hippo-bundle-notdb-home-');
     const cwd = join(home, 'proj');
-    mkdirSync(join(cwd, '.hippo'), { recursive: true });
+    mkdirSync(join(cwd, '.hippo'), PRIVATE_DIR);
     writeFileSync(join(cwd, '.hippo', 'hippo.db'), 'this file is not a database. '.repeat(400));
     vi.stubEnv('HIPPO_HOME', join(home, 'unused-global'));
 

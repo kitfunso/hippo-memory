@@ -22,6 +22,7 @@ import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { initTestStore } from './store-template.js';
 import { removeAfterRequest } from './one-request-per-test.js';
 import { REAL_IO } from './real-io.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 export interface World {
   readonly dir: string;
@@ -85,7 +86,7 @@ export function codexSummary(w: World, ...lines: string[]): string {
 
 /** A store config naming its agent memory tools (null is every tool), with embeddings off. */
 export function writeConfig(root: string, tools: readonly string[] | null): void {
-  mkdirSync(root, { recursive: true });
+  mkdirSync(root, PRIVATE_DIR);
   writeFileSync(
     join(root, 'config.json'),
     JSON.stringify({ agentMemories: { tools }, embeddings: { enabled: false } }),

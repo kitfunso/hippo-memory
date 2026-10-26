@@ -10,6 +10,7 @@ import { armEnv, childEnv, armSettings, cleanPath, assertToolsResolve, writeHipp
 import { HIPPO_JS, git } from '../scripts/token-eval/exec.mjs';
 import { runDirs, freshRunDirs, assertFreshEmpty, ancestorInstructionFiles, parseImportDryRun, checkImportHomes, checkHomes } from '../scripts/token-eval/homes.mjs';
 import { STUB_CLAUDE_MD, stubBaseCommit, isInstructionPath, instructionSnapshot, instructionDelta, applyInstructions, checkoutBase, goldLines, writeHiddenTests } from '../scripts/token-eval/workspace.mjs';
+import { PRIVATE_DIR } from '../src/host/private-dir.js';
 
 const dirs: string[] = [];
 const savedCwd = process.cwd();
@@ -352,7 +353,7 @@ describe('workspace checkout', () => {
     const work = workRepo();
     const wg = (...args: string[]): string => execFileSync('git', args, { cwd: work, encoding: 'utf8' }).trim();
     checkoutBase(repo, work, 'seqP', { id: 'p1', baseRef: fix }, arm);
-    mkdirSync(join(work, '.hippo'));
+    mkdirSync(join(work, '.hippo'), PRIVATE_DIR);
     writeFileSync(join(work, '.hippo', 'store.db'), 'hippo store\n');
     writeFileSync(join(work, 'lib.js'), 'agent edit\n');
     wg('stash');
@@ -407,7 +408,7 @@ describe('workspace checkout', () => {
     expect(spawnSync('git', ['cat-file', '-e', `${fix}^{commit}`], { cwd: work }).status).not.toBe(0);
     expect(wg('rev-parse', 'HEAD')).toBe(stub);
     expect(spawnSync('git', ['symbolic-ref', '-q', 'HEAD'], { cwd: work }).status).not.toBe(0);
-    mkdirSync(join(work, '.hippo'));
+    mkdirSync(join(work, '.hippo'), PRIVATE_DIR);
     writeFileSync(join(work, '.hippo', 'store.db'), 'x');
     expect(wg('status', '--porcelain')).toBe('');
     expect(wg('config', 'core.autocrlf')).toBe('false');
@@ -682,7 +683,7 @@ describe('workspace checkout', () => {
     const { repo, base, fix } = await gitRepo({});
     const work = workRepo();
     checkoutBase(repo, work, 'seqE', { id: 'e1', baseRef: fix }, 'A2');
-    mkdirSync(join(work, '.hippo'));
+    mkdirSync(join(work, '.hippo'), PRIVATE_DIR);
     writeFileSync(join(work, '.hippo', 'hippo.db'), 'store\n');
     const deny = (p: string): void => {
       if (p.endsWith('hippo.db')) throw Object.assign(new Error(`EACCES: permission denied, open '${p}'`), { code: 'EACCES' });

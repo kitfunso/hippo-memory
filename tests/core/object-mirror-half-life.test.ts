@@ -18,6 +18,7 @@ import { PROCESS } from '../../src/domain/objects/processes.js';
 import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
 import { TYPED_HALF_LIFE_META_KEY } from '../../src/store/rules/half-life.js';
+import { duplicateHash } from '../../src/base/util/same-text.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';
@@ -213,8 +214,14 @@ const OWN = [
   },
 ] as const;
 
+// v64's duplicate_hash postdates that commit; it is listed as the hash of the row's own text, so the writer's value is checked.
 function rowsBeforeTheGroup(migrated: boolean): Record<string, Column>[] {
-  return OWN.map(({ flat, onDefault, ...own }) => ({ ...SHARED, ...own, half_life_days: migrated ? onDefault : flat }));
+  return OWN.map(({ flat, onDefault, ...own }) => ({
+    ...SHARED,
+    ...own,
+    half_life_days: migrated ? onDefault : flat,
+    duplicate_hash: duplicateHash(own.content),
+  }));
 }
 
 /** A clock that moves one millisecond at every read, so no two reads inside a save agree; it returns the instants it handed out. */

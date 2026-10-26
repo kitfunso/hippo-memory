@@ -1,7 +1,7 @@
 // The recall golden seed: one local store, one wide store and one global store, copied fresh for each test,
 // so the surface goldens, the port-only parity test and the sqliteStore tests replay the same rows.
 import { vi } from 'vitest';
-import { cpSync, existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
@@ -19,6 +19,7 @@ import {
   saveSessionHandoff,
 } from './root-forms.js';
 import { initTestStore } from './store-template.js';
+import { copyTree } from './copy-tree.js';
 
 export const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 export const SESSION = 'golden-session';
@@ -294,8 +295,8 @@ export function freshStore(templates: Templates, kind: 'local' | 'wide'): Store 
   const home = mkdtempSync(join(tmpdir(), 'hippo-parity-'));
   const root = join(home, 'store');
   const globalRoot = join(home, 'global');
-  cpSync(join(templates.dir, kind), root, { recursive: true });
-  cpSync(join(templates.dir, 'global'), globalRoot, { recursive: true });
+  copyTree(join(templates.dir, kind), root);
+  copyTree(join(templates.dir, 'global'), globalRoot);
   vi.stubEnv('HIPPO_HOME', globalRoot);
   return { home, root, globalRoot, goalId: templates.goalId };
 }

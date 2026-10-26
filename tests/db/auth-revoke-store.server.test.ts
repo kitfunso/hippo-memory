@@ -1,7 +1,7 @@
 // authRevoke with a store revokes through its keyAudit group and never opens hippo.db, and DELETE /v1/auth/keys/:keyId
 // runs under another store only when that store has the group.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { authRevoke, ForbiddenError, NotFoundError, serve, type Actor, type ServerHandle } from '../../src/server.js';
@@ -10,6 +10,7 @@ import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/sto
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 let fixture: TwoTenantFixture;
@@ -18,7 +19,7 @@ let n = 0;
 
 function copyOf(): string {
   const root = join(home, `copy-${++n}`);
-  cpSync(fixture.dir, root, { recursive: true });
+  copyTree(fixture.dir, root);
   return root;
 }
 

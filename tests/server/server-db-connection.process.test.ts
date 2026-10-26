@@ -77,8 +77,8 @@ describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
     dirs.push(root);
     const db = join(root, 'hippo.db');
     const inlineLimit = inlineCheckpointPages(root);
-    // Sized so 16 posts write over twice the inline limit's pages, and under the 4,000 a served store checkpoints at.
-    const filler = 'x'.repeat(inlineLimit * 320);
+    // Sized so 16 posts, each also indexed by the trigram table, write over twice the inline limit's pages and under 4,000.
+    const filler = 'x'.repeat(inlineLimit * 160);
     const handle = await serveKeyed({ hippoRoot: root, port: 0, rateLimits: { perAddress: 'off' } });
     try {
       const before = readFileSync(db);

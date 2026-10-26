@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { projectNames } from '../../src/base/scope/project-identity.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';
 import { normalizeRemote, originUrlFromConfig } from '../../src/host/project-remote.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -189,7 +190,7 @@ describe('resolveProjectIdentity with an origin remote', () => {
   it('names a nested store by its own folder, since the remote names the whole checkout', () => {
     repo('git@github.com:acme/mono.git', 'home', 'mono');
     const pkg = mkdirs('home', 'mono', 'packages', 'web');
-    fs.mkdirSync(path.join(pkg, '.hippo'));
+    fs.mkdirSync(path.join(pkg, '.hippo'), PRIVATE_DIR);
     expect(identity(pkg)).toMatchObject({ name: 'web', legacyName: 'web' });
   });
 

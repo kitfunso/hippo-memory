@@ -1,12 +1,12 @@
 // embedAll and embedMemory on hippo.db with no store: the vectors, model identity and particles a backfill and a model-change rebuild leave.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { closeHippoDb, getMeta, openHippoDb, withSharedStoreHandles, withWriteScope } from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
-import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
+import { loadAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { initializeParticle } from '../../src/base/rank/physics.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
@@ -29,6 +29,7 @@ import { loadEveryTenantEntries, resetStoredParticles, loadEmbeddingIndex } from
 import { initTestStore } from '../_helpers/store-template.js';
 import type { EmbeddingIndex } from '../../src/base/ports/store.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 oneRequestPerTest();
 
@@ -104,7 +105,7 @@ function writeRows(root: string, entries: readonly MemoryEntry[]): void {
 
 function copyOf(from: string): string {
   const root = join(home, `copy-${++n}`);
-  cpSync(from, root, { recursive: true });
+  copyTree(from, root);
   return root;
 }
 
@@ -124,7 +125,7 @@ function indexOn(root: string): IndexState {
         .prepare('SELECT memory_id, model, dim, hex(vector) AS bytes FROM memory_vectors ORDER BY rowid')
         .all() as VectorRow[],
       model: getMeta(db, EMBEDDING_MODEL_META_KEY, ''),
-      particles: [...loadPhysicsState(db).values()].sort((a, b) => (a.memoryId < b.memoryId ? -1 : 1)),
+      particles: [...loadAllPhysicsState(db).values()].sort((a, b) => (a.memoryId < b.memoryId ? -1 : 1)),
     };
   } finally {
     closeHippoDb(db);

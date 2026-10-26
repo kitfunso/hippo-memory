@@ -5,6 +5,7 @@ import { Layer, type MemoryEntry } from '../../base/memory/memory.js';
 import { dumpFrontmatter } from '../../base/util/yaml.js';
 import { type DatabaseSyncLike, getMeta, CONSOLIDATION_RUNS_KEPT } from '../../db/index.js';
 import { oncePerStore } from '../../db/connect.js';
+import { currentStoreRuntime } from '../../db/store-runtime.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import {
   type HippoIndex,
@@ -28,6 +29,7 @@ import { serializeEntry } from '../../base/memory/markdown.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 const SCORE_DECIMALS = 3;
 
@@ -41,15 +43,12 @@ export function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
 }
 
-// Owner-only wherever a mirror folder is made, at open or by a writer that finds it gone.
-const MIRROR_FOLDER = { recursive: true, mode: 0o700 } as const;
-
 /** Makes the mirror folders on a store's first open in this process; a writer makes its own folder if one goes missing
  * later. */
 export function ensureMirrorDirectories(hippoRoot: string): void {
   oncePerStore(hippoRoot, 'mirror-folders', () => {
     for (const sub of ['buffer', 'episodic', 'semantic', 'conflicts']) {
-      fs.mkdirSync(path.join(hippoRoot, sub), MIRROR_FOLDER);
+      fs.mkdirSync(path.join(hippoRoot, sub), PRIVATE_DIR);
     }
   });
 }
@@ -97,7 +96,7 @@ export function writeActiveTaskMirror(hippoRoot: string, tenantId: string, snaps
     body.push(`## Session`, snapshot.sessionId, '');
   }
 
-  fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
+  fs.mkdirSync(path.dirname(filePath), PRIVATE_DIR);
   writeMirror(filePath, `${fm}\n\n${body.join('\n')}`);
 }
 
@@ -142,47 +141,53 @@ export function writeRecentSessionMirror(hippoRoot: string, tenantId: string, ev
 
   lines.push('');
 
-  fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
+  fs.mkdirSync(path.dirname(filePath), PRIVATE_DIR);
   writeMirror(filePath, `${fm}\n\n${lines.join('\n')}`);
 }
 
-function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): void {
+const conflictMirrorName = (conflict: MemoryConflict): string => `conflict_${conflict.id}.md`;
+
+function writeConflictMirror(conflictDir: string, conflict: MemoryConflict): void {
+  const fm = dumpFrontmatter({ ...conflictToWire(conflict), score: Math.round(conflict.score * 10000) / 10000 });
+  const body = [
+    '# Memory Conflict',
+    '',
+    `- Memory A: ${conflict.memoryAId}`,
+    `- Memory B: ${conflict.memoryBId}`,
+    `- Reason: ${conflict.reason}`,
+    `- Score: ${conflict.score.toFixed(SCORE_DECIMALS)}`,
+    `- Status: ${conflict.status}`,
+    '',
+  ].join('\n');
+  writeMirror(path.join(conflictDir, conflictMirrorName(conflict)), `${fm}\n\n${body}`);
+}
+
+/** Every open conflict's file, and no other: the full sync's rebuild of the folder. */
+function writeAllConflictMirrors(hippoRoot: string, open: readonly MemoryConflict[]): void {
   const conflictDir = path.join(hippoRoot, 'conflicts');
-  fs.mkdirSync(conflictDir, MIRROR_FOLDER);
-
-  const keep = new Set<string>();
-  for (const conflict of conflicts) {
-    const filename = `conflict_${conflict.id}.md`;
-    keep.add(filename);
-
-    const fm = dumpFrontmatter({ ...conflictToWire(conflict), score: Math.round(conflict.score * 10000) / 10000 });
-
-    const body = [
-      '# Memory Conflict',
-      '',
-      `- Memory A: ${conflict.memoryAId}`,
-      `- Memory B: ${conflict.memoryBId}`,
-      `- Reason: ${conflict.reason}`,
-      `- Score: ${conflict.score.toFixed(SCORE_DECIMALS)}`,
-      `- Status: ${conflict.status}`,
-      '',
-    ].join('\n');
-
-    writeMirror(path.join(conflictDir, filename), `${fm}\n\n${body}`);
-  }
-
+  fs.mkdirSync(conflictDir, PRIVATE_DIR);
+  const keep = new Set(open.map(conflictMirrorName));
+  for (const conflict of open) writeConflictMirror(conflictDir, conflict);
   for (const existing of fs.readdirSync(conflictDir)) {
-    if (existing === '.gitkeep') continue;
-    if (!keep.has(existing)) {
-      fs.unlinkSync(path.join(conflictDir, existing));
-    }
+    if (existing !== '.gitkeep' && !keep.has(existing)) fs.unlinkSync(path.join(conflictDir, existing));
+  }
+}
+
+/** The files of `changed` alone: an open conflict's is rewritten, a closed one's removed. */
+function writeChangedConflictMirrors(hippoRoot: string, changed: readonly MemoryConflict[]): void {
+  if (changed.length === 0) return;
+  const conflictDir = path.join(hippoRoot, 'conflicts');
+  fs.mkdirSync(conflictDir, PRIVATE_DIR);
+  for (const conflict of changed) {
+    if (conflict.status === 'open') writeConflictMirror(conflictDir, conflict);
+    else fs.rmSync(path.join(conflictDir, conflictMirrorName(conflict)), { force: true });
   }
 }
 
 export function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void {
   removeEntryMirrors(hippoRoot, entry.id);
   const dir = layerDir(hippoRoot, entry.layer);
-  fs.mkdirSync(dir, MIRROR_FOLDER);
+  fs.mkdirSync(dir, PRIVATE_DIR);
   writeMirror(path.join(dir, `${entry.id}.md`), serializeEntry(entry));
 }
 
@@ -256,7 +261,7 @@ function writeListedMirror(hippoRoot: string, entry: MemoryEntry, listed: LayerL
     if (listed.get(layer)?.has(name) ?? fs.existsSync(file)) fs.rmSync(file, { force: true });
   }
   const dir = layerDir(hippoRoot, entry.layer);
-  if (!made.has(dir)) fs.mkdirSync(dir, MIRROR_FOLDER);
+  if (!made.has(dir)) fs.mkdirSync(dir, PRIVATE_DIR);
   made.add(dir);
   writeMirror(path.join(dir, name), serializeEntry(entry));
 }
@@ -389,85 +394,33 @@ export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
   );
 }
 
-const HELD_MIRROR_INTERVAL_MS = 1000;
-
-/** One root's held mirror writes, the latest of each kind, run together when its timer fires. */
-interface HeldMirrors {
-  lastWrite: number;
-  readonly writes: Map<string, () => void>;
-  timer?: NodeJS.Timeout;
-}
-
-const heldMirrors = new Map<string, HeldMirrors>();
-let exitHookInstalled = false;
-
 function putStatsMirror(hippoRoot: string, stats: LegacyStats): void {
   // A root removed before its deferred write has nothing left to mirror.
   if (!fs.existsSync(hippoRoot)) return;
-  mirrorBestEffort('stats.json', () =>
-    overwriteInPlace(path.join(hippoRoot, 'stats.json'), JSON.stringify(stats, null, 2)),
-  );
+  overwriteInPlace(path.join(hippoRoot, 'stats.json'), JSON.stringify(stats, null, 2));
 }
 
-function heldFor(hippoRoot: string): HeldMirrors {
-  const key = path.resolve(hippoRoot);
-  dropIdleMirrors();
-  const state = heldMirrors.get(key) ?? { lastWrite: 0, writes: new Map() };
-  heldMirrors.set(key, state);
-  return state;
-}
-
-/** Makes `write` the next `what` write of the root, run within an interval of the root's last mirror write. */
-function hold(hippoRoot: string, state: HeldMirrors, what: string, write: () => void): void {
-  state.writes.set(what, write);
-  if (state.timer !== undefined) return;
-  if (!exitHookInstalled) {
-    process.on('exit', () => flushHeldMirrors());
-    exitHookInstalled = true;
-  }
-  const wait = Math.max(0, state.lastWrite + HELD_MIRROR_INTERVAL_MS - Date.now());
-  state.timer = setTimeout(() => flushHeldMirrors(hippoRoot), wait);
-  state.timer.unref();
-}
-
-/** Mirror `stats` to stats.json at once, or hold it and write the latest within a second of the last write; the
- * database counters are always current. */
+/** Mirror `stats` to stats.json at once, or, inside a store runtime, hold it and write the latest within a second of
+ * the last write; the database counters are always current. */
 export function writeStatsMirror(hippoRoot: string, stats: LegacyStats): void {
-  const state = heldFor(hippoRoot);
-  // Behind a pending timer it waits its turn, so an older held copy never lands after it.
-  if (state.timer === undefined && state.lastWrite + HELD_MIRROR_INTERVAL_MS <= Date.now()) {
-    state.lastWrite = Date.now();
-    putStatsMirror(hippoRoot, stats);
-    return;
-  }
-  hold(hippoRoot, state, 'stats.json', () => putStatsMirror(hippoRoot, stats));
+  const write = (): void => putStatsMirror(hippoRoot, stats);
+  const runtime = currentStoreRuntime();
+  if (runtime) runtime.held.writeOrHold(hippoRoot, 'stats.json', write);
+  else mirrorBestEffort('stats.json', write);
 }
 
 /** Runs `write` once the current job is done, off the writer's path, as the root's next `what` mirror write; a later
- * call before it runs replaces it. */
+ * call before it runs replaces it. Outside a store runtime it runs on the next turn of the event loop. */
 export function deferMirrorWrite(hippoRoot: string, what: string, write: () => void): void {
-  hold(hippoRoot, heldFor(hippoRoot), what, write);
+  const runtime = currentStoreRuntime();
+  if (runtime) runtime.held.hold(hippoRoot, what, write);
+  else setImmediate(() => mirrorBestEffort(what, write));
 }
 
-// A root idle for a full interval needs no throttle state, so the map holds only recently written roots.
-function dropIdleMirrors(): void {
-  const now = Date.now();
-  for (const [root, state] of heldMirrors) {
-    if (state.timer === undefined && state.writes.size === 0 && now - state.lastWrite >= HELD_MIRROR_INTERVAL_MS) {
-      heldMirrors.delete(root);
-    }
-  }
-}
-
-/** Runs any held mirror write now, for one root or all; store close, worker stop and process exit call it. */
+/** Runs the current store runtime's held mirror writes now, for one root or all; store close and worker stop call
+ * it. */
 export function flushHeldMirrors(hippoRoot?: string): void {
-  const key = hippoRoot === undefined ? undefined : path.resolve(hippoRoot);
-  for (const [root, state] of heldMirrors) {
-    if (key !== undefined && root !== key) continue;
-    if (state.timer !== undefined) clearTimeout(state.timer);
-    heldMirrors.delete(root);
-    for (const [what, write] of state.writes) mirrorBestEffort(what, write);
-  }
+  currentStoreRuntime()?.held.flush(hippoRoot);
 }
 
 // A truncate waits for the file's last write to reach the disk, so a file rewritten on every recall keeps its blocks.
@@ -510,27 +463,29 @@ function* pagedMemoryRows(db: DatabaseSyncLike): Generator<MemoryEntry> {
 
 export function syncMirrorFiles(hippoRoot: string, db: DatabaseSyncLike): void {
   writeMarkdownMirrors(hippoRoot, pagedMemoryRows(db));
-  syncSideMirrors(hippoRoot, db);
+  const open = cachedStatement(
+    db,
+    `SELECT ${MEMORY_CONFLICT_COLUMNS} FROM memory_conflicts WHERE status = 'open' ORDER BY updated_at DESC, id DESC`,
+  ).all() as MemoryConflictRow[];
+  mirrorBestEffort('conflict mirrors', () => writeAllConflictMirrors(hippoRoot, open.map(rowToMemoryConflict)));
+  writeStatsMirror(hippoRoot, buildStatsFromDb(db));
 }
 
-/** syncMirrorFiles for a pass that changed only `changed`: the other rows' markdown is already current. */
-export function syncChangedMirrors(hippoRoot: string, db: DatabaseSyncLike, changed: readonly MemoryEntry[]): void {
+/** syncMirrorFiles for a pass that changed only `changed` and the conflicts it stamped `conflictsAt`: every other
+ * mirror is already current. */
+export function syncChangedMirrors(
+  hippoRoot: string,
+  db: DatabaseSyncLike,
+  changed: readonly MemoryEntry[],
+  conflictsAt: string,
+): void {
   writeMarkdownMirrors(hippoRoot, changed);
-  syncSideMirrors(hippoRoot, db);
-}
-
-/** The conflict and stats mirrors, which a full sync and a partial one refresh alike. */
-function syncSideMirrors(hippoRoot: string, db: DatabaseSyncLike): void {
   const conflicts = cachedStatement(
     db,
-    `
-    SELECT ${MEMORY_CONFLICT_COLUMNS}
-    FROM memory_conflicts
-    WHERE status = 'open'
-    ORDER BY updated_at DESC, id DESC
-  `,
-  ).all() as MemoryConflictRow[];
-  mirrorBestEffort('conflict mirrors', () => writeConflictMirrors(hippoRoot, conflicts.map(rowToMemoryConflict)));
-
+    `SELECT ${MEMORY_CONFLICT_COLUMNS} FROM memory_conflicts WHERE updated_at = ?`,
+  ).all(conflictsAt) as MemoryConflictRow[];
+  mirrorBestEffort('conflict mirrors', () =>
+    writeChangedConflictMirrors(hippoRoot, conflicts.map(rowToMemoryConflict)),
+  );
   writeStatsMirror(hippoRoot, buildStatsFromDb(db));
 }

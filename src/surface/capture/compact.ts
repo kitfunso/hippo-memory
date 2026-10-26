@@ -20,6 +20,7 @@ import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, type WorkingState } from '../../base/session/working-state.js';
 import { transcriptWorkingState } from './working-state.js';
 import type { StoreGroups } from '../../base/ports/store.js';
+import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
@@ -34,7 +35,7 @@ export function sanitizeLogMessage(message: string): string {
 
 function appendPreCompactLog(logFile: string, message: string): void {
   try {
-    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
     // One handle, so the cap acts on the file it measured; two hooks writing in the same instant can overwrite one
     // diagnostic line, which this log accepts.
     const fd = fs.openSync(logFile, fs.constants.O_RDWR | fs.constants.O_CREAT);

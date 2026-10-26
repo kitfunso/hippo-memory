@@ -7,6 +7,7 @@ import { importVault } from '../../src/entry/importers.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { tmpDir, vaultDir, useVaultImport, writeNote, opts, archivedRows } from '../_helpers/importers-vault.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 oneRequestPerTest();
 
@@ -207,7 +208,7 @@ describe('importVault (r): does not import the Hippo store mirror files', () => 
   it('skips .hippo / dot-dirs when the vault contains the store', async () => {
     writeNote('real-note.md', 'a genuine vault note, long enough to store');
     // markdown mirror file inside a .hippo store dir under the vault
-    fs.mkdirSync(path.join(vaultDir, '.hippo', 'episodic'), { recursive: true });
+    fs.mkdirSync(path.join(vaultDir, '.hippo', 'episodic'), PRIVATE_DIR);
     fs.writeFileSync(
       path.join(vaultDir, '.hippo', 'episodic', 'mirror.md'),
       'self-import mirror content must not be ingested',

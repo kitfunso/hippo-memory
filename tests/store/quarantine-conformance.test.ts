@@ -1,6 +1,6 @@
 // Quarantine answers: the same records, the same order, the same refusals and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, rmSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { KeysetPosition } from '../../src/base/util/keyset.js';
@@ -33,6 +33,7 @@ import {
   heldContent,
   seedQuarantineRecords,
 } from '../_helpers/quarantine-seed.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 oneRequestPerTest();
 
@@ -445,7 +446,7 @@ describe('on hippo.db, a decision whose audit row is refused', () => {
 
   beforeEach(() => {
     root = join(makeRoot('quarantine-atomic', { init: false }), 'store');
-    cpSync(fixture.dir, root, { recursive: true });
+    copyTree(fixture.dir, root);
     const db = openHippoDb(root);
     try {
       db.exec(
