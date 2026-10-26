@@ -50,7 +50,9 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory, applyOutcome } from '../../dist/entry/memory.js';
-import { initStore, writeEntry, loadAllEntries } from '../../dist/entry/testing.js';
+import { initStore } from '../../dist/entry/testing.js';
+import { loadAllEntriesIn, writeEntryIn } from '../../dist/store/sqlite/fixtures.js';
+import { storeFilesOf } from '../../dist/store/sqlite/handles.js';
 import { withSharedStoreHandles } from '../../dist/db/index.js';
 import { hybridSearch } from '../../dist/entry/eval-scripts.js';
 import { outcomeMultiplier } from '../../dist/entry/eval-scripts.js';
@@ -214,37 +216,37 @@ function groupBySession(items) {
 
 // Entry ids are DERIVED from (seed, protocol id), not random UUIDs: the protocol creates score TIES and
 // same-timestamp rows order by id, so random ids would change top-5 metrics between identical runs (codex P1).
-function ingestMemories(hippoRoot, seed, memories, idMap) {
+function ingestMemories(files, seed, memories, idMap) {
   for (const m of memories) {
     const entry = createMemory(m.content, { baseHalfLifeDays: SWEEP_HALF_LIFE });
     entry.id = `mem_${createHash('sha256').update(`e1:${seed}:${m.id}`).digest('hex').slice(0, 12)}`;
-    writeEntry(hippoRoot, entry);
+    writeEntryIn(files, entry);
     idMap.set(m.id, entry.id);
   }
 }
 
 // hybridSearch -> markRetrieved -> persistence gated exactly like cli.ts cmdRecall.
-async function runScheduledRetrievals(hippoRoot, retrievals) {
-  const entriesNow = () => loadAllEntries(hippoRoot);
+async function runScheduledRetrievals(files, retrievals) {
+  const entriesNow = () => loadAllEntriesIn(files);
   for (const r of retrievals) {
     const entries = entriesNow();
     const results = await hybridSearch(r.query, entries, { budget: PROBE_BUDGET, minResults: PROBE_TOP_K });
     const topEntries = results.slice(0, PROBE_TOP_K).map((x) => x.entry);
     const updated = markRetrieved(topEntries); // default now = evalNow() (fake)
     if (!isRecallBoostAblated()) {
-      for (const u of updated) writeEntry(hippoRoot, u);
+      for (const u of updated) writeEntryIn(files, u);
     }
   }
 }
 
-function applyScheduledOutcomes(hippoRoot, outcomes, idMap, sessionIndex) {
+function applyScheduledOutcomes(files, outcomes, idMap, sessionIndex) {
   for (const o of outcomes) {
     const hippoId = idMap.get(o.memoryRef);
     if (!hippoId) throw new Error(`outcome before ingestion: ${o.memoryRef} at session ${sessionIndex}`);
-    const entry = loadAllEntries(hippoRoot).find((e) => e.id === hippoId);
+    const entry = loadAllEntriesIn(files).find((e) => e.id === hippoId);
     if (!entry) throw new Error(`outcome target missing from store: ${hippoId}`);
     const updated = applyOutcome(entry, o.good);
-    writeEntry(hippoRoot, updated);
+    writeEntryIn(files, updated);
   }
 }
 
@@ -273,19 +275,20 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
     const outcomesBySession = groupBySession(protocol.outcomeSchedule);
 
     // One connection for the whole arm: a close per write checkpoints the WAL, which is slow on Windows.
-    await withSharedStoreHandles(async () => {
+    await withSharedStoreHandles(async (handles) => {
+      const files = storeFilesOf(hippoRoot, { session: handles });
       for (const session of protocol.sessions) {
         setSimulatedNow(session.date); // mutators stamp simulated time
 
         // 1. Ingest this session's memories (created/last_retrieved = fake now).
-        ingestMemories(hippoRoot, seed, bySession.get(session.index) ?? [], idMap);
+        ingestMemories(files, seed, bySession.get(session.index) ?? [], idMap);
         // 2. Scheduled mutating retrievals - CLI-parity block.
-        await runScheduledRetrievals(hippoRoot, retrievalsBySession.get(session.index) ?? []);
+        await runScheduledRetrievals(files, retrievalsBySession.get(session.index) ?? []);
         // 3. Scheduled outcomes on EXPLICIT ids (never last_retrieval_ids).
-        applyScheduledOutcomes(hippoRoot, outcomesBySession.get(session.index) ?? [], idMap, session.index);
+        applyScheduledOutcomes(files, outcomesBySession.get(session.index) ?? [], idMap, session.index);
 
         // 4. READ-ONLY probes (explicit now; no markRetrieved; no writes).
-        const entries = loadAllEntries(hippoRoot);
+        const entries = loadAllEntriesIn(files);
         epochs.push(await probeEpoch(protocol, entries, session.index, session.date, arm));
       }
     });
