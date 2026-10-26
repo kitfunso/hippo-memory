@@ -17,34 +17,82 @@ export const HEALED_TABLES = [
   'session_owners',
 ] as const;
 
-let chainDdl: ReadonlyMap<string, readonly string[]> | undefined;
+/** The indexes the chain puts on those tables and the two request indexes, by name: the open's probe counts them, and
+ * a missing one is made again from the chain. */
+export const HEALED_INDEXES = [
+  'idx_task_snapshots_status_updated',
+  'idx_task_snapshots_tenant_status',
+  'idx_task_snapshots_tenant_scope',
+  'idx_task_snapshots_owner',
+  'idx_session_events_session_created',
+  'idx_session_events_task_created',
+  'idx_session_events_tenant_session',
+  'idx_session_handoffs_session',
+  'idx_session_handoffs_tenant_session',
+  'idx_session_handoffs_tenant_outcome',
+  'idx_session_handoffs_tenant_card',
+  'idx_session_handoffs_owner',
+  'idx_cards_tenant_status',
+  'idx_card_deps_tenant_child',
+  'idx_card_deps_tenant_parent',
+  'idx_card_runs_tenant_card',
+  'idx_card_comments_tenant_card',
+  'idx_memory_quarantine_status',
+  'idx_compactions_request',
+  'idx_failure_log_request',
+] as const;
+
+// The request indexes' tables: never healed, since a store that lost one still opens so its hooks can log the step.
+const REQUEST_TABLES = ['compactions', 'failure_log'] as const;
+
+interface ChainObject {
+  readonly table: string;
+  readonly sql: string;
+}
+
+let chainObjects: ReadonlyMap<string, ChainObject> | undefined;
 
 // Before the loop on stamped stores: the chain never re-runs a stamped migration, and v4/v16/v22 ALTER or read these
 // tables. IF NOT EXISTS because this runs outside the migration lock, where two processes may heal one store.
 export function ensureContinuityTables(db: DatabaseSyncLike): void {
-  const missing = HEALED_TABLES.filter((table) => !tableExists(db, table));
-  if (missing.length === 0) return;
-  chainDdl ??= tableDdlFromChain();
-  for (const table of missing) for (const ddl of chainDdl.get(table) ?? []) db.exec(ddl);
+  const missing = new Set<string>(HEALED_TABLES.filter((table) => !tableExists(db, table)));
+  if (missing.size === 0) return;
+  chainObjects ??= objectsFromChain();
+  for (const { table, sql } of chainObjects.values()) if (missing.has(table)) db.exec(sql);
 }
 
-/** Each healed table's CREATE TABLE, then its indexes, as the migration chain leaves them on an empty database. */
-function tableDdlFromChain(): ReadonlyMap<string, readonly string[]> {
+// After the loop, when every column an index names exists; only a store missing one builds the chain.
+export function ensureContinuityIndexes(db: DatabaseSyncLike): void {
+  // SAFETY: one TEXT column named name.
+  const present = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND name IN (${placeholders(HEALED_INDEXES.length)})`)
+    .all(...HEALED_INDEXES) as Array<{ name: string }>;
+  if (present.length === HEALED_INDEXES.length) return;
+  const have = new Set(present.map(({ name }) => name));
+  chainObjects ??= objectsFromChain();
+  for (const name of HEALED_INDEXES) {
+    const made = chainObjects.get(name);
+    if (!have.has(name) && made !== undefined && tableExists(db, made.table)) db.exec(made.sql);
+  }
+}
+
+/** Each healed table's CREATE TABLE, then every index on it and on the request tables, keyed by object name, as the
+ * migration chain leaves them on an empty database. */
+function objectsFromChain(): ReadonlyMap<string, ChainObject> {
   const db = new DatabaseSync(':memory:');
   try {
     ensureMetaTable(db);
     // No root: only v39 reads it, to backfill rows an empty database does not have.
     for (const migration of MIGRATIONS) migration.up(db, {});
+    const tables = [...HEALED_TABLES, ...REQUEST_TABLES];
     // SAFETY: rows follow the selected columns, and the WHERE drops the autoindexes whose sql is NULL.
     const rows = db
       .prepare(
-        `SELECT tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL AND type IN ('table', 'index') ` +
-          `AND tbl_name IN (${placeholders(HEALED_TABLES.length)}) ORDER BY type DESC, name`,
+        `SELECT name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL AND type IN ('table', 'index') ` +
+          `AND tbl_name IN (${placeholders(tables.length)}) ORDER BY type DESC, name`,
       )
-      .all(...HEALED_TABLES) as Array<{ tbl_name: string; sql: string }>;
-    const ddl = new Map<string, string[]>();
-    for (const { tbl_name, sql } of rows) ddl.set(tbl_name, [...(ddl.get(tbl_name) ?? []), ifNotExists(sql)]);
-    return ddl;
+      .all(...tables) as Array<{ name: string; tbl_name: string; sql: string }>;
+    return new Map(rows.map(({ name, tbl_name, sql }) => [name, { table: tbl_name, sql: ifNotExists(sql) }]));
   } finally {
     db.close();
   }
@@ -53,50 +101,3 @@ function tableDdlFromChain(): ReadonlyMap<string, readonly string[]> {
 // sqlite_master keeps each CREATE without its IF NOT EXISTS.
 const ifNotExists = (sql: string): string =>
   sql.replace(/^CREATE (UNIQUE )?(TABLE|INDEX) /, 'CREATE $1$2 IF NOT EXISTS ');
-
-// The quarantine index is here too, so a store that lost only an index heals without its table missing.
-export const CONTINUITY_INDEX_DDL = [
-  `CREATE INDEX IF NOT EXISTS idx_task_snapshots_status_updated ON task_snapshots(status, updated_at DESC, id DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_status ON task_snapshots(tenant_id, status, updated_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_scope ON task_snapshots(tenant_id, scope, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_events_session_created ON session_events(session_id, created_at DESC, id ` +
-    `DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_events_task_created ON session_events(task, created_at DESC, id DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_events_tenant_session ON session_events(tenant_id, session_id, created_at ` +
-    `DESC, id DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_session ON session_handoffs(session_id, created_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_session ON session_handoffs(tenant_id, session_id, ` +
-    `created_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_outcome ON session_handoffs(tenant_id, outcome, created_at ` +
-    `DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_cards_tenant_status ON cards(tenant_id, status, updated_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_card_deps_tenant_child ON card_deps(tenant_id, child)`,
-  `CREATE INDEX IF NOT EXISTS idx_card_deps_tenant_parent ON card_deps(tenant_id, parent)`,
-  `CREATE INDEX IF NOT EXISTS idx_card_runs_tenant_card ON card_runs(tenant_id, card, started DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_card_comments_tenant_card ON card_comments(tenant_id, card_id, created_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_card ON session_handoffs(tenant_id, card_id, created_at ` +
-    `DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_task_snapshots_owner ON task_snapshots(tenant_id, owner_subject, origin_project, ` +
-    `status, updated_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_owner ON session_handoffs(tenant_id, owner_subject, ` +
-    `origin_project, created_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_memory_quarantine_status ON memory_quarantine(tenant_id, status, quarantined_at ` +
-    `DESC)`,
-] as const;
-
-// A client retry carries the same request id, so a repeat finds the earlier row instead of writing again.
-export const REQUEST_INDEX_DDL = {
-  compactions:
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_compactions_request ON compactions(tenant_id, request_id) ` +
-    `WHERE request_id IS NOT NULL`,
-  failure_log:
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_failure_log_request ON failure_log(tenant_id, request_id) ` +
-    `WHERE request_id IS NOT NULL`,
-} as const;
-
-// After the loop: tenant_id (v16) and scope (v23) do not exist yet on a genuine old store.
-export function ensureContinuityIndexes(db: DatabaseSyncLike): void {
-  for (const ddl of CONTINUITY_INDEX_DDL) db.exec(ddl);
-  // A store that lost one of these tables still opens, so its hooks can log the failed step and run the rest.
-  for (const [table, ddl] of Object.entries(REQUEST_INDEX_DDL)) if (tableExists(db, table)) db.exec(ddl);
-}

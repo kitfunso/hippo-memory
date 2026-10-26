@@ -20,7 +20,7 @@ import {
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/required-objects.js';
-import { HEALED_TABLES } from '../../src/db/continuity-tables.js';
+import { HEALED_INDEXES, HEALED_TABLES } from '../../src/db/continuity-tables.js';
 import { MIGRATIONS } from '../../src/db/migrations/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -112,17 +112,32 @@ describe('store open fast path', () => {
     expect(statements.filter((sql) => /COUNT\(\*\)/i.test(sql) && !/sqlite_master|FROM meta/i.test(sql))).toEqual([]);
   });
 
-  it('every CREATE the slow path runs names a required object, and it re-asserts each one but a healed table', () => {
+  it('every CREATE the slow path runs names a required object, and it re-asserts each one but a healed one', () => {
     withDb((db) => db.prepare(`DELETE FROM meta WHERE key = 'last_trace_id'`).run());
 
     const created = new Set(openAndClose().flatMap((sql) => [...sql.matchAll(ANY_CREATE)].map((m) => m[1])));
-    // A healed table is created only when it is missing.
-    const healed = new Set<string>(HEALED_TABLES);
+    // A healed table or index is created only when it is missing.
+    const healed = new Set<string>([...HEALED_TABLES, ...HEALED_INDEXES]);
 
     expect([...created].filter((name) => !REQUIRED_SCHEMA_OBJECTS.includes(name))).toEqual([]);
     expect(REQUIRED_SCHEMA_OBJECTS.filter((name) => !created.has(name) && !healed.has(name))).toEqual([]);
-    expect(HEALED_TABLES.filter((name) => !REQUIRED_SCHEMA_OBJECTS.includes(name))).toEqual([]);
+    expect([...healed].filter((name) => !REQUIRED_SCHEMA_OBJECTS.includes(name))).toEqual([]);
     expect(REQUIRED_SCHEMA_OBJECTS).toContain('idx_memory_quarantine_status');
+  });
+
+  it('HEALED_INDEXES names every index the migrations put on a healed table, and each one exists', () => {
+    const list = (names: readonly string[]): string => names.map(() => '?').join(', ');
+    let made: string[] = [];
+    withDb((db) => {
+      const sql =
+        `SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ` +
+        `AND (tbl_name IN (${list(HEALED_TABLES)}) OR name IN (${list(HEALED_INDEXES)}))`;
+      // SAFETY: one TEXT column named name.
+      made = (db.prepare(sql).all(...HEALED_TABLES, ...HEALED_INDEXES) as Array<{ name: string }>).map(
+        ({ name }) => name,
+      );
+    });
+    expect(made.sort()).toEqual([...HEALED_INDEXES].sort());
   });
 
   it('applies the last migration when both versions are stale', () => {

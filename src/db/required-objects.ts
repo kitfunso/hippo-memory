@@ -1,5 +1,5 @@
 import { META_TABLE_DDL } from './meta.js';
-import { CONTINUITY_INDEX_DDL, HEALED_TABLES, REQUEST_INDEX_DDL } from './continuity-tables.js';
+import { HEALED_INDEXES, HEALED_TABLES } from './continuity-tables.js';
 import { FTS_INDEX_DDL } from './fts-index.js';
 
 const CREATED_NAME = /CREATE\s+(?:VIRTUAL\s+|UNIQUE\s+)?(?:TABLE|INDEX|TRIGGER)\s+IF\s+NOT\s+EXISTS\s+(\w+)/gi;
@@ -13,5 +13,6 @@ export function createdObjectNames(ddl: string): string[] {
 export const REQUIRED_SCHEMA_OBJECTS: readonly string[] = Object.freeze([
   ...createdObjectNames(META_TABLE_DDL),
   ...HEALED_TABLES,
-  ...[...CONTINUITY_INDEX_DDL, ...Object.values(REQUEST_INDEX_DDL), ...FTS_INDEX_DDL].flatMap(createdObjectNames),
+  ...HEALED_INDEXES,
+  ...FTS_INDEX_DDL.flatMap(createdObjectNames),
 ]);
