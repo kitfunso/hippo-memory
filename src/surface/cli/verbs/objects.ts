@@ -2,6 +2,9 @@
 
 import { DEFAULT_KEY_TTL_DAYS, MAX_TTL_DAYS } from '../../../api/auth/auth.js';
 import { DEFAULT_DASHBOARD_PORT, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../../server/defaults.js';
+import { DEFAULT_GOAL_LEVEL } from '../../../base/ports/store/goals.js';
+import { WM_DEFAULT_IMPORTANCE } from '../flag-defaults.js';
+import { WM_MAX_ENTRIES } from '../../../base/util/limits.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 
 export const OBJECT_VERBS = {
@@ -184,13 +187,13 @@ export const OBJECT_VERBS = {
     wm push                Push a working memory entry
       --scope <scope>      Scope name (default: default)
       --content <text>     Content to store (required)
-      --importance <n>     Priority 0-1 (default: 0.5)
+      --importance <n>     Priority 0-1 (default: ${WM_DEFAULT_IMPORTANCE})
       --session <id>       Session ID
       --task <id>          Task ID
     wm read                Read working memory entries
       --scope <scope>      Filter by scope
       --session <id>       Filter by session
-      --limit <n>          Max entries (default: 20)
+      --limit <n>          Max entries (default: ${WM_MAX_ENTRIES})
       --json               Output as JSON
     wm clear               Clear working memory entries
       --scope <scope>      Filter by scope
@@ -244,7 +247,7 @@ export const OBJECT_VERBS = {
       --policy <type>      schema-fit-biased | error-prioritized |
                            recency-first | hybrid
       --success "<cond>"   Optional success condition text
-      --level <n>          Goal level (default: 0)
+      --level <n>          Goal level (default: ${DEFAULT_GOAL_LEVEL})
       --parent <goalId>    Parent goal id (for sub-goals)
       --session-id <s>     Override session (defaults to HIPPO_SESSION_ID)
       --tenant-id <t>      Override tenant (defaults to HIPPO_TENANT)

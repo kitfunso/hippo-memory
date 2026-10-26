@@ -74,7 +74,7 @@ async function cliCore(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
       lastRecall: ctx.store.lastRecall,
       show: (ranking) => {
         shown = ranking.results;
-        return { results: ranking.results, audit: [], tokens: ranking.results.reduce((n, r) => n + r.tokens, 0) };
+        return { results: ranking.results, hints: { anchoring: null, availability: null }, tokens: ranking.results.reduce((n, r) => n + r.tokens, 0) };
       },
     },
   ));
@@ -105,7 +105,7 @@ async function showRanked(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
     },
     ({ ranked }) => {
       shown = ranked.slice(0, SHOWN_ROWS);
-      return { ids: shown.map((r) => r.entry.id), audit: [] };
+      return { ids: shown.map((r) => r.entry.id), hints: { anchoring: null, availability: null } };
     },
   ));
   return { texts: shown.map((r) => r.entry.content), retrieveMs };

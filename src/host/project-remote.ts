@@ -153,6 +153,8 @@ export function originRemoteId(gitRoot: string): string | null {
 }
 
 export const PROJECT_FILE = '.hippo-project.json';
+/** A committed id longer than this is not a project name, so the remote or folder name stands in. */
+const MAX_PROJECT_ID_CHARS = 200;
 
 /** The `id` a team committed in `.hippo-project.json` at root, lowercased like every project name; null when absent or
  * unusable. */
@@ -164,7 +166,7 @@ export function projectFileId(root: string): string | null {
     const raw = isObjectLike(parsed) && 'id' in parsed ? parsed.id : undefined;
     const id = isStringValue(raw) ? raw.trim().toLowerCase() : '';
     // No slash: a committed file in an untrusted clone must not claim a remote-shaped id like `github.com/acme/api`.
-    if (id !== '' && id.length <= 200 && !/[:\s/\\]/.test(id)) return id;
+    if (id !== '' && id.length <= MAX_PROJECT_ID_CHARS && !/[:\s/\\]/.test(id)) return id;
     log.warn(
       `${file}: "id" must be a non-empty string with no colon, slash or spaces; ` +
         'using the remote or folder name instead',

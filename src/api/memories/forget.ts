@@ -1,6 +1,6 @@
 // Forget a memory, and reject or unreject a value so it cannot be stored again.
 
-import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
+import { BadRequestError, memoryNotFoundText, NotFoundError } from '../../base/errors/api-errors.js';
 import { rawRemovalRefusal } from '../../base/errors/raw-append-only.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import {
@@ -36,7 +36,7 @@ export async function forget(ctx: Context, id: string): Promise<ForgetResult> {
  * only. */
 export async function removalTarget(ctx: Context, id: string, archive: boolean): Promise<MemoryEntry> {
   const entry = await memoryGet(ctx, id);
-  if (entry === null) throw new NotFoundError(`memory not found: ${id}`);
+  if (entry === null) throw new NotFoundError(memoryNotFoundText(id));
   const refusal = rawRemovalRefusal(entry, archive);
   if (refusal !== null) throw refusal;
   return entry;
@@ -68,7 +68,7 @@ export async function reject(ctx: Context, opts: RejectOptions): Promise<RejectR
     // keeps the error message consistent.
     const entry = await memoryGet(ctx, opts.memoryId);
     if (entry === null || !canReadScope(ctx.actor, entry.scope)) {
-      throw new NotFoundError(`memory not found: ${opts.memoryId}`);
+      throw new NotFoundError(memoryNotFoundText(opts.memoryId));
     }
   }
   const result = await applyReject(ctx, opts);

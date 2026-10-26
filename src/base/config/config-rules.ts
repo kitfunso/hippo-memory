@@ -1,5 +1,6 @@
 // Leaf module: how one config.json value is checked and how a bad one is reported, in one wording.
-import { isJsonBoolean, isJsonNumber, isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
+import { isJsonBoolean, isJsonNumber, isJsonObject, isJsonString, knownOption, type JsonValue } from '../util/json.js';
+import { BASIS_POINTS } from '../util/limits.js';
 import { log } from '../util/log.js';
 
 type Guard<T extends JsonValue | undefined> = (value: JsonValue | undefined) => value is T;
@@ -54,11 +55,11 @@ const isCount: Guard<number> = (value): value is number => isNumber(value) && va
 const isPositive: Guard<number> = (value): value is number => isNumber(value) && value > 0;
 const isFraction: Guard<number> = (value): value is number => isNumber(value) && value >= 0 && value <= 1;
 const isBasisPoints: Guard<number> = (value): value is number =>
-  isJsonNumber(value) && Number.isInteger(value) && value >= 0 && value <= 10000;
+  isJsonNumber(value) && Number.isInteger(value) && value >= 0 && value <= BASIS_POINTS;
 const isTextList: Guard<string[]> = (value): value is string[] => Array.isArray(value) && value.every(isJsonString);
 
 function oneOf<T extends string>(...allowed: readonly T[]): Guard<T> {
-  return (value): value is T => isJsonString(value) && allowed.some((option) => option === value);
+  return (value): value is T => knownOption(allowed, value) !== undefined;
 }
 
 function either<A extends JsonValue | undefined, B extends JsonValue | undefined>(
@@ -75,7 +76,7 @@ export const fraction = (fallback: number): Reader<number> => check('a number fr
 export const finite = (fallback: number): Reader<number> => check('a finite number', isNumber, fallback);
 export const textList = (fallback: string[]): Reader<string[]> => check('a list of strings', isTextList, fallback);
 export const basisPoints = (fallback: number): Reader<number> =>
-  check('an integer from 0 to 10000', isBasisPoints, fallback);
+  check(`an integer from 0 to ${BASIS_POINTS}`, isBasisPoints, fallback);
 
 export function flagOrAuto(fallback: boolean | 'auto'): Reader<boolean | 'auto'> {
   return check('true, false or "auto"', either(isJsonBoolean, oneOf('auto')), fallback);

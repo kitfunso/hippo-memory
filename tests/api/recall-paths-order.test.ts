@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { adminActor, type RecallResult } from '../../src/api/index.js';
 import { retrieve, retrieveRanking } from '../../src/api/recall/recall.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
-import { RECALL_RECORDING } from '../../src/api/recall/finish.js';
+import { RECALL_RECORDING, type ShownHints } from '../../src/api/recall/finish.js';
 import type { CliCoreRecall } from '../../src/api/recall/types.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -15,7 +15,7 @@ import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { CLEARED_ENV, FAKE_NOW, pinUpdatedAt, seeded, TENANT } from '../_helpers/recall-golden-seed.js';
 import { loadEntriesByIds, loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
-import type { AppendAuditOptions, AuditEvent } from '../../src/base/ports/store/types.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -33,7 +33,20 @@ const ROWS = [
 const CLAIM = 'the deploy will take 3 days';
 
 // A hint row of the caller's own, so the test sees where each path puts it among the recall's rows.
-const CALLER_ROW: AppendAuditOptions = { tenantId: TENANT, actor: 'order-test', op: 'recall_availability_detected' };
+// A presenter that detected an availability bias; the api writes its row.
+const CALLER_HINTS: ShownHints = {
+  anchoring: null,
+  availability: {
+    recentCount: 2,
+    returnedCount: 2,
+    recentFraction: 1,
+    topKMedianAgeDays: 1,
+    poolMedianAgeDays: 30,
+    olderCandidatesPassedOver: 1,
+    summary: 'recent rows crowd the top',
+    source: 'j2-recency',
+  },
+};
 
 interface Written {
   readonly audit: readonly (readonly [string, number | null])[];
@@ -175,7 +188,7 @@ describe('retrieve paths: order and writes', () => {
       },
       (ranking) => {
         ranked = ranking.ranked.map((r) => r.entry.id);
-        return { ids: ranked.slice(0, 2), audit: [CALLER_ROW] };
+        return { ids: ranked.slice(0, 2), hints: CALLER_HINTS };
       },
     );
     expect(ranked).toEqual(WIDE_RANKED);
@@ -199,7 +212,7 @@ describe('retrieve paths: order and writes', () => {
       { query: CLAIM },
       {
         ...cliCore(),
-        show: (ranking) => ({ results: ranking.results.slice(0, 2), audit: [CALLER_ROW], tokens: 7 }),
+        show: (ranking) => ({ results: ranking.results.slice(0, 2), hints: CALLER_HINTS, tokens: 7 }),
         lastRecall: caller.store.lastRecall,
       },
     );

@@ -7,7 +7,12 @@
  * permits it outside graph.ts.
  */
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../../base/rank/search-types.js';
+import {
+  DEFAULT_MIN_RESULTS,
+  DEFAULT_RECALL_BUDGET,
+  type ResultCost,
+  type SearchResult,
+} from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import type { Entity } from '../../base/ports/store/graph.js';
@@ -311,7 +316,7 @@ function selectWithinBudget(
   opts: GraphExpandOptions,
 ): Set<SearchResult> {
   const budget = opts.budget ?? DEFAULT_RECALL_BUDGET;
-  const minResults = opts.minResults ?? 1;
+  const minResults = opts.minResults ?? DEFAULT_MIN_RESULTS;
   // Budget selection is by score, not position, so a high-value graph hit can beat a low-score lexical distractor; the
   // greedy pack uses `continue`, so the DISPLAY loop emits a hit only under a kept seed. The top --min-results base
   // rows are never evicted; at least one result is kept.

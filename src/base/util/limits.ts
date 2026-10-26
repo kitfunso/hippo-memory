@@ -21,6 +21,18 @@ export const MAX_DATE_LEN = 64;
 // Most entries a string-array field takes (tags, aliases).
 export const MAX_ARRAY_ITEMS = 100;
 
+// The basis-point scale: a rate of BASIS_POINTS is every session.
+export const BASIS_POINTS = 10_000;
+
+// Fresh raw rows one read returns at most, whatever count the caller asks for; the store port promises this cap.
+export const MAX_FRESH_RAW = 200;
+
+// Working-memory entries one scope keeps, and a read returns by default; past it the lowest importance goes first.
+export const WM_MAX_ENTRIES = 20;
+
+// Session events a read returns when its caller names no limit, as `hippo session show` prints by default.
+export const SESSION_EVENT_LIMIT = 8;
+
 // Page size every list surface (CLI, HTTP, store) falls back to when the caller names none.
 export const DEFAULT_LIST_LIMIT = 100;
 

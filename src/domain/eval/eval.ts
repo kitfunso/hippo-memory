@@ -153,34 +153,25 @@ export async function runEval(
 
 /** One case's ranking: across the local and global stores when `stores` is set, else over `entries` alone. */
 function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOptions) {
-  const budget = options.budget ?? DEFAULT_EVAL_BUDGET;
+  const ranking = {
+    budget: options.budget ?? DEFAULT_EVAL_BUDGET,
+    now: options.now,
+    embeddingWeight: options.embeddingWeight,
+    mmr: options.mmr,
+    mmrLambda: options.mmrLambda,
+    runtime: options.runtime,
+    cwd: options.cwd,
+    switches: options.switches,
+  };
   const { stores } = options;
-  const { switches } = options;
   return stores
     ? searchBothHybrid(query, stores.local, stores.global, {
+        ...ranking,
         tenantId: ALL_TENANTS,
         embedderFor: stores.embedderFor,
-        budget,
-        now: options.now,
-        embeddingWeight: options.embeddingWeight,
-        mmr: options.mmr,
-        mmrLambda: options.mmrLambda,
         localBump: options.localBump,
-        runtime: options.runtime,
-        cwd: options.cwd,
-        switches,
       })
-    : hybridSearch(query, entries, {
-        budget,
-        now: options.now,
-        source: options.source,
-        embeddingWeight: options.embeddingWeight,
-        mmr: options.mmr,
-        mmrLambda: options.mmrLambda,
-        runtime: options.runtime,
-        cwd: options.cwd,
-        switches,
-      });
+    : hybridSearch(query, entries, { ...ranking, source: options.source });
 }
 
 export interface EvalDelta {

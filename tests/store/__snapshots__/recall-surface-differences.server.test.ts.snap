@@ -1,0 +1,91 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`recall surface differences > cli: the hint audit rows, byte for byte 1`] = `
+[
+  {
+    "actor": "cli",
+    "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6}",
+    "op": "recall_anchor_skipped_no_session",
+    "target_id": null,
+    "tenant_id": "default",
+    "ts": "<ts>",
+  },
+  {
+    "actor": "cli",
+    "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":13}",
+    "op": "recall",
+    "target_id": null,
+    "tenant_id": "default",
+    "ts": "<ts>",
+  },
+  {
+    "actor": "cli",
+    "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":13}",
+    "op": "recall",
+    "target_id": null,
+    "tenant_id": "default",
+    "ts": "<ts>",
+  },
+  {
+    "actor": "cli",
+    "metadata_json": "{"memory_id":"mem_p_global"}",
+    "op": "recall_anchor_detected_query_repeat",
+    "target_id": "mem_p_global",
+    "tenant_id": "default",
+    "ts": "<ts>",
+  },
+  {
+    "actor": "cli",
+    "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":13}",
+    "op": "recall",
+    "target_id": null,
+    "tenant_id": "default",
+    "ts": "<ts>",
+  },
+]
+`;
+
+exports[`recall surface differences > mcp: the hint audit rows, byte for byte 1`] = `
+[
+  {
+    "actor": "mcp",
+    "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":12}",
+    "op": "recall",
+    "target_id": null,
+    "tenant_id": "default",
+    "ts": "<ts>",
+  },
+  {
+    "actor": "mcp",
+    "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6}",
+    "op": "recall_anchor_skipped_no_session",
+    "target_id": null,
+    "tenant_id": "default",
+    "ts": "<ts>",
+  },
+  {
+    "actor": "mcp",
+    "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":12}",
+    "op": "recall",
+    "target_id": null,
+    "tenant_id": "default",
+    "ts": "<ts>",
+  },
+  {
+    "actor": "mcp",
+    "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":12}",
+    "op": "recall",
+    "target_id": null,
+    "tenant_id": "default",
+    "ts": "<ts>",
+  },
+  {
+    "actor": "mcp",
+    "metadata_json": "{"memory_id":"mem_p_goal"}",
+    "op": "recall_anchor_detected_query_repeat",
+    "target_id": "mem_p_goal",
+    "tenant_id": "default",
+    "ts": "<ts>",
+  },
+]
+`;

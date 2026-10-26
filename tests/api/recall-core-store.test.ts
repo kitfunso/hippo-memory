@@ -48,7 +48,7 @@ function cliCore(): CliCoreRecall {
         explain: false,
       },
     },
-    show: (ranking) => ({ results: ranking.results, audit: [], tokens: 0 }),
+    show: (ranking) => ({ results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 }),
     lastRecall: sqliteStore(hippoRoot).lastRecall,
   };
 }

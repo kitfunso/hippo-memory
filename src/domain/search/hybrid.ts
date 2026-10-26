@@ -180,7 +180,7 @@ export async function hybridSearch(
   });
   scored.sort(compareScoredResults);
   const ordered = await orderHybrid(query, withDagChildren(dedupeExtracted(scored), arm.entries), arm, options);
-  return fitBudget(ordered, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
+  return fitBudget(ordered, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults, options.cost);
 }
 
 /** The vector arm over `store`, embedding queries with the provider `embedderFor` builds from `config`. */

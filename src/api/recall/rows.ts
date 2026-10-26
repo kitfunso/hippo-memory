@@ -15,6 +15,7 @@ import { estimateTokens } from '../../base/util/token-text.js';
 import type { ContinuityBlock, HippoStore } from '../../base/ports/store.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
 import type { Context, ContextWith } from '../types.js';
+import { CONTINUITY_EVENT_LIMIT } from '../continuity.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../domain/graph/recall.js';
 
@@ -75,7 +76,7 @@ export async function loadScopedContinuity(
     activeSnapshot: rawSnapshot,
     sessionHandoff: rawHandoff,
     recentSessionEvents: rawEvents,
-  } = await ctx.store.continuity(ctx.tenantId, 5, null);
+  } = await ctx.store.continuity(ctx.tenantId, CONTINUITY_EVENT_LIMIT, null);
   // The same shared scope rule as api.recall; the active scope merges --scope and detectScope().
   const effectiveScope = setting.activeScope || undefined;
   const passes = (r: { scope?: string | null }): boolean => passesScopeFilterForRecall(r.scope ?? null, effectiveScope);

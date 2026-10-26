@@ -387,14 +387,10 @@ async function searchBothStores(
     { local: pools.local.entries, global: pools.global.entries },
     contextVectorSpec(ctx, plan, admit),
     {
+      ...engineSettings(ctx, plan),
       budget: left,
       minResults,
       cost: cost && ((r) => price(r.entry, isGlobalHit(r.entry))),
-      scope: plan.activeScope,
-      runtime: ctx.config.runtime,
-      cwd: ctx.infra.machine.cwd,
-      switches: ctx.infra.evalSwitches,
-      now: plan.now,
     },
   );
   return merged.map((r) => ({
@@ -403,6 +399,17 @@ async function searchBothStores(
     tokens: price(r.entry, isGlobalHit(r.entry)),
     isGlobal: isGlobalHit(r.entry),
   }));
+}
+
+/** What both context engine calls rank under, built once so a new ranking input reaches each. */
+function engineSettings(ctx: Context, plan: ContextPlan) {
+  return {
+    scope: plan.activeScope,
+    runtime: ctx.config.runtime,
+    cwd: ctx.infra.machine.cwd,
+    switches: ctx.infra.evalSwitches,
+    now: plan.now,
+  };
 }
 
 /** The vector arm under the lexical window's own tenant, scope and current-row rules. */
@@ -447,17 +454,7 @@ async function searchLocalRows(
     query,
     localEntries,
     usePhysicsCtx ? ctxConfig.physics : null,
-    {
-      budget: left,
-      minResults,
-      cost: localCost,
-      scope: plan.activeScope,
-      runtime: ctx.config.runtime,
-      cwd: ctx.infra.machine.cwd,
-      switches: ctx.infra.evalSwitches,
-      now: plan.now,
-      vectorCandidates,
-    },
+    { ...engineSettings(ctx, plan), budget: left, minResults, cost: localCost, vectorCandidates },
   );
   return ctxResults.map((r) => ({
     entry: r.entry,

@@ -1,6 +1,6 @@
 // Which text a rejection names and which rows it may remove: the rules a store applies inside its write, so the caller
 // sends data and no function crosses the port.
-import { BadRequestError } from '../errors/api-errors.js';
+import { BadRequestError, memoryNotFoundText } from '../errors/api-errors.js';
 import { isPersonalScope, ownScopeTouches } from '../scope/recall-scope.js';
 
 /** What a rejection asks for: a memory's current text by id, or a value the caller states. */
@@ -19,7 +19,7 @@ export function rejectedText(
     if (request.value === undefined) throw new BadRequestError('reject requires either a memory id or a value.');
     return request.value;
   }
-  if (!row || row.tenant_id !== request.tenantId) throw new Error(`memory not found: ${request.memoryId}`);
+  if (!row || row.tenant_id !== request.tenantId) throw new Error(memoryNotFoundText(request.memoryId));
   // A tombstone is tenant-wide, so one made from personal text would show its reason to everyone.
   if (isPersonalScope(row.scope)) {
     throw new BadRequestError("Personal memories can't be rejected. Use forget to remove it.");

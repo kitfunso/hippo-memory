@@ -4,15 +4,12 @@
 import type { SearchResult } from '../../base/rank/search-types.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { estimateTokens, tokenPurse } from '../../base/util/token-text.js';
-import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { Context } from '../../api/types.js';
 import {
-  callerOf,
   hashQueryText,
   RECALL_RECORDING,
   sessionRing,
-  shownRecallRows,
   type HintConfig,
   type RingBuffer,
 } from '../../api/recall/finish.js';
@@ -39,7 +36,7 @@ import {
 import type { RecallResultItem, RecallSuppressionSummary, ShowRanking } from '../../api/recall/types.js';
 
 /**
- * Builds the presenter that renders the list the tool shows, parks the render in `out` and hands back its hint rows.
+ * Builds the presenter that renders the list the tool shows, parks the render in `out` and hands back its hints.
  */
 interface RecallPresenterOptions {
   readonly config: HintConfig;
@@ -47,7 +44,6 @@ interface RecallPresenterOptions {
   readonly anchorRing: RingBuffer | null;
   readonly queryHash: number;
   readonly out: RenderSlot;
-  readonly hintRows: (rendered: RenderedRecall) => AppendAuditOptions[];
   /** The instant each confidence label prints at. */
   readonly now: Date;
 }
@@ -104,7 +100,7 @@ function unshownTail(list: SearchResult[], tailRows: RecallResultItem[]): Recall
 }
 
 function recallPresenter(budget: number, options: RecallPresenterOptions): ShowRanking {
-  const { config, includeContinuity, anchorRing, queryHash, out, hintRows, now } = options;
+  const { config, includeContinuity, anchorRing, queryHash, out, now } = options;
   return ({ ranked, pool, droppedByScope }, apiResult) => {
     // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped
     // whole.
@@ -141,8 +137,7 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): ShowR
     out.rendered = rendered;
     return {
       ids: rendered.list.map((r) => r.entry.id),
-      audit: hintRows(rendered),
-      anchoredOn: rendered.anchoring?.memoryId,
+      hints: { anchoring: rendered.anchoring, availability: rendered.availability },
       tokens: estimateTokens(rendered.text),
     };
   };
@@ -167,7 +162,6 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
   } = opts;
   const budget = req.budget ?? ctx.config.defaultBudget;
   const anchorRing = sessionRing(ctx, 'mcp', sessionId);
-  const who = callerOf(ctx);
   const queryHash = hashQueryText(query);
   const out: RenderSlot = {};
   await retrieveRanking(
@@ -188,14 +182,6 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
       queryHash,
       out,
       now: ctx.infra.clock(),
-      hintRows: ({ list, anchoring, availability }) =>
-        shownRecallRows(ctx.config, who, {
-          query,
-          sessionId,
-          topId: list[0]?.entry.id ?? null,
-          anchoring,
-          availability,
-        }),
     }),
   );
   const { rendered } = out;

@@ -2,7 +2,7 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { churnStaleFactor } from './boosts.js';
-import type { ResultCost, SearchResult } from '../../base/rank/search-types.js';
+import { DEFAULT_MIN_RESULTS, type ResultCost, type SearchResult } from '../../base/rank/search-types.js';
 
 /** When an extracted fact and its source both match, keep only the higher-scoring one (usually the fact). */
 export function dedupeExtracted(scored: SearchResult[]): SearchResult[] {
@@ -56,14 +56,15 @@ export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): S
 export function fitBudget<T extends SearchResult>(
   ordered: T[],
   budget: number,
-  minResults: number,
+  minResults: number | undefined,
   cost?: ResultCost,
 ): T[] {
+  const floor = minResults ?? DEFAULT_MIN_RESULTS;
   const results: T[] = [];
   let used = 0;
   for (const r of ordered) {
     const tokens = cost ? cost(r) : r.tokens;
-    if (results.length >= minResults && used + tokens > budget) continue;
+    if (results.length >= floor && used + tokens > budget) continue;
     used += tokens;
     results.push(r);
   }

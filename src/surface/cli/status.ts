@@ -9,12 +9,13 @@ import { strengthOf } from '../../api/types.js';
 import { Layer } from '../../base/memory/entry.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { computeSystemEnergy } from '../../base/rank/physics.js';
-import { runDoctor, formatDoctor, type DoctorStore } from './doctor.js';
+import { runDoctor, formatDoctor } from './doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import * as api from '../../api/index.js';
+import { DEFAULT_REPORT_WINDOW_DAYS } from '../../api/tokens.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import {
   correctionLatencyReport,
@@ -26,9 +27,9 @@ import {
 } from '../../api/status.js';
 import type { StatusCounts } from '../../base/ports/store/reports.js';
 import type { ParticleStats } from '../../base/ports/store.js';
-import { cliConfig, cliApiContext, cliDiagnostics, type CliContext } from './api-context.js';
+import { cliConfig, cliApiContext, type CliContext } from './api-context.js';
+import { defaultDiagnostics } from '../open-store.js';
 
-const diagnosticsBodies = (hippoRoot: string): DoctorStore => cliDiagnostics(hippoRoot);
 import { errorCode, errorMessage, log, errorFields } from '../../base/util/log.js';
 import { printError } from './output.js';
 import { type CommandContext, boolFlag, parseCountFlag, stringFlagOrExit } from './flag-values.js';
@@ -207,7 +208,7 @@ export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContex
     console.log(JSON.stringify(summary, null, 2));
     return;
   }
-  const windowDays = days > 0 ? days : 30;
+  const windowDays = days > 0 ? days : DEFAULT_REPORT_WINDOW_DAYS;
   if (summary.surfaces.length === 0) {
     console.log(`No memory text recorded in the last ${windowDays} days.`);
     return;
@@ -255,7 +256,7 @@ export async function handleFailures({ hippoRoot, tenantId, flags }: CommandCont
     console.log(JSON.stringify(summary, null, 2));
     return;
   }
-  const windowDays = days > 0 ? days : 30;
+  const windowDays = days > 0 ? days : DEFAULT_REPORT_WINDOW_DAYS;
   const kept = windowDays > FAILURE_LOG_RETENTION_DAYS ? ` (rows are kept ${FAILURE_LOG_RETENTION_DAYS} days)` : '';
   if (summary.total === 0) {
     console.log(`No failed tool calls recorded in the last ${windowDays} days${kept}.`);
@@ -337,7 +338,7 @@ export async function handleProvenance({ hippoRoot, tenantId, flags }: CommandCo
 }
 
 export async function handleDoctor({ tenantId, flags }: CommandContext): Promise<void> {
-  const report = await runDoctor({ version: readPackageVersion(), tenantId, diagnosticsBodies });
+  const report = await runDoctor({ version: readPackageVersion(), tenantId, diagnosticsBodies: defaultDiagnostics });
   console.log(boolFlag(flags, 'json') ? JSON.stringify(report, null, 2) : formatDoctor(report));
   if (!report.ok) throw new CliExit(1);
 }
@@ -357,7 +358,7 @@ export async function handleSupportBundle({ tenantId, flags }: CommandContext): 
     tenantId,
     includeLogs,
     now,
-    diagnosticsBodies,
+    diagnosticsBodies: defaultDiagnostics,
   });
   const stamp = now.toISOString().replace(/[:.]/g, '-');
   const file = outFlag ?? path.join(process.cwd(), `hippo-support-${stamp}.json`);
