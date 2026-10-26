@@ -1,6 +1,6 @@
 // Import rules for src/, built from layers.json so the map and the rules cannot drift.
-// Run: npm run check:deps. Name rules (requireGroup in routes, SQLite words) live in .oxlintrc.json;
-// runtime cycles between features are .dependency-cruiser-cycles.cjs.
+// Run: npm run check:deps. Name and syntax rules (requireGroup in routes, SQLite words, process.env)
+// live in .oxlintrc.json; runtime cycles between features are .dependency-cruiser-cycles.cjs.
 'use strict';
 const { existsSync, readdirSync } = require('node:fs');
 const { join } = require('node:path');
@@ -141,11 +141,85 @@ const storeReach = [
   },
 ];
 
+const IO_MODULES = '^(fs|fs/promises|os|child_process)$';
+const SQLITE_MODULE = '^node:sqlite$';
+const notType = ['type-only', 'type-import'];
+// The composition roots and adapters, which read the environment once and pass settings down.
+const ENV_READERS = [
+  '^src/cli\\.ts$',
+  '^src/surface/(cli|server|mcp|hooks-install)/',
+  '^src/surface/connectors/[^/]+/webhook\\.ts$',
+  '^src/infra/',
+  '^src/base/util/(env|log)\\.ts$',
+  '^src/host/(spawn-argv|agent-homes)\\.ts$',
+];
+const STRAY_STORE = { path: '^src/store/', pathNot: '^src/store/(sqlite|rules)/' };
+const strayStore = {
+  comment: 'src/store holds the SQLite adapter and the rules it shares; a rule with no SQL goes in src/base',
+  severity: 'error',
+};
+
+const reachRules = [
+  {
+    name: 'no-io-below-host',
+    comment: 'src/base, src/domain and src/api read no disk or process; src/host does, and its caller passes the answer',
+    severity: 'error',
+    from: { path: '^src/(base|domain|api)/' },
+    to: { path: IO_MODULES },
+  },
+  {
+    name: 'host-types-only',
+    comment: 'src/domain and src/api take what src/host reads from their caller, and may name its types',
+    severity: 'error',
+    from: { path: '^src/(domain|api)/' },
+    to: { path: '^src/host/', dependencyTypesNot: notType },
+  },
+  {
+    name: 'sqlite-in-data-layer',
+    comment: 'only src/db and src/store hold a hippo.db handle; code above them reaches it through the port',
+    severity: 'error',
+    from: { pathNot: '^src/(db|store)/' },
+    to: { path: SQLITE_MODULE },
+  },
+  {
+    name: 'store-rules-pure',
+    comment: 'src/store/rules runs no SQL and opens nothing: it imports src/base and itself only',
+    severity: 'error',
+    from: { path: '^src/store/rules/' },
+    to: { pathNot: '^src/(base|store/rules)/' },
+  },
+  { name: 'store-folders', ...strayStore, from: STRAY_STORE, to: {} },
+  { name: 'store-folders-used', ...strayStore, from: {}, to: STRAY_STORE },
+  { name: 'store-folders-orphan', ...strayStore, from: { ...STRAY_STORE, orphan: true }, to: {} },
+  {
+    name: 'config-file-in-surface',
+    comment: 'only src/host and the surface reach config.json; api code reads ctx.config, others take it from their caller',
+    severity: 'error',
+    from: { path: '^src/', pathNot: [layerPaths('surface'), layerPaths('host')] },
+    to: { path: '^src/host/config-file\\.ts$', dependencyTypesNot: notType },
+  },
+  {
+    name: 'env-in-roots',
+    comment: 'src/base/util/env.ts is read by the composition roots and adapters, which pass settings down',
+    severity: 'error',
+    from: { path: '^src/', pathNot: ENV_READERS },
+    to: { path: '^src/base/util/env\\.ts$' },
+  },
+  {
+    name: 'recall-verbs-book-nothing',
+    comment: 'hippo recall and hippo explain book tokens and ledger turns through retrieveWithCliCore(), never by hand',
+    severity: 'error',
+    from: { path: '^src/surface/cli/(recall|explain)\\.ts$' },
+    to: { path: '^src/api/(tokens|ledger-db)\\.ts$' },
+  },
+];
+
 module.exports = {
-  forbidden: [...layerOrder, ...apart, ...barrels, ...adapterRules, ...storeReach],
+  forbidden: [...layerOrder, ...apart, ...barrels, ...adapterRules, ...storeReach, ...reachRules],
   required: adapterRequired,
   options: {
-    includeOnly: '^src/',
+    // The node modules a rule names are kept, so a rule can bar a src file from them.
+    includeOnly: ['^src/', IO_MODULES, SQLITE_MODULE],
     exclude: { path: '\\.d\\.ts$' },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.json' },
