@@ -16,13 +16,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -34,7 +31,7 @@ let handle: ServerHandle;
 beforeEach(async () => {
   home = makeRoot('http-f5');
   vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', undefined);
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serveKeyed({ hippoRoot: home, port: 0 }, serve);
 });
 
 afterEach(async () => {

@@ -82,9 +82,9 @@ describe('http retry', () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]).toContain('method=POST');
     expect(lines[0]).toContain('target=api.example.test/v1/items');
-    expect(lines[0]).toContain('reason=status 503');
+    expect(lines[0]).toContain('reason="status 503"');
     expect(lines[0]).toContain('attempt=1/3');
-    expect(lines[1]).toContain('reason=status 429');
+    expect(lines[1]).toContain('reason="status 429"');
     expect(logged().join('')).not.toContain('SECRET');
   });
 });

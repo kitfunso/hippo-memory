@@ -43,6 +43,10 @@ import { initStore } from '../../dist/entry/testing.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { remember as apiRemember } from '../../dist/entry/eval-scripts.js';
 import { serve, type ServerHandle } from '../../dist/server.js';
+import { readLocalKey } from '../../dist/surface/server/local-key.js';
+
+// The key serve wrote for this machine, set once the server is up.
+let authHeader = { authorization: '' };
 
 interface CliArgs {
   hours: number;
@@ -176,14 +180,14 @@ async function doRequest(
   try {
     if (kind === 'recall') {
       const q = QUERIES[Math.floor(Math.random() * QUERIES.length)]!;
-      const res = await fetch(`${url}/v1/memories?q=${encodeURIComponent(q)}&limit=10`);
+      const res = await fetch(`${url}/v1/memories?q=${encodeURIComponent(q)}&limit=10`, { headers: authHeader });
       await res.text();
       return { ok: res.ok, latencyMs: performance.now() - t0 };
     } else if (kind === 'remember') {
       const tag = SEED_TAGS[Math.floor(Math.random() * SEED_TAGS.length)]!;
       const res = await fetch(`${url}/v1/memories`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { ...authHeader, 'content-type': 'application/json' },
         body: JSON.stringify({
           content: `soak-${Date.now()}-${Math.random().toString(36).slice(2, 8)} ${tag}`,
           tags: [tag],
@@ -205,11 +209,11 @@ async function doRequest(
       const id = takeRecent(recent);
       if (!id) {
         // Fall back to a recall if we have nothing to forget yet.
-        const res = await fetch(`${url}/v1/memories?q=anything&limit=1`);
+        const res = await fetch(`${url}/v1/memories?q=anything&limit=1`, { headers: authHeader });
         await res.text();
         return { ok: res.ok, latencyMs: performance.now() - t0 };
       }
-      const res = await fetch(`${url}/v1/memories/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${url}/v1/memories/${id}`, { method: 'DELETE', headers: authHeader });
       await res.text();
       return { ok: res.ok, latencyMs: performance.now() - t0 };
     }
@@ -269,9 +273,9 @@ async function main(): Promise<void> {
   seedStore(home, 1000);
   console.log(`[soak] seed done in ${Date.now() - seedStart}ms`);
 
-  // The workload sends no key, so it runs the server in keyless local mode.
-  process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
-  const server: ServerHandle = await serve({ hippoRoot: home, port: args.port });
+  // One key sends every request, so the per-caller limiter would measure itself rather than the workload.
+  const server: ServerHandle = await serve({ hippoRoot: home, port: args.port, rateLimits: { perCaller: 'off' } });
+  authHeader = { authorization: `Bearer ${readLocalKey(home)}` };
   console.log(`[soak] server listening on ${server.url}`);
 
   // Output file

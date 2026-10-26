@@ -3,7 +3,6 @@ import {
   envCallerRps,
   envLossAversionRatio,
   envPort,
-  envRequireAuth,
   envRuntimeSettings,
   envStoreQueueMax,
   envTenant,
@@ -13,6 +12,7 @@ import {
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
+import { issueLocalKey } from './local-key.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
 import { isStoreBusy } from '../../base/ports/store.js';
 import { defaultServerRuntime, tenantOfApiKey, type ResolveOptions, type ServerRuntime } from '../open-store.js';
@@ -174,17 +174,6 @@ async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> 
     return;
   }
   sendJson(res, 200, { ok: true });
-}
-
-function assertBindable(host: string, loopbackHosts: ReadonlySet<string>): void {
-  if (!loopbackHosts.has(host) && !envRequireAuth()) {
-    throw new Error(
-      `Refusing to bind hippo serve to non-loopback host '${host}' without auth. ` +
-        `Set HIPPO_REQUIRE_AUTH=1 to bind non-loopback; every request then requires ` +
-        `a valid API key. Bind to 127.0.0.1 / ::1 otherwise, or to localhost when every address it resolves to is ` +
-        `loopback.`,
-    );
-  }
 }
 
 // The buckets see every request because serve() holds the store's pidfile lock (claimPidfile): one server per store.
@@ -417,8 +406,8 @@ export function resolveTenantId(opts: ResolveOptions): string {
 }
 
 /**
- * Boots the HTTP daemon on host:port and writes the pidfile under hippoRoot; refuses a non-loopback host unless
- * HIPPO_REQUIRE_AUTH=1 and either `tls` or allowCleartext is given, and refuses HIPPO_CLIENT_IP_HEADER without
+ * Boots the HTTP daemon on host:port and writes the local key and the pidfile under hippoRoot; refuses a non-loopback
+ * host unless `tls` or allowCleartext is given, and refuses HIPPO_CLIENT_IP_HEADER without
  * HIPPO_TRUSTED_PROXIES.
  * Use port: 0 in tests for an ephemeral port. See docs/ARCHITECTURE.md#srcserverbootts. */
 export async function serve(opts: ServeOpts): Promise<ServerHandle> {
@@ -428,7 +417,6 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
   const limiters = bootLimiters(opts.rateLimits);
   const loopbackHosts = await loopbackBindHosts(host);
-  assertBindable(host, loopbackHosts);
   assertTlsOrCleartextAllowed(host, opts.tls, loopbackHosts, opts.allowCleartext ?? envAllowCleartext());
   // An open-ended previous secret keeps working, so the operator hears once that nothing will close it.
   warnSlackPreviousSecretOpen();
@@ -479,6 +467,7 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
 
   const { port: actualPort, url } = await listenAndDescribe(server, requestedPort, host, opts.tls);
 
+  issueLocalKey(opts.hippoRoot);
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
   runtime.hold();
 

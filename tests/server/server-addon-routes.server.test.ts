@@ -22,7 +22,6 @@ let calls: AddonCall[] = [];
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_V1_RPS', '0');
-  vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
   root = makeRoot('addon-routes');
   const db = openHippoDb(root);
   try {

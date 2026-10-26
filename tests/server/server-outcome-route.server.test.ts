@@ -12,18 +12,15 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadLastRecall, readEntry, saveIndex } from '../_helpers/root-forms.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** POST /v1/outcome with no ids as `bearer`, or keyless, so it lands on that caller's last recall. */
+/** POST /v1/outcome with no ids as `bearer`, or as the local key, so it lands on that caller's last recall. */
 async function postOutcome(url: string, body: { readonly good: boolean }, bearer?: string): Promise<Response> {
   const auth: Record<string, string> = bearer === undefined ? {} : { authorization: `Bearer ${bearer}` };
   return fetch(`${url}/v1/outcome`, {
@@ -33,7 +30,7 @@ async function postOutcome(url: string, body: { readonly good: boolean }, bearer
   });
 }
 
-/** The ids a REST recall for `q` showed `bearer`, or a keyless caller. */
+/** The ids a REST recall for `q` showed `bearer`, or the local key. */
 async function recalledIds(url: string, q: string, bearer?: string): Promise<string[]> {
   const headers: Record<string, string> = bearer === undefined ? {} : { authorization: `Bearer ${bearer}` };
   const res = await fetch(`${url}/v1/memories?q=${encodeURIComponent(q)}`, { headers });
@@ -50,7 +47,7 @@ describe('POST /v1/outcome', () => {
     home = makeRoot('srv-out');
     globalHome = makeRoot('srv-out');
     vi.stubEnv('HIPPO_HOME', globalHome);
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serveKeyed({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
@@ -173,7 +170,7 @@ describe('POST /v1/outcome', () => {
 
   it('cross-tenant last-recall path: response ids field does NOT leak other-tenant ids', async () => {
     // v1.11.4 regression: the store's last_retrieval_ids is per folder, not per tenant, so it must never answer a
-    // keyless 'default' caller with a tenant_b id.
+    // local-key 'default' caller with a tenant_b id.
     const tenantBCtx: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
     const tenantBMem = await remember(tenantBCtx, { content: 'tenant-b-secret-id' });
     const idx = loadLastRecall(home);
@@ -265,7 +262,7 @@ describe('POST /v1/outcome without ids, one client beside another', () => {
     home = makeRoot('srv-out-clients');
     globalHome = makeRoot('srv-out-clients');
     vi.stubEnv('HIPPO_HOME', globalHome);
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serveKeyed({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {

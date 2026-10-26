@@ -1,5 +1,5 @@
 // Personal scopes answer to their owner alone, and an HttpError can carry Retry-After.
-import { afterAll, beforeAll, describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi, afterEach } from 'vitest';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { HttpError } from '../../src/base/util/http-util.js';
 import { MAX_ID_LEN } from '../../src/base/util/limits.js';
@@ -17,11 +17,8 @@ import {
   type ScopeActor,
 } from '../../src/base/scope/recall-scope.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -149,25 +146,28 @@ describe('HttpError Retry-After', () => {
 
   beforeAll(async () => {
     root = makeRoot('retry-after');
-    handle = await serve({
-      hippoRoot: root,
-      host: '127.0.0.1',
-      port: 0,
-      routes: [
-        {
-          path: '/v1/x-slow',
-          handler: async () => {
-            throw new HttpError(429, 'slow down', 7);
+    handle = await serveKeyed(
+      {
+        hippoRoot: root,
+        host: '127.0.0.1',
+        port: 0,
+        routes: [
+          {
+            path: '/v1/x-slow',
+            handler: async () => {
+              throw new HttpError(429, 'slow down', 7);
+            },
           },
-        },
-        {
-          path: '/v1/x-gone',
-          handler: async () => {
-            throw new HttpError(404, 'gone');
+          {
+            path: '/v1/x-gone',
+            handler: async () => {
+              throw new HttpError(404, 'gone');
+            },
           },
-        },
-      ],
-    });
+        ],
+      },
+      serve,
+    );
   });
 
   afterAll(async () => {

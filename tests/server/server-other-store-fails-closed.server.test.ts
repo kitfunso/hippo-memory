@@ -178,9 +178,7 @@ describe('serve() under a store that is not hippo.db', () => {
   it('a bad key on the store-ready /v1/memories and a missing key on /mcp are still a 401', async () => {
     const wrong = await fetch(`${handle.url}/v1/memories?q=deploy`, { headers: bearer(newKey()) });
     expect(wrong.status).toBe(401);
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     const keyless = await fetch(`${handle.url}/mcp`, { method: 'POST', body: '{}' });
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '');
     expect(keyless.status).toBe(401);
   });
 
@@ -292,8 +290,8 @@ describe('serve() under a store that is not hippo.db', () => {
     expect(await statusOf()).toBe(401);
   });
 
-  it('leaves nothing under the served root but the pidfile: no hippo.db, no .hippo folder', () => {
-    expect(readdirSync(root)).toEqual(['server.pid']);
+  it('leaves nothing under the served root but the pidfile and the local key: no hippo.db, no .hippo folder', () => {
+    expect(readdirSync(root)).toEqual(['server.key', 'server.pid']);
     expect(existsSync(join(root, '.hippo'))).toBe(false);
   });
 });

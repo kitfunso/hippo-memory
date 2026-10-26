@@ -11,14 +11,10 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { remember, type RecallResult } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -33,7 +29,7 @@ beforeEach(async () => {
   ctx = apiCtx(home, 'default', { subject: 'test', role: 'admin' });
   await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
   await remember(ctx, { content: 'auth UI polish notes', tags: ['ui'] });
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serveKeyed({ hippoRoot: home, port: 0 });
 });
 
 afterEach(async () => {

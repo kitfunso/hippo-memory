@@ -108,7 +108,6 @@ describe('a request with no credential', () => {
   const routes = [...new Set([...V1_ROWS.map(({ key }) => key), ...WEBHOOKS])];
 
   beforeAll(async () => {
-    vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '');
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('SLACK_SIGNING_SECRET', 'slack-test-secret');
     vi.stubEnv('GITHUB_WEBHOOK_SECRET', 'github-test-secret');

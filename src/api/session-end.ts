@@ -101,6 +101,7 @@ export async function bookSessionRereads(
   try {
     read = await transcriptCalls(transcriptPath);
   } catch (err) {
+    log.warn('session-end: transcript not read, so its re-reads go uncounted', errorFields(err));
     return [`skip re-read count: cannot read the transcript: ${errorMessage(err)}`];
   }
   const lines: string[] = [];

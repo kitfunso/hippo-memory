@@ -1,11 +1,12 @@
 // The HTTP status of a failed request follows the error's class, never its message, and an untyped error never shows its text.
-import { describe, it, expect, beforeAll, afterAll, afterEach, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../src/base/errors/api-errors.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { StoreBusyError } from '../../src/base/ports/store.js';
@@ -17,10 +18,6 @@ import {
 } from '../../src/base/util/http-util.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -85,7 +82,7 @@ describe('typed errors from real domain paths keep their status and message', ()
 
   beforeAll(async () => {
     home = makeRoot('error-class');
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serveKeyed({ hippoRoot: home, port: 0 }, serve);
   });
 
   afterAll(async () => {
@@ -107,7 +104,7 @@ describe('typed errors from real domain paths keep their status and message', ()
   it('ConflictError -> 409: superseding a row that is already superseded', async () => {
     const old = createMemory('the build runs on node 20', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(home, old);
-    // A keyless caller is a member, which may not supersede a row it does not own, so this sends an admin key.
+    // The local key is a member, which may not supersede a row it does not own, so this sends an admin key.
     const db = openHippoDb(home);
     let adminKey: string;
     try {
@@ -161,11 +158,14 @@ describe('an untyped error is a 500 that hides its text', () => {
     home = makeRoot('error-class', { init: false });
     mkdirSync(join(home, 'hippo.db'));
     // No key can be minted in a store that will not open, so a resolver vouches for an admin on the admin-only audit route.
-    handle = await serve({
-      hippoRoot: home,
-      port: 0,
-      authResolver: () => ({ tenantId: 'default', subject: 'ops', role: 'admin' }),
-    });
+    handle = await serveKeyed(
+      {
+        hippoRoot: home,
+        port: 0,
+        authResolver: () => ({ tenantId: 'default', subject: 'ops', role: 'admin' }),
+      },
+      serve,
+    );
   });
 
   afterAll(async () => {
@@ -193,7 +193,7 @@ describe('an untyped error is a 500 that hides its text', () => {
     const line = writes.find((w) => w.includes('requestId=req-s1b-500'));
     expect(line).toMatch(/^\[hippo\] error: GET \/v1\/audit failed: \S/);
     expect(line).toContain('status=500');
-    expect(line).toMatch(/ errorClass=\w+ stack=\w*Error: .+ at /);
+    expect(line).toMatch(/ errorClass=\w+ stack="\w*Error: .+ at /);
     expect(line).not.toContain(INTERNAL_ERROR_MESSAGE);
     expect(JSON.stringify(r.body)).not.toContain(' at ');
   });

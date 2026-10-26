@@ -10,6 +10,7 @@ import { insertEntityAt } from '../_helpers/graph-seed.js';
 import type { SourceObjectType } from '../../src/base/ports/store/graph.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { KEY_REQUIRED_MESSAGE } from '../_helpers/keyed-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { deleteEntry } from '../_helpers/root-forms.js';
@@ -319,24 +320,19 @@ describe('typed objects over HTTP, one shared store', () => {
     await api.stop();
   });
 
-  // The dispatch gate runs before any handler, so a keyless caller learns nothing about which parameters are bad.
-  const KEYLESS: readonly (readonly [string, number, string])[] = [
+  // The dispatch gate runs before any handler, so a caller with no key learns nothing about which parameters are bad.
+  const NO_KEY: readonly (readonly [string, number, string])[] = [
     ...TYPES.flatMap((row): (readonly [string, number, string])[] => [
-      [`${row.path}?limit=0`, 401, 'auth required'],
-      [`${row.path}?cursor=junk`, 401, 'auth required'],
-      [`${row.path}?status=bogus`, 401, 'auth required'],
+      [`${row.path}?limit=0`, 401, KEY_REQUIRED_MESSAGE],
+      [`${row.path}?cursor=junk`, 401, KEY_REQUIRED_MESSAGE],
+      [`${row.path}?status=bogus`, 401, KEY_REQUIRED_MESSAGE],
     ]),
-    ['/v1/policies/asof', 401, 'auth required'],
-    ['/v1/policies/asof?date=soon', 401, 'auth required'],
+    ['/v1/policies/asof', 401, KEY_REQUIRED_MESSAGE],
+    ['/v1/policies/asof?date=soon', 401, KEY_REQUIRED_MESSAGE],
   ];
 
-  it.each(KEYLESS)('with auth required and no key, GET %s answers %i', async (path, status, error) => {
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
-    try {
-      expect(await api.send('GET', path, undefined, false)).toEqual(refused(status, error));
-    } finally {
-      vi.unstubAllEnvs();
-    }
+  it.each(NO_KEY)('with no key, GET %s answers %i', async (path, status, error) => {
+    expect(await api.send('GET', path, undefined, false)).toEqual(refused(status, error));
   });
 
   const FILTERS: readonly (readonly [string, string, Body, Body, string])[] = [

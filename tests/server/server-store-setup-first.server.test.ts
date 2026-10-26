@@ -1,5 +1,5 @@
 // The store's open-time setup runs on the writer thread before any reader thread is sent a job, since a reader's connection refuses the writes setup makes.
-import { afterEach, describe, expect, it, beforeEach, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,10 +24,6 @@ import {
   undoAll,
 } from '../_helpers/store-worker-server.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();

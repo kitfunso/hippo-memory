@@ -1,15 +1,11 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { request as httpRequest } from 'node:http';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { remember as apiRemember } from '../../src/api/index.js';
-import type { ServerHandle } from '../../src/server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -131,7 +127,7 @@ describe('server concurrency — recall + write under single-writer', () => {
     });
     vi.stubEnv('HIPPO_V1_RPS', '0');
     // The count below is the rows this test wrote; a sleep a REST write starts would add its own.
-    const handle: ServerHandle = await serve({ hippoRoot: home, port: 0, autoSleep: false });
+    const handle = await serveKeyed({ hippoRoot: home, port: 0, autoSleep: false });
     const lockedErrors: string[] = [];
 
     try {
@@ -156,6 +152,7 @@ describe('server concurrency — recall + write under single-writer', () => {
               tracedRequest(
                 `worker ${workerIdx} req ${reqIdx} read-chunk ${chunkStart}`,
                 `${handle.url}/v1/memories?q=${term}&limit=5`,
+                { headers: handle.auth },
               ),
             );
           }
@@ -172,7 +169,7 @@ describe('server concurrency — recall + write under single-writer', () => {
         for (let n = 0; n < writeCount; n++) {
           const res = await tracedRequest(`writer req ${n} write`, `${handle.url}/v1/memories`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: { 'content-type': 'application/json', ...handle.auth },
             body: JSON.stringify({
               content: `concurrent-canary-${n}`,
               kind: 'distilled',

@@ -1,21 +1,18 @@
-// A request with no key is refused by default, on loopback too; HIPPO_ALLOW_KEYLESS_LOCAL=1 lets this machine's own user in as a member,
-// and HIPPO_KEYLESS_LOCAL_ROLE=admin no longer does anything: that user is always a member.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// Every request but the public ones needs a key, from this machine too: a forwarded port (ssh -L, socat) looks local.
+// The CLI here sends the key serve writes to server.key at each start, which only this user can read.
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { request } from 'node:http';
-import { rmSync } from 'node:fs';
+import { readFileSync, rmSync, statSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import type { ServerHandle } from '../../src/server.js';
+import { localKeyPath } from '../../src/surface/server/local-key.js';
+import { KEY_REQUIRED_MESSAGE } from '../_helpers/keyed-server.js';
 import { presentConnectionsAsRemote } from '../_helpers/listen.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
-
-const MODE_KEYS = ['HIPPO_ALLOW_KEYLESS_LOCAL', 'HIPPO_KEYLESS_LOCAL_ROLE', 'HIPPO_REQUIRE_AUTH'] as const;
 const PLAIN_REFUSAL = 'auth required';
 
 /** The fields these tests read: a refusal carries `error`, /health the rest. */
@@ -97,16 +94,23 @@ function rememberActors(): string[] {
   }
 }
 
-beforeEach(async () => {
-  for (const key of MODE_KEYS) vi.stubEnv(key, undefined);
-  home = makeRoot('keyless-default');
+function withDb<T>(work: (db: ReturnType<typeof openHippoDb>) => T): T {
   const db = openHippoDb(home);
   try {
-    apiKey = createApiKey(db, { tenantId: 'default', label: 'keyless-default' }).plaintext;
+    return work(db);
   } finally {
     closeHippoDb(db);
   }
-  handle = await serve({ hippoRoot: home, port: 0, host: '127.0.0.1' });
+}
+
+const start = (): Promise<ServerHandle> => serve({ hippoRoot: home, port: 0, host: '127.0.0.1' });
+const localKey = (): string => readFileSync(localKeyPath(home), 'utf8').trim();
+const asLocalKey = () => ({ authorization: `Bearer ${localKey()}` });
+
+beforeEach(async () => {
+  home = makeRoot('local-key');
+  apiKey = withDb((db) => createApiKey(db, { tenantId: 'default', label: 'local-key' }).plaintext);
+  handle = await start();
 });
 
 afterEach(async () => {
@@ -122,15 +126,11 @@ const NOT_LOCAL: ReadonlyArray<readonly [string, () => Record<string, string>]> 
   ['a page of another origin', () => ({ origin: 'http://evil.example' })],
 ];
 
-describe('a request with no key, by default', () => {
-  it('is refused 401 with a message that names both fixes, and writes nothing', async () => {
-    const reply = await remember('keyless-default-canary');
+describe('a request with no key', () => {
+  it('is refused 401 with a message that says where the key is, and writes nothing', async () => {
+    const reply = await remember('keyless-canary');
     expect(reply.status).toBe(401);
-    expect(reply.error).toBe(
-      'auth required: this server takes no request without an API key. Mint one with `hippo auth create` and send it as ' +
-        '"Authorization: Bearer <key>" (the hippo CLI reads HIPPO_API_KEY), or start the server with HIPPO_ALLOW_KEYLESS_LOCAL=1 ' +
-        'to let requests from this machine in without a key.',
-    );
+    expect(reply.error).toBe(KEY_REQUIRED_MESSAGE);
     expect(rememberActors()).toEqual([]);
   });
 
@@ -147,103 +147,70 @@ describe('a request with no key, by default', () => {
   });
 
   it.skipIf(needsHippoDb('db'))('serves the same request once it carries a key', async () => {
-    const reply = await remember('keyed-default-canary', { authorization: `Bearer ${apiKey}` });
+    const reply = await remember('keyed-canary', { authorization: `Bearer ${apiKey}` });
     expect(reply.status).toBe(200);
     expect(rememberActors()).toEqual([expect.stringMatching(/^api_key:/)]);
   });
 
-  it.each(NOT_LOCAL)('tells %s nothing about the switch', async (_name, headers) => {
+  it.each(NOT_LOCAL)('tells %s nothing about the key file', async (_name, headers) => {
     const reply = await recall(headers());
     expect(reply.status).toBe(401);
     expect(reply.error).toBe(PLAIN_REFUSAL);
   });
 
-  it('tells a caller from another machine nothing about the switch', async () => {
+  it.each(NOT_LOCAL)('serves %s once it carries a key', async (_name, headers) => {
+    const reply = await recall({ ...headers(), authorization: `Bearer ${apiKey}` });
+    expect(reply.status).toBe(200);
+  });
+
+  it('tells a caller from another machine nothing about the key file', async () => {
     presentConnectionsAsRemote(handle.server!);
     const reply = await recall();
     expect(reply.status).toBe(401);
     expect(reply.error).toBe(PLAIN_REFUSAL);
   });
-
-  it.each(['0', 'yes', ''])('stays closed when HIPPO_ALLOW_KEYLESS_LOCAL is %j', async (value) => {
-    vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', value);
-    expect((await recall()).status).toBe(401);
-  });
 });
 
-describe('a request with no key under HIPPO_ALLOW_KEYLESS_LOCAL=1', () => {
-  beforeEach(() => {
-    vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+describe('the local key serve writes', () => {
+  it.skipIf(process.platform === 'win32')('is readable by this user alone', () => {
+    expect(statSync(localKeyPath(home)).mode & 0o777).toBe(0o600);
   });
 
-  /** The keys GET /v1/auth/keys shows this caller: a member sees only keys it owns, the admin every key in the tenant. */
-  async function listedKeyCount(): Promise<number> {
-    const res = await fetch(`${handle.url}/v1/auth/keys`);
-    expect(res.status).toBe(200);
-    const rows: unknown = await res.json();
-    return Array.isArray(rows) ? rows.length : -1;
-  }
-
-  it.skipIf(needsHippoDb('db'))('is served as a member', async () => {
-    expect((await remember('keyless-opt-in-canary')).status).toBe(200);
+  it.skipIf(needsHippoDb('db'))('signs a member of the server tenant, audited as localhost:cli', async () => {
+    expect((await remember('local-key-canary', asLocalKey())).status).toBe(200);
     expect(rememberActors()).toEqual(['localhost:cli']);
-    expect(await listedKeyCount()).toBe(0);
-    expect(
-      (
-        await call('/v1/sleep', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: '{"dry_run":true}',
-        })
-      ).status,
-    ).toBe(403);
-    expect((await call('/mcp/stream')).status).toBe(200);
+    const sleep = await call('/v1/sleep', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...asLocalKey() },
+      body: '{"dry_run":true}',
+    });
+    expect(sleep.status).toBe(403);
   });
 
-  it.skipIf(needsHippoDb('sleep'))(
-    'is still a member when HIPPO_KEYLESS_LOCAL_ROLE=admin is set, which nothing reads any more',
-    async () => {
-      vi.stubEnv('HIPPO_KEYLESS_LOCAL_ROLE', 'admin');
-      expect(await listedKeyCount()).toBe(0);
+  it('is fresh at every start, so the key of an earlier run is refused', async () => {
+    const before = localKey();
+    await handle.stop();
+    handle = await start();
+    expect(localKey()).not.toBe(before);
+    expect((await recall({ authorization: `Bearer ${before}` })).status).toBe(401);
+    expect((await recall(asLocalKey())).status).toBe(200);
+  });
+
+  it('works for the server that wrote it alone', async () => {
+    const other = makeRoot('local-key-other');
+    const second = await serve({ hippoRoot: other, port: 0, host: '127.0.0.1' });
+    try {
       expect(
-        (
-          await call('/v1/sleep', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: '{"dry_run":true}',
-          })
-        ).status,
-      ).toBe(403);
-    },
-  );
-
-  it.skipIf(needsHippoDb('db'))('still serves a keyed request as that key', async () => {
-    expect((await remember('keyed-opt-in-canary', { authorization: `Bearer ${apiKey}` })).status).toBe(200);
-    expect(rememberActors()).toEqual([expect.stringMatching(/^api_key:/)]);
-  });
-
-  it.each(NOT_LOCAL)('still refuses %s', async (_name, headers) => {
-    const reply = await recall(headers());
-    expect([401, 403]).toContain(reply.status);
-    expect(reply.error).not.toContain('HIPPO_ALLOW_KEYLESS_LOCAL');
-  });
-
-  it('still refuses a caller from another machine', async () => {
-    presentConnectionsAsRemote(handle.server!);
-    expect(await recall()).toMatchObject({ status: 401, error: PLAIN_REFUSAL });
-  });
-
-  it('loses to HIPPO_REQUIRE_AUTH=1, which answers with the plain refusal', async () => {
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
-    expect(await recall()).toMatchObject({ status: 401, error: PLAIN_REFUSAL });
-    expect((await recall({ authorization: `Bearer ${apiKey}` })).status).toBe(200);
+        (await recall({ authorization: `Bearer ${readFileSync(localKeyPath(other), 'utf8').trim()}` })).status,
+      ).toBe(401);
+    } finally {
+      await second.stop();
+    }
   });
 });
 
 describe('GET /health', () => {
-  it('gives this machine its version and pid with no key, in either mode', async () => {
-    expect((await call('/health')).json).toMatchObject({ ok: true, pid: process.pid, version: expect.any(String) });
-    vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+  it('gives this machine its version and pid with no key', async () => {
     expect((await call('/health')).json).toMatchObject({ ok: true, pid: process.pid, version: expect.any(String) });
   });
 

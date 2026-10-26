@@ -8,16 +8,13 @@ import { auditQueryFields } from '../../src/base/records/audit-report.js';
 import { contextGet, retrieve, remember } from '../../src/api/index.js';
 import { handleMcpRequest, type McpContext } from '../../src/surface/mcp/server.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { testInfra } from '../_helpers/infra.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -155,7 +152,7 @@ describe('census: a canary query reaches no audit metadata value', () => {
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: QUERY } } },
       mcpCtx,
     );
-    const handle: ServerHandle = await serve({ hippoRoot: localRoot, port: 0 });
+    const handle: ServerHandle = await serveKeyed({ hippoRoot: localRoot, port: 0 }, serve);
     try {
       const res = await fetch(`${handle.url}/v1/memories?q=${encodeURIComponent(QUERY)}`);
       expect(res.status).toBe(200);

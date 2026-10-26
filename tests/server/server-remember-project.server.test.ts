@@ -11,11 +11,8 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -34,7 +31,7 @@ async function start(config: Record<string, JsonValue>): Promise<ServerHandle> {
   fs.mkdirSync(store, { recursive: true });
   initTestStore(store);
   fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify(config));
-  handle = await serve({ hippoRoot: store, port: 0 });
+  handle = await serveKeyed({ hippoRoot: store, port: 0 });
   return handle;
 }
 

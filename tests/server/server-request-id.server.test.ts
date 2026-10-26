@@ -3,38 +3,37 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AuthResolver, ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import type { AuthResolver } from '../../src/server.js';
+import { serveKeyed, type KeyedServer } from '../_helpers/keyed-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
 let home: string;
-let handle: ServerHandle;
+let handle: KeyedServer;
 
 function send(
   path: string,
   headers: Record<string, string> = {},
 ): Promise<{ status: number; requestId: string | undefined; sniffing: string | undefined }> {
   return new Promise((resolve, reject) => {
-    const req = request({ host: '127.0.0.1', port: handle.port, method: 'GET', path, headers }, (res) => {
-      res.resume();
-      res.on('end', () => {
-        const id = res.headers['x-request-id'];
-        const sniffing = res.headers['x-content-type-options'];
-        resolve({
-          status: res.statusCode ?? 0,
-          requestId: Array.isArray(id) ? id[0] : id,
-          sniffing: Array.isArray(sniffing) ? sniffing[0] : sniffing,
+    const req = request(
+      { host: '127.0.0.1', port: handle.port, method: 'GET', path, headers: { ...handle.auth, ...headers } },
+      (res) => {
+        res.resume();
+        res.on('end', () => {
+          const id = res.headers['x-request-id'];
+          const sniffing = res.headers['x-content-type-options'];
+          resolve({
+            status: res.statusCode ?? 0,
+            requestId: Array.isArray(id) ? id[0] : id,
+            sniffing: Array.isArray(sniffing) ? sniffing[0] : sniffing,
+          });
         });
-      });
-    });
+      },
+    );
     req.on('error', reject);
     req.end();
   });
@@ -42,7 +41,7 @@ function send(
 
 beforeEach(async () => {
   home = makeRoot('request-id');
-  handle = await serve({ hippoRoot: home, port: 0, host: '127.0.0.1' });
+  handle = await serveKeyed({ hippoRoot: home, port: 0, host: '127.0.0.1' });
 });
 
 afterEach(async () => {
@@ -196,7 +195,7 @@ describe('a request still unanswered past the slow threshold', () => {
       return { tenantId: 'default', subject: 'slow-test', role: 'admin' };
     };
     const slowHome = makeRoot('request-slow');
-    const slow = await serve({
+    const slow = await serveKeyed({
       hippoRoot: slowHome,
       port: 0,
       host: '127.0.0.1',
