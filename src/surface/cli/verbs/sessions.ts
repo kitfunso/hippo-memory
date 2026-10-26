@@ -76,6 +76,7 @@ export const SESSION_VERBS = {
     ],
   }),
   card: verb(() => import('../card.js'), 'handleCard', {
+    needs: ['cards'],
     // Every card subcommand's flags together; card.ts then refuses the ones its subcommand does not read.
     flags: {
       switches: ['json'],
@@ -171,6 +172,7 @@ export const SESSION_VERBS = {
     ],
   }),
   learn: verb(() => import('../transfer.js'), 'handleLearn', {
+    needs: ['lessonWrites'],
     scoped: true,
     flags: { switches: ['git'], values: ['repos'], numbers: ['days'] },
     usage: [

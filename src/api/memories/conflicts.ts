@@ -17,7 +17,7 @@ import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
 import { keysetPages, pageLimit } from '../pages.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
-import { requireHostAdmin, type Actor, type Context } from '../types.js';
+import { requireHostAdmin, type Actor, type ContextWith } from '../types.js';
 import type { TenantReach } from './memories.js';
 
 /** A page of a conflict list: `limit` (default 100, at most 1000) and the position the previous page ended on. */
@@ -63,13 +63,13 @@ function touchable(actor: Actor, row: ConflictRow): boolean {
   return [row.a, row.b].every((member) => member !== null && canReadScope(actor, member.scope));
 }
 
-async function touchableConflict(ctx: Context, conflictId: number): Promise<ConflictRow | null> {
+async function touchableConflict(ctx: ContextWith<'conflicts'>, conflictId: number): Promise<ConflictRow | null> {
   const row = await ctx.store.conflicts.get(ctx.tenantId, conflictId);
   return row !== null && touchable(ctx.actor, row) ? row : null;
 }
 
 /** Conflict `conflictId` in the caller's tenant, any status; null when missing or a row of it is out of reach. */
-export async function conflictGet(ctx: Context, conflictId: number): Promise<MemoryConflict | null> {
+export async function conflictGet(ctx: ContextWith<'conflicts'>, conflictId: number): Promise<MemoryConflict | null> {
   return (await touchableConflict(ctx, conflictId))?.conflict ?? null;
 }
 
@@ -77,7 +77,7 @@ export async function conflictGet(ctx: Context, conflictId: number): Promise<Mem
  * untouchable or no longer live. Forbidden: a loser to remove the caller may not change. Conflict: already resolved.
  * BadRequest: `keepId` outside the pair. */
 export async function conflictResolve(
-  ctx: Context,
+  ctx: ContextWith<'conflicts'>,
   conflictId: number,
   opts: ResolveMemoryConflictOptions,
 ): Promise<ResolveMemoryConflictResult> {
@@ -107,7 +107,7 @@ export async function conflictResolve(
 }
 
 /** Removing the loser is a forget, so it takes forget's write rights; a loser out of reach is a missing conflict. */
-async function assertMayRemove(ctx: Context, conflictId: number, loserId: string): Promise<void> {
+async function assertMayRemove(ctx: ContextWith<'conflicts'>, conflictId: number, loserId: string): Promise<void> {
   const [loser] = await ctx.store.entriesByIds([loserId], ctx.tenantId);
   assertWriteRight(scopeReaderOf(ctx.actor), loser, loserId, `conflict not found: ${conflictId}`);
 }
@@ -130,7 +130,7 @@ function sidesOf(row: ConflictRow, keepId: string): ResolveSides {
 /** One page of open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall: its
  *  repo or user-global, and no scope it was not asked for. */
 export async function conflictListOpen(
-  ctx: Context,
+  ctx: ContextWith<'conflicts'>,
   opts: ConflictPageOptions & { project?: CallerProject } = {},
 ): Promise<ConflictPage> {
   const { project } = opts;
@@ -153,7 +153,7 @@ export async function conflictListOpen(
 /** One page of conflicts with `status` ('*' for any) in reach, with no scope filter: the host's own view, so the host
  * admin only. */
 export async function conflictList(
-  ctx: Context,
+  ctx: ContextWith<'conflicts'>,
   status: string,
   reach: TenantReach = {},
   opts: ConflictPageOptions = {},

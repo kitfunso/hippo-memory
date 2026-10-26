@@ -1,7 +1,7 @@
 // The reject, unreject and list flow the CLI verbs and the api functions share: the rules and their wording live here,
 // and the store's rejections group runs each one in one write.
 
-import type { HippoStore } from '../../base/ports/store-index.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import { normalizeValueForRejection } from '../../base/records/rejection-digest.js';
 import type { AppliedRejection, LiftedRejection } from '../../base/ports/store/rejections.js';
 import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
@@ -48,7 +48,7 @@ function assertRejectOpts(opts: RejectFlowOptions): void {
  * `hippo reject` and `api.reject`: refuses a bad request, then tombstones the value and removes every row in reach that
  * holds it.
  */
-export async function rejectValue(store: HippoStore, opts: RejectFlowOptions): Promise<RejectFlowResult> {
+export async function rejectValue(store: StoreWith<'rejections'>, opts: RejectFlowOptions): Promise<RejectFlowResult> {
   assertRejectOpts(opts);
   return store.rejections.apply({
     tenantId: opts.tenantId,
@@ -67,7 +67,7 @@ export type UnrejectOutcome = LiftedRejection;
  * rejected value again.
  */
 export async function unrejectValue(
-  store: HippoStore,
+  store: StoreWith<'rejections'>,
   tenantId: string,
   digestOrPrefix: string,
   actor: string,
@@ -80,6 +80,6 @@ export async function unrejectValue(
 }
 
 /** `hippo rejections` / `api.listRejections` — list tombstones for a tenant. */
-export function listRejectionsForTenant(store: HippoStore, tenantId: string): Promise<RejectedValueRow[]> {
+export function listRejectionsForTenant(store: StoreWith<'rejections'>, tenantId: string): Promise<RejectedValueRow[]> {
   return store.rejections.list(tenantId);
 }

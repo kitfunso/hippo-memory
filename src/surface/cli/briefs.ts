@@ -1,7 +1,7 @@
 // The project brief verbs: one repo's brief, versioned by supersession and refreshable from the repo's receipts.
 
 import { briefDigest, briefRefresh } from '../../api/objects/object-kinds.js';
-import type { Context } from '../../api/types.js';
+import type { ContextWith } from '../../api/types.js';
 import type { ProjectBrief } from '../../base/records/object-types.js';
 import { errorMessage } from '../../base/util/log.js';
 import { printError } from './output.js';
@@ -14,7 +14,7 @@ function printBriefRow(b: ProjectBrief): void {
   if (b.changeSummary) console.log(`    change: ${b.changeSummary}`);
 }
 
-async function refreshBrief(ctx: Context, args: string[], flags: CliFlags): Promise<void> {
+async function refreshBrief(ctx: ContextWith<'objects'>, args: string[], flags: CliFlags): Promise<void> {
   const repoRaw = args[1];
   if (!repoRaw) {
     fail('Usage: hippo brief refresh "<repo>" [--dry-run]');

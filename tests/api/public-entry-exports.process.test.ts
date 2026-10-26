@@ -285,7 +285,7 @@ describe('published runtime exports', () => {
         transcriptWorkingState",
           "./store-kit": "ALL_TENANTS
         EMBEDDING_MODEL_META_KEY
-        OTHER_STORE_MARKER
+        OPTIONAL_GROUPS OTHER_STORE_MARKER
         PROTECTED_ROWS
         RECALL_DEFAULT_DENY_SCOPES RejectedValueError
         SECRET_TAGS StoreBusyError

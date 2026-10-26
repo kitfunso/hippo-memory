@@ -82,6 +82,7 @@ const STORE_KIT_VALUES = [
   'isSharedStore',
   'loadConfig',
   'normalizeValueForRejection',
+  'OPTIONAL_GROUPS',
   'OTHER_STORE_MARKER',
   'ownScopeTouches',
   'passesScopeFilterForRecall',

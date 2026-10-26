@@ -221,6 +221,7 @@ entry/store-kit.d.ts: LoserFate re-export
 entry/store-kit.d.ts: MemoryConflict re-export
 entry/store-kit.d.ts: MemoryEntry re-export
 entry/store-kit.d.ts: NewApiKey re-export
+entry/store-kit.d.ts: OPTIONAL_GROUPS re-export
 entry/store-kit.d.ts: OTHER_STORE_MARKER re-export
 entry/store-kit.d.ts: OptionalGroup re-export
 entry/store-kit.d.ts: OriginFilter re-export

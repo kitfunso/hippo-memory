@@ -23,7 +23,7 @@ import {
   ScopeForbiddenError,
 } from '../../base/scope/recall-scope.js';
 import { isQuarantineScope } from '../../domain/trust/quarantine.js';
-import type { Context } from '../types.js';
+import type { Context, ContextWith } from '../types.js';
 import { autoSleepAfterWrite } from '../sleep/auto-sleep.js';
 
 /** Row fields the caller's own process decides, as the CLI does from its flags and its salience gate. */
@@ -47,11 +47,6 @@ export interface RememberOptions {
   owner?: string;
   artifactRef?: string;
   tags?: string[];
-  /** The connector event this write answers. The store logs it in the memory's own transaction; an event logged before
-   * stores nothing and answers `duplicate`. */
-  event?: ConnectorEvent;
-  /** Connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this. */
-  untrusted?: boolean;
   /** The caller's project: its name becomes the row's origin. Without it the store's fallback applies (NULL on a shared
    * store). */
   project?: { readonly name: string; readonly aliases?: readonly string[] };
@@ -61,6 +56,13 @@ export interface RememberOptions {
   /** Never set from a request body: a route or tool that copied it would let a client pin a row or pick its layer and
    * source. */
   local?: RememberLocal;
+}
+
+/** A connector's write of content an agent doesn't control. */
+export interface ConnectorRememberOptions extends RememberOptions {
+  /** The connector event this write answers. The store logs it in the memory's own transaction; an event logged before
+   * stores nothing and answers `duplicate`. */
+  event?: ConnectorEvent;
 }
 
 /** A write that asks for the salience gate: one it judges not worth keeping answers `RememberSkipped` and stores
@@ -94,7 +96,7 @@ export interface RememberSkipped {
 
 /** The scope a write lands in: the caller's own personal scope when asked for, else the client's, which may not be a
  * personal or quarantine one and must be one the same actor could read (a private scope needs its grant). */
-function rememberScope(ctx: Context, opts: RememberOptions): string | null {
+function rememberScope(ctx: Context, opts: RememberOptions, untrusted: boolean): string | null {
   if (!opts.personal) {
     assertClientScope(opts.scope);
     const scope = opts.scope ?? null;
@@ -104,7 +106,7 @@ function rememberScope(ctx: Context, opts: RememberOptions): string | null {
     }
     return scope;
   }
-  if (opts.untrusted) throw new Error('personal memories come from their owner, never from a connector');
+  if (untrusted) throw new Error('personal memories come from their owner, never from a connector');
   if (opts.scope !== undefined) throw new BadRequestError('send personal or scope, not both');
   const own = personalScopeOf(ctx.actor);
   if (own === null) {
@@ -130,14 +132,15 @@ interface PreparedRemember {
   readonly warnings: readonly string[];
 }
 
-function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember {
+/** `untrusted` marks connector content an agent doesn't control, which the instruction check gates. */
+function prepareRemember(ctx: Context, opts: RememberOptions, untrusted: boolean): PreparedRemember {
   if (opts.project) assertCallerProject(opts.project);
   assertOwnerIsCallers(ctx, opts.owner);
-  const requestedScope = rememberScope(ctx, opts);
+  const requestedScope = rememberScope(ctx, opts, untrusted);
   const vetted = vetSecrets(opts.content);
-  const detection = opts.untrusted ? detectInstruction(vetted.content) : { flagged: false, reason: null };
-  const flagged = memberShares(ctx, opts) && detectInstruction(vetted.content).flagged;
-  const tags = trustTagged(opts.tags, opts.untrusted === true, flagged);
+  const detection = untrusted ? detectInstruction(vetted.content) : { flagged: false, reason: null };
+  const flagged = !untrusted && memberShares(ctx, opts) && detectInstruction(vetted.content).flagged;
+  const tags = trustTagged(opts.tags, untrusted, flagged);
   const local = opts.local ?? {};
   const created = createMemory(
     vetted.content,
@@ -175,7 +178,7 @@ function trustTagged(tags: string[] | undefined, untrusted: boolean, flagged: bo
 
 /** A member key's write outside its personal scope reaches the other members' prompts, as connector text does. */
 function memberShares(ctx: Context, opts: RememberOptions): boolean {
-  return ctx.actor.role === 'member' && !opts.personal && !opts.untrusted;
+  return ctx.actor.role === 'member' && !opts.personal;
 }
 
 function weakened(entry: MemoryEntry, weaken: NonNullable<RememberLocal['weaken']>): MemoryEntry {
@@ -247,22 +250,26 @@ export async function remember(
   return startedWeak ? { ...result, startedWeak } : result;
 }
 
-/** The store's entryWrites group writes the row and its one remember audit row, under the caller's subject. A write
- * that carries a connector event or untrusted content goes through connectorWrites, which commits its companion rows
- * with it. */
+/** The store's entryWrites group writes the row and its one remember audit row, under the caller's subject. */
 async function writeRemembered(ctx: Context, opts: RememberOptions): Promise<RememberResult> {
-  const store = ctx.store;
-  const entryWrites = store.entryWrites;
-  const prepared = prepareRemember(ctx, opts);
-  const write = { entry: prepared.entry, actor: ctx.actor.subject };
-  if (opts.untrusted !== true && opts.event === undefined) {
-    await entryWrites.writeEntry(write);
-    return rememberResult(ctx, prepared);
-  }
-  const written = await store.connectorWrites.writeConnectorEntry({
-    ...write,
+  const prepared = prepareRemember(ctx, opts, false);
+  await ctx.store.entryWrites.writeEntry({ entry: prepared.entry, actor: ctx.actor.subject });
+  return rememberResult(ctx, prepared);
+}
+
+/** Store one row of connector content, which the instruction check gates. connectorWrites commits the row with its
+ * event and any quarantine record, so an event logged before stores nothing and answers `duplicate`. */
+export async function rememberUntrusted(
+  ctx: ContextWith<'connectorWrites'>,
+  opts: ConnectorRememberOptions,
+): Promise<RememberResult> {
+  const prepared = prepareRemember(ctx, opts, true);
+  const written = await ctx.store.connectorWrites.writeConnectorEntry({
+    entry: prepared.entry,
+    actor: ctx.actor.subject,
     event: opts.event,
     quarantine: quarantineOf(prepared),
   });
+  await autoSleepAfterWrite(ctx);
   return rememberResult(ctx, prepared, written);
 }

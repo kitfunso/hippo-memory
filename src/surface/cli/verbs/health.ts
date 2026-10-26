@@ -47,6 +47,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   github: verb(() => import('../github.js'), 'handleGitHub', {
+    needs: ['connectorWrites', 'connectorEvents'],
     flags: { switches: ['force'], values: ['max', 'repo', 'since'] },
     usage: [
       `
@@ -59,6 +60,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   slack: verb(() => import('../slack.js'), 'handleSlack', {
+    needs: ['connectorWrites', 'connectorEvents'],
     flags: { switches: ['force'], values: ['channel', 'since', 'team', 'tenant'] },
     usage: [
       `
@@ -134,6 +136,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   conflicts: verb(() => import('../curate.js'), 'handleConflicts', {
+    needs: ['conflicts'],
     flags: { switches: ['json'], values: ['status'] },
     usage: [
       `
@@ -143,6 +146,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   resolve: verb(() => import('../curate.js'), 'handleResolve', {
+    needs: ['conflicts'],
     destructive: true,
     flags: { switches: ['forget', 'reject-loser'], values: ['keep', 'reason'] },
     usage: [
@@ -155,6 +159,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   reject: verb(() => import('../curate.js'), 'handleReject', {
+    needs: ['rejections'],
     destructive: true,
     flags: { switches: ['global'], values: ['reason', 'value'] },
     usage: [
@@ -167,6 +172,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   rejections: verb(() => import('../curate.js'), 'handleRejections', {
+    needs: ['rejections'],
     flags: { switches: ['global', 'json'] },
     usage: [
       `
@@ -176,6 +182,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   unreject: verb(() => import('../curate.js'), 'handleUnreject', {
+    needs: ['rejections'],
     flags: { switches: ['global'] },
     usage: [
       `
@@ -184,6 +191,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   dormant: verb(() => import('../curate.js'), 'handleDormant', {
+    needs: ['dormant'],
     scoped: true,
     flags: { switches: ['global', 'json'], numbers: ['limit'] },
     usage: [
@@ -215,6 +223,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   quarantine: verb(() => import('../curate.js'), 'handleQuarantine', {
+    needs: ['quarantine'],
     scoped: true,
     flags: { switches: ['all', 'global', 'json'] },
     usage: [
@@ -228,6 +237,7 @@ export const HEALTH_VERBS = {
     ],
   }),
   'capture-error': verb(() => import('../hooks/capture-error.js'), 'handleCaptureError', {
+    needs: ['failureLog', 'lessonWrites'],
     flags: { values: ['format', 'runtime'] },
     usage: [
       `

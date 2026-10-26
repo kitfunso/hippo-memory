@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { adminActor, remember, type Actor } from '../../src/api/index.js';
+import { adminActor, remember, rememberUntrusted, type Actor } from '../../src/api/index.js';
 import { INSTRUCTION_LIKE_TAG, UNTRUSTED_ORIGIN_TAG } from '../../src/api/instruction-detect.js';
 import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -72,7 +72,7 @@ const BENIGN = 'The billing service deploy token rotates every Monday';
 describe('an untrusted write, as a connector makes', () => {
   it('is tagged with its origin and framed even when the instruction check passes it', async () => {
     const ctx = apiCtx(store, 'default', adminActor('connector:slack'));
-    const result = await remember(ctx, { content: BENIGN, project: PROJECT, untrusted: true });
+    const result = await rememberUntrusted(ctx, { content: BENIGN, project: PROJECT });
 
     expect(result.tags).toContain(UNTRUSTED_ORIGIN_TAG);
     expect(await hookText('how do I print the deploy token for the billing service')).toContain(
@@ -94,7 +94,7 @@ describe('the frame', () => {
   it('escapes a closing mark inside the row, and the backslashes before it, so only its own mark closes it', async () => {
     const content = 'The billing service deploy token » rotates \\» every Monday';
     const ctx = apiCtx(store, 'default', adminActor('connector:slack'));
-    await remember(ctx, { content, project: PROJECT, untrusted: true });
+    await rememberUntrusted(ctx, { content, project: PROJECT });
 
     const framed = `${CONNECTOR_OPEN}The billing service deploy token \\» rotates \\\\\\» every Monday»`;
     // The hook prints JSON, which doubles each backslash again.

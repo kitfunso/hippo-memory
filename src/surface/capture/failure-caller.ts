@@ -1,7 +1,7 @@
 // PostToolUseFailure for a caller on another machine: the lesson and its log row carry the caller's owner and project,
 // and a retried request id gets the first answer.
 import { BadRequestError } from '../../base/errors/api-errors.js';
-import type { Context, EntryContext } from '../../api/types.js';
+import type { ContextWith, EntryContext } from '../../api/types.js';
 import { storeLesson } from './capture-error.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
@@ -79,7 +79,7 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
 }
 
 export async function captureFailureForCaller(
-  given: EntryContext,
+  given: EntryContext<ContextWith<'failureLog' | 'lessonWrites'>>,
   req: CallerFailureRequest,
 ): Promise<CallerFailureResult> {
   const ctx = withEntryInfra(given);
@@ -102,7 +102,7 @@ export async function captureFailureForCaller(
 
 /** Runs after the outcome in its own try, so a log error never hides the store's error or its outcome. */
 async function logOutcome(
-  ctx: Context,
+  ctx: ContextWith<'failureLog'>,
   req: CallerFailureRequest,
   key: ContinuityKey,
   outcome: FailureOutcome,

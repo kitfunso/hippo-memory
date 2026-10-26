@@ -16,7 +16,6 @@ import { errorFields, log } from '../../../base/util/log.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
 import { resolveTenant, type RouteFallback } from '../tenant-route.js';
-import type { Context } from '../../../api/index.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import {
   JSON_HEADERS,
@@ -27,7 +26,7 @@ import {
   type WebhookRequest,
 } from '../../http/http-util.js';
 import { type JsonValue, isJsonObject, tryParseJson } from '../../../base/util/json.js';
-import type { WebhookPorts } from '../ingest.js';
+import type { ConnectorContext, WebhookPorts } from '../ingest.js';
 
 export function warnSlackPreviousSecretOpen(): void {
   warnIfOpenEnded(SLACK_PREVIOUS, envSlackSigningSecretPrevious(), envSlackSigningSecretPreviousUntil());
@@ -183,7 +182,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
     resolvedTenant = envTenant();
   }
-  const ctx: Context = {
+  const ctx: ConnectorContext = {
     tenantId: resolvedTenant,
     actor: { subject: 'connector:slack', role: 'admin' },
     store: d.store,
@@ -224,7 +223,7 @@ async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | nu
 
 async function dispatchSlackEvent(
   d: SignedSlackRequest,
-  ctx: Context,
+  ctx: ConnectorContext,
   body: JsonValue & SlackEventEnvelope,
 ): Promise<void> {
   const { res } = d;

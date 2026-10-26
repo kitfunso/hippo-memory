@@ -78,6 +78,4 @@ export interface LessonWrites {
   writeSkippingRejected(entries: readonly MemoryEntry[], actor: string): Promise<string[]>;
   /** Rewrites each entry in one transaction, all or none. */
   writeTogether(entries: readonly MemoryEntry[]): Promise<void>;
-  /** Adds `count` to the store-wide remembered counter. */
-  bumpRemembered(count: number): Promise<void>;
 }

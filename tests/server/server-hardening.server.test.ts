@@ -7,6 +7,7 @@ import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
+import { CONNECTOR_GROUPS } from '../../src/surface/connectors/ingest.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -193,7 +194,7 @@ describe('server hardening', () => {
   describe('PUBLIC_ROUTES bypass attempts', () => {
     beforeEach(async () => {
       vi.stubEnv('SLACK_SIGNING_SECRET', SLACK_SECRET);
-      handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+      handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0, keep: CONNECTOR_GROUPS });
     });
 
     it('trailing slash on slack events does NOT bypass auth (still HMAC-required)', async () => {

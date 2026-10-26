@@ -32,7 +32,7 @@ export interface Actor {
 /** The operator's global store in reach, with the config.json that ranks its rows and governs its ledger. */
 export interface GlobalInReach {
   readonly root: string;
-  readonly store: HippoStore;
+  readonly store: StoreWith<'learning'>;
   readonly config: HippoConfig;
 }
 

@@ -60,8 +60,9 @@ export function keptAsWritten(entry: MemoryEntry): boolean {
   return entry.tags.some((tag) => NO_MERGE_TAGS.has(tag));
 }
 
-/** The store a consolidation runs on: its own group, and the learning group extraction writes through. */
-export type ConsolidationStore = StoreWith<'consolidation' | 'learning'>;
+/** The store a consolidation runs on: its own group, the learning group extraction writes through, and the lesson and
+ * audit writes its passes make. */
+export type ConsolidationStore = StoreWith<'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance'>;
 
 /**
  * State every sleep stage reads or appends to; the pending lists are flushed at the end, each of `units` whole in one

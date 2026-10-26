@@ -1,7 +1,9 @@
-// serve() under a store that has the predictions, quarantine or graphReads group runs those routes on it.
+// serve() under a store that has the predictions, quarantine or graphReads group runs those routes on it, and one
+// without a feature group answers 501 on that group's routes from boot.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../../src/base/errors/http-errors.js';
 import type { ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
@@ -11,14 +13,14 @@ import { HELD, heldAt, heldContent, seedQuarantineRecords } from '../_helpers/qu
 
 describe('serve() under a store that has the predictions group', () => {
   let fixture: TwoTenantFixture;
-  let side: PortOnlySide;
+  let side: PortOnlySide<'objects'>;
   let handle: ServerHandle;
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
-    side = portOnlySide(fixture.dir);
+    side = portOnlySide(fixture.dir, ['objects']);
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store: side.store });
   });
 
@@ -90,7 +92,7 @@ describe('serve() under a store that has the predictions group', () => {
 
 describe('serve() under a store that has the quarantine group', () => {
   let fixture: TwoTenantFixture;
-  let side: PortOnlySide;
+  let side: PortOnlySide<'quarantine'>;
   let handle: ServerHandle;
   let adminB: string;
 
@@ -99,7 +101,7 @@ describe('serve() under a store that has the quarantine group', () => {
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
     adminB = seedQuarantineRecords(fixture.dir);
-    side = portOnlySide(fixture.dir);
+    side = portOnlySide(fixture.dir, ['quarantine']);
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store: side.store });
   });
 
@@ -290,5 +292,43 @@ describe('serve() under a store that has the graphReads group', () => {
       body: { error: 'limit must be a positive integer <= 1000' },
     });
     expect(hippoDbRows()).toEqual(before);
+  });
+});
+
+describe('serve() under a store without the feature groups', () => {
+  let fixture: TwoTenantFixture;
+  let handle: ServerHandle;
+
+  beforeAll(async () => {
+    vi.stubEnv('HIPPO_V1_RPS', '0');
+    vi.stubEnv('HIPPO_CALLER_RPS', '0');
+    fixture = seedTwoTenants();
+    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: portOnlySide(fixture.dir).store });
+  });
+
+  afterAll(async () => {
+    await handle.stop();
+    vi.unstubAllEnvs();
+    rmSync(fixture.dir, { recursive: true, force: true });
+  });
+
+  const call = async (method: string, path: string, token?: string): Promise<{ status: number; body: unknown }> => {
+    const headers = new Headers({ 'content-type': 'application/json' });
+    if (token !== undefined) headers.set('authorization', `Bearer ${token}`);
+    const res = await fetch(`${handle.url}${path}`, { method, headers, body: method === 'GET' ? undefined : '{}' });
+    return { status: res.status, body: await res.json() };
+  };
+  const refused = { status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } };
+
+  it('answers 501 on an objects or quarantine route after the key checks out, and a bad key is still a 401', async () => {
+    const { adminA, revokedA } = fixture.tokens;
+    expect(await call('GET', '/v1/predictions', adminA)).toEqual(refused);
+    expect(await call('GET', '/v1/quarantine', adminA)).toEqual(refused);
+    expect((await call('GET', '/v1/predictions', revokedA)).status).toBe(401);
+  });
+
+  it('answers 501 on both connector webhooks before reading the body', async () => {
+    expect(await call('POST', '/v1/connectors/slack/events')).toEqual(refused);
+    expect(await call('POST', '/v1/connectors/github/events')).toEqual(refused);
   });
 });
