@@ -2,7 +2,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { postPromote, postRemember, HttpResponseError, MalformedReplyError } from '../../src/surface/cli/client.js';
+import {
+  postPromote,
+  postRemember,
+  HttpResponseError,
+  MalformedReplyError,
+} from '../../src/surface/cli/client.js';
 
 const OVER_CAP = 'x'.repeat(1024 * 1024 + 1);
 
@@ -31,12 +36,18 @@ afterEach(async () => {
 describe('thin client reply cap', () => {
   it('returns a normal reply', async () => {
     const url = await startFake(200, JSON.stringify({ ok: true, sourceId: 'a', globalId: 'b' }));
-    await expect(postPromote(url, undefined, 'a')).resolves.toEqual({ ok: true, sourceId: 'a', globalId: 'b' });
+    await expect(postPromote(url, undefined, 'a')).resolves.toEqual({
+      ok: true,
+      sourceId: 'a',
+      globalId: 'b',
+    });
   });
 
   it('refuses a 2xx reply past the cap', async () => {
     const url = await startFake(200, JSON.stringify({ id: OVER_CAP }));
-    await expect(postRemember(url, undefined, { content: 'a fact' })).rejects.toThrow('reply over 1048576 bytes');
+    await expect(postRemember(url, undefined, { content: 'a fact' })).rejects.toThrow(
+      'reply over 1048576 bytes',
+    );
   });
 
   it("keeps the server's error message and falls back to the status line past the cap", async () => {
@@ -53,13 +64,16 @@ describe('thin client reply cap', () => {
     expect(err).toMatchObject({ status: 500, message: '500 Internal Server Error' });
   });
 
-  it.each(['null', '[]', '"text"'])('throws a typed error naming the route when a 2xx reply is %s', async (body) => {
-    const url = await startFake(200, body);
-    const err = await postRemember(url, undefined, { content: 'a fact' }).catch((e: Error) => e);
-    expect(err).toBeInstanceOf(MalformedReplyError);
-    expect(err).toMatchObject({ route: 'POST /v1/memories' });
-    expect(err instanceof Error && err.message).toContain('POST /v1/memories');
-  });
+  it.each(['null', '[]', '"text"'])(
+    'throws a typed error naming the route when a 2xx reply is %s',
+    async (body) => {
+      const url = await startFake(200, body);
+      const err = await postRemember(url, undefined, { content: 'a fact' }).catch((e: Error) => e);
+      expect(err).toBeInstanceOf(MalformedReplyError);
+      expect(err).toMatchObject({ route: 'POST /v1/memories' });
+      expect(err instanceof Error && err.message).toContain('POST /v1/memories');
+    },
+  );
 
   it('applies the per-route guard to an object missing the fields it needs', async () => {
     const url = await startFake(200, JSON.stringify({ ok: true }));

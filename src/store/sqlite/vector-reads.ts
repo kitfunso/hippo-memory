@@ -16,7 +16,10 @@ import { readStoredVectorViews, storedIndexState } from './vector-index.js';
 type RowReads = Omit<VectorReads, 'nearestEntries'>;
 
 type PartReads = {
-  readonly [P in StoredPart]: (db: DatabaseSyncLike, ids: readonly string[]) => Map<string, StoredParts[P]>;
+  readonly [P in StoredPart]: (
+    db: DatabaseSyncLike,
+    ids: readonly string[],
+  ) => Map<string, StoredParts[P]>;
 };
 
 const storedBodies: PartReads = {
@@ -39,10 +42,13 @@ export function sqliteVectorReads(
   return {
     ...reads,
     // An empty list needs no handle.
-    stored: (part, ids) => (ids.length === 0 ? Promise.resolve(new Map()) : reads.stored(part, ids)),
+    stored: (part, ids) =>
+      ids.length === 0 ? Promise.resolve(new Map()) : reads.stored(part, ids),
     // The scan reads a page per event-loop turn, so the handle stays open until the promise settles.
     nearestEntries: (queryVector, spec) =>
-      onAsync((db) => listVectorCandidateEntries(db, queryVector, spec, index), openStore).catch(rethrowInPortTerms),
+      onAsync((db) => listVectorCandidateEntries(db, queryVector, spec, index), openStore).catch(
+        rethrowInPortTerms,
+      ),
   };
 }
 
@@ -57,8 +63,12 @@ export function askingNearestFirst<S extends { readonly vectors: VectorReads }>(
   const { on } = handlesOf(hippoRoot);
   const local = store.vectors;
   const nearestEntries: VectorReads['nearestEntries'] = async (queryVector, spec) => {
-    const ids = on((db) => graphServesStore(db, maxVectors)) ? await ask(queryVector, spec) : undefined;
-    return ids === undefined ? local.nearestEntries(queryVector, spec) : on((db) => entriesInOrder(db, ids));
+    const ids = on((db) => graphServesStore(db, maxVectors))
+      ? await ask(queryVector, spec)
+      : undefined;
+    return ids === undefined
+      ? local.nearestEntries(queryVector, spec)
+      : on((db) => entriesInOrder(db, ids));
   };
   return { ...store, vectors: { ...local, nearestEntries } };
 }

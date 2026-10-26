@@ -20,7 +20,13 @@ describe('two replayers over one spool', () => {
       spool({
         hippoRoot: root,
         tenantId: 'default',
-        payload: { sessionId: id, trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null },
+        payload: {
+          sessionId: id,
+          trigger: 'auto',
+          cwd: null,
+          transcriptPath: null,
+          compactSummary: null,
+        },
         text: { summary: id, items: [] },
         at: new Date(),
       });
@@ -68,12 +74,21 @@ describe('two replayers over one spool', () => {
     spool({
       hippoRoot: root,
       tenantId: 'default',
-      payload: { sessionId: 'only', trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null },
+      payload: {
+        sessionId: 'only',
+        trigger: 'auto',
+        cwd: null,
+        transcriptPath: null,
+        compactSummary: null,
+      },
       text: { summary: 'only', items: [] },
       at: new Date(),
     });
     const seen: string[] = [];
-    const record = async (s: { payload: { sessionId: string } }, done: () => void): Promise<null> => {
+    const record = async (
+      s: { payload: { sessionId: string } },
+      done: () => void,
+    ): Promise<null> => {
       seen.push(s.payload.sessionId);
       done();
       return null;

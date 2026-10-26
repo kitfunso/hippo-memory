@@ -49,7 +49,11 @@ export function isForeignPage(req: IncomingMessage): boolean {
  * socket alone proves nothing. Never the auth boundary (a forwarder such as ssh -L adds no header); it only narrows
  * what a caller that is already keyed or public may see. */
 export function isLocalCaller(req: IncomingMessage): boolean {
-  return isLoopbackAddress(req.socket.remoteAddress) && proxyHeaderOf(req) === undefined && !isForeignPage(req);
+  return (
+    isLoopbackAddress(req.socket.remoteAddress) &&
+    proxyHeaderOf(req) === undefined &&
+    !isForeignPage(req)
+  );
 }
 
 /** The 401 a request from this machine with no key gets: the CLI finds the key `hippo serve` wrote, anything else names
@@ -137,7 +141,11 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   // Padding would let "system " pass the reserved-name check yet read as `system` in an audit log.
   if (hasControlChar(subject) || subject !== subject.trim()) return null;
   if (isReservedActor(subject)) return null;
-  const clean: ResolvedBearer = { tenantId: tenant, subject, role: role === 'admin' ? 'admin' : 'member' };
+  const clean: ResolvedBearer = {
+    tenantId: tenant,
+    subject,
+    role: role === 'admin' ? 'admin' : 'member',
+  };
   if (Array.isArray(scopes)) {
     if (scopes.length > MAX_RESOLVED_SCOPES) return null;
     const kept = scopes.filter((s) => isJsonString(s));
@@ -150,7 +158,10 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
 /** The fields with `token` cut out of every text, since a plugin may echo it into its message, stack or cause. */
 function withoutToken(fields: LogFields, token: string): LogFields {
   return Object.fromEntries(
-    Object.entries(fields).map(([k, v]) => [k, isJsonString(v) ? v.split(token).join('[token]') : v]),
+    Object.entries(fields).map(([k, v]) => [
+      k,
+      isJsonString(v) ? v.split(token).join('[token]') : v,
+    ]),
   );
 }
 
@@ -160,7 +171,11 @@ function logResolverFailure<E>(what: string, err: E, token: string): void {
 }
 
 /** 503 when upstream throws or misses the deadline, so a stream heartbeat can tell an outage from a revocation. */
-async function askResolver(resolver: AuthResolver, token: string, deadlineMs: number): Promise<ResolvedBearer> {
+async function askResolver(
+  resolver: AuthResolver,
+  token: string,
+  deadlineMs: number,
+): Promise<ResolvedBearer> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const abort = new AbortController();
   const deadline = new Promise<never>((_, reject) => {
@@ -209,7 +224,11 @@ function chargeScryptRun(req: IncomingMessage, opts: AuthOptions): void {
 }
 
 /** Shared by buildContextWithAuth and requireAuth so the two cannot drift. */
-async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOptions): Promise<BearerIdentity> {
+async function resolveBearer(
+  req: IncomingMessage,
+  token: string,
+  opts: AuthOptions,
+): Promise<BearerIdentity> {
   // First, so the local secret never reaches resolver plugin code.
   if (isLocalKey(opts.hippoRoot, token)) {
     return { tenantId: envTenant(), subject: LOCAL_KEY_SUBJECT, role: 'member', scopes: [] };
@@ -217,7 +236,8 @@ async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOpti
   // Routing by shape keeps key plaintext out of plugin code and stops a resolver overriding a key's identity.
   if (opts.authResolver && !token.startsWith(API_KEY_PREFIX)) {
     const t = opts.authResolverTimeoutMs;
-    const deadlineMs = t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_RESOLVER_DEADLINE_MS;
+    const deadlineMs =
+      t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_RESOLVER_DEADLINE_MS;
     let clean: ResolvedBearer;
     try {
       clean = await askResolver(opts.authResolver, token, deadlineMs);
@@ -290,7 +310,10 @@ function warnCallerLimited(key: string, tenantId: string, person: string): void 
     if (!oldest.done) callerWarnedAt.delete(oldest.value);
   }
   callerWarnedAt.set(key, now);
-  log.warn('caller over its rate limit; its further 429s this minute are not logged', { tenant: tenantId, person });
+  log.warn('caller over its rate limit; its further 429s this minute are not logged', {
+    tenant: tenantId,
+    person,
+  });
 }
 
 function chargeCaller(tenantId: string, actor: Actor, opts: AuthOptions): void {
@@ -305,7 +328,10 @@ function chargeCaller(tenantId: string, actor: Actor, opts: AuthOptions): void {
 
 /** Builds a per-request Context from the Authorization header and remote address; throws HttpError(401) on bad ones.
  * Reads the store only for an API-key-shaped Bearer (or any Bearer with no resolver), so the local key stays cheap. */
-export async function buildContextWithAuth(req: IncomingMessage, opts: ContextOptions): Promise<Context> {
+export async function buildContextWithAuth(
+  req: IncomingMessage,
+  opts: ContextOptions,
+): Promise<Context> {
   const id = await checkAuth(req, opts);
   const ctx = contextFor(id, opts, requestClientKey(req));
   chargeCaller(id.tenantId, ctx.actor, opts);
@@ -314,7 +340,10 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: ContextOp
 
 /** The auth check again, uncharged, for a handler that authenticated with requireAuth before a slow body read and must
  * re-check right before it acts. */
-export async function recheckContextWithAuth(req: IncomingMessage, opts: ContextOptions): Promise<Context> {
+export async function recheckContextWithAuth(
+  req: IncomingMessage,
+  opts: ContextOptions,
+): Promise<Context> {
   return contextFor(await checkAuth(req, opts), opts, requestClientKey(req));
 }
 
@@ -328,7 +357,16 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
   const callers = opts.callers;
   const infra = opts.infra();
   const actor = bearerActor(id);
-  return { tenantId: id.tenantId, actor, store: opts.store, reach, config, callers, clientKey, infra };
+  return {
+    tenantId: id.tenantId,
+    actor,
+    store: opts.store,
+    reach,
+    config,
+    callers,
+    clientKey,
+    infra,
+  };
 }
 
 /** Auth check for routes that need no tenant Context (e.g. the MCP transport, which resolves its own root): throws
@@ -348,8 +386,11 @@ export async function heartbeatVerdict(
     await checkAuth(req, opts);
     return 'ok';
   } catch (err) {
-    if (!(err instanceof HttpError)) log.error(`heartbeat auth check failed: ${errorMessage(err)}`, errorFields(err));
-    return err instanceof HttpError && err.status < 500 && err.status !== 429 ? 'revoked' : 'unavailable';
+    if (!(err instanceof HttpError))
+      log.error(`heartbeat auth check failed: ${errorMessage(err)}`, errorFields(err));
+    return err instanceof HttpError && err.status < 500 && err.status !== 429
+      ? 'revoked'
+      : 'unavailable';
   }
 }
 

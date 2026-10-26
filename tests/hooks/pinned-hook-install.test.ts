@@ -3,7 +3,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { installJsonHooks, uninstallJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
+import {
+  installJsonHooks,
+  uninstallJsonHooks,
+} from '../../src/surface/hooks-install/json-hooks.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -90,7 +93,9 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
     const settings = JSON.parse(fs.readFileSync(result.settingsPath, 'utf8'));
     expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
     const flat = JSON.stringify(settings.hooks.UserPromptSubmit);
-    expect(flat).toContain('hippo context --pinned-only --include-recent 5 --format additional-context');
+    expect(flat).toContain(
+      'hippo context --pinned-only --include-recent 5 --format additional-context',
+    );
   });
 
   it('migration edits only a hippo handler: a user command that merely mentions the pinned-only command is left as written', () => {
@@ -99,7 +104,10 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
       type: 'command',
       command: 'node ~/hooks/ctx.js --note "hippo context --pinned-only-report" --format json',
     };
-    fs.writeFileSync(settingsPath, JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [mine] }] } }));
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [mine] }] } }),
+    );
 
     const result = installJsonHooks('claude-code');
     expect(result.migratedPinnedInjectRecent).toBe(false);
@@ -121,7 +129,11 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
             {
               hooks: [
                 mine,
-                { type: 'command', command: 'hippo context --pinned-only --format additional-context', timeout: 5 },
+                {
+                  type: 'command',
+                  command: 'hippo context --pinned-only --format additional-context',
+                  timeout: 5,
+                },
               ],
             },
           ],

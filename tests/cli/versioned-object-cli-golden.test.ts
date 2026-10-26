@@ -52,7 +52,16 @@ const KINDS: readonly KindRow[] = [
   },
   {
     cmd: 'process',
-    create: ['new', 'Release', '--step', 'run the tests', '--step', 'publish', '--description', 'ship it'],
+    create: [
+      'new',
+      'Release',
+      '--step',
+      'run the tests',
+      '--step',
+      'publish',
+      '--description',
+      'ship it',
+    ],
     bare: ['Deploy', '--step', 'push'],
     body: ['--step', 'sign the build', '--description', 'signed'],
     bodyless: ['new', 'Onboard'],
@@ -67,7 +76,9 @@ const KINDS: readonly KindRow[] = [
 ];
 
 const mask = (text: string): string =>
-  text.replace(/\b[a-z]{3}_[0-9a-f]{12}\b/g, '<mem>').replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z/g, '<ts>');
+  text
+    .replace(/\b[a-z]{3}_[0-9a-f]{12}\b/g, '<mem>')
+    .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z/g, '<ts>');
 
 const savedCwd = process.cwd();
 let root = '';
@@ -88,7 +99,8 @@ afterEach(() => {
   removeAfterRequest(root);
 });
 
-const hippo = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
+const hippo = (...args: string[]): Promise<InProcessResult> =>
+  runInProcess(() => runCli(['node', 'hippo', ...args]));
 
 describe('versioned object CLI verbs', () => {
   it.each(KINDS)('hippo $cmd: every subcommand prints the same bytes and exit code', async (k) => {

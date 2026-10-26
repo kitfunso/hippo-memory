@@ -31,7 +31,8 @@ function dagRebuildLine(e: EventOf<'dagRebuild'>): string {
 }
 
 function physicsLine(e: EventOf<'physics'>): string {
-  const capped = e.shown < e.stored ? ` (the ${e.shown} most recently recalled of ${e.stored})` : '';
+  const capped =
+    e.shown < e.stored ? ` (the ${e.shown} most recently recalled of ${e.stored})` : '';
   return `  ⚛️  physics: ${e.particles} particles${capped}, avg vel ${e.avgVelocity.toFixed(STATS_DECIMALS)}`;
 }
 

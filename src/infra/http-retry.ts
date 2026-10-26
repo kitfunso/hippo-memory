@@ -132,7 +132,10 @@ async function backoffWait(
   signal.throwIfAborted();
   const left = new AbortController();
   const aborted = new Promise<never>((_resolve, reject) => {
-    signal.addEventListener('abort', () => reject(signal.reason), { once: true, signal: left.signal });
+    signal.addEventListener('abort', () => reject(signal.reason), {
+      once: true,
+      signal: left.signal,
+    });
   });
   try {
     // An injected sleep cannot be cancelled, so it is raced and left to run out.
@@ -151,7 +154,11 @@ const defaultRetryOn =
 
 /** `fetch` with a per-attempt timeout and up to `attempts` tries on 429 and, for a replay-safe call (see
  * `retryTransport`), on 5xx and transport faults; the last response or error comes back as is. */
-export async function fetchWithRetry(url: string | URL, init: RequestInit, policy: RetryPolicy): Promise<Response> {
+export async function fetchWithRetry(
+  url: string | URL,
+  init: RequestInit,
+  policy: RetryPolicy,
+): Promise<Response> {
   const fetchFn = policy.fetchFn ?? fetch;
   const attempts = Math.max(1, policy.attempts ?? DEFAULT_ATTEMPTS);
   const baseDelayMs = policy.baseDelayMs ?? DEFAULT_BASE_DELAY_MS;
@@ -176,7 +183,13 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
       res = await fetchFn(url, { ...init, signal });
     } catch (err) {
       // The caller's own abort is a decision, not a fault, so it ends the call.
-      if (!replaySafe || attempt >= attempts || init.signal?.aborted || !isTransientTransportError(err)) throw err;
+      if (
+        !replaySafe ||
+        attempt >= attempts ||
+        init.signal?.aborted ||
+        !isTransientTransportError(err)
+      )
+        throw err;
       const delay = backoffMs(attempt);
       if (!fitsBudget(delay)) throw err;
       const reason = errorCode(err) || (err instanceof Error ? err.name : 'transport');

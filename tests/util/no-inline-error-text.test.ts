@@ -5,7 +5,10 @@ import * as path from 'node:path';
 
 const SRC = path.resolve('src');
 const IDENT = String.raw`[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*`;
-const INLINE = new RegExp(String.raw`(${IDENT})\s+instanceof\s+Error\s*\?\s*\1\.message\s*:\s*String\(\s*\1\s*\)`, 'g');
+const INLINE = new RegExp(
+  String.raw`(${IDENT})\s+instanceof\s+Error\s*\?\s*\1\.message\s*:\s*String\(\s*\1\s*\)`,
+  'g',
+);
 
 function sourceFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) => {

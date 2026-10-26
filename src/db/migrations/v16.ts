@@ -42,7 +42,9 @@ export const v16: Migration = {
       db.exec(`ALTER TABLE working_memory ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
     }
     if (!tableHasColumn(db, 'consolidation_runs', 'tenant_id')) {
-      db.exec(`ALTER TABLE consolidation_runs ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+      db.exec(
+        `ALTER TABLE consolidation_runs ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`,
+      );
     }
     if (!tableHasColumn(db, 'task_snapshots', 'tenant_id')) {
       db.exec(`ALTER TABLE task_snapshots ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
@@ -51,7 +53,9 @@ export const v16: Migration = {
       db.exec(`ALTER TABLE memory_conflicts ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
     }
     // Composite indexes for recall hot paths. Leading column is tenant_id so single-tenant lookups are O(log n).
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_tenant_created ON memories(tenant_id, created)`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_memories_tenant_created ON memories(tenant_id, created)`,
+    );
     db.exec(
       `CREATE INDEX IF NOT EXISTS idx_working_memory_tenant ` +
         `ON working_memory(tenant_id, importance DESC, created_at DESC)`,

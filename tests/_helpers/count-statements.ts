@@ -50,7 +50,8 @@ export function recordStatements<T>(fn: () => T): StatementLog<T> {
   try {
     const result = fn();
     // A Promise here would drop every statement run after its first await.
-    if (result instanceof Promise) throw new Error('recordStatements got a Promise; use recordStatementsAsync');
+    if (result instanceof Promise)
+      throw new Error('recordStatements got a Promise; use recordStatementsAsync');
     return { result, statements, rowsRead: tally.rows, reads: tally.reads };
   } finally {
     for (const spy of spies) spy.mockRestore();
@@ -71,7 +72,9 @@ export async function recordStatementsAsync<T>(fn: () => Promise<T>): Promise<St
 
 /** The most rows any one read whose SQL matches `pattern` handed back; 0 when none matched. */
 export function peakRowsRead(reads: readonly StatementRead[], pattern: RegExp | string): number {
-  const matched = reads.filter(({ sql }) => (pattern instanceof RegExp ? pattern.test(sql) : sql.includes(pattern)));
+  const matched = reads.filter(({ sql }) =>
+    pattern instanceof RegExp ? pattern.test(sql) : sql.includes(pattern),
+  );
   return Math.max(0, ...matched.map((read) => read.rows));
 }
 
@@ -86,7 +89,10 @@ function* countEach(rows: Iterable<object>, tally: Tally, read: StatementRead): 
 function spyOnStatements(statements: string[], tally: Tally): Array<{ mockRestore(): void }> {
   const exec = DatabaseSync.prototype.exec;
   const spies: Array<{ mockRestore(): void }> = [
-    vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseProto, sql: string) {
+    vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
+      this: DatabaseProto,
+      sql: string,
+    ) {
       statements.push(sql);
       exec.call(this, sql);
     }),
@@ -117,5 +123,7 @@ function spyOnStatements(statements: string[], tally: Tally): Array<{ mockRestor
 }
 
 export function countMatching(statements: readonly string[], pattern: RegExp | string): number {
-  return statements.filter((sql) => (pattern instanceof RegExp ? pattern.test(sql) : sql.includes(pattern))).length;
+  return statements.filter((sql) =>
+    pattern instanceof RegExp ? pattern.test(sql) : sql.includes(pattern),
+  ).length;
 }

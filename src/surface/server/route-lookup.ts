@@ -23,7 +23,10 @@ export interface RouteMatch<T = Route, Q = RouteRequest> {
 }
 
 /** Finds the first row whose method and path match a request. */
-export type RouteLookup<T = Route, Q = RouteRequest> = (method: string, path: string) => RouteMatch<T, Q> | null;
+export type RouteLookup<T = Route, Q = RouteRequest> = (
+  method: string,
+  path: string,
+) => RouteMatch<T, Q> | null;
 
 function exactPath(row: LookupRow): string | undefined {
   return 'path' in row ? row.path : undefined;
@@ -64,10 +67,16 @@ export function routeLookup<T extends LookupRow = Route, Q = RouteRequest>(
   );
   const walked = rows.filter((row) => exactPath(row) === undefined);
   const walkedByMethod = new Map<string, T[]>();
-  for (const row of walked) walkedByMethod.set(row.method, [...(walkedByMethod.get(row.method) ?? []), row]);
+  for (const row of walked)
+    walkedByMethod.set(row.method, [...(walkedByMethod.get(row.method) ?? []), row]);
   return (method, path) => {
     const route = literal.get(`${method} ${path}`);
     if (route !== undefined) return { route, run: matches(route, method, path)! };
-    return firstMatch(hasMalformedEscape(path) ? walked : (walkedByMethod.get(method) ?? []), matches, method, path);
+    return firstMatch(
+      hasMalformedEscape(path) ? walked : (walkedByMethod.get(method) ?? []),
+      matches,
+      method,
+      path,
+    );
   };
 }

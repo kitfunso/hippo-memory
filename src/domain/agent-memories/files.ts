@@ -22,7 +22,11 @@ export function frontmatterField(yaml: string, field: string): string | null {
 }
 
 /** An item's time: the date string when it parses and is not in the future, else the fallback. */
-export function itemTime(dateText: string | null, fallbackMs: number, nowMs: number = Date.now()): number {
+export function itemTime(
+  dateText: string | null,
+  fallbackMs: number,
+  nowMs: number = Date.now(),
+): number {
   const parsed = dateText === null ? NaN : Date.parse(dateText);
   const t = Number.isFinite(parsed) ? parsed : fallbackMs;
   return Math.min(t, nowMs);
@@ -30,5 +34,9 @@ export function itemTime(dateText: string | null, fallbackMs: number, nowMs: num
 
 /** `~/x` against the given home; anything else unchanged. */
 export function expandHome(p: string, home: string): string {
-  return p === '~' ? home : p.startsWith('~/') || p.startsWith('~\\') ? path.join(home, p.slice(2)) : p;
+  return p === '~'
+    ? home
+    : p.startsWith('~/') || p.startsWith('~\\')
+      ? path.join(home, p.slice(2))
+      : p;
 }

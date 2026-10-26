@@ -33,7 +33,12 @@ const TENANT = 'default';
 
 const ago = (days: number): string => new Date(NOW.getTime() - days * DAY_MS).toISOString();
 
-function mk(id: string, content: string, ageDays: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
+function mk(
+  id: string,
+  content: string,
+  ageDays: number,
+  extra: Partial<MemoryEntry> = {},
+): MemoryEntry {
   const base = createMemory(content, { baseHalfLifeDays: 30, tenantId: TENANT });
   const t = ago(ageDays);
   return { ...base, id, created: t, lastRetrieved: t, validFrom: t, ...extra };
@@ -45,9 +50,16 @@ const ENTRIES: MemoryEntry[] = [
   mk('d3', 'rollback the deploy when health checks fail twice', 40, { outcomePositive: 3 }),
   mk('d4', 'pipeline caching speeds up the nightly builds', 1, { tags: [CHURN_STALE_TAG] }),
   mk('d5', 'deploy pipeline secrets live in the team vault', 5, { tags: ['scope:team-a'] }),
-  mk('d6', 'deploy pipeline secrets live in the shared vault', 5, { tags: ['scope:team-b'], outcomeNegative: 2 }),
+  mk('d6', 'deploy pipeline secrets live in the shared vault', 5, {
+    tags: ['scope:team-b'],
+    outcomeNegative: 2,
+  }),
   mk('d7', 'long thread: the deploy pipeline requires approval from ops before release', 12),
-  mk('x1', 'deploy pipeline requires ops approval', 11, { tags: ['extracted'], extractedFrom: 'd7', dagLevel: 1 }),
+  mk('x1', 'deploy pipeline requires ops approval', 11, {
+    tags: ['extracted'],
+    extractedFrom: 'd7',
+    dagLevel: 1,
+  }),
   mk('s1', 'deploy pipeline summary topic', 3, {
     tags: ['dag-summary'],
     dagLevel: 2,
@@ -85,17 +97,25 @@ const OUTSIDE: MemoryEntry[] = [
   mk('v1', 'release trains leave every tuesday morning', 7),
   mk('v2', 'canary hosts get the build first', 8),
 ];
-const OUTSIDE_VECTORS = { v1: [0.99, 0.05, 0], v2: [0.95, 0.2, 0.1] } satisfies Record<string, number[]>;
+const OUTSIDE_VECTORS = { v1: [0.99, 0.05, 0], v2: [0.95, 0.2, 0.1] } satisfies Record<
+  string,
+  number[]
+>;
 
 const clone = (): MemoryEntry[] => ENTRIES.map((e) => ({ ...e, tags: [...e.tags] }));
 const ids = (results: readonly SearchResult[]): string[] => results.map((r) => r.entry.id);
 
 /** The order, every score above zero, and, unless a re-rank ran after scoring, scores that never rise down the list. */
-function expectRanked(results: readonly SearchResult[], order: readonly string[], sorted = true): void {
+function expectRanked(
+  results: readonly SearchResult[],
+  order: readonly string[],
+  sorted = true,
+): void {
   expect(ids(results)).toEqual(order);
   for (const r of results) expect(r.score, r.entry.id).toBeGreaterThan(0);
   if (!sorted) return;
-  for (let i = 1; i < results.length; i++) expect(results[i]!.score).toBeLessThanOrEqual(results[i - 1]!.score);
+  for (let i = 1; i < results.length; i++)
+    expect(results[i]!.score).toBeLessThanOrEqual(results[i - 1]!.score);
 }
 
 function breakdownOf(results: readonly SearchResult[], id: string): ScoreBreakdown {
@@ -126,7 +146,17 @@ describe('sync BM25 search', () => {
       'd4',
       'd3',
     ]);
-    expectRanked(rankBm25('first deploy', clone(), base), ['d2', 'x1', 'd1', 's1', 'n1', 'c1', 'd3', 'd5', 'd6']);
+    expectRanked(rankBm25('first deploy', clone(), base), [
+      'd2',
+      'x1',
+      'd1',
+      's1',
+      'n1',
+      'c1',
+      'd3',
+      'd5',
+      'd6',
+    ]);
   });
 
   it('a query that names the summary and its child returns the summary first', () => {
@@ -154,7 +184,10 @@ describe('sync BM25 search', () => {
   });
 
   it('a small budget still returns minResults rows', () => {
-    expectRanked(rankBm25('deploy pipeline', clone(), { now: NOW, budget: 20, minResults: 2 }), ['x1', 'd1']);
+    expectRanked(rankBm25('deploy pipeline', clone(), { now: NOW, budget: 20, minResults: 2 }), [
+      'x1',
+      'd1',
+    ]);
   });
 });
 
@@ -171,7 +204,11 @@ describe('hybrid without vectors', () => {
     expect(breakdownOf(res, 'd6').outcomeBoost).toBeLessThan(1);
     expect(breakdownOf(res, 'd2').decisionBoost).toBe(1.2);
     expect(breakdownOf(res, 'd4').churnStaleMultiplier).toBeLessThan(1);
-    expect(breakdownOf(res, 's1')).toMatchObject({ summaryDeboost: 0.85, descendantCount: 2, rebuildCount: 4 });
+    expect(breakdownOf(res, 's1')).toMatchObject({
+      summaryDeboost: 0.85,
+      descendantCount: 2,
+      rebuildCount: 4,
+    });
     expect(breakdownOf(res, 's1').summaryFreshnessBoost).toBeGreaterThan(1);
     expect(res.find((r) => r.entry.id === 'c1')!.breakdown).toBeUndefined();
   });
@@ -187,20 +224,13 @@ describe('hybrid without vectors', () => {
   });
 
   it('asOf returns the old row alone; includeSuperseded ranks it among the rest', async () => {
-    expectRanked(await hybridSearch('deploy pipeline', clone(), { ...base, asOf: ago(50) }), ['o1']);
-    expectRanked(await hybridSearch('deploy pipeline', clone(), { ...base, includeSuperseded: true }), [
-      'd5',
-      'x1',
-      'd1',
-      's1',
-      'c1',
-      'n1',
-      'd2',
+    expectRanked(await hybridSearch('deploy pipeline', clone(), { ...base, asOf: ago(50) }), [
       'o1',
-      'd3',
-      'd4',
-      'd6',
     ]);
+    expectRanked(
+      await hybridSearch('deploy pipeline', clone(), { ...base, includeSuperseded: true }),
+      ['d5', 'x1', 'd1', 's1', 'c1', 'n1', 'd2', 'o1', 'd3', 'd4', 'd6'],
+    );
   });
 });
 
@@ -215,9 +245,13 @@ function seedStore(): string {
   for (const e of [...ENTRIES, ...OUTSIDE]) writeEntry(root, e);
   vi.stubEnv('OPENAI_API_KEY', 'sk-test');
   saveEmbeddingIndex(root, { ...VECTORS, ...OUTSIDE_VECTORS });
-  saveStoredEmbeddingModel(handlesOf(root).on, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
+  saveStoredEmbeddingModel(
+    handlesOf(root).on,
+    resolveEmbeddingProvider(loadConfig(root).embeddings).id,
+  );
   const entity = (memoryId: string): number =>
-    insertEntityAt(root, TENANT, { entityType: 'decision', name: memoryId.toUpperCase(), memoryId }).id;
+    insertEntityAt(root, TENANT, { entityType: 'decision', name: memoryId.toUpperCase(), memoryId })
+      .id;
   for (const [from, to] of [
     ['z2', 'c1'],
     ['x1', 'd4'],
@@ -271,16 +305,20 @@ describe('hybrid and physics with a store', () => {
       vi.fn(async (_url: string, init: { body: string }) => {
         // SAFETY: body is the OpenAI embeddings request the provider just serialised.
         const body = JSON.parse(init.body) as { input: string[] };
-        return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }), {
-          status: 200,
-        });
+        return new Response(
+          JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }),
+          {
+            status: 200,
+          },
+        );
       }),
     );
   });
   afterEach(() => vi.unstubAllGlobals());
 
   const opts = () => ({ now: NOW, budget: 100_000, hippoRoot: root, explain: true, scope: null });
-  const score = (results: readonly SearchResult[], id: string): number => results.find((r) => r.entry.id === id)!.score;
+  const score = (results: readonly SearchResult[], id: string): number =>
+    results.find((r) => r.entry.id === id)!.score;
 
   it('the blend adds a vector-only row, and MMR moves a near copy down', async () => {
     const res = await hybridSearch('deploy pipeline', clone(), opts());
@@ -291,7 +329,11 @@ describe('hybrid and physics with a store', () => {
   });
 
   it('without MMR the scores order the list, under the weight the caller set', async () => {
-    const res = await hybridSearch('deploy pipeline', clone(), { ...opts(), mmr: false, embeddingWeight: 0.3 });
+    const res = await hybridSearch('deploy pipeline', clone(), {
+      ...opts(),
+      mmr: false,
+      embeddingWeight: 0.3,
+    });
     expectRanked(res, ['x1', 'd1', 's1', 'd5', 'n1', 'd2', 'd6', 'd3', 'z2', 'd4', 'c1']);
     expect(breakdownOf(res, 'x1')).toMatchObject({ embeddingWeight: 0.3 });
     expect(breakdownOf(res, 'x1').postMmrRank).toBeUndefined();
@@ -301,7 +343,11 @@ describe('hybrid and physics with a store', () => {
     const rrf = await hybridSearch('deploy pipeline', clone(), { ...opts(), scoring: 'rrf' });
     expectRanked(rrf, ['x1', 'c1', 'd2', 'd1', 'z2', 'd5', 's1', 'd3', 'n1', 'd6', 'd4'], false);
     const graphStream = { weight: 0.5, tenantId: TENANT, seedCount: 3 };
-    const graph = await hybridSearch('deploy pipeline', clone(), { ...opts(), scoring: 'rrf', graphStream });
+    const graph = await hybridSearch('deploy pipeline', clone(), {
+      ...opts(),
+      scoring: 'rrf',
+      graphStream,
+    });
     expectRanked(graph, ['x1', 'c1', 'd2', 'd1', 'd5', 'z2', 's1', 'd3', 'n1', 'd4', 'd6'], false);
     expect(score(graph, 'd4')).toBeGreaterThan(score(rrf, 'd4'));
   });
@@ -310,8 +356,17 @@ describe('hybrid and physics with a store', () => {
     const reranker: RerankerFn = async (_q, items) =>
       [...items]
         .reverse()
-        .map((r, i) => ({ ...r, rerankScore: i, preRerankRank: r.preRerankRank ?? 0, postRerankRank: i + 1 }));
-    const res = await hybridSearch('deploy pipeline', clone(), { ...opts(), reranker, rerankerOptions: { topK: 3 } });
+        .map((r, i) => ({
+          ...r,
+          rerankScore: i,
+          preRerankRank: r.preRerankRank ?? 0,
+          postRerankRank: i + 1,
+        }));
+    const res = await hybridSearch('deploy pipeline', clone(), {
+      ...opts(),
+      reranker,
+      rerankerOptions: { topK: 3 },
+    });
     expectRanked(res, ['s1', 'd1', 'x1', ...BLEND.slice(3)], false);
     expect(res.slice(0, 4).map((r) => [r.rerankScore, r.preRerankRank, r.postRerankRank])).toEqual([
       [0, 3, 1],
@@ -324,14 +379,24 @@ describe('hybrid and physics with a store', () => {
   it('vector candidates add store rows the caller did not pass', async () => {
     const vectorCandidates = { tenantId: TENANT, includeSuperseded: false, limit: 5 };
     const res = await hybridSearch('deploy pipeline', clone(), { ...opts(), vectorCandidates });
-    expectRanked(res, ['x1', 'd1', 's1', 'd5', 'n1', 'd2', 'z2', 'v1', 'v2', 'd3', 'd6', 'c1', 'd4'], false);
+    expectRanked(
+      res,
+      ['x1', 'd1', 's1', 'd5', 'n1', 'd2', 'z2', 'v1', 'v2', 'd3', 'd6', 'c1', 'd4'],
+      false,
+    );
   });
 
   it('physics merges its pool with the classic one; its top row ties the classic top', async () => {
-    const res = await physicsSearch('deploy pipeline', clone(), { ...opts(), queryEmbedding: [1, 0, 0] });
+    const res = await physicsSearch('deploy pipeline', clone(), {
+      ...opts(),
+      queryEmbedding: [1, 0, 0],
+    });
     expectRanked(res, ['x1', 'z2', 's1', 'n1', 'd5', 'd1', 'd6', 'd3', 'd2', 'c1', 'd4']);
     expect(score(res, 'z2')).toBe(score(res, 'x1'));
-    expect([breakdownOf(res, 'x1').mode, breakdownOf(res, 'z2').mode]).toEqual(['hybrid', 'physics']);
+    expect([breakdownOf(res, 'x1').mode, breakdownOf(res, 'z2').mode]).toEqual([
+      'hybrid',
+      'physics',
+    ]);
   });
 
   it('physics with asOf, a summary deboost and vector candidates returns the old row alone', async () => {

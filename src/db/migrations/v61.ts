@@ -1,7 +1,9 @@
 import type { Migration } from './types.js';
 
-const PREDICTIONS_PAGE = 'idx_predictions_tenant_created ON predictions(tenant_id, created_at DESC, id DESC)';
-const MEMORIES_ORIGIN = 'idx_memories_tenant_origin_created ON memories(tenant_id, origin_project, created, id)';
+const PREDICTIONS_PAGE =
+  'idx_predictions_tenant_created ON predictions(tenant_id, created_at DESC, id DESC)';
+const MEMORIES_ORIGIN =
+  'idx_memories_tenant_origin_created ON memories(tenant_id, origin_project, created, id)';
 
 export const v61: Migration = {
   version: 61,

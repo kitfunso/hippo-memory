@@ -65,7 +65,8 @@ export function rowToEntity(row: EntityRow): Entity {
     name: row.name,
     memoryId: row.memory_id,
     sourceKind: row.source_kind as SourceKind,
-    sourceObjectType: row.source_object_type === null ? undefined : (row.source_object_type as SourceObjectType),
+    sourceObjectType:
+      row.source_object_type === null ? undefined : (row.source_object_type as SourceObjectType),
     sourceObjectId: row.source_object_id === null ? undefined : row.source_object_id,
     createdAt: row.created_at,
   };
@@ -81,7 +82,8 @@ export function rowToRelation(row: RelationRow): Relation {
     relType: row.rel_type as RelationType,
     memoryId: row.memory_id,
     sourceKind: row.source_kind as SourceKind,
-    sourceObjectType: row.source_object_type === null ? undefined : (row.source_object_type as SourceObjectType),
+    sourceObjectType:
+      row.source_object_type === null ? undefined : (row.source_object_type as SourceObjectType),
     sourceObjectId: row.source_object_id === null ? undefined : row.source_object_id,
     createdAt: row.created_at,
   };

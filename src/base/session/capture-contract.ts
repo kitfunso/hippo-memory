@@ -101,11 +101,22 @@ function stringField(payload: JsonObject | null, key: string): string | null {
 }
 
 function noPayloadInTime(label: string): CaptureReceipt<never> {
-  return { status: 'unavailable', reason: `no ${label} payload arrived before the stdin wait window closed` };
+  return {
+    status: 'unavailable',
+    reason: `no ${label} payload arrived before the stdin wait window closed`,
+  };
 }
 
 function manualRun(runtime: string, event: CaptureEvent): CaptureReceipt {
-  const input = { runtime, event, manual: true, sessionId: null, cwd: null, transcriptPath: null, trigger: null };
+  const input = {
+    runtime,
+    event,
+    manual: true,
+    sessionId: null,
+    cwd: null,
+    transcriptPath: null,
+    trigger: null,
+  };
   return { status: 'received', input };
 }
 
@@ -123,12 +134,18 @@ export function readClaudeCodePreCompact(
   const transcriptPath = stringField(payload, 'transcript_path');
   // A bad payload is skipped, never treated as manual: discovery could pick up another session's transcript.
   if (transcriptPath === null) {
-    return { status: 'skipped', reason: 'malformed or incomplete PreCompact payload (missing string transcript_path)' };
+    return {
+      status: 'skipped',
+      reason: 'malformed or incomplete PreCompact payload (missing string transcript_path)',
+    };
   }
   // Path shape only: CLAUDE_CONFIG_DIR can move the transcript root, and a same-user process can already read every
   // transcript.
   if (!/\.jsonl$/i.test(transcriptPath)) {
-    return { status: 'skipped', reason: `payload transcript_path is not a .jsonl file: ${transcriptPath}` };
+    return {
+      status: 'skipped',
+      reason: `payload transcript_path is not a .jsonl file: ${transcriptPath}`,
+    };
   }
   return {
     status: 'received',
@@ -152,11 +169,17 @@ export function readVscodeStop(stdinText: string | undefined, timedOut: boolean)
   if (isBlank(stdinText)) {
     return timedOut
       ? noPayloadInTime('Stop')
-      : { status: 'skipped', reason: 'no payload: turn capture runs only from a VS Code Stop hook' };
+      : {
+          status: 'skipped',
+          reason: 'no payload: turn capture runs only from a VS Code Stop hook',
+        };
   }
   const payload = parseObject(stdinText);
   if (stringField(payload, 'hook_event_name') !== 'Stop') {
-    return { status: 'skipped', reason: 'not a VS Code Stop payload (no snake_case hook_event_name "Stop")' };
+    return {
+      status: 'skipped',
+      reason: 'not a VS Code Stop payload (no snake_case hook_event_name "Stop")',
+    };
   }
   const transcriptPath = stringField(payload, 'transcript_path');
   if (transcriptPath === null || !/\.jsonl$/i.test(transcriptPath)) {

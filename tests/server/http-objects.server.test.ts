@@ -2,7 +2,15 @@
 // http-<kind> test. One server serves the whole file, so the request limits are off and every test makes its own rows.
 import { describe, it, expect } from 'vitest';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { type Body, handle, apiKeyB, useObjectsServer, jsonAs, post, get } from '../_helpers/http-objects-server.js';
+import {
+  type Body,
+  handle,
+  apiKeyB,
+  useObjectsServer,
+  jsonAs,
+  post,
+  get,
+} from '../_helpers/http-objects-server.js';
 
 useObjectsServer();
 
@@ -68,7 +76,12 @@ const KINDS: readonly Kind[] = [
     field: 'policy',
     listField: 'policies',
     create: { policyName: 'Retention', policyText: 'delete after 90d', validFrom: '2026-01-01' },
-    created: { policyName: 'Retention', validFrom: '2026-01-01T00:00:00.000Z', version: 1, status: 'active' },
+    created: {
+      policyName: 'Retention',
+      validFrom: '2026-01-01T00:00:00.000Z',
+      version: 1,
+      status: 'active',
+    },
     supersede: {
       body: { policyText: 'b', changeSummary: 'x' },
       status: 200,
@@ -81,8 +94,17 @@ const KINDS: readonly Kind[] = [
     root: '/v1/processes',
     field: 'process',
     listField: 'processes',
-    create: { processName: 'Release', steps: ['test', 'bump', 'publish'], description: 'the ritual' },
-    created: { processName: 'Release', steps: ['test', 'bump', 'publish'], version: 1, status: 'active' },
+    create: {
+      processName: 'Release',
+      steps: ['test', 'bump', 'publish'],
+      description: 'the ritual',
+    },
+    created: {
+      processName: 'Release',
+      steps: ['test', 'bump', 'publish'],
+      version: 1,
+      status: 'active',
+    },
     supersede: {
       body: { steps: ['x', 'y'], changeSummary: 'added y' },
       status: 200,
@@ -124,7 +146,12 @@ const KINDS: readonly Kind[] = [
     field: 'incident',
     listField: 'incidents',
     create: { text: 'DB pool exhausted', context: 'spike at 14:00' },
-    created: { incidentText: 'DB pool exhausted', context: 'spike at 14:00', status: 'open', linkedMemoryIds: [] },
+    created: {
+      incidentText: 'DB pool exhausted',
+      context: 'spike at 14:00',
+      status: 'open',
+      linkedMemoryIds: [],
+    },
   },
 ];
 

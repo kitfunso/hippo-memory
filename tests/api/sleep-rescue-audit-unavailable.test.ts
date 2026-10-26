@@ -43,7 +43,11 @@ describe('sleep rescue audit', () => {
     roots.push(root);
     writeFileSync(
       join(root, 'config.json'),
-      JSON.stringify({ memoryValue: { enabled: true }, physics: { enabled: false }, dormant: { enabled: false } }),
+      JSON.stringify({
+        memoryValue: { enabled: true },
+        physics: { enabled: false },
+        dormant: { enabled: false },
+      }),
     );
     writeEntriesTogether(
       root,

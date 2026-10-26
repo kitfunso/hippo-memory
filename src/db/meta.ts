@@ -36,9 +36,10 @@ export function ensureMetaTable(db: DatabaseSyncLike): void {
 
 export function getSchemaVersion(db: DatabaseSyncLike): number {
   if (!tableExists(db, 'meta')) return 0;
-  const row = cachedStatement(db, `SELECT value FROM meta WHERE key = '${META_KEY.schemaVersion}'`).get() as
-    | { value?: string }
-    | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT value FROM meta WHERE key = '${META_KEY.schemaVersion}'`,
+  ).get() as { value?: string } | undefined;
   const version = Number(row?.value ?? 0);
   return Number.isFinite(version) ? version : 0;
 }
@@ -46,13 +47,15 @@ export function getSchemaVersion(db: DatabaseSyncLike): number {
 /** SQLite's own `user_version` stamp, which can differ from the `meta` schema_version row. */
 export function pragmaUserVersion(db: DatabaseSyncLike): number {
   // SAFETY: PRAGMA user_version always answers one row.
-  return (cachedStatement(db, 'PRAGMA user_version').get() as { user_version: number }).user_version;
+  return (cachedStatement(db, 'PRAGMA user_version').get() as { user_version: number })
+    .user_version;
 }
 
 /** The connection's commit counter: it moves when another connection commits. */
 export function pragmaDataVersion(db: DatabaseSyncLike): number {
   // SAFETY: PRAGMA data_version always answers one row.
-  return (cachedStatement(db, 'PRAGMA data_version').get() as { data_version: number }).data_version;
+  return (cachedStatement(db, 'PRAGMA data_version').get() as { data_version: number })
+    .data_version;
 }
 
 export function setSchemaVersion(db: DatabaseSyncLike, version: number): void {
@@ -65,7 +68,9 @@ export function setSchemaVersion(db: DatabaseSyncLike, version: number): void {
 }
 
 export function getMeta(db: DatabaseSyncLike, key: string, fallback = ''): string {
-  const row = cachedStatement(db, `SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined;
+  const row = cachedStatement(db, `SELECT value FROM meta WHERE key = ?`).get(key) as
+    | { value?: string }
+    | undefined;
   return row?.value ?? fallback;
 }
 
@@ -87,7 +92,8 @@ export function setMeta(db: DatabaseSyncLike, key: string, value: string): void 
  */
 export function raiseMinBinary(db: DatabaseSyncLike, version: string): void {
   const existing = getMeta(db, META_KEY.minCompatibleBinary);
-  if (!existing || compareSemver(version, existing) > 0) setMeta(db, META_KEY.minCompatibleBinary, version);
+  if (!existing || compareSemver(version, existing) > 0)
+    setMeta(db, META_KEY.minCompatibleBinary, version);
 }
 
 export function isFtsAvailable(db: DatabaseSyncLike): boolean {

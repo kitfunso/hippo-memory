@@ -8,7 +8,11 @@ const ALL_PAIRS_PER_PASS = (NODES * (NODES - 1)) / 2;
 
 function ring(n: number): GraphModel {
   return {
-    nodes: Array.from({ length: n }, (_, i) => ({ id: i + 1, type: 'system' as const, name: `n${i}` })),
+    nodes: Array.from({ length: n }, (_, i) => ({
+      id: i + 1,
+      type: 'system' as const,
+      name: `n${i}`,
+    })),
     edges: Array.from({ length: n }, (_, i) => ({
       from: i + 1,
       to: ((i + 1) % n) + 1,

@@ -12,7 +12,13 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import { parseSteps, traceRecord, traceStats } from '../../api/memories/trace.js';
 import { extractPathTags } from '../../api/memories/remember-local.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
-import { type MemoryWrites, type RememberRequest, type Remembered, localWrites, pickWrites } from './memory-writes.js';
+import {
+  type MemoryWrites,
+  type RememberRequest,
+  type Remembered,
+  localWrites,
+  pickWrites,
+} from './memory-writes.js';
 import { cliApiContext, cliInitGlobal } from './api-context.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
@@ -76,7 +82,9 @@ function parseKindFlag(flags: CliFlags): UserVisibleKind | undefined {
   // forget/consolidate on raw rows, so exposing --kind raw would create unforgettable memories. 'archived' is an
   // internal sentinel set only in that transaction.
   if (kindFlag !== undefined && !isOneOf(USER_VISIBLE_KINDS, kindFlag)) {
-    printError(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${USER_VISIBLE_KINDS.join(', ')}`);
+    printError(
+      `Invalid --kind: "${kindFlagRaw}". Must be one of: ${USER_VISIBLE_KINDS.join(', ')}`,
+    );
     fail(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
   }
   return kindFlag;
@@ -86,14 +94,21 @@ type RememberEnvelope = Pick<RememberRequest, 'kind' | 'owner' | 'artifactRef' |
 
 function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   const kind = parseKindFlag(flags);
-  const ownerCheck = validateOwner(stringFlag(flags, 'owner') ?? null, { strict: isStrictOwnerEnv() });
+  const ownerCheck = validateOwner(stringFlag(flags, 'owner') ?? null, {
+    strict: isStrictOwnerEnv(),
+  });
   if (!ownerCheck.ok) {
     fail(ownerCheck.message);
   }
   if (ownerCheck.message) printError(ownerCheck.message);
   const scope = stringFlag(flags, 'scope')?.trim() || undefined;
   assertClientScope(scope);
-  return { kind, owner: ownerCheck.value ?? undefined, artifactRef: stringFlag(flags, 'artifact-ref'), scope };
+  return {
+    kind,
+    owner: ownerCheck.value ?? undefined,
+    artifactRef: stringFlag(flags, 'artifact-ref'),
+    scope,
+  };
 }
 
 function rememberRequest(content: string, flags: CliFlags, useGlobal: boolean): RememberRequest {
@@ -112,9 +127,20 @@ function rememberRequest(content: string, flags: CliFlags, useGlobal: boolean): 
 }
 
 /** The switches only a write on the store honours (with --layer), so a command that sets one never goes to a server. */
-const STORE_ONLY_SWITCHES = ['pin', 'extract', 'force', 'observed', 'inferred', 'verified'] as const;
+const STORE_ONLY_SWITCHES = [
+  'pin',
+  'extract',
+  'force',
+  'observed',
+  'inferred',
+  'verified',
+] as const;
 
-async function rememberWrites(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<MemoryWrites> {
+async function rememberWrites(
+  hippoRoot: string,
+  tenantId: string,
+  flags: CliFlags,
+): Promise<MemoryWrites> {
   if (boolFlag(flags, 'global')) {
     cliInitGlobal();
     return localWrites(hippoHomeDir(), tenantId);
@@ -131,7 +157,8 @@ async function printRemembered(outcome: Remembered, useGlobal: boolean): Promise
     return;
   }
   const weak = outcome.startedWeak;
-  if (weak) console.log(`Weakened (salience: ${weak.reason}, strength ${weak.strength.toFixed(2)})`);
+  if (weak)
+    console.log(`Weakened (salience: ${weak.reason}, strength ${weak.strength.toFixed(2)})`);
   if (outcome.status === 'relayed') {
     console.log(`Remembered [${outcome.id}] (via ${outcome.via})`);
     console.log(`   Kind: ${outcome.kind} | Tenant: ${outcome.tenantId}`);
@@ -154,7 +181,8 @@ function printEntry(entry: MemoryEntry, useGlobal: boolean): void {
 }
 
 function printExtraction(extraction: api.FactExtraction): void {
-  if (extraction.status === 'no_key') printError('  (extraction skipped: ANTHROPIC_API_KEY not set)');
+  if (extraction.status === 'no_key')
+    printError('  (extraction skipped: ANTHROPIC_API_KEY not set)');
   if (extraction.status !== 'ran') return;
   for (const failure of extraction.failures) printError(`  (extraction failed: ${failure})`);
   if (extraction.facts > 0) printError(`  extracted ${extraction.facts} fact(s)`);
@@ -205,11 +233,17 @@ async function supersedeMemory(
 
   let newId: string;
   try {
-    ({ newId } = await api.supersede(cliApiContext(hippoRoot, tenantId), oldId, newContent, overrides));
+    ({ newId } = await api.supersede(
+      cliApiContext(hippoRoot, tenantId),
+      oldId,
+      newContent,
+      overrides,
+    ));
   } catch (err) {
     if (err instanceof NotFoundError) printError(`Error: memory ${oldId} not found.`);
     else if (err instanceof RejectedValueError) printError(`Error: ${err.message}`);
-    else if (err instanceof ConflictError) printError(await alreadySupersededLine(hippoRoot, oldId, tenantId, err));
+    else if (err instanceof ConflictError)
+      printError(await alreadySupersededLine(hippoRoot, oldId, tenantId, err));
     else throw err;
     throw new CliExit(1);
   }
@@ -263,7 +297,12 @@ async function recordTrace(hippoRoot: string, tenantId: string, flags: CliFlags)
   console.log(`Recorded trace ${id} (outcome=${outcome}, ${steps.length} steps)`);
 }
 
-async function printTrace(hippoRoot: string, tenantId: string, id: string, flags: CliFlags): Promise<void> {
+async function printTrace(
+  hippoRoot: string,
+  tenantId: string,
+  id: string,
+  flags: CliFlags,
+): Promise<void> {
   requireInit(hippoRoot);
   const asJson = boolFlag(flags, 'json');
 
@@ -301,18 +340,29 @@ type TraceView = ReturnType<typeof traceStats> &
     sourceLabel: 'local' | 'global';
   };
 
-async function traceLineage(hippoRoot: string, globalRoot: string, entry: MemoryEntry, id: string, tenantId: string) {
+async function traceLineage(
+  hippoRoot: string,
+  globalRoot: string,
+  entry: MemoryEntry,
+  id: string,
+  tenantId: string,
+) {
   // Parents (consolidation lineage) — schema v9 field.
   const parents = Array.isArray(entry.parents) ? entry.parents : [];
-  const local = parents.length === 0 ? [] : await memoryListByIds(cliApiContext(hippoRoot, tenantId), parents);
+  const local =
+    parents.length === 0 ? [] : await memoryListByIds(cliApiContext(hippoRoot, tenantId), parents);
   const found = new Map(local.map((p) => [p.id, p]));
   const missing = parents.filter((pid) => !found.has(pid));
   if (missing.length > 0 && isInitialized(globalRoot)) {
-    for (const p of await memoryListByIds(cliApiContext(globalRoot, tenantId), missing)) found.set(p.id, p);
+    for (const p of await memoryListByIds(cliApiContext(globalRoot, tenantId), missing))
+      found.set(p.id, p);
   }
   const parentPreviews = parents.map((pid) => {
     const p = found.get(pid);
-    return { id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)' };
+    return {
+      id: pid,
+      content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)',
+    };
   });
 
   const openIn = async (root: string): Promise<api.ConflictPage['conflicts']> => {
@@ -323,7 +373,10 @@ async function traceLineage(hippoRoot: string, globalRoot: string, entry: Memory
     }
     return mine;
   };
-  const myConflicts = [...(await openIn(hippoRoot)), ...(isInitialized(globalRoot) ? await openIn(globalRoot) : [])];
+  const myConflicts = [
+    ...(await openIn(hippoRoot)),
+    ...(isInitialized(globalRoot) ? await openIn(globalRoot) : []),
+  ];
   return { parentPreviews, myConflicts };
 }
 
@@ -370,10 +423,14 @@ function printTraceText(t: TraceView): void {
   console.log(`Memory: ${entry.id}  [${sourceLabel}]`);
   console.log('='.repeat(50));
   const ellipsis = entry.content.length > DETAIL_CONTENT_CHARS ? '...' : '';
-  console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${ellipsis}`);
+  console.log(
+    `Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${ellipsis}`,
+  );
   const starred = entry.starred ? '  Starred: yes' : '';
   const pinned = entry.pinned ? 'yes' : 'no';
-  console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(14)} Pinned: ${pinned}${starred}`);
+  console.log(
+    `Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(14)} Pinned: ${pinned}${starred}`,
+  );
   console.log(`Tags:      ${entry.tags.join(', ') || '(none)'}`);
   console.log(`Created:   ${entry.created}  (${fmt(ageDays, 1)} days ago)`);
   console.log();
@@ -407,8 +464,16 @@ function printTraceText(t: TraceView): void {
   }
 }
 
-export async function handleRemember({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
-  const text = args.length === 1 && args[0] === '-' ? fs.readFileSync(0, 'utf-8').trim() : args.join(' ').trim();
+export async function handleRemember({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
+  const text =
+    args.length === 1 && args[0] === '-'
+      ? fs.readFileSync(0, 'utf-8').trim()
+      : args.join(' ').trim();
   if (!text || text.length < 3) {
     fail('Memory content too short (minimum 3 characters).');
   }
@@ -418,7 +483,12 @@ export async function handleRemember({ hippoRoot, tenantId, args, flags }: Comma
   await printRemembered(await writes.remember(request), useGlobal);
 }
 
-export async function handleSupersede({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleSupersede({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const oldId = args[0];
   const newContent = args.slice(1).join(' ').trim();
   if (!oldId || !newContent) {
@@ -427,14 +497,21 @@ export async function handleSupersede({ hippoRoot, tenantId, args, flags }: Comm
   await supersedeMemory(hippoRoot, tenantId, oldId, newContent, flags);
 }
 
-export async function handleTrace({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleTrace({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const sub = args[0] ? String(args[0]) : '';
   if (sub === 'record') {
     await recordTrace(hippoRoot, tenantId, flags);
     return;
   }
   if (!sub) {
-    fail('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
+    fail(
+      'Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>',
+    );
   }
   await printTrace(hippoRoot, tenantId, sub, flags);
 }

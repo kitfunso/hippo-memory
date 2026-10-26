@@ -32,8 +32,14 @@ afterEach(() => {
 });
 
 /** A deploy-runbook memory created `createdDaysAgo` and last read `readDaysAgo` days before NOW. */
-function aged(createdDaysAgo: number, readDaysAgo = createdDaysAgo, outcome?: boolean): MemoryEntry {
-  const base = createMemory('deploy runbook for the staging cluster', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+function aged(
+  createdDaysAgo: number,
+  readDaysAgo = createdDaysAgo,
+  outcome?: boolean,
+): MemoryEntry {
+  const base = createMemory('deploy runbook for the staging cluster', {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+  });
   const m = outcome === undefined ? base : applyOutcome(base, outcome);
   m.created = new Date(NOW.getTime() - createdDaysAgo * DAY_MS).toISOString();
   m.lastRetrieved = new Date(NOW.getTime() - readDaysAgo * DAY_MS).toISOString();
@@ -42,7 +48,11 @@ function aged(createdDaysAgo: number, readDaysAgo = createdDaysAgo, outcome?: bo
 }
 
 async function breakdownOf(entry: MemoryEntry, clock: { now?: Date } = { now: NOW }) {
-  const [hit] = await hybridSearch('deploy runbook', [entry], { budget: 10000, explain: true, ...clock });
+  const [hit] = await hybridSearch('deploy runbook', [entry], {
+    budget: 10000,
+    explain: true,
+    ...clock,
+  });
   return hit.breakdown!;
 }
 
@@ -52,7 +62,9 @@ describe('the ./search entry reads each eval switch from the environment', () =>
       (await breakdownOf(aged(0))).strengthMultiplier,
     );
     vi.stubEnv('HIPPO_ABLATE_DECAY', '1');
-    expect((await breakdownOf(aged(30))).strengthMultiplier).toBe((await breakdownOf(aged(0))).strengthMultiplier);
+    expect((await breakdownOf(aged(30))).strengthMultiplier).toBe(
+      (await breakdownOf(aged(0))).strengthMultiplier,
+    );
   });
 
   it('HIPPO_ABLATE_RECALL_BOOST: decay runs from creation, so a recent read no longer refreshes strength', async () => {
@@ -113,7 +125,10 @@ describe('the ./search entry reads each eval switch from the environment', () =>
 describe('the ./testing entry reads them as well', () => {
   it('hybridSearchWire drops the recency multiplier under HIPPO_ABLATE_RECENCY', async () => {
     vi.stubEnv('HIPPO_ABLATE_RECENCY', '1');
-    const [hit] = await hybridSearchWire('deploy runbook', [toWire(aged(30))], { explain: true, now: NOW });
+    const [hit] = await hybridSearchWire('deploy runbook', [toWire(aged(30))], {
+      explain: true,
+      now: NOW,
+    });
     expect(hit.breakdown!.recencyMultiplier).toBe(1);
   });
 });
@@ -124,7 +139,10 @@ describe('the domain ranker takes the switches as input', () => {
     const options = { budget: 10000, explain: true, now: NOW };
     const [unswitched] = await rankHybrid('deploy runbook', [aged(30)], options);
     expect(unswitched.breakdown!.recencyMultiplier).toBeLessThan(1);
-    const [switched] = await rankHybrid('deploy runbook', [aged(30)], { ...options, switches: evalSwitches() });
+    const [switched] = await rankHybrid('deploy runbook', [aged(30)], {
+      ...options,
+      switches: evalSwitches(),
+    });
     expect(switched.breakdown!.recencyMultiplier).toBe(1);
   });
 });

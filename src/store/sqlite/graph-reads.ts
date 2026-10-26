@@ -13,7 +13,12 @@ import {
 } from './graph-rows.js';
 import { GRAPH_ID_BATCH, type Entity, type Relation } from '../../base/ports/store/graph.js';
 import { chunked } from '../../base/util/chunked.js';
-import type { GraphRows, GraphReads, GraphViewQuery, GraphWalkQuery } from '../../base/ports/store.js';
+import type {
+  GraphRows,
+  GraphReads,
+  GraphViewQuery,
+  GraphWalkQuery,
+} from '../../base/ports/store.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
@@ -68,7 +73,11 @@ function listRelations(db: DatabaseSyncLike, tenantId: string, limit: number): R
 
 /** Load entities by primary id (the BFS-reached rows whose `memory_id` maps back to a recall result). Tenant-scoped,
  * read-only. */
-function readEntitiesByIds(db: DatabaseSyncLike, tenantId: string, ids: readonly number[]): Entity[] {
+function readEntitiesByIds(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  ids: readonly number[],
+): Entity[] {
   assertTenantId('readEntitiesByIds', tenantId);
   if (ids.length === 0) return [];
   const out: Entity[] = [];
@@ -165,7 +174,11 @@ function listRelationsAmong(
 
 /** Map consolidated source memory ids to their graph entities: the SEED step of multi-hop recall. Tenant-scoped,
  * read-only; chunks the IN-list under the SQLite variable cap. */
-function listEntitiesByMemoryId(db: DatabaseSyncLike, tenantId: string, memoryIds: readonly string[]): Entity[] {
+function listEntitiesByMemoryId(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  memoryIds: readonly string[],
+): Entity[] {
   assertTenantId('listEntitiesByMemoryId', tenantId);
   if (memoryIds.length === 0) return [];
   const out: Entity[] = [];
@@ -288,7 +301,11 @@ function graphViewRows(db: DatabaseSyncLike, tenantId: string, spec: GraphViewSp
   };
 }
 
-function viewRows(db: DatabaseSyncLike, tenantId: string, { entity, limit, reader }: GraphViewQuery): GraphRows {
+function viewRows(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  { entity, limit, reader }: GraphViewQuery,
+): GraphRows {
   return withGraphReadSnapshot(db, (snapshot) =>
     graphViewRows(snapshot, tenantId, {
       entity,
@@ -310,7 +327,8 @@ function walkRows(db: DatabaseSyncLike, tenantId: string, query: GraphWalkQuery)
 }
 
 const graphReadsBodies: Bodies<GraphReads> = {
-  graphRows: (db, tenantId, query) => ('by' in query ? walkRows(db, tenantId, query) : viewRows(db, tenantId, query)),
+  graphRows: (db, tenantId, query) =>
+    'by' in query ? walkRows(db, tenantId, query) : viewRows(db, tenantId, query),
   graphDelta: graphDeltaOn,
 };
 

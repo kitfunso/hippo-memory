@@ -3,7 +3,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { auditHighId } from '../_helpers/root-forms.js';
-import type { ApiKeyListRow, ApiKeyRecord, AuditEvent, KeyListQuery, NewApiKey } from '../../src/entry/store-kit.js';
+import type {
+  ApiKeyListRow,
+  ApiKeyRecord,
+  AuditEvent,
+  KeyListQuery,
+  NewApiKey,
+} from '../../src/entry/store-kit.js';
 import {
   FIXTURE_REVOKED_AT,
   runOnFixture,
@@ -62,7 +68,11 @@ const SELF_META = { label: 'new', role: 'member', self: true, expiresAt: EXPIRES
 const create =
   (key: NewApiKey): Call =>
   (g) =>
-    g.changeApiKey('create', { key, actor: 'api_key:caller', metadata: { label: key.label, role: key.role } });
+    g.changeApiKey('create', {
+      key,
+      actor: 'api_key:caller',
+      metadata: { label: key.label, role: key.role },
+    });
 const createSelf =
   (key: NewApiKey & { ownerSubject: string; expiresAt: string }, perSubject: number): Call =>
   (g) =>
@@ -121,7 +131,11 @@ afterEach(() => {
 describe('KeyWrites.changeApiKey create', () => {
   it('stores the hashed row and one auth_create row under the next id', async () => {
     const key = newKey({ label: 'ci', role: 'admin' });
-    const side = await conforms([create(key), find(key.keyId), list({ keyId: key.keyId, active: true })]);
+    const side = await conforms([
+      create(key),
+      find(key.keyId),
+      list({ keyId: key.keyId, active: true }),
+    ]);
     expect(side.outcomes.slice(0, 2)).toEqual([
       { value: undefined },
       {
@@ -171,7 +185,11 @@ describe('KeyWrites.changeApiKey create', () => {
     const taken = newKey({ keyId: memberA });
     const side = await conforms([settled(create(taken)), find(memberA)]);
     expect(side.outcomes[0]).toEqual({ value: 'refused' });
-    expect(valueOf(side, 1)).toMatchObject({ tenantId: TENANT_A, role: 'member', scopes: [OWNED_SCOPE] });
+    expect(valueOf(side, 1)).toMatchObject({
+      tenantId: TENANT_A,
+      role: 'member',
+      scopes: [OWNED_SCOPE],
+    });
     expect(valueOf(side, 1)).not.toMatchObject({ keyHash: taken.keyHash });
     expect(side.audit).toEqual(baseline.audit);
   });
@@ -277,8 +295,15 @@ describe('KeyWrites.changeApiKey create_self', () => {
       revokedAtOf(owned.liveNew),
       listIds({ tenantId: TENANT_B, ownerSubject: OWNER, active: true }),
     ]);
-    expect(side.outcomes).toEqual([{ value: [owned.liveB] }, { value: null }, { value: null }, { value: [key.keyId] }]);
-    expect(side.audit.slice(baseline.audit.length).map((e) => [e.tenantId, e.op, e.targetId])).toEqual([
+    expect(side.outcomes).toEqual([
+      { value: [owned.liveB] },
+      { value: null },
+      { value: null },
+      { value: [key.keyId] },
+    ]);
+    expect(
+      side.audit.slice(baseline.audit.length).map((e) => [e.tenantId, e.op, e.targetId]),
+    ).toEqual([
       [TENANT_B, 'auth_revoke', owned.liveB],
       [TENANT_B, 'auth_create', key.keyId],
     ]);
@@ -334,7 +359,9 @@ describe('KeyWrites.listApiKeys', () => {
       list({ keyId: memberA, active: true }),
       list({ keyId: memberB, active: false }),
     ]);
-    expect(side.outcomes[0]).toEqual({ value: [owned.liveNew, owned.revoked, owned.expired, owned.liveOld] });
+    expect(side.outcomes[0]).toEqual({
+      value: [owned.liveNew, owned.revoked, owned.expired, owned.liveOld],
+    });
     expect(valueOf(side, 1)).toEqual([
       expect.objectContaining({
         key: expect.objectContaining({ keyId: memberA, scopes: [OWNED_SCOPE], ownerSubject: null }),

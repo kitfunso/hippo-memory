@@ -1,4 +1,9 @@
-import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, DAG_LEVEL, type MemoryEntry } from './entry.js';
+import {
+  COMPACTION_MEMORY_TAG,
+  COMPACTION_SOURCE_PREFIX,
+  DAG_LEVEL,
+  type MemoryEntry,
+} from './entry.js';
 import { heldTexts } from '../util/same-text.js';
 import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
 
@@ -43,12 +48,20 @@ export function isReleaseCommitNoise(text: string): boolean {
 }
 
 const NOT_FILLER_WORD = String.raw`(?!(?:the|that|this|it|them|those|these|one|other|something)\b)\S+`;
-const PREFER_TARGET = new RegExp(String.raw`^(?:prefer|use|avoid|never use|don't use)\s+` + NOT_FILLER_WORD, 'i');
-const ALWAYS_NEVER_TARGET = new RegExp(String.raw`\b(?:never|always|must)\s+` + NOT_FILLER_WORD, 'i');
+const PREFER_TARGET = new RegExp(
+  String.raw`^(?:prefer|use|avoid|never use|don't use)\s+` + NOT_FILLER_WORD,
+  'i',
+);
+const ALWAYS_NEVER_TARGET = new RegExp(
+  String.raw`\b(?:never|always|must)\s+` + NOT_FILLER_WORD,
+  'i',
+);
 
 /** Short preferences and rules carry a useful relationship even without a path or number. */
 export function hasNoSpecificity(text: string): boolean {
-  const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter((a) => !CHAT_ACRONYMS.test(a));
+  const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter(
+    (a) => !CHAT_ACRONYMS.test(a),
+  );
   if (/\d|[A-Z][a-z]{2,}|[/\\.]|[`_{}()[\]]/.test(text)) return false;
   if (domainAcronyms.length > 0 && /[a-z]/.test(text)) return false;
   if (PREFER_TARGET.test(text)) return false;
@@ -77,7 +90,8 @@ function isRoutineReleaseActivity(text: string): boolean {
   const subject = text.replace(/^(?:chore|ci|build)(?:\([^)]*\))?:\s*/i, '');
   if (VERSION_BUMP.test(subject)) return true;
   return (
-    DEPLOY_ACTION.test(subject) || /^(?:deployment|release|build)\s+(?:succeeded|completed|finished)\b/i.test(subject)
+    DEPLOY_ACTION.test(subject) ||
+    /^(?:deployment|release|build)\s+(?:succeeded|completed|finished)\b/i.test(subject)
   );
 }
 
@@ -120,7 +134,10 @@ function isDanglingAssertion(text: string): boolean {
 /** A capitalised short condition may carry its rule with no comma: "When CI fails we retry once". */
 function isPossibleFragment(text: string): boolean {
   const bare = bareText(text);
-  return POSSIBLE_CUT_ENDING.test(bare) || (/^(?:If|Unless|When|While|Until)\b/.test(bare) && isBareCondition(bare));
+  return (
+    POSSIBLE_CUT_ENDING.test(bare) ||
+    (/^(?:If|Unless|When|While|Until)\b/.test(bare) && isBareCondition(bare))
+  );
 }
 
 const OUTCOME_LEAD = new RegExp(
@@ -228,7 +245,10 @@ const COPY_SOURCE = /^(?:promoted|shared):/;
 export const BUNDLE_HEADER =
   /^\[Consolidated(?: from| pattern from) \d+ related memor(?:y|ies)(?:, newest first)?\]\n\n/;
 
-type Provenance = Pick<MemoryEntry, 'source' | 'confidence' | 'content' | 'extractedFrom' | 'dagLevel' | 'tags'>;
+type Provenance = Pick<
+  MemoryEntry,
+  'source' | 'confidence' | 'content' | 'extractedFrom' | 'dagLevel' | 'tags'
+>;
 
 /**
  * A row hippo wrote that no person vouched for: hippo's writers stamp observed or inferred, a person's edit or restore
@@ -250,7 +270,9 @@ export function isAutomaticEntry(entry: Provenance): boolean {
  * A bundle's parts are other rows' words, possibly a person's, so a bundle is sure to be junk only when every part is.
  */
 function bundleParts(entry: Pick<MemoryEntry, 'content'>): string[] {
-  return BUNDLE_HEADER.test(entry.content) ? heldTexts({ content: entry.content, source: 'consolidation' }) : [];
+  return BUNDLE_HEADER.test(entry.content)
+    ? heldTexts({ content: entry.content, source: 'consolidation' })
+    : [];
 }
 
 function hasCertainDefect(entry: Pick<MemoryEntry, 'content'>): boolean {
@@ -265,7 +287,9 @@ function hasCertainDefect(entry: Pick<MemoryEntry, 'content'>): boolean {
 export function automaticDefect(entry: Provenance): AutomaticMemoryDefect | null {
   if (!isAutomaticEntry(entry)) return null;
   const parts = bundleParts(entry);
-  const reasons = (parts.length > 0 ? parts : [entry.content.trim()]).map((text) => assessAutomaticMemory(text).reason);
+  const reasons = (parts.length > 0 ? parts : [entry.content.trim()]).map(
+    (text) => assessAutomaticMemory(text).reason,
+  );
   return reasons.every((reason) => reason !== null) ? (reasons[0] ?? null) : null;
 }
 
@@ -290,7 +314,9 @@ export function isContentWorthStoring(content: string): boolean {
 /** Recent-context floor: rows hippo wrote meet the automatic check, a person's rows only the older, looser floor. */
 export function isWorthSurfacing(entry: MemoryEntry): boolean {
   if (isAutomaticEntry(entry)) {
-    return bundleParts(entry).length > 0 ? !hasCertainDefect(entry) : isContentWorthStoring(entry.content);
+    return bundleParts(entry).length > 0
+      ? !hasCertainDefect(entry)
+      : isContentWorthStoring(entry.content);
   }
   const text = entry.content.trim();
   return (

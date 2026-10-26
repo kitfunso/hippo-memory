@@ -68,7 +68,10 @@ function rows(sql: string, ...params: string[]): unknown[] {
 describe('hippo auth revoke, grant and ungrant (in process)', () => {
   it('prints each command output and exit code, and leaves these rows', async () => {
     const mint = async (tenantId: string): Promise<api.AuthCreateResult> =>
-      await api.authCreate(apiCtx(root, tenantId, api.adminActor('cli')), { label: tenantId, role: 'member' });
+      await api.authCreate(apiCtx(root, tenantId, api.adminActor('cli')), {
+        label: tenantId,
+        role: 'member',
+      });
     const home = await mint('default');
     const acme = await mint('acme');
     const spare = await mint('acme');
@@ -83,8 +86,12 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
 
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<void> => {
-      const r = await runInProcess(() => handleAuth({ hippoRoot: root, tenantId: 'default', args, flags }));
-      transcript.push(`$ auth ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
+      const r = await runInProcess(() =>
+        handleAuth({ hippoRoot: root, tenantId: 'default', args, flags }),
+      );
+      transcript.push(
+        `$ auth ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`,
+      );
     };
 
     await step('revoke (no id)', ['revoke']);
@@ -93,10 +100,14 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
     await step('grant (unknown)', ['grant', 'hk_aaaaaaaaaaaaaaaaaaaaaaaa', 'unknown:legacy']);
     await step('grant (open scope)', ['grant', spare.keyId, 'team:eng']);
     await step('grant', ['grant', spare.keyId, 'unknown:legacy']);
-    expect((await verifyApiKeyCached(spare.plaintext, sqliteStore(root)))?.scopes).toEqual(['unknown:legacy']);
+    expect((await verifyApiKeyCached(spare.plaintext, sqliteStore(root)))?.scopes).toEqual([
+      'unknown:legacy',
+    ]);
     await step('grant --json (again)', ['grant', spare.keyId, 'unknown:legacy'], { json: true });
     await step('ungrant', ['ungrant', spare.keyId, 'unknown:legacy']);
-    await step('ungrant --json (none held)', ['ungrant', spare.keyId, 'unknown:legacy'], { json: true });
+    await step('ungrant --json (none held)', ['ungrant', spare.keyId, 'unknown:legacy'], {
+      json: true,
+    });
     await step('revoke (other tenant)', ['revoke', acme.keyId]);
     expect(await verifyApiKeyCached(acme.plaintext, sqliteStore(root))).toBeNull();
     await step('revoke --json (again)', ['revoke', acme.keyId], { json: true });
@@ -104,7 +115,9 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
     await step('revoke (own tenant)', ['revoke', home.keyId], { json: true });
 
     expect(transcript.join('\n')).toMatchSnapshot();
-    expect(rows(`SELECT key_id, tenant_id, revoked_at IS NOT NULL AS revoked FROM api_keys ORDER BY id`)).toEqual([
+    expect(
+      rows(`SELECT key_id, tenant_id, revoked_at IS NOT NULL AS revoked FROM api_keys ORDER BY id`),
+    ).toEqual([
       { key_id: home.keyId, tenant_id: 'default', revoked: 1 },
       { key_id: acme.keyId, tenant_id: 'acme', revoked: 1 },
       { key_id: spare.keyId, tenant_id: 'acme', revoked: 0 },
@@ -126,8 +139,20 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
       scoped('auth_grant'),
       scoped('auth_ungrant'),
       scoped('auth_ungrant'),
-      { tenant_id: 'acme', actor: 'cli', op: 'auth_revoke', target_id: acme.keyId, metadata_json: '{}' },
-      { tenant_id: 'default', actor: 'cli', op: 'auth_revoke', target_id: home.keyId, metadata_json: '{}' },
+      {
+        tenant_id: 'acme',
+        actor: 'cli',
+        op: 'auth_revoke',
+        target_id: acme.keyId,
+        metadata_json: '{}',
+      },
+      {
+        tenant_id: 'default',
+        actor: 'cli',
+        op: 'auth_revoke',
+        target_id: home.keyId,
+        metadata_json: '{}',
+      },
     ]);
   });
 });
@@ -137,8 +162,12 @@ describe('hippo goal (in process)', () => {
     const mask = masker(/\b(?:g|rp)_[0-9a-f]{16}\b/g, 'id');
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<string> => {
-      const r = await runInProcess(() => handleGoal({ hippoRoot: root, tenantId: 'default', args, flags }));
-      transcript.push(`$ goal ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
+      const r = await runInProcess(() =>
+        handleGoal({ hippoRoot: root, tenantId: 'default', args, flags }),
+      );
+      transcript.push(
+        `$ goal ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`,
+      );
       return r.stdout.trim();
     };
     const s = { 'session-id': 's1' };
@@ -163,7 +192,10 @@ describe('hippo goal (in process)', () => {
       parent: top,
       level: '1',
     });
-    const other = await step('push (other tenant)', ['push', 'acme goal'], { ...s, 'tenant-id': 'acme' });
+    const other = await step('push (other tenant)', ['push', 'acme goal'], {
+      ...s,
+      'tenant-id': 'acme',
+    });
     vi.stubEnv('HIPPO_SESSION_ID', 's1');
     const third = await step('push (session from env)', ['push', 'write docs']);
     await step('list (empty session)', ['list'], { 'session-id': 's2' });
@@ -179,7 +211,10 @@ describe('hippo goal (in process)', () => {
     await step('list --all', ['list'], { ...s, all: true });
     await step('resume (no id)', ['resume']);
     await step('resume', ['resume', third]);
-    await step('complete --no-propagate', ['complete', top], { outcome: '0.5', 'no-propagate': true });
+    await step('complete --no-propagate', ['complete', top], {
+      outcome: '0.5',
+      'no-propagate': true,
+    });
     await step('list --all (after)', ['list'], { ...s, all: true });
     await step('list --tenant-id acme', ['list'], { ...s, 'tenant-id': 'acme' });
 

@@ -6,7 +6,9 @@ import { cosineOf as cosineSimilarity } from '../../src/base/rank/cosine.js';
 import { REQUIRE_EMBEDDINGS_VAR } from '../_helpers/embedding-backend.js';
 
 const LOCAL_JS = new URL('../../dist/base/embeddings/local.js', import.meta.url).href;
-const INSTALLED_ONLY = fileURLToPath(new URL('../_helpers/transformers-installed.cjs', import.meta.url));
+const INSTALLED_ONLY = fileURLToPath(
+  new URL('../_helpers/transformers-installed.cjs', import.meta.url),
+);
 
 // ---------------------------------------------------------------------------
 // Tests that run without a Transformers.js backend installed

@@ -33,13 +33,19 @@ async function backfillSlack(hippoRoot: string, tenantId: string, flags: CliFlag
   // Real fetcher requires SLACK_BOT_TOKEN with channels:history scope.
   const token = envSlackBotToken();
   if (!token) {
-    printError('SLACK_BOT_TOKEN is not set. Backfill requires a Slack bot token with channels:history scope.');
+    printError(
+      'SLACK_BOT_TOKEN is not set. Backfill requires a Slack bot token with channels:history scope.',
+    );
     throw new CliExit(2);
   }
   // The slack_cursors row drives resume, so the loop always continues where it left off (keeps idempotency clean).
-  if (stringFlag(flags, 'since')) printError('note: --since is ignored; the backfill resumes from the saved cursor.');
+  if (stringFlag(flags, 'since'))
+    printError('note: --since is ignored; the backfill resumes from the saved cursor.');
   const fetcher = slackHistoryFetcher(token);
-  const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: api.adminActor('cli:slack-backfill') };
+  const ctx = {
+    ...cliApiContext(hippoRoot, tenantId),
+    actor: api.adminActor('cli:slack-backfill'),
+  };
   try {
     const r = await backfillChannel(ctx, {
       teamId: envSlackTeamId() ?? 'T_UNKNOWN',
@@ -60,7 +66,12 @@ async function listSlackDlq(hippoRoot: string, tenantId: string, _flags: CliFlag
   }
 }
 
-async function replaySlackDlq(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
+async function replaySlackDlq(
+  hippoRoot: string,
+  tenantId: string,
+  args: string[],
+  flags: CliFlags,
+): Promise<void> {
   const ctx = cliApiContext(hippoRoot, tenantId);
   await runDlqReplay('slack', args[2], flags, (id, force) =>
     replaySlackDlqEntry(ctx, id, {
@@ -104,7 +115,12 @@ async function unregisterSlackWorkspace(hippoRoot: string, flags: CliFlags): Pro
   console.log(`removed: ${teamId}`);
 }
 
-export async function handleSlack({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleSlack({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
     await backfillSlack(hippoRoot, tenantId, flags);

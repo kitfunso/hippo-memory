@@ -44,9 +44,16 @@ export interface AuditMaintenance {
   pruneAuditRows(prune: AuditPrune): Promise<number>;
   /** A preview, or with `apply` the moves of certain defects to dormant storage behind a backup; a row
    * `repairKeeps(row, backsObject, protect)` names is kept, checked inside the repair's write. */
-  repairQuality(tenantId: string, apply: boolean, protect: RepairProtection): Promise<QualityRepairResult>;
+  repairQuality(
+    tenantId: string,
+    apply: boolean,
+    protect: RepairProtection,
+  ): Promise<QualityRepairResult>;
   /** repairQuality applied once per store; null once it ran there. */
-  repairQualityOnce(tenantId: string, protect: RepairProtection): Promise<QualityRepairResult | null>;
+  repairQualityOnce(
+    tenantId: string,
+    protect: RepairProtection,
+  ): Promise<QualityRepairResult | null>;
 }
 
 export interface AuditPrune {

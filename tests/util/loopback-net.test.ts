@@ -2,21 +2,32 @@ import { describe, it, expect } from 'vitest';
 import { isLoopbackAddress, isLoopbackHost } from '../../src/base/util/net.js';
 
 describe('isLoopbackHost', () => {
-  it.each(['localhost', '[::1]', '::1', '127.0.0.1', '127.0.0.2', '127.255.255.254'])('accepts %s', (host) => {
-    expect(isLoopbackHost(host)).toBe(true);
-  });
-  it.each(['example.com', '128.0.0.1', '10.0.0.1', '127.0.0.256', '127.0.0', '::ffff:127.0.0.1', ''])(
-    'rejects %s',
+  it.each(['localhost', '[::1]', '::1', '127.0.0.1', '127.0.0.2', '127.255.255.254'])(
+    'accepts %s',
     (host) => {
-      expect(isLoopbackHost(host)).toBe(false);
+      expect(isLoopbackHost(host)).toBe(true);
     },
   );
+  it.each([
+    'example.com',
+    '128.0.0.1',
+    '10.0.0.1',
+    '127.0.0.256',
+    '127.0.0',
+    '::ffff:127.0.0.1',
+    '',
+  ])('rejects %s', (host) => {
+    expect(isLoopbackHost(host)).toBe(false);
+  });
 });
 
 describe('isLoopbackAddress', () => {
-  it.each(['127.0.0.1', '127.0.0.2', '::1', '::ffff:127.0.0.1', '::ffff:127.1.2.3'])('accepts %s', (addr) => {
-    expect(isLoopbackAddress(addr)).toBe(true);
-  });
+  it.each(['127.0.0.1', '127.0.0.2', '::1', '::ffff:127.0.0.1', '::ffff:127.1.2.3'])(
+    'accepts %s',
+    (addr) => {
+      expect(isLoopbackAddress(addr)).toBe(true);
+    },
+  );
   // The expanded '0:0:0:0:0:0:0:1' stays rejected: the helper does not normalize IPv6.
   it.each([
     undefined,

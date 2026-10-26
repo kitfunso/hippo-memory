@@ -82,7 +82,10 @@ describe('isStrictOwnerEnv', () => {
     expect(isStrictOwnerEnv({})).toBe(false);
   });
 
-  it.each(['0', 'true', 'yes', ''])('returns false for HIPPO_STRICT_OWNER=%s (only 1 enables)', (v) => {
-    expect(isStrictOwnerEnv({ HIPPO_STRICT_OWNER: v })).toBe(false);
-  });
+  it.each(['0', 'true', 'yes', ''])(
+    'returns false for HIPPO_STRICT_OWNER=%s (only 1 enables)',
+    (v) => {
+      expect(isStrictOwnerEnv({ HIPPO_STRICT_OWNER: v })).toBe(false);
+    },
+  );
 });

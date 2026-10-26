@@ -50,7 +50,8 @@ const STYLE = [
   ...Object.entries(NODE_COLORS).map(([t, color]) => `.legend .t-${t}{color:${color}}`),
 ].join('\n');
 
-const sha256 = (text: string): string => `'sha256-${createHash('sha256').update(text).digest('base64')}'`;
+const sha256 = (text: string): string =>
+  `'sha256-${createHash('sha256').update(text).digest('base64')}'`;
 
 // Entity names come from memories, so the page runs only its own script and style block, each named by hash.
 const POLICY = [
@@ -84,7 +85,9 @@ function renderNodeSvg(model: GraphModel, pos: Map<number, Point>): string {
       const p = pos.get(node.id);
       if (!p) return '';
       const label =
-        node.name.length > NODE_LABEL_MAX_CHARS ? node.name.slice(0, NODE_LABEL_MAX_CHARS - 1) + '…' : node.name;
+        node.name.length > NODE_LABEL_MAX_CHARS
+          ? node.name.slice(0, NODE_LABEL_MAX_CHARS - 1) + '…'
+          : node.name;
       return (
         `<g class="node" data-id="${node.id}" transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">` +
         `<title>${escapeHtml(node.type + ': ' + node.name)}</title>` +
@@ -99,7 +102,10 @@ function renderNodeSvg(model: GraphModel, pos: Map<number, Point>): string {
 // Safe inline JSON for the client: unicode-escape the HTML-significant chars so the content cannot terminate the
 // <script> block; JSON.parse restores them.
 function inlineModelJson(model: GraphModel): string {
-  return JSON.stringify(model).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+  return JSON.stringify(model)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
 }
 
 function renderLegend(model: GraphModel): string {

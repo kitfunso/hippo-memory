@@ -23,7 +23,9 @@ import {
 
 let p: Project;
 
-const { mk, rows, events, logs, lessons, lessonWith, list, read, doc } = toolFailureScratch(() => p);
+const { mk, rows, events, logs, lessons, lessonWith, list, read, doc } = toolFailureScratch(
+  () => p,
+);
 
 describe('tool-failure listing, lesson and origin', () => {
   it('TF1 a stored failure is listed after prompt 1, and its lesson reaches prompt 2 with the failure as origin', async () => {
@@ -54,10 +56,11 @@ describe('tool-failure listing, lesson and origin', () => {
     expect(lessons()).toHaveLength(1);
     const id = String(lesson.id);
     expect(
-      rows('SELECT pool, outcome, stage FROM delivery_candidates WHERE event_id = ? AND memory_id = ?', p.hippoRoot, [
-        num(ev[2].id),
-        id,
-      ]),
+      rows(
+        'SELECT pool, outcome, stage FROM delivery_candidates WHERE event_id = ? AND memory_id = ?',
+        p.hippoRoot,
+        [num(ev[2].id), id],
+      ),
     ).toEqual([{ pool: 'prompt-recall', outcome: 'emitted', stage: 'final' }]);
     const listing = list('tf1');
     expect(listing.entries).toEqual([
@@ -126,7 +129,8 @@ describe('tool-failure listing, lesson and origin', () => {
 
   it('TF3 duplicated fires of two tool calls give two entries; a repeated error text is a duplicate with no lesson', async () => {
     p = mk();
-    for (const id of ['toolu_a', 'toolu_a', 'toolu_b', 'toolu_b']) await fail(p, 'tf3', { tool_use_id: id });
+    for (const id of ['toolu_a', 'toolu_a', 'toolu_b', 'toolu_b'])
+      await fail(p, 'tf3', { tool_use_id: id });
     const ev = events('tf3');
     const log = logs();
     expect(ev.map(callKey)).toEqual([
@@ -213,7 +217,9 @@ describe('tool-failure listing, lesson and origin', () => {
     expect(list('tf6')).toEqual({ entries: [], notes: [] });
     const lesson = String(lessons()[0].id);
     const v = read('tf6', lesson);
-    expect(v.notes).toEqual(expect.arrayContaining([`subagent:${ev[1].id}`, `subagent-outcome:${ev[1].id}:none`]));
+    expect(v.notes).toEqual(
+      expect.arrayContaining([`subagent:${ev[1].id}`, `subagent-outcome:${ev[1].id}:none`]),
+    );
     expect(v.notes.some((n) => n.startsWith('tool-failure'))).toBe(false);
     expect([v.origin, v.turns.length]).toEqual([null, 1]);
   });
@@ -301,7 +307,9 @@ describe('lesson links and the ledger loss window', () => {
     p = mk();
     failWhere(p, 'tf12', 'INSERT INTO failure_log', { tool_use_id: 'toolu_loss' });
     const ev = events('tf12');
-    expect(ev.map((e) => [e.event_type, e.tool_use_id, e.failure_id])).toEqual([['tool-failure', 'toolu_loss', null]]);
+    expect(ev.map((e) => [e.event_type, e.tool_use_id, e.failure_id])).toEqual([
+      ['tool-failure', 'toolu_loss', null],
+    ]);
     expect(list('tf12').entries.map((e) => [e.event_id, e.outcome, e.lesson])).toEqual([
       [ev[0].id, 'log-missing', null],
     ]);

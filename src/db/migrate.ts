@@ -4,7 +4,14 @@ import { importLegacyEmbeddingIndex } from './vector-store.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { execWithBusyRetry, withWriteScope } from './busy.js';
 import { tableExists } from './tables.js';
-import { ensureMetaTable, getMeta, getSchemaVersion, setMeta, setSchemaVersion, META_KEY } from './meta.js';
+import {
+  ensureMetaTable,
+  getMeta,
+  getSchemaVersion,
+  setMeta,
+  setSchemaVersion,
+  META_KEY,
+} from './meta.js';
 import {
   MEMORIES_FTS_DDL,
   REQUIRED_SCHEMA_OBJECTS,
@@ -120,7 +127,9 @@ function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   return current ? factsOf(probe) : null;
 }
 
-function factsOf(row: Pick<SchemaProbe, 'archive_pending' | 'has_memories' | 'mirrors_due'>): OpenFacts {
+function factsOf(
+  row: Pick<SchemaProbe, 'archive_pending' | 'has_memories' | 'mirrors_due'>,
+): OpenFacts {
   return {
     archivePending: row.archive_pending !== null,
     hasMemories: row.has_memories !== null,
@@ -150,20 +159,29 @@ export function settledStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   };
   assertMinBinary(row.min_binary);
   const current =
-    Number(row.user_version) === CURRENT_SCHEMA_VERSION && Number(row.schema_version) === CURRENT_SCHEMA_VERSION;
+    Number(row.user_version) === CURRENT_SCHEMA_VERSION &&
+    Number(row.schema_version) === CURRENT_SCHEMA_VERSION;
   return current ? factsOf(row) : null;
 }
 
 /** Brings the store to the current schema; returns the probe's facts when it was current already, null after any
  * repair. */
-export function runMigrations(db: DatabaseSyncLike, hippoRoot?: string, busyWaitMs?: number): OpenFacts | null {
+export function runMigrations(
+  db: DatabaseSyncLike,
+  hippoRoot?: string,
+  busyWaitMs?: number,
+): OpenFacts | null {
   const facts = currentStoreFacts(db);
   if (!facts) migrateAndHeal(db, hippoRoot, busyWaitMs);
   if (hippoRoot) importLegacyVectors(db, hippoRoot);
   return facts;
 }
 
-function migrateAndHeal(db: DatabaseSyncLike, hippoRoot: string | undefined, busyWaitMs: number | undefined): void {
+function migrateAndHeal(
+  db: DatabaseSyncLike,
+  hippoRoot: string | undefined,
+  busyWaitMs: number | undefined,
+): void {
   ensureMetaTable(db);
   // Before anything writes, so a stale binary never repairs or migrates a store it does not understand.
   assertBinaryCompatible(db);
@@ -207,10 +225,15 @@ function applyMigration(
 }
 
 // The fast path requires user_version as well, and a store stamped only in meta would otherwise never reach it.
-function healUserVersion(db: DatabaseSyncLike, version: number, busyWaitMs: number | undefined): void {
+function healUserVersion(
+  db: DatabaseSyncLike,
+  version: number,
+  busyWaitMs: number | undefined,
+): void {
   const row = db.prepare('PRAGMA user_version').get() as { user_version?: number } | undefined;
   const target = Math.max(0, Math.trunc(version));
-  if (Number(row?.user_version ?? 0) < target) execWithBusyRetry(db, `PRAGMA user_version = ${target}`, busyWaitMs);
+  if (Number(row?.user_version ?? 0) < target)
+    execWithBusyRetry(db, `PRAGMA user_version = ${target}`, busyWaitMs);
 }
 
 // A failed import leaves embeddings.json in place for the next open to retry; the store still opens.
@@ -232,7 +255,9 @@ function ensureMetaDefaults(db: DatabaseSyncLike): void {
   // SAFETY: meta.key is TEXT NOT NULL.
   const present = new Set(
     (
-      db.prepare(`SELECT key FROM meta WHERE key IN (${placeholders(keys.length)})`).all(...keys) as Array<{
+      db
+        .prepare(`SELECT key FROM meta WHERE key IN (${placeholders(keys.length)})`)
+        .all(...keys) as Array<{
         key: string;
       }>
     ).map((r) => r.key),
@@ -253,7 +278,10 @@ function ensureOptionalFts(db: DatabaseSyncLike): void {
   } catch (err) {
     // A busy or locked open says nothing about fts5, so only a missing module may flip the flag.
     if (!isFtsMissing(errorMessage(err))) {
-      log.warn(`full-text index not set up this open (${errorMessage(err)}); the next open retries`, errorFields(err));
+      log.warn(
+        `full-text index not set up this open (${errorMessage(err)}); the next open retries`,
+        errorFields(err),
+      );
       return;
     }
     log.warn(
@@ -275,10 +303,15 @@ function writeFtsFlag(db: DatabaseSyncLike, flag: '0' | '1'): void {
  * missing. */
 export function ftsRowCounts(db: DatabaseSyncLike): { memories: number; fts: number } | null {
   if (!tableExists(db, 'memories_fts') || !tableExists(db, 'memories')) return null;
-  const memories = (db.prepare(`SELECT COUNT(*) AS c FROM memories`).get() as { c?: number } | undefined)?.c ?? 0;
+  const memories =
+    (db.prepare(`SELECT COUNT(*) AS c FROM memories`).get() as { c?: number } | undefined)?.c ?? 0;
   // memories_fts_docsize is FTS5's cheaper one-row-per-document shadow table; fall back for a foreign-built index.
-  const ftsTable = tableExists(db, 'memories_fts_docsize') ? 'memories_fts_docsize' : 'memories_fts';
-  const fts = (db.prepare(`SELECT COUNT(*) AS c FROM ${ftsTable}`).get() as { c?: number } | undefined)?.c ?? 0;
+  const ftsTable = tableExists(db, 'memories_fts_docsize')
+    ? 'memories_fts_docsize'
+    : 'memories_fts';
+  const fts =
+    (db.prepare(`SELECT COUNT(*) AS c FROM ${ftsTable}`).get() as { c?: number } | undefined)?.c ??
+    0;
   return { memories: Number(memories), fts: Number(fts) };
 }
 

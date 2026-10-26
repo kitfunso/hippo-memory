@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { mrr, recallAtK, ndcgAtK, runEval, bootstrapCorpus, compareSummaries } from '../../src/domain/eval/eval.js';
+import {
+  mrr,
+  recallAtK,
+  ndcgAtK,
+  runEval,
+  bootstrapCorpus,
+  compareSummaries,
+} from '../../src/domain/eval/eval.js';
 import { PRODUCTION_SWITCHES } from '../../src/base/memory/eval-switches.js';
 import type { EvalSummary } from '../../src/domain/eval/eval.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -83,7 +90,9 @@ describe('runEval', () => {
     const m1 = createMemory('FRED cache silently dropped the TIPS series', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     });
-    const m2 = createMemory('Python dict ordering is guaranteed in 3.7+', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const m2 = createMemory('Python dict ordering is guaranteed in 3.7+', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     const m3 = createMemory('backfill script skipped rows before 2023-01-01', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     });
@@ -94,7 +103,10 @@ describe('runEval', () => {
       { id: 'c2', query: 'Python dict ordering', expectedIds: [m2.id] },
     ];
 
-    const summary = await runEval(cases, entries, { now: evalNow(), switches: PRODUCTION_SWITCHES });
+    const summary = await runEval(cases, entries, {
+      now: evalNow(),
+      switches: PRODUCTION_SWITCHES,
+    });
     expect(summary.cases).toHaveLength(2);
     expect(summary.meanMrr).toBe(1); // both cases hit at rank 1
     expect(summary.meanRecallAt5).toBe(1);
@@ -106,7 +118,9 @@ describe('runEval', () => {
     const m1 = createMemory('FRED cache silently dropped the TIPS series', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     });
-    const cases = [{ id: 'c1', query: 'unrelated query that matches nothing', expectedIds: ['mem_nonexistent'] }];
+    const cases = [
+      { id: 'c1', query: 'unrelated query that matches nothing', expectedIds: ['mem_nonexistent'] },
+    ];
     const summary = await runEval(cases, [m1], { now: evalNow(), switches: PRODUCTION_SWITCHES });
     expect(summary.meanMrr).toBe(0);
     expect(summary.meanRecallAt10).toBe(0);
@@ -145,7 +159,9 @@ describe('bootstrapCorpus', () => {
 
   it('respects maxCases cap', () => {
     const entries = Array.from({ length: 10 }, (_, i) =>
-      createMemory(`memory number ${i} about various topics here`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      createMemory(`memory number ${i} about various topics here`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
     );
     const corpus = bootstrapCorpus(entries, 3);
     expect(corpus).toHaveLength(3);
@@ -156,7 +172,9 @@ describe('bootstrapCorpus', () => {
 // compareSummaries — baseline vs current deltas
 // ---------------------------------------------------------------------------
 
-function mockSummary(cases: Array<{ id: string; mrr: number; r10: number; ndcg: number }>): EvalSummary {
+function mockSummary(
+  cases: Array<{ id: string; mrr: number; r10: number; ndcg: number }>,
+): EvalSummary {
   const converted = cases.map((c) => ({
     case: { id: c.id, query: 'q', expectedIds: ['x'] },
     returnedIds: [],

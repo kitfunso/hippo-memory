@@ -20,7 +20,13 @@ function send(
 ): Promise<{ status: number; requestId: string | undefined; sniffing: string | undefined }> {
   return new Promise((resolve, reject) => {
     const req = request(
-      { host: '127.0.0.1', port: handle.port, method: 'GET', path, headers: { ...handle.auth, ...headers } },
+      {
+        host: '127.0.0.1',
+        port: handle.port,
+        method: 'GET',
+        path,
+        headers: { ...handle.auth, ...headers },
+      },
       (res) => {
         res.resume();
         res.on('end', () => {
@@ -113,7 +119,9 @@ describe('X-Request-Id', () => {
       // A bad value makes the config reader warn from inside the request.
       writeFileSync(join(home, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: -1 } }));
       await send('/v1/context?q=anything', { 'x-request-id': 'req-deep-1' });
-      const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('"pilot.holdoutRateBp"'));
+      const warned = stderrSpy.mock.calls
+        .map((c) => String(c[0]))
+        .filter((l) => l.includes('"pilot.holdoutRateBp"'));
       expect(warned.join('')).toMatch(
         /^\[hippo\] warn: .* ts=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z requestId=req-deep-1\n/,
       );
@@ -168,10 +176,15 @@ describe('the access line', () => {
       writeFileSync(join(home, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: -1 } }));
       await send('/v1/context?q=anything', { 'x-request-id': 'req-marker-1' });
       await vi.waitFor(
-        () => expect(stderrSpy.mock.calls.some((c) => String(c[0]).includes('requestId=req-marker-1'))).toBe(true),
+        () =>
+          expect(
+            stderrSpy.mock.calls.some((c) => String(c[0]).includes('requestId=req-marker-1')),
+          ).toBe(true),
         { timeout: 5000 },
       );
-      const markerAt = stderrSpy.mock.calls.findIndex((c) => String(c[0]).includes('requestId=req-marker-1'));
+      const markerAt = stderrSpy.mock.calls.findIndex((c) =>
+        String(c[0]).includes('requestId=req-marker-1'),
+      );
       expect(accessLines({ mock: { calls: stderrSpy.mock.calls.slice(0, markerAt) } })).toEqual([]);
     } finally {
       stderrSpy.mockRestore();
@@ -222,7 +235,9 @@ describe('a request still unanswered past the slow threshold', () => {
       expect(res.headers.get('x-request-id')).toBe('req-slow-1');
 
       // A request answered inside the threshold never logs: its timer went with the reply.
-      const quick = await fetch(`${slow.url}/health`, { headers: { 'x-request-id': 'req-quick-1' } });
+      const quick = await fetch(`${slow.url}/health`, {
+        headers: { 'x-request-id': 'req-quick-1' },
+      });
       expect(quick.status).toBe(200);
       // Positive control: a second held request warns later than the quick one's timer would have, so its warn proves the quick one stayed silent.
       gate = new Promise<void>((ok) => {
@@ -234,7 +249,10 @@ describe('a request still unanswered past the slow threshold', () => {
       await vi.waitFor(() => expect(warned()).toHaveLength(2), { timeout: 5000 });
       release();
       expect((await second).status).toBe(200);
-      expect(warned().map((l) => /requestId=(\S+)/.exec(l)?.[1])).toEqual(['req-slow-1', 'req-slow-2']);
+      expect(warned().map((l) => /requestId=(\S+)/.exec(l)?.[1])).toEqual([
+        'req-slow-1',
+        'req-slow-2',
+      ]);
     } finally {
       stderrSpy.mockRestore();
       await slow.stop();

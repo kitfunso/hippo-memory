@@ -13,11 +13,20 @@ import { audit, auditRejectionRefusal } from './audit-event.js';
 import { entryIdTaken } from './entry-reads.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { stampOriginProject } from './entry-row.js';
-import type { DormantRestoreOutcome, Dormant, DormantRestoreRequest } from '../../base/ports/store/dormant.js';
+import type {
+  DormantRestoreOutcome,
+  Dormant,
+  DormantRestoreRequest,
+} from '../../base/ports/store/dormant.js';
 import { updateStatsUnlessBusy } from './index-and-stats.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
-import { deleteDormantRow, hasDormantRow, listDormantRows, readDormantSnapshot } from './dormant-rows.js';
+import {
+  deleteDormantRow,
+  hasDormantRow,
+  listDormantRows,
+  readDormantSnapshot,
+} from './dormant-rows.js';
 import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 
@@ -101,22 +110,30 @@ function auditDormantRestore(
   ]);
 }
 
-function restoreInWriteScope(db: DatabaseSyncLike, files: StoreFiles, restore: DormantRestore): DormantRestoreOutcome {
-  return withWriteScopeOr<DormantRestoreOutcome, DormantRestoreOutcome>(db, 'restore_dormant', (rollback) => {
-    const snapshot = readDormantSnapshot(db, restore.tenantId, restore.id);
-    if (!snapshot || !ownScopeTouches(restore.ownScope, snapshot.entry.scope ?? null)) {
-      return rollback({ status: 'missing' });
-    }
-    if (entryIdTaken(db, restore.id)) return rollback({ status: 'active' });
-    const now = files.clock();
-    const entry = stampOriginProject(files, reviveDormant(snapshot, now, restore.revival));
-    writeEntryDbOnly(db, entry, { actor: restore.actor });
-    deleteDormantRow(db, restore.tenantId, restore.id);
-    // A restore is a labelled "forgot it, then needed it" event, the signal a learned lifecycle trains on.
-    // Same write scope as the restore, so the label exists exactly when the restore does.
-    auditDormantRestore(db, restore, snapshot, now);
-    return { status: 'restored', entry };
-  });
+function restoreInWriteScope(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  restore: DormantRestore,
+): DormantRestoreOutcome {
+  return withWriteScopeOr<DormantRestoreOutcome, DormantRestoreOutcome>(
+    db,
+    'restore_dormant',
+    (rollback) => {
+      const snapshot = readDormantSnapshot(db, restore.tenantId, restore.id);
+      if (!snapshot || !ownScopeTouches(restore.ownScope, snapshot.entry.scope ?? null)) {
+        return rollback({ status: 'missing' });
+      }
+      if (entryIdTaken(db, restore.id)) return rollback({ status: 'active' });
+      const now = files.clock();
+      const entry = stampOriginProject(files, reviveDormant(snapshot, now, restore.revival));
+      writeEntryDbOnly(db, entry, { actor: restore.actor });
+      deleteDormantRow(db, restore.tenantId, restore.id);
+      // A restore is a labelled "forgot it, then needed it" event, the signal a learned lifecycle trains on.
+      // Same write scope as the restore, so the label exists exactly when the restore does.
+      auditDormantRestore(db, restore, snapshot, now);
+      return { status: 'restored', entry };
+    },
+  );
 }
 
 /** Brings one dormant memory back on a single handle: the live row, the dormant delete and the audit row commit
@@ -162,18 +179,29 @@ function forgetDormantMemory(db: DatabaseSyncLike, forget: DormantForget): boole
 
 // The port names the caller's own scope; the rows take the SQL that admits it.
 const dormantReadsBodies: Bodies<Pick<Dormant, 'list'>> = {
-  list: (db, tenantId, ownScope, opts) => listDormantRows(db, tenantId, opts, touchableScopeSql('', ownScope)),
+  list: (db, tenantId, ownScope, opts) =>
+    listDormantRows(db, tenantId, opts, touchableScopeSql('', ownScope)),
 };
 
 export function sqliteDormant({ on, files }: Handles): Dormant {
   return {
     ...bound(on, dormantReadsBodies),
-    ...bound<Pick<Dormant, 'restore'>>(on, { restore: (db, ...args) => restoreDormantMemory(db, files, ...args) }),
+    ...bound<Pick<Dormant, 'restore'>>(on, {
+      restore: (db, ...args) => restoreDormantMemory(db, files, ...args),
+    }),
     ...bound<Pick<Dormant, 'forget'>>(
       on,
       {
         forget: (db, tenantId, ownScope, id, actor) => {
-          if (!forgetDormantMemory(db, { tenantId, id, actor, admit: touchableScopeSql('', ownScope) })) return false;
+          if (
+            !forgetDormantMemory(db, {
+              tenantId,
+              id,
+              actor,
+              admit: touchableScopeSql('', ownScope),
+            })
+          )
+            return false;
           // Counted like every other permanent removal (forget, archiveRaw).
           updateStatsUnlessBusy(db, files, { forgotten: 1 }, `removed ${id}`);
           return true;

@@ -29,7 +29,10 @@ describe('aggregate helpers', () => {
   it('ciHalfWidth95 for 10-sample [0.10..0.20] is approximately 0.032', () => {
     // Hand-verified: mean=0.15, sample variance ~0.001944, sd ~0.04410,
     // CI = 2.262 * 0.04410 / sqrt(10) ~= 0.0315.
-    expect(ciHalfWidth95([0.1, 0.15, 0.2, 0.1, 0.15, 0.2, 0.1, 0.15, 0.2, 0.15])).toBeCloseTo(0.032, 2);
+    expect(ciHalfWidth95([0.1, 0.15, 0.2, 0.1, 0.15, 0.2, 0.1, 0.15, 0.2, 0.15])).toBeCloseTo(
+      0.032,
+      2,
+    );
   });
 
   it('ciHalfWidth95 returns 0 for n=1 (no sample variance estimable)', () => {

@@ -7,7 +7,12 @@ import { join } from 'node:path';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import type { HippoStore, LastRecall, LastRecallWrites, RecallWrites } from '../../src/base/ports/store-index.js';
+import type {
+  HippoStore,
+  LastRecall,
+  LastRecallWrites,
+  RecallWrites,
+} from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { withSqliteAllowed } from '../../src/db/index.js';
@@ -100,7 +105,11 @@ describe('retrieve with the CLI ranking core', () => {
       infra: testInfra(),
     };
 
-    const result = await retrieveWithCliCore(ctx, { query: 'deploy' }, { ...cliCore(), lastRecall: traced });
+    const result = await retrieveWithCliCore(
+      ctx,
+      { query: 'deploy' },
+      { ...cliCore(), lastRecall: traced },
+    );
 
     expect(store.kind).toBe('port-only');
     expect(result.results.map((r) => r.id).sort()).toEqual(['mem_core_0', 'mem_core_1']);
@@ -150,7 +159,10 @@ describe('retrieve with the CLI ranking core', () => {
     const result = await retrieveWithCliCore(
       ctx,
       { query: 'deploy' },
-      { ...cliCore(), sources: { root: secondRoot, store: globalStore, config: loadConfig(secondRoot) } },
+      {
+        ...cliCore(),
+        sources: { root: secondRoot, store: globalStore, config: loadConfig(secondRoot) },
+      },
     );
 
     expect(result.results.map((r) => r.id)).toContain('mem_second_0');

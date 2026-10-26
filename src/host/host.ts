@@ -20,7 +20,10 @@ const IDENTITY_CACHE_MAX = 1_000;
 export function createHost(): Host {
   const globalConfig = configReader();
   const remoteOn: RemoteRule = () => globalConfig(hippoHomeDir()).projectIdentity.remote;
-  const walks = new Map<string, { readonly identity: ProjectIdentity; readonly remote: boolean | null }>();
+  const walks = new Map<
+    string,
+    { readonly identity: ProjectIdentity; readonly remote: boolean | null }
+  >();
   return {
     projectIdentity: (dir) => {
       const start = path.resolve(dir);
@@ -38,5 +41,7 @@ export function createHost(): Host {
 /** The origin for a write that names none: NULL on a shared store, whose folder is no caller's project, else the
  * folder's project. */
 export function fallbackOrigin(host: Host, hippoRoot: string): string | null {
-  return host.isSharedStore(hippoRoot) ? null : host.projectIdentity(path.dirname(path.resolve(hippoRoot))).name;
+  return host.isSharedStore(hippoRoot)
+    ? null
+    : host.projectIdentity(path.dirname(path.resolve(hippoRoot))).name;
 }

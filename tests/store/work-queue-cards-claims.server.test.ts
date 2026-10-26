@@ -37,7 +37,10 @@ function holdLockThenRelease(dbPath: string, cardId: string, holdMs: number) {
   `;
   // Set before COMMIT: the commit frees the lock, and the waiting call can return before this thread runs its next line.
   const holdEnded = new Int32Array(new SharedArrayBuffer(4));
-  const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, cardId, holdMs, holdEnded } });
+  const worker = new Worker(workerCode, {
+    eval: true,
+    workerData: { dbPath, cardId, holdMs, holdEnded },
+  });
   const locked = new Promise<void>((resolve) => {
     worker.once('message', (msg) => {
       if (msg === 'locked') resolve();
@@ -153,7 +156,10 @@ function holdLockThenCompleteParent(dbPath: string, parentId: string, holdMs: nu
   `;
   // Set before COMMIT: the commit frees the lock, and the waiting call can return before this thread runs its next line.
   const holdEnded = new Int32Array(new SharedArrayBuffer(4));
-  const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, parentId, holdMs, holdEnded } });
+  const worker = new Worker(workerCode, {
+    eval: true,
+    workerData: { dbPath, parentId, holdMs, holdEnded },
+  });
   const locked = new Promise<void>((resolve) => {
     worker.once('message', (msg) => {
       if (msg === 'locked') resolve();
@@ -179,7 +185,11 @@ describe('a parent completing while createCard waits for the write lock still yi
     await reviewCard(root, 'default', parent.id); // in review, not done yet: a read before the commit would see this.
 
     const dbPath = join(root, 'hippo.db');
-    const { locked, released, startHold, holdHadEnded } = holdLockThenCompleteParent(dbPath, parent.id, 300);
+    const { locked, released, startHold, holdHadEnded } = holdLockThenCompleteParent(
+      dbPath,
+      parent.id,
+      300,
+    );
     await locked;
 
     startHold();

@@ -10,7 +10,12 @@ import {
   type StrengthModel,
 } from '../../base/memory/strength.js';
 import { strengthSql, originInSql, rewardFactorSql, scopeAdmitSql } from './rule-sql.js';
-import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../../db/decay-key.js';
+import {
+  DECAY_KEY_HALF_LIVES,
+  DECAY_KEY_SLACK_DAYS,
+  DECAY_KEY_SQL,
+  DECAY_KEY_WHERE,
+} from '../../db/decay-key.js';
 import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { sortableStamp } from '../../base/memory/created-stamp.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -64,7 +69,15 @@ function tallyStatus(
     if (facets.agedOut) sums.agedOut++;
   }
   const { total, pinned, atRisk, agedOut } = sums;
-  return { total, byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength: total > 0 ? sums.strength / total : 0 };
+  return {
+    total,
+    byLayer,
+    byConfidence,
+    pinned,
+    atRisk,
+    agedOut,
+    avgStrength: total > 0 ? sums.strength / total : 0,
+  };
 }
 
 const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
@@ -105,12 +118,17 @@ const positionOf = (e: MemoryEntry): Position => ({ at: sortableStamp(e.created)
 const newestFirst = (a: Position, b: Position): number =>
   a.at !== b.at ? (a.at < b.at ? 1 : -1) : a.id === b.id ? 0 : a.id < b.id ? 1 : -1;
 
-const afterParams = (after: Position | undefined): string[] => (after ? [after.at, after.at, after.id] : []);
+const afterParams = (after: Position | undefined): string[] =>
+  after ? [after.at, after.at, after.id] : [];
 
 /** Reads in `created` text order, which is time order while every live row of the tenant holds toISOString text. */
 function readByText(run: RunSql): ReadNewest {
   return (own, limit, after) =>
-    run(`${own.sql} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [...own.params, ...afterParams(after), limit]);
+    run(`${own.sql} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [
+      ...own.params,
+      ...afterParams(after),
+      limit,
+    ]);
 }
 
 /** Every live drifted row `own` admits, newest first; the drift index holds only these, so it is no tenant scan. */
@@ -127,11 +145,10 @@ function readByInstant(run: RunSql, drifted: Map<string, MemoryEntry[]>): ReadNe
   return (own, limit, after) => {
     let odd = drifted.get(own.sql);
     if (!odd) drifted.set(own.sql, (odd = newestDrifted(run, own)));
-    const text = run(`${own.sql} AND NOT ${CREATED_DRIFTED} ${after ? AFTER : ''}${NEWEST} LIMIT ?`, [
-      ...own.params,
-      ...afterParams(after),
-      limit,
-    ]);
+    const text = run(
+      `${own.sql} AND NOT ${CREATED_DRIFTED} ${after ? AFTER : ''}${NEWEST} LIMIT ?`,
+      [...own.params, ...afterParams(after), limit],
+    );
     const older = after ? odd.filter((e) => newestFirst(positionOf(e), after) > 0) : odd;
     return [...text, ...older]
       .map((entry) => ({ entry, at: positionOf(entry) }))
@@ -143,13 +160,19 @@ function readByInstant(run: RunSql, drifted: Map<string, MemoryEntry[]>): ReadNe
 
 // The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still sees, and the delivery
 // ledger still counts, the other-project rows it refuses; past it, the reads narrow to the caller's origins.
-function listRecentRows(read: ReadNewest, tenantId: string, options: RecentRowsOptions): MemoryEntry[] {
+function listRecentRows(
+  read: ReadNewest,
+  tenantId: string,
+  options: RecentRowsOptions,
+): MemoryEntry[] {
   const { needed, admit, origins } = options;
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
   const window = Math.max(needed * 4, 32);
   const originSql =
     origins &&
-    (origins.userGlobal ? `(origin_project = '' OR ${originInSql(origins.names)})` : originInSql(origins.names));
+    (origins.userGlobal
+      ? `(origin_project = '' OR ${originInSql(origins.names)})`
+      : originInSql(origins.names));
   const own: SqlFragment = {
     sql: originSql ? `${AMBIENT_SCOPED} AND ${originSql}` : AMBIENT_SCOPED,
     params: [tenantId, ...(origins?.names ?? [])],
@@ -232,7 +255,9 @@ export function listAmbientCandidates(
   const needed = Math.trunc(recentNeeded);
   const run: RunSql = (where, params) =>
     (
-      cachedStatement(db, `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where}`).all(...params) as MemoryRow[]
+      cachedStatement(db, `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where}`).all(
+        ...params,
+      ) as MemoryRow[]
     ).map(rowToEntry);
 
   const byId = new Map<string, MemoryEntry>();
@@ -242,7 +267,10 @@ export function listAmbientCandidates(
 
   if (needed > 0) {
     const drifted = newestDrifted(run, { sql: AMBIENT_SCOPED, params: [tenantId] });
-    const read = drifted.length === 0 ? readByText(run) : readByInstant(run, new Map([[AMBIENT_SCOPED, drifted]]));
+    const read =
+      drifted.length === 0
+        ? readByText(run)
+        : readByInstant(run, new Map([[AMBIENT_SCOPED, drifted]]));
     for (const e of listRecentRows(read, tenantId, { needed, admit, origins })) byId.set(e.id, e);
   }
 
@@ -264,7 +292,9 @@ export function listAmbientCandidates(
 
 // calculateStrength's decay exponent with its reward factor under `model`: the strongest rows, without scoring each
 // one in JS.
-const decayExponentSql = (model: StrengthModel): string => `CASE WHEN half_life_days > 0 THEN (julianday(?) -
+const decayExponentSql = (
+  model: StrengthModel,
+): string => `CASE WHEN half_life_days > 0 THEN (julianday(?) -
     julianday(last_retrieved)) / (half_life_days * ${rewardFactorSql(model)}) END`;
 
 const decayRankSql = (model: StrengthModel): string => `pinned DESC,
@@ -294,12 +324,14 @@ export function contextRowsWhere(
   return { sql: where.join(' AND '), params };
 }
 
-const RANK_COLUMNS = 'id, pinned, half_life_days, last_retrieved, outcome_positive, outcome_negative';
+const RANK_COLUMNS =
+  'id, pinned, half_life_days, last_retrieved, outcome_positive, outcome_negative';
 
 // The `cap` best of the pinned rows and the unpinned rows the v60 key puts within DECAY_KEY_HALF_LIVES; nothing unless
 // every unpinned winner is within it too, since then each row left out has decayed further and the rank is the scan's.
 function decayKeySubsetSql(whereSql: string): string {
-  const arm = (extra: string): string => `SELECT ${RANK_COLUMNS} FROM memories WHERE ${whereSql} AND ${extra}`;
+  const arm = (extra: string): string =>
+    `SELECT ${RANK_COLUMNS} FROM memories WHERE ${whereSql} AND ${extra}`;
   // pinned is 0 or 1 (entry-row.ts), so the two arms hold every pinned row and every unpinned row with a key.
   return `WITH top AS MATERIALIZED (
       SELECT id, pinned, ${decayExponentSql(PRODUCTION_STRENGTH)} AS d FROM (
@@ -314,9 +346,23 @@ function decayKeySubsetSql(whereSql: string): string {
     ORDER BY created ASC, id ASC`;
 }
 
-function decayKeySubsetRows(db: DatabaseSyncLike, rows: SqlFragment, cap: number, now: string): MemoryRow[] {
+function decayKeySubsetRows(
+  db: DatabaseSyncLike,
+  rows: SqlFragment,
+  cap: number,
+  now: string,
+): MemoryRow[] {
   const whereSql = rows.sql;
-  const bound = [now, ...rows.params, ...rows.params, now, DECAY_KEY_SLACK_DAYS, cap, cap, DECAY_KEY_HALF_LIVES];
+  const bound = [
+    now,
+    ...rows.params,
+    ...rows.params,
+    now,
+    DECAY_KEY_SLACK_DAYS,
+    cap,
+    cap,
+    DECAY_KEY_HALF_LIVES,
+  ];
   return cachedStatement(db, decayKeySubsetSql(whereSql)).all(...bound) as MemoryRow[];
 }
 
@@ -335,10 +381,10 @@ export function listContextCandidates(
   // Stops one row past the cap, so a large tenant is not walked to be counted.
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const matched = (
-    cachedStatement(db, `SELECT COUNT(*) AS n FROM (SELECT 1 FROM memories WHERE ${whereSql} LIMIT ?)`).get(
-      ...params,
-      cap + 1,
-    ) as { n: number }
+    cachedStatement(
+      db,
+      `SELECT COUNT(*) AS n FROM (SELECT 1 FROM memories WHERE ${whereSql} LIMIT ?)`,
+    ).get(...params, cap + 1) as { n: number }
   ).n;
   // Under the cap every match is returned, so the per-row decay math and the sort are skipped.
   const ranked = matched > cap;
@@ -353,7 +399,10 @@ export function listContextCandidates(
     SELECT id FROM memories WHERE ${whereSql} ORDER BY ${decayRankSql(model)} LIMIT ?
   ) ORDER BY created ASC, id ASC`
     : `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${whereSql} ORDER BY created ASC, id ASC`;
-  const rows = cachedStatement(db, sql).all(...params, ...(ranked ? [now, cap] : [])) as MemoryRow[];
+  const rows = cachedStatement(db, sql).all(
+    ...params,
+    ...(ranked ? [now, cap] : []),
+  ) as MemoryRow[];
   return rows.map(rowToEntry);
 }
 
@@ -370,11 +419,19 @@ export function listTextsHolding(
   project?: readonly string[],
   admit: SqlFragment = TEAM_VISIBLE,
 ): HeldText[] {
-  const origin = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
-  const filter = { sql: `${origin} AND ${admit.sql}`, params: [...(project ?? []), ...admit.params] };
+  const origin =
+    project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
+  const filter = {
+    sql: `${origin} AND ${admit.sql}`,
+    params: [...(project ?? []), ...admit.params],
+  };
   const byId = new Map<string, HeldText>();
   for (const row of rowsHoldingTexts(db, { tenantId, filter }, texts)) {
-    byId.set(row.id, { content: row.content, source: row.source, originProject: row.origin_project });
+    byId.set(row.id, {
+      content: row.content,
+      source: row.source,
+      originProject: row.origin_project,
+    });
   }
   return [...byId.values()];
 }
@@ -385,19 +442,26 @@ function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
 
 /** computeSchemaFit against a tenant's newest SCHEMA_FIT_WINDOW_ROWS rows: tag counts come from one aggregate and texts
  * stream one column, so no row is loaded. */
-export function schemaFit(db: DatabaseSyncLike, tenantId: string, content: string, tags: readonly string[]): number {
-  const newest = 'SELECT tags_json, content FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?';
+export function schemaFit(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  content: string,
+  tags: readonly string[],
+): number {
+  const newest =
+    'SELECT tags_json, content FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?';
   // One read transaction, so the row count and the texts come from the same snapshot.
   return withReadSnapshot(db, () => {
-    const groups = cachedStatement(db, `SELECT tags_json, COUNT(*) AS n FROM (${newest}) GROUP BY tags_json`).all(
-      tenantId,
-      SCHEMA_FIT_WINDOW_ROWS,
-    ) as Array<{ tags_json: string | null; n: number }>;
+    const groups = cachedStatement(
+      db,
+      `SELECT tags_json, COUNT(*) AS n FROM (${newest}) GROUP BY tags_json`,
+    ).all(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Array<{ tags_json: string | null; n: number }>;
     let rows = 0;
     const tagCounts = new Map<string, number>();
     for (const group of groups) {
       rows += group.n;
-      for (const tag of parseJsonArray(group.tags_json)) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + group.n);
+      for (const tag of parseJsonArray(group.tags_json))
+        tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + group.n);
     }
     // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out; a stored per-tenant tag and
     // token tally is the upgrade.
@@ -512,7 +576,12 @@ function* statusInputs(rows: Iterable<StatusRow>): Iterable<StatusInputs> {
 /**
  * The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is built.
  */
-export function statusCounts(db: DatabaseSyncLike, rules: StoreModel, now: Date, atRiskBelow: number): StatusCounts {
+export function statusCounts(
+  db: DatabaseSyncLike,
+  rules: StoreModel,
+  now: Date,
+  atRiskBelow: number,
+): StatusCounts {
   // One read transaction, so the row tallies and the two counts describe the same store.
   return withReadSnapshot(db, () => {
     // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
@@ -528,6 +597,10 @@ export function statusCounts(db: DatabaseSyncLike, rules: StoreModel, now: Date,
       (SELECT COUNT(*) FROM memory_conflicts WHERE status = 'open') AS openConflicts,
       (SELECT COUNT(*) FROM memory_vectors WHERE memory_id IN (SELECT id FROM memories)) AS embedded`,
     ).get() as Record<'openConflicts' | 'embedded', number | bigint>;
-    return { ...tallies, openConflicts: Number(counts.openConflicts), embedded: Number(counts.embedded) };
+    return {
+      ...tallies,
+      openConflicts: Number(counts.openConflicts),
+      embedded: Number(counts.embedded),
+    };
   });
 }

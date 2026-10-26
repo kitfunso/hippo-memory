@@ -11,7 +11,8 @@ afterEach(() => {
 async function loadAdapter(cli: string) {
   vi.stubEnv('HIPPO_BENCH_CLI', cli);
   vi.resetModules();
-  const { default: adapter } = await import('../../benchmarks/sequential-learning/adapters/hippo.mjs');
+  const { default: adapter } =
+    await import('../../benchmarks/sequential-learning/adapters/hippo.mjs');
   return adapter;
 }
 

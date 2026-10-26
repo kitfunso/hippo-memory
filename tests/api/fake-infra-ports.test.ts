@@ -130,7 +130,9 @@ describe('the api on fake infra ports', () => {
     const ctx = contextOn(fake);
     const config = ctx.config;
 
-    await remember(ctx, { content: 'the release train leaves every second thursday from platform nine' });
+    await remember(ctx, {
+      content: 'the release train leaves every second thursday from platform nine',
+    });
     await remember(ctx, {
       content: 'the release notes are drafted on the wednesday before the train',
       kind: 'distilled',

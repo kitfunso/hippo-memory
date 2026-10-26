@@ -60,8 +60,14 @@ describe('gemini adapter: home', () => {
 
   it('GEMINI_CLI_HOME replaces the home and the default folder is not read', () => {
     const other = path.join(tmp, 'elsewhere');
-    write(path.join(other, '.gemini', 'GEMINI.md'), lines('## Gemini Added Memories', '- from the variable'));
-    write(path.join(geminiDir(), 'GEMINI.md'), lines('## Gemini Added Memories', '- from the default'));
+    write(
+      path.join(other, '.gemini', 'GEMINI.md'),
+      lines('## Gemini Added Memories', '- from the variable'),
+    );
+    write(
+      path.join(geminiDir(), 'GEMINI.md'),
+      lines('## Gemini Added Memories', '- from the default'),
+    );
     const listing = geminiAdapter.list(ctxFor({ env: { GEMINI_CLI_HOME: other } }), 'user');
     expect(listing.home).toBe(path.join(other, '.gemini'));
     expect(listing.containers[0].items.map((i) => i.text)).toEqual(['from the variable']);
@@ -107,7 +113,10 @@ describe('gemini adapter: user scope', () => {
       warnings: [],
       textKeyed: true,
     });
-    expect(container.items.map((i) => i.text)).toEqual(['likes tabs', 'uses pnpm for installs\n  - not npm']);
+    expect(container.items.map((i) => i.text)).toEqual([
+      'likes tabs',
+      'uses pnpm for installs\n  - not npm',
+    ]);
     expect(container.items.map((i) => i.key)).toEqual(
       textItemKeys([
         { headingSlug: 'gemini-added-memories', text: 'likes tabs' },
@@ -138,7 +147,10 @@ describe('gemini adapter: user scope', () => {
 
   it.each([
     ['a NUL byte', () => Buffer.from('## Gemini Added Memories\n- a\0b\n')],
-    ['a file over 256 KB', () => Buffer.from(`## Gemini Added Memories\n- ${'x'.repeat(300 * 1024)}\n`)],
+    [
+      'a file over 256 KB',
+      () => Buffer.from(`## Gemini Added Memories\n- ${'x'.repeat(300 * 1024)}\n`),
+    ],
   ])('%s makes the container unreadable with one warning', (_name, content) => {
     write(path.join(geminiDir(), 'GEMINI.md'), content());
     const [container] = geminiAdapter.list(ctxFor(), 'user').containers;
@@ -160,7 +172,10 @@ describe('gemini adapter: project scope', () => {
     const root = path.join(tmp, 'proj');
     index({ [root]: 'proj-slug' });
     const dir = memoryDir('proj-slug');
-    const withFm = write(path.join(dir, 'a.md'), lines('---', 'name: A', '---', '', 'body of a  ', ''));
+    const withFm = write(
+      path.join(dir, 'a.md'),
+      lines('---', 'name: A', '---', '', 'body of a  ', ''),
+    );
     write(path.join(dir, 'b.md'), '  plain body of b\n');
     write(path.join(dir, 'MEMORY.md'), '- index line that is never an item');
     write(path.join(dir, 'notes.txt'), 'not markdown');

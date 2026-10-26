@@ -4,7 +4,12 @@ import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { layerDir, writeMarkdownMirror } from '../../src/store/sqlite/mirrors.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { deleteEntry, writeEntry, readEntry, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
+import {
+  deleteEntry,
+  writeEntry,
+  readEntry,
+  batchWriteAndDeleteInFolder,
+} from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -55,14 +60,20 @@ describe('mirror files are replaced whole', () => {
     writeMarkdownMirror(root, entry);
     writeMarkdownMirror(root, { ...entry, content: 'second wording of the mirror' });
     const dir = layerDir(root, entry.layer);
-    expect(fs.readdirSync(dir).filter((name) => name.startsWith(entry.id))).toEqual([`${entry.id}.md`]);
-    expect(fs.readFileSync(path.join(dir, `${entry.id}.md`), 'utf8')).toContain('second wording of the mirror');
+    expect(fs.readdirSync(dir).filter((name) => name.startsWith(entry.id))).toEqual([
+      `${entry.id}.md`,
+    ]);
+    expect(fs.readFileSync(path.join(dir, `${entry.id}.md`), 'utf8')).toContain(
+      'second wording of the mirror',
+    );
   });
 
   it('a write that cannot rename onto its target throws and leaves no temp file', () => {
     const entry = createMemory('blocked mirror');
     blockMarkdownMirror(entry.id, entry.layer);
     expect(() => writeMarkdownMirror(root, entry)).toThrow();
-    expect(fs.readdirSync(layerDir(root, entry.layer)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+    expect(
+      fs.readdirSync(layerDir(root, entry.layer)).filter((name) => name.endsWith('.tmp')),
+    ).toEqual([]);
   });
 });

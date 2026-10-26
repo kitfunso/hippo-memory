@@ -6,11 +6,21 @@ import { chunked } from '../../base/util/chunked.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { appendAuditEvents } from './audit.js';
-import { deleteDormantRow, dormantSnapshotsWhere, readDormantSnapshot, replaceDormantEntry } from './dormant-rows.js';
+import {
+  deleteDormantRow,
+  dormantSnapshotsWhere,
+  readDormantSnapshot,
+  replaceDormantEntry,
+} from './dormant-rows.js';
 import { stampOriginProject } from './entry-row.js';
 import { entryIdTaken, readEntriesInIdOrder } from './entry-reads.js';
 import { listEntriesWhere } from './entry-filter.js';
-import { renameEntrySourceAndOrigin, renameEntrySource, setEntryTagsInTx, supersedeEntry } from './entry-writes.js';
+import {
+  renameEntrySourceAndOrigin,
+  renameEntrySource,
+  setEntryTagsInTx,
+  supersedeEntry,
+} from './entry-writes.js';
 import { gatedWrite } from './gated-write.js';
 import type { StoreFiles } from './open.js';
 import { setAsideRow } from './set-aside.js';
@@ -36,11 +46,19 @@ interface StepsRun {
 /** The tenant's live rows under `prefix`, one bounded statement per page. */
 function liveUnder(db: DatabaseSyncLike, tenantId: string, prefix: string): MemoryEntry[] {
   const filter = { tenantId, sourcePrefix: prefix, live: true } as const;
-  return [...rowsInPages((after?: EntryCursor) => listEntriesWhere(db, filter, { limit: READ_PAGE_ROWS, after }))];
+  return [
+    ...rowsInPages((after?: EntryCursor) =>
+      listEntriesWhere(db, filter, { limit: READ_PAGE_ROWS, after }),
+    ),
+  ];
 }
 
 /** Null when the rows the plan read have changed: nothing is written then, and the sync plans again. */
-export function runSteps(db: DatabaseSyncLike, files: StoreFiles, plan: ContainerApply): StepsRun | null {
+export function runSteps(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  plan: ContainerApply,
+): StepsRun | null {
   const rows = standingRows(db, plan);
   return rows === null ? null : new ContainerSteps(db, files, plan, rows).run();
 }
@@ -55,14 +73,21 @@ function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, M
   if (rows.size !== plan.rows.length) return null;
   for (const want of plan.rows) {
     const row = rows.get(want.id);
-    if (row === undefined || row.source !== want.source || row.tags.includes(plan.tag) !== want.tagged) return null;
+    if (
+      row === undefined ||
+      row.source !== want.source ||
+      row.tags.includes(plan.tag) !== want.tagged
+    )
+      return null;
   }
   const outside = [...new Set(plan.steps.flatMap(namedIds))].filter((id) => !rows.has(id));
   for (const ids of chunked(outside)) {
     for (const row of readEntriesInIdOrder(db, ids, plan.tenantId)) rows.set(row.id, row);
   }
   const adoptable = plan.steps.every(
-    (step) => step.kind !== 'adopt' || (rows.get(step.id)?.source === step.from && !rows.get(step.id)?.supersededBy),
+    (step) =>
+      step.kind !== 'adopt' ||
+      (rows.get(step.id)?.source === step.from && !rows.get(step.id)?.supersededBy),
   );
   return adoptable ? rows : null;
 }
@@ -146,7 +171,11 @@ class ContainerSteps {
     for (const snap of dormantSnapshotsWhere(this.db, { tenantId, sourcePrefix: from })) {
       const source = to + snap.entry.source.slice(from.length);
       const originProject = origin ?? snap.entry.originProject;
-      replaceDormantEntry(this.db, tenantId, snap.entry.id, { ...snap.entry, source, originProject });
+      replaceDormantEntry(this.db, tenantId, snap.entry.id, {
+        ...snap.entry,
+        source,
+        originProject,
+      });
     }
     return 'done';
   }
@@ -177,7 +206,10 @@ class ContainerSteps {
 
   private gated(entry: MemoryEntry): GatedWriteResult {
     const stamped = stampOriginProject(this.files, entry);
-    const result = gatedWrite(this.db, this.files, stamped, { actor: SYNC_ACTOR, worthCheck: false });
+    const result = gatedWrite(this.db, this.files, stamped, {
+      actor: SYNC_ACTOR,
+      worthCheck: false,
+    });
     if (result === 'written') this.mirror.push(stamped);
     return result;
   }

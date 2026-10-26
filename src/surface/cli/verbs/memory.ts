@@ -25,7 +25,11 @@ export const MEMORY_VERBS = {
   init: verb(() => import('../init.js'), 'handleInit', {
     repairsCodexWrapper: true,
     scoped: true,
-    flags: { switches: ['global', 'no-hooks', 'no-learn', 'no-schedule'], values: ['scan'], numbers: ['days'] },
+    flags: {
+      switches: ['global', 'no-hooks', 'no-learn', 'no-schedule'],
+      values: ['scan'],
+      numbers: ['days'],
+    },
     usage: [
       `
   init                     Create .hippo/ structure in current directory
@@ -205,7 +209,11 @@ export const MEMORY_VERBS = {
     ],
   }),
   trace: verb(() => import('../remember.js'), 'handleTrace', {
-    flags: { switches: ['json'], values: ['outcome', 'session', 'source', 'steps', 'task'], lists: ['tag'] },
+    flags: {
+      switches: ['json'],
+      values: ['outcome', 'session', 'source', 'steps', 'task'],
+      lists: ['tag'],
+    },
     usage: [
       `
   trace <id>               Memory dossier: content, decay trajectory, retrievals,
@@ -228,7 +236,15 @@ export const MEMORY_VERBS = {
   }),
   eval: verb(() => import('../eval.js'), 'handleEval', {
     flags: {
-      switches: ['bootstrap', 'equal-sources', 'json', 'no-mmr', 'save-baseline', 'show-cases', 'suite'],
+      switches: [
+        'bootstrap',
+        'equal-sources',
+        'json',
+        'no-mmr',
+        'save-baseline',
+        'show-cases',
+        'suite',
+      ],
       values: ['baseline', 'compare', 'out'],
       numbers: ['embedding-weight', 'local-bump', 'max-cases', 'min-mrr', 'mmr-lambda'],
     },

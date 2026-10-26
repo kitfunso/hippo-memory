@@ -3,7 +3,11 @@
 // src/store/sqlite/recall-trace.ts); hashes, ids, counts and enums only, never text.
 import type { MemoryEntry } from '../base/memory/entry.js';
 import { scoreOverlap, type PromptRecallGate } from '../base/rank/prompt-recall.js';
-import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';
+import {
+  hookPayloadSessionId,
+  hookPayloadString,
+  isSubagentPayload,
+} from '../base/util/hook-payload.js';
 import { blockHash, estimateTokens } from '../base/util/token-text.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { MAX_HOOK_FIELD_LEN } from '../base/util/limits.js';
@@ -21,7 +25,8 @@ import type {
   DeliveryWriteStore,
 } from '../base/session/delivery.js';
 /** Only the per-prompt calls keep prompt facts; a boundary or a `hippo context` run is not a prompt. */
-const carriesPrompt = (type: DeliveryEventType): boolean => type === 'prompt-submit' || type === 'pinned-manual';
+const carriesPrompt = (type: DeliveryEventType): boolean =>
+  type === 'prompt-submit' || type === 'pinned-manual';
 
 /** Rejected candidate rows kept per event; the rest only add to `rejected_unlisted`. */
 const DELIVERY_REJECTED_ROW_CAP = 16;
@@ -66,7 +71,13 @@ export interface DeliveryObserver {
   disabled(): void;
   /** No `pool` means pin or recent by the entry's own flag. */
   offer(entries: readonly MemoryEntry[], isGlobal: boolean, pool?: DeliveryPool): void;
-  reject(entry: MemoryEntry, stage: DeliveryStage, reason: DeliveryRejectReason, score?: number, tokens?: number): void;
+  reject(
+    entry: MemoryEntry,
+    stage: DeliveryStage,
+    reason: DeliveryRejectReason,
+    score?: number,
+    tokens?: number,
+  ): void;
   dropMissing(
     before: readonly MemoryEntry[],
     after: readonly MemoryEntry[],
@@ -150,7 +161,8 @@ function storeOf(isGlobal: boolean | undefined): DeliveryWriteStore {
 }
 
 function byDepthThenScore(a: Candidate, b: Candidate): number {
-  const depth = (STAGE_DEPTH.get(b.stage ?? 'load') ?? 0) - (STAGE_DEPTH.get(a.stage ?? 'load') ?? 0);
+  const depth =
+    (STAGE_DEPTH.get(b.stage ?? 'load') ?? 0) - (STAGE_DEPTH.get(a.stage ?? 'load') ?? 0);
   if (depth !== 0) return depth;
   const score = (b.score ?? Number.NEGATIVE_INFINITY) - (a.score ?? Number.NEGATIVE_INFINITY);
   if (score !== 0 && !Number.isNaN(score)) return score;
@@ -190,7 +202,8 @@ type Guard = (fn: () => void) => void;
 function readPayload(init: DeliveryRecorderInit): PayloadFacts {
   const payloadSession = hookPayloadSessionId(init.stdinText);
   const subagent = isSubagentPayload(init.stdinText);
-  const envSession = init.envSessionId !== undefined && init.envSessionId !== '' ? init.envSessionId : null;
+  const envSession =
+    init.envSessionId !== undefined && init.envSessionId !== '' ? init.envSessionId : null;
   const prompt = hookPayloadString(init.stdinText, 'prompt');
   const rawTurnId = hookPayloadString(init.stdinText, 'turn_id');
   const hostTurnId = rawTurnId !== null && rawTurnId.trim() !== '' ? rawTurnId : null;
@@ -284,7 +297,12 @@ function rejectedRows(state: RecorderState): RejectedRows {
 
 type DeliveryCounts = Pick<
   DeliveryEventInput,
-  'consideredCount' | 'filteredCount' | 'selectedCount' | 'emittedCount' | 'rejectedCount' | 'rejectedUnlisted'
+  | 'consideredCount'
+  | 'filteredCount'
+  | 'selectedCount'
+  | 'emittedCount'
+  | 'rejectedCount'
+  | 'rejectedUnlisted'
 >;
 
 function deliveryCounts(
@@ -314,14 +332,21 @@ function buildEvent(
   const rejected = rejectedRows(state);
   const rows = [...picked, ...rejected.rows];
   const emitted = outcome.emittedText ?? null;
-  const eventType = init.eventType ?? (payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual');
+  const eventType =
+    init.eventType ??
+    (payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual');
   // Whatever the payload holds, so a hook-run `hippo context` is never matched to an earlier row by its prompt.
   const prompt = carriesPrompt(eventType) ? payload.prompt : null;
   return {
     ts,
     tenantId: init.tenantId,
     runtime:
-      init.runtime ?? (payload.hostTurnId !== null ? 'codex' : payload.hookEvent !== null ? 'claude-code' : 'unknown'),
+      init.runtime ??
+      (payload.hostTurnId !== null
+        ? 'codex'
+        : payload.hookEvent !== null
+          ? 'claude-code'
+          : 'unknown'),
     eventType,
     surface: eventType === 'context' ? 'context' : 'hook',
     storeHash: init.storeHash,
@@ -376,12 +401,19 @@ function markQualityDropped(
   rejectId(state, id, { stage: 'load', reason: 'quality', score: null, tokens: null });
 }
 
-function offerEntries(state: RecorderState, ...[entries, isGlobal, pool]: Parameters<DeliveryObserver['offer']>): void {
+function offerEntries(
+  state: RecorderState,
+  ...[entries, isGlobal, pool]: Parameters<DeliveryObserver['offer']>
+): void {
   for (const e of entries) {
     const held = state.candidates.get(e.id);
     const wanted: DeliveryPool = pool ?? (e.pinned ? 'pin' : 'recent');
     // A loaded recent row the prompt-recall gate then judges belongs to that pool.
-    const relabel = held !== undefined && held.reason === null && held.pool === 'recent' && wanted === 'prompt-recall';
+    const relabel =
+      held !== undefined &&
+      held.reason === null &&
+      held.pool === 'recent' &&
+      wanted === 'prompt-recall';
     if (held !== undefined && !relabel) continue;
     state.candidates.set(e.id, {
       id: e.id,
@@ -401,7 +433,9 @@ function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods 
     qualityDropped: (...args) => guard(() => markQualityDropped(state, ...args)),
     offer: (...args) => guard(() => offerEntries(state, ...args)),
     reject: (e, stage, reason, score, tokens) =>
-      guard(() => rejectId(state, e.id, { stage, reason, score: score ?? null, tokens: tokens ?? null })),
+      guard(() =>
+        rejectId(state, e.id, { stage, reason, score: score ?? null, tokens: tokens ?? null }),
+      ),
     dropMissing: (before, after, stage, reason) =>
       guard(() => {
         const kept = new Set(after.map((e) => e.id));
@@ -463,7 +497,15 @@ function newRecorderState(): RecorderState {
 
 type StateMethods = Pick<
   DeliveryRecorder,
-  'facts' | 'sections' | 'watchAdmit' | 'filtered' | 'disabled' | 'queried' | 'traced' | 'delivered' | 'logged'
+  | 'facts'
+  | 'sections'
+  | 'watchAdmit'
+  | 'filtered'
+  | 'disabled'
+  | 'queried'
+  | 'traced'
+  | 'delivered'
+  | 'logged'
 >;
 
 function stateMethods(state: RecorderState, guard: Guard): StateMethods {
@@ -522,7 +564,10 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
   const state = newRecorderState();
 
   const guard = guardFor(state, fault);
-  const { qualityDropped, offer, reject, dropMissing, gated, selected } = candidateMethods(state, guard);
+  const { qualityDropped, offer, reject, dropMissing, gated, selected } = candidateMethods(
+    state,
+    guard,
+  );
 
   return {
     ledger: init.ledger,
@@ -549,7 +594,10 @@ function recorderTake(
     if (state.flushed) return null;
     state.flushed = true;
     if (state.broken !== null) {
-      log.warn(`delivery ledger skipped: recorder failed: ${state.broken.message}`, errorFields(state.broken.error));
+      log.warn(
+        `delivery ledger skipped: recorder failed: ${state.broken.message}`,
+        errorFields(state.broken.error),
+      );
       return null;
     }
     if (fault === 'build') throw new Error('injected build fault');

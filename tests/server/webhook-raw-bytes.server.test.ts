@@ -8,7 +8,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 const SECRET = 'raw-bytes-secret';
 // 0xff and 0xfe never occur in UTF-8, so decoding turns each into U+FFFD.
-const BODY = Buffer.concat([Buffer.from('{"action":"opened","note":"'), Buffer.from([0xff, 0xfe]), Buffer.from('"}')]);
+const BODY = Buffer.concat([
+  Buffer.from('{"action":"opened","note":"'),
+  Buffer.from([0xff, 0xfe]),
+  Buffer.from('"}'),
+]);
 const DECODED_AND_REENCODED = Buffer.from(BODY.toString('utf8'), 'utf8');
 
 const hmac = (payload: readonly (string | Buffer)[]): string => {

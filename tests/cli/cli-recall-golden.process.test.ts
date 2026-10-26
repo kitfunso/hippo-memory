@@ -63,12 +63,22 @@ async function seedLocal(hippoRoot: string): Promise<void> {
       {},
       { scope: 'slack:private:C1' },
     ),
-    seeded('deploy target was the old staging cluster', 'mem_golden_old', '2026-01-02T00:00:00.000Z', {
-      supersededBy: 'mem_golden_new',
-    }),
-    seeded('deploy target is the new staging cluster in eu west', 'mem_golden_new', '2026-01-25T00:00:00.000Z', {
-      conflictsWith: ['mem_golden_plain'],
-    }),
+    seeded(
+      'deploy target was the old staging cluster',
+      'mem_golden_old',
+      '2026-01-02T00:00:00.000Z',
+      {
+        supersededBy: 'mem_golden_new',
+      },
+    ),
+    seeded(
+      'deploy target is the new staging cluster in eu west',
+      'mem_golden_new',
+      '2026-01-25T00:00:00.000Z',
+      {
+        conflictsWith: ['mem_golden_plain'],
+      },
+    ),
     seeded(
       'deploy goal work: migrate the rollout scripts to the new runner',
       'mem_golden_goal',
@@ -83,16 +93,26 @@ async function seedLocal(hippoRoot: string): Promise<void> {
       {},
       { layer: Layer.Trace, traceOutcome: 'success' },
     ),
-    seeded('unrelated note about lunch options near the office', 'mem_golden_noise', '2026-01-21T00:00:00.000Z'),
+    seeded(
+      'unrelated note about lunch options near the office',
+      'mem_golden_noise',
+      '2026-01-21T00:00:00.000Z',
+    ),
   ];
   for (const row of rows) writeEntry(hippoRoot, row);
-  goalId = (await pushGoal(hippoRoot, { sessionId: SESSION, tenantId: 'default', goalName: 'goal-alpha' })).id;
+  goalId = (
+    await pushGoal(hippoRoot, { sessionId: SESSION, tenantId: 'default', goalName: 'goal-alpha' })
+  ).id;
 }
 
 function seedGlobal(globalRoot: string): void {
   writeEntry(
     globalRoot,
-    seeded('deploy notes from the global store about rollbacks', 'mem_golden_global', '2026-01-12T00:00:00.000Z'),
+    seeded(
+      'deploy notes from the global store about rollbacks',
+      'mem_golden_global',
+      '2026-01-12T00:00:00.000Z',
+    ),
   );
 }
 
@@ -108,7 +128,10 @@ const CASES: Case[] = [
   { name: 'recall --json', args: ['recall', 'deploy', '--json'] },
   { name: 'recall --why', args: ['recall', 'deploy', '--why'] },
   { name: 'recall --why --json', args: ['recall', 'deploy', '--why', '--json'] },
-  { name: 'recall --scope private', args: ['recall', 'deploy', '--scope', 'slack:private:C1', '--json'] },
+  {
+    name: 'recall --scope private',
+    args: ['recall', 'deploy', '--scope', 'slack:private:C1', '--json'],
+  },
   { name: 'recall --scope tag', args: ['recall', 'deploy', '--scope', 'team-alpha'] },
   { name: 'recall --limit 2', args: ['recall', 'deploy', '--limit', '2'] },
   { name: 'recall --budget 120', args: ['recall', 'deploy', '--budget', '120', '--why'] },
@@ -119,11 +142,21 @@ const CASES: Case[] = [
     name: 'recall --graph-stream',
     args: ['recall', 'deploy', '--graph-stream', '--graph-hops', '2', '--graph-seeds', '3'],
   },
-  { name: 'recall --hops 1', args: ['recall', 'deploy', '--hops', '1', '--max-neighbors', '5', '--json'] },
-  { name: 'recall --include-superseded', args: ['recall', 'deploy', '--include-superseded', '--json'] },
+  {
+    name: 'recall --hops 1',
+    args: ['recall', 'deploy', '--hops', '1', '--max-neighbors', '5', '--json'],
+  },
+  {
+    name: 'recall --include-superseded',
+    args: ['recall', 'deploy', '--include-superseded', '--json'],
+  },
   { name: 'recall --as-of', args: ['recall', 'deploy', '--as-of', '2026-01-10', '--json'] },
   { name: 'recall --goal', args: ['recall', 'deploy', '--goal', 'goal-alpha', '--why'] },
-  { name: 'recall session goal stack', args: ['recall', 'deploy', '--why', '--json'], session: true },
+  {
+    name: 'recall session goal stack',
+    args: ['recall', 'deploy', '--why', '--json'],
+    session: true,
+  },
   {
     name: 'recall pfc rerankers',
     args: [
@@ -140,20 +173,39 @@ const CASES: Case[] = [
       '2',
     ],
   },
-  { name: 'recall --outcome success', args: ['recall', 'deploy', '--outcome', 'success', '--json'] },
+  {
+    name: 'recall --outcome success',
+    args: ['recall', 'deploy', '--outcome', 'success', '--json'],
+  },
   { name: 'recall --layer trace', args: ['recall', 'deploy', '--layer', 'trace'] },
   { name: 'recall no match', args: ['recall', 'zzqqxx'] },
   { name: 'recall no match --json', args: ['recall', 'zzqqxx', '--json'] },
   { name: 'recall global store', args: ['recall', 'deploy'], global: true },
-  { name: 'recall global store --json --why', args: ['recall', 'deploy', '--json', '--why'], global: true },
+  {
+    name: 'recall global store --json --why',
+    args: ['recall', 'deploy', '--json', '--why'],
+    global: true,
+  },
   { name: 'recall invalid --layer', args: ['recall', 'deploy', '--layer', 'bogus'] },
   { name: 'recall invalid --outcome', args: ['recall', 'deploy', '--outcome', 'nope'] },
-  { name: 'recall invalid --salience-threshold', args: ['recall', 'deploy', '--salience-threshold', '-1'] },
+  {
+    name: 'recall invalid --salience-threshold',
+    args: ['recall', 'deploy', '--salience-threshold', '-1'],
+  },
   { name: 'recall invalid --hops', args: ['recall', 'deploy', '--hops', 'x'] },
-  { name: 'recall invalid --max-neighbors', args: ['recall', 'deploy', '--hops', '1', '--max-neighbors', '0'] },
+  {
+    name: 'recall invalid --max-neighbors',
+    args: ['recall', 'deploy', '--hops', '1', '--max-neighbors', '0'],
+  },
   { name: 'recall invalid --as-of', args: ['recall', 'deploy', '--as-of', 'notadate'] },
-  { name: 'recall invalid --graph-hops', args: ['recall', 'deploy', '--graph-stream', '--graph-hops', '0'] },
-  { name: 'recall invalid --graph-seeds', args: ['recall', 'deploy', '--graph-stream', '--graph-seeds', 'x'] },
+  {
+    name: 'recall invalid --graph-hops',
+    args: ['recall', 'deploy', '--graph-stream', '--graph-hops', '0'],
+  },
+  {
+    name: 'recall invalid --graph-seeds',
+    args: ['recall', 'deploy', '--graph-stream', '--graph-seeds', 'x'],
+  },
   { name: 'recall invalid --reranker', args: ['recall', 'deploy', '--reranker', 'bogus'] },
   {
     name: 'recall --graph-stream then invalid --layer',
@@ -162,7 +214,10 @@ const CASES: Case[] = [
   },
   { name: 'explain default', args: ['explain', 'deploy'] },
   { name: 'explain --json', args: ['explain', 'deploy', '--json'] },
-  { name: 'explain --scope private --json', args: ['explain', 'deploy', '--scope', 'slack:private:C1', '--json'] },
+  {
+    name: 'explain --scope private --json',
+    args: ['explain', 'deploy', '--scope', 'slack:private:C1', '--json'],
+  },
   {
     name: 'explain --include-superseded --classic',
     args: ['explain', 'deploy', '--include-superseded', '--classic', '--limit', '3'],
@@ -198,7 +253,11 @@ function freshStore(c: Pick<Case, 'global'>): FreshStore {
   }
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const k of DROP_ENV) delete env[k];
-  Object.assign(env, { HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_FAKE_NOW: FAKE_NOW });
+  Object.assign(env, {
+    HIPPO_HOME: globalRoot,
+    HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+    HIPPO_FAKE_NOW: FAKE_NOW,
+  });
   return { home, env };
 }
 
@@ -220,7 +279,11 @@ async function run(c: Case): Promise<RunResult> {
     : await runCliAs(c.args, { cwd: home, env });
   return {
     home,
-    out: { status: res.status, stdout: normalize(res.stdout, home), stderr: normalize(res.stderr, home) },
+    out: {
+      status: res.status,
+      stdout: normalize(res.stdout, home),
+      stderr: normalize(res.stderr, home),
+    },
   };
 }
 
@@ -242,7 +305,9 @@ function writtenRows(hippoRoot: string): WrittenRows {
     // SAFETY: node:sqlite answers each row as a plain column-keyed object.
     const q = (sql: string): Row[] => db.prepare(sql).all() as Row[];
     return {
-      audit: q('SELECT ts, tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id'),
+      audit: q(
+        'SELECT ts, tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id',
+      ),
       goalRecallLog: q(
         'SELECT goal_id, memory_id, tenant_id, session_id, recalled_at, score FROM goal_recall_log ORDER BY memory_id, goal_id',
       ),
@@ -253,7 +318,9 @@ function writtenRows(hippoRoot: string): WrittenRows {
       traceResults: q(
         'SELECT trace_id, memory_id, result_rank, score, rerank_json FROM recall_trace_results ORDER BY trace_id, result_rank',
       ),
-      ledger: q('SELECT ts, tenant_id, session_id, surface, event, items, tokens FROM token_ledger ORDER BY id'),
+      ledger: q(
+        'SELECT ts, tenant_id, session_id, surface, event, items, tokens FROM token_ledger ORDER BY id',
+      ),
       memories: q('SELECT id, retrieval_count, strength, last_retrieved FROM memories ORDER BY id'),
     };
   } finally {
@@ -271,7 +338,10 @@ async function rowsAfter(c: Case): Promise<RowsAfter> {
   try {
     const rows = writtenRows(join(home, '.hippo'));
     // SAFETY: normalize rewrites text inside the JSON strings only, so the parse keeps the WrittenRows shape.
-    return { status: out.status, rows: JSON.parse(normalize(JSON.stringify(rows), home)) as WrittenRows };
+    return {
+      status: out.status,
+      rows: JSON.parse(normalize(JSON.stringify(rows), home)) as WrittenRows,
+    };
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
@@ -316,7 +386,13 @@ describe('cli recall and explain golden output', () => {
     });
     expect(status).toBe(0);
     expect(auditOps(rows)).toEqual([...SEEDED, 'recall -']);
-    const trace = { tenant_id: 'default', session_id: SESSION, pipeline: 'cli', query_length: 6, result_count: 6 };
+    const trace = {
+      tenant_id: 'default',
+      session_id: SESSION,
+      pipeline: 'cli',
+      query_length: 6,
+      result_count: 6,
+    };
     expect(rows.traces).toEqual([expect.objectContaining({ ...trace, explain_mode: 1 })]);
     expect(JSON.parse(String(rows.audit.at(-1)!['metadata_json']))).toEqual({
       query_hash: rows.traces[0]!['query_hash'],
@@ -324,7 +400,9 @@ describe('cli recall and explain golden output', () => {
       results: 6,
     });
     // The session goal doubles its row's score, which lifts it to the top; no other stage reranks.
-    expect(rows.traceResults.map((t) => [t['result_rank'], t['memory_id']])).toEqual(SHOWN.map((id, i) => [i + 1, id]));
+    expect(rows.traceResults.map((t) => [t['result_rank'], t['memory_id']])).toEqual(
+      SHOWN.map((id, i) => [i + 1, id]),
+    );
     const scores = rows.traceResults.map((t) => Number(t['score']));
     expect(scores.every((s, i) => s > 0 && (i === 0 || s < scores[i - 1]!))).toBe(true);
     const reranks = rows.traceResults.map((t) =>
@@ -333,9 +411,17 @@ describe('cli recall and explain golden output', () => {
     );
     expect(reranks.slice(1)).toEqual(SHOWN.slice(1).map(() => null));
     expect(reranks[0]).toEqual([
-      { stage: 'goal-boost', multiplier: 2, scoreBefore: expect.any(Number), scoreAfter: scores[0] },
+      {
+        stage: 'goal-boost',
+        multiplier: 2,
+        scoreBefore: expect.any(Number),
+        scoreAfter: scores[0],
+      },
     ]);
-    expect(Number(reranks[0]![0]!['scoreAfter'])).toBeCloseTo(2 * Number(reranks[0]![0]!['scoreBefore']), 12);
+    expect(Number(reranks[0]![0]!['scoreAfter'])).toBeCloseTo(
+      2 * Number(reranks[0]![0]!['scoreBefore']),
+      12,
+    );
     expect(rows.goalRecallLog).toEqual([goalLogged(scores[0]!)]);
     expect(rows.ledger).toEqual([
       {

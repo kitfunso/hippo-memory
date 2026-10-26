@@ -11,7 +11,8 @@ beforeEach(() => {
   home = realpathSync.native(makeRoot('guard-leak', { init: false }));
   vi.stubEnv('HIPPO_HOME', home);
   // Blank, so a clean teardown here cannot remove this run's own temp dirs.
-  for (const key of ['HIPPO_TEST_TMP_HOME', 'HIPPO_TEST_TMP_USERHOME', 'HIPPO_TEST_TMP_RUN']) vi.stubEnv(key, '');
+  for (const key of ['HIPPO_TEST_TMP_HOME', 'HIPPO_TEST_TMP_USERHOME', 'HIPPO_TEST_TMP_RUN'])
+    vi.stubEnv(key, '');
 });
 
 afterEach(() => {
@@ -27,7 +28,9 @@ describe('real-store guard', () => {
   it('fails a run that wrote to the watched global store', () => {
     setup();
     writeFileSync(join(home, 'hippo.db'), 'leaked');
-    expect(() => teardown()).toThrow(`Test-isolation leak: the test run mutated hippo store(s): ${home}`);
+    expect(() => teardown()).toThrow(
+      `Test-isolation leak: the test run mutated hippo store(s): ${home}`,
+    );
   });
 });
 

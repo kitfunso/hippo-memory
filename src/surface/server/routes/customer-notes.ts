@@ -22,6 +22,11 @@ export const CUSTOMER_NOTE_ROUTES: VersionedRouteConfig<'customer_note'> = {
   revise: (body) => {
     const note = requiredString(body, 'note', NOTE);
     const changeSummary = getString(body, 'changeSummary', OBJECT_CAPS.noteChange);
-    return (existing, id) => ({ customer: existing.customer, note, changeSummary, supersedesNoteId: id });
+    return (existing, id) => ({
+      customer: existing.customer,
+      note,
+      changeSummary,
+      supersedesNoteId: id,
+    });
   },
 };

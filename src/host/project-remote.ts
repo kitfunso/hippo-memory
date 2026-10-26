@@ -28,7 +28,10 @@ export function gitConfigPath(gitRoot: string): string | null {
     if (pointer === null) return path.join(marker, 'config');
     const dirs = readGitFilePointer(gitRoot, pointer);
     if (dirs === null) {
-      log.warnThenDebug('project-remote:gitdir', `project remote: ${marker} names no gitdir, so it has no remote`);
+      log.warnThenDebug(
+        'project-remote:gitdir',
+        `project remote: ${marker} names no gitdir, so it has no remote`,
+      );
       return null;
     }
     return path.join(dirs.commonDir ?? dirs.linkDir, 'config');
@@ -114,7 +117,14 @@ function azureDevOps(hostPath: string): string {
 export function normalizeRemote(url: string): string | null {
   // A query or fragment can carry a token (`?private_token=`) and never names the repo.
   const u = url.trim().replace(/[?#].*$/, '');
-  if (u === '' || u.includes('::') || /^file:/i.test(u) || /^[A-Za-z]:[\\/]/.test(u) || /^[./\\~]/.test(u)) return null;
+  if (
+    u === '' ||
+    u.includes('::') ||
+    /^file:/i.test(u) ||
+    /^[A-Za-z]:[\\/]/.test(u) ||
+    /^[./\\~]/.test(u)
+  )
+    return null;
   let hostPath: string;
   const withScheme = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/([^/]*)(.*)$/.exec(u);
   if (withScheme) {
@@ -170,7 +180,10 @@ export function projectFileId(root: string): string | null {
         'using the remote or folder name instead',
     );
   } catch (err) {
-    log.warn(`${file} not read: ${errorMessage(err)}; using the remote or folder name instead`, errorFields(err));
+    log.warn(
+      `${file} not read: ${errorMessage(err)}; using the remote or folder name instead`,
+      errorFields(err),
+    );
   }
   return null;
 }

@@ -30,10 +30,19 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-const conflictOf = (a: string, b: string) => ({ memory_a_id: a, memory_b_id: b, reason: 'contradiction', score: 0.9 });
+const conflictOf = (a: string, b: string) => ({
+  memory_a_id: a,
+  memory_b_id: b,
+  reason: 'contradiction',
+  score: 0.9,
+});
 
 /** `n` open conflicts between team rows, plus `extra`, all detected at one instant so the pages must break ties on id. */
-function seedTeamConflicts(n: number, tenantId = 'default', extra: ReturnType<typeof conflictOf>[] = []): void {
+function seedTeamConflicts(
+  n: number,
+  tenantId = 'default',
+  extra: ReturnType<typeof conflictOf>[] = [],
+): void {
   const rows = Array.from({ length: 2 * n }, (_, i) =>
     createMemory(`deploy rule number ${i} for tenant ${tenantId}`, {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -41,12 +50,16 @@ function seedTeamConflicts(n: number, tenantId = 'default', extra: ReturnType<ty
     }),
   );
   writeEntriesTogether(root, rows);
-  const pairs = Array.from({ length: n }, (_, i) => conflictOf(rows[2 * i]!.id, rows[2 * i + 1]!.id));
+  const pairs = Array.from({ length: n }, (_, i) =>
+    conflictOf(rows[2 * i]!.id, rows[2 * i + 1]!.id),
+  );
   replaceDetectedConflicts(root, [...pairs, ...extra], '2026-10-17T00:00:00.000Z');
 }
 
 async function walk(
-  read: (page: ConflictPageOptions) => Promise<{ conflicts: { id: number }[]; next: KeysetPosition | null }>,
+  read: (
+    page: ConflictPageOptions,
+  ) => Promise<{ conflicts: { id: number }[]; next: KeysetPosition | null }>,
   limit: number,
 ): Promise<{ ids: number[]; pages: number }> {
   const ids: number[] = [];
@@ -102,9 +115,14 @@ describe('conflict list pages', () => {
 
   it('never shows a tenant key a pair whose other row it cannot touch, on any page', async () => {
     const bPersonal = (
-      await remember(apiCtx(root, 'default', actorB), { content: 'b private deploy rule', personal: true })
+      await remember(apiCtx(root, 'default', actorB), {
+        content: 'b private deploy rule',
+        personal: true,
+      })
     ).id;
-    const aTeam = (await remember(apiCtx(root, 'default', actorA), { content: 'a team deploy rule' })).id;
+    const aTeam = (
+      await remember(apiCtx(root, 'default', actorA), { content: 'a team deploy rule' })
+    ).id;
     seedTeamConflicts(4, 'default', [conflictOf(bPersonal, aTeam)]);
     const all = (await conflictList(apiCtx(root), 'open', {}, { limit: 1000 })).conflicts;
     expect(all).toHaveLength(5);
@@ -115,12 +133,16 @@ describe('conflict list pages', () => {
     expect(seenByA.ids).not.toContain(hidden);
     expect(seenByA.ids).toHaveLength(4);
     expect(await conflictGet(ctxA, hidden)).toBeNull();
-    expect((await walk((page) => conflictListOpen(apiCtx(root, 'default', actorB), page), 1)).ids).toContain(hidden);
+    expect(
+      (await walk((page) => conflictListOpen(apiCtx(root, 'default', actorB), page), 1)).ids,
+    ).toContain(hidden);
   });
 
   it("keeps another tenant's conflicts off a tenant key's pages", async () => {
     seedTeamConflicts(2, 'other');
     expect((await conflictListOpen(apiCtx(root, 'default', actorA))).conflicts).toHaveLength(0);
-    expect((await conflictList(apiCtx(root), 'open', { everyTenant: true })).conflicts).toHaveLength(2);
+    expect(
+      (await conflictList(apiCtx(root), 'open', { everyTenant: true })).conflicts,
+    ).toHaveLength(2);
   });
 });

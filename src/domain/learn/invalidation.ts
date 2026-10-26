@@ -107,7 +107,9 @@ export async function invalidateMatching(
 ): Promise<InvalidationResult> {
   // Only that tenant's memories are weakened; the onlyId read is tenant-scoped, so another tenant's id is invisible.
   if (options?.onlyId !== undefined) {
-    const entries = [await store.learning.readEntry(options.onlyId, tenantId)].filter((entry) => entry !== null);
+    const entries = [await store.learning.readEntry(options.onlyId, tenantId)].filter(
+      (entry) => entry !== null,
+    );
     const { result, weakened } = weakenMatches(entries, target, options);
     await store.lessonWrites.writeTogether(weakened);
     return result;
@@ -115,11 +117,20 @@ export async function invalidateMatching(
   const tokens = invalidationTokenize(target.from);
   const tag = target.from.toLowerCase().trim();
   const dryRun = options?.dryRun === true;
-  const result: InvalidationResult = { invalidated: 0, targets: [], skippedPinned: [], dryRun, preview: [] };
+  const result: InvalidationResult = {
+    invalidated: 0,
+    targets: [],
+    skippedPinned: [],
+    dryRun,
+    preview: [],
+  };
   const weakened: MemoryEntry[] = [];
   let after: EntryCursor | undefined;
   do {
-    const page = await store.learning.entriesMentioning(tokens, tag, tenantId, { limit: READ_PAGE_ROWS, after });
+    const page = await store.learning.entriesMentioning(tokens, tag, tenantId, {
+      limit: READ_PAGE_ROWS,
+      after,
+    });
     const found = weakenMatches(page.entries, target, options);
     result.invalidated += found.result.invalidated;
     result.targets.push(...found.result.targets);
@@ -145,7 +156,9 @@ export async function invalidateMatchingAmong(
 ): Promise<InvalidationResult> {
   const seen = weakenMatches(live, target, { dryRun: true }).result;
   const ids = [...seen.targets, ...seen.skippedPinned];
-  const fresh = new Map((await store.entriesByIds(ids, tenantId)).map((entry) => [entry.id, entry]));
+  const fresh = new Map(
+    (await store.entriesByIds(ids, tenantId)).map((entry) => [entry.id, entry]),
+  );
   const { result, weakened } = weakenMatches(
     ids.flatMap((id) => fresh.get(id) ?? []),
     target,
@@ -157,8 +170,13 @@ export async function invalidateMatchingAmong(
 }
 
 /** Whether `entry` is a row any of `targets` would weaken or skip, by the match pass's own test. */
-export function invalidationMatcher(targets: readonly InvalidationTarget[]): (entry: MemoryEntry) => boolean {
-  const patterns = targets.map((t) => ({ tokens: invalidationTokenize(t.from), tag: t.from.toLowerCase().trim() }));
+export function invalidationMatcher(
+  targets: readonly InvalidationTarget[],
+): (entry: MemoryEntry) => boolean {
+  const patterns = targets.map((t) => ({
+    tokens: invalidationTokenize(t.from),
+    tag: t.from.toLowerCase().trim(),
+  }));
   return (entry) => patterns.some((p) => referencesPattern(entry, p.tokens, p.tag));
 }
 
@@ -171,7 +189,11 @@ function referencesPattern(entry: MemoryEntry, fromTokens: string[], exactTag: s
 }
 
 /** The match pass: weakens each unpinned match in place and returns them, writing nothing. */
-function weakenMatches(entries: readonly MemoryEntry[], target: InvalidationTarget, options?: InvalidationOptions) {
+function weakenMatches(
+  entries: readonly MemoryEntry[],
+  target: InvalidationTarget,
+  options?: InvalidationOptions,
+) {
   const fromTokens = invalidationTokenize(target.from);
   const exactTag = target.from.toLowerCase().trim();
   const dryRun = options?.dryRun === true;
@@ -343,14 +365,21 @@ function isTrackedPath(index: TrackedIndex, candidate: string): boolean {
 
 // Absolute-path relativization and the <repoName>/ strip both need the repo, so they happen here rather than in the
 // pure extractor.
-function resolveTrackedPath(token: string, repoRoot: string, projectName: string, index: TrackedIndex): string | null {
+function resolveTrackedPath(
+  token: string,
+  repoRoot: string,
+  projectName: string,
+  index: TrackedIndex,
+): string | null {
   let candidate = token;
   const isAbsUnix = candidate.startsWith('/');
   const isAbsWin = /^[A-Za-z]:\//.test(candidate);
   if (isAbsUnix || isAbsWin) {
     const rootPosix = repoRoot.replace(/\\/g, '/').replace(/\/$/, '');
     const prefix = `${rootPosix}/`;
-    const under = IS_WIN32 ? candidate.toLowerCase().startsWith(prefix.toLowerCase()) : candidate.startsWith(prefix);
+    const under = IS_WIN32
+      ? candidate.toLowerCase().startsWith(prefix.toLowerCase())
+      : candidate.startsWith(prefix);
     if (!under) return null;
     candidate = candidate.slice(prefix.length);
   }
@@ -363,8 +392,19 @@ function resolveTrackedPath(token: string, repoRoot: string, projectName: string
   return null;
 }
 
-function emptyChurnResult(dryRun: boolean, skippedPinned: string[] = [], error?: string): ChurnStaleResult {
-  const result: ChurnStaleResult = { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned, dryRun, preview: [] };
+function emptyChurnResult(
+  dryRun: boolean,
+  skippedPinned: string[] = [],
+  error?: string,
+): ChurnStaleResult {
+  const result: ChurnStaleResult = {
+    checked: 0,
+    marked: 0,
+    alreadyMarked: 0,
+    skippedPinned,
+    dryRun,
+    preview: [],
+  };
   if (error !== undefined) result.error = error;
   return result;
 }
@@ -386,7 +426,10 @@ function collectChurnCandidates(
   const skippedPinned: string[] = [];
   const candidates: ChurnCandidate[] = [];
   for (const entry of entries) {
-    if (!entry.originProject || (entry.originProject !== opts.projectName && entry.originProject !== opts.legacyName)) {
+    if (
+      !entry.originProject ||
+      (entry.originProject !== opts.projectName && entry.originProject !== opts.legacyName)
+    ) {
       continue;
     }
     if (entry.supersededBy) continue;
@@ -494,7 +537,11 @@ function loadChurnGitView(
   };
 }
 
-function pathEvidence(git: ChurnGitView, paths: readonly string[], anchorTime: number): string | null {
+function pathEvidence(
+  git: ChurnGitView,
+  paths: readonly string[],
+  anchorTime: number,
+): string | null {
   for (const rawPath of paths) {
     const resolved = resolveTrackedPath(rawPath, git.repoRoot, git.projectName, git.trackedIndex);
     if (!resolved) continue;
@@ -506,7 +553,9 @@ function pathEvidence(git: ChurnGitView, paths: readonly string[], anchorTime: n
     } else {
       // --no-renames means a rename shows as a D + A pair, so this also fires for renames.
       const deleted = git.windowLog.some(
-        (c) => new Date(c.date).getTime() > anchorTime && c.files.some((f) => f.status === 'D' && f.path === resolved),
+        (c) =>
+          new Date(c.date).getTime() > anchorTime &&
+          c.files.some((f) => f.status === 'D' && f.path === resolved),
       );
       if (deleted) return `file-deleted: ${resolved}`;
     }
@@ -514,7 +563,11 @@ function pathEvidence(git: ChurnGitView, paths: readonly string[], anchorTime: n
   return null;
 }
 
-function symbolEvidence(git: ChurnGitView, symbols: readonly string[], anchor: string): string | null {
+function symbolEvidence(
+  git: ChurnGitView,
+  symbols: readonly string[],
+  anchor: string,
+): string | null {
   const absent = symbols.filter((s) => !git.presentAtHeadSymbols.has(s));
   if (absent.length === 0) return null;
   const anchorCommit = git.resolveAnchorCommit(anchor);
@@ -605,11 +658,21 @@ function recordChurnEvidence(
 
 /** The good-outcome times the candidates' anchors need, and the anchor of each: its last confirmation, if that is later
  * than its creation. */
-async function readChurnAnchors(learning: Learning, tenantId: string, candidates: readonly ChurnCandidate[]) {
+async function readChurnAnchors(
+  learning: Learning,
+  tenantId: string,
+  candidates: readonly ChurnCandidate[],
+) {
   const firstReadAt = Date.now();
   // A confirmation older than the oldest candidate cannot move any anchor, so the read starts there.
-  const oldestCreated = candidates.reduce((oldest, c) => Math.min(oldest, Date.parse(c.entry.created)), Infinity);
-  const confirmedAt = await learning.confirmedOutcomeTimes(tenantId, new Date(oldestCreated).toISOString());
+  const oldestCreated = candidates.reduce(
+    (oldest, c) => Math.min(oldest, Date.parse(c.entry.created)),
+    Infinity,
+  );
+  const confirmedAt = await learning.confirmedOutcomeTimes(
+    tenantId,
+    new Date(oldestCreated).toISOString(),
+  );
   // Compared as epoch ms, not strings: imported rows may carry offsets or other ISO forms.
   const anchorOf = (entry: MemoryEntry): string => {
     const confirmed = confirmedAt.get(entry.id);
@@ -632,7 +695,12 @@ export async function detectChurnStale(
   if (!opts.projectName) return emptyChurnResult(dryRun);
 
   const origins = [opts.projectName, opts.legacyName].filter((name): name is string => !!name);
-  const current = { tenantId: opts.tenantId, origins, live: true, kinds: ['distilled', 'superseded'] } as const;
+  const current = {
+    tenantId: opts.tenantId,
+    origins,
+    live: true,
+    kinds: ['distilled', 'superseded'],
+  } as const;
   const candidates: ChurnCandidate[] = [];
   const skippedPinned: string[] = [];
   // Page by page, so only the candidates stay held, never every row of the project.
@@ -645,7 +713,11 @@ export async function detectChurnStale(
   }
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 
-  const { confirmedAt, firstReadAt, anchorOf } = await readChurnAnchors(learning, opts.tenantId, candidates);
+  const { confirmedAt, firstReadAt, anchorOf } = await readChurnAnchors(
+    learning,
+    opts.tenantId,
+    candidates,
+  );
 
   const needs: ChurnNeeds = {
     paths: candidates.some((c) => c.refs.paths.length > 0),
@@ -653,18 +725,39 @@ export async function detectChurnStale(
     scripts: candidates.some((c) => c.refs.scripts.length > 0),
   };
   if (!needs.paths && !needs.symbols && !needs.scripts) {
-    return { checked: candidates.length, marked: 0, alreadyMarked: 0, skippedPinned, dryRun, preview: [] };
+    return {
+      checked: candidates.length,
+      marked: 0,
+      alreadyMarked: 0,
+      skippedPinned,
+      dryRun,
+      preview: [],
+    };
   }
 
-  const result: ChurnStaleResult = { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned, dryRun, preview: [] };
+  const result: ChurnStaleResult = {
+    checked: 0,
+    marked: 0,
+    alreadyMarked: 0,
+    skippedPinned,
+    dryRun,
+    preview: [],
+  };
 
   try {
-    const git = loadChurnGitView(repo, opts.legacyName ?? opts.projectName, candidates, anchorOf, needs);
+    const git = loadChurnGitView(
+      repo,
+      opts.legacyName ?? opts.projectName,
+      candidates,
+      anchorOf,
+      needs,
+    );
     // Collected here and written only after every candidate's evidence is computed, so a GitReadError mid-loop cannot
     // leave an earlier candidate tagged.
     const toTag = recordChurnEvidence(git, candidates, anchorOf, result);
 
-    if (!dryRun && toTag.length > 0) await tagChurnStale(learning, opts.tenantId, toTag, confirmedAt, firstReadAt);
+    if (!dryRun && toTag.length > 0)
+      await tagChurnStale(learning, opts.tenantId, toTag, confirmedAt, firstReadAt);
   } catch (err) {
     if (err instanceof GitReadError) return emptyChurnResult(dryRun, skippedPinned, err.message);
     throw err;

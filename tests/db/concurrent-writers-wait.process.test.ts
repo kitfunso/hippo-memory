@@ -108,15 +108,23 @@ describe('two hippo processes writing to one store at once', () => {
     const done = await Promise.all(workers.map((w) => w.finished));
 
     for (const d of done) expect(d.code, d.stderr).toBe(0);
-    expect(storeCounts(root)).toEqual({ rows: WORKERS * ROWS, audits: WORKERS * ROWS, matched: WORKERS * ROWS });
+    expect(storeCounts(root)).toEqual({
+      rows: WORKERS * ROWS,
+      audits: WORKERS * ROWS,
+      matched: WORKERS * ROWS,
+    });
   });
 });
 
 describe("writeEntryDbOnly inside the caller's transaction", () => {
   it("a throwing afterWrite undoes only its own row and leaves the caller's transaction open", () => {
     root = makeRoot('nested-write');
-    const kept = createMemory('The caller keeps this row when a nested write fails.', { baseHalfLifeDays: 30 });
-    const dropped = createMemory('This nested row rolls back on its own.', { baseHalfLifeDays: 30 });
+    const kept = createMemory('The caller keeps this row when a nested write fails.', {
+      baseHalfLifeDays: 30,
+    });
+    const dropped = createMemory('This nested row rolls back on its own.', {
+      baseHalfLifeDays: 30,
+    });
     const db = openHippoDb(root);
     try {
       db.exec('BEGIN IMMEDIATE');
@@ -134,7 +142,11 @@ describe("writeEntryDbOnly inside the caller's transaction", () => {
       closeHippoDb(db);
     }
     const ids = withDb(root, (db2) =>
-      db2.prepare(`SELECT id FROM memories UNION ALL SELECT target_id FROM audit_log WHERE op = 'remember'`).all(),
+      db2
+        .prepare(
+          `SELECT id FROM memories UNION ALL SELECT target_id FROM audit_log WHERE op = 'remember'`,
+        )
+        .all(),
     );
     expect(ids).toEqual([{ id: kept.id }, { id: kept.id }]);
   });

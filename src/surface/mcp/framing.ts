@@ -25,7 +25,10 @@ function skipWhitespace(buffer: Buffer): number {
   let start = 0;
   while (
     start < buffer.length &&
-    (buffer[start] === 0x0a || buffer[start] === 0x0d || buffer[start] === 0x20 || buffer[start] === 0x09)
+    (buffer[start] === 0x0a ||
+      buffer[start] === 0x0d ||
+      buffer[start] === 0x20 ||
+      buffer[start] === 0x09)
   ) {
     start++;
   }
@@ -64,7 +67,11 @@ export function parseFrame(buffer: Buffer): FrameResult {
       return { kind: 'incomplete', needs: start + bodyStart + contentLength };
     }
     const body = trimmed.subarray(bodyStart, bodyStart + contentLength).toString('utf-8');
-    return { kind: 'message', body, rest: Buffer.from(trimmed.subarray(bodyStart + contentLength)) };
+    return {
+      kind: 'message',
+      body,
+      rest: Buffer.from(trimmed.subarray(bodyStart + contentLength)),
+    };
   }
 
   // Newline-delimited JSON (MCP spec).

@@ -34,7 +34,9 @@ const DAG_CHILD_SCORE_FACTOR = 0.9;
 
 /** DAG drill-down: a matched summary pulls its children from `pool` in at 0.9x its score; sorts `results` in place. */
 export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): SearchResult[] {
-  const summaryIds = new Set(results.filter((r) => r.entry.tags.includes('dag-summary')).map((r) => r.entry.id));
+  const summaryIds = new Set(
+    results.filter((r) => r.entry.tags.includes('dag-summary')).map((r) => r.entry.id),
+  );
   if (summaryIds.size === 0) return results;
   const children = pool.filter((e) => e.dagParentId && summaryIds.has(e.dagParentId));
   // The first result of an id wins, and a child added below counts for the rows after it.
@@ -43,8 +45,16 @@ export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): S
   for (const child of children) {
     if (resultById.has(child.id)) continue;
     const parentResult = child.dagParentId ? resultById.get(child.dagParentId) : undefined;
-    const childScore = parentResult ? parentResult.score * DAG_CHILD_SCORE_FACTOR * churnStaleFactor(child) : 0;
-    const added = { entry: child, score: childScore, bm25: 0, cosine: 0, tokens: estimateTokens(child.content) };
+    const childScore = parentResult
+      ? parentResult.score * DAG_CHILD_SCORE_FACTOR * churnStaleFactor(child)
+      : 0;
+    const added = {
+      entry: child,
+      score: childScore,
+      bm25: 0,
+      cosine: 0,
+      tokens: estimateTokens(child.content),
+    };
     results.push(added);
     resultById.set(child.id, added);
   }

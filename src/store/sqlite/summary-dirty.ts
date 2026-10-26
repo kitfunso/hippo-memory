@@ -13,7 +13,12 @@ const MARK_DIRTY_WHERE = `tenant_id = ?
 
 /** Runs in the caller's transaction so the mark commits or rolls back with the child change; only a 0 to 1 flip is
  * audited. */
-export function markSummaryDirtyInTx(db: DatabaseSyncLike, summaryId: string, tenantId: string, actor: string): void {
+export function markSummaryDirtyInTx(
+  db: DatabaseSyncLike,
+  summaryId: string,
+  tenantId: string,
+  actor: string,
+): void {
   const result = cachedStatement(
     db,
     `

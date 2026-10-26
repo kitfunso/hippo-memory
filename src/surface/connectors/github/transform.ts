@@ -54,7 +54,9 @@ export function issueEventToRememberOpts(evt: GitHubIssueEvent): RememberOptions
   });
 }
 
-export function issueCommentEventToRememberOpts(evt: GitHubIssueCommentEvent): RememberOptions | null {
+export function issueCommentEventToRememberOpts(
+  evt: GitHubIssueCommentEvent,
+): RememberOptions | null {
   const content = evt.comment.body?.trim();
   if (!content) return null;
   return rememberOpts(evt.repository, {
@@ -65,7 +67,9 @@ export function issueCommentEventToRememberOpts(evt: GitHubIssueCommentEvent): R
   });
 }
 
-export function pullRequestEventToRememberOpts(evt: GitHubPullRequestEvent): RememberOptions | null {
+export function pullRequestEventToRememberOpts(
+  evt: GitHubPullRequestEvent,
+): RememberOptions | null {
   const content = titleAndBody(evt.pull_request);
   if (!content) return null;
   return rememberOpts(evt.repository, {
@@ -76,7 +80,9 @@ export function pullRequestEventToRememberOpts(evt: GitHubPullRequestEvent): Rem
   });
 }
 
-export function prReviewCommentEventToRememberOpts(evt: GitHubPullRequestReviewCommentEvent): RememberOptions | null {
+export function prReviewCommentEventToRememberOpts(
+  evt: GitHubPullRequestReviewCommentEvent,
+): RememberOptions | null {
   const content = evt.comment.body?.trim();
   if (!content) return null;
   return rememberOpts(evt.repository, {

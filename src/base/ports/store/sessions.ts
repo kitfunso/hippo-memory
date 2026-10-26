@@ -75,7 +75,9 @@ export interface HandoffStamp {
 }
 
 /** One handoff by its row id, or the newest a session id (null: any session) and the filter admit. */
-export type HandoffQuery = { readonly id: number } | (HandoffFilter & { readonly sessionId: string | null });
+export type HandoffQuery =
+  | { readonly id: number }
+  | (HandoffFilter & { readonly sessionId: string | null });
 
 export interface SessionEventQuery {
   readonly sessionId?: string;
@@ -118,7 +120,12 @@ export interface WorkingMemoryPush {
  * kind. Every keyed call takes `key: ContinuityKey | null`, so an unkeyed caller says so. */
 export interface Sessions {
   /** Saves the active snapshot, superseding the key's earlier active ones. */
-  save(tenantId: string, kind: 'snapshot', snapshot: SnapshotInput, key: ContinuityKey | null): Promise<TaskSnapshot>;
+  save(
+    tenantId: string,
+    kind: 'snapshot',
+    snapshot: SnapshotInput,
+    key: ContinuityKey | null,
+  ): Promise<TaskSnapshot>;
   save(tenantId: string, kind: 'event', event: SessionEventInput): Promise<SessionEvent>;
   /** Adds the handoff as the session's newest revision. */
   save(
@@ -141,7 +148,11 @@ export interface Sessions {
   save(tenantId: string, kind: 'working_memory', item: WorkingMemoryPush): Promise<number>;
   /** The `limit` newest events a non-empty session id and task narrow, returned oldest first. */
   read(tenantId: string, kind: 'event', query: SessionEventQuery): Promise<SessionEvent[]>;
-  read(tenantId: string, kind: 'handoff', query: { readonly id: number }): Promise<SessionHandoff | null>;
+  read(
+    tenantId: string,
+    kind: 'handoff',
+    query: { readonly id: number },
+  ): Promise<SessionHandoff | null>;
   read(
     tenantId: string,
     kind: 'handoff',
@@ -166,21 +177,39 @@ export interface Sessions {
   /** Rows cleared; a session-end flush is the same call. */
   clear(tenantId: string, kind: 'working_memory', filter: WorkingMemoryFilter): Promise<number>;
   /** The key's newest active snapshot. It rewrites the active-task mirror, so it is a write, apart from `read`. */
-  loadSnapshot(tenantId: string, load: SnapshotLoad, key: ContinuityKey | null): Promise<TaskSnapshot | null>;
+  loadSnapshot(
+    tenantId: string,
+    load: SnapshotLoad,
+    key: ContinuityKey | null,
+  ): Promise<TaskSnapshot | null>;
   /** The stored owner, which is not `owner` when a concurrent first bind won. */
-  bindSessionOwner(tenantId: string, sessionId: string, owner: string, retentionMs: number): Promise<string | null>;
+  bindSessionOwner(
+    tenantId: string,
+    sessionId: string,
+    owner: string,
+    retentionMs: number,
+  ): Promise<string | null>;
 }
 
 /** Each method's overloads as one argument list, so an adapter writes one body per method. */
 export type SessionSaveArgs =
   | [tenantId: string, kind: 'snapshot', snapshot: SnapshotInput, key: ContinuityKey | null]
   | [tenantId: string, kind: 'event', event: SessionEventInput]
-  | [tenantId: string, kind: 'handoff', save: HandoffSave | HandoffStamp, key?: ContinuityKey | null]
+  | [
+      tenantId: string,
+      kind: 'handoff',
+      save: HandoffSave | HandoffStamp,
+      key?: ContinuityKey | null,
+    ]
   | [tenantId: string, kind: 'working_memory', item: WorkingMemoryPush];
 export type SessionReadArgs =
   | [tenantId: string, kind: 'event', query: SessionEventQuery]
   | [tenantId: string, kind: 'handoff', query: HandoffQuery, key?: ContinuityKey | null]
-  | [tenantId: string, kind: 'working_memory', query: WorkingMemoryFilter & { readonly limit?: number }];
+  | [
+      tenantId: string,
+      kind: 'working_memory',
+      query: WorkingMemoryFilter & { readonly limit?: number },
+    ];
 export type SessionClearArgs =
   | [
       tenantId: string,
@@ -192,8 +221,12 @@ export type SessionClearArgs =
 
 /** `Sessions` as an adapter writes it, one signature per method; the overloads pair each kind with its answer. */
 export interface SessionCalls {
-  save(...args: SessionSaveArgs): Promise<TaskSnapshot | SessionEvent | SessionHandoff | number | null>;
-  read(...args: SessionReadArgs): Promise<SessionEvent[] | SessionHandoff | WorkingMemoryItem[] | null>;
+  save(
+    ...args: SessionSaveArgs
+  ): Promise<TaskSnapshot | SessionEvent | SessionHandoff | number | null>;
+  read(
+    ...args: SessionReadArgs
+  ): Promise<SessionEvent[] | SessionHandoff | WorkingMemoryItem[] | null>;
   clear(...args: SessionClearArgs): Promise<number>;
   loadSnapshot: Sessions['loadSnapshot'];
   bindSessionOwner: Sessions['bindSessionOwner'];

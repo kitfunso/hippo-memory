@@ -10,14 +10,17 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
+const ctx = (root: string): FullContext =>
+  apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
 
 function readStrength(root: string, memId: string): number {
   const db = openHippoDb(root);
   try {
     // SAFETY: `.get()` is typed `unknown` (node:sqlite); the query selects only
     // `strength` from a row for a memId this test just created, so it exists.
-    return (db.prepare(`SELECT strength FROM memories WHERE id = ?`).get(memId) as { strength: number }).strength;
+    return (
+      db.prepare(`SELECT strength FROM memories WHERE id = ?`).get(memId) as { strength: number }
+    ).strength;
   } finally {
     closeHippoDb(db);
   }

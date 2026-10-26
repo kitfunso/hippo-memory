@@ -1,6 +1,11 @@
 import { evalStoreRules } from '../../infra/eval-switches.js';
 import { adminActor } from '../../api/index.js';
-import { contextReach, type ContextReach, type ContextWith, type GlobalInReach } from '../../api/types.js';
+import {
+  contextReach,
+  type ContextReach,
+  type ContextWith,
+  type GlobalInReach,
+} from '../../api/types.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { SyncOptions } from '../../api/agent-memories.js';
 import type { Machine } from '../../base/util/agent-homes.js';
@@ -27,7 +32,12 @@ import {
   runStoreRequest,
 } from '../open-store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import { envClefSettings, envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
+import {
+  envClefSettings,
+  envLossAversionRatio,
+  envRuntimeSettings,
+  envTenant,
+} from '../../base/util/env.js';
 import type { RerankerFn } from '../../base/ports/reranker.js';
 import { autoSleepHost, createCallerState, type CallerState } from '../../api/callers.js';
 import { rootInfra } from '../../infra/ports.js';
@@ -55,17 +65,28 @@ export function cliReranker(name: string | null | undefined): RerankerFn | null 
  * `hippo serve` on the same store answers its nearest-row reads from the graph it holds. */
 export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
   const store = defaultStore(hippoRoot, evalStoreRules(envLossAversionRatio()));
-  return askingNearestFirst(hippoRoot, store, serverNearestAsk(hippoRoot), cliConfig(hippoRoot).vectorGraph.maxVectors);
+  return askingNearestFirst(
+    hippoRoot,
+    store,
+    serverNearestAsk(hippoRoot),
+    cliConfig(hippoRoot).vectorGraph.maxVectors,
+  );
 }
 
 /** The folder's hippo.db as doctor reads it: read-only, so a check leaves the store as it found it. */
-export function cliDiagnostics(hippoRoot: string): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {
+export function cliDiagnostics(
+  hippoRoot: string,
+): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {
   return defaultDiagnostics(hippoRoot);
 }
 
 /** A folder's hippo.db with its config, as sharing and sync take each side; the global one may not exist yet. */
 export function cliFolder(hippoRoot: string): ConfiguredFolder<HippoStore & StoreGroups> {
-  return { store: cliStore(hippoRoot), config: cliConfig(hippoRoot), embedderFor: resolveEmbeddingProvider };
+  return {
+    store: cliStore(hippoRoot),
+    config: cliConfig(hippoRoot),
+    embedderFor: resolveEmbeddingProvider,
+  };
 }
 
 /** The folder's hippo.db as an import reaches it, answering at once: the published importers return their result. */
@@ -130,7 +151,16 @@ export function cliApiContext(
   // Read here, once per command, so a long-lived caller of this function never pins a stale config.
   const config = cliConfig(hippoRoot);
   const reach = cliReach(hippoRoot, store);
-  return { hippoRoot, tenantId, actor: adminActor(CLI_ACTOR), store, reach, config, callers, infra: cliInfra() };
+  return {
+    hippoRoot,
+    tenantId,
+    actor: adminActor(CLI_ACTOR),
+    store,
+    reach,
+    config,
+    callers,
+    infra: cliInfra(),
+  };
 }
 
 /** A second store a CLI read searches beside its own, with that store's config. */

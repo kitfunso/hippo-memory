@@ -2,7 +2,12 @@
 // code on this store), whether its list was sorted for it or for an earlier page; a later page reads the list, and a
 // commit, a new instant or the cap sorts again.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type ConfidenceLevel, type EmotionalValence, Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import {
+  type ConfidenceLevel,
+  type EmotionalValence,
+  Layer,
+  type MemoryEntry,
+} from '../../src/base/memory/entry.js';
 import { buildMemoryPage, type MemoryQuery } from '../../src/api/dashboard/queries.js';
 import type { MemoryPage } from '../../src/api/dashboard/types.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -35,7 +40,16 @@ const BASE: MemoryQuery = {
   q: null,
 };
 
-const SORTS = ['content', 'layer', 'strength', 'retrievals', 'last', 'age', 'confidence', 'scope'] as const;
+const SORTS = [
+  'content',
+  'layer',
+  'strength',
+  'retrievals',
+  'last',
+  'age',
+  'confidence',
+  'scope',
+] as const;
 
 /** Every sort both ways, each chip, each brush, the text test and a layer subset, alone and together. */
 const QUERIES: ReadonlyArray<[string, MemoryQuery]> = [
@@ -54,7 +68,13 @@ const QUERIES: ReadonlyArray<[string, MemoryQuery]> = [
   ['layers', { ...BASE, layers: [0, 2], sort: 'retrievals', dir: 'desc' }],
   [
     'all filters',
-    { ...BASE, q: 'row 1', chip: 'risk', layers: [1, 2, 3], brush: { amin: 2, amax: 300, smin: 0.01, smax: 0.9 } },
+    {
+      ...BASE,
+      q: 'row 1',
+      chip: 'risk',
+      layers: [1, 2, 3],
+      brush: { amin: 2, amax: 300, smin: 0.01, smax: 0.9 },
+    },
   ],
 ];
 
@@ -82,7 +102,8 @@ function seedRows(): MemoryEntry[] {
 function line(name: string, offset: number, page: MemoryPage | null): string {
   if (page === null) return `${name} @${offset}: null`;
   const rows = page.rows.map(
-    (r) => `${r.id}:${r.strength}:${r.ageDays}:${r.lastRetrievedDays}:${r.band}${r.inConflict ? ':c' : ''}`,
+    (r) =>
+      `${r.id}:${r.strength}:${r.ageDays}:${r.lastRetrievedDays}:${r.band}${r.inConflict ? ':c' : ''}`,
   );
   return `${name} @${offset}: total=${page.total} ${JSON.stringify(page.counts)} ${JSON.stringify(page.decay)} ${rows.join(' ')}`;
 }
@@ -93,7 +114,13 @@ async function pagesOf(view: DashboardView, order: readonly number[]): Promise<s
   const lines: string[] = [];
   for (const [name, query] of QUERIES) {
     for (const offset of order) {
-      lines.push(line(name, offset, await buildMemoryPage(view.reads, stamp, 'p:alpha', { ...query, offset })));
+      lines.push(
+        line(
+          name,
+          offset,
+          await buildMemoryPage(view.reads, stamp, 'p:alpha', { ...query, offset }),
+        ),
+      );
     }
   }
   return lines.sort();
@@ -105,7 +132,12 @@ beforeAll(() => {
   store = makeStore('hippo-dash-lists');
   writeEntriesTogether(store.hippoRoot, [
     ...seedRows(),
-    { ...createMemory('beta kafka', { tags: [] }), id: 'mem_beta1', originProject: 'beta', created: isoAgo(3) },
+    {
+      ...createMemory('beta kafka', { tags: [] }),
+      id: 'mem_beta1',
+      originProject: 'beta',
+      created: isoAgo(3),
+    },
   ]);
   replaceDetectedConflicts(store.hippoRoot, [
     { memory_a_id: 'mem_l001', memory_b_id: 'mem_l002', reason: 'inside alpha', score: 0.9 },
@@ -153,7 +185,9 @@ describe('dashboard memory lists', () => {
     const { reads, clock } = dashboardOf(store.hippoRoot, () => now);
     const scans = async (query: MemoryQuery): Promise<number> => {
       const stamp = await clock.at('default', true);
-      const log = await recordStatementsAsync(() => buildMemoryPage(reads, stamp, 'p:alpha', query));
+      const log = await recordStatementsAsync(() =>
+        buildMemoryPage(reads, stamp, 'p:alpha', query),
+      );
       return countMatching(log.statements, SCAN);
     };
     try {
@@ -167,7 +201,12 @@ describe('dashboard memory lists', () => {
       now += 1;
       expect(await scans(queries[7])).toBe(1);
       writeEntriesTogether(store.hippoRoot, [
-        { ...createMemory('late kafka', { tags: [] }), id: 'mem_late', originProject: 'alpha', created: isoAgo(1) },
+        {
+          ...createMemory('late kafka', { tags: [] }),
+          id: 'mem_late',
+          originProject: 'alpha',
+          created: isoAgo(1),
+        },
       ]);
       expect(await scans(queries[7])).toBe(1);
       const stamp = await clock.at('default');

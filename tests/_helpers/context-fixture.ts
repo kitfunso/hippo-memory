@@ -19,7 +19,8 @@ export const OWN_SCOPE = `personal:private:${OWNER}`;
 /** A zoneless stamp an old importer wrote, which no writer stores now. */
 const DRIFTED = '2026-03-05 10:00:00';
 
-export const ago = (hours: number): string => new Date(Date.parse(CONTEXT_NOW) - hours * 3_600_000).toISOString();
+export const ago = (hours: number): string =>
+  new Date(Date.parse(CONTEXT_NOW) - hours * 3_600_000).toISOString();
 
 type SeedOptions = Parameters<typeof seeded>[4];
 
@@ -30,14 +31,21 @@ function inTenant(tenantId: string, origin: string | null) {
     hours: number,
     extra: Partial<MemoryEntry> = {},
     opts: SeedOptions = {},
-  ): MemoryEntry => seeded(content, id, ago(hours), { tenantId: tenantId, originProject: origin, ...extra }, opts);
+  ): MemoryEntry =>
+    seeded(content, id, ago(hours), { tenantId: tenantId, originProject: origin, ...extra }, opts);
 }
 
 function memoryRows(): MemoryEntry[] {
   const a = inTenant(TENANT_A, PROJECT);
   const b = inTenant(TENANT_B, PROJECT);
   return [
-    a('pinned rule: no deploys to the billing service on fridays', 'mem_a_pin', 500, {}, { pinned: true }),
+    a(
+      'pinned rule: no deploys to the billing service on fridays',
+      'mem_a_pin',
+      500,
+      {},
+      { pinned: true },
+    ),
     a(
       'pinned rule from the other project about its release train',
       'mem_a_pin_other',
@@ -69,14 +77,38 @@ function memoryRows(): MemoryEntry[] {
       }),
     ),
     a('team rota covers the rollout pager this week', 'mem_a_team', 30, {}, { scope: 'team:eng' }),
-    a('alice reminder to renew the rollout certificate', 'mem_a_alice', 31, {}, { scope: OWN_SCOPE }),
-    a('bob reminder to rotate the rollout dashboards', 'mem_a_bob', 32, {}, { scope: 'personal:private:bob' }),
-    a('legacy import about the rollout freeze', 'mem_a_legacy', 33, {}, { scope: 'unknown:legacy' }),
+    a(
+      'alice reminder to renew the rollout certificate',
+      'mem_a_alice',
+      31,
+      {},
+      { scope: OWN_SCOPE },
+    ),
+    a(
+      'bob reminder to rotate the rollout dashboards',
+      'mem_a_bob',
+      32,
+      {},
+      { scope: 'personal:private:bob' },
+    ),
+    a(
+      'legacy import about the rollout freeze',
+      'mem_a_legacy',
+      33,
+      {},
+      { scope: 'unknown:legacy' },
+    ),
     a('rollout target was the old staging cluster', 'mem_a_old', 60, { supersededBy: 'mem_a_new' }),
     a('rollout target is the new staging cluster', 'mem_a_new', 41),
     a('rollout note whose supersede link was blanked', 'mem_a_blank', 42, { supersededBy: '' }),
     a('archived rollout plan from last quarter', 'mem_a_archived', 43, { kind: 'archived' }),
-    a('own project vault path lives in the ops runbook', 'mem_a_secret_own', 44, {}, { tags: ['secret'] }),
+    a(
+      'own project vault path lives in the ops runbook',
+      'mem_a_secret_own',
+      44,
+      {},
+      { tags: ['secret'] },
+    ),
     a(
       'other project vault path lives in its runbook',
       'mem_a_secret_other',
@@ -105,12 +137,19 @@ function memoryRows(): MemoryEntry[] {
         dagLevel: 2,
       },
     ),
-    a('legacy row with no recorded origin about the rollout', 'mem_a_no_origin', 48, { originProject: null }),
+    a('legacy row with no recorded origin about the rollout', 'mem_a_no_origin', 48, {
+      originProject: null,
+    }),
     a('rollout lesson that decays within a day', 'mem_a_decayed', 200, { halfLifeDays: 1 }),
-    a('rollout lesson that kept paying off', 'mem_a_liked', 100, { outcomePositive: 3, lastRetrieved: ago(2) }),
+    a('rollout lesson that kept paying off', 'mem_a_liked', 100, {
+      outcomePositive: 3,
+      lastRetrieved: ago(2),
+    }),
     a('rollout lesson with no half life', 'mem_a_flat', 49, { halfLifeDays: 0 }),
     b('globex pinned rule about the deploy window', 'mem_b_pin', 50, {}, { pinned: true }),
-    ...Array.from({ length: 5 }, (_, i) => b(`globex note ${i} about the rollout plan`, `mem_b_${i}`, 5 + i)),
+    ...Array.from({ length: 5 }, (_, i) =>
+      b(`globex note ${i} about the rollout plan`, `mem_b_${i}`, 5 + i),
+    ),
     seeded('globex drifted row written by an old importer', 'mem_b_drift', DRIFTED, {
       tenantId: TENANT_B,
       originProject: PROJECT,
@@ -136,7 +175,16 @@ const HANDOFFS: readonly Row[] = [
   [TENANT_A, SESSION, 'first handoff for session a', null, null, 2.5, null, null],
   [TENANT_A, SESSION, 'second handoff for session a', 'success', null, 1, null, null],
   [TENANT_A, 'ctx-session-b', 'partial handoff for session b', 'partial', null, 3, null, null],
-  [TENANT_A, 'ctx-session-c', 'private handoff for session c', null, 'slack:private:C9', 0.5, null, null],
+  [
+    TENANT_A,
+    'ctx-session-c',
+    'private handoff for session c',
+    null,
+    'slack:private:C9',
+    0.5,
+    null,
+    null,
+  ],
   [TENANT_A, 'ctx-session-d', 'stale handoff for session d', null, null, 100, null, null],
   [TENANT_A, KEYED_SESSION, 'alice handoff', null, null, 4, OWNER, PROJECT],
   [TENANT_A, 'ctx-session-e', 'failed handoff e, older id', 'failure', null, 6, null, null],
@@ -253,7 +301,13 @@ export function seedContextGlobal(dir: string): void {
   const a = inTenant(TENANT_A, '');
   writeEntry(
     dir,
-    a('global pinned rule: rollout notes go in the team channel', 'mem_g_pin', 600, {}, { pinned: true }),
+    a(
+      'global pinned rule: rollout notes go in the team channel',
+      'mem_g_pin',
+      600,
+      {},
+      { pinned: true },
+    ),
   );
   writeEntry(dir, a('global rollout note from the home store', 'mem_g_note', 12));
   pinUpdatedAt(dir);
@@ -266,12 +320,17 @@ export function contextRowsOf(root: string) {
     const rows = rowsOf(root);
     // The audit row is written by the store, and a worker-thread store stamps the real clock, not the faked Date.
     // SAFETY: rowsOf selects ts, tenant_id, actor, op, target_id and metadata_json for the audit rows.
-    const audit = (rows.audit as Array<{ ts: string; op: string }>).map((row) => ({ ...row, ts: 'stamped' }));
+    const audit = (rows.audit as Array<{ ts: string; op: string }>).map((row) => ({
+      ...row,
+      ts: 'stamped',
+    }));
     return {
       ...rows,
       audit,
       strengthened: db
-        .prepare('SELECT id, retrieval_count, last_retrieved, half_life_days, strength FROM memories ORDER BY id')
+        .prepare(
+          'SELECT id, retrieval_count, last_retrieved, half_life_days, strength FROM memories ORDER BY id',
+        )
         .all(),
     };
   } finally {

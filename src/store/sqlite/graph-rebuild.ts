@@ -22,10 +22,18 @@ import {
 import { type OnHandle, waitingOpener } from './open.js';
 import { bound } from './bound.js';
 
-function insertDesiredRelation(db: DatabaseSyncLike, tenantId: string, rel: DesiredRelation): boolean {
+function insertDesiredRelation(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  rel: DesiredRelation,
+): boolean {
   const fromEntityId = entityIdBySource(db, tenantId, rel.from.entityType, rel.from.sourceObject);
   const toEntityId = entityIdBySource(db, tenantId, rel.to.entityType, rel.to.sourceObject);
-  if (fromEntityId === undefined || toEntityId === undefined || !objectInForce(db, tenantId, rel.sourceObject)) {
+  if (
+    fromEntityId === undefined ||
+    toEntityId === undefined ||
+    !objectInForce(db, tenantId, rel.sourceObject)
+  ) {
     return false;
   }
   if (relationPresent(db, tenantId, fromEntityId, toEntityId, rel.relType)) return false;

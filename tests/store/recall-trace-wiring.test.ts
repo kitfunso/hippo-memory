@@ -75,7 +75,9 @@ function traceRows(home: string, pipeline: string): SqliteRow[] {
   try {
     // SAFETY: sql is a literal SELECT against the known recall_traces schema;
     // the SqliteRow value type already reflects what node:sqlite can return.
-    return db.prepare(`SELECT * FROM recall_traces WHERE pipeline = ?`).all(pipeline) as SqliteRow[];
+    return db
+      .prepare(`SELECT * FROM recall_traces WHERE pipeline = ?`)
+      .all(pipeline) as SqliteRow[];
   } finally {
     closeHippoDb(db);
   }
@@ -141,7 +143,10 @@ describe('api.recall — trace wiring', () => {
       await remember(ctx, { content: 'recall-trace-no-side-effect-target' });
 
       expect(lastTraceId(home)).toBeNull();
-      const result = await retrieve(ctx, { query: 'recall-trace-no-side-effect-target', window: { limit: 5 } });
+      const result = await retrieve(ctx, {
+        query: 'recall-trace-no-side-effect-target',
+        window: { limit: 5 },
+      });
       expect(result.results).toHaveLength(1);
 
       // A trace row WAS written (previous test), but last_trace_id stays null.
@@ -199,7 +204,11 @@ describe('api.contextGet - trace wiring', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'context-trace-target-gamma' });
 
-      const result = await contextGet(ctx, { currentProject: cwdProject(), q: 'context-trace-target', budget: 1000 });
+      const result = await contextGet(ctx, {
+        currentProject: cwdProject(),
+        q: 'context-trace-target',
+        budget: 1000,
+      });
       expect(result.entries).toHaveLength(1);
 
       const traces = traceRows(home, 'context');
@@ -221,7 +230,11 @@ describe('api.contextGet - trace wiring', () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       writeEntry(home, createMemory('pinned-context-trace-delta', { pinned: true }));
 
-      const result = await contextGet(ctx, { currentProject: cwdProject(), pinnedOnly: true, budget: 1000 });
+      const result = await contextGet(ctx, {
+        currentProject: cwdProject(),
+        pinnedOnly: true,
+        budget: 1000,
+      });
       expect(result.entries).toHaveLength(1);
 
       expect(traceRows(home, 'context')).toHaveLength(0);
@@ -420,7 +433,9 @@ describe('CLI goal-stack boost — ignores the CLAUDE_CODE_SESSION_ID host var',
     type RecallJson = { results: Array<{ id: string; score: number }> };
     // SAFETY: parses this test's own `hippo recall --json` output, whose shape (cli.ts's asJson branch) is fixed above.
     const recall = async (...flags: string[]): Promise<RecallJson> =>
-      JSON.parse(await hippo(hippoRoot, 'recall', 'zzgoalboostquery', '--json', ...flags)) as RecallJson;
+      JSON.parse(
+        await hippo(hippoRoot, 'recall', 'zzgoalboostquery', '--json', ...flags),
+      ) as RecallJson;
 
     const noSession = await recall();
 

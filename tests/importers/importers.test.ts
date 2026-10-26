@@ -216,8 +216,14 @@ describe('importCursor - .cursor/rules folder', () => {
         '- Prefer named exports over default exports',
       ].join('\n'),
     );
-    fs.writeFileSync(path.join(rules, 'workflow.mdc'), '- Run the full test suite before every push\n');
-    fs.writeFileSync(path.join(rules, 'frontend', 'components.md'), '- Keep React components under 200 lines\n');
+    fs.writeFileSync(
+      path.join(rules, 'workflow.mdc'),
+      '- Run the full test suite before every push\n',
+    );
+    fs.writeFileSync(
+      path.join(rules, 'frontend', 'components.md'),
+      '- Keep React components under 200 lines\n',
+    );
 
     const result = importCursor(rules, makeOpts());
 
@@ -341,7 +347,10 @@ describe('dedup: import same file twice', () => {
   it('second import gets 0 new entries', () => {
     const file = writeTmp(
       'data.json',
-      JSON.stringify(['Cache refresh should run before market open', 'Use UTC for all timestamps in pipelines']),
+      JSON.stringify([
+        'Cache refresh should run before market open',
+        'Use UTC for all timestamps in pipelines',
+      ]),
     );
 
     const r1 = importChatGPT(file, makeOpts());
@@ -364,7 +373,10 @@ describe('dry-run: nothing written', () => {
   it('returns entries but does not persist to disk', () => {
     const file = writeTmp(
       'rules.txt',
-      ['Always write integration tests for external APIs', 'Never store credentials in source code'].join('\n'),
+      [
+        'Always write integration tests for external APIs',
+        'Never store credentials in source code',
+      ].join('\n'),
     );
 
     const result = importGenericFile(file, makeOpts({ dryRun: true }));
@@ -390,7 +402,10 @@ describe('--global: writes to global store', () => {
 
     const file = writeTmp(
       'prefs.json',
-      JSON.stringify(['Prefer explicit over implicit in all code', 'Document public APIs with JSDoc']),
+      JSON.stringify([
+        'Prefer explicit over implicit in all code',
+        'Document public APIs with JSDoc',
+      ]),
     );
 
     importChatGPT(file, {
@@ -449,7 +464,10 @@ describe('confidence tiers on imported memories', () => {
   it('sets confidence to observed for all imported entries', () => {
     const file = writeTmp(
       'facts.json',
-      JSON.stringify(['Never use process.exit in library code', 'Prefer composition over inheritance']),
+      JSON.stringify([
+        'Never use process.exit in library code',
+        'Prefer composition over inheritance',
+      ]),
     );
 
     importChatGPT(file, makeOpts());
@@ -492,7 +510,12 @@ describe('importEntries', () => {
 
   it('truncates long chunks, skips short and duplicate ones, and dedups within a real batch', () => {
     const result = importEntries(
-      ['tiny', LONG, 'Always run the migration dry-run first.', 'Always run the migration dry-run first.'],
+      [
+        'tiny',
+        LONG,
+        'Always run the migration dry-run first.',
+        'Always run the migration dry-run first.',
+      ],
       'test-source',
       ['imported'],
       { tenantId: 'default', hippoRoot: tmpDir, extraTags: ['extra', 'imported'] },
@@ -500,7 +523,10 @@ describe('importEntries', () => {
     expect(result).toMatchObject({ total: 3, imported: 2, skipped: 2, rejected: 0, redacted: 0 });
     expect(result.entries.map((e) => e.content.length)).toEqual([1000, 39]);
     expect(result.entries[0].tags).toEqual(['imported', 'extra']);
-    expect(loadAllEntries(tmpDir, 'default').map((e) => e.source)).toEqual(['test-source', 'test-source']);
+    expect(loadAllEntries(tmpDir, 'default').map((e) => e.source)).toEqual([
+      'test-source',
+      'test-source',
+    ]);
   });
 
   it('dry run writes nothing and does not dedup within the batch', () => {

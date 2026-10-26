@@ -85,7 +85,11 @@ export function parseWikilinks(body: string): string[] {
  * Skips dot-directories and the Hippo store path so a vault containing the store never imports its own mirror files;
  * importVault handles root-IS-the-store.
  */
-export function collectMarkdownFiles(root: string, hippoRoot: string, match: RegExp = /\.md$/i): string[] {
+export function collectMarkdownFiles(
+  root: string,
+  hippoRoot: string,
+  match: RegExp = /\.md$/i,
+): string[] {
   const out: string[] = [];
   // Canonicalize (realpath) so a non-dot HIPPO_HOME store nested in the vault is skipped even via a junction or Windows
   // case alias.

@@ -5,11 +5,19 @@ import { adminActor, remember, type Actor } from '../../src/api/index.js';
 import { listRejectionsForTenant } from '../../src/domain/trust/reject-flow.js';
 import { resolveOpenConflict } from '../../src/surface/dashboard/dashboard-actions.js';
 import { mapApiError } from '../../src/api/error-reply.js';
-import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
+import {
+  handleMcpRequest,
+  type McpContext,
+  type McpResponse,
+} from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from '../_helpers/root-forms.js';
+import {
+  replaceDetectedConflicts,
+  listMemoryConflicts,
+  readEntry,
+} from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
@@ -44,7 +52,10 @@ async function callTool(
     infra: testInfra(),
   };
   if (actor.owner !== undefined) ctx.owner = actor.owner;
-  return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx);
+  return handleMcpRequest(
+    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
+    ctx,
+  );
 }
 
 function replyText(res: McpResponse | null): string {
@@ -54,10 +65,17 @@ function replyText(res: McpResponse | null): string {
 }
 
 /** Seeds one open conflict per pair, replacing any before, and returns their ids; each pair's first id must be in no other pair. */
-async function seedConflicts(...pairs: ReadonlyArray<readonly [string, string]>): Promise<number[]> {
+async function seedConflicts(
+  ...pairs: ReadonlyArray<readonly [string, string]>
+): Promise<number[]> {
   replaceDetectedConflicts(
     root,
-    pairs.map(([a, b]) => ({ memory_a_id: a, memory_b_id: b, reason: 'contradictory deploy advice', score: 0.9 })),
+    pairs.map(([a, b]) => ({
+      memory_a_id: a,
+      memory_b_id: b,
+      reason: 'contradictory deploy advice',
+      score: 0.9,
+    })),
   );
   const open = await listMemoryConflicts(root, 'open', 'default');
   return pairs.map(([a]) => {
@@ -67,7 +85,8 @@ async function seedConflicts(...pairs: ReadonlyArray<readonly [string, string]>)
   });
 }
 
-const seedConflict = async (aId: string, bId: string): Promise<number> => (await seedConflicts([aId, bId]))[0]!;
+const seedConflict = async (aId: string, bId: string): Promise<number> =>
+  (await seedConflicts([aId, bId]))[0]!;
 
 interface PersonalPair {
   personalId: string;
@@ -78,7 +97,9 @@ interface PersonalPair {
 /** A's personal row in an open conflict with B's team row. */
 async function personalPair(): Promise<PersonalPair> {
   const personalId = (await remember(ctxFor(actorA), { content: A_TEXT, personal: true })).id;
-  const teamId = (await remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' })).id;
+  const teamId = (
+    await remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' })
+  ).id;
   return { personalId, teamId, conflictId: await seedConflict(personalId, teamId) };
 }
 
@@ -96,11 +117,17 @@ describe('resolving conflicts next to personal rows', () => {
     const teamCopy = (await remember(ctxFor(actorB), { content: A_TEXT })).id;
     // B owns the loser, so B may remove it.
     const loser = (await remember(ctxFor(actorB), { content: A_TEXT, owner: 'b' })).id;
-    const keeper = (await remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' })).id;
+    const keeper = (
+      await remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' })
+    ).id;
     expect(new Set([personalId, teamCopy, loser]).size).toBe(3);
     const conflictId = await seedConflict(keeper, loser);
 
-    const reply = await callTool(actorB, 'hippo_resolve', { conflict_id: conflictId, keep: keeper, rejectLoser: true });
+    const reply = await callTool(actorB, 'hippo_resolve', {
+      conflict_id: conflictId,
+      keep: keeper,
+      rejectLoser: true,
+    });
     expect(replyText(reply)).toContain(`Resolved conflict ${conflictId}`);
     expect(readEntry(root, loser, 'default')).toBeNull();
     expect(readEntry(root, teamCopy, 'default')).toBeNull();
@@ -113,7 +140,11 @@ describe('resolving conflicts next to personal rows', () => {
     const { personalId, teamId, conflictId } = await personalPair();
     let refusal: { status: number; message: string } | undefined;
     try {
-      await callTool(actorA, 'hippo_resolve', { conflict_id: conflictId, keep: teamId, rejectLoser: true });
+      await callTool(actorA, 'hippo_resolve', {
+        conflict_id: conflictId,
+        keep: teamId,
+        rejectLoser: true,
+      });
     } catch (err) {
       refusal = mapApiError(err);
     }
@@ -121,18 +152,28 @@ describe('resolving conflicts next to personal rows', () => {
     expect(refusal?.message).toContain('cannot reject the value of personal memory');
     expect(await listRejectionsForTenant(sqliteStore(root), 'default')).toHaveLength(0);
     expect(readEntry(root, personalId, 'default')).not.toBeNull();
-    expect((await listMemoryConflicts(root, 'open', 'default')).map((c) => c.id)).toEqual([conflictId]);
+    expect((await listMemoryConflicts(root, 'open', 'default')).map((c) => c.id)).toEqual([
+      conflictId,
+    ]);
 
-    const forgotten = await callTool(actorA, 'hippo_resolve', { conflict_id: conflictId, keep: teamId, forget: true });
+    const forgotten = await callTool(actorA, 'hippo_resolve', {
+      conflict_id: conflictId,
+      keep: teamId,
+      forget: true,
+    });
     expect(replyText(forgotten)).toContain(`Resolved conflict ${conflictId}`);
     expect(readEntry(root, personalId, 'default')).toBeNull();
   });
 
   it("hippo_conflicts hides a pair holding someone else's personal row, and the owner sees it", async () => {
     const { personalId, teamId } = await personalPair();
-    const otherTeamId = (await remember(ctxFor(actorB), { content: 'always run the deploy script from the repo root' }))
-      .id;
-    const [conflictId, teamConflictId] = await seedConflicts([personalId, teamId], [otherTeamId, teamId]);
+    const otherTeamId = (
+      await remember(ctxFor(actorB), { content: 'always run the deploy script from the repo root' })
+    ).id;
+    const [conflictId, teamConflictId] = await seedConflicts(
+      [personalId, teamId],
+      [otherTeamId, teamId],
+    );
     const listed = replyText(await callTool(actorA, 'hippo_conflicts', {}));
     expect(listed).toContain(`conflict_${conflictId}:`);
     expect(listed).toContain(`conflict_${teamConflictId}:`);
@@ -147,19 +188,36 @@ describe('resolving conflicts next to personal rows', () => {
     const { personalId, teamId, conflictId } = await personalPair();
     for (const outsider of [actorB, unownedAdmin]) {
       expect(
-        replyText(await callTool(outsider, 'hippo_resolve', { conflict_id: conflictId, keep: teamId, forget: true })),
+        replyText(
+          await callTool(outsider, 'hippo_resolve', {
+            conflict_id: conflictId,
+            keep: teamId,
+            forget: true,
+          }),
+        ),
       ).toBe(NOT_RESOLVED);
       expect(
         replyText(
-          await callTool(outsider, 'hippo_resolve', { conflict_id: conflictId + 1000, keep: teamId, forget: true }),
+          await callTool(outsider, 'hippo_resolve', {
+            conflict_id: conflictId + 1000,
+            keep: teamId,
+            forget: true,
+          }),
         ),
       ).toBe(NOT_RESOLVED);
     }
     expect(readEntry(root, personalId, 'default')).not.toBeNull();
-    expect((await listMemoryConflicts(root, 'open', 'default')).map((c) => c.id)).toEqual([conflictId]);
+    expect((await listMemoryConflicts(root, 'open', 'default')).map((c) => c.id)).toEqual([
+      conflictId,
+    ]);
 
-    const resolved = await callTool(actorA, 'hippo_resolve', { conflict_id: conflictId, keep: personalId });
-    expect(replyText(resolved)).toBe(`Resolved conflict ${conflictId}: kept ${personalId}, weakened ${teamId}`);
+    const resolved = await callTool(actorA, 'hippo_resolve', {
+      conflict_id: conflictId,
+      keep: personalId,
+    });
+    expect(replyText(resolved)).toBe(
+      `Resolved conflict ${conflictId}: kept ${personalId}, weakened ${teamId}`,
+    );
   });
 
   it('the dashboard resolve answers a pair holding a personal row as it answers a missing conflict, open or resolved', async () => {
@@ -168,7 +226,9 @@ describe('resolving conflicts next to personal rows', () => {
     const missing = await resolveOpenConflict(dashboard, conflictId + 1000, { keep: teamId });
     expect(missing.status).toBe(404);
     expect(await resolveOpenConflict(dashboard, conflictId, { keep: teamId })).toEqual(missing);
-    expect((await listMemoryConflicts(root, 'open', 'default')).map((c) => c.id)).toEqual([conflictId]);
+    expect((await listMemoryConflicts(root, 'open', 'default')).map((c) => c.id)).toEqual([
+      conflictId,
+    ]);
 
     await callTool(actorA, 'hippo_resolve', { conflict_id: conflictId, keep: personalId });
     expect(await resolveOpenConflict(dashboard, conflictId, { keep: teamId })).toEqual(missing);

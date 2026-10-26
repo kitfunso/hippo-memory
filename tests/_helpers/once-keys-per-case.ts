@@ -16,7 +16,8 @@ export function onceKeysPerCase(): void {
     const count = repeats.get(key);
     repeats.set(key, (count ?? -1) + 1);
     if (count === undefined) log.warn(message, fields);
-    else if ((count + 1) % 100 === 0) log.warn(`${message} (${count + 1} more since the first warning)`, fields);
+    else if ((count + 1) % 100 === 0)
+      log.warn(`${message} (${count + 1} more since the first warning)`, fields);
     else log.debug(message, fields);
   });
 }

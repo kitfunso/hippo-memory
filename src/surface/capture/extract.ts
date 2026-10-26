@@ -78,7 +78,8 @@ function proseOnly(text: string): string {
       }
       // Quotes, table rows and indented code are not the speaker's own; indented code cannot interrupt a paragraph or
       // list item.
-      const dropped = /^\s*[>|]/.test(line) || (!afterProse && /^(?: {4}|\t)(?!\s*(?:[-*]|\d+\.)\s)/.test(line));
+      const dropped =
+        /^\s*[>|]/.test(line) || (!afterProse && /^(?: {4}|\t)(?!\s*(?:[-*]|\d+\.)\s)/.test(line));
       afterProse = !dropped && trimmed !== '' && !/^#{1,6}(?:\s|$)/.test(trimmed);
       return dropped ? '' : line;
     })
@@ -122,14 +123,20 @@ function proseBlocks(text: string): string[] {
 function completeSentences(text: string): string[] {
   // Masking keeps offsets, so each sentence is cut from the unchanged source.
   const segments = new Intl.Segmenter('en', { granularity: 'sentence' }).segment(masked(text));
-  return [...segments].map(({ index, segment }) => text.slice(index, index + segment.length).trim());
+  return [...segments].map(({ index, segment }) =>
+    text.slice(index, index + segment.length).trim(),
+  );
 }
 
 function insideBrackets(lead: string): boolean {
   return (lead.match(/[([{]/g) ?? []).length > (lead.match(/[)\]}]/g) ?? []).length;
 }
 
-function extractFromPatterns(sentence: string, patterns: readonly RegExp[], category: string): ExtractedItem | null {
+function extractFromPatterns(
+  sentence: string,
+  patterns: readonly RegExp[],
+  category: string,
+): ExtractedItem | null {
   // A keyword inside brackets does not support a detached assertion; a later one outside them still does.
   const keyed = patterns.some((pattern) =>
     [...sentence.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))].some(
@@ -165,7 +172,11 @@ function extractSpecSections(text: string): ExtractedItem[] {
     if (/^#+\s/.test(trimmed) || /^[A-Z][a-z]+:$/.test(trimmed)) inSpecSection = false;
     const bullet = trimmed.match(BULLET);
     const wrapped: boolean =
-      inSpecSection && open && !bullet && trimmed !== '' && (/^\s/.test(line) || continues(trimmed, bullets.at(-1)));
+      inSpecSection &&
+      open &&
+      !bullet &&
+      trimmed !== '' &&
+      (/^\s/.test(line) || continues(trimmed, bullets.at(-1)));
     if (inSpecSection && bullet) bullets.push(bullet[1].trim());
     else if (wrapped) bullets[bullets.length - 1] += ` ${trimmed}`;
     open = inSpecSection && (bullet !== null || wrapped);
@@ -199,7 +210,9 @@ function extractOne(text: string): ExtractedItem[] {
 export function extractFromTexts(texts: readonly string[], userTexts = 0): ExtractedItem[] {
   const seen = new Set<string>();
   return texts
-    .flatMap((text, i) => extractOne(text).map((item) => (i < userTexts ? { ...item, fromUser: true } : item)))
+    .flatMap((text, i) =>
+      extractOne(text).map((item) => (i < userTexts ? { ...item, fromUser: true } : item)),
+    )
     .filter((item) => {
       const key = duplicateKey(item.content);
       if (seen.has(key) || !assessAutomaticMemory(item.content).accepted) return false;

@@ -13,7 +13,12 @@ import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { issueLocalKey } from './local-key.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
-import { defaultServerRuntime, tenantOfApiKey, type ResolveOptions, type ServerRuntime } from '../open-store.js';
+import {
+  defaultServerRuntime,
+  tenantOfApiKey,
+  type ResolveOptions,
+  type ServerRuntime,
+} from '../open-store.js';
 import { configReader, loadConfig } from '../../host/config-file.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
@@ -23,7 +28,12 @@ import { isLocalCaller } from './auth.js';
 import { assertClientIpHeaderPinned, enforceRateLimit } from './client-ip.js';
 import { createSleepQueue } from './sleep-offload.js';
 import { createCallerState } from '../../api/callers.js';
-import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
+import {
+  DEFAULT_SHUTDOWN_DRAIN_MS,
+  drainAndClose,
+  setKeepAliveTimeouts,
+  shutdownBoundMs,
+} from './lifecycle.js';
 import { readyProbeFor } from './ready.js';
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './defaults.js';
 import { installCrashHandlers, installSignalHandlers } from '../../base/util/crash-handlers.js';
@@ -47,11 +57,19 @@ import {
   dispatchV1Route,
   HOST_ROUTES,
 } from './route-table.js';
-import type { ResolvedServeOptions, RouteRequest, ServeOptions, ServerCounts, ServerHandle } from './types.js';
+import type {
+  ResolvedServeOptions,
+  RouteRequest,
+  ServeOptions,
+  ServerCounts,
+  ServerHandle,
+} from './types.js';
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before listening, a string only for
 // pipe/unix-socket listeners (never used here).
-function isAddressInfo(a: string | import('node:net').AddressInfo | null): a is import('node:net').AddressInfo {
+function isAddressInfo(
+  a: string | import('node:net').AddressInfo | null,
+): a is import('node:net').AddressInfo {
   return a !== null && typeof a !== 'string';
 }
 
@@ -82,8 +100,14 @@ async function handleRequest(
   const routeRequest: RouteRequest = { req, res, opts, query };
   const request = { method, path };
   const { health, ready, mcpStream } = HOST_ROUTES;
-  if (await dispatchHostRoute(routeRequest, request, health, async () => sendHealth(req, res, options))) return;
-  if (await dispatchHostRoute(routeRequest, request, ready, () => sendReady(res, opts.store))) return;
+  if (
+    await dispatchHostRoute(routeRequest, request, health, async () =>
+      sendHealth(req, res, options),
+    )
+  )
+    return;
+  if (await dispatchHostRoute(routeRequest, request, ready, () => sendReady(res, opts.store)))
+    return;
 
   enforceRateLimit(req, path, limiter);
 
@@ -91,7 +115,11 @@ async function handleRequest(
 
   // The request scope (the server's lock wait) is kept by the heartbeat timer after it closes, so the key check and
   // every heartbeat wait that long. Store-ready: the stream only authenticates, through the port.
-  if (await dispatchHostRoute(routeRequest, request, mcpStream, () => handleMcpStream(req, res, opts, streamSlots))) {
+  if (
+    await dispatchHostRoute(routeRequest, request, mcpStream, () =>
+      handleMcpStream(req, res, opts, streamSlots),
+    )
+  ) {
     return;
   }
 
@@ -101,12 +129,18 @@ async function handleRequest(
 
 /** Every route that runs inside a request scope, so it opens each store once: the /v1 table with the webhooks, public
  * JSON, add-on routes and POST /mcp. */
-async function dispatchScopedRoute(r: RouteRequest, method: string, path: string): Promise<boolean> {
+async function dispatchScopedRoute(
+  r: RouteRequest,
+  method: string,
+  path: string,
+): Promise<boolean> {
   if (await dispatchV1Route(r, method, path)) return true;
   if (dispatchPublicJson(r, method, path)) return true;
   if (await dispatchAddonRoute(r, method, path)) return true;
   // Store-ready: under another store the MCP layer lists and runs only the tools ported to the port.
-  return dispatchHostRoute(r, { method, path }, HOST_ROUTES.mcp, () => handleMcpPost(r.req, r.res, r.opts));
+  return dispatchHostRoute(r, { method, path }, HOST_ROUTES.mcp, () =>
+    handleMcpPost(r.req, r.res, r.opts),
+  );
 }
 
 function sendHealth(
@@ -154,7 +188,9 @@ async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> 
 function assertFlagsValid(): void {
   const bad = validateFlags();
   if (bad.length > 0) {
-    throw new Error(`hippo serve: unknown flag value(s) ${bad.join(', ')}; use 1, true, on, 0, false or off`);
+    throw new Error(
+      `hippo serve: unknown flag value(s) ${bad.join(', ')}; use 1, true, on, 0, false or off`,
+    );
   }
 }
 
@@ -167,7 +203,9 @@ export function listenOn(server: Server, port: number, host: string): Promise<vo
     const onListening = (): void => {
       server.removeListener('error', onError);
       // With no listener, an 'error' event after boot is an uncaught exception that stops the server for every caller.
-      server.on('error', (err) => log.error(`serve: listener error: ${err.message}`, errorFields(err)));
+      server.on('error', (err) =>
+        log.error(`serve: listener error: ${err.message}`, errorFields(err)),
+      );
       resolve();
     };
     server.once('error', onError);
@@ -202,7 +240,12 @@ export async function serve(opts: ServeOptions): Promise<ServerHandle> {
   assertClientIpHeaderPinned();
   assertFlagsValid();
   const loopbackHosts = await loopbackBindHosts(host);
-  assertTlsOrCleartextAllowed(host, opts.tls, loopbackHosts, opts.allowCleartext ?? envAllowCleartext());
+  assertTlsOrCleartextAllowed(
+    host,
+    opts.tls,
+    loopbackHosts,
+    opts.allowCleartext ?? envAllowCleartext(),
+  );
   // An open-ended previous secret keeps working, so the operator hears once that nothing will close it.
   warnSlackPreviousSecretOpen();
   warnGitHubPreviousSecretOpen();
@@ -212,7 +255,14 @@ export async function serve(opts: ServeOptions): Promise<ServerHandle> {
   const startedAt = new Date().toISOString();
   await claimPidfile(opts.hippoRoot, startedAt);
   try {
-    return await bindClaimed(opts, { host, requestedPort, routes, publicJsonBodies, limiters, startedAt });
+    return await bindClaimed(opts, {
+      host,
+      requestedPort,
+      routes,
+      publicJsonBodies,
+      limiters,
+      startedAt,
+    });
   } catch (err) {
     removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
     throw err;
@@ -245,7 +295,13 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
 
   const inflight = new Set<ServerResponse>();
   const { workerCounts } = runtime;
-  const options = { startedAt, streamSlots, limiter: limiters.perAddress, counts: served.counts, workerCounts };
+  const options = {
+    startedAt,
+    streamSlots,
+    limiter: limiters.perAddress,
+    counts: served.counts,
+    workerCounts,
+  };
   const server = acceptingServer(served, runtime, inflight, options);
 
   setKeepAliveTimeouts(server);
@@ -266,12 +322,15 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
     await runtime.close();
   };
 
-  if (opts.handleSignals) exitOnSignalOrCrash(stop, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
+  if (opts.handleSignals)
+    exitOnSignalOrCrash(stop, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
 
   return { port: actualPort, url, stop, server };
 }
 
-function frozenAddonRoutes(addonRoutes: ServeOptions['routes']): NonNullable<ServeOptions['routes']> {
+function frozenAddonRoutes(
+  addonRoutes: ServeOptions['routes'],
+): NonNullable<ServeOptions['routes']> {
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
   const routes = Object.freeze(
     (addonRoutes ?? []).map(({ path, handler, storeReady, loop }) =>
@@ -334,10 +393,15 @@ function acceptingServer(
     res.once('finish', runtime.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    answerRequest(req, res, () => runtime.runRequest(() => handleRequest(req, res, served, options)), {
-      slowWarnMs: served.slowRequestWarnMs,
-      counts: options.counts,
-    });
+    answerRequest(
+      req,
+      res,
+      () => runtime.runRequest(() => handleRequest(req, res, served, options)),
+      {
+        slowWarnMs: served.slowRequestWarnMs,
+        counts: options.counts,
+      },
+    );
   });
 }
 

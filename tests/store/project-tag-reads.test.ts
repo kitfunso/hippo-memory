@@ -50,21 +50,35 @@ async function folder(): Promise<StoreFolder> {
   return { isGlobal: false, shared, project };
 }
 
-const memory = (content: string, origin: string | null, i: number, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
+const memory = (
+  content: string,
+  origin: string | null,
+  i: number,
+  extra: Partial<MemoryEntry> = {},
+): MemoryEntry => ({
   ...createMemory(content, { layer: Layer.Semantic }),
   originProject: origin,
   created: at(i),
   ...extra,
 });
 
-const note = (content: string, origin: string, i: number, extra: Partial<MemoryEntry> = {}): MemoryEntry =>
+const note = (
+  content: string,
+  origin: string,
+  i: number,
+  extra: Partial<MemoryEntry> = {},
+): MemoryEntry =>
   memory(content, origin, i, {
     source: `agent-memory:claude-code:p-0123456789ab/${content.slice(0, 12).replace(/ /g, '-')}.md#abc`,
     tags: ['claude-code-memory'],
     ...extra,
   });
 
-const merged = (i: number, parents: readonly string[], extra: Partial<MemoryEntry> = {}): MemoryEntry =>
+const merged = (
+  i: number,
+  parents: readonly string[],
+  extra: Partial<MemoryEntry> = {},
+): MemoryEntry =>
   memory(mergedText(HEADER, [`merge ${i} part one`, `merge ${i} part two`]), '', i, {
     source: 'consolidation',
     parents: [...parents],
@@ -113,7 +127,12 @@ function addBystanders(n: number): void {
     for (let k = 0; k < n; k++) {
       writeEntryDbOnly(db, memory(`bystander ${k} about the build cache`, 'elsewhere', 100 + k));
       const snapshot = memory(`bystander snapshot ${k}`, 'elsewhere', 100 + k);
-      insertDormantRow(db, { entry: snapshot, strength: 0.1, reason: 'decay', dormantAt: at(100 + k) });
+      insertDormantRow(db, {
+        entry: snapshot,
+        strength: 0.1,
+        reason: 'decay',
+        dormantAt: at(100 + k),
+      });
     }
     db.exec('COMMIT');
   });
@@ -143,11 +162,22 @@ describe('hippo projects reads', () => {
       compactions: 1,
     };
 
-    const dry = await mergeProjects(tags(), SCOPE, { from: 'repo-wt-a', into: 'repo', dryRun: true });
+    const dry = await mergeProjects(tags(), SCOPE, {
+      from: 'repo-wt-a',
+      into: 'repo',
+      dryRun: true,
+    });
     expect(dry).toEqual({ ...expected, backup: null });
-    const done = await mergeProjects(tags(), SCOPE, { from: 'repo-wt-a', into: 'repo', dryRun: false });
+    const done = await mergeProjects(tags(), SCOPE, {
+      from: 'repo-wt-a',
+      into: 'repo',
+      dryRun: false,
+    });
     expect(done).toMatchObject(expected);
-    expect((await listProjects(store(), T)).find((p) => p.origin === 'repo')).toMatchObject({ live: 3, imported: 2 });
+    expect((await listProjects(store(), T)).find((p) => p.origin === 'repo')).toMatchObject({
+      live: 3,
+      imported: 2,
+    });
   });
 
   it('plans the repair from the user-global merges, their parents live or dormant, and copied imports', async () => {

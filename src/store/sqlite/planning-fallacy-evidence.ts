@@ -8,7 +8,10 @@ import { cachedStatement } from '../../db/statement-cache.js';
 
 /** A unique best of at least one shared token wins; a tie at the top resolves no class, since an alphabetical pick
  * would name the wrong class on an ambiguous claim. The result does not depend on the order of `classTags`. */
-function resolveClass(classTags: Iterable<string>, queryTokens: readonly string[]): ClassResolution {
+function resolveClass(
+  classTags: Iterable<string>,
+  queryTokens: readonly string[],
+): ClassResolution {
   if (queryTokens.length === 0) return { classTag: null, tiebreak: false };
   const query = new Set(queryTokens);
   let best = 0;
@@ -44,7 +47,9 @@ export function planningFallacyEvidence(
   const tags =
     classQueryTokens.length === 0
       ? []
-      : (cachedStatement(db, `SELECT DISTINCT class_tag FROM predictions WHERE tenant_id = ?`).all(tenantId) as Array<{
+      : (cachedStatement(db, `SELECT DISTINCT class_tag FROM predictions WHERE tenant_id = ?`).all(
+          tenantId,
+        ) as Array<{
           class_tag: string;
         }>);
   const resolution = resolveClass(

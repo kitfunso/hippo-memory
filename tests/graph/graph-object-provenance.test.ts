@@ -81,7 +81,9 @@ function entityRows(home: string): EntityRow[] {
     // generic overload); the SELECT column list above matches EntityRow
     // field-for-field.
     return db
-      .prepare(`SELECT id, name, memory_id, source_object_type, source_object_id FROM entities ORDER BY id`)
+      .prepare(
+        `SELECT id, name, memory_id, source_object_type, source_object_id FROM entities ORDER BY id`,
+      )
       .all() as EntityRow[];
   } finally {
     closeHippoDb(db);
@@ -183,7 +185,9 @@ describe('graph provenance is anchored to the first-class object, not its memory
     expect(rels[0].source_object_id).toBe(decision.id);
 
     // It is verifiable in loadEntities too (the API maps the object columns).
-    const apiEnt = loadEntities(home, T, { limit: 100 }).find((e) => e.sourceObjectType === 'decision')!;
+    const apiEnt = loadEntities(home, T, { limit: 100 }).find(
+      (e) => e.sourceObjectType === 'decision',
+    )!;
     expect(apiEnt.memoryId).toBeNull();
     expect(apiEnt.sourceObjectId).toBe(decision.id);
   });
@@ -206,9 +210,9 @@ describe('graph provenance is anchored to the first-class object, not its memory
 
   it('the no-raw invariant holds: inserting an entity that references a raw memory still ABORTs', () => {
     const raw = addMemory(home, 'raw');
-    expect(() => insertEntityAt(home, T, { entityType: 'system', name: 'x', memoryId: raw })).toThrow(
-      /raw|consolidated/i,
-    );
+    expect(() =>
+      insertEntityAt(home, T, { entityType: 'system', name: 'x', memoryId: raw }),
+    ).toThrow(/raw|consolidated/i);
     // and via a direct raw SQL INSERT claiming distilled -> the trigger ABORTs.
     const db = openHippoDb(home);
     try {
@@ -268,7 +272,11 @@ describe('graph provenance is anchored to the first-class object, not its memory
   it('object-path guard: inserting an entity pointing at a non-existent / wrong-tenant E2 row ABORTs', () => {
     // memory-null + a source_object that does not exist -> ABORT (helper + trigger).
     expect(() =>
-      insertEntityAt(home, T, { entityType: 'decision', name: 'ghost', sourceObject: { type: 'decision', id: 99999 } }),
+      insertEntityAt(home, T, {
+        entityType: 'decision',
+        name: 'ghost',
+        sourceObject: { type: 'decision', id: 99999 },
+      }),
     ).toThrow(/not found|active\/superseded|active|superseded/i);
     const db = openHippoDb(home);
     try {
@@ -395,9 +403,9 @@ describe('graph provenance is anchored to the first-class object, not its memory
     expect(ent.memoryId).toBeNull(); // dead mirror pointer dropped
     expect(ent.sourceObjectId).toBe(policy.id); // anchored to the object
     // a stale-missing mirror with NO object still throws (no provenance to fall back on).
-    expect(() => insertEntityAt(home, T, { entityType: 'system', name: 'x', memoryId: 'sem_doesnotexist' })).toThrow(
-      /not found/i,
-    );
+    expect(() =>
+      insertEntityAt(home, T, { entityType: 'system', name: 'x', memoryId: 'sem_doesnotexist' }),
+    ).toThrow(/not found/i);
   });
 
   it('an explicit UPDATE re-pointing a row to a bad object ABORTs (object cols changed); memory-only SET NULL still does not', async () => {
@@ -410,13 +418,13 @@ describe('graph provenance is anchored to the first-class object, not its memory
     const db = openHippoDb(home);
     try {
       // explicit re-point to a nonexistent object -> object cols changed -> object path validated -> ABORT.
-      expect(() => db.prepare(`UPDATE entities SET source_object_id = 99999 WHERE id = ?`).run(polEnt.id)).toThrow(
-        /source_object must reference|active|superseded/i,
-      );
+      expect(() =>
+        db.prepare(`UPDATE entities SET source_object_id = 99999 WHERE id = ?`).run(polEnt.id),
+      ).toThrow(/source_object must reference|active|superseded/i);
       // half-set via UPDATE -> all-or-none ABORT.
-      expect(() => db.prepare(`UPDATE entities SET source_object_type = NULL WHERE id = ?`).run(polEnt.id)).toThrow(
-        /set together|all-or-none/i,
-      );
+      expect(() =>
+        db.prepare(`UPDATE entities SET source_object_type = NULL WHERE id = ?`).run(polEnt.id),
+      ).toThrow(/set together|all-or-none/i);
     } finally {
       closeHippoDb(db);
     }
@@ -439,9 +447,9 @@ describe('graph provenance is anchored to the first-class object, not its memory
     try {
       // moving it to another tenant: the object-validation gate now includes tenant change, so the
       // object is re-checked against the NEW tenant (policy is in T, not 'other-tenant') -> ABORT.
-      expect(() => db.prepare(`UPDATE entities SET tenant_id = 'other-tenant' WHERE id = ?`).run(ent.id)).toThrow(
-        /source_object must reference|active|superseded/i,
-      );
+      expect(() =>
+        db.prepare(`UPDATE entities SET tenant_id = 'other-tenant' WHERE id = ?`).run(ent.id),
+      ).toThrow(/source_object must reference|active|superseded/i);
     } finally {
       closeHippoDb(db);
     }
@@ -459,24 +467,35 @@ describe('graph provenance is anchored to the first-class object, not its memory
     deleteEntry(home, decision.memoryId!);
     await extractGraph(sqliteStore(home), T);
     expect(
-      entityRows(home).some((e) => e.source_object_type === 'decision' && e.source_object_id === decision.id),
+      entityRows(home).some(
+        (e) => e.source_object_type === 'decision' && e.source_object_id === decision.id,
+      ),
     ).toBe(true);
     expect(relationRows(home).length).toBe(1); // decision -> policy references arc
 
     // Close the mirrorless decision. close* cannot enqueue a rebuild (no mirror to key the
     // queue), so it must drop the decision's graph rows DIRECTLY. NO extractGraph after close.
-    await closeObject(objectsAt(home), DECISION, T, decision.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), DECISION, T, decision.id, {
+      actor: CLI_ACTOR,
+      now: evalNow(),
+    });
 
     expect(
-      entityRows(home).some((e) => e.source_object_type === 'decision' && e.source_object_id === decision.id),
+      entityRows(home).some(
+        (e) => e.source_object_type === 'decision' && e.source_object_id === decision.id,
+      ),
     ).toBe(false); // gone
     expect(
-      relationRows(home).some((r) => r.source_object_type === 'decision' && r.source_object_id === decision.id),
+      relationRows(home).some(
+        (r) => r.source_object_type === 'decision' && r.source_object_id === decision.id,
+      ),
     ).toBe(false); // edge gone
     // the policy entity (untouched, live mirror) remains.
-    expect(entityRows(home).some((e) => e.source_object_type === 'policy' && e.source_object_id === policy.id)).toBe(
-      true,
-    );
+    expect(
+      entityRows(home).some(
+        (e) => e.source_object_type === 'policy' && e.source_object_id === policy.id,
+      ),
+    ).toBe(true);
   });
 
   it('forgetting the mirror of a CLOSED-but-not-yet-rebuilt object does NOT block the delete (core sleep/forget safe)', async () => {
@@ -491,7 +510,10 @@ describe('graph provenance is anchored to the first-class object, not its memory
     expect(entityRows(home).length).toBe(1); // entity created with a live mirror + object (active)
 
     // Close removes the object's graph rows DIRECTLY (deterministic), so it never lingers.
-    await closeObject(objectsAt(home), DECISION, T, decision.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), DECISION, T, decision.id, {
+      actor: CLI_ACTOR,
+      now: evalNow(),
+    });
     expect(entityRows(home).length).toBe(0); // gone immediately, not lingering until a rebuild
 
     // Forgetting the now-orphaned mirror afterwards must not throw - and with the object-status
@@ -500,9 +522,13 @@ describe('graph provenance is anchored to the first-class object, not its memory
     expect(deleteEntry(home, decision.memoryId!)).toBe(true);
     const db = openHippoDb(home);
     try {
-      expect(db.prepare(`SELECT id FROM memories WHERE id = ?`).get(decision.memoryId!)).toBeUndefined();
+      expect(
+        db.prepare(`SELECT id FROM memories WHERE id = ?`).get(decision.memoryId!),
+      ).toBeUndefined();
       // The closed decision outlives its mirror: the FK set its memory_id to NULL instead of blocking the delete.
-      expect(db.prepare(`SELECT memory_id, status FROM decisions WHERE id = ?`).get(decision.id)).toEqual({
+      expect(
+        db.prepare(`SELECT memory_id, status FROM decisions WHERE id = ?`).get(decision.id),
+      ).toEqual({
         memory_id: null,
         status: 'closed',
       });

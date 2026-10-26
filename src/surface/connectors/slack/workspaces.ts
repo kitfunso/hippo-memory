@@ -11,7 +11,10 @@ export interface AddWorkspaceOptions {
   tenantId: string;
 }
 
-export function addWorkspace(store: HippoStore, opts: AddWorkspaceOptions): Promise<SlackWorkspace> {
+export function addWorkspace(
+  store: HippoStore,
+  opts: AddWorkspaceOptions,
+): Promise<SlackWorkspace> {
   return store.connectorEvents.registerSlackWorkspace(opts.teamId, opts.tenantId);
 }
 

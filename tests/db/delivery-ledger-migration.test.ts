@@ -79,10 +79,16 @@ function count(db: DatabaseSyncLike, table: string): number {
 
 function meta(db: DatabaseSyncLike, key: string): string | undefined {
   // SAFETY: the meta table's value column is TEXT; one row by primary key.
-  return (db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined)?.value;
+  return (
+    db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined
+  )?.value;
 }
 
-function insertEvent(db: DatabaseSyncLike, sessionId: string | null, turnSeq: number | null): number {
+function insertEvent(
+  db: DatabaseSyncLike,
+  sessionId: string | null,
+  turnSeq: number | null,
+): number {
   return Number(
     db
       .prepare(
@@ -112,8 +118,12 @@ describe('delivery ledger schema v50', () => {
       const tables = names(db, `SELECT name FROM sqlite_master WHERE type='table'`);
       expect(tables).toContain('delivery_events');
       expect(tables).toContain('delivery_candidates');
-      expect(names(db, `SELECT name FROM pragma_table_info('delivery_events')`)).toEqual(EVENT_COLUMNS);
-      expect(names(db, `SELECT name FROM pragma_table_info('delivery_candidates')`)).toEqual(CANDIDATE_COLUMNS);
+      expect(names(db, `SELECT name FROM pragma_table_info('delivery_events')`)).toEqual(
+        EVENT_COLUMNS,
+      );
+      expect(names(db, `SELECT name FROM pragma_table_info('delivery_candidates')`)).toEqual(
+        CANDIDATE_COLUMNS,
+      );
     });
   });
 
@@ -131,13 +141,17 @@ describe('delivery ledger schema v50', () => {
         'idx_delivery_events_turn',
       ]);
       // SAFETY: one TEXT column `sql`.
-      const turn = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_delivery_events_turn'`).get() as {
+      const turn = db
+        .prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_delivery_events_turn'`)
+        .get() as {
         sql: string;
       };
       expect(turn.sql).toMatch(/UNIQUE/);
       expect(turn.sql).toMatch(/WHERE turn_seq IS NOT NULL/);
       // SAFETY: one TEXT column `sql`.
-      const call = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_delivery_events_tool_call'`).get() as {
+      const call = db
+        .prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_delivery_events_tool_call'`)
+        .get() as {
         sql: string;
       };
       expect(call.sql).toMatch(/UNIQUE/);
@@ -185,7 +199,9 @@ describe('delivery ledger schema v50', () => {
       db.exec('DROP TABLE IF EXISTS delivery_candidates');
       db.exec('DROP TABLE IF EXISTS delivery_events');
       db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '49')`).run();
-      db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('min_compatible_binary', ?)`).run(minBefore);
+      db.prepare(
+        `INSERT OR REPLACE INTO meta (key, value) VALUES ('min_compatible_binary', ?)`,
+      ).run(minBefore);
     } finally {
       closeHippoDb(db);
     }

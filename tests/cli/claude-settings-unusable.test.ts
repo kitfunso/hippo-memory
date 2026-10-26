@@ -25,7 +25,8 @@ afterEach(() => {
 
 // A PATH with no codex on it, and no schedule or git call, so the run touches nothing outside the fake home.
 async function hippo(...args: string[]): Promise<string> {
-  for (const key of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_SKIP_AUTO_INTEGRATIONS']) vi.stubEnv(key, undefined);
+  for (const key of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_SKIP_AUTO_INTEGRATIONS'])
+    vi.stubEnv(key, undefined);
   vi.stubEnv('HOME', path.join(root, 'home'));
   vi.stubEnv('USERPROFILE', path.join(root, 'home'));
   vi.stubEnv('APPDATA', path.join(root, 'appdata'));
@@ -34,7 +35,9 @@ async function hippo(...args: string[]): Promise<string> {
   vi.stubEnv('PATH', path.join(root, 'empty-path'));
   process.chdir(path.join(root, 'repo'));
   try {
-    const r = await runInProcess(() => runCli(['node', 'hippo', ...args, '--no-schedule', '--no-learn']));
+    const r = await runInProcess(() =>
+      runCli(['node', 'hippo', ...args, '--no-schedule', '--no-learn']),
+    );
     // A verb that sets process.exitCode instead of exiting fails here, as the real process would on exit.
     expect(r.status || Number(process.exitCode ?? 0), r.stderr).toBe(0);
     return r.stdout;
@@ -59,7 +62,9 @@ describe.each([
       expect(out.match(/left unchanged/g)).toHaveLength(1);
       expect(out).toContain(settings);
       expect(out).toContain(
-        command.startsWith('hook uninstall') ? 'hippo hook uninstall claude-code' : 'hippo hook install claude-code',
+        command.startsWith('hook uninstall')
+          ? 'hippo hook uninstall claude-code'
+          : 'hippo hook install claude-code',
       );
       expect(out).not.toContain('already configured');
       expect(fs.readFileSync(settings, 'utf8')).toBe(text);

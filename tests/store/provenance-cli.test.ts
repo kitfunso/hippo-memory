@@ -22,14 +22,20 @@ interface RunResult {
 
 // In process, so coverage sees the verb; the shape matches the spawned run it replaced.
 async function runHippo(args: string[]): Promise<RunResult> {
-  const r = await runCliAs(args, { env: { ...process.env, HIPPO_HOME: path.join(tmpDir, 'global') }, cwd: tmpDir });
+  const r = await runCliAs(args, {
+    env: { ...process.env, HIPPO_HOME: path.join(tmpDir, 'global') },
+    cwd: tmpDir,
+  });
   return { stdout: r.stdout, stderr: r.stderr, status: r.status ?? 1 };
 }
 
 describe('hippo provenance CLI', () => {
   it('reports the trivially-satisfied gate when no raw rows exist', async () => {
     initTestStore(hippoDir);
-    writeEntry(hippoDir, createMemory('legacy distilled memory predating envelope', { kind: 'distilled' }));
+    writeEntry(
+      hippoDir,
+      createMemory('legacy distilled memory predating envelope', { kind: 'distilled' }),
+    );
 
     const r = await runHippo(['provenance', '--strict']);
     expect(r.status).toBe(0);

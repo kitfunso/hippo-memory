@@ -45,7 +45,9 @@ function goalId(output: string): string {
 
 describe('hippo goal CLI', () => {
   it('push then list shows the active goal', async () => {
-    expect(await ok('push', 'review-auth', '--policy', 'error-prioritized')).toMatch(/^g_[a-f0-9]+/);
+    expect(await ok('push', 'review-auth', '--policy', 'error-prioritized')).toMatch(
+      /^g_[a-f0-9]+/,
+    );
     const list = await ok('list');
     expect(list).toContain('review-auth');
     expect(list).toContain('active');

@@ -1,16 +1,32 @@
 // hippo.db's ProjectTags group: the reads `hippo projects` plans from, and the merge and repair, each one transaction
 // backed up first.
-import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import {
+  getMeta,
+  setMeta,
+  withTrialScope,
+  withWriteScope,
+  type DatabaseSyncLike,
+} from '../../db/index.js';
 import { withBackup } from '../../db/backup.js';
 import { calculateStrength } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { AGENT_MEMORY_SOURCE_PREFIX, isImport, noteKey, toolTag } from '../../base/memory/agent-memory-tools.js';
+import {
+  AGENT_MEMORY_SOURCE_PREFIX,
+  isImport,
+  noteKey,
+  toolTag,
+} from '../../base/memory/agent-memory-tools.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { appendAuditEvents } from './audit.js';
 import { compactionOrigins, restampCompactionOrigin } from './compaction-rows.js';
 import { dormantSnapshotsWhere, insertDormantRow, replaceDormantEntry } from './dormant-rows.js';
 import { readEntriesByIds, countByOrigin } from './entry-reads.js';
-import { deleteEntryRowInTx, restampOriginProject, stampOriginProjects, writeEntryMirrors } from './entry-writes.js';
+import {
+  deleteEntryRowInTx,
+  restampOriginProject,
+  stampOriginProjects,
+  writeEntryMirrors,
+} from './entry-writes.js';
 import { removeEntryMirrors } from './mirrors.js';
 import type { Handles, HandleOpener, StoreFiles } from './open.js';
 import { setAsideRow } from './set-aside.js';
@@ -60,15 +76,27 @@ function rewrite<T>(
 }
 
 function rowsWhere(db: DatabaseSyncLike, filter: EntryFilter): Iterable<MemoryEntry> {
-  return rowsInPages((after?: EntryCursor) => listEntriesWhere(db, filter, { limit: READ_PAGE_ROWS, after }));
+  return rowsInPages((after?: EntryCursor) =>
+    listEntriesWhere(db, filter, { limit: READ_PAGE_ROWS, after }),
+  );
 }
 
 /** Re-tags `from`'s rows, snapshots and compactions to `into`, setting aside the imports `into` already holds. */
-function fold(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, { from, into }: ProjectFold): FoldResult {
+function fold(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  tenantId: string,
+  { from, into }: ProjectFold,
+): FoldResult {
   // The sync renames the rest to `into`'s prefix and keeps their ids; only a note `into` already holds would show
   // twice.
   const held = new Set<string>();
-  const imports = { tenantId, origins: [into], live: true, sourcePrefix: AGENT_MEMORY_SOURCE_PREFIX } as const;
+  const imports = {
+    tenantId,
+    origins: [into],
+    live: true,
+    sourcePrefix: AGENT_MEMORY_SOURCE_PREFIX,
+  } as const;
   for (const row of rowsWhere(db, imports)) {
     held.add(noteKey(row.source));
   }
@@ -79,7 +107,11 @@ function fold(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, { from,
     const tag = toolTag(row.source);
     const live = isImport(row.source) && !row.supersededBy && row.kind !== 'raw';
     const copy = live && tag !== null && held.has(noteKey(row.source));
-    if (copy && setAsideRow(db, tag, { ...row, originProject: into }, 'project-merge', files).kind === 'dormant') {
+    if (
+      copy &&
+      setAsideRow(db, tag, { ...row, originProject: into }, 'project-merge', files).kind ===
+        'dormant'
+    ) {
       setAside.push(row.id);
     } else restamped.push(row.id);
   }
@@ -103,7 +135,9 @@ function merge(
 ): AppliedMerge {
   const body = (backup: string | null): TagRewrite<AppliedMerge> => {
     const folded = fold(db, files, tenantId, { from, into });
-    appendAuditEvents(db, [{ tenantId, actor, op: 'project_merge', metadata: { from, into, backup, ...folded } }]);
+    appendAuditEvents(db, [
+      { tenantId, actor, op: 'project_merge', metadata: { from, into, backup, ...folded } },
+    ]);
     return { result: { ...folded, backup }, rewrite: folded.restamped, purge: folded.setAside };
   };
   // A dry run rolls back, so it writes no backup and no mirror.
@@ -127,7 +161,8 @@ function setAsideCopies(
   for (const { id, origin } of copies) {
     const row = rows.get(id);
     const tag = row ? toolTag(row.source) : null;
-    if (!row || tag === null || row.supersededBy || (row.originProject ?? null) !== origin) continue;
+    if (!row || tag === null || row.supersededBy || (row.originProject ?? null) !== origin)
+      continue;
     if (setAsideRow(db, tag, row, 'project-repair', files).kind === 'dormant') done.push(id);
   }
   return done;
@@ -135,13 +170,23 @@ function setAsideCopies(
 
 /** The planned sleep merges still live and user-global; the plan chose each by its parents, so one re-tagged since
  * stays as it is. */
-function userGlobalMerges(db: DatabaseSyncLike, tenantId: string, ids: readonly string[]): Map<string, MemoryEntry> {
+function userGlobalMerges(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  ids: readonly string[],
+): Map<string, MemoryEntry> {
   const rows = readEntriesByIds(db, ids, tenantId);
   return new Map([...rows].filter(([, e]) => !e.supersededBy && e.originProject === ''));
 }
 
 /** A live row to dormant storage, restorable, as sleep's dormant move does. */
-function retire(db: DatabaseSyncLike, files: StoreFiles, row: MemoryEntry, actor: string, now: Date): void {
+function retire(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  row: MemoryEntry,
+  actor: string,
+  now: Date,
+): void {
   insertDormantRow(db, {
     entry: row,
     strength: calculateStrength(row, now, files.strength),
@@ -151,13 +196,21 @@ function retire(db: DatabaseSyncLike, files: StoreFiles, row: MemoryEntry, actor
   deleteEntryRowInTx(db, row, actor);
 }
 
-function repair(db: DatabaseSyncLike, files: StoreFiles, scope: ProjectTagScope, plan: RepairPlan): AppliedRepair {
+function repair(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  scope: ProjectTagScope,
+  plan: RepairPlan,
+): AppliedRepair {
   const { tenantId, actor } = scope;
   return rewrite(db, files, tenantId, 'before-repair', (backup) => {
     const copies = setAsideCopies(db, files, tenantId, plan.copies);
     const { folds, untraced } = plan;
     const folded = folds.map((f) => fold(db, files, tenantId, f));
-    const merges = userGlobalMerges(db, tenantId, [...plan.toProject.map((r) => r.id), ...plan.setAside]);
+    const merges = userGlobalMerges(db, tenantId, [
+      ...plan.toProject.map((r) => r.id),
+      ...plan.setAside,
+    ]);
     const toProject = plan.toProject.filter((r) => merges.has(r.id));
     stampOriginProjects(db, tenantId, toProject);
     const retired = plan.setAside.flatMap((id) => merges.get(id) ?? []);

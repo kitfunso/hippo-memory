@@ -49,7 +49,11 @@ describe('MCP-over-HTTP transport', () => {
     });
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('application/json');
-    const body = await jsonAs<{ jsonrpc: string; id: number; result?: { tools: Array<{ name: string }> } }>(res);
+    const body = await jsonAs<{
+      jsonrpc: string;
+      id: number;
+      result?: { tools: Array<{ name: string }> };
+    }>(res);
     expect(body.jsonrpc).toBe('2.0');
     expect(body.id).toBe(1);
     expect(Array.isArray(body.result?.tools)).toBe(true);
@@ -78,7 +82,10 @@ describe('MCP-over-HTTP transport', () => {
         }),
       });
       expect(rememberRes.status).toBe(200);
-      const rememberBody = await jsonAs<{ id: number; result?: { content: Array<{ text: string }> } }>(rememberRes);
+      const rememberBody = await jsonAs<{
+        id: number;
+        result?: { content: Array<{ text: string }> };
+      }>(rememberRes);
       expect(rememberBody.id).toBe(2);
       const rememberText = rememberBody.result?.content?.[0]?.text ?? '';
       expect(rememberText).toMatch(/Remembered/i);
@@ -100,7 +107,10 @@ describe('MCP-over-HTTP transport', () => {
         }),
       });
       expect(recallRes.status).toBe(200);
-      const recallBody = await jsonAs<{ id: number; result?: { content: Array<{ text: string }> } }>(recallRes);
+      const recallBody = await jsonAs<{
+        id: number;
+        result?: { content: Array<{ text: string }> };
+      }>(recallRes);
       const recallText = recallBody.result?.content?.[0]?.text ?? '';
       expect(recallText).toContain(sentinel);
     },
@@ -115,10 +125,16 @@ describe('MCP-over-HTTP transport', () => {
       });
       return { status: res.status, body: await res.text() };
     };
-    const noMethod = { status: 400, body: '{"error":"JSON-RPC body must include a method string"}' };
+    const noMethod = {
+      status: 400,
+      body: '{"error":"JSON-RPC body must include a method string"}',
+    };
     expect(await post('{"jsonrpc":"2.0","id":1}')).toEqual(noMethod);
     expect(await post('[1,2]')).toEqual(noMethod);
-    expect(await post('{"jsonrpc":"2.0","method":"notifications/initialized"}')).toEqual({ status: 202, body: '' });
+    expect(await post('{"jsonrpc":"2.0","method":"notifications/initialized"}')).toEqual({
+      status: 202,
+      body: '',
+    });
     expect(await post('{"jsonrpc":"2.0","id":7,"method":"no/such"}')).toEqual({
       status: 200,
       body: '{"jsonrpc":"2.0","id":7,"error":{"code":-32601,"message":"Method not found: no/such"}}',

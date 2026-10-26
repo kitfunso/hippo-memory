@@ -15,7 +15,11 @@ import {
   writeClaudeTranscript,
   writeCopilotSessionLog,
 } from '../_helpers/copilot-hooks.js';
-import { loadActiveTaskSnapshot, loadAllEntries, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
+import {
+  loadActiveTaskSnapshot,
+  loadAllEntries,
+  saveActiveTaskSnapshot,
+} from '../_helpers/root-forms.js';
 import {
   runHippo,
   PROJ_PIN,
@@ -107,11 +111,21 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   const logFile = (): string => path.join(s.dir, 'turn.log');
   const memoriesWith = (text: string, hippoRoot = s.hippoRoot): number =>
     loadAllEntries(hippoRoot, 'default').filter((e) => e.content.includes(text)).length;
-  const stopArgs = (log: string): string[] => ['session-end', '--runtime', 'copilot', '--turn', '--log-file', log];
+  const stopArgs = (log: string): string[] => [
+    'session-end',
+    '--runtime',
+    'copilot',
+    '--turn',
+    '--log-file',
+    log,
+  ];
   const sessionFile = (suffix: string, id = VSCODE_SESSION): string =>
     path.join(s.dir, '.hippo', 'sessions', `${id}${suffix}`);
 
-  function stopPayload(transcript: string, over: { cwd?: string; sessionId?: string } = {}): string {
+  function stopPayload(
+    transcript: string,
+    over: { cwd?: string; sessionId?: string } = {},
+  ): string {
     const payload = copilotPayload('Stop', over.cwd ?? s.proj, transcript);
     if (over.sessionId === undefined) return payload;
     // SAFETY: copilotPayload returns the JSON object of one fixture.
@@ -156,7 +170,8 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
           timeoutMs: 40_000,
         });
         const pid = Number(marked().split('\n')[0]);
-        if (!Number.isInteger(pid) || pid <= 0) throw new Error(`bad pid in the cursor save mark: ${marked()}`);
+        if (!Number.isInteger(pid) || pid <= 0)
+          throw new Error(`bad pid in the cursor save mark: ${marked()}`);
         return pid;
       },
       saves: (): number[] =>
@@ -238,7 +253,8 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     patchConfig(s.hippoRoot, { autoSleep });
     const log = await stop(writeVscodeTranscript(copilotEventsJsonl()));
     expect(log).toMatch(line);
-    if (!autoSleep.enabled || autoSleep.threshold > 1) expect(log).not.toContain('consolidating memory...');
+    if (!autoSleep.enabled || autoSleep.threshold > 1)
+      expect(log).not.toContain('consolidating memory...');
   });
 
   /** How many session-end workers one Stop hook run started; the preload records each spawn before the hook exits. */
@@ -250,10 +266,17 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
       RECORD_SPAWN_FILE: record,
       NODE_OPTIONS: `${s.env.NODE_OPTIONS ?? ''} --require "${RECORD_SPAWN}"`,
     };
-    const r = runHippo(['session-end', '--runtime', 'copilot', '--turn', '--log-file', logFile()], s.dir, env, payload);
+    const r = runHippo(
+      ['session-end', '--runtime', 'copilot', '--turn', '--log-file', logFile()],
+      s.dir,
+      env,
+      payload,
+    );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
-    return fs.existsSync(record) ? fs.readFileSync(record, 'utf8').split('__session-end-worker').length - 1 : 0;
+    return fs.existsSync(record)
+      ? fs.readFileSync(record, 'utf8').split('__session-end-worker').length - 1
+      : 0;
   }
 
   it('does nothing for the Copilot CLI agentStop on the same hook line, or for no payload', async () => {
@@ -326,7 +349,10 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
       timeoutMs: WORKER_WAIT_MS,
     });
     fault.release();
-    await waitFor(() => !fs.existsSync(sessionFile('.lock')), { what: 'session lock released', timeoutMs: 60_000 });
+    await waitFor(() => !fs.existsSync(sessionFile('.lock')), {
+      what: 'session lock released',
+      timeoutMs: 60_000,
+    });
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
     // The second worker has no preload, so two lines with this pid mean the first worker saved the cursor twice.
@@ -349,7 +375,9 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(firstStop.status, firstStop.stderr).toBe(0);
     // The first chat's worker is held at its cursor save before the second chat starts, so the whole second save falls inside that worker's life.
     const pid = await fault.reached();
-    const secondPayload = stopPayload(writeVscodeTranscript(SECOND_TURN, second), { sessionId: second });
+    const secondPayload = stopPayload(writeVscodeTranscript(SECOND_TURN, second), {
+      sessionId: second,
+    });
     const secondStop = await hippo(stopArgs(secondLog), s.dir, s.env, secondPayload);
     expect(secondStop.status, secondStop.stderr).toBe(0);
     await waitForLog(secondLog, TURN_DONE, 50_000);
@@ -361,7 +389,10 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(fs.existsSync(sessionFile('.cursor.json', second))).toBe(true);
 
     fault.release();
-    await waitFor(() => !fs.existsSync(sessionFile('.lock')), { what: 'session lock released', timeoutMs: 60_000 });
+    await waitFor(() => !fs.existsSync(sessionFile('.lock')), {
+      what: 'session lock released',
+      timeoutMs: 60_000,
+    });
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
@@ -372,14 +403,19 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     fs.mkdirSync(path.join(billing, '.git'), { recursive: true });
     await stop(writeVscodeTranscript(copilotEventsJsonl()), { cwd: billing, waitMs: 50_000 });
     const sql = `SELECT origin_project FROM memories WHERE instr(content, '${FIRST_LESSON}') > 0`;
-    expect(rows<{ origin_project: string }>(sql, s.globalRoot)).toEqual([{ origin_project: 'billing' }]);
+    expect(rows<{ origin_project: string }>(sql, s.globalRoot)).toEqual([
+      { origin_project: 'billing' },
+    ]);
     expect(memoriesWith(FIRST_LESSON)).toBe(0);
     expect(fs.existsSync(path.join(billing, '.hippo'))).toBe(false);
   });
 
   it('saves into the payload cwd store when the hook runs from another project with its own store', async () => {
     const otherRoot = initStoreIn(path.join(s.dir, 'other'));
-    await stop(writeVscodeTranscript(copilotEventsJsonl()), { from: path.join(s.dir, 'other'), waitMs: 50_000 });
+    await stop(writeVscodeTranscript(copilotEventsJsonl()), {
+      from: path.join(s.dir, 'other'),
+      waitMs: 50_000,
+    });
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(FIRST_LESSON, otherRoot)).toBe(0);
     expect(memoriesWith(FIRST_LESSON, s.globalRoot)).toBe(0);
@@ -406,7 +442,9 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   it('warns once when the payload cwd does not exist, and saves into the store of the folder it ran in', async () => {
     const other = path.join(s.dir, 'other');
     const otherRoot = initStoreIn(other);
-    const payload = stopPayload(writeVscodeTranscript(copilotEventsJsonl()), { cwd: path.join(s.dir, 'gone') });
+    const payload = stopPayload(writeVscodeTranscript(copilotEventsJsonl()), {
+      cwd: path.join(s.dir, 'gone'),
+    });
     fs.rmSync(logFile(), { force: true });
     const r = await hippo(stopArgs(logFile()), other, { ...s.env, HIPPO_LOG: 'warn' }, payload);
     expect(r.status, r.stderr).toBe(0);
@@ -497,7 +535,9 @@ describe('a Claude Code payload run from another folder with no --runtime', () =
     );
     expect(r.status, r.stderr).toBe(0);
     const sql = `SELECT session_id FROM failure_log`;
-    expect(rows<{ session_id: string | null }>(sql, otherRoot)).toEqual([{ session_id: CLAUDE_SESSION }]);
+    expect(rows<{ session_id: string | null }>(sql, otherRoot)).toEqual([
+      { session_id: CLAUDE_SESSION },
+    ]);
     expect(rows<{ session_id: string | null }>(sql)).toEqual([]);
   });
 

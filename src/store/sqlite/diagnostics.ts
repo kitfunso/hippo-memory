@@ -63,7 +63,11 @@ function storeInventory(db: DatabaseSyncLike): StoreInventory {
 
 /** Compaction records in all, those with a summary whose memories never got saved, and those still without a summary;
  * each cutoff is an ISO time. */
-function compactionCounts(db: DatabaseSyncLike, stuckBefore: string, transcriptFloor: string): CompactionCounts {
+function compactionCounts(
+  db: DatabaseSyncLike,
+  stuckBefore: string,
+  transcriptFloor: string,
+): CompactionCounts {
   const row = cachedStatement(
     db,
     `SELECT COUNT(*) AS total,
@@ -90,7 +94,11 @@ function tokenTallySince(db: DatabaseSyncLike, sinceIso: string): TokenTally {
               COALESCE(SUM(CASE WHEN event = 'reread' THEN tokens END), 0) AS r
        FROM token_ledger WHERE ts >= ?`,
   ).get(sinceIso) as { n: number; t: number; r: number } | undefined;
-  return { injected: Number(row?.n ?? 0), tokensSent: Number(row?.t ?? 0), tokensReread: Number(row?.r ?? 0) };
+  return {
+    injected: Number(row?.n ?? 0),
+    tokensSent: Number(row?.t ?? 0),
+    tokensReread: Number(row?.r ?? 0),
+  };
 }
 
 const diagnosticsBodies: Bodies<Diagnostics> = {

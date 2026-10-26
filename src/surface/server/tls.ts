@@ -20,7 +20,9 @@ export function createListener(tls: ServeOptions['tls'], onRequest: RequestListe
     return createHttpsServer({ cert: tls.cert, key: tls.key, minVersion: 'TLSv1.2' }, withHsts);
   } catch (err) {
     // OpenSSL's own text names no file, so the operator would not know which input was refused.
-    throw new Error(`hippo serve: the TLS certificate or key was refused: ${errorMessage(err)}`, { cause: err });
+    throw new Error(`hippo serve: the TLS certificate or key was refused: ${errorMessage(err)}`, {
+      cause: err,
+    });
   }
 }
 

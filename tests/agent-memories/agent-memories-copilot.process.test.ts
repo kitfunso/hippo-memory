@@ -61,7 +61,10 @@ describe('copilot data folders', () => {
     const data = path.join(portable, 'user-data');
     write(path.join(userMemories(data), 'a.md'));
     write(path.join(userMemories(path.join(tmp, 'appdata', 'Code')), 'b.md'));
-    const listing = list(ctxOf({ VSCODE_PORTABLE: portable, VSCODE_APPDATA: path.join(tmp, 'appdata') }), 'user');
+    const listing = list(
+      ctxOf({ VSCODE_PORTABLE: portable, VSCODE_APPDATA: path.join(tmp, 'appdata') }),
+      'user',
+    );
     expect(listing.home).toBe(data);
     expect(listing.containers.map((c) => c.path)).toEqual([userMemories(data)]);
   });
@@ -76,7 +79,10 @@ describe('copilot data folders', () => {
     const env = { VSCODE_APPDATA: appData, APPDATA: path.join(tmp, 'roaming') };
     const listing = list(ctxOf(env, undefined, 'win32'), 'user');
     expect(listing.home).toBe(code);
-    expect(listing.containers.map((c) => c.path)).toEqual([userMemories(code), userMemories(insiders)]);
+    expect(listing.containers.map((c) => c.path)).toEqual([
+      userMemories(code),
+      userMemories(insiders),
+    ]);
   });
 
   it('names the first data folder that exists as home, else the first candidate', () => {
@@ -158,10 +164,15 @@ describe('copilot project containers', () => {
   const data = (): string => path.join(tmp, 'appdata', 'Code');
   const env = () => ({ VSCODE_APPDATA: path.join(tmp, 'appdata') });
   const projectRoot = (): string => path.join(tmp, 'proj');
-  const paths = (ctx: AdapterContext): string[] => list(ctx, 'project').containers.map((c) => c.path);
+  const paths = (ctx: AdapterContext): string[] =>
+    list(ctx, 'project').containers.map((c) => c.path);
 
   it('lists nothing without a project root, and the user scope never lists project folders', () => {
-    const container = addWorkspace(data(), 'w1', JSON.stringify({ folder: fileUri(projectRoot()) }));
+    const container = addWorkspace(
+      data(),
+      'w1',
+      JSON.stringify({ folder: fileUri(projectRoot()) }),
+    );
     expect(paths(ctxOf(env()))).toEqual([]);
     expect(list(ctxOf(env(), projectRoot()), 'user').containers).toEqual([]);
     expect(paths(ctxOf(env(), projectRoot()))).toEqual([container]);
@@ -169,7 +180,11 @@ describe('copilot project containers', () => {
 
   it('matches a workspace whose folder is exactly the project root', () => {
     fs.mkdirSync(projectRoot(), { recursive: true });
-    const container = addWorkspace(data(), 'w1', JSON.stringify({ folder: fileUri(projectRoot()) }));
+    const container = addWorkspace(
+      data(),
+      'w1',
+      JSON.stringify({ folder: fileUri(projectRoot()) }),
+    );
     const listing = list(ctxOf(env(), projectRoot()), 'project');
     expect(listing.containers.map((c) => [c.scope, c.path, c.items.map((i) => i.key)])).toEqual([
       ['project', container, ['note.md']],
@@ -188,7 +203,11 @@ describe('copilot project containers', () => {
   it('does not match a parent or a child folder of the project root', () => {
     fs.mkdirSync(path.join(projectRoot(), 'child'), { recursive: true });
     addWorkspace(data(), 'parent', JSON.stringify({ folder: fileUri(tmp) }));
-    addWorkspace(data(), 'child', JSON.stringify({ folder: fileUri(path.join(projectRoot(), 'child')) }));
+    addWorkspace(
+      data(),
+      'child',
+      JSON.stringify({ folder: fileUri(path.join(projectRoot(), 'child')) }),
+    );
     expect(paths(ctxOf(env(), projectRoot()))).toEqual([]);
   });
 
@@ -196,7 +215,11 @@ describe('copilot project containers', () => {
     const repo = path.join(tmp, 'repo');
     fs.mkdirSync(path.join(repo, 'sub'), { recursive: true });
     execFileSync('git', ['init', '-q', repo]);
-    const container = addWorkspace(data(), 'w1', JSON.stringify({ folder: fileUri(fs.realpathSync.native(repo)) }));
+    const container = addWorkspace(
+      data(),
+      'w1',
+      JSON.stringify({ folder: fileUri(fs.realpathSync.native(repo)) }),
+    );
     expect(paths(ctxOf(env(), path.join(repo, 'sub')))).toEqual([container]);
   });
 
@@ -259,18 +282,27 @@ describe('copilot project containers', () => {
     expect(listing.warnings).toHaveLength(1);
   });
 
-  it.skipIf(process.platform !== 'win32')('compares a Windows drive URI case-insensitively on win32', () => {
-    fs.mkdirSync(projectRoot(), { recursive: true });
-    const container = addWorkspace(data(), 'w1', JSON.stringify({ folder: fileUri(projectRoot()).toLowerCase() }));
-    expect(paths(ctxOf(env(), projectRoot(), 'win32'))).toEqual([container]);
-  });
+  it.skipIf(process.platform !== 'win32')(
+    'compares a Windows drive URI case-insensitively on win32',
+    () => {
+      fs.mkdirSync(projectRoot(), { recursive: true });
+      const container = addWorkspace(
+        data(),
+        'w1',
+        JSON.stringify({ folder: fileUri(projectRoot()).toLowerCase() }),
+      );
+      expect(paths(ctxOf(env(), projectRoot(), 'win32'))).toEqual([container]);
+    },
+  );
 
   it.skipIf(process.platform === 'win32')('compares case-sensitively off win32', () => {
     fs.mkdirSync(projectRoot(), { recursive: true });
     addWorkspace(
       data(),
       'w1',
-      JSON.stringify({ folder: fileUri(projectRoot()).toUpperCase().replace('FILE://', 'file://') }),
+      JSON.stringify({
+        folder: fileUri(projectRoot()).toUpperCase().replace('FILE://', 'file://'),
+      }),
     );
     expect(paths(ctxOf(env(), projectRoot(), 'linux'))).toEqual([]);
   });

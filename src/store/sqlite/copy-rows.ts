@@ -15,7 +15,9 @@ import { duplicateKey } from '../../base/util/same-text.js';
 
 // Letters and digits in every Unicode table unicode61 has shipped (Latin, Greek, Cyrillic, Hebrew, Arabic, Devanagari,
 // Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
-const SURE_TOKEN_CHAR = new RegExp('[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-яא-תء-غف-يअ-हก-ะぁ-んァ-ヶ一-龥가-힣]');
+const SURE_TOKEN_CHAR = new RegExp(
+  '[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-яא-תء-غف-يअ-हก-ะぁ-んァ-ヶ一-龥가-힣]',
+);
 const PHRASE_WORDS = 32;
 
 /** The first words of `text`, which a row holding the text word for word holds in a row; null when they might name no
@@ -76,9 +78,15 @@ function copyChunk(
 
 /** The rows `read` admits that may hold one of `texts`, a superset of the copies heldTextKeys finds: the texts the
  * index can name first, a row once per chunk it matches. */
-export function rowsHoldingTexts(db: DatabaseSyncLike, read: CopyRead, texts: readonly string[]): CopyDbRow[] {
+export function rowsHoldingTexts(
+  db: DatabaseSyncLike,
+  read: CopyRead,
+  texts: readonly string[],
+): CopyDbRow[] {
   const indexed = isFtsAvailable(db) && isFtsInSync(db);
-  const phraseOf = new Map([...new Set(texts)].map((text) => [text, indexed ? holdingPhrase(text) : null]));
+  const phraseOf = new Map(
+    [...new Set(texts)].map((text) => [text, indexed ? holdingPhrase(text) : null]),
+  );
   const named = [...phraseOf].filter((pair): pair is [string, string] => pair[1] !== null);
   const unnamed = [...phraseOf].filter(([, phrase]) => phrase === null).map(([text]) => text);
   const rows: CopyDbRow[] = [];
@@ -97,7 +105,11 @@ export function rowsHoldingTexts(db: DatabaseSyncLike, read: CopyRead, texts: re
 }
 
 /** Each row `read` admits that may hold one of `texts`, once. */
-function distinctRowsHolding(db: DatabaseSyncLike, read: CopyRead, texts: readonly string[]): CopyDbRow[] {
+function distinctRowsHolding(
+  db: DatabaseSyncLike,
+  read: CopyRead,
+  texts: readonly string[],
+): CopyDbRow[] {
   return [...new Map(rowsHoldingTexts(db, read, texts).map((row) => [row.id, row])).values()];
 }
 
@@ -108,10 +120,12 @@ export function listTextKeysHolding(
   texts: readonly string[],
 ): EntryTextKey[] {
   const { tenantId, ...narrowing } = filter;
-  return distinctRowsHolding(db, { tenantId, filter: narrowingAnd(narrowing) }, texts).map((row) => ({
-    id: row.id,
-    tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
-    content: row.content,
-    source: row.source,
-  }));
+  return distinctRowsHolding(db, { tenantId, filter: narrowingAnd(narrowing) }, texts).map(
+    (row) => ({
+      id: row.id,
+      tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
+      content: row.content,
+      source: row.source,
+    }),
+  );
 }

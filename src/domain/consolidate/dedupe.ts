@@ -62,7 +62,16 @@ interface DedupRow {
 
 function dedupRow(entry: MemoryEntry): DedupRow {
   const { id, content, layer, strength, retrievalCount, tags, source } = entry;
-  return { id, content, layer, strength, retrievalCount, tags, source, deletable: canAutoDelete(entry) };
+  return {
+    id,
+    content,
+    layer,
+    strength,
+    retrievalCount,
+    tags,
+    source,
+    deletable: canAutoDelete(entry),
+  };
 }
 
 /** The v1.26.3 survivor total order: strength bucket desc, then retrievalCount desc, then compareEntryIdentity. */
@@ -111,11 +120,14 @@ function partitionPairs(groups: PartitionGroups, backing: ReadonlySet<string>): 
     .map((group) => ({ ...group, losers: group.losers.filter((loser) => !backing.has(loser.id)) }))
     .filter((group) => group.losers.length > 0)
     .sort((a, b) => survivorOrder(a.survivor, b.survivor))
-    .flatMap((group) => group.losers.sort(survivorOrder).map((loser) => dedupPair(group.survivor, loser)));
+    .flatMap((group) =>
+      group.losers.sort(survivorOrder).map((loser) => dedupPair(group.survivor, loser)),
+    );
 }
 
 /** The rows duplicateCandidates selects, picked from pages of every row. */
-const isCurrentDistilled = (e: MemoryEntry): boolean => (e.kind ?? 'distilled') === 'distilled' && !e.supersededBy;
+const isCurrentDistilled = (e: MemoryEntry): boolean =>
+  (e.kind ?? 'distilled') === 'distilled' && !e.supersededBy;
 
 type Partitions = Map<string, PartitionGroups>;
 
@@ -151,8 +163,13 @@ async function candidatePartitions(store: StoreWith<'consolidation'>): Promise<P
   return new Map([...(await partitionRows([rows]))].sort(([a], [b]) => at(a) - at(b)));
 }
 
-async function scanPairs(store: StoreWith<'consolidation'>, partitions: Partitions): Promise<DedupPair[]> {
-  const losers = [...partitions.values()].flatMap((groups) => [...groups.values()].flatMap((g) => g.losers));
+async function scanPairs(
+  store: StoreWith<'consolidation'>,
+  partitions: Partitions,
+): Promise<DedupPair[]> {
+  const losers = [...partitions.values()].flatMap((groups) =>
+    [...groups.values()].flatMap((g) => g.losers),
+  );
   const backing = await store.auditMaintenance.objectBackedAmong(losers.map((loser) => loser.id));
   return [...partitions.values()].flatMap((groups) => partitionPairs(groups, backing));
 }
@@ -165,7 +182,9 @@ export async function deduplicateStore(
 ): Promise<DedupResult> {
   // Only current distilled rows compete: raw rows are append-only (the delete trigger would abort sleep mid-loop) and
   // superseded rows are history.
-  const partitions = options.pages ? await partitionRows(options.pages) : await candidatePartitions(store);
+  const partitions = options.pages
+    ? await partitionRows(options.pages)
+    : await candidatePartitions(store);
   const pairs = await scanPairs(store, partitions);
   const done = options.dryRun ? pairs : await deletePairs(store, pairs, options.actor);
   return { removed: done.length, pairs: done };
@@ -178,7 +197,9 @@ async function deletePairs(
   actor: string | undefined,
 ): Promise<DedupPair[]> {
   const targets = pairs.map((p) => ({ id: p.removed, reason: `dedup: duplicate of ${p.kept}` }));
-  const gone = new Set(await store.auditMaintenance.deleteAutomatically(targets, actor ?? CLI_ACTOR));
+  const gone = new Set(
+    await store.auditMaintenance.deleteAutomatically(targets, actor ?? CLI_ACTOR),
+  );
   // A loser named twice went once, so only its first pair reports the delete.
   return pairs.filter((p) => gone.delete(p.removed));
 }

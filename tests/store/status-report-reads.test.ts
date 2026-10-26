@@ -31,20 +31,34 @@ function at(entry: MemoryEntry, iso: string): MemoryEntry {
 
 function seed(): void {
   const raw = at(
-    createMemory('slack: tier moved to 120', { kind: 'raw', owner: 'user:keith', artifactRef: 'slack://a/1' }),
+    createMemory('slack: tier moved to 120', {
+      kind: 'raw',
+      owner: 'user:keith',
+      artifactRef: 'slack://a/1',
+    }),
     '2026-04-01T10:00:00.000Z',
   );
-  const rawGap = at(createMemory('slack: owner and ref missing', { kind: 'raw' }), '2026-04-01T11:00:00.000Z');
+  const rawGap = at(
+    createMemory('slack: owner and ref missing', { kind: 'raw' }),
+    '2026-04-01T11:00:00.000Z',
+  );
   const oldFact = at(createMemory('belief: tier is 100'), '2026-03-15T00:00:00.000Z');
-  const newFact = at(createMemory('belief: tier is 120', { extractedFrom: raw.id }), '2026-04-01T10:30:00.000Z');
+  const newFact = at(
+    createMemory('belief: tier is 120', { extractedFrom: raw.id }),
+    '2026-04-01T10:30:00.000Z',
+  );
   oldFact.supersededBy = newFact.id;
   const oldManual = at(createMemory('belief: seats are 5'), '2026-03-16T00:00:00.000Z');
   const newManual = at(createMemory('belief: seats are 6'), '2026-04-02T00:00:00.000Z');
   oldManual.supersededBy = newManual.id;
-  const dangling = at(createMemory('belief: replaced by a deleted row'), '2026-03-17T00:00:00.000Z');
+  const dangling = at(
+    createMemory('belief: replaced by a deleted row'),
+    '2026-03-17T00:00:00.000Z',
+  );
   dangling.supersededBy = 'mem_gone';
   const lone = at(createMemory('belief: never corrected'), '2026-03-18T00:00:00.000Z');
-  for (const e of [raw, rawGap, oldFact, newFact, oldManual, newManual, dangling, lone]) writeEntry(root, e);
+  for (const e of [raw, rawGap, oldFact, newFact, oldManual, newManual, dangling, lone])
+    writeEntry(root, e);
   writeEntriesTogether(
     root,
     Array.from({ length: 30 }, (_, i) => createMemory(`filler memory number ${i}`)),
@@ -54,14 +68,18 @@ function seed(): void {
 describe('status report reads', () => {
   it('builds the correction-latency report from the join', async () => {
     seed();
-    const report = buildCorrectionLatency((await sqliteStore(root).reports.correctionLinks({ limit: 500 })).links);
+    const report = buildCorrectionLatency(
+      (await sqliteStore(root).reports.correctionLinks({ limit: 500 })).links,
+    );
     expect(report.count).toBe(2);
     expect(report.extractionCount).toBe(1);
   });
 
   it('builds the provenance report from the count and the gaps', async () => {
     seed();
-    const report = buildProvenanceCoverage(await sqliteStore(root).reports.rawProvenance({ limit: 500 }));
+    const report = buildProvenanceCoverage(
+      await sqliteStore(root).reports.rawProvenance({ limit: 500 }),
+    );
     expect(report.rawTotal).toBe(2);
     expect(report.gaps).toHaveLength(1);
   });
@@ -70,7 +88,10 @@ describe('status report reads', () => {
     seed();
     const reports = async () => {
       const { correctionLinks, rawProvenance } = sqliteStore(root).reports;
-      return { links: await correctionLinks({ limit: 500 }), raw: await rawProvenance({ limit: 500 }) };
+      return {
+        links: await correctionLinks({ limit: 500 }),
+        raw: await rawProvenance({ limit: 500 }),
+      };
     };
     const before = await recordStatementsAsync(reports);
     writeEntriesTogether(
@@ -156,15 +177,22 @@ describe('physics status stats', () => {
 
   it('reads one column past the limit, whatever the particle count', async () => {
     await seedParticles(4);
-    const stats = async () => await indexStep(sqliteStore(root).embeddingIndex, { kind: 'particles', fullUpTo: 2 });
-    const reads = (await recordStatementsAsync(stats)).reads.filter((r) => r.sql.includes('memory_physics'));
-    expect(reads.map((r) => r.sql)).toEqual(['SELECT velocity_blob FROM memory_physics ORDER BY rowid']);
+    const stats = async () =>
+      await indexStep(sqliteStore(root).embeddingIndex, { kind: 'particles', fullUpTo: 2 });
+    const reads = (await recordStatementsAsync(stats)).reads.filter((r) =>
+      r.sql.includes('memory_physics'),
+    );
+    expect(reads.map((r) => r.sql)).toEqual([
+      'SELECT velocity_blob FROM memory_physics ORDER BY rowid',
+    ]);
   });
 
   it('prints the energy for loaded particles and skips it past the limit', () => {
     expect(physicsEnergyText({ count: 2, particles: particles(['a', 'b']) }, 1)).toMatch(
       /^energy: -?\d.*\(KE: .*, PE: .*\)$/,
     );
-    expect(physicsEnergyText({ count: 2001, particles: null }, 1)).toBe('energy: skipped (2001 particles)');
+    expect(physicsEnergyText({ count: 2001, particles: null }, 1)).toBe(
+      'energy: skipped (2001 particles)',
+    );
   });
 });

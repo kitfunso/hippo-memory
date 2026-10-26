@@ -14,13 +14,15 @@ function admitsNothing(node) {
   return ts.isLiteralTypeNode(node) && node.literal.kind === ts.SyntaxKind.NullKeyword;
 }
 
-const namesTenant = (name) => name !== undefined && ts.isIdentifier(name) && TENANT_NAMES.has(name.text);
+const namesTenant = (name) =>
+  name !== undefined && ts.isIdentifier(name) && TENANT_NAMES.has(name.text);
 
 /** The tenant members a type node holds that may be left out, as `Owner.member`, read through src aliases, interfaces,
  * intersections, unions and type arguments. */
 function looseMembers(file, node, seen) {
   if (!node) return [];
-  if (ts.isParenthesizedTypeNode(node) || ts.isTypeOperatorNode(node)) return looseMembers(file, node.type, seen);
+  if (ts.isParenthesizedTypeNode(node) || ts.isTypeOperatorNode(node))
+    return looseMembers(file, node.type, seen);
   if (ts.isTypeLiteralNode(node)) return looseIn(node.members, '{}');
   if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) {
     return node.types.flatMap((t) => looseMembers(file, t, seen));
@@ -39,7 +41,11 @@ function looseMembers(file, node, seen) {
       ...looseIn(decl.node.members, name),
       ...bases.flatMap((b) =>
         ts.isIdentifier(b.expression)
-          ? looseMembers(decl.file, ts.factory.createTypeReferenceNode(b.expression.text, b.typeArguments), seen)
+          ? looseMembers(
+              decl.file,
+              ts.factory.createTypeReferenceNode(b.expression.text, b.typeArguments),
+              seen,
+            )
           : [],
       ),
     ];
@@ -49,15 +55,23 @@ function looseMembers(file, node, seen) {
 
 function looseIn(members, owner) {
   return members
-    .filter((m) => ts.isPropertySignature(m) && namesTenant(m.name) && (m.questionToken || admitsNothing(m.type)))
+    .filter(
+      (m) =>
+        ts.isPropertySignature(m) &&
+        namesTenant(m.name) &&
+        (m.questionToken || admitsNothing(m.type)),
+    )
     .map((m) => `${owner}.${m.name.text}`);
 }
 
 /** Why a parameter's tenant may be left out, or [] when it may not. */
 function looseParam(file, p, seen) {
-  if (namesTenant(p.name) && (p.questionToken || p.initializer || admitsNothing(p.type))) return [p.name.text];
+  if (namesTenant(p.name) && (p.questionToken || p.initializer || admitsNothing(p.type)))
+    return [p.name.text];
   const defaulted = ts.isObjectBindingPattern(p.name)
-    ? p.name.elements.filter((e) => e.initializer && namesTenant(e.propertyName ?? e.name)).map((e) => e.name.getText())
+    ? p.name.elements
+        .filter((e) => e.initializer && namesTenant(e.propertyName ?? e.name))
+        .map((e) => e.name.getText())
     : [];
   return [...defaulted, ...looseMembers(file, p.type, seen)];
 }
@@ -72,7 +86,9 @@ export function looseTenants(file) {
       const owner = node.name ? node.name.getText(sf) : '(anonymous)';
       for (const p of node.parameters) {
         for (const why of looseParam(file, p, new Set())) {
-          hits.push(`${file}:${lineOf(sf, p)} ${owner}(${p.name.getText(sf).slice(0, 40)}: ${why})`);
+          hits.push(
+            `${file}:${lineOf(sf, p)} ${owner}(${p.name.getText(sf).slice(0, 40)}: ${why})`,
+          );
         }
       }
     }

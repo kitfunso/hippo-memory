@@ -22,7 +22,16 @@ export function insertTokenRow(db: DatabaseSyncLike, row: TokenRowInput): void {
     db,
     `INSERT INTO token_ledger (ts, tenant_id, session_id, surface, event, items, tokens, block_hash)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(row.ts, row.tenantId, row.sessionId, row.surface, row.event, row.items, row.tokens, row.blockHash);
+  ).run(
+    row.ts,
+    row.tenantId,
+    row.sessionId,
+    row.surface,
+    row.event,
+    row.items,
+    row.tokens,
+    row.blockHash,
+  );
 }
 
 export function pruneTokenRowsBefore(db: DatabaseSyncLike, cutoffIso: string): void {
@@ -76,7 +85,11 @@ interface SurfaceTotalsRow {
   sessions: number;
 }
 
-export function surfaceTotals(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SurfaceTotalsRow[] {
+export function surfaceTotals(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sinceIso: string,
+): SurfaceTotalsRow[] {
   return cachedStatement(
     db,
     `SELECT surface,
@@ -127,7 +140,11 @@ interface SessionTokenRow {
   injections: number;
 }
 
-export function sessionTokenRows(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionTokenRow[] {
+export function sessionTokenRows(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sinceIso: string,
+): SessionTokenRow[] {
   return cachedStatement(
     db,
     `SELECT session_id,
@@ -161,10 +178,10 @@ export function injectedBlocks(
 }
 
 export function deleteRereadRows(db: DatabaseSyncLike, tenantId: string, sessionId: string): void {
-  cachedStatement(db, `DELETE FROM token_ledger WHERE tenant_id = ? AND session_id = ? AND event = 'reread'`).run(
-    tenantId,
-    sessionId,
-  );
+  cachedStatement(
+    db,
+    `DELETE FROM token_ledger WHERE tenant_id = ? AND session_id = ? AND event = 'reread'`,
+  ).run(tenantId, sessionId);
 }
 
 /** The first stored pilot arm hash for a session in `tenantId`. */

@@ -41,31 +41,34 @@ afterEach(async () => {
 });
 
 describe('HTTP /v1/predictions/stats', () => {
-  it.skipIf(needsHippoDb('db'))('returns baserate JSON for a class with closed predictions', async () => {
-    // Seed: 2 closed predictions in class "http-test"
-    for (const [est, act] of [
-      [3, 5],
-      [4, 6],
-    ]) {
-      const p = await savePrediction(home, 'default', {
-        classTag: 'http-test',
-        claimText: `est=${est} act=${act}`,
-        estimateValue: est,
-      });
-      await closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
-    }
+  it.skipIf(needsHippoDb('db'))(
+    'returns baserate JSON for a class with closed predictions',
+    async () => {
+      // Seed: 2 closed predictions in class "http-test"
+      for (const [est, act] of [
+        [3, 5],
+        [4, 6],
+      ]) {
+        const p = await savePrediction(home, 'default', {
+          classTag: 'http-test',
+          claimText: `est=${est} act=${act}`,
+          estimateValue: est,
+        });
+        await closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: act });
+      }
 
-    const res = await fetch(`${handle.url}/v1/predictions/stats?class=http-test`, {
-      headers: authHeaders(apiKey),
-    });
-    expect(res.status).toBe(200);
-    const body = await jsonAs<{ baserate: PredictionBaserate }>(res);
-    expect(body.baserate.classTag).toBe('http-test');
-    expect(body.baserate.nClosed).toBe(2);
-    expect(body.baserate.nRatioEligible).toBe(2);
-    expect(body.baserate.meanRatio).toEqual(expect.any(Number));
-    expect(body.baserate.summary).toEqual(expect.any(String));
-  });
+      const res = await fetch(`${handle.url}/v1/predictions/stats?class=http-test`, {
+        headers: authHeaders(apiKey),
+      });
+      expect(res.status).toBe(200);
+      const body = await jsonAs<{ baserate: PredictionBaserate }>(res);
+      expect(body.baserate.classTag).toBe('http-test');
+      expect(body.baserate.nClosed).toBe(2);
+      expect(body.baserate.nRatioEligible).toBe(2);
+      expect(body.baserate.meanRatio).toEqual(expect.any(Number));
+      expect(body.baserate.summary).toEqual(expect.any(String));
+    },
+  );
 
   it('missing class param returns 400', async () => {
     const res = await fetch(`${handle.url}/v1/predictions/stats`, { headers: authHeaders(apiKey) });
@@ -82,13 +85,17 @@ describe('HTTP /v1/predictions/stats', () => {
     });
     await closePrediction(home, 'default', p.id, { closureState: 'closed', actualValue: 2 });
 
-    await fetch(`${handle.url}/v1/predictions/stats?class=audit-http`, { headers: authHeaders(apiKey) });
+    await fetch(`${handle.url}/v1/predictions/stats?class=audit-http`, {
+      headers: authHeaders(apiKey),
+    });
 
     const db = openHippoDb(home);
     try {
       // SAFETY: the SELECT list above is exactly `op, target_id`, so each
       // row from .all() has exactly these two string columns.
-      const rows = db.prepare(`SELECT op, target_id FROM audit_log WHERE op = 'predict_baserate'`).all() as Array<{
+      const rows = db
+        .prepare(`SELECT op, target_id FROM audit_log WHERE op = 'predict_baserate'`)
+        .all() as Array<{
         op: string;
         target_id: string;
       }>;
@@ -100,7 +107,9 @@ describe('HTTP /v1/predictions/stats', () => {
   });
 
   it('empty class returns baserate with nClosed=0', async () => {
-    const res = await fetch(`${handle.url}/v1/predictions/stats?class=never-existed`, { headers: authHeaders(apiKey) });
+    const res = await fetch(`${handle.url}/v1/predictions/stats?class=never-existed`, {
+      headers: authHeaders(apiKey),
+    });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ baserate: PredictionBaserate }>(res);
     expect(body.baserate.nClosed).toBe(0);

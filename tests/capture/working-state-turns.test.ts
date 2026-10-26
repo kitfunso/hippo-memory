@@ -66,6 +66,9 @@ describe('transcriptWorkingState turn selection', () => {
       task: '',
       next_step: 'only the agent spoke',
     });
-    expect(derive([user('only the human spoke')])).toMatchObject({ task: 'only the human spoke', next_step: '' });
+    expect(derive([user('only the human spoke')])).toMatchObject({
+      task: 'only the human spoke',
+      next_step: '',
+    });
   });
 });

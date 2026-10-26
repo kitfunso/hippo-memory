@@ -93,7 +93,11 @@ describe('skills store (executable/exportable first-class object)', () => {
     expect(s.trigger).toBe('before push');
     const db = openHippoDb(home);
     try {
-      const memRow = getRow<{ content: string }>(db, `SELECT content FROM memories WHERE id = ?`, s.memoryId!);
+      const memRow = getRow<{ content: string }>(
+        db,
+        `SELECT content FROM memories WHERE id = ?`,
+        s.memoryId!,
+      );
       expect(memRow.content).toContain('When: before push');
     } finally {
       closeHippoDb(db);
@@ -118,13 +122,16 @@ describe('skills store (executable/exportable first-class object)', () => {
       instructions: 'x2',
       supersedesSkillId: b.id,
     });
-    await closeObject(objectsAt(home), SKILL, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), SKILL, 'default', c.id, {
+      actor: CLI_ACTOR,
+      now: evalNow(),
+    });
     const active = await listObjects(objectsAt(home), SKILL, 'default', { status: 'active' });
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
-    expect((await listObjects(objectsAt(home), SKILL, 'default', { status: 'closed' })).map((x) => x.id)).toEqual([
-      c.id,
-    ]);
+    expect(
+      (await listObjects(objectsAt(home), SKILL, 'default', { status: 'closed' })).map((x) => x.id),
+    ).toEqual([c.id]);
     expect((await listObjects(objectsAt(home), SKILL, 'default', {})).length).toBe(4);
   });
 
@@ -178,7 +185,10 @@ describe('skills store (executable/exportable first-class object)', () => {
       skillName: 'Zulu',
       instructions: 'old',
     });
-    await closeObject(objectsAt(home), SKILL, 'default', closed.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), SKILL, 'default', closed.id, {
+      actor: CLI_ACTOR,
+      now: evalNow(),
+    });
     const sup = await cliSave(home, 'default', SKILL, {
       skillName: 'Yankee',
       instructions: 'v1',

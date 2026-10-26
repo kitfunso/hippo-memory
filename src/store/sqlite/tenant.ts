@@ -10,7 +10,9 @@ export const TENANT_IS = '+tenant_id = ?';
 
 /** ` AND <condition>` and its argument for one tenant; both empty for ALL_TENANTS. */
 export function tenantAnd(tenantId: TenantId, condition: string = 'tenant_id = ?'): SqlFragment {
-  return tenantId === ALL_TENANTS ? { sql: '', params: [] } : { sql: ` AND ${condition}`, params: [tenantId] };
+  return tenantId === ALL_TENANTS
+    ? { sql: '', params: [] }
+    : { sql: ` AND ${condition}`, params: [tenantId] };
 }
 
 export interface ResolveOptions {

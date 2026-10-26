@@ -12,7 +12,11 @@ function result(entry: MemoryEntry, score = 1): SearchResult {
 }
 
 /** An entry whose id reads are counted, so a scan over earlier results shows up as reads. */
-function countedEntry(id: string, counter: { reads: number }, extra: Partial<MemoryEntry> = {}): MemoryEntry {
+function countedEntry(
+  id: string,
+  counter: { reads: number },
+  extra: Partial<MemoryEntry> = {},
+): MemoryEntry {
   const base = { ...createMemory(`row ${id}`, { baseHalfLifeDays: 30 }), ...extra };
   return Object.defineProperty(base, 'id', {
     get() {
@@ -37,7 +41,13 @@ describe('dedupeExtracted', () => {
     ];
     scored.push(plain('late'));
 
-    expect(dedupeExtracted(scored).map((r) => r.entry.id)).toEqual(['a', 'b', 'fact', 'c', 'early-fact']);
+    expect(dedupeExtracted(scored).map((r) => r.entry.id)).toEqual([
+      'a',
+      'b',
+      'fact',
+      'c',
+      'early-fact',
+    ]);
   });
 
   it('reads each id a bounded number of times however many results come before it', () => {
@@ -60,9 +70,19 @@ describe('dedupeExtracted', () => {
 
 describe('withDagChildren', () => {
   it('adds a missing child at 0.9x its parent and skips one already in the results', () => {
-    const summary = result({ ...createMemory('summary', { baseHalfLifeDays: 30 }), id: 's', tags: ['dag-summary'] }, 2);
-    const held = result({ ...createMemory('held child', { baseHalfLifeDays: 30 }), id: 'held', dagParentId: 's' }, 0.1);
-    const fresh = { ...createMemory('fresh child', { baseHalfLifeDays: 30 }), id: 'fresh', dagParentId: 's' };
+    const summary = result(
+      { ...createMemory('summary', { baseHalfLifeDays: 30 }), id: 's', tags: ['dag-summary'] },
+      2,
+    );
+    const held = result(
+      { ...createMemory('held child', { baseHalfLifeDays: 30 }), id: 'held', dagParentId: 's' },
+      0.1,
+    );
+    const fresh = {
+      ...createMemory('fresh child', { baseHalfLifeDays: 30 }),
+      id: 'fresh',
+      dagParentId: 's',
+    };
 
     const out = withDagChildren([summary, held], [held.entry, fresh]);
 
@@ -75,7 +95,11 @@ describe('withDagChildren', () => {
 
   it('reads each id a bounded number of times for many children', () => {
     const counter = { reads: 0 };
-    const summary = result({ ...createMemory('summary', { baseHalfLifeDays: 30 }), id: 's', tags: ['dag-summary'] });
+    const summary = result({
+      ...createMemory('summary', { baseHalfLifeDays: 30 }),
+      id: 's',
+      tags: ['dag-summary'],
+    });
     const pool: MemoryEntry[] = [];
     for (let i = 0; i < N; i++) pool.push(countedEntry(`child${i}`, counter, { dagParentId: 's' }));
 

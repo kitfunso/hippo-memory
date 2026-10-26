@@ -17,7 +17,12 @@ const ids: Record<string, number> = {};
 
 type Body = { [key: string]: JsonValue };
 
-async function call(method: string, path: string, body?: Body, headers: Record<string, string> = {}) {
+async function call(
+  method: string,
+  path: string,
+  body?: Body,
+  headers: Record<string, string> = {},
+) {
   const res = await fetch(`${handle.url}${path}`, {
     method,
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...headers },
@@ -51,12 +56,36 @@ beforeAll(async () => {
   handle = await serve({ hippoRoot: home, port: 0 });
   vi.unstubAllEnvs();
   ids.decision = await created('/v1/decisions', { text: 'use sqlite for the store' }, 'decision');
-  ids.process = await created('/v1/processes', { processName: 'release', steps: ['tag', 'publish'] }, 'process');
-  ids.policy = await created('/v1/policies', { policyName: 'retention', policyText: 'keep 30 days' }, 'policy');
-  ids.skill = await created('/v1/skills', { skillName: 'bisect', instructions: 'halve the range' }, 'skill');
-  ids.brief = await created('/v1/project-briefs', { repo: 'acme/app', summary: 'a web app' }, 'brief');
-  ids.note = await created('/v1/customer-notes', { customer: 'acme', note: 'prefers email' }, 'note');
-  ids.prediction = await created('/v1/predictions', { claim: 'ships friday', classTag: 'release' }, 'prediction');
+  ids.process = await created(
+    '/v1/processes',
+    { processName: 'release', steps: ['tag', 'publish'] },
+    'process',
+  );
+  ids.policy = await created(
+    '/v1/policies',
+    { policyName: 'retention', policyText: 'keep 30 days' },
+    'policy',
+  );
+  ids.skill = await created(
+    '/v1/skills',
+    { skillName: 'bisect', instructions: 'halve the range' },
+    'skill',
+  );
+  ids.brief = await created(
+    '/v1/project-briefs',
+    { repo: 'acme/app', summary: 'a web app' },
+    'brief',
+  );
+  ids.note = await created(
+    '/v1/customer-notes',
+    { customer: 'acme', note: 'prefers email' },
+    'note',
+  );
+  ids.prediction = await created(
+    '/v1/predictions',
+    { claim: 'ships friday', classTag: 'release' },
+    'prediction',
+  );
 });
 
 afterAll(async () => {
@@ -72,7 +101,13 @@ describe('HTTP input validation', () => {
       { content: 'a fact', kind: 'opinion' },
       /^(?!.*opinion)invalid kind; allowed: raw, distilled/s,
     ],
-    ['memory scope type', 'POST', '/v1/memories', { content: 'a fact', scope: 123 }, /scope must be a string/],
+    [
+      'memory scope type',
+      'POST',
+      '/v1/memories',
+      { content: 'a fact', scope: 123 },
+      /scope must be a string/,
+    ],
     [
       'memory tags type',
       'POST',
@@ -80,11 +115,23 @@ describe('HTTP input validation', () => {
       { content: 'a fact', tags: ['a', 1] },
       /tags must be an array of strings/,
     ],
-    ['outcome ids type', 'POST', '/v1/outcome', { good: true, ids: 'mem_1' }, /ids must be an array/],
+    [
+      'outcome ids type',
+      'POST',
+      '/v1/outcome',
+      { good: true, ids: 'mem_1' },
+      /ids must be an array/,
+    ],
     ['sleep no_share type', 'POST', '/v1/sleep', { no_share: 'yes' }, /no_share must be a boolean/],
     ['key label type', 'POST', '/v1/auth/keys', { label: 7 }, /label must be a string/],
     ['key role', 'POST', '/v1/auth/keys', { role: 'owner' }, /role must be 'admin' or 'member'/],
-    ['prediction classTag', 'POST', '/v1/predictions', { claim: 'c', classTag: '' }, /classTag is required/],
+    [
+      'prediction classTag',
+      'POST',
+      '/v1/predictions',
+      { claim: 'c', classTag: '' },
+      /classTag is required/,
+    ],
     [
       'prediction estimate',
       'POST',
@@ -92,7 +139,13 @@ describe('HTTP input validation', () => {
       { claim: 'c', classTag: 't', estimate: 'ten' },
       /estimate must be a finite number/,
     ],
-    ['prediction unit', 'POST', '/v1/predictions', { claim: 'c', classTag: 't', unit: 3 }, /unit must be a string/],
+    [
+      'prediction unit',
+      'POST',
+      '/v1/predictions',
+      { claim: 'c', classTag: 't', unit: 3 },
+      /unit must be a string/,
+    ],
     [
       'prediction targetDate',
       'POST',
@@ -121,8 +174,20 @@ describe('HTTP input validation', () => {
       { state: 'closed', note: long(2048) },
       /note exceeds 2048/,
     ],
-    ['decision context type', 'POST', '/v1/decisions', { text: 't', context: 1 }, /context must be a string/],
-    ['decision context cap', 'POST', '/v1/decisions', { text: 't', context: long(4096) }, /context exceeds 4096/],
+    [
+      'decision context type',
+      'POST',
+      '/v1/decisions',
+      { text: 't', context: 1 },
+      /context must be a string/,
+    ],
+    [
+      'decision context cap',
+      'POST',
+      '/v1/decisions',
+      { text: 't', context: long(4096) },
+      /context exceeds 4096/,
+    ],
     [
       'decision supersedes id',
       'POST',
@@ -130,7 +195,13 @@ describe('HTTP input validation', () => {
       { text: 't', supersedesDecisionId: -2 },
       /supersedesDecisionId must be a positive integer/,
     ],
-    ['decision supersede text cap', 'POST', '/v1/decisions/1/supersede', { text: long(4096) }, /text exceeds 4096/],
+    [
+      'decision supersede text cap',
+      'POST',
+      '/v1/decisions/1/supersede',
+      { text: long(4096) },
+      /text exceeds 4096/,
+    ],
     [
       'decision supersede context type',
       'POST',
@@ -145,8 +216,20 @@ describe('HTTP input validation', () => {
       { text: 't', context: long(4096) },
       /context exceeds 4096/,
     ],
-    ['incident context type', 'POST', '/v1/incidents', { text: 't', context: 1 }, /context must be a string/],
-    ['incident context cap', 'POST', '/v1/incidents', { text: 't', context: long(4096) }, /context exceeds 4096/],
+    [
+      'incident context type',
+      'POST',
+      '/v1/incidents',
+      { text: 't', context: 1 },
+      /context must be a string/,
+    ],
+    [
+      'incident context cap',
+      'POST',
+      '/v1/incidents',
+      { text: 't', context: long(4096) },
+      /context exceeds 4096/,
+    ],
     [
       'incident linked type',
       'POST',
@@ -175,7 +258,13 @@ describe('HTTP input validation', () => {
       { resolutionText: long(4096) },
       /resolutionText exceeds 4096/,
     ],
-    ['process name cap', 'POST', '/v1/processes', { processName: long(4096) }, /processName exceeds 4096/],
+    [
+      'process name cap',
+      'POST',
+      '/v1/processes',
+      { processName: long(4096) },
+      /processName exceeds 4096/,
+    ],
     [
       'process steps type',
       'POST',
@@ -183,8 +272,20 @@ describe('HTTP input validation', () => {
       { processName: 'p', steps: 'tag' },
       /steps must be an array of strings/,
     ],
-    ['process step type', 'POST', '/v1/processes', { processName: 'p', steps: [1] }, /each step must be a string/],
-    ['process step empty', 'POST', '/v1/processes', { processName: 'p', steps: ['  '] }, /a step is empty/],
+    [
+      'process step type',
+      'POST',
+      '/v1/processes',
+      { processName: 'p', steps: [1] },
+      /each step must be a string/,
+    ],
+    [
+      'process step empty',
+      'POST',
+      '/v1/processes',
+      { processName: 'p', steps: ['  '] },
+      /a step is empty/,
+    ],
     [
       'process step cap',
       'POST',
@@ -234,7 +335,13 @@ describe('HTTP input validation', () => {
       { steps: ['a'], description: long(4096) },
       /description exceeds 4096/,
     ],
-    ['policy name cap', 'POST', '/v1/policies', { policyName: long(4096), policyText: 't' }, /policyName exceeds 4096/],
+    [
+      'policy name cap',
+      'POST',
+      '/v1/policies',
+      { policyName: long(4096), policyText: 't' },
+      /policyName exceeds 4096/,
+    ],
     ['policy text', 'POST', '/v1/policies', { policyName: 'p' }, /policyText is required/],
     [
       'policy validFrom type',
@@ -271,7 +378,13 @@ describe('HTTP input validation', () => {
       { policyText: 't', changeSummary: long(4096) },
       /changeSummary exceeds 4096/,
     ],
-    ['skill name cap', 'POST', '/v1/skills', { skillName: long(256), instructions: 'i' }, /skillName exceeds 256/],
+    [
+      'skill name cap',
+      'POST',
+      '/v1/skills',
+      { skillName: long(256), instructions: 'i' },
+      /skillName exceeds 256/,
+    ],
     ['skill instructions', 'POST', '/v1/skills', { skillName: 's' }, /instructions are required/],
     [
       'skill trigger type',
@@ -322,9 +435,21 @@ describe('HTTP input validation', () => {
       { instructions: 'i', changeSummary: long(4096) },
       /changeSummary exceeds 4096/,
     ],
-    ['brief repo cap', 'POST', '/v1/project-briefs', { repo: long(256), summary: 's' }, /repo exceeds 256/],
+    [
+      'brief repo cap',
+      'POST',
+      '/v1/project-briefs',
+      { repo: long(256), summary: 's' },
+      /repo exceeds 256/,
+    ],
     ['brief summary', 'POST', '/v1/project-briefs', { repo: 'r' }, /summary is required/],
-    ['brief refresh repo cap', 'POST', '/v1/project-briefs/refresh', { repo: long(256) }, /repo exceeds 256/],
+    [
+      'brief refresh repo cap',
+      'POST',
+      '/v1/project-briefs/refresh',
+      { repo: long(256) },
+      /repo exceeds 256/,
+    ],
     [
       'brief supersede summary cap',
       'POST',
@@ -346,9 +471,21 @@ describe('HTTP input validation', () => {
       { summary: 's', changeSummary: long(4096) },
       /changeSummary exceeds 4096/,
     ],
-    ['note customer cap', 'POST', '/v1/customer-notes', { customer: long(256), note: 'n' }, /customer exceeds 256/],
+    [
+      'note customer cap',
+      'POST',
+      '/v1/customer-notes',
+      { customer: long(256), note: 'n' },
+      /customer exceeds 256/,
+    ],
     ['note text', 'POST', '/v1/customer-notes', { customer: 'c' }, /note is required/],
-    ['note supersede text cap', 'POST', '/v1/customer-notes/1/supersede', { note: long(8192) }, /note exceeds 8192/],
+    [
+      'note supersede text cap',
+      'POST',
+      '/v1/customer-notes/1/supersede',
+      { note: long(8192) },
+      /note exceeds 8192/,
+    ],
     [
       'note supersede change type',
       'POST',
@@ -363,8 +500,20 @@ describe('HTTP input validation', () => {
       { note: 'n', changeSummary: long(4096) },
       /changeSummary exceeds 4096/,
     ],
-    ['graph entity cap', 'GET', `/v1/graph?entity=${long(512)}`, undefined, /entity exceeds the 512-character cap/],
-    ['context scope cap', 'GET', `/v1/context?scope=${long(256)}`, undefined, /scope exceeds 256-character cap/],
+    [
+      'graph entity cap',
+      'GET',
+      `/v1/graph?entity=${long(512)}`,
+      undefined,
+      /entity exceeds the 512-character cap/,
+    ],
+    [
+      'context scope cap',
+      'GET',
+      `/v1/context?scope=${long(256)}`,
+      undefined,
+      /scope exceeds 256-character cap/,
+    ],
     [
       'context include_recent',
       'GET',
@@ -372,19 +521,45 @@ describe('HTTP input validation', () => {
       undefined,
       /include_recent must be a non-negative number/,
     ],
-    ['quarantine status', 'GET', '/v1/quarantine?status=maybe', undefined, /status must be one of: pending/],
-    ['prediction list closed needs class', 'GET', '/v1/predictions?status=closed', undefined, /requires class param/],
-    ['prediction stats class cap', 'GET', `/v1/predictions/stats?class=${long(256)}`, undefined, /class exceeds 256/],
+    [
+      'quarantine status',
+      'GET',
+      '/v1/quarantine?status=maybe',
+      undefined,
+      /status must be one of: pending/,
+    ],
+    [
+      'prediction list closed needs class',
+      'GET',
+      '/v1/predictions?status=closed',
+      undefined,
+      /requires class param/,
+    ],
+    [
+      'prediction stats class cap',
+      'GET',
+      `/v1/predictions/stats?class=${long(256)}`,
+      undefined,
+      /class exceeds 256/,
+    ],
   ];
 
-  const namesTheProblem = async (...[, method, path, body, message]: (typeof bad)[number]): Promise<void> => {
+  const namesTheProblem = async (
+    ...[, method, path, body, message]: (typeof bad)[number]
+  ): Promise<void> => {
     const r = await call(method, path, body);
     expect(r.status).toBe(400);
     expect(String(r.json.error)).toMatch(message);
   };
   const isSleep = (row: (typeof bad)[number]): boolean => row[2] === '/v1/sleep';
-  it.each(bad.filter((row) => !isSleep(row)))('%s is a 400 that names the problem', namesTheProblem);
-  it.skipIf(needsHippoDb('sleep')).each(bad.filter(isSleep))('%s is a 400 that names the problem', namesTheProblem);
+  it.each(bad.filter((row) => !isSleep(row)))(
+    '%s is a 400 that names the problem',
+    namesTheProblem,
+  );
+  it.skipIf(needsHippoDb('sleep')).each(bad.filter(isSleep))(
+    '%s is a 400 that names the problem',
+    namesTheProblem,
+  );
 
   it('none of the rejected writes reached the store', async () => {
     const counts = await Promise.all(
@@ -432,16 +607,25 @@ describe('HTTP input validation', () => {
   });
 
   it('a create that points at a missing row is a 409, not a 404', async () => {
-    const decision = await call('POST', '/v1/decisions', { text: 'replace it', supersedesDecisionId: 99999 });
+    const decision = await call('POST', '/v1/decisions', {
+      text: 'replace it',
+      supersedesDecisionId: 99999,
+    });
     expect(decision.status).toBe(409);
     expect(String(decision.json.error)).toContain('to supersede not found');
-    const incident = await call('POST', '/v1/incidents', { text: 'outage', linkedMemoryIds: ['mem_does_not_exist'] });
+    const incident = await call('POST', '/v1/incidents', {
+      text: 'outage',
+      linkedMemoryIds: ['mem_does_not_exist'],
+    });
     expect(incident.status).toBe(409);
   });
 
   // Decision supersede answers 201 but process and skill answer 200; this pins today's contract.
   it('a supersede carries its optional context, description and trigger into the new version', async () => {
-    const d = await call('POST', `/v1/decisions/${ids.decision}/supersede`, { text: 'use postgres', context: 'scale' });
+    const d = await call('POST', `/v1/decisions/${ids.decision}/supersede`, {
+      text: 'use postgres',
+      context: 'scale',
+    });
     expect(d.status).toBe(201);
     expect(d.json.decision).toMatchObject({ context: 'scale' });
     const p = await call('POST', `/v1/processes/${ids.process}/supersede`, {
@@ -449,7 +633,10 @@ describe('HTTP input validation', () => {
       description: 'signed now',
     });
     expect(p.status).toBe(200);
-    expect(p.json.process).toMatchObject({ description: 'signed now', steps: ['tag', 'sign', 'publish'] });
+    expect(p.json.process).toMatchObject({
+      description: 'signed now',
+      steps: ['tag', 'sign', 'publish'],
+    });
     const s = await call('POST', `/v1/skills/${ids.skill}/supersede`, {
       instructions: 'halve it',
       trigger: 'flaky test',
@@ -470,21 +657,29 @@ describe('HTTP input validation', () => {
     expect(r.json.predictions).toEqual([expect.objectContaining({ id: ids.prediction })]);
   });
 
-  it.skipIf(needsHippoDb('team'))('include_recent is accepted, and audit since filters by time', async () => {
-    expect((await call('GET', '/v1/context?include_recent=2')).status).toBe(200);
-    const since = async (iso: string): Promise<number> => {
-      const r = await call('GET', `/v1/audit?since=${encodeURIComponent(iso)}`);
-      expect(r.status).toBe(200);
-      // /v1/audit answers auditList's event array as the whole body.
-      return Array.isArray(r.json) ? r.json.length : -1;
-    };
-    // Only the seven beforeAll creates are certain; earlier tests' writes add more depending on which ran.
-    expect(await since('2020-01-01T00:00:00Z')).toBeGreaterThanOrEqual(7);
-    expect(await since('2999-01-01T00:00:00Z')).toBe(0);
-  });
+  it.skipIf(needsHippoDb('team'))(
+    'include_recent is accepted, and audit since filters by time',
+    async () => {
+      expect((await call('GET', '/v1/context?include_recent=2')).status).toBe(200);
+      const since = async (iso: string): Promise<number> => {
+        const r = await call('GET', `/v1/audit?since=${encodeURIComponent(iso)}`);
+        expect(r.status).toBe(200);
+        // /v1/audit answers auditList's event array as the whole body.
+        return Array.isArray(r.json) ? r.json.length : -1;
+      };
+      // Only the seven beforeAll creates are certain; earlier tests' writes add more depending on which ran.
+      expect(await since('2020-01-01T00:00:00Z')).toBeGreaterThanOrEqual(7);
+      expect(await since('2999-01-01T00:00:00Z')).toBe(0);
+    },
+  );
 
   it('a malformed Authorization header on /mcp is a 401', async () => {
-    const r = await call('POST', '/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' }, { authorization: 'Bearer' });
+    const r = await call(
+      'POST',
+      '/mcp',
+      { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+      { authorization: 'Bearer' },
+    );
     expect(r.status).toBe(401);
     expect(r.json.error).toBe('invalid api key');
   });

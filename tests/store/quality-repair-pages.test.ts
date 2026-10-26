@@ -48,19 +48,33 @@ function seed() {
     [800, (ids) => automatic('Found local migration files to be', { supersededBy: ids[0] })],
     [801, () => automatic('Found local migration files to be', { kind: 'archived' })],
     [900, () => automatic('Found local migration files to be', { tenantId: 'other' })],
-    [1090, (ids) => automatic(mergedText(HEADER, [PART_A, PART_B]), bundleOf([ids[520], dormantParent.id]))],
+    [
+      1090,
+      (ids) =>
+        automatic(mergedText(HEADER, [PART_A, PART_B]), bundleOf([ids[520], dormantParent.id])),
+    ],
   ]);
   const ids: string[] = [];
   withDb((db) => {
     db.exec('BEGIN');
     try {
-      insertDormantRow(db, { entry: dormantParent, strength: 0.1, reason: 'decay', dormantAt: '2026-03-01T00:00:00Z' });
+      insertDormantRow(db, {
+        entry: dormantParent,
+        strength: 0.1,
+        reason: 'decay',
+        dormantAt: '2026-03-01T00:00:00Z',
+      });
       for (let i = 0; i < ROWS; i++) {
         const make = special.get(i);
         const entry = make
           ? make(ids)
-          : automatic(`Run migrations before seeding because seed row ${i} needs table ${i % 9} present.`);
-        writeEntryDbOnly(db, { ...entry, created: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString() });
+          : automatic(
+              `Run migrations before seeding because seed row ${i} needs table ${i % 9} present.`,
+            );
+        writeEntryDbOnly(db, {
+          ...entry,
+          created: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
+        });
         ids.push(entry.id);
       }
       db.exec('COMMIT');
@@ -77,7 +91,11 @@ function bundleOf(parents: string[]): Partial<MemoryEntry> {
 }
 
 const run = async (apply = false) =>
-  await repairAutomaticMemories(storeFilesOf(root), { tenantId: 'default', apply, protect: PROTECTED_ROWS });
+  await repairAutomaticMemories(storeFilesOf(root), {
+    tenantId: 'default',
+    apply,
+    protect: PROTECTED_ROWS,
+  });
 
 describe('quality repair across pages', () => {
   it('plans every issue in store order, judging a bundle by parents on other pages and in dormant storage', async () => {
@@ -105,7 +123,8 @@ describe('quality repair across pages', () => {
     expect(applied.appliedIds).toEqual([ids[10], ids[520], ids[1090]]);
     expect(applied.warnings).toEqual([]);
     withDb((db) => {
-      for (const id of applied.appliedIds) expect(readDormantSnapshot(db, 'default', id)?.entry.id).toBe(id);
+      for (const id of applied.appliedIds)
+        expect(readDormantSnapshot(db, 'default', id)?.entry.id).toBe(id);
     });
     expect((await run()).issues.map((issue) => issue.id)).toEqual([ids[30], ids[600], ids[700]]);
   });

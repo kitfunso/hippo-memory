@@ -13,7 +13,12 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { SleepRows } from '../../src/domain/consolidate/survivors.js';
 import { rowsInPages } from '../../src/base/util/pages.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { countMatching, peakRowsRead, recordStatements, recordStatementsAsync } from '../_helpers/count-statements.js';
+import {
+  countMatching,
+  peakRowsRead,
+  recordStatements,
+  recordStatementsAsync,
+} from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { seedRows } from '../_helpers/seed-rows.js';
 import type { EntryCursor } from '../../src/base/ports/store/types.js';
@@ -25,7 +30,11 @@ oneRequestPerTest();
 
 const ID_PAGE_READ = 'SELECT id, created FROM memories';
 
-function seeded(root: string, n: number, extra: (i: number) => Partial<MemoryEntry> = () => ({})): MemoryEntry[] {
+function seeded(
+  root: string,
+  n: number,
+  extra: (i: number) => Partial<MemoryEntry> = () => ({}),
+): MemoryEntry[] {
   return seedRows(
     root,
     n,
@@ -47,7 +56,10 @@ describe('rows that may mention a target', () => {
       let after;
       let pages = 0;
       do {
-        const page = listEntriesMentioning(db, ['quuxlib'], 'quuxlib', 'default', { limit: 4, after });
+        const page = listEntriesMentioning(db, ['quuxlib'], 'quuxlib', 'default', {
+          limit: 4,
+          after,
+        });
         ids.push(...page.entries.map((e) => e.id));
         after = page.next ?? undefined;
         pages++;
@@ -153,17 +165,25 @@ describe('walks of every row a read names', () => {
     try {
       const imported = recordStatements(() => [
         ...rowsInPages((after?: EntryCursor) =>
-          listEntriesWhere(db, { tenantId: tenant, sourcePrefix: 'agent-memory:', live: true }, { limit: 2, after }),
+          listEntriesWhere(
+            db,
+            { tenantId: tenant, sourcePrefix: 'agent-memory:', live: true },
+            { limit: 2, after },
+          ),
         ),
       ]);
-      expect(imported.result.map((e) => e.id)).toEqual(rows.filter((_, i) => i % 3 !== 0).map((r) => r.id));
+      expect(imported.result.map((e) => e.id)).toEqual(
+        rows.filter((_, i) => i % 3 !== 0).map((r) => r.id),
+      );
       expect(peakRowsRead(imported.reads, MEMORY_SELECT_COLUMNS)).toBe(3);
       const alpha = recordStatements(() => [
         ...rowsInPages((after?: EntryCursor) =>
           listEntriesWhere(db, { tenantId: tenant, origins: ['alpha'] }, { limit: 2, after }),
         ),
       ]);
-      expect(alpha.result.map((e) => e.id)).toEqual(rows.filter((_, i) => i !== 5).map((r) => r.id));
+      expect(alpha.result.map((e) => e.id)).toEqual(
+        rows.filter((_, i) => i !== 5).map((r) => r.id),
+      );
       expect(peakRowsRead(alpha.reads, MEMORY_SELECT_COLUMNS)).toBe(3);
     } finally {
       closeHippoDb(db);
@@ -174,15 +194,19 @@ describe('walks of every row a read names', () => {
     const root = makeRoot('bounded-tag-lazy');
     const rows = seeded(root, 3, () => ({ source: 'agent-memory:claude-code:p/note.md' }));
     const reports = sqliteStore(root).reports;
-    const under = { tenantId: rows[0].tenantId, sourcePrefix: 'agent-memory:', live: true } as const;
+    const under = {
+      tenantId: rows[0].tenantId,
+      sourcePrefix: 'agent-memory:',
+      live: true,
+    } as const;
     const log = await recordStatementsAsync(async () => {
       const page = await reports.entriesWhere(under, { limit: 1 });
       return page.entries[0]?.id;
     });
     expect(log.result).toBe(rows[0].id);
-    expect(log.reads.filter((read) => read.sql.includes(MEMORY_SELECT_COLUMNS)).map((r) => r.sql)).toEqual([
-      expect.stringMatching(/ORDER BY created ASC, id ASC LIMIT \?$/),
-    ]);
+    expect(
+      log.reads.filter((read) => read.sql.includes(MEMORY_SELECT_COLUMNS)).map((r) => r.sql),
+    ).toEqual([expect.stringMatching(/ORDER BY created ASC, id ASC LIMIT \?$/)]);
   });
 });
 
@@ -190,7 +214,12 @@ describe('ambient tag tallies', () => {
   it('count tags in SQL as the row-by-row tally does, repeats and error tags included', () => {
     const root = makeRoot('bounded-ambient');
     const rows = seeded(root, 6, (i) => ({
-      tags: i % 3 === 0 ? ['alpha', 'alpha', 'error:db'] : i % 3 === 1 ? ['beta', 'critical'] : ['alpha'],
+      tags:
+        i % 3 === 0
+          ? ['alpha', 'alpha', 'error:db']
+          : i % 3 === 1
+            ? ['beta', 'critical']
+            : ['alpha'],
     }));
     const now = new Date(Date.UTC(2026, 0, 2));
     const db = openHippoDb(root);

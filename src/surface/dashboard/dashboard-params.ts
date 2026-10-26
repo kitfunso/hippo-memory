@@ -16,7 +16,13 @@ export const LIMIT_MAX = 500;
 export const SEARCH_MIN = 2;
 export const SEARCH_MAX = 200;
 
-function integerParam(params: URLSearchParams, name: string, fallback: number, min: number, max: number): number {
+function integerParam(
+  params: URLSearchParams,
+  name: string,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
   const raw = params.get(name);
   if (raw === null) return fallback;
   const n = INTEGER.test(raw.trim()) ? Number(raw) : Number.NaN;
@@ -26,7 +32,12 @@ function integerParam(params: URLSearchParams, name: string, fallback: number, m
   return n;
 }
 
-function oneOf<T extends string>(params: URLSearchParams, name: string, allowed: readonly T[], fallback: T): T {
+function oneOf<T extends string>(
+  params: URLSearchParams,
+  name: string,
+  allowed: readonly T[],
+  fallback: T,
+): T {
   const raw = params.get(name);
   if (raw === null) return fallback;
   const hit = allowed.find((a) => a === raw);
@@ -57,7 +68,8 @@ function layersParam(params: URLSearchParams): number[] {
 function rangeParam(params: URLSearchParams, lo: string, hi: string): [number, number] {
   const min = finiteParam(params, lo);
   const max = finiteParam(params, hi);
-  if (min !== null && max !== null && min > max) throw new ParamError(`${lo} must not exceed ${hi}`);
+  if (min !== null && max !== null && min > max)
+    throw new ParamError(`${lo} must not exceed ${hi}`);
   return [min ?? Number.NEGATIVE_INFINITY, max ?? Number.POSITIVE_INFINITY];
 }
 

@@ -20,7 +20,9 @@ describe('store supersede', () => {
     writeEntry(root, old);
 
     const first = await supersedeNow(ctx, old.id, 'the deploy runs on Wednesdays');
-    await expect(supersedeNow(ctx, old.id, 'the deploy runs on Thursdays')).rejects.toThrow(ConflictError);
+    await expect(supersedeNow(ctx, old.id, 'the deploy runs on Thursdays')).rejects.toThrow(
+      ConflictError,
+    );
 
     expect(readEntry(root, old.id, 'default')?.supersededBy).toBe(first);
   });

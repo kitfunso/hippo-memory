@@ -57,7 +57,9 @@ export function seed(
 }
 
 export function rows(n: number, label: string, extra: Partial<MemoryEntry> = {}): MemoryEntry[] {
-  return Array.from({ length: n }, (_, i) => memory(`${label} memory number ${i} about the zephyrine cache`, extra));
+  return Array.from({ length: n }, (_, i) =>
+    memory(`${label} memory number ${i} about the zephyrine cache`, extra),
+  );
 }
 
 /** Mirror files rewritten since `ageMirrors`, read from their mtimes. */
@@ -73,5 +75,7 @@ export function ageMirrors(root: string): () => number {
       : [];
   });
   for (const file of files) fs.utimesSync(file, old, old);
-  return () => files.filter((file) => fs.existsSync(file) && fs.statSync(file).mtimeMs > old.getTime() + 1000).length;
+  return () =>
+    files.filter((file) => fs.existsSync(file) && fs.statSync(file).mtimeMs > old.getTime() + 1000)
+      .length;
 }

@@ -74,7 +74,9 @@ describe('splitMarkdownItems: paragraphs', () => {
 describe('splitMarkdownItems: headings', () => {
   it.each([1, 2, 3, 4, 5, 6])('reads a level %i heading as context, never as an item', (level) => {
     const items = splitMarkdownItems(`${'#'.repeat(level)} Section Title\n- entry`);
-    expect(items).toEqual([{ heading: 'Section Title', headingSlug: 'section-title', text: 'entry' }]);
+    expect(items).toEqual([
+      { heading: 'Section Title', headingSlug: 'section-title', text: 'entry' },
+    ]);
   });
 
   it('strips a trailing run of hashes and spaces', () => {
@@ -121,7 +123,18 @@ describe('splitMarkdownItems: input shape', () => {
   });
 
   it('gives the same items for CRLF and LF input', () => {
-    const md = lines('# Title', '', 'para one', 'wrapped', '', '- bullet', '  - sub', '', '## Next', '1. num');
+    const md = lines(
+      '# Title',
+      '',
+      'para one',
+      'wrapped',
+      '',
+      '- bullet',
+      '  - sub',
+      '',
+      '## Next',
+      '1. num',
+    );
     expect(splitMarkdownItems(md.replace(/\n/g, '\r\n'))).toEqual(splitMarkdownItems(md));
     expect(texts(md)).toEqual(['para one\nwrapped', 'bullet\n  - sub', 'num']);
   });
@@ -139,9 +152,21 @@ describe('splitMarkdownItems: input shape', () => {
 
 describe('splitMarkdownItems: fenced code', () => {
   it('keeps heading-like and bullet-like lines inside a fence in the bullet that holds it', () => {
-    const md = lines('## Real', '- has code', '  ```', '  # not a heading', '  - not a bullet', '  ```', '- after');
+    const md = lines(
+      '## Real',
+      '- has code',
+      '  ```',
+      '  # not a heading',
+      '  - not a bullet',
+      '  ```',
+      '- after',
+    );
     expect(splitMarkdownItems(md)).toEqual([
-      { heading: 'Real', headingSlug: 'real', text: 'has code\n  ```\n  # not a heading\n  - not a bullet\n  ```' },
+      {
+        heading: 'Real',
+        headingSlug: 'real',
+        text: 'has code\n  ```\n  # not a heading\n  - not a bullet\n  ```',
+      },
       { heading: 'Real', headingSlug: 'real', text: 'after' },
     ]);
   });
@@ -225,13 +250,21 @@ describe('splitMarkdownItems: Codex-style file', () => {
       { heading: 'User Profile', headingSlug: 'user-profile', text: 'Prefers short answers.' },
       { heading: 'User preferences', headingSlug: 'user-preferences', text: 'Use metric units' },
       { heading: 'User preferences', headingSlug: 'user-preferences', text: 'No emojis' },
-      { heading: 'General Tips', headingSlug: 'general-tips', text: 'Run the tests before a commit' },
+      {
+        heading: 'General Tips',
+        headingSlug: 'general-tips',
+        text: 'Run the tests before a commit',
+      },
       {
         heading: '2026-09-01',
         headingSlug: '2026-09-01',
         text: 'topic: kw\n  - desc: first note\n  - desc: second note',
       },
-      { heading: '2026-09-01', headingSlug: '2026-09-01', text: 'topic: other\n  - desc: third note' },
+      {
+        heading: '2026-09-01',
+        headingSlug: '2026-09-01',
+        text: 'topic: other\n  - desc: third note',
+      },
     ]);
   });
 

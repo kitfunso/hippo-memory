@@ -1,6 +1,10 @@
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { AmbientTallies } from '../../memory/ambient.js';
-import type { AmbientAdmission, AmbientRefusalReason, DescendantAdmission } from '../../scope/read-admission.js';
+import type {
+  AmbientAdmission,
+  AmbientRefusalReason,
+  DescendantAdmission,
+} from '../../scope/read-admission.js';
 
 export type { AmbientAdmission, AmbientRefusalReason };
 
@@ -138,5 +142,9 @@ export interface DagReads {
   /** The tenant's row `id` and up to `walk.depth` levels under it, read in one call so no write of this process lands
    * between levels; null if no such row. Each level lists the children of the one above, parent by parent, children by
    * created then id ascending; a row is listed once, at its first level. */
-  summaryWithDescendants(tenantId: string, id: string, walk: DescendantWalk): Promise<SummaryDescendants | null>;
+  summaryWithDescendants(
+    tenantId: string,
+    id: string,
+    walk: DescendantWalk,
+  ): Promise<SummaryDescendants | null>;
 }

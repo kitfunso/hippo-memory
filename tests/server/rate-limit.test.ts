@@ -70,7 +70,13 @@ describe('createRateLimiter', () => {
     rl.check('n1', 1000); // the table is full: this evicts idle
     expect(rl.check('busy', 1000)).toBe(false);
     // idle starts over with a full burst of five; had it been kept, it would be refused on the second request.
-    expect(Array.from({ length: 5 }, () => rl.check('idle', 1000))).toEqual([true, true, true, true, true]);
+    expect(Array.from({ length: 5 }, () => rl.check('idle', 1000))).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+    ]);
   });
 
   it('keeps a throttled key throttled however many new keys churn the full map, while it keeps asking', () => {
@@ -95,7 +101,11 @@ describe('createRateLimiter', () => {
     rl.check('refilled', 1000); // four tokens at 1000, full again by 1100
     rl.check('later', 1000);
     rl.check('new', 1100); // refilled is full again, so it goes; spending holds two tokens and stays
-    expect(Array.from({ length: 3 }, () => rl.check('spending', 1100))).toEqual([true, true, false]);
+    expect(Array.from({ length: 3 }, () => rl.check('spending', 1100))).toEqual([
+      true,
+      true,
+      false,
+    ]);
   });
 
   it('reads at most 64 buckets to free a slot for an unseen key at 10,000 keys, then drops the oldest', () => {

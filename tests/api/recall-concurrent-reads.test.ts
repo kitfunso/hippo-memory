@@ -4,7 +4,11 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
+import {
+  rankRecall,
+  type RankRecallCtx,
+  type RankRecallOptions,
+} from '../../src/api/recall/pipeline.js';
 import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import type { HippoStore } from '../../src/base/ports/store.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -28,7 +32,12 @@ function gate(): Gate {
 }
 
 /** The store with its recall read held at the start until `released`, so the test, not a timer, orders the reads. */
-function held(store: HippoStore, name: StoreName, released: Promise<void>, events: string[]): HippoStore {
+function held(
+  store: HippoStore,
+  name: StoreName,
+  released: Promise<void>,
+  events: string[],
+): HippoStore {
   const search = store.searchRecallEntries.bind(store);
   // SAFETY: Object.create keeps every other store method; only the read under test is replaced.
   const wrapped = Object.create(store) as HippoStore;
@@ -64,28 +73,51 @@ function options(root: string): RankRecallOptions {
 }
 
 /** One recall with both reads held until both have started, then let go one at a time in `order`. */
-async function run(order: readonly [StoreName, StoreName]): Promise<{ ids: string[]; events: string[] }> {
+async function run(
+  order: readonly [StoreName, StoreName],
+): Promise<{ ids: string[]; events: string[] }> {
   const { root: local } = makeStore('recall-concurrent-local');
   const { root: global } = makeStore('recall-concurrent-global');
-  writeEntry(local, { ...createMemory('deploy pipeline uses blue green rollout'), id: 'mem_local_a', strength: 1 });
-  writeEntry(local, { ...createMemory('deploy gate waits for the smoke run'), id: 'mem_local_b', strength: 1 });
-  writeEntry(global, { ...createMemory('deploy tokens rotate every quarter'), id: 'mem_global_a', strength: 1 });
+  writeEntry(local, {
+    ...createMemory('deploy pipeline uses blue green rollout'),
+    id: 'mem_local_a',
+    strength: 1,
+  });
+  writeEntry(local, {
+    ...createMemory('deploy gate waits for the smoke run'),
+    id: 'mem_local_b',
+    strength: 1,
+  });
+  writeEntry(global, {
+    ...createMemory('deploy tokens rotate every quarter'),
+    id: 'mem_global_a',
+    strength: 1,
+  });
   const events: string[] = [];
   const gates = { local: gate(), global: gate() };
   const ctx: RankRecallCtx = {
     now: evalNow(),
     store: held(sqliteStore(local), 'local', gates.local.opened, events),
     config: loadConfig(local),
-    global: { store: held(sqliteStore(global), 'global', gates.global.opened, events), config: loadConfig(global) },
+    global: {
+      store: held(sqliteStore(global), 'global', gates.global.opened, events),
+      config: loadConfig(global),
+    },
     tenantId: 'default',
     embedderFor: resolveEmbeddingProvider,
   };
   const ranked = rankRecall(ctx, options(local), BUDGET_RANKED);
   // Neither read may end yet, so a recall that ran them one after the other never starts the second.
-  await waitFor(() => events.length === 2, { what: 'both store reads to start before either ends', timeoutMs: 4_000 });
+  await waitFor(() => events.length === 2, {
+    what: 'both store reads to start before either ends',
+    timeoutMs: 4_000,
+  });
   for (const name of order) {
     gates[name].open();
-    await waitFor(() => events.includes(`${name}:end`), { what: `the ${name} read to end`, timeoutMs: 4_000 });
+    await waitFor(() => events.includes(`${name}:end`), {
+      what: `the ${name} read to end`,
+      timeoutMs: 4_000,
+    });
   }
   const result = await ranked;
   return { ids: result.results.map((r) => r.entry.id), events };

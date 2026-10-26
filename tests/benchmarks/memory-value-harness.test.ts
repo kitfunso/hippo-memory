@@ -41,7 +41,11 @@ import { computeSplit } from '../../benchmarks/memory-value/split.mjs';
 import { ingestQuestion } from '../../benchmarks/memory-value/ingest.mjs';
 import { simulateQuestion } from '../../benchmarks/memory-value/simulate.mjs';
 import { extractQuestion } from '../../benchmarks/memory-value/extract.mjs';
-import { evaluateAll, computeDatasetVariance, evaluateVarianceGate } from '../../benchmarks/memory-value/evaluate.mjs';
+import {
+  evaluateAll,
+  computeDatasetVariance,
+  evaluateVarianceGate,
+} from '../../benchmarks/memory-value/evaluate.mjs';
 import {
   questionDir,
   metaPathFor,
@@ -76,7 +80,9 @@ afterEach(() => {
 });
 
 // mkdtemp per process (two worktrees at once must not share a root); re-set in a LATER beforeEach because clearAblationEnv deletes it.
-const HARNESS_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-harness-test-scratch-'));
+const HARNESS_SCRATCH_ROOT = fs.mkdtempSync(
+  path.join(os.tmpdir(), 'hippo-mv-harness-test-scratch-'),
+);
 
 beforeEach(clearAblationEnv);
 beforeEach(() => {
@@ -194,7 +200,9 @@ describe('memory-value harness (real stores)', () => {
     // "it varies" assertion would not have been true and is not asserted.
     for (const q of QUESTIONS) {
       await runOf(q);
-      const rows = jsonlRows<{ memory_id: string; features: { schema_fit: number } }>(featuresPathFor(q.question_id));
+      const rows = jsonlRows<{ memory_id: string; features: { schema_fit: number } }>(
+        featuresPathFor(q.question_id),
+      );
       const rowById = new Map(rows.map((r) => [r.memory_id, r]));
       const gold = jsonFile<{ memories: Array<{ id: string }> }>(goldPathFor(q.question_id));
       const { turns } = computeGold(q);
@@ -304,7 +312,9 @@ describe('causal clock clamp', () => {
     fs.rmSync(questionDir(QUESTION_C.question_id), { recursive: true, force: true });
     try {
       const ingestResult = ingestQuestion(QUESTION_C);
-      const meta = jsonFile<{ questionDate: string; tEval: string }>(metaPathFor(QUESTION_C.question_id));
+      const meta = jsonFile<{ questionDate: string; tEval: string }>(
+        metaPathFor(QUESTION_C.question_id),
+      );
 
       // question_date (day 7) predates session s1 (day 10) -> T_eval must
       // clamp FORWARD to day 10, not stay at question_date.
@@ -313,7 +323,10 @@ describe('causal clock clamp', () => {
       expect(meta.tEval).not.toBe(meta.questionDate);
       expect(meta.tEval > meta.questionDate).toBe(true);
 
-      await simulateQuestion(QUESTION_C.question_id, meta.tEval, { seed: CONFIG.GLOBAL_SEED, rounds: TEST_SIM_ROUNDS });
+      await simulateQuestion(QUESTION_C.question_id, meta.tEval, {
+        seed: CONFIG.GLOBAL_SEED,
+        rounds: TEST_SIM_ROUNDS,
+      });
       extractQuestion(QUESTION_C.question_id, meta.tEval);
 
       const rows = jsonlRows<{
@@ -328,7 +341,10 @@ describe('causal clock clamp', () => {
       // No negative age anywhere — the bug this fix eliminates (codex
       // measured 15,162 such rows across the real 500-question dataset).
       for (const row of rows) {
-        expect(row.features.age_days, `session ${row.sessionIndex} turn ${row.turnIdx}`).toBeGreaterThanOrEqual(0);
+        expect(
+          row.features.age_days,
+          `session ${row.sessionIndex} turn ${row.turnIdx}`,
+        ).toBeGreaterThanOrEqual(0);
       }
       // s1 (day 10) IS T_eval -> its memories' age is exactly 0 (created ===
       // T_eval, untouched by simulation, which never mutates `created`).
@@ -360,7 +376,13 @@ describe('--skip-simulate variance-gate exemption', () => {
       const { varying, dead } = computeDatasetVariance(storesRows, FEATURE_NAMES);
 
       // Usage-derived dims are constant BY DESIGN without simulation.
-      for (const f of ['retrieval_count', 'outcome_positive', 'outcome_negative', 'outcome_ratio', 'half_life_days']) {
+      for (const f of [
+        'retrieval_count',
+        'outcome_positive',
+        'outcome_negative',
+        'outcome_ratio',
+        'half_life_days',
+      ]) {
         expect(dead, f).toContain(f);
       }
       // The naturally-surviving set (age varies by session date regardless
@@ -434,7 +456,10 @@ describe('variance gate (pure logic, no I/O)', () => {
     const storeB = constantRowsAt(0.7, 4); // constant 0.7 within store B — DIFFERENT constant
     const storeC = constantRowsAt(1.5, 4); // a third distinct constant, for good measure
 
-    const { varying, dead, detail } = computeDatasetVariance([storeA, storeB, storeC], featureNames);
+    const { varying, dead, detail } = computeDatasetVariance(
+      [storeA, storeB, storeC],
+      featureNames,
+    );
     expect(varying.length).toBe(0);
     expect(dead.length).toBe(featureNames.length);
     for (const f of featureNames) {

@@ -57,7 +57,11 @@ function strengthAblation(): StrengthAblation {
 
 /** The rank switches as the environment holds them. */
 function rankAblation(): RankAblation {
-  return { recency: envAblateRecency(), recencyDays: envEvalRecencyDays(), outcomeFast: isOutcomeFastAblated() };
+  return {
+    recency: envAblateRecency(),
+    recencyDays: envEvalRecencyDays(),
+    outcomeFast: isOutcomeFastAblated(),
+  };
 }
 
 /** The strength model and rank switches as the environment holds them, for a root to hand its rankings. */

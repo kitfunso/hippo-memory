@@ -32,7 +32,11 @@ export function isPermanentFailure(failure: LlmFailure): boolean {
 
 /** The first errno name (ECONNRESET, ENOTFOUND) along a cause chain; fetch puts it one level down. */
 function errnoOf(cause: unknown): string {
-  for (let link = cause, depth = 0; link instanceof Error && depth < 5; link = link.cause, depth++) {
+  for (
+    let link = cause, depth = 0;
+    link instanceof Error && depth < 5;
+    link = link.cause, depth++
+  ) {
     const code = errorCode(link);
     if (code !== '') return code;
   }
@@ -62,7 +66,9 @@ export function describeLlmFailure(failure: LlmFailure): string {
     case 'request':
       return `request failed: ${failure.message}`;
     case 'http':
-      return failure.detail ? `HTTP ${failure.status}: ${failure.detail}` : `HTTP ${failure.status}`;
+      return failure.detail
+        ? `HTTP ${failure.status}: ${failure.detail}`
+        : `HTTP ${failure.status}`;
     case 'unreadable':
       return `unparseable response: ${failure.message}`;
     case 'empty':

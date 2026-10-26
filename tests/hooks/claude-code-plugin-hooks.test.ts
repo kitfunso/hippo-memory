@@ -31,12 +31,17 @@ describe('Claude Code plugin hook manifest', () => {
   it('saves a checkpoint before compaction with no matcher, so manual and automatic compaction both fire', () => {
     const groups = manifest.hooks.PreCompact ?? [];
     expect(
-      groups.some((g) => g.matcher === undefined && g.hooks.some((h) => h.command.startsWith('hippo pre-compact'))),
+      groups.some(
+        (g) =>
+          g.matcher === undefined && g.hooks.some((h) => h.command.startsWith('hippo pre-compact')),
+      ),
     ).toBe(true);
   });
 
   it('extracts after compaction and resumes on the compact SessionStart', () => {
     expect(commands('PostCompact').some((c) => c.startsWith('hippo post-compact'))).toBe(true);
-    expect(commands('SessionStart', 'compact').some((c) => c.startsWith('hippo compact-resume'))).toBe(true);
+    expect(
+      commands('SessionStart', 'compact').some((c) => c.startsWith('hippo compact-resume')),
+    ).toBe(true);
   });
 });

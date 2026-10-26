@@ -90,7 +90,11 @@ export async function learn(ctx: Context, opts: LearnOptions): Promise<LearnResu
   // The gate filters the loop input, so a dropped lesson neither stores nor invalidates; docs/decisions
   // git-learn-gate-placement says why.
   const { kept, dropped } = partitionLessons(parsed);
-  return { status: 'scanned', lowInfo: dropped.length, ...(await writeLessons(ctx, kept, opts, config)) };
+  return {
+    status: 'scanned',
+    lowInfo: dropped.length,
+    ...(await writeLessons(ctx, kept, opts, config)),
+  };
 }
 
 interface QueuedLesson {
@@ -135,12 +139,22 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   if (!batch.full) return;
   if (landed.length > 0) await writes.bumpRemembered(landed.length);
   const { embedderFor, clock } = ctx.infra;
-  const target = { store: ctx.store, embeddings: ctx.config.embeddings, embedderFor, strength: strengthOf(ctx), clock };
+  const target = {
+    store: ctx.store,
+    embeddings: ctx.config.embeddings,
+    embedderFor,
+    strength: strengthOf(ctx),
+    clock,
+  };
   for (const entry of landed) embedMemoryDetached(target, entry);
 }
 
 /** The keys of the rows that may hold a lesson, the only rows that can be its copy. */
-async function knownKeys(ctx: Context, writes: LessonWrites, lessons: readonly string[]): Promise<Set<string>> {
+async function knownKeys(
+  ctx: Context,
+  writes: LessonWrites,
+  lessons: readonly string[],
+): Promise<Set<string>> {
   const held = await writes.textsHolding(ctx.tenantId, lessons, personalScopeOf(ctx.actor));
   return storedTextKeys(held);
 }
@@ -153,7 +167,11 @@ interface LessonMemoryInputs {
   readonly now: Date;
 }
 
-function newLessonMemory(lesson: string, profile: LearnProfile, inputs: LessonMemoryInputs): MemoryEntry {
+function newLessonMemory(
+  lesson: string,
+  profile: LearnProfile,
+  inputs: LessonMemoryInputs,
+): MemoryEntry {
   const { tenantId, config, fitSource, pathTags, now } = inputs;
   const entry = createMemory(
     lesson,
@@ -182,7 +200,11 @@ interface TenantScan {
 
 /** One pass over the tenant in pages: keeps the rows `targets` match, and from the rows the caller can read only the
  * tag counts, texts and duplicate keys that scoring a lesson needs. */
-async function scanTenant(ctx: Context, targets: readonly InvalidationTarget[], pageRows: number): Promise<TenantScan> {
+async function scanTenant(
+  ctx: Context,
+  targets: readonly InvalidationTarget[],
+  pageRows: number,
+): Promise<TenantScan> {
   const matches = invalidationMatcher(targets);
   const live: MemoryEntry[] = [];
   const tagCounts = new Map<string, number>();
@@ -213,8 +235,12 @@ async function writeLessons(
   const writes = store.lessonWrites;
   // One pass serves the batch: invalidation matches against `live`, which follows every write below. Schema fit needs
   // every readable row, and each lesson is scored against them as they were before the batch.
-  const targets = profile.full ? lessons.flatMap((lesson) => extractInvalidationTarget(lesson) ?? []) : [];
-  const scan = profile.full ? await scanTenant(ctx, targets, opts.pageRows ?? TENANT_PAGE_ROWS) : undefined;
+  const targets = profile.full
+    ? lessons.flatMap((lesson) => extractInvalidationTarget(lesson) ?? [])
+    : [];
+  const scan = profile.full
+    ? await scanTenant(ctx, targets, opts.pageRows ?? TENANT_PAGE_ROWS)
+    : undefined;
   const live = scan?.live ?? [];
   const fitSource = scan?.fitSource;
   const batch: LessonBatch = {
@@ -238,9 +264,16 @@ async function writeLessons(
     if (target) {
       await landLessons(batch, queue.splice(0));
       const { invalidated } = await invalidateMatchingAmong(store, live, target, tenantId);
-      if (invalidated > 0) batch.counts.invalidations.push({ from: target.from, count: invalidated });
+      if (invalidated > 0)
+        batch.counts.invalidations.push({ from: target.from, count: invalidated });
     }
-    const entry = newLessonMemory(lesson, profile, { tenantId, config, fitSource, pathTags, now: ctx.infra.clock() });
+    const entry = newLessonMemory(lesson, profile, {
+      tenantId,
+      config,
+      fitSource,
+      pathTags,
+      now: ctx.infra.clock(),
+    });
     queue.push({ entry, key });
     if (profile.full) live.push(entry);
     batch.keys.add(key);

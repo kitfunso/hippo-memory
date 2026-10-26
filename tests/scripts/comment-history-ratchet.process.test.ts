@@ -37,7 +37,8 @@ function withFixture(
   }
 }
 
-const TWO = '// DF1 v1.2.3 critic round 2\nexport const a = 1;\n/**\n * AT1 (docs/plans/2026-08-15-x.md)\n */\n';
+const TWO =
+  '// DF1 v1.2.3 critic round 2\nexport const a = 1;\n/**\n * AT1 (docs/plans/2026-08-15-x.md)\n */\n';
 
 describe('check-comment-history.mjs', () => {
   it('passes when the count equals the baseline', () => {
@@ -57,14 +58,22 @@ describe('check-comment-history.mjs', () => {
   });
 
   it('fails on a new file that has matches, passes on a new file that has none', () => {
-    withFixture({ 'src/a.ts': TWO, 'src/b.ts': '// v1.4.0 fix\n' }, { 'src/a.ts': 2 }, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/b.ts: 0 -> 1');
-    });
-    withFixture({ 'src/a.ts': TWO, 'src/b.ts': '// says why in one line\n' }, { 'src/a.ts': 2 }, ({ run }) => {
-      expect(run().status).toBe(0);
-    });
+    withFixture(
+      { 'src/a.ts': TWO, 'src/b.ts': '// v1.4.0 fix\n' },
+      { 'src/a.ts': 2 },
+      ({ run }) => {
+        const r = run();
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain('src/b.ts: 0 -> 1');
+      },
+    );
+    withFixture(
+      { 'src/a.ts': TWO, 'src/b.ts': '// says why in one line\n' },
+      { 'src/a.ts': 2 },
+      ({ run }) => {
+        expect(run().status).toBe(0);
+      },
+    );
   });
 
   it('--update lowers the baseline and drops files with no matches; a lower count passes before that', () => {
@@ -120,7 +129,8 @@ describe('check-comment-history.mjs', () => {
     withFixture(files, {}, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
-      for (const f of ['src/a.ts', 'src/b.mts', 'src/c.cts']) expect(r.stderr).toContain(`${f}: 0 -> 1`);
+      for (const f of ['src/a.ts', 'src/b.mts', 'src/c.cts'])
+        expect(r.stderr).toContain(`${f}: 0 -> 1`);
     });
   });
 });

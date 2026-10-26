@@ -73,7 +73,11 @@ function toCurrentEntry(snapshot: StoredSnapshot): MemoryEntry {
     return fromWire({ ...rest, summary_dirty: summary_dirty === true || summary_dirty === 1 });
   }
   const { tenantId, summary_dirty, ...rest } = snapshot;
-  return fromWire({ ...rest, tenant_id: tenantId, summary_dirty: summary_dirty === true || summary_dirty === 1 });
+  return fromWire({
+    ...rest,
+    tenant_id: tenantId,
+    summary_dirty: summary_dirty === true || summary_dirty === 1,
+  });
 }
 
 /** Parse a stored snapshot back into a MemoryEntry, or null when the row no longer matches it (edited by hand, or
@@ -84,7 +88,12 @@ function parseSnapshot(row: DormantRow): MemoryEntry | null {
   const parsed = parseStoredJson(site, row.entry_json);
   if (parsed === undefined) return null;
   const entry = isStoredSnapshot(parsed) ? toCurrentEntry(parsed) : undefined;
-  if (entry === undefined || entry.id !== row.id || entry.tenantId !== row.tenant_id || entry.content !== row.content) {
+  if (
+    entry === undefined ||
+    entry.id !== row.id ||
+    entry.tenantId !== row.tenant_id ||
+    entry.content !== row.content
+  ) {
     warnDamagedColumn(site, 'wrong shape');
     return null;
   }
@@ -149,7 +158,11 @@ export function listDormantRows(
 }
 
 /** A tenant's stored dormant snapshot, or null when it has none with that id (another tenant's id reads as absent). */
-export function readDormantSnapshot(db: DatabaseSyncLike, tenantId: string, id: string): DormantSnapshot | null {
+export function readDormantSnapshot(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: string,
+): DormantSnapshot | null {
   const row = cachedStatement(
     db,
     `SELECT ${DORMANT_COLUMNS}
@@ -164,7 +177,10 @@ const snapshotColumn = (column: FilterColumn): string =>
 
 /** Readable snapshots whose entry `filter` keeps, by tenant then id; a malformed snapshot is passed over, not an error.
  */
-export function dormantSnapshotsWhere(db: DatabaseSyncLike, filter: EntryFilter): DormantSnapshot[] {
+export function dormantSnapshotsWhere(
+  db: DatabaseSyncLike,
+  filter: EntryFilter,
+): DormantSnapshot[] {
   const { tenantId, ...narrowing } = filter;
   const where = narrowingAnd(narrowing, snapshotColumn);
   const tenant = tenantAnd(tenantId);
@@ -177,11 +193,18 @@ export function dormantSnapshotsWhere(db: DatabaseSyncLike, filter: EntryFilter)
 
 function toSnapshot(row: DormantRow): DormantSnapshot | null {
   const entry = parseSnapshot(row);
-  return entry ? { entry, reason: row.reason, strength: row.strength, dormantAt: row.dormant_at } : null;
+  return entry
+    ? { entry, reason: row.reason, strength: row.strength, dormantAt: row.dormant_at }
+    : null;
 }
 
 /** Put `entry` in place of a tenant's dormant memory `id`, keeping when and why that one went dormant. */
-export function replaceDormantEntry(db: DatabaseSyncLike, tenantId: string, id: string, entry: MemoryEntry): void {
+export function replaceDormantEntry(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: string,
+  entry: MemoryEntry,
+): void {
   cachedStatement(
     db,
     `UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?`,
@@ -196,17 +219,19 @@ export function hasDormantRow(
   admit: SqlFragment = EVERY_SCOPE,
 ): boolean {
   return (
-    cachedStatement(db, `SELECT 1 FROM ${DORMANT_WITH_SCOPE} WHERE tenant_id = ? AND id = ? AND ${admit.sql}`).get(
-      tenantId,
-      id,
-      ...admit.params,
-    ) !== undefined
+    cachedStatement(
+      db,
+      `SELECT 1 FROM ${DORMANT_WITH_SCOPE} WHERE tenant_id = ? AND id = ? AND ${admit.sql}`,
+    ).get(tenantId, id, ...admit.params) !== undefined
   );
 }
 
 /** Delete a tenant's dormant memory. Returns false when there was none. */
 export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: string): boolean {
-  const result = cachedStatement(db, `DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ?`).run(tenantId, id);
+  const result = cachedStatement(
+    db,
+    `DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ?`,
+  ).run(tenantId, id);
   return Number(result.changes ?? 0) > 0;
 }
 

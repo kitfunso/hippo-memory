@@ -9,7 +9,9 @@ const JS_PATH = /^[\w./-]+\.js$/;
 /** The src module behind an import specifier written in `from`, or null when it does not land in the repo's dist/ or src/. */
 function toSrc(has, from, spec) {
   if (!spec.startsWith('.')) return null;
-  const m = /^(?:dist|src)\/(.+)\.(?:js|mjs|ts)$/.exec(posix.normalize(posix.join(posix.dirname(from), spec)));
+  const m = /^(?:dist|src)\/(.+)\.(?:js|mjs|ts)$/.exec(
+    posix.normalize(posix.join(posix.dirname(from), spec)),
+  );
   return m && has(`src/${m[1]}.ts`) ? `src/${m[1]}.ts` : null;
 }
 
@@ -30,7 +32,8 @@ function readStatic(found, st, resolve) {
   if (!target || !clause || st.importClause?.isTypeOnly || st.isTypeOnly) return;
   if (ts.isNamespaceImport(clause)) found.spaces.set(clause.name.text, target);
   else if (!ts.isNamespaceExport(clause)) {
-    for (const el of clause.elements) if (!el.isTypeOnly) found.named.push([target, (el.propertyName ?? el.name).text]);
+    for (const el of clause.elements)
+      if (!el.isTypeOnly) found.named.push([target, (el.propertyName ?? el.name).text]);
   }
 }
 
@@ -78,7 +81,11 @@ function scan(file, text, has) {
     else if (ts.isStringLiteralLike(n)) {
       if (!found.joined.has(n)) found.literals.add(n.text);
     } else if (ts.isCallExpression(n)) readCall(found, n, resolve);
-    else if (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && found.spaces.has(n.expression.text)) {
+    else if (
+      ts.isPropertyAccessExpression(n) &&
+      ts.isIdentifier(n.expression) &&
+      found.spaces.has(n.expression.text)
+    ) {
       found.named.push([found.spaces.get(n.expression.text), n.name.text]);
     }
     ts.forEachChild(n, visit);

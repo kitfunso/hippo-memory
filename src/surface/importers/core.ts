@@ -163,7 +163,9 @@ function skipReason(chunk: string, target: OpenImport): 'too-short' | 'duplicate
 /** Only the rows holding the chunk's words can hold the chunk, so the store is asked for those alone. */
 function storeHolds({ files, tenantId }: OpenImport, chunk: string): boolean {
   const key = duplicateKey(chunk);
-  return files.textKeysHolding({ tenantId }, [chunk]).some((row) => heldTextKeys(row).includes(key));
+  return files
+    .textKeysHolding({ tenantId }, [chunk])
+    .some((row) => heldTextKeys(row).includes(key));
 }
 
 /** The secret-vetted chunk capped at MAX_IMPORT_CHARS, and whether vetting changed it. */
@@ -203,10 +205,18 @@ function createImportEntry(
 }
 
 /** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
-function writeOrProbeImport(target: OpenImport, entry: MemoryEntry, options: ImportOptions): boolean {
+function writeOrProbeImport(
+  target: OpenImport,
+  entry: MemoryEntry,
+  options: ImportOptions,
+): boolean {
   const { files } = target;
   if (options.dryRun) {
-    const check = { tenantId: entry.tenantId ?? DEFAULT_TENANT_ID, entryId: entry.id, content: entry.content };
+    const check = {
+      tenantId: entry.tenantId ?? DEFAULT_TENANT_ID,
+      entryId: entry.id,
+      content: entry.content,
+    };
     return !files.refusedAmong([check])[0];
   }
   // A rejection refuses one chunk, not the whole import, so siblings still land.

@@ -241,8 +241,12 @@ async function hippo(cwd: string, ...args: string[]): Promise<string> {
 const init = (cwd = proj) => hippo(cwd, 'init', '--no-schedule', '--no-learn');
 const write = (f: string, text: string) => fs.writeFileSync(path.join(proj, f), text);
 const read = (f: string, dir = proj) => fs.readFileSync(path.join(dir, f), 'utf8');
-const inner = (text: string) => text.slice(text.indexOf(START) + START.length, text.indexOf(END)).trim();
-const outside = (text: string) => [text.slice(0, text.indexOf(START) + START.length), text.slice(text.indexOf(END))];
+const inner = (text: string) =>
+  text.slice(text.indexOf(START) + START.length, text.indexOf(END)).trim();
+const outside = (text: string) => [
+  text.slice(0, text.indexOf(START) + START.length),
+  text.slice(text.indexOf(END)),
+];
 
 describe('the instruction block', () => {
   it('asks Claude Code only for task context and error causes, since its hooks capture the session', async () => {
@@ -310,10 +314,11 @@ describe('hippo init on a file that already has a hippo block', () => {
   });
 
   it('refreshes an unedited old block in a CRLF file and keeps its line endings', async () => {
-    const before = `# Rules\n\nKeep this line.\n\n${START}\n${OLD_CLAUDE}\n${END}\n\nAnd this one.\n`.replace(
-      /\n/g,
-      '\r\n',
-    );
+    const before =
+      `# Rules\n\nKeep this line.\n\n${START}\n${OLD_CLAUDE}\n${END}\n\nAnd this one.\n`.replace(
+        /\n/g,
+        '\r\n',
+      );
     write('CLAUDE.md', before);
     expect(await init()).toContain('Refreshed the claude-code hippo block in CLAUDE.md');
 

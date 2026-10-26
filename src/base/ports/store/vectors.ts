@@ -13,7 +13,10 @@ export interface VectorReads {
   /** The stored model and whether any vector exists, in one snapshot. */
   embeddingIndexState(): Promise<EmbeddingIndexState>;
   /** The stored `part` of each of `ids` that has one; an empty list reads nothing. */
-  stored<P extends StoredPart>(part: P, ids: readonly string[]): Promise<Map<string, StoredParts[P]>>;
+  stored<P extends StoredPart>(
+    part: P,
+    ids: readonly string[],
+  ): Promise<Map<string, StoredParts[P]>>;
   /** The `spec.limit ?? VECTOR_CANDIDATE_LIMIT` rows nearest `queryVector` by `rankVectorRows`, filtered by tenant
    * (when set), kind != 'archived', superseded only with `includeSuperseded`, scope per `RecallScopeFilter`, and origin
    * '' or listed (when `spec.origin` is set). */

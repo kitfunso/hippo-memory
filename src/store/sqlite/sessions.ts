@@ -1,6 +1,11 @@
 // hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner binding.
 import { freshActiveSnapshot } from '../../base/session/session-snapshot.js';
-import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import {
+  HOOK_DB_WAIT_MS,
+  scopedBusyWait,
+  withWriteScope,
+  type DatabaseSyncLike,
+} from '../../db/index.js';
 import { raiseMinBinary } from '../../db/meta.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { TASK_OWNER_MIN_BINARY } from '../../base/util/version.js';
@@ -63,12 +68,10 @@ function clearActiveTaskSnapshot(
     return 0;
   }
 
-  cachedStatement(db, `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`).run(
-    clearedStatus,
-    now,
-    active.id,
-    tenantId,
-  );
+  cachedStatement(
+    db,
+    `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`,
+  ).run(clearedStatus, now, active.id, tenantId);
   removeActiveTaskMirror(hippoRoot, tenantId);
   return 1;
 }
@@ -95,7 +98,12 @@ function closeTaskSnapshotsForSession(
   return Number(result.changes ?? 0);
 }
 
-function insertSessionEventRow(db: DatabaseSyncLike, tenantId: string, event: SessionEventInput, now: string): number {
+function insertSessionEventRow(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  event: SessionEventInput,
+  now: string,
+): number {
   const result = cachedStatement(
     db,
     `
@@ -207,7 +215,11 @@ export function listSessionEvents(
 
 /** The tenant's sessions completed since `sinceMs` with no trace yet, each with its newest TRACE_EVENT_ROWS events
  * oldest first: two statements for any number of sessions. */
-export function listUntracedSessions(db: DatabaseSyncLike, tenantId: string, sinceMs: number): UntracedSession[] {
+export function listUntracedSessions(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sinceMs: number,
+): UntracedSession[] {
   assertTenantId('listUntracedSessions', tenantId);
   // SAFETY: one TEXT column, session_id.
   const ids = (
@@ -233,7 +245,11 @@ export function listUntracedSessions(db: DatabaseSyncLike, tenantId: string, sin
 }
 
 /** The owner a session id is bound to, or null. */
-function readSessionOwner(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
+function readSessionOwner(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sessionId: string,
+): string | null {
   const row = cachedStatement(
     db,
     `SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`,
@@ -300,7 +316,8 @@ function sessionOwnerOrBind(
 ): string | null {
   // A bound session is the common case after the first prompt, so it must not take the write lock.
   return (
-    readSessionOwner(db, tenantId, sessionId) ?? insertSessionOwner(db, { tenantId, sessionId, owner, retentionMs })
+    readSessionOwner(db, tenantId, sessionId) ??
+    insertSessionOwner(db, { tenantId, sessionId, owner, retentionMs })
   );
 }
 
@@ -323,7 +340,10 @@ interface WorkingMemoryRow {
 function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
   // Damaged metadata logs once and reads as empty: the item still lists with its content.
   const metadata: JsonObject =
-    parseStoredObject({ table: 'working_memory', id: row.id, column: 'metadata_json' }, row.metadata_json) ?? {};
+    parseStoredObject(
+      { table: 'working_memory', id: row.id, column: 'metadata_json' },
+      row.metadata_json,
+    ) ?? {};
   return {
     id: row.id,
     scope: row.scope,
@@ -436,11 +456,17 @@ function wmRead(
 /** Clear (delete) working memory entries. Returns the count deleted. */
 function wmClear(db: DatabaseSyncLike, tenantId: string, filter: WorkingMemoryFilter): number {
   const where = wmWhere(tenantId, filter);
-  const result = cachedStatement(db, `DELETE FROM working_memory ${where.sql}`).run(...where.params);
+  const result = cachedStatement(db, `DELETE FROM working_memory ${where.sql}`).run(
+    ...where.params,
+  );
   return Number(result.changes ?? 0);
 }
 
-function saveAny(db: DatabaseSyncLike, files: StoreFiles, ...[tenantId, kind, row, key]: SessionSaveArgs) {
+function saveAny(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  ...[tenantId, kind, row, key]: SessionSaveArgs
+) {
   if (kind === 'snapshot') return saveActiveTaskSnapshot(db, files, tenantId, row, key);
   if (kind === 'event') return appendSessionEvent(db, files, tenantId, row);
   if (kind === 'working_memory') return wmPush(db, tenantId, row);
@@ -452,16 +478,25 @@ function saveAny(db: DatabaseSyncLike, files: StoreFiles, ...[tenantId, kind, ro
 function readAny(db: DatabaseSyncLike, ...[tenantId, kind, query, key]: SessionReadArgs) {
   // The port names the session in camelCase; the event rows keep their column's name.
   if (kind === 'event') {
-    return listSessionEvents(db, tenantId, { session_id: query.sessionId, task: query.task, limit: query.limit });
+    return listSessionEvents(db, tenantId, {
+      session_id: query.sessionId,
+      task: query.task,
+      limit: query.limit,
+    });
   }
   if (kind === 'working_memory') return wmRead(db, tenantId, query);
   if ('id' in query) return readHandoff(db, tenantId, query.id);
   return readLatestHandoff(db, tenantId, query.sessionId, query, key);
 }
 
-function clearAny(db: DatabaseSyncLike, files: StoreFiles, ...[tenantId, kind, close, key]: SessionClearArgs) {
+function clearAny(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  ...[tenantId, kind, close, key]: SessionClearArgs
+) {
   if (kind === 'working_memory') return wmClear(db, tenantId, close);
-  if (close.sessionId === undefined) return clearActiveTaskSnapshot(db, files, tenantId, close.status);
+  if (close.sessionId === undefined)
+    return clearActiveTaskSnapshot(db, files, tenantId, close.status);
   return closeTaskSnapshotsForSession(db, tenantId, close.sessionId, close.status, key);
 }
 

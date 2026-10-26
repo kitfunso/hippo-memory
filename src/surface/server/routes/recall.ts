@@ -12,12 +12,21 @@ import {
 } from '../../../api/index.js';
 import { RECALL_RECORDING } from '../../../api/recall/finish.js';
 import { continuityJson, sessionEventJson, snapshotJson } from '../../../api/continuity-json.js';
-import { httpParams, parseContextRequest, parseRecallRequest } from '../../../api/recall/request.js';
+import {
+  httpParams,
+  parseContextRequest,
+  parseRecallRequest,
+} from '../../../api/recall/request.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import { sendJson } from '../../http/http-util.js';
 import type { AuthedRouteRequest, RouteParams } from '../types.js';
 import { MAX_LIST_LIMIT } from '../../../base/util/limits.js';
-import { parseIntParam, parseLimitParam, parseNumberParam, validateIdSegment } from '../validation.js';
+import {
+  parseIntParam,
+  parseLimitParam,
+  parseNumberParam,
+  validateIdSegment,
+} from '../validation.js';
 
 // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
 export async function handleRecallMemories({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
@@ -29,7 +38,11 @@ export async function handleRecallMemories({ res, ctx, query }: AuthedRouteReque
     trace: { explain, recordAs: RECALL_RECORDING.http },
   });
 
-  sendJson(res, 200, result.continuity ? { ...result, continuity: continuityJson(result.continuity) } : result);
+  sendJson(
+    res,
+    200,
+    result.continuity ? { ...result, continuity: continuityJson(result.continuity) } : result,
+  );
   return;
 }
 
@@ -45,10 +58,14 @@ export async function handleAssembleSession(
   // Same strict-parse convention as summarize_overflow on /v1/memories:
   // ?summarizeOlder=banana is false (matches includeContinuity convention).
   const sumOlderRaw = query.get('summarizeOlder');
-  const summarizeOlder = sumOlderRaw === null ? undefined : sumOlderRaw === '1' || sumOlderRaw === 'true';
+  const summarizeOlder =
+    sumOlderRaw === null ? undefined : sumOlderRaw === '1' || sumOlderRaw === 'true';
   const scopeQ = query.get('scope');
   const scope = scopeQ !== null && scopeQ.length > 0 ? scopeQ : undefined;
-  const assembleExtra: Pick<AssembleOptions, 'budget' | 'freshTailCount' | 'summarizeOlder' | 'scope'> = {};
+  const assembleExtra: Pick<
+    AssembleOptions,
+    'budget' | 'freshTailCount' | 'summarizeOlder' | 'scope'
+  > = {};
   if (budget !== undefined) assembleExtra.budget = budget;
   if (freshTailCount !== undefined) assembleExtra.freshTailCount = freshTailCount;
   if (summarizeOlder !== undefined) assembleExtra.summarizeOlder = summarizeOlder;
@@ -66,7 +83,10 @@ export async function handleAssembleSession(
 // GET /v1/recall/drill/:id?limit=N&budget=N: companion to /v1/memories; the caller drills into a level-2 summary
 // (RecallResultItem.isSummary) to recover the originals. Tenant-scoped via Bearer; default-deny on private scopes for
 // the summary and its children.
-export async function handleDrillRecall({ res, ctx, query }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+export async function handleDrillRecall(
+  { res, ctx, query }: AuthedRouteRequest,
+  { id }: RouteParams,
+): Promise<void> {
   validateIdSegment(id, 'summary id');
   const limitRaw = query.get('limit');
   const limit = parseNumberParam(limitRaw, 'limit');
@@ -96,7 +116,12 @@ export async function handleDrillRecall({ res, ctx, query }: AuthedRouteRequest,
 // Bearer.
 // Pinned-only and '*' fallback skip the recall audit emit (as printContext does); a real-query hybrid search emits one
 // 'recall' row.
-export async function handleGetContext({ res, ctx, query, opts }: AuthedRouteRequest): Promise<void> {
+export async function handleGetContext({
+  res,
+  ctx,
+  query,
+  opts,
+}: AuthedRouteRequest): Promise<void> {
   const parsed = parseContextRequest(httpParams(query));
   const result = await contextGet(ctx, {
     ...parsed,

@@ -8,15 +8,31 @@ export interface FolderRules {
   readonly recursive: boolean;
   readonly include: (rel: string) => boolean;
   /** The stored text and time of a file read in full, or null when the tool would not count it as a note. */
-  readonly item: (text: string, mtimeMs: number) => { readonly text: string; readonly updatedAt: number } | null;
+  readonly item: (
+    text: string,
+    mtimeMs: number,
+  ) => { readonly text: string; readonly updatedAt: number } | null;
 }
 
 /** Null when the folder is missing; a file that could not be read is `skipped`, so its row is left alone. */
-export function readFolderStore(files: AgentFiles, dir: string, scope: Scope, rules: FolderRules): Container | null {
+export function readFolderStore(
+  files: AgentFiles,
+  dir: string,
+  scope: Scope,
+  rules: FolderRules,
+): Container | null {
   const listing = files.listFiles(dir, { recursive: rules.recursive });
   if (listing.status === 'missing') return null;
   if (listing.status === 'unreadable') {
-    return { scope, path: dir, readable: false, items: [], skipped: [], warnings: [listing.reason], textKeyed: false };
+    return {
+      scope,
+      path: dir,
+      readable: false,
+      items: [],
+      skipped: [],
+      warnings: [listing.reason],
+      textKeyed: false,
+    };
   }
   const items: MemoryItem[] = [];
   const skipped: string[] = [];

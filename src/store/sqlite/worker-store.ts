@@ -15,7 +15,13 @@ import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from 
 import { sqliteStore } from './store.js';
 import type { StoreRules } from '../../base/ports/infra.js';
 import { type VectorPack, vectorViewsOf } from './vector-pack.js';
-import { type OpPlaces, type OpRoute, type WorkerBase, type WorkerGroup, WORKER_OPS } from './worker-ops.js';
+import {
+  type OpPlaces,
+  type OpRoute,
+  type WorkerBase,
+  type WorkerGroup,
+  WORKER_OPS,
+} from './worker-ops.js';
 import { asHippoDb } from './hippo-db-stores.js';
 
 const offLoopStores = new WeakSet<HippoStore>();
@@ -26,7 +32,12 @@ export function runsOffLoop(store: HippoStore): boolean {
   return offLoopStores.has(store);
 }
 
-function send<T>(executor: SqliteExecutor, op: string, args: readonly unknown[], mode: OpRoute): Promise<T> {
+function send<T>(
+  executor: SqliteExecutor,
+  op: string,
+  args: readonly unknown[],
+  mode: OpRoute,
+): Promise<T> {
   const deadline = currentDeadline();
   const call = executor.call<T>(op, args, {
     mode,
@@ -40,7 +51,12 @@ function send<T>(executor: SqliteExecutor, op: string, args: readonly unknown[],
 
 /** `inProcess` with each method the op table places on a worker answered from one, so a new method of a group needs its
  * tag and no body here. */
-function onWorkers<G>(executor: SqliteExecutor, group: WorkerGroup, places: OpPlaces<G>, inProcess: G): G {
+function onWorkers<G>(
+  executor: SqliteExecutor,
+  group: WorkerGroup,
+  places: OpPlaces<G>,
+  inProcess: G,
+): G {
   const moved = Object.entries<OpRoute>(places).map(([method, place]) => [
     method,
     (...args: unknown[]) => send(executor, `${group}.${method}`, args, place),
@@ -48,15 +64,22 @@ function onWorkers<G>(executor: SqliteExecutor, group: WorkerGroup, places: OpPl
   return { ...inProcess, ...Object.fromEntries(moved) };
 }
 
-type SentParts = { readonly [P in StoredPart]: (ids: readonly string[]) => Promise<Map<string, StoredParts[P]>> };
+type SentParts = {
+  readonly [P in StoredPart]: (ids: readonly string[]) => Promise<Map<string, StoredParts[P]>>;
+};
 
 // Stored vectors come back as one moved buffer, and the port's Map of views is rebuilt here. No ids reads nothing,
 // as in process.
-function vectorGroups(executor: SqliteExecutor, inProcess: VectorReads): Pick<StoreGroups, 'vectors'> {
+function vectorGroups(
+  executor: SqliteExecutor,
+  inProcess: VectorReads,
+): Pick<StoreGroups, 'vectors'> {
   const { vectors } = WORKER_OPS;
   const sent: SentParts = {
     vectors: async (ids) =>
-      vectorViewsOf(await send<VectorPack>(executor, 'vectors.stored', ['vectors', ids], vectors.stored)),
+      vectorViewsOf(
+        await send<VectorPack>(executor, 'vectors.stored', ['vectors', ids], vectors.stored),
+      ),
     particles: (ids) => send(executor, 'vectors.stored', ['particles', ids], vectors.stored),
   };
   return {
@@ -90,8 +113,14 @@ const PLAIN_GROUPS = (Object.keys(WORKER_OPS) as WorkerGroup[]).filter(isPlainGr
 
 /** Every other group, wrapped the same way; the op table's `satisfies` check makes a group it misses a compile
  * error. */
-function plainGroups(executor: SqliteExecutor, inProcess: StoreGroups): Pick<StoreGroups, PlainGroup> {
-  const wrapped = PLAIN_GROUPS.map((group) => [group, onWorkers(executor, group, WORKER_OPS[group], inProcess[group])]);
+function plainGroups(
+  executor: SqliteExecutor,
+  inProcess: StoreGroups,
+): Pick<StoreGroups, PlainGroup> {
+  const wrapped = PLAIN_GROUPS.map((group) => [
+    group,
+    onWorkers(executor, group, WORKER_OPS[group], inProcess[group]),
+  ]);
   // SAFETY: each entry pairs a group name with that group's own wrapped methods, so the object has every PlainGroup
   // key.
   return Object.fromEntries(wrapped) as Pick<StoreGroups, PlainGroup>;
@@ -111,7 +140,10 @@ export function workerSqliteStore(
     ...onWorkers<WorkerBase>(executor, 'base', WORKER_OPS.base, inProcess),
     ...vectorGroups(executor, inProcess.vectors),
     ...plainGroups(executor, inProcess),
-    readiness: probing(hippoRoot, onWorkers(executor, 'readiness', WORKER_OPS.readiness, inProcess.readiness)),
+    readiness: probing(
+      hippoRoot,
+      onWorkers(executor, 'readiness', WORKER_OPS.readiness, inProcess.readiness),
+    ),
     close: () => executor.close(),
   };
   offLoopStores.add(store);
@@ -126,8 +158,12 @@ interface GlobalStores {
 
 /** On threads of their own when `served` answers from workers, so a `loop: 'off'` route never opens one on the server
  * thread; each is built at first use, since the global store can appear while the server runs. */
-export function globalStoresFor(served: HippoStore, executorOpts: ExecutorOptions = {}): GlobalStores {
-  if (!runsOffLoop(served)) return { open: (root) => sqliteStore(root, executorOpts), close: async () => {} };
+export function globalStoresFor(
+  served: HippoStore,
+  executorOpts: ExecutorOptions = {},
+): GlobalStores {
+  if (!runsOffLoop(served))
+    return { open: (root) => sqliteStore(root, executorOpts), close: async () => {} };
   const opened = new Map<string, HippoStore & StoreGroups>();
   return {
     open(root) {

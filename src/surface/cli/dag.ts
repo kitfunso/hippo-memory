@@ -3,7 +3,12 @@
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import * as api from '../../api/index.js';
-import { assembleCost, assembleHeading, drillCost, settleTokens } from '../../api/context-render.js';
+import {
+  assembleCost,
+  assembleHeading,
+  drillCost,
+  settleTokens,
+} from '../../api/context-render.js';
 import { memoryList } from '../../api/memories/memories.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
@@ -116,7 +121,12 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
   }
 }
 
-async function assembleSession(hippoRoot: string, tenantId: string, sessionId: string, flags: CliFlags): Promise<void> {
+async function assembleSession(
+  hippoRoot: string,
+  tenantId: string,
+  sessionId: string,
+  flags: CliFlags,
+): Promise<void> {
   requireInit(hippoRoot);
   // Absent stays undefined so the api default applies.
   const budget = parseBudgetFlag(flags, undefined);
@@ -200,13 +210,22 @@ async function drillIntoSummary(
       `${r.summary.earliestAt ? ` (${r.summary.earliestAt} → ${r.summary.latestAt})` : ''}`,
   );
   console.log(`  ${truncateWithEllipsis(r.summary.content, DAG_SUMMARY_PREVIEW_CHARS, '…')}`);
-  console.log(`\nChildren (${r.children.length}/${r.totalChildren}${r.truncated ? ', truncated' : ''}):`);
+  console.log(
+    `\nChildren (${r.children.length}/${r.totalChildren}${r.truncated ? ', truncated' : ''}):`,
+  );
   for (const c of r.children) {
-    console.log(`  [L${c.dagLevel}] ${c.id} — ${truncateWithEllipsis(c.content, DAG_CHILD_PREVIEW_CHARS, '…')}`);
+    console.log(
+      `  [L${c.dagLevel}] ${c.id} — ${truncateWithEllipsis(c.content, DAG_CHILD_PREVIEW_CHARS, '…')}`,
+    );
   }
 }
 
-export async function handleDrill({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleDrill({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const summaryId = args[0];
   if (!summaryId) {
     fail('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
@@ -214,10 +233,17 @@ export async function handleDrill({ hippoRoot, tenantId, args, flags }: CommandC
   await drillIntoSummary(hippoRoot, tenantId, summaryId, flags);
 }
 
-export async function handleAssemble({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleAssemble({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const sessionId = stringFlag(flags, 'session') ?? args[0];
   if (!sessionId) {
-    fail('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
+    fail(
+      'Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]',
+    );
   }
   await assembleSession(hippoRoot, tenantId, sessionId, flags);
 }

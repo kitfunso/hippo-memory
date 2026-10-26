@@ -8,8 +8,16 @@ import type { OriginFilter } from '../base/ports/store/types.js';
 import { defaultStore } from '../surface/open-store.js';
 import { listRecallEntriesInFolder } from '../surface/testing-kit.js';
 import type { TenantId } from '../base/util/tenant.js';
-import { embedMemoryInto, folderEmbedTarget, type EmbedOutcome } from '../domain/search/embed-memories.js';
-import { hybridSearch as rankHybrid, vectorSourceOf, type HybridSearchOptions } from '../domain/search/hybrid.js';
+import {
+  embedMemoryInto,
+  folderEmbedTarget,
+  type EmbedOutcome,
+} from '../domain/search/embed-memories.js';
+import {
+  hybridSearch as rankHybrid,
+  vectorSourceOf,
+  type HybridSearchOptions,
+} from '../domain/search/hybrid.js';
 import { loadConfig } from '../host/config-file.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { rankPhysics, type PhysicsSearchOptions } from '../domain/search/physics-search.js';
@@ -18,10 +26,14 @@ import { evalNow, evalRun, evalSwitches } from '../infra/eval-switches.js';
 import type { EvalSwitches } from '../base/memory/eval-switches.js';
 
 /** A published ranker's options under the environment's eval switches and clock, unless the caller names its own. */
-export function withEvalSwitches<O extends { readonly switches?: EvalSwitches; readonly now?: Date }>(
-  options: O,
-): O & { now: Date } {
-  return { ...options, switches: options.switches ?? evalSwitches(), now: options.now ?? evalNow() };
+export function withEvalSwitches<
+  O extends { readonly switches?: EvalSwitches; readonly now?: Date },
+>(options: O): O & { now: Date } {
+  return {
+    ...options,
+    switches: options.switches ?? evalSwitches(),
+    now: options.now ?? evalNow(),
+  };
 }
 
 /** hippo.db under `hippoRoot` when the caller passed no store. */
@@ -55,7 +67,8 @@ export async function hybridSearch(
     ...withEvalSwitches(options),
     cwd: options.cwd ?? process.cwd(),
     source: options.source ?? folderVectorSource(options),
-    graphGlobal: globalRoot && globalRoot !== options.hippoRoot ? defaultStore(globalRoot) : undefined,
+    graphGlobal:
+      globalRoot && globalRoot !== options.hippoRoot ? defaultStore(globalRoot) : undefined,
   });
 }
 
@@ -69,7 +82,11 @@ export async function physicsSearch(
   options: PhysicsSearchOptions = {},
 ): Promise<SearchResult[]> {
   const source = entries.length > 0 ? folderVectorSource(options) : undefined;
-  return rankPhysics(query, entries, { ...withEvalSwitches(options), cwd: options.cwd ?? process.cwd(), source });
+  return rankPhysics(query, entries, {
+    ...withEvalSwitches(options),
+    cwd: options.cwd ?? process.cwd(),
+    source,
+  });
 }
 
 /** The eval kit's folder form of embedMemory, for frozen scripts written against it. */
@@ -77,7 +94,10 @@ export async function embedMemory(hippoRoot: string, entry: MemoryEntry): Promis
   const store = defaultStore(hippoRoot);
   try {
     const config = loadConfig(hippoRoot);
-    const target = folderEmbedTarget({ store, config, embedderFor: resolveEmbeddingProvider }, evalRun());
+    const target = folderEmbedTarget(
+      { store, config, embedderFor: resolveEmbeddingProvider },
+      evalRun(),
+    );
     return await embedMemoryInto(target, entry);
   } finally {
     await store.close();

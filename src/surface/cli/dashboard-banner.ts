@@ -26,9 +26,14 @@ export function printDashboardBanner(
   fs.mkdirSync(path.dirname(file), PRIVATE_DIR);
   // Created fresh, so its mode holds even where an older file had a wider one.
   fs.rmSync(file, { force: true });
-  fs.writeFileSync(file, `http://localhost:${port}/?token=${ticket}\n`, { flag: 'wx', mode: 0o600 });
+  fs.writeFileSync(file, `http://localhost:${port}/?token=${ticket}\n`, {
+    flag: 'wx',
+    mode: 0o600,
+  });
   // The banner is the command's printed result, so it stays on stdout.
-  console.log(`Hippo Dashboard running at http://localhost:${port}/ (open the URL with its token from ${file})`);
+  console.log(
+    `Hippo Dashboard running at http://localhost:${port}/ (open the URL with its token from ${file})`,
+  );
   if (staticRoot !== null) console.log(`Serving React UI from ${staticRoot}`);
   console.log('Press Ctrl+C to stop.');
 }

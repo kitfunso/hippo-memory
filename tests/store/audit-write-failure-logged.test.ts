@@ -29,7 +29,9 @@ function breakAuditTable(): void {
 
 describe('audit write failure', () => {
   it('keeps the forget, logs one error line with the target id, and counts it', () => {
-    const entry = createMemory('the staging cluster runs on the old node pool', { baseHalfLifeDays: 30 });
+    const entry = createMemory('the staging cluster runs on the old node pool', {
+      baseHalfLifeDays: 30,
+    });
     writeEntry(root, entry);
     breakAuditTable();
     const lines: string[] = [];

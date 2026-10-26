@@ -48,7 +48,8 @@ const floors = FLOORS.map(([name, schema]) => {
     fail(`expected plain x.y.z versions, got ${name} ${floor} and package ${packageVersion}.`);
   }
   // A floor above the running binary would lock the binary out of every store that reaches it.
-  if (isAbove(floorParts, packageParts)) fail(`${name} ${floor} is above the package version ${packageVersion}.`);
+  if (isAbove(floorParts, packageParts))
+    fail(`${name} ${floor} is above the package version ${packageVersion}.`);
   return { name, schema, floor };
 });
 
@@ -62,7 +63,9 @@ const tags = new Set(
     .filter(Boolean),
 );
 if (tags.size === 0) {
-  fail('no git tags in this checkout, so no floor can be checked; fetch with tags (fetch-depth: 0).');
+  fail(
+    'no git tags in this checkout, so no floor can be checked; fetch with tags (fetch-depth: 0).',
+  );
 }
 
 for (const { name, schema, floor } of floors) {
@@ -70,7 +73,9 @@ for (const { name, schema, floor } of floors) {
   // An untagged floor can only be the release being cut; any other untagged version was never checked against a schema.
   if (!tags.has(tag)) {
     if (floor !== packageVersion) {
-      fail(`${name} ${floor} names no release tag and is not the package version ${packageVersion}.`);
+      fail(
+        `${name} ${floor} names no release tag and is not the package version ${packageVersion}.`,
+      );
     }
     continue;
   }

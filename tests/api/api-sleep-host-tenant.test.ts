@@ -31,7 +31,9 @@ describe('api.sleep audit row tenant tag', () => {
       // SAFETY: query selects exactly these four audit_log text columns, so
       // each returned row is shaped { tenant_id, actor, op, metadata_json }.
       const rows = db
-        .prepare(`SELECT tenant_id, actor, op, metadata_json FROM audit_log WHERE op = 'consolidate'`)
+        .prepare(
+          `SELECT tenant_id, actor, op, metadata_json FROM audit_log WHERE op = 'consolidate'`,
+        )
         .all() as Array<{ tenant_id: string; actor: string; op: string; metadata_json: string }>;
       expect(rows).toHaveLength(1);
       expect(rows[0]!.tenant_id).toBe('__host__'); // D2 pick: host-wide tag
@@ -54,7 +56,9 @@ describe('api.sleep audit row tenant tag', () => {
       // SAFETY: query selects exactly these three audit_log text columns, so
       // each returned row is shaped { tenant_id, actor, metadata_json }.
       const rows = db
-        .prepare(`SELECT tenant_id, actor, metadata_json FROM audit_log WHERE op = 'consolidate' ORDER BY id`)
+        .prepare(
+          `SELECT tenant_id, actor, metadata_json FROM audit_log WHERE op = 'consolidate' ORDER BY id`,
+        )
         .all() as Array<{ tenant_id: string; actor: string; metadata_json: string }>;
       expect(rows).toHaveLength(2);
       // BOTH rows tagged __host__ (host-wide work, not the caller's tenant).

@@ -45,7 +45,10 @@ export function installOpencodePlugin(): OpencodePluginInstallResult {
 export function uninstallOpencodePlugin(): boolean {
   const pluginPath = resolveOpencodePluginPath();
   let removedFile = false;
-  if (fs.existsSync(pluginPath) && fs.readFileSync(pluginPath, 'utf8').includes(HIPPO_OPENCODE_PLUGIN_MARKER)) {
+  if (
+    fs.existsSync(pluginPath) &&
+    fs.readFileSync(pluginPath, 'utf8').includes(HIPPO_OPENCODE_PLUGIN_MARKER)
+  ) {
     fs.unlinkSync(pluginPath);
     removedFile = true;
   }

@@ -80,14 +80,25 @@ describe('the api with ctx.store', () => {
       infra: testInfra(),
     };
     await withSqliteBlocked('port-only', async () => {
-      const raw = await remember(ctx, { content: 'raw call transcript about the outage', kind: 'raw' });
+      const raw = await remember(ctx, {
+        content: 'raw call transcript about the outage',
+        kind: 'raw',
+      });
       const note = await remember(ctx, { content: 'deploys go out on tuesdays' });
-      expect(await outcome(ctx, [note.id, 'mem_missing'], true)).toEqual({ applied: 1, appliedIds: [note.id] });
+      expect(await outcome(ctx, [note.id, 'mem_missing'], true)).toEqual({
+        applied: 1,
+        appliedIds: [note.id],
+      });
       const { newId } = await supersede(ctx, note.id, 'deploys go out on wednesdays');
-      expect(await rawArchive(ctx, raw.id, 'source deleted')).toEqual({ ok: true, archivedAt: NOW });
+      expect(await rawArchive(ctx, raw.id, 'source deleted')).toEqual({
+        ok: true,
+        archivedAt: NOW,
+      });
       expect(await forget(ctx, newId)).toEqual({ ok: true, id: newId });
       const rows = await side.store.entriesByIds([note.id, newId, raw.id], TENANT_A);
-      expect(rows.map((r) => [r.id, r.supersededBy, r.outcomePositive])).toEqual([[note.id, newId, 1]]);
+      expect(rows.map((r) => [r.id, r.supersededBy, r.outcomePositive])).toEqual([
+        [note.id, newId, 1],
+      ]);
     });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     const ops = side
@@ -153,20 +164,33 @@ describe('the entry write routes', () => {
       send('/v1/memories', 'POST', token, { content: 'raw call transcript', kind: 'raw' }),
     );
     expect(
-      await json<Pick<OutcomeResult, 'applied'>>(send('/v1/outcome', 'POST', token, { ids: [note.id], good: true })),
+      await json<Pick<OutcomeResult, 'applied'>>(
+        send('/v1/outcome', 'POST', token, { ids: [note.id], good: true }),
+      ),
     ).toEqual({ applied: 1 });
     // It lands on this client's own last REST recall, which the server holds, and this client has recalled nothing.
-    expect(await json<{ applied: number; ids: string[] }>(send('/v1/outcome', 'POST', token, { good: true }))).toEqual({
+    expect(
+      await json<{ applied: number; ids: string[] }>(
+        send('/v1/outcome', 'POST', token, { good: true }),
+      ),
+    ).toEqual({
       applied: 0,
       ids: [],
     });
     const { newId } = await json<SupersedeResult>(
-      send(`/v1/memories/${note.id}/supersede`, 'POST', token, { content: 'deploys go out on wednesdays' }),
+      send(`/v1/memories/${note.id}/supersede`, 'POST', token, {
+        content: 'deploys go out on wednesdays',
+      }),
     );
     expect(
-      await json<ArchiveRawResult>(send(`/v1/memories/${raw.id}/archive`, 'POST', token, { reason: 'source deleted' })),
+      await json<ArchiveRawResult>(
+        send(`/v1/memories/${raw.id}/archive`, 'POST', token, { reason: 'source deleted' }),
+      ),
     ).toMatchObject({ ok: true });
-    expect(await json<ForgetResult>(send(`/v1/memories/${newId}`, 'DELETE', token))).toEqual({ ok: true, id: newId });
+    expect(await json<ForgetResult>(send(`/v1/memories/${newId}`, 'DELETE', token))).toEqual({
+      ok: true,
+      id: newId,
+    });
     expect(
       side
         .auditRows()
@@ -190,10 +214,15 @@ describe('the entry write routes', () => {
     );
     expect(mirror(note.id)).toBe(true);
     const { newId } = await json<SupersedeResult>(
-      send(`/v1/memories/${note.id}/supersede`, 'POST', token, { content: 'deploys go out on wednesdays' }),
+      send(`/v1/memories/${note.id}/supersede`, 'POST', token, {
+        content: 'deploys go out on wednesdays',
+      }),
     );
     expect(mirror(newId)).toBe(true);
-    expect(await json<ForgetResult>(send(`/v1/memories/${newId}`, 'DELETE', token))).toEqual({ ok: true, id: newId });
+    expect(await json<ForgetResult>(send(`/v1/memories/${newId}`, 'DELETE', token))).toEqual({
+      ok: true,
+      id: newId,
+    });
     expect(mirror(newId)).toBe(false);
   });
 });
@@ -217,17 +246,28 @@ describe('hippo_remember and hippo_outcome under another store', () => {
     };
     const call = (name: string, args: Record<string, string | boolean>) =>
       withSqliteBlocked('port-only', () =>
-        handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx),
+        handleMcpRequest(
+          { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
+          ctx,
+        ),
       );
     const textOf = (res: Awaited<ReturnType<typeof call>>): string | undefined =>
       // SAFETY: a tools/call reply carries { content: [{ type: 'text', text }] }.
       (res?.result as { content: { text: string }[] } | undefined)?.content[0]?.text;
-    const remembered = textOf(await call('hippo_remember', { text: 'deploys go out on tuesdays', tag: 'deploy' }));
-    const id = /^Remembered \[(\w+)\] \(half-life: \d+d, tags: deploy\)$/.exec(remembered ?? '')?.[1];
+    const remembered = textOf(
+      await call('hippo_remember', { text: 'deploys go out on tuesdays', tag: 'deploy' }),
+    );
+    const id = /^Remembered \[(\w+)\] \(half-life: \d+d, tags: deploy\)$/.exec(
+      remembered ?? '',
+    )?.[1];
     expect(id).toMatch(/^mem_[0-9a-f]+$/);
     callers.lastShown.set('entry-writes-store', [id ?? '']);
-    expect(textOf(await call('hippo_outcome', { good: true }))).toBe('Applied positive outcome to 1 memories');
-    expect((await side.store.entriesByIds([id ?? ''], TENANT_A)).map((r) => r.outcomePositive)).toEqual([1]);
+    expect(textOf(await call('hippo_outcome', { good: true }))).toBe(
+      'Applied positive outcome to 1 memories',
+    );
+    expect(
+      (await side.store.entriesByIds([id ?? ''], TENANT_A)).map((r) => r.outcomePositive),
+    ).toEqual([1]);
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
   });
 });

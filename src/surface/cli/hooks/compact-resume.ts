@@ -4,13 +4,22 @@ import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { isInitialized } from '../../../host/project-identity.js';
 import { compactResumeBlock } from '../../../api/session-end.js';
 import { bookLedgerTurn } from '../../../api/ledger-db.js';
-import { flushDeliveryRecorder, startDeliveryRecorder, takeDelivery } from '../../../api/prompt-hook.js';
+import {
+  flushDeliveryRecorder,
+  startDeliveryRecorder,
+  takeDelivery,
+} from '../../../api/prompt-hook.js';
 import type { DeliveryRecorder } from '../../../api/delivery-recorder.js';
 import { readHookStdin } from '../stdin.js';
 import { readCompactResumePayload } from '../compact-resume-payload.js';
 import { cliApiContext, cliHookRequest, cliLedgerReach } from '../api-context.js';
 import type { CommandContext } from '../flag-values.js';
-import { hookStoreRoot, hostSessionId, inPilotHoldout, resetHookInjection } from '../hook-runtime.js';
+import {
+  hookStoreRoot,
+  hostSessionId,
+  inPilotHoldout,
+  resetHookInjection,
+} from '../hook-runtime.js';
 
 export async function handleCompactResume({ hippoRoot, tenantId }: CommandContext): Promise<void> {
   const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();

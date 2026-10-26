@@ -5,7 +5,12 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
+import {
+  writeEntry,
+  saveActiveTaskSnapshot,
+  appendSessionEvent,
+  saveSessionHandoff,
+} from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -28,7 +33,9 @@ afterEach(() => {
 async function runHippo(args: string[]): Promise<{ stdout: string; status: number }> {
   const [, query, ...rest] = args;
   const flags = Object.fromEntries(rest.map((f) => [f.replace(/^--/, ''), true]));
-  return runInProcess(() => handleRecall({ hippoRoot: hippoDir, tenantId: 'default', args: [query], flags }));
+  return runInProcess(() =>
+    handleRecall({ hippoRoot: hippoDir, tenantId: 'default', args: [query], flags }),
+  );
 }
 
 async function seedContinuity(): Promise<void> {
@@ -57,7 +64,10 @@ async function seedContinuity(): Promise<void> {
 describe('hippo recall --continuity', () => {
   it('JSON: returns continuity alongside memories', async () => {
     initTestStore(hippoDir);
-    writeEntry(hippoDir, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      hippoDir,
+      createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     await seedContinuity();
 
     const r = await runHippo(['recall', 'deploys', '--continuity', '--json']);
@@ -73,7 +83,10 @@ describe('hippo recall --continuity', () => {
 
   it('text: prints snapshot/handoff/trail headings above the memory list', async () => {
     initTestStore(hippoDir);
-    writeEntry(hippoDir, createMemory('another deploy memo', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      hippoDir,
+      createMemory('another deploy memo', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     await seedContinuity();
 
     const r = await runHippo(['recall', 'deploy', '--continuity']);
@@ -87,7 +100,10 @@ describe('hippo recall --continuity', () => {
 
   it('does not include continuity when flag is absent (hot path)', async () => {
     initTestStore(hippoDir);
-    writeEntry(hippoDir, createMemory('hot path memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      hippoDir,
+      createMemory('hot path memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     await seedContinuity();
 
     const r = await runHippo(['recall', 'hot', '--json']);
@@ -100,7 +116,10 @@ describe('hippo recall --continuity', () => {
   // codex round 2 P1: zero-result regression must surface continuity.
   it('zero-result JSON: continuity still present when no memories match', async () => {
     initTestStore(hippoDir);
-    writeEntry(hippoDir, createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      hippoDir,
+      createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     await seedContinuity();
 
     const r = await runHippo(['recall', 'totallyabsent_xyzzy', '--continuity', '--json']);
@@ -112,7 +131,10 @@ describe('hippo recall --continuity', () => {
 
   it('zero-result text: prints continuity instead of bare "No memories found"', async () => {
     initTestStore(hippoDir);
-    writeEntry(hippoDir, createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      hippoDir,
+      createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     await seedContinuity();
 
     const r = await runHippo(['recall', 'totallyabsent_xyzzy', '--continuity']);
@@ -125,7 +147,10 @@ describe('hippo recall --continuity', () => {
 
   it('zero-result without --continuity still prints "No memories found"', async () => {
     initTestStore(hippoDir);
-    writeEntry(hippoDir, createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      hippoDir,
+      createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     await seedContinuity();
 
     const r = await runHippo(['recall', 'totallyabsent_xyzzy']);

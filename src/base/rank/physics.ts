@@ -5,7 +5,11 @@
  * repulsion and drag act on them, and nearby high-scoring memories amplify each other. */
 
 import { ZERO_NORM, cosineOf, norm } from './cosine.js';
-import { calculateStrength, FALLBACK_HALF_LIFE_DAYS, type StrengthModel } from '../memory/strength.js';
+import {
+  calculateStrength,
+  FALLBACK_HALF_LIFE_DAYS,
+  type StrengthModel,
+} from '../memory/strength.js';
 import type { EmotionalValence, MemoryEntry } from '../memory/entry.js';
 import { DAY_MS } from '../util/time.js';
 import type { PhysicsConfig } from './physics-config.js';
@@ -71,7 +75,11 @@ const CHARGE_MAP = {
   critical: -1.0,
 } satisfies Record<EmotionalValence, number>;
 
-export function computeMass(strength: number, retrievalCount: number, model: StrengthModel): number {
+export function computeMass(
+  strength: number,
+  retrievalCount: number,
+  model: StrengthModel,
+): number {
   // Mass grows with recall only where recall strengthens, so query gravity cannot rank by a history the model ignores.
   const effectiveCount = model.recallStrengthens ? retrievalCount : 0;
   return Math.max(MIN_MASS, strength * (1 + RETRIEVAL_MASS_GAIN * Math.log2(effectiveCount + 1)));
@@ -89,13 +97,20 @@ export function computeTemperature(ageDays: number, temperatureDecay: number): n
  * Query gravity (retrieval-time, virtual: does not move the particle): scalar ranking magnitude F = G_Q * mass * max(0,
  * cosine(pos, query))^2.
  */
-export function queryGravityMagnitude(particle: PhysicsParticle, queryEmbedding: number[], gQuery: number): number {
+export function queryGravityMagnitude(
+  particle: PhysicsParticle,
+  queryEmbedding: number[],
+  gQuery: number,
+): number {
   const cos = cosineOf(particle.position, queryEmbedding);
   return gQuery * particle.mass * Math.pow(Math.max(0, cos), 2);
 }
 
 /** Momentum bonus in [0, 1]: how aligned the particle's velocity is with the query direction. */
-export function velocityAlignmentBonus(particle: PhysicsParticle, queryEmbedding: number[]): number {
+export function velocityAlignmentBonus(
+  particle: PhysicsParticle,
+  queryEmbedding: number[],
+): number {
   return Math.max(0, cosineOf(particle.velocity, queryEmbedding));
 }
 
@@ -171,7 +186,13 @@ export interface ForceContext {
 }
 
 /** Zeroes `net`, then accumulates the net force on particle i into it; `diff` is the caller's scratch. */
-function computeNetForce(i: number, particles: PhysicsParticle[], ctx: ForceContext, net: number[], diff: number[]) {
+function computeNetForce(
+  i: number,
+  particles: PhysicsParticle[],
+  ctx: ForceContext,
+  net: number[],
+  diff: number[],
+) {
   const pi = particles[i];
   net.fill(0);
   const conflicts = ctx.conflictPairs.get(pi.memoryId);
@@ -189,7 +210,12 @@ function computeNetForce(i: number, particles: PhysicsParticle[], ctx: ForceCont
 }
 
 /** Acceleration of every particle (net force over mass) into `into`, one preallocated vector each. */
-function computeAccelerations(particles: PhysicsParticle[], ctx: ForceContext, into: number[][], diff: number[]): void {
+function computeAccelerations(
+  particles: PhysicsParticle[],
+  ctx: ForceContext,
+  into: number[][],
+  diff: number[],
+): void {
   for (let i = 0; i < particles.length; i++) {
     const accel = into[i];
     computeNetForce(i, particles, ctx, accel, diff);

@@ -13,7 +13,11 @@ export interface Captures {
    * and each sleep-merged row holding one, plus any near copy; the caller checks them again with heldTextKeys.
    * `project` keeps rows carrying one of those names plus user-global rows, `everyScope` lifts the team-visible filter
    * for a reader that sees the whole store. */
-  textsHolding(tenantId: TenantId, texts: readonly string[], opts?: TextsHoldingOptions): Promise<HeldText[]>;
+  textsHolding(
+    tenantId: TenantId,
+    texts: readonly string[],
+    opts?: TextsHoldingOptions,
+  ): Promise<HeldText[]>;
 }
 
 /** Which rows a `textsHolding` read keeps beyond the tenant. */
@@ -54,11 +58,20 @@ export interface CompactionHooks {
   /** Puts one spooled summary on its record, as its PostCompact would have; the record its items go under. */
   recordSpooled(spooled: SpooledSummary, wait: StoreWait): Promise<RecordedCompaction>;
   /** Writes a recorded summary's items; a failure is answered beside the notes logged before it. */
-  saveRecordItems(tenantId: string, record: RecordedCompaction, opts: ItemsOptions): Promise<ItemsSaved>;
+  saveRecordItems(
+    tenantId: string,
+    record: RecordedCompaction,
+    opts: ItemsOptions,
+  ): Promise<ItemsSaved>;
   /** The `started` records whose PostCompact never came, young enough that their transcript may still hold them. */
   openRecords(tenantId: string, wait: StoreWait): Promise<OpenCompaction[]>;
   /** Fills an open record with the summary its transcript held, or closes it as no-summary when `text` is null. */
-  fill(tenantId: string, record: OpenCompaction, text: CompactionText | null, opts: ItemsOptions): Promise<FillOutcome>;
+  fill(
+    tenantId: string,
+    record: OpenCompaction,
+    text: CompactionText | null,
+    opts: ItemsOptions,
+  ): Promise<FillOutcome>;
 }
 
 /** One PostCompact summary to save; its items start on `baseHalfLifeDays`, the config default. */

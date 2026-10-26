@@ -21,7 +21,8 @@ export function realRerankers(): RerankerLookup {
     jev: createJevReranker(crossEncoder, processHttp),
     llm: createLlmReranker(processHttp),
   } satisfies Record<string, RerankerFn>;
-  const isRegistered = (name: string): name is keyof typeof registry => Object.hasOwn(registry, name);
+  const isRegistered = (name: string): name is keyof typeof registry =>
+    Object.hasOwn(registry, name);
   return (name) => {
     if (!name) return null;
     if (!isRegistered(name)) {

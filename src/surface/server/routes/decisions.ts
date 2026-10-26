@@ -4,7 +4,12 @@ import { HttpError } from '../../../base/errors/http-errors.js';
 import { sendJson } from '../../http/http-util.js';
 import { type JsonValue, isJsonNumber } from '../../../base/util/json.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { parseJsonBody, getString, requiredString, type RequiredStringRule } from '../validation.js';
+import {
+  parseJsonBody,
+  getString,
+  requiredString,
+  type RequiredStringRule,
+} from '../validation.js';
 import { MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import type { ObjectRouteConfig } from './object-routes.js';
 

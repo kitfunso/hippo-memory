@@ -31,7 +31,13 @@ import {
   runPeersTool,
 } from './admin-tools.js';
 import { sharedStoreRefusal } from './shared-gate.js';
-import { errorReply, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND, resultReply } from './json-rpc.js';
+import {
+  errorReply,
+  INTERNAL_ERROR,
+  INVALID_PARAMS,
+  METHOD_NOT_FOUND,
+  resultReply,
+} from './json-rpc.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../../base/util/json.js';
 
 // ── Token ledger ──
@@ -40,7 +46,10 @@ import { type JsonValue, isJsonString, isJsonObject } from '../../base/util/json
  * row is booked by the api with the rest of the recall, and other tools are not recorded. */
 async function recordMcpTokens(toolName: string, output: string, ctx: McpContext): Promise<void> {
   if (toolName !== 'hippo_context' || !output) return;
-  await recordTokens(mcpApiContext(ctx), 'mcp_context', { items: 0, tokens: estimateTokens(output) });
+  await recordTokens(mcpApiContext(ctx), 'mcp_context', {
+    items: 0,
+    tokens: estimateTokens(output),
+  });
 }
 
 // ── Tool execution ──
@@ -102,7 +111,9 @@ function boundTool(entry: ToolEntry, store: HippoStore): StoreTool | undefined {
   const { run } = entry;
   return (ctx) => {
     const globalTarget = globalTargetOf(ctx);
-    return globalTarget === undefined ? undefined : (args) => run({ ...toolCall(ctx), args, store, globalTarget });
+    return globalTarget === undefined
+      ? undefined
+      : (args) => run({ ...toolCall(ctx), args, store, globalTarget });
   };
 }
 
@@ -121,14 +132,19 @@ function runsOn(store: HippoStore | undefined, toolName: string): boolean {
 /** The tool bound to `ctx`, or undefined when its store does not serve it. */
 function toolRun(name: string, ctx: McpContext): ToolRun | undefined {
   // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table drifted apart.
-  if (!TOOL_HANDLERS.has(name)) throw new Error(`hippo-mcp: tool ${name} is declared but has no handler`);
+  if (!TOOL_HANDLERS.has(name))
+    throw new Error(`hippo-mcp: tool ${name} is declared but has no handler`);
   return toolsOn(ctx.store).get(name)?.(ctx);
 }
 
 // ── Request handling ──
 
 // The MCP spec reports input validation as a tool result with isError, so the model can read it and retry.
-function invalidArgs(id: McpResponse['id'], toolName: string, problems: readonly string[]): McpResponse {
+function invalidArgs(
+  id: McpResponse['id'],
+  toolName: string,
+  problems: readonly string[],
+): McpResponse {
   return resultReply(id, {
     content: [{ type: 'text', text: `Invalid arguments for ${toolName}: ${problems.join('; ')}` }],
     isError: true,
@@ -150,7 +166,11 @@ async function runTool(
   return text;
 }
 
-async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx: McpContext): Promise<McpResponse> {
+async function callTool(
+  id: McpRequest['id'],
+  params: McpRequest['params'],
+  ctx: McpContext,
+): Promise<McpResponse> {
   const nameValue = params?.name;
   const toolName = isJsonString(nameValue) ? nameValue : '';
   const tool = TOOLS_BY_NAME.get(toolName);
@@ -184,7 +204,10 @@ async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx:
 /** Transport-agnostic MCP dispatcher: the stdio loop and the HTTP/SSE transport route every JSON-RPC message through
  * it. Returns null for notifications. A tool's errors are the caller's problem: wrap with try/catch in the transport.
  * Only `tools/call` needs the context, so stdio builds one for that method alone. */
-export async function handleMcpRequest(req: McpRequest, ctx: McpContext | undefined): Promise<McpResponse | null> {
+export async function handleMcpRequest(
+  req: McpRequest,
+  ctx: McpContext | undefined,
+): Promise<McpResponse | null> {
   const { id, method, params } = req;
 
   switch (method) {

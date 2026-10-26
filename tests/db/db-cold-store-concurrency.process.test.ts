@@ -47,8 +47,12 @@ function readyFile(i: number): string {
 }
 
 async function waitForReady(count: number, timeoutMs: number): Promise<void> {
-  const missing = (): number[] => Array.from({ length: count }, (_, i) => i).filter((i) => !existsSync(readyFile(i)));
-  await waitFor(() => missing().length === 0, { timeoutMs, what: `workers ${missing().join(', ')} at the barrier` });
+  const missing = (): number[] =>
+    Array.from({ length: count }, (_, i) => i).filter((i) => !existsSync(readyFile(i)));
+  await waitFor(() => missing().length === 0, {
+    timeoutMs,
+    what: `workers ${missing().join(', ')} at the barrier`,
+  });
 }
 
 function runWorkers(
@@ -92,8 +96,12 @@ describe('openHippoDb on a cold store under concurrent processes', () => {
     const results = await pending;
 
     const failed = results.filter((r) => r.code !== 0);
-    expect(failed.map((r) => r.stderr.split('\n').find((l) => l.includes('Error')) ?? `exit ${r.code}`)).toEqual([]);
-    expect(results.map((r) => r.stdout)).toEqual(results.map(() => String(getCurrentSchemaVersion())));
+    expect(
+      failed.map((r) => r.stderr.split('\n').find((l) => l.includes('Error')) ?? `exit ${r.code}`),
+    ).toEqual([]);
+    expect(results.map((r) => r.stdout)).toEqual(
+      results.map(() => String(getCurrentSchemaVersion())),
+    );
     expect(existsSync(join(root, 'hippo.db'))).toBe(true);
   });
 });

@@ -1,6 +1,11 @@
 // Audit log queries and retention, and the memory-quality audit with its repair passes.
 
-import { auditMemories, PROTECTED_ROWS, type AuditIssue, type AuditResult } from '../../base/memory/memory-audit.js';
+import {
+  auditMemories,
+  PROTECTED_ROWS,
+  type AuditIssue,
+  type AuditResult,
+} from '../../base/memory/memory-audit.js';
 import type { AuditMaintenance } from '../../base/ports/store.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
@@ -53,7 +58,10 @@ export async function auditRemoveErrors(
 
 /** The caller's memories run through the quality audit a page at a time, as each row is judged alone; a memory that
  * backs an object is never marked for removal. */
-export async function auditMemoryQuality(ctx: Context, opts: { pageSize?: number } = {}): Promise<AuditResult> {
+export async function auditMemoryQuality(
+  ctx: Context,
+  opts: { pageSize?: number } = {},
+): Promise<AuditResult> {
   const audit: AuditResult = { total: 0, issues: [], clean: 0 };
   for await (const page of memoryPages(ctx.store, ctx.tenantId, opts.pageSize)) {
     const backing = await maintenanceOf(ctx).objectBackedAmong(page.map((e) => e.id));
@@ -67,7 +75,10 @@ export async function auditMemoryQuality(ctx: Context, opts: { pageSize?: number
 
 /** Audit repair for the caller's tenant: a preview, or with `apply` the moves of certain defects to dormant storage
  * behind a backup. */
-export async function memoryQualityRepair(ctx: Context, apply: boolean): Promise<QualityRepairResult> {
+export async function memoryQualityRepair(
+  ctx: Context,
+  apply: boolean,
+): Promise<QualityRepairResult> {
   return maintenanceOf(ctx).repairQuality(ctx.tenantId, apply, PROTECTED_ROWS);
 }
 
@@ -103,14 +114,22 @@ export function computeCutoff(days: number, now: Date): string {
  * never prunes its own record. Throws on non-positive days or an empty tenant. */
 export async function auditPrune(ctx: Context, opts: PruneAuditOptions): Promise<PruneAuditResult> {
   if (!Number.isFinite(opts.olderThanDays) || opts.olderThanDays <= 0) {
-    throw new Error(`auditPrune: olderThanDays must be a positive number, got ${opts.olderThanDays}`);
+    throw new Error(
+      `auditPrune: olderThanDays must be a positive number, got ${opts.olderThanDays}`,
+    );
   }
   if (!ctx.tenantId) {
     throw new Error('auditPrune: tenantId is required');
   }
   const dryRun = opts.dryRun === true;
   const cutoff = computeCutoff(opts.olderThanDays, ctx.infra.clock());
-  const prune = { tenantId: ctx.tenantId, cutoff, actor: ctx.actor.subject, olderThanDays: opts.olderThanDays, dryRun };
+  const prune = {
+    tenantId: ctx.tenantId,
+    cutoff,
+    actor: ctx.actor.subject,
+    olderThanDays: opts.olderThanDays,
+    dryRun,
+  };
   const count = await maintenanceOf(ctx).pruneAuditRows(prune);
   return { cutoff, count, dryRun };
 }

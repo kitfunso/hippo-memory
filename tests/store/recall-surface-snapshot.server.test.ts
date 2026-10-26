@@ -14,7 +14,10 @@ import { createCallerState, type CallerState } from '../../src/api/callers.js';
 import type { CliFlags } from '../../src/surface/cli/flag-values.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { testInfra } from '../_helpers/infra.js';
-import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
+import {
+  startHashedEmbeddings,
+  type HashedEmbeddings,
+} from '../_helpers/hashed-embedding-server.js';
 import { seedVectors } from '../_helpers/recall-vector-seed.js';
 import {
   CLEARED_ENV,
@@ -51,16 +54,31 @@ const CASES: ReadonlyArray<readonly [string, SnapshotCase]> = [
   ['no match', { query: 'zebra' }],
   [
     'scope filter',
-    { query: 'deploy', http: { scope: 'team-alpha' }, mcp: { scope: 'team-alpha' }, cli: { scope: 'team-alpha' } },
+    {
+      query: 'deploy',
+      http: { scope: 'team-alpha' },
+      mcp: { scope: 'team-alpha' },
+      cli: { scope: 'team-alpha' },
+    },
   ],
   ['goal session', { query: 'deploy', http: SESSION_HTTP, mcp: SESSION_MCP, cli: SESSION_CLI }],
   [
     'physics mode',
-    { query: 'deploy rollout', http: { mode: 'physics' }, mcp: { mode: 'physics' }, cli: { physics: true } },
+    {
+      query: 'deploy rollout',
+      http: { mode: 'physics' },
+      mcp: { mode: 'physics' },
+      cli: { physics: true },
+    },
   ],
   [
     'hybrid mode',
-    { query: 'deploy rollout', http: { mode: 'hybrid' }, mcp: { mode: 'hybrid' }, cli: { classic: true } },
+    {
+      query: 'deploy rollout',
+      http: { mode: 'hybrid' },
+      mcp: { mode: 'hybrid' },
+      cli: { classic: true },
+    },
   ],
   [
     'hybrid mode with a goal session',
@@ -78,14 +96,29 @@ const CASES: ReadonlyArray<readonly [string, SnapshotCase]> = [
     'continuity and fresh tail',
     {
       query: 'deploy',
-      http: { include_continuity: 'true', fresh_tail_count: '1', fresh_tail_session_id: SESSION, ...SESSION_HTTP },
-      mcp: { include_continuity: true, fresh_tail_count: 1, fresh_tail_session_id: SESSION, ...SESSION_MCP },
+      http: {
+        include_continuity: 'true',
+        fresh_tail_count: '1',
+        fresh_tail_session_id: SESSION,
+        ...SESSION_HTTP,
+      },
+      mcp: {
+        include_continuity: true,
+        fresh_tail_count: 1,
+        fresh_tail_session_id: SESSION,
+        ...SESSION_MCP,
+      },
       cli: { continuity: true, ...SESSION_CLI },
     },
   ],
   [
     'scorer window and summaries',
-    { query: 'deploy', http: { scorer_window: '5', limit: '2' }, mcp: { scorer_window: 5 }, cli: { limit: '2' } },
+    {
+      query: 'deploy',
+      http: { scorer_window: '5', limit: '2' },
+      mcp: { scorer_window: 5 },
+      cli: { limit: '2' },
+    },
   ],
 ];
 
@@ -155,12 +188,16 @@ function viaMcp(s: Store, c: SnapshotCase): Promise<McpResponse | null> {
 
 function viaCli(s: Store, c: SnapshotCase): Promise<InProcessResult> {
   const flags: CliFlags = { json: true, ...c.cli };
-  return runInProcess(() => handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }));
+  return runInProcess(() =>
+    handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags, callers }),
+  );
 }
 
 const SURFACES = { http: viaHttp, mcp: viaMcp, cli: viaCli };
 const SURFACE_NAMES = ['http', 'mcp', 'cli'] as const;
-const CASE_SURFACES = CASES.flatMap(([name, c]) => SURFACE_NAMES.map((surface) => [name, surface, c] as const));
+const CASE_SURFACES = CASES.flatMap(([name, c]) =>
+  SURFACE_NAMES.map((surface) => [name, surface, c] as const),
+);
 const fileStem = (name: string): string => name.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
 
 describe('recall surface snapshot', () => {
@@ -190,6 +227,8 @@ describe('recall surface snapshot', () => {
   // One file per case and surface, so a moved ranking shows as a small diff in the one place it moved.
   it.each(CASE_SURFACES)('%s via %s', async (name, surface, c) => {
     const got = await onFreshStore<unknown>((s) => SURFACES[surface](s, c));
-    await expect(got).toMatchFileSnapshot(`./__snapshots__/recall-surface/${fileStem(name)}.${surface}.txt`);
+    await expect(got).toMatchFileSnapshot(
+      `./__snapshots__/recall-surface/${fileStem(name)}.${surface}.txt`,
+    );
   });
 });

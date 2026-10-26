@@ -4,8 +4,17 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { PATH_TAGS, remembered, Store, type ParsedRow, type Ran } from '../_helpers/cli-verb-store.js';
-import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
+import {
+  PATH_TAGS,
+  remembered,
+  Store,
+  type ParsedRow,
+  type Ran,
+} from '../_helpers/cli-verb-store.js';
+import {
+  startHashedEmbeddings,
+  type HashedEmbeddings,
+} from '../_helpers/hashed-embedding-server.js';
 import { loadEmbeddingIndex } from '../_helpers/root-forms.js';
 
 const TEXT = 'the billing service retries a failed charge three times';
@@ -32,10 +41,17 @@ function configure(root: string, config: StoreConfig): void {
 
 /** A command that fails the same way in every shell. */
 function failingScript(s: Store): void {
-  writeFileSync(join(s.cwd, 'fail.js'), `process.stderr.write(${JSON.stringify(STDERR)}); process.exit(3);\n`);
+  writeFileSync(
+    join(s.cwd, 'fail.js'),
+    `process.stderr.write(${JSON.stringify(STDERR)}); process.exit(3);\n`,
+  );
 }
 
-const skipped = (verdict: string): Ran => ({ status: 0, stdout: `Skipped (salience: ${verdict})\n`, stderr: '' });
+const skipped = (verdict: string): Ran => ({
+  status: 0,
+  stdout: `Skipped (salience: ${verdict})\n`,
+  stderr: '',
+});
 const ids = (rows: readonly ParsedRow[]): string[] => rows.map((r) => String(r['id']));
 
 describe('hippo remember with the salience gate on (built CLI, no server)', () => {
@@ -93,11 +109,14 @@ describe('hippo remember with the salience gate on (built CLI, no server)', () =
     const s = new Store();
     configure(s.root, { salience: { enabled: true } });
     const seeded: string[] = [];
-    for (let n = 1; n <= 4; n++) seeded.push(s.seed(`connection timeout on database shard ${n}`, { tags: ['error'] }));
+    for (let n = 1; n <= 4; n++)
+      seeded.push(s.seed(`connection timeout on database shard ${n}`, { tags: ['error'] }));
     s.settle();
     const ran = await s.run('remember', 'connection timeout on database shard 5', '--error');
     const rows = s.rows();
-    expect(rows.slice(0, 4).map((r) => [r['strength'], r['half_life_days']])).toEqual(Array(4).fill([1, 730]));
+    expect(rows.slice(0, 4).map((r) => [r['strength'], r['half_life_days']])).toEqual(
+      Array(4).fill([1, 730]),
+    );
     const added = rows[4]!;
     expect(added).toMatchObject({
       content: 'connection timeout on database shard 5',
@@ -124,7 +143,10 @@ describe('hippo remember with the salience gate on (built CLI, no server)', () =
       remembered(row!, '[global] '),
       skipped(`duplicate (same text as ${String(row!['id'])}), score 0.10`),
     ]);
-    expect([s.counters()['total_remembered'], s.counters('global')['total_remembered']]).toEqual(['0', '1']);
+    expect([s.counters()['total_remembered'], s.counters('global')['total_remembered']]).toEqual([
+      '0',
+      '1',
+    ]);
   });
 });
 
@@ -172,10 +194,10 @@ describe('hippo watch never gates or extracts (built CLI, no server)', () => {
     s.env['ANTHROPIC_API_KEY'] = '';
     configure(s.root, { salience: { enabled: true }, extraction: { enabled: true } });
     failingScript(s);
-    expect([await s.run('watch', 'node', 'fail.js'), await s.run('watch', 'node', 'fail.js')]).toEqual([
-      LEARNED,
-      LEARNED,
-    ]);
+    expect([
+      await s.run('watch', 'node', 'fail.js'),
+      await s.run('watch', 'node', 'fail.js'),
+    ]).toEqual([LEARNED, LEARNED]);
     const rows = s.rows();
     expect(rows.map((r) => [r['source'], r['strength']])).toEqual([
       ['autolearn', 1],
@@ -199,7 +221,9 @@ describe('embedding after a local write (built CLI, local embeddings server)', (
   it('remember and a failed watch each leave a vector for their row', async () => {
     const s = new Store({ spawned: true });
     s.env['OPENAI_API_KEY'] = 'test-key-not-secret';
-    configure(s.root, { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } });
+    configure(s.root, {
+      embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url },
+    });
     failingScript(s);
     const first = await s.run('remember', TEXT);
     expect(await s.run('watch', 'node', 'fail.js')).toEqual(LEARNED);

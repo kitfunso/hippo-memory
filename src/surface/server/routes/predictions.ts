@@ -15,7 +15,13 @@ import { parseCursor } from '../../../api/cursor.js';
 import { byCreatedAt, pageOf } from '../cursor.js';
 import type { AuthedRouteRequest } from '../types.js';
 import type { KindRoutes } from './kind-routes.js';
-import { getString, isSetMember, parseJsonBody, parseLimitParam, requiredString } from '../validation.js';
+import {
+  getString,
+  isSetMember,
+  parseJsonBody,
+  parseLimitParam,
+  requiredString,
+} from '../validation.js';
 import { isJsonString, isJsonNumber } from '../../../base/util/json.js';
 
 // Routes: /v1/predictions (create, list, show, close), Bearer-authed and tenant-scoped; closure_state is validated
@@ -39,7 +45,13 @@ async function handleCreatePrediction({ req, res, ctx }: AuthedRouteRequest): Pr
     throw new HttpError(400, 'targetDate must be an ISO date string');
   }
   const targetDateValue = getString(body, 'targetDate', MAX_DATE_LEN);
-  const claimed = { classTag, claimText: claim, estimateValue, estimateUnit, targetDate: targetDateValue };
+  const claimed = {
+    classTag,
+    claimText: claim,
+    estimateValue,
+    estimateUnit,
+    targetDate: targetDateValue,
+  };
   const prediction = await predictionRecord(ctx, claimed);
   sendJson(res, 201, { prediction });
 }
@@ -52,7 +64,10 @@ function listFilter(classTag: string | undefined, status: string): PredictionFil
   if (status === 'all') return { classTag };
   if (status === 'open') return { classTag, closureState: 'open' };
   if (!isSetMember(VALID_CLOSURE_STATES, status)) {
-    throw new HttpError(400, `status must be one of: open | closed | closed-unknown | all (got "${status}")`);
+    throw new HttpError(
+      400,
+      `status must be one of: open | closed | closed-unknown | all (got "${status}")`,
+    );
   }
   if (!classTag) {
     throw new HttpError(400, 'status filter (non-open) requires class param');
@@ -65,7 +80,11 @@ async function handleListPredictions({ res, ctx, query }: AuthedRouteRequest): P
   const status = query.get('status') ?? 'all';
   const limit = parseLimitParam(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
-  const predictions = await predictionList(ctx, { ...listFilter(classTag, status), limit: limit + 1, after });
+  const predictions = await predictionList(ctx, {
+    ...listFilter(classTag, status),
+    limit: limit + 1,
+    after,
+  });
   const page = pageOf(predictions, limit, byCreatedAt);
   sendJson(res, 200, { predictions: page.items, next_cursor: page.nextCursor });
 }
@@ -92,7 +111,10 @@ async function handleGetPrediction({ res, ctx }: AuthedRouteRequest, id: number)
   sendJson(res, 200, { prediction });
 }
 
-async function handleClosePrediction({ req, res, ctx }: AuthedRouteRequest, id: number): Promise<void> {
+async function handleClosePrediction(
+  { req, res, ctx }: AuthedRouteRequest,
+  id: number,
+): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const state = body['state'];
   if (!isJsonString(state) || !isSetMember(VALID_CLOSURE_STATES, state) || state === 'open') {

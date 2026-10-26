@@ -9,7 +9,9 @@ import { loadAllEntries } from '../_helpers/root-forms.js';
 function breakEventLog(root: string): void {
   const db = openHippoDb(root);
   try {
-    db.exec(`CREATE TRIGGER event_log_broken BEFORE INSERT ON slack_event_log BEGIN SELECT RAISE(ABORT, 'boom'); END`);
+    db.exec(
+      `CREATE TRIGGER event_log_broken BEFORE INSERT ON slack_event_log BEGIN SELECT RAISE(ABORT, 'boom'); END`,
+    );
   } finally {
     closeHippoDb(db);
   }

@@ -18,7 +18,8 @@ const logged = (): string => stderr.mock.calls.map((c) => String(c[0])).join('')
 /** Fails `op` on the legacy file only, with an errno `code`; every other path goes through. */
 function failOnLegacy(op: 'renameSync' | 'rmSync', code: string): void {
   const blocked = (target: fs.PathLike): void => {
-    if (String(target) === legacy) throw Object.assign(new Error(`${code}: operation blocked, '${legacy}'`), { code });
+    if (String(target) === legacy)
+      throw Object.assign(new Error(`${code}: operation blocked, '${legacy}'`), { code });
   };
   if (op === 'renameSync') {
     const real = fs.renameSync;
@@ -48,7 +49,10 @@ afterEach(() => {
 });
 
 function seedLegacyIndex(): string {
-  const entry = createMemory('alpha note', { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+  const entry = createMemory('alpha note', {
+    tenantId: 'default',
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+  });
   writeEntry(root, entry);
   fs.writeFileSync(legacy, RAW(entry.id), 'utf8');
   return entry.id;
@@ -77,7 +81,9 @@ describe('moving the imported embeddings.json aside', () => {
 
     expect(fs.readFileSync(legacy, 'utf8')).toBe(RAW(id));
     expect(asides()).toEqual([]);
-    expect(logged()).toContain('embeddings.json import failed; the next open retries it (EIO: operation blocked');
+    expect(logged()).toContain(
+      'embeddings.json import failed; the next open retries it (EIO: operation blocked',
+    );
   });
 
   it('removes its copy when the original cannot be deleted either, so copies do not pile up', () => {

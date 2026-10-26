@@ -26,7 +26,9 @@ function gitCall(repo: ChurnRepo, args: string[], input?: string): GitResult {
 }
 
 function readFailed(args: string[], run: Extract<GitResult, { ok: false }>): GitReadError {
-  return new GitReadError(`git ${args.join(' ')} failed: ${errorMessage(run.error)}`, { cause: run.error });
+  return new GitReadError(`git ${args.join(' ')} failed: ${errorMessage(run.error)}`, {
+    cause: run.error,
+  });
 }
 
 function runGit(args: string[], repo: ChurnRepo): string {
@@ -112,7 +114,10 @@ export function gitGrepPresence(repo: ChurnRepo, patterns: string[], rev: string
 
 /** Last commit at or before `beforeIso`, or null when the repo has none. */
 export function resolveCommitBefore(repo: ChurnRepo, beforeIso: string): string | null {
-  const raw = runGit(['rev-list', '-1', '--first-parent', `--before=${beforeIso}`, 'HEAD'], repo).trim();
+  const raw = runGit(
+    ['rev-list', '-1', '--first-parent', `--before=${beforeIso}`, 'HEAD'],
+    repo,
+  ).trim();
   return raw === '' ? null : raw;
 }
 

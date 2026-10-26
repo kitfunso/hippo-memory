@@ -130,7 +130,8 @@ export class RequestStores implements RequestScope {
     }
     this.#handles.clear();
     if (failures.length === 1) throw failures[0];
-    if (failures.length > 1) throw new AggregateError(failures, `${failures.length} request stores did not close`);
+    if (failures.length > 1)
+      throw new AggregateError(failures, `${failures.length} request stores did not close`);
   }
 }
 
@@ -138,7 +139,10 @@ export class RequestStores implements RequestScope {
  * Runs `fn` in a request scope whose handles close when `fn` settles; inside an open scope `fn` joins it and `opts` is
  * ignored.
  */
-export async function runWithRequestStores<T>(fn: () => T | Promise<T>, opts?: RequestStoresOptions): Promise<T> {
+export async function runWithRequestStores<T>(
+  fn: () => T | Promise<T>,
+  opts?: RequestStoresOptions,
+): Promise<T> {
   const outer = currentRequestStores();
   if (outer && !outer.closed) return fn();
   const stores = new RequestStores(opts);

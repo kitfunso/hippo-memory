@@ -324,7 +324,9 @@ function run() {
       break;
     }
     if (stats.maxVelocityMagnitude > 10 * config.maxVelocity) {
-      console.error(`  RUNAWAY at tick ${tick}: |v|_max=${stats.maxVelocityMagnitude} exceeds 10x cap`);
+      console.error(
+        `  RUNAWAY at tick ${tick}: |v|_max=${stats.maxVelocityMagnitude} exceeds 10x cap`,
+      );
       break;
     }
   }

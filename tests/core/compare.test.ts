@@ -5,7 +5,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { compareEntryIdentity, compareScoredResults, comparePhysicsResultsBy } from '../../src/base/rank/compare.js';
+import {
+  compareEntryIdentity,
+  compareScoredResults,
+  comparePhysicsResultsBy,
+} from '../../src/base/rank/compare.js';
 
 describe('compareEntryIdentity', () => {
   it('orders by content ascending when content differs', () => {
@@ -52,7 +56,14 @@ describe('compareEntryIdentity', () => {
       mk('trace', '6'),
     ];
     const sorted = [...shuffled].sort(compareEntryIdentity);
-    expect(sorted.map((e) => e.layer)).toEqual(['semantic', 'episodic', 'trace', 'buffer', undefined, 'weird']);
+    expect(sorted.map((e) => e.layer)).toEqual([
+      'semantic',
+      'episodic',
+      'trace',
+      'buffer',
+      undefined,
+      'weird',
+    ]);
   });
 
   it('prefers more distinct tags, then the sorted tag list, before falling to id', () => {

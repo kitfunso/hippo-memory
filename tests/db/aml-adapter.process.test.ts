@@ -24,7 +24,9 @@ afterAll(() => {
   vi.unstubAllEnvs();
 });
 
-const ADAPTER_PATH = fileURLToPath(new URL('../../deploy/aml/adapter/adapter.mjs', import.meta.url));
+const ADAPTER_PATH = fileURLToPath(
+  new URL('../../deploy/aml/adapter/adapter.mjs', import.meta.url),
+);
 
 interface SearchRow {
   id: string;
@@ -75,7 +77,10 @@ function spawnAdapter(hippoPort: number): Promise<AdapterHandle> {
       child.kill();
       reject(err);
     };
-    const startupTimer = setTimeout(() => fail(new Error('adapter never printed its listening line')), 20_000);
+    const startupTimer = setTimeout(
+      () => fail(new Error('adapter never printed its listening line')),
+      20_000,
+    );
     child.stdout?.on('data', (chunk: Buffer) => {
       stdoutBuf += chunk.toString('utf8');
       const match = /listening on :(\d+)/.exec(stdoutBuf);
@@ -94,7 +99,11 @@ function spawnAdapter(hippoPort: number): Promise<AdapterHandle> {
     child.once('error', fail);
     child.once('exit', (code) => {
       if (code !== null && code !== 0) {
-        fail(new Error(`adapter process exited with code ${code}: ${Buffer.concat(stderrChunks).toString('utf8')}`));
+        fail(
+          new Error(
+            `adapter process exited with code ${code}: ${Buffer.concat(stderrChunks).toString('utf8')}`,
+          ),
+        );
       }
     });
   });
@@ -121,7 +130,10 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
 
     const db = openHippoDb(hippoRoot);
     try {
-      ({ plaintext: validKey } = createApiKey(db, { tenantId: 'default', label: 'aml-adapter-test' }));
+      ({ plaintext: validKey } = createApiKey(db, {
+        tenantId: 'default',
+        label: 'aml-adapter-test',
+      }));
     } finally {
       closeHippoDb(db);
     }
@@ -184,7 +196,10 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     const addBody = await addRes.json();
     expect(addBody).toEqual({ success: true, request_id, user_id, session_id });
 
-    const searchRes = await postSearch({ query: 'aml-happy-path-marker', user_id, top_k: 5 }, authHeader(validKey));
+    const searchRes = await postSearch(
+      { query: 'aml-happy-path-marker', user_id, top_k: 5 },
+      authHeader(validKey),
+    );
     expect(searchRes.status).toBe(200);
     const searchBody: { data: SearchRow[] } = await searchRes.json();
     expect(Array.isArray(searchBody.data)).toBe(true);
@@ -227,7 +242,10 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     });
     expect(directRes.status).toBe(200);
 
-    const searchRes = await postSearch({ query: marker, user_id: 'user-a-iso', top_k: 10 }, authHeader(validKey));
+    const searchRes = await postSearch(
+      { query: marker, user_id: 'user-a-iso', top_k: 10 },
+      authHeader(validKey),
+    );
     expect(searchRes.status).toBe(200);
     const searchBody: { data: SearchRow[] } = await searchRes.json();
     const contents = searchBody.data.map((row) => row.content);
@@ -307,7 +325,10 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     });
 
     it('X-Api-Key header works', async () => {
-      const res = await postSearch({ query: 'x', user_id: 'user-auth', top_k: 1 }, { 'X-Api-Key': validKey });
+      const res = await postSearch(
+        { query: 'x', user_id: 'user-auth', top_k: 1 },
+        { 'X-Api-Key': validKey },
+      );
       expect(res.status).toBe(200);
     });
 
@@ -382,10 +403,15 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     );
     expect(addRes.status).toBe(200);
 
-    const searchRes = await postSearch({ query: 'zqx7 wvk3', user_id, top_k: 5 }, authHeader(validKey));
+    const searchRes = await postSearch(
+      { query: 'zqx7 wvk3', user_id, top_k: 5 },
+      authHeader(validKey),
+    );
     expect(searchRes.status).toBe(200);
     const searchBody: { data: SearchRow[] } = await searchRes.json();
-    const row = searchBody.data.find((r) => r.content.includes('zqx7') && r.content.includes('wvk3'));
+    const row = searchBody.data.find(
+      (r) => r.content.includes('zqx7') && r.content.includes('wvk3'),
+    );
     expect(row?.content).toBe('user: zqx7\nassistant: wvk3');
   });
 });
@@ -412,7 +438,10 @@ describe('rate-limit key forwarding and status pass-through', () => {
 
     const db = openHippoDb(rlHippoRoot);
     try {
-      ({ plaintext: rlValidKey } = createApiKey(db, { tenantId: 'default', label: 'aml-adapter-ratelimit-test' }));
+      ({ plaintext: rlValidKey } = createApiKey(db, {
+        tenantId: 'default',
+        label: 'aml-adapter-ratelimit-test',
+      }));
     } finally {
       closeHippoDb(db);
     }

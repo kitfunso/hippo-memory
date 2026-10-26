@@ -22,7 +22,9 @@ for (const entry of extensions) {
   try {
     await import(pathToFileURL(path.resolve(distPath)).href);
   } catch (err) {
-    missing.push(`${distPath} (does not load: ${err instanceof Error ? err.message : String(err)})`);
+    missing.push(
+      `${distPath} (does not load: ${err instanceof Error ? err.message : String(err)})`,
+    );
   }
 }
 

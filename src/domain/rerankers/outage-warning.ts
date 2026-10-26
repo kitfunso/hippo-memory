@@ -26,16 +26,22 @@ export function createOutageWarning(name: string, fallback: string): OutageWarni
         unreported++;
         return;
       }
-      const skipped = unreported > 0 ? ` ${unreported} more calls failed since the last warning.` : '';
+      const skipped =
+        unreported > 0 ? ` ${unreported} more calls failed since the last warning.` : '';
       const repeat = `While it fails this repeats at most every ${REPEAT_MS / MINUTE_MS} minutes.`;
-      log.warn(`${name} reranker unavailable (${reason}); ${fallback}.${skipped} ${repeat}`, fields);
+      log.warn(
+        `${name} reranker unavailable (${reason}); ${fallback}.${skipped} ${repeat}`,
+        fields,
+      );
       warnedAt = Date.now();
       unreported = 0;
     },
     answered(): void {
       if (failures === 0) return;
       // At warn so it shows at the default level, next to the outage line it closes.
-      log.warn(`${name} reranker is answering again after ${failures} failed ${failures === 1 ? 'call' : 'calls'}.`);
+      log.warn(
+        `${name} reranker is answering again after ${failures} failed ${failures === 1 ? 'call' : 'calls'}.`,
+      );
       failures = 0;
       unreported = 0;
     },

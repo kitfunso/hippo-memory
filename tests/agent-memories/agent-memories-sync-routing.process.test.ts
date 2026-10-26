@@ -73,7 +73,10 @@ const opts = () => ({
 });
 
 function plainRow(root: string, content: string, origin: string): MemoryEntry {
-  const entry = { ...createMemory(content, { tenantId: 'default', baseHalfLifeDays: 30 }), originProject: origin };
+  const entry = {
+    ...createMemory(content, { tenantId: 'default', baseHalfLifeDays: 30 }),
+    originProject: origin,
+  };
   writeEntry(root, entry);
   return entry;
 }
@@ -125,8 +128,13 @@ describe('agent memory sync: routing and sharing', () => {
     note(projectNotes(w, hx), 'deploy.md', DEPLOY);
     note(projectNotes(w, hx), 'utc.md', SHARED);
 
-    expect(claude(await importAtSessionEnd(hx, undefined, opts()))).toMatchObject({ imported: 1, duplicate: 1 });
-    expect(liveRows(w.global)).toMatchObject([{ content: DEPLOY, originProject: deriveOriginProject(hx) }]);
+    expect(claude(await importAtSessionEnd(hx, undefined, opts()))).toMatchObject({
+      imported: 1,
+      duplicate: 1,
+    });
+    expect(liveRows(w.global)).toMatchObject([
+      { content: DEPLOY, originProject: deriveOriginProject(hx) },
+    ]);
   });
 
   it('post-compact reads the session folder only and runs no git call', async () => {
@@ -149,19 +157,28 @@ describe('agent memory sync: routing and sharing', () => {
     expect(liveRows(w.local)).toMatchObject([{ content: Q, originProject: 'proj' }]);
     expect(isInitialized(w.global)).toBe(false);
     // Claude Code's folder names ask git once; this world has no Gemini index or Copilot store to ask it again.
-    expect((await gitRunsDuring((machine) => importProjectMemories(w.local, { ...opts(), machine }))).runs).toBe(1);
+    expect(
+      (await gitRunsDuring((machine) => importProjectMemories(w.local, { ...opts(), machine })))
+        .runs,
+    ).toBe(1);
   });
 
   it('a session begun above two repos keeps its folder notes user-global, one copy wherever it ends', async () => {
     const HOME_NOTE = 'A note the session filed under the folder it began in.';
-    const transcript = join(dirname(note(projectNotes(w, w.dir), 'h.md', HOME_NOTE)), '..', 's.jsonl');
+    const transcript = join(
+      dirname(note(projectNotes(w, w.dir), 'h.md', HOME_NOTE)),
+      '..',
+      's.jsonl',
+    );
     const [a, b] = [join(w.dir, 'repoa'), join(w.dir, 'repob')];
     for (const repo of [a, b]) mkdirSync(join(repo, '.git'), { recursive: true });
 
     await importAtSessionEnd(a, transcript, opts());
     await importAtSessionEnd(b, transcript, opts());
     expect(liveRows(w.global)).toMatchObject([{ content: HOME_NOTE, originProject: '' }]);
-    expect(claude(await importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(0);
+    expect(claude(await importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(
+      0,
+    );
     expect(liveTexts(w.local)).toEqual([]);
   });
 
@@ -171,8 +188,12 @@ describe('agent memory sync: routing and sharing', () => {
     const transcript = join(dirname(note(projectNotes(w, x), 'x.md', DEPLOY)), '..', 's.jsonl');
     writeFileSync(transcript, `${JSON.stringify({ type: 'user', cwd: x })}\n`, 'utf8');
 
-    expect(claude(await importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(1);
-    expect(liveRows(w.global)).toMatchObject([{ content: DEPLOY, originProject: deriveOriginProject(x) }]);
+    expect(claude(await importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(
+      1,
+    );
+    expect(liveRows(w.global)).toMatchObject([
+      { content: DEPLOY, originProject: deriveOriginProject(x) },
+    ]);
     expect(liveTexts(w.local)).toEqual([]);
   });
 
@@ -183,7 +204,9 @@ describe('agent memory sync: routing and sharing', () => {
     writeFileSync(transcript, `${JSON.stringify({ cwd: x })}\n`, 'utf8');
     writeConfig(w.local, []);
 
-    expect(claude(await importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(0);
+    expect(claude(await importSessionFolder(w.local, transcript, w.project, opts())).imported).toBe(
+      0,
+    );
     expect(isInitialized(w.global)).toBe(false);
   });
 
@@ -194,7 +217,10 @@ describe('agent memory sync: routing and sharing', () => {
     writeFileSync(transcript, `${JSON.stringify({ cwd: w.dir })}\n`, 'utf8');
     initTestStore(w.global);
     const stray = {
-      ...createMemory('An older wording of the home note.', { tenantId: 'default', baseHalfLifeDays: 30 }),
+      ...createMemory('An older wording of the home note.', {
+        tenantId: 'default',
+        baseHalfLifeDays: 30,
+      }),
       originProject: 'repoa',
       source: `${containerPrefix('claude-code', containerId(notes, 'project', { platform: process.platform, files: diskAgentFiles }, 'repoa'))}h.md#abc`,
       tags: ['claude-code-memory'],
@@ -207,7 +233,8 @@ describe('agent memory sync: routing and sharing', () => {
         )
         .run(join(w.dir, 'repoa'), transcript, new Date().toISOString()),
     );
-    const repair = (dryRun: boolean) => projectNameRepair(cliApiContext(w.global, 'default'), { dryRun });
+    const repair = (dryRun: boolean) =>
+      projectNameRepair(cliApiContext(w.global, 'default'), { dryRun });
 
     expect((await repair(true)).copies).toEqual([stray.id]);
     expect(liveRows(w.global).map((e) => e.id)).toEqual([stray.id]);
@@ -239,7 +266,9 @@ describe('agent memory sync: routing and sharing', () => {
     expect(claude(await importForStore(w.local, opts())).imported).toBe(1);
     expect(liveRows(w.global)).toMatchObject([{ content: USER_NOTE, originProject: '' }]);
     expect(
-      liveRows(w.global)[0].source.startsWith(`agent-memory:claude-code:${expectedContainer(dir, 'u')}/u.md#`),
+      liveRows(w.global)[0].source.startsWith(
+        `agent-memory:claude-code:${expectedContainer(dir, 'u')}/u.md#`,
+      ),
     ).toBe(true);
     expect(agentRows(w.local)).toEqual([]);
   });
@@ -248,7 +277,11 @@ describe('agent memory sync: routing and sharing', () => {
     writeConfig(w.local, null);
     const dir = userNotes(w);
     note(dir, 'u.md', USER_NOTE);
-    const gone = note(dir, 'gone.md', 'This user note is deleted, set aside, then restored by hand.');
+    const gone = note(
+      dir,
+      'gone.md',
+      'This user note is deleted, set aside, then restored by hand.',
+    );
     await importForStore(w.local, opts());
     const goneId = liveRows(w.global).find((e) => e.content.startsWith('This user note'))?.id ?? '';
     unlinkSync(gone);
@@ -256,7 +289,9 @@ describe('agent memory sync: routing and sharing', () => {
     await dormantRestore(ctxFor(w.global), goneId);
     plainRow(w.global, CONTROL, '');
 
-    expect(await syncGlobalToLocal(...sharingStores(w.local, w.global), { embed: TEST_RUN })).toBe(1);
+    expect(await syncGlobalToLocal(...sharingStores(w.local, w.global), { embed: TEST_RUN })).toBe(
+      1,
+    );
     expect(agentRows(w.local)).toEqual([]);
     expect(loadAllEntries(w.local, 'default').map((e) => e.content)).toEqual([CONTROL]);
   });
@@ -265,9 +300,14 @@ describe('agent memory sync: routing and sharing', () => {
     writeConfig(w.local, null);
     const dir = projectNotes(w);
     note(dir, 'deploy.md', DEPLOY);
-    const gone = note(dir, 'gone.md', 'This project note is deleted, set aside, then restored by hand.');
+    const gone = note(
+      dir,
+      'gone.md',
+      'This project note is deleted, set aside, then restored by hand.',
+    );
     await importForStore(w.local, opts());
-    const goneId = liveRows(w.local).find((e) => e.content.startsWith('This project note'))?.id ?? '';
+    const goneId =
+      liveRows(w.local).find((e) => e.content.startsWith('This project note'))?.id ?? '';
     unlinkSync(gone);
     await importForStore(w.local, opts());
     await dormantRestore(ctxFor(w.local), goneId);
@@ -295,11 +335,15 @@ describe('agent memory sync: routing and sharing', () => {
 
     expect(claude(await importForStore(store, opts()))).toMatchObject({ imported: 1, setAside: 0 });
     expect(liveRows(store)).toHaveLength(2);
-    expect(toolTally(await importForStore(store, { ...opts(), dryRun: true }), 'claude-code')).toMatchObject({
+    expect(
+      toolTally(await importForStore(store, { ...opts(), dryRun: true }), 'claude-code'),
+    ).toMatchObject({
       unchanged: 1,
     });
     expect(
-      (await importForStore(store, { ...opts(), dryRun: true })).tools.find((t) => t.tool === 'claude-code')?.unlisted,
+      (await importForStore(store, { ...opts(), dryRun: true })).tools.find(
+        (t) => t.tool === 'claude-code',
+      )?.unlisted,
     ).toBe(1);
 
     unlinkSync(copied);
@@ -310,7 +354,9 @@ describe('agent memory sync: routing and sharing', () => {
   it('a git failure sets nothing aside', async () => {
     const repo = join(w.dir, 'repo');
     mkdirSync(repo);
-    expect(spawnSync('git', ['init', '-q', repo], { encoding: 'utf8', windowsHide: true }).status).toBe(0);
+    expect(
+      spawnSync('git', ['init', '-q', repo], { encoding: 'utf8', windowsHide: true }).status,
+    ).toBe(0);
     const store = join(repo, 'sub', '.hippo');
     initTestStore(store);
     note(projectNotes(w, repo), 'deploy.md', DEPLOY);

@@ -69,8 +69,16 @@ describe('schema v25 — DAG summary metadata', () => {
   });
 
   it('loadEntriesByIds returns matching rows scoped to tenant', () => {
-    const a = createMemory('row A', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dagLevel: 0 });
-    const b = createMemory('row B', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dagLevel: 0 });
+    const a = createMemory('row A', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Buffer,
+      dagLevel: 0,
+    });
+    const b = createMemory('row B', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Buffer,
+      dagLevel: 0,
+    });
     const c = createMemory('row C', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
@@ -125,8 +133,12 @@ describe('schema v25 — DAG summary metadata', () => {
     writeEntry(root, grandchild);
 
     const direct =
-      (await sqliteDagReads(handlesOf(root).on).summaryWithDescendants('default', parent.id, { depth: 1, admit: {} }))
-        ?.levels[0] ?? [];
+      (
+        await sqliteDagReads(handlesOf(root).on).summaryWithDescendants('default', parent.id, {
+          depth: 1,
+          admit: {},
+        })
+      )?.levels[0] ?? [];
     expect(direct.map((e) => e.id)).toEqual([child1.id, child2.id]);
     // Grandchild reachable only via child1, not directly under parent.
     expect(direct.find((e) => e.id === grandchild.id)).toBeUndefined();

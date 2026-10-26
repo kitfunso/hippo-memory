@@ -38,7 +38,9 @@ beforeEach(() => {
       // SAFETY: the stub only receives the embeddings request body, which is JSON.
       const body = JSON.parse(String(init?.body)) as JsonValue;
       const input = isJsonObject(body) && Array.isArray(body.input) ? body.input : [];
-      return new Response(JSON.stringify({ data: input.map((_text, index) => ({ index, embedding: [1, 0] })) }));
+      return new Response(
+        JSON.stringify({ data: input.map((_text, index) => ({ index, embedding: [1, 0] })) }),
+      );
     }),
   );
 });

@@ -2,9 +2,17 @@
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { insertRejectedValue } from './rejection.js';
-import { rejectionDigest, normalizeValueForRejection } from '../../base/records/rejection-digest.js';
+import {
+  rejectionDigest,
+  normalizeValueForRejection,
+} from '../../base/records/rejection-digest.js';
 import { archiveRawMemory } from './raw-archive.js';
-import { MEMORY_CONFLICT_COLUMNS, type MemoryConflictRow, parseJsonArray, rowToMemoryConflict } from './rows.js';
+import {
+  MEMORY_CONFLICT_COLUMNS,
+  type MemoryConflictRow,
+  parseJsonArray,
+  rowToMemoryConflict,
+} from './rows.js';
 import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { readEntriesByIds } from './entry-reads.js';
@@ -35,8 +43,13 @@ const CONFLICT_COLS_MC = MEMORY_CONFLICT_COLUMNS.split(', ')
   .map((c) => `mc.${c}`)
   .join(', ');
 
-function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string; memory_b_id: string } {
-  return aId < bId ? { memory_a_id: aId, memory_b_id: bId } : { memory_a_id: bId, memory_b_id: aId };
+function canonicalConflictPair(
+  aId: string,
+  bId: string,
+): { memory_a_id: string; memory_b_id: string } {
+  return aId < bId
+    ? { memory_a_id: aId, memory_b_id: bId }
+    : { memory_a_id: bId, memory_b_id: aId };
 }
 
 // Each member's columns the api's conflict rules read, aliased per side so one JOIN carries both.
@@ -85,7 +98,10 @@ function conflictSelect(tenantId: TenantId, filters: readonly SqlFragment[]): Sq
   const where: SqlFragment[] =
     tenantId === ALL_TENANTS
       ? [...filters]
-      : [{ sql: 'ma.tenant_id = ? AND mb.tenant_id = ?', params: [tenantId, tenantId] }, ...filters];
+      : [
+          { sql: 'ma.tenant_id = ? AND mb.tenant_id = ?', params: [tenantId, tenantId] },
+          ...filters,
+        ];
   return {
     sql:
       `SELECT ${CONFLICT_ROW_COLS} FROM memory_conflicts mc ${join} memories ma ON ma.id = mc.memory_a_id ` +
@@ -102,18 +118,23 @@ export function conflictPage(
 ): ConflictRowPage {
   const filters: SqlFragment[] = [];
   if (status !== '*') filters.push({ sql: 'mc.status = ?', params: [status] });
-  if (after) filters.push({ sql: '(mc.updated_at, mc.id) < (?, ?)', params: [after.key, after.id] });
+  if (after)
+    filters.push({ sql: '(mc.updated_at, mc.id) < (?, ?)', params: [after.key, after.id] });
   const select = conflictSelect(tenantId, filters);
-  const rows = cachedStatement(db, `${select.sql} ORDER BY mc.updated_at DESC, mc.id DESC LIMIT ?`).all(
-    ...select.params,
-    limit + 1,
-  ) as ConflictJoinRow[];
+  const rows = cachedStatement(
+    db,
+    `${select.sql} ORDER BY mc.updated_at DESC, mc.id DESC LIMIT ?`,
+  ).all(...select.params, limit + 1) as ConflictJoinRow[];
   const page = keysetPage(rows, limit, (row) => ({ key: row.updated_at, id: row.id }));
   return { rows: page.rows.map(toConflictRow), next: page.next };
 }
 
 /** Conflict `conflictId`, any status, when both its members are in `tenantId`. */
-function conflictById(db: DatabaseSyncLike, tenantId: string, conflictId: number): ConflictRow | null {
+function conflictById(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  conflictId: number,
+): ConflictRow | null {
   const select = conflictSelect(tenantId, [{ sql: 'mc.id = ?', params: [conflictId] }]);
   const row = cachedStatement(db, select.sql).get(...select.params) as ConflictJoinRow | undefined;
   return row ? toConflictRow(row) : null;
@@ -128,14 +149,21 @@ const OPEN_IN_TENANT = `FROM memory_conflicts mc
 /** countOpenConflicts on a handle the caller holds, so it can share a snapshot with other reads. */
 export function countOpenConflicts(db: DatabaseSyncLike, tenantId: string): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const row = cachedStatement(db, `SELECT COUNT(*) AS n ${OPEN_IN_TENANT}`).get(tenantId, tenantId) as {
+  const row = cachedStatement(db, `SELECT COUNT(*) AS n ${OPEN_IN_TENANT}`).get(
+    tenantId,
+    tenantId,
+  ) as {
     n: number | bigint;
   };
   return Number(row.n);
 }
 
 /** The tenant's open conflicts naming `memoryId`, newest change first, each with both members' columns. */
-export function openConflictsNaming(db: DatabaseSyncLike, tenantId: string, memoryId: string): ConflictRow[] {
+export function openConflictsNaming(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  memoryId: string,
+): ConflictRow[] {
   const select = conflictSelect(tenantId, [
     { sql: `mc.status = 'open'`, params: [] },
     { sql: '(mc.memory_a_id = ? OR mc.memory_b_id = ?)', params: [memoryId, memoryId] },
@@ -154,7 +182,12 @@ export function replaceDetectedConflicts(
   detected: Array<DetectedConflict>,
   detectedAt: string = handleStamp(db),
 ): void {
-  const changedIds = writeConflictRefresh(db, readConflictRefresh(db, detected), detected, detectedAt);
+  const changedIds = writeConflictRefresh(
+    db,
+    readConflictRefresh(db, detected),
+    detected,
+    detectedAt,
+  );
   const changed = [...readEntriesByIds(db, changedIds, ALL_TENANTS).values()];
   syncChangedMirrors(files.hippoRoot, db, changed, detectedAt);
 }
@@ -168,7 +201,10 @@ interface ConflictRefreshReads {
 
 /** The refresh's reads, kept out of the write lock; only rows holding refs, in an open conflict or in `detected` are
  * loaded, not the whole table. */
-function readConflictRefresh(db: DatabaseSyncLike, detected: readonly DetectedConflict[]): ConflictRefreshReads {
+function readConflictRefresh(
+  db: DatabaseSyncLike,
+  detected: readonly DetectedConflict[],
+): ConflictRefreshReads {
   // Tenant guard: a conflict is meaningful only within one tenant, so cross-tenant pairs are skipped on insert and on
   // rebuild, and a stale cross-tenant row can neither persist nor leak a foreign id.
   const tenantById = new Map<string, string>();
@@ -234,7 +270,9 @@ function resolveStaleOpenConflicts(
   sameTenant: SameTenant,
   detectedAt: string,
 ): void {
-  const detectedKeys = new Set(canonicalDetected.map((conflict) => `${conflict.memory_a_id}::${conflict.memory_b_id}`));
+  const detectedKeys = new Set(
+    canonicalDetected.map((conflict) => `${conflict.memory_a_id}::${conflict.memory_b_id}`),
+  );
 
   let after = 0;
   for (;;) {
@@ -247,7 +285,8 @@ function resolveStaleOpenConflicts(
     // would linger as 'open'.
     const resolved = page.filter(
       (row) =>
-        !detectedKeys.has(`${row.memory_a_id}::${row.memory_b_id}`) || !sameTenant(row.memory_a_id, row.memory_b_id),
+        !detectedKeys.has(`${row.memory_a_id}::${row.memory_b_id}`) ||
+        !sameTenant(row.memory_a_id, row.memory_b_id),
     );
     if (resolved.length > 0) {
       cachedStatement(
@@ -281,12 +320,22 @@ function upsertDetectedConflicts(
   for (const conflict of canonicalDetected) {
     // Skip cross-tenant pairs — never persist a conflict spanning tenants.
     if (!sameTenant(conflict.memory_a_id, conflict.memory_b_id)) continue;
-    upsert.run(conflict.memory_a_id, conflict.memory_b_id, conflict.reason, conflict.score, detectedAt, detectedAt);
+    upsert.run(
+      conflict.memory_a_id,
+      conflict.memory_b_id,
+      conflict.reason,
+      conflict.score,
+      detectedAt,
+      detectedAt,
+    );
   }
 }
 
 /** Rewrites only the rows whose conflicts_with_json changes, and returns their ids. */
-function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs }: ConflictRefreshReads): string[] {
+function rebuildConflictsWithJson(
+  db: DatabaseSyncLike,
+  { sameTenant, storedRefs }: ConflictRefreshReads,
+): string[] {
   const openConflicts = cachedStatement(
     db,
     `SELECT memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'open'`,
@@ -337,7 +386,11 @@ const SIDE_HOLDS = 'EXISTS (SELECT 1 FROM memories WHERE id = ? AND tenant_id = 
 /**
  * Marks the conflict resolved while it is open, names this pair and each side holds its scope; false writes nothing.
  */
-function claimConflict(db: DatabaseSyncLike, tenantId: string, resolution: ConflictResolution): boolean {
+function claimConflict(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  resolution: ConflictResolution,
+): boolean {
   const { conflictId, keep, loser } = resolution;
   const pair = [keep.id, loser.id, loser.id, keep.id];
   const sides = [keep.id, tenantId, keep.scope, loser.id, tenantId, loser.scope];
@@ -405,7 +458,12 @@ function emptyRemoval(): LoserRemoval {
 
 type WeakenFate = Extract<LoserFate, { kind: 'weaken' }>;
 
-function weakenConflictLoser(db: DatabaseSyncLike, tenantId: string, loserId: string, fate: WeakenFate): LoserRemoval {
+function weakenConflictLoser(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  loserId: string,
+  fate: WeakenFate,
+): LoserRemoval {
   cachedStatement(
     db,
     `UPDATE memories SET half_life_days = MAX(?, half_life_days * ?), updated_at = datetime('now') ` +
@@ -414,7 +472,11 @@ function weakenConflictLoser(db: DatabaseSyncLike, tenantId: string, loserId: st
   return emptyRemoval();
 }
 
-function removeConflictLoser(db: DatabaseSyncLike, tenantId: string, r: ConflictResolution): LoserRemoval {
+function removeConflictLoser(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  r: ConflictResolution,
+): LoserRemoval {
   // Removal is kind-aware: a bare DELETE on a raw loser fires the append-only trigger, so use the same helpers as the
   // reject verb.
   const removal = emptyRemoval();
@@ -426,7 +488,12 @@ function removeConflictLoser(db: DatabaseSyncLike, tenantId: string, r: Conflict
   // The claim in this transaction saw the row, so it is there.
   if (!loserRow) return removal;
   if (r.fate.kind === 'reject') {
-    removal.rejectedDigest = tombstoneLoserValue(db, { r, ownScope: r.fate.ownScope, loserRow, removal });
+    removal.rejectedDigest = tombstoneLoserValue(db, {
+      r,
+      ownScope: r.fate.ownScope,
+      loserRow,
+      removal,
+    });
   }
   if (loserRow.kind === 'raw') {
     archiveRawMemory(db, loserId, { reason: r.reason, who: r.actor });
@@ -485,7 +552,8 @@ function removeDuplicatesOfRejectedValue(
   }>;
   const dups: Array<{ id: string; kind: string }> = [];
   for (const dup of dupRows) {
-    if (rejectionDigest(dup.content) !== rejectedDigest || !ownScopeTouches(ownScope, dup.scope)) continue;
+    if (rejectionDigest(dup.content) !== rejectedDigest || !ownScopeTouches(ownScope, dup.scope))
+      continue;
     dups.push({ id: dup.id, kind: dup.kind });
   }
   const { actor, reason } = r;
@@ -511,19 +579,28 @@ function tombstoneLoserValue(db: DatabaseSyncLike, loser: RejectedLoser): string
 
 /** Drops `ref` from row `id`'s conflicts_with_json, when the row is in the tenant. */
 function dropConflictRef(db: DatabaseSyncLike, tenantId: string, id: string, ref: string): void {
-  const row = cachedStatement(db, `SELECT conflicts_with_json FROM memories WHERE id = ? AND tenant_id = ?`).get(
-    id,
-    tenantId,
-  ) as { conflicts_with_json: string } | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT conflicts_with_json FROM memories WHERE id = ? AND tenant_id = ?`,
+  ).get(id, tenantId) as { conflicts_with_json: string } | undefined;
   if (!row) return;
-  const refs = parseJsonArray(row.conflicts_with_json, { table: 'memories', id, column: 'conflicts_with_json' });
+  const refs = parseJsonArray(row.conflicts_with_json, {
+    table: 'memories',
+    id,
+    column: 'conflicts_with_json',
+  });
   cachedStatement(
     db,
     `UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
   ).run(JSON.stringify(refs.filter((r: string) => r !== ref)), id, tenantId);
 }
 
-function stripConflictRefs(db: DatabaseSyncLike, tenantId: string, r: ConflictResolution, loserRemoved: boolean): void {
+function stripConflictRefs(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  r: ConflictResolution,
+  loserRemoved: boolean,
+): void {
   dropConflictRef(db, tenantId, r.keep.id, r.loser.id);
   if (!loserRemoved) dropConflictRef(db, tenantId, r.loser.id, r.keep.id);
 }
@@ -568,7 +645,8 @@ function purgeRemovedLoserMirrors(
   // like the reject verb.
   // A non-raw mirror has no reaper, so skipping the purge would orphan it forever.
   for (const removedId of [loserId, ...removal.extraRemovedIds]) {
-    const isRaw = removedId === loserId ? removal.loserWasRaw : removal.extraRemovedRawIds.includes(removedId);
+    const isRaw =
+      removedId === loserId ? removal.loserWasRaw : removal.extraRemovedRawIds.includes(removedId);
     // purgeMirrorBestEffort retries once, then reports the explicit leftover paths for non-raw ids, which the
     // cleanupArchivedMirrors reaper never scans.
     const mirrorOk = purgeMirrorBestEffort(hippoRoot, removedId, isRaw, 'resolveConflict');
@@ -582,7 +660,9 @@ function purgeRemovedLoserMirrors(
 }
 
 /** The conflict and loser ids every conflict_resolve audit row names. */
-export function conflictResolveAudits(db: DatabaseSyncLike): Array<{ conflictId: number; loserId: string }> {
+export function conflictResolveAudits(
+  db: DatabaseSyncLike,
+): Array<{ conflictId: number; loserId: string }> {
   // SAFETY: every conflict_resolve audit row's metadata holds both ids (ConflictResolveMeta above).
   return cachedStatement(
     db,
@@ -606,7 +686,10 @@ export function resolvedConflicts(
   }[];
 }
 
-const conflictsBodies: Bodies<Omit<Conflicts, 'resolve'>> = { list: conflictPage, get: conflictById };
+const conflictsBodies: Bodies<Omit<Conflicts, 'resolve'>> = {
+  list: conflictPage,
+  get: conflictById,
+};
 
 export function sqliteConflicts({ on, files }: Handles): Conflicts {
   return {

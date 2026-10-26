@@ -19,10 +19,12 @@ const SHELL_META = ['a;b', 'c&d', '$(echo pwned)', '`id`', '|x', '%PATH%', 'two 
 describe('runWatched', () => {
   it('returns only the last 64 KiB of stderr while the terminal gets all of it', async () => {
     const written: number[] = [];
-    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
-      written.push(Buffer.byteLength(chunk));
-      return true;
-    });
+    const spy = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation((chunk: string | Uint8Array) => {
+        written.push(Buffer.byteLength(chunk));
+        return true;
+      });
     try {
       const script = "process.stderr.write('A'.repeat(200000)); process.stderr.write('END')";
       const { exitCode, stderr } = await runWatched([process.execPath, '-e', script]);
@@ -54,18 +56,21 @@ describe('runWatched', () => {
     expect(JSON.parse(stderr)).toEqual(SHELL_META);
   });
 
-  it.runIf(process.platform === 'win32')('runs a .cmd shim with the same literal arguments', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hippo-run-watched-'));
-    try {
-      const echo = join(dir, 'echo-args.js');
-      writeFileSync(echo, 'process.stderr.write(JSON.stringify(process.argv.slice(2)))');
-      const shim = join(dir, 'shim.cmd');
-      writeFileSync(shim, `@"${process.execPath}" "${echo}" %*\r\n`);
-      const { exitCode, stderr } = await stderrOf([shim, ...SHELL_META]);
-      expect(exitCode).toBe(0);
-      expect(JSON.parse(stderr)).toEqual(SHELL_META);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
+  it.runIf(process.platform === 'win32')(
+    'runs a .cmd shim with the same literal arguments',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'hippo-run-watched-'));
+      try {
+        const echo = join(dir, 'echo-args.js');
+        writeFileSync(echo, 'process.stderr.write(JSON.stringify(process.argv.slice(2)))');
+        const shim = join(dir, 'shim.cmd');
+        writeFileSync(shim, `@"${process.execPath}" "${echo}" %*\r\n`);
+        const { exitCode, stderr } = await stderrOf([shim, ...SHELL_META]);
+        expect(exitCode).toBe(0);
+        expect(JSON.parse(stderr)).toEqual(SHELL_META);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 });

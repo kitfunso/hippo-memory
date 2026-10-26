@@ -4,9 +4,13 @@ import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/sc
 
 describe('scanWithinWatchdog', () => {
   it('returns what a linear scan returns for a 1 MiB input', () => {
-    expect(scanWithinWatchdog((text) => text.replaceAll('a', 'b').length, fillTo('a', ONE_MIB), WATCHDOG_MS)).toBe(
-      ONE_MIB,
-    );
+    expect(
+      scanWithinWatchdog(
+        (text) => text.replaceAll('a', 'b').length,
+        fillTo('a', ONE_MIB),
+        WATCHDOG_MS,
+      ),
+    ).toBe(ONE_MIB);
   });
 
   it('stops a quadratic scan at the deadline and names the deadline', () => {

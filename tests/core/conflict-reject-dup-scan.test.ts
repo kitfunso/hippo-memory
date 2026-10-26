@@ -8,7 +8,12 @@ import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
+import {
+  replaceDetectedConflicts,
+  listMemoryConflicts,
+  writeEntry,
+  readEntry,
+} from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -19,7 +24,9 @@ interface StatementProto {
 }
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; all() takes SQL params and returns the row array.
-const { StatementSync } = require('node:sqlite') as { StatementSync: { prototype: StatementProto } };
+const { StatementSync } = require('node:sqlite') as {
+  StatementSync: { prototype: StatementProto };
+};
 
 /** The duplicate scan: every other row of the loser's tenant. */
 const DUP_SCAN = 'SELECT id, kind, content, scope FROM memories WHERE tenant_id = ?';
@@ -70,10 +77,16 @@ async function rejectLoser(): Promise<RejectedLoser> {
   const keepId = put('Always use semicolons in PowerShell');
   const loserId = put(LOSER);
   replaceDetectedConflicts(root, [
-    { memory_a_id: keepId, memory_b_id: loserId, reason: 'contradictory chaining advice', score: 0.85 },
+    {
+      memory_a_id: keepId,
+      memory_b_id: loserId,
+      reason: 'contradictory chaining advice',
+      score: 0.85,
+    },
   ]);
   const conflictId = (await listMemoryConflicts(root, 'open'))[0]!.id;
-  const resolve = () => conflictResolve(apiCtx(root), conflictId, { keepId, rejectLoser: true, reason: 'wrong' });
+  const resolve = () =>
+    conflictResolve(apiCtx(root), conflictId, { keepId, rejectLoser: true, reason: 'wrong' });
   return { keepId, loserId, resolve };
 }
 
@@ -81,7 +94,8 @@ function removedIds(): string[] {
   const db = openHippoDb(root);
   try {
     // SAFETY: conflict_resolve audit rows always carry removedIds as string[].
-    return listAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' })[0]!.metadata.removedIds as string[];
+    return listAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' })[0]!.metadata
+      .removedIds as string[];
   } finally {
     closeHippoDb(db);
   }
@@ -93,7 +107,9 @@ function archivedRawIds(): string[] {
   try {
     // SAFETY: one TEXT memory_id column.
     return (
-      db.prepare('SELECT memory_id FROM raw_archive ORDER BY memory_id').all() as Array<{ memory_id: string }>
+      db.prepare('SELECT memory_id FROM raw_archive ORDER BY memory_id').all() as Array<{
+        memory_id: string;
+      }>
     ).map((r) => r.memory_id);
   } finally {
     closeHippoDb(db);

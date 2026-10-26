@@ -15,7 +15,11 @@ import type { Objects, PoliciesInForceQuery } from '../../base/ports/store.js';
 
 export type { Policy, PolicyStatus } from '../../base/records/object-types.js';
 
-export const VALID_POLICY_STATES: ReadonlySet<PolicyStatus> = new Set<PolicyStatus>(['active', 'superseded', 'closed']);
+export const VALID_POLICY_STATES: ReadonlySet<PolicyStatus> = new Set<PolicyStatus>([
+  'active',
+  'superseded',
+  'closed',
+]);
 
 export interface SavePolicyOptions {
   policyName: string;
@@ -44,23 +48,40 @@ export interface ListPoliciesOptions {
 export function normalizePolicyDate(input: string, label: string = 'date'): string {
   const d = new Date(input);
   if (Number.isNaN(d.getTime())) {
-    throw new BadRequestError(`policy: invalid ${label} "${input}" (expected an ISO-8601 date or datetime)`);
+    throw new BadRequestError(
+      `policy: invalid ${label} "${input}" (expected an ISO-8601 date or datetime)`,
+    );
   }
   return d.toISOString();
 }
 
 /** Normalize valid_from (default `nowIso`) and valid_to (default null), then enforce valid_to > valid_from. */
-export function validatePolicyDates(validFromRaw: string | undefined, validToRaw: string | undefined, nowIso: string) {
-  const validFrom = validFromRaw !== undefined ? normalizePolicyDate(validFromRaw, 'valid_from') : nowIso;
-  const validTo = validToRaw !== undefined && validToRaw !== null ? normalizePolicyDate(validToRaw, 'valid_to') : null;
+export function validatePolicyDates(
+  validFromRaw: string | undefined,
+  validToRaw: string | undefined,
+  nowIso: string,
+) {
+  const validFrom =
+    validFromRaw !== undefined ? normalizePolicyDate(validFromRaw, 'valid_from') : nowIso;
+  const validTo =
+    validToRaw !== undefined && validToRaw !== null
+      ? normalizePolicyDate(validToRaw, 'valid_to')
+      : null;
   if (validTo !== null && validTo <= validFrom) {
-    throw new BadRequestError(`policy: valid_to (${validTo}) must be strictly after valid_from (${validFrom})`);
+    throw new BadRequestError(
+      `policy: valid_to (${validTo}) must be strictly after valid_from (${validFrom})`,
+    );
   }
   return { validFrom, validTo };
 }
 
 /** Recall-surface content for the memory mirror: name + rule + effective range. */
-function buildPolicyContent(policyName: string, policyText: string, validFrom: string, validTo: string | null): string {
+function buildPolicyContent(
+  policyName: string,
+  policyText: string,
+  validFrom: string,
+  validTo: string | null,
+): string {
   const range = validTo ? `${validFrom} to ${validTo}` : `${validFrom} onward`;
   return `${policyName}\n\n${policyText}\n\nEffective: ${range}`;
 }
@@ -89,7 +110,11 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOptions> = {
   },
 };
 
-export function loadPolicies(objects: Objects, tenantId: string, opts: ListPoliciesOptions = {}): Promise<Policy[]> {
+export function loadPolicies(
+  objects: Objects,
+  tenantId: string,
+  opts: ListPoliciesOptions = {},
+): Promise<Policy[]> {
   return listObjects(objects, POLICY, tenantId, opts);
 }
 

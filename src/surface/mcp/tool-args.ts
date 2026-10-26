@@ -6,7 +6,13 @@ import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 
 const ARG_PREVIEW_CHARS = 40;
 
-export type ToolArgValue = string | number | boolean | null | ToolArgValue[] | { [key: string]: ToolArgValue };
+export type ToolArgValue =
+  | string
+  | number
+  | boolean
+  | null
+  | ToolArgValue[]
+  | { [key: string]: ToolArgValue };
 
 /** A tool call's arguments object. */
 export type ToolArgs = Readonly<Record<string, ToolArgValue>>;
@@ -75,9 +81,12 @@ function checkProperty(name: string, schema: ToolPropertySchema, raw: ToolArgVal
     case 'number':
     case 'integer':
       if (value === null || !isArgNumber(value)) return `${name} must be a number${got}`;
-      if (schema.type === 'integer' && !Number.isInteger(value)) return `${name} must be an integer${got}`;
-      if (schema.minimum !== undefined && value < schema.minimum) return `${name} must be >= ${schema.minimum}${got}`;
-      if (schema.maximum !== undefined && value > schema.maximum) return `${name} must be <= ${schema.maximum}${got}`;
+      if (schema.type === 'integer' && !Number.isInteger(value))
+        return `${name} must be an integer${got}`;
+      if (schema.minimum !== undefined && value < schema.minimum)
+        return `${name} must be >= ${schema.minimum}${got}`;
+      if (schema.maximum !== undefined && value > schema.maximum)
+        return `${name} must be <= ${schema.maximum}${got}`;
       break;
   }
   if (schema.enum !== undefined && !schema.enum.some((allowed) => allowed === value)) {

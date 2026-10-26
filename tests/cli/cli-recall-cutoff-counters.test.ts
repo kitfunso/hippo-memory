@@ -70,7 +70,9 @@ async function seedMatchingMemories(env: TestEnv, keyword: string, count: number
   const ctx = ctxFor(env.hippoRoot);
   await withSharedStoreHandles(async () => {
     for (let i = 0; i < count; i++) {
-      await remember(ctx, { content: `${keyword} candidate number ${i} carries unique detail ${i}` });
+      await remember(ctx, {
+        content: `${keyword} candidate number ${i} carries unique detail ${i}`,
+      });
     }
   });
 }
@@ -84,12 +86,28 @@ interface SuppressionSummary {
 type RecallJson = { results: unknown[]; suppressionSummary: SuppressionSummary };
 
 async function recallJsonBudget(env: TestEnv, query: string, budget: number): Promise<RecallJson> {
-  const raw = await hippo(env.cwd, env.globalRoot, 'recall', query, '--json', '--budget', String(budget));
+  const raw = await hippo(
+    env.cwd,
+    env.globalRoot,
+    'recall',
+    query,
+    '--json',
+    '--budget',
+    String(budget),
+  );
   return JSON.parse(raw.slice(raw.indexOf('{')));
 }
 
 async function recallJson(env: TestEnv, query: string, limit: number): Promise<RecallJson> {
-  const raw = await hippo(env.cwd, env.globalRoot, 'recall', query, '--json', '--limit', String(limit));
+  const raw = await hippo(
+    env.cwd,
+    env.globalRoot,
+    'recall',
+    query,
+    '--json',
+    '--limit',
+    String(limit),
+  );
   return JSON.parse(raw.slice(raw.indexOf('{')));
 }
 
@@ -177,7 +195,12 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
     const b = mk('wholly unrelated wording xyzzy plugh frobnicate');
     const ea = insertEntityAt(root, T, { entityType: 'decision', name: 'A', memoryId: a.id }).id;
     const eb = insertEntityAt(root, T, { entityType: 'decision', name: 'B', memoryId: b.id }).id;
-    insertRelationAt(root, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
+    insertRelationAt(root, T, {
+      fromEntityId: eb,
+      toEntityId: ea,
+      relType: 'supersedes',
+      memoryId: b.id,
+    });
 
     // cwd is `home` so no stray local store joins the recall: this test pins
     // the SINGLE-store graph case. (A worktree cwd would silently merge its
@@ -193,10 +216,13 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
     expect(ids, 'graph neighbour must be surfaced by edge').toContain(b.id);
     // the graph-added row must be inside the PUBLISHED total, not only the
     // internal arithmetic - this is what broke: total said 1, returned said 2
-    expect(s.totalCandidates, 'published invariant must close when the graph adds an out-of-pool row').toBe(
-      s.droppedPreRank + s.droppedByBudget + rows.length,
+    expect(
+      s.totalCandidates,
+      'published invariant must close when the graph adds an out-of-pool row',
+    ).toBe(s.droppedPreRank + s.droppedByBudget + rows.length);
+    expect(s.totalCandidates, 'total must count the edge-surfaced row').toBeGreaterThanOrEqual(
+      rows.length,
     );
-    expect(s.totalCandidates, 'total must count the edge-surfaced row').toBeGreaterThanOrEqual(rows.length);
   });
 });
 
@@ -226,7 +252,9 @@ describe('BUDGET-driven truncation is counted (the measured failure)', () => {
     // Every printed row costs more than the 40-token budget leaves, so only the one-row floor survives of the 40.
     expect(returned).toBe(1);
     expect(s.totalCandidates).toBe(40);
-    expect(s.droppedByBudget, 'budget/rank drops must be counted - this read 0 in production').toBe(39);
+    expect(s.droppedByBudget, 'budget/rank drops must be counted - this read 0 in production').toBe(
+      39,
+    );
     expect(s.totalCandidates, 'published invariant must close on the budget path too').toBe(
       s.droppedPreRank + s.droppedByBudget + returned,
     );
@@ -258,7 +286,9 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
     // must not single one out.
     expect(output).toMatch(/^Cutoff: showing \d+ of \d+ candidates;/m);
     expect(output).toMatch(/not shown \(rank, budget or limit\)/);
-    expect(output, 'must not name a control the caller may never have passed').not.toMatch(/dropped to fit limit/);
+    expect(output, 'must not name a control the caller may never have passed').not.toMatch(
+      /dropped to fit limit/,
+    );
   });
 
   it('does NOT print "Cutoff:" when the recall is not truncated (no always-on noise)', async () => {

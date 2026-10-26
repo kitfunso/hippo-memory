@@ -14,7 +14,10 @@ export interface ProjectFacts {
  * A shared store's folder is no caller's project, so the caller names it; with none, contextGet refuses. Any other
  * store is the project of the folder it sits in.
  */
-export function contextProjectFor(ctx: Context, { storeDir, project, aliases }: ProjectFacts): ProjectRef {
+export function contextProjectFor(
+  ctx: Context,
+  { storeDir, project, aliases }: ProjectFacts,
+): ProjectRef {
   if (!sharedStoreOf(ctx)) return ctx.infra.machine.projectIdentity(dirname(resolve(storeDir)));
   if (project === null) return '';
   assertCallerProject({ name: project, aliases });

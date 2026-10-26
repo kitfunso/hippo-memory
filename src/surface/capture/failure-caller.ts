@@ -9,7 +9,11 @@ import { scrubForSharing } from './share-scrub.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { assertRequestId, bindCaller } from './caller-session.js';
 import { FAILURE_TEXT_MAX_CHARS, failureHash } from './failure-reading.js';
-import type { CaptureErrorOutcome, FailureOutcome, RoutineRule } from '../../base/ports/store/rejections.js';
+import type {
+  CaptureErrorOutcome,
+  FailureOutcome,
+  RoutineRule,
+} from '../../base/ports/store/rejections.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import { withEntryInfra } from '../entry-infra.js';
 
@@ -59,7 +63,10 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
   if (skip !== null && !Object.hasOwn(SKIPS, skip)) {
     throw new BadRequestError('skip: skipped-interrupt, skipped-routine, skipped-invalid or null');
   }
-  if ((skip === 'skipped-routine') !== (rule !== null) || (rule !== null && !Object.hasOwn(ROUTINE_RULES, rule))) {
+  if (
+    (skip === 'skipped-routine') !== (rule !== null) ||
+    (rule !== null && !Object.hasOwn(ROUTINE_RULES, rule))
+  ) {
     throw new BadRequestError('rule: a routine rule on skipped-routine, else null');
   }
   if (text === null || text.trim() === '') {
@@ -85,13 +92,18 @@ export async function captureFailureForCaller(
   const ctx = withEntryInfra(given);
   const failure = checkedFailure(req);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  const earlier = await ctx.store.failureLog.requestOutcome(ctx.tenantId, req.requestId, req.sessionId);
+  const earlier = await ctx.store.failureLog.requestOutcome(
+    ctx.tenantId,
+    req.requestId,
+    req.sessionId,
+  );
   // A retry after a lost reply gets the first answer and writes nothing; one whose store failed tries the store again.
   if (earlier !== null && earlier !== 'store-failed') return { outcome: earlier };
   let logged: FailureOutcome = 'store-failed';
   try {
     const caller = { actor: key.owner, originProject: req.project.name, origins: key.project };
-    const outcome = failure.skip === null ? await storeLesson(ctx, failure.text, caller) : failure.skip;
+    const outcome =
+      failure.skip === null ? await storeLesson(ctx, failure.text, caller) : failure.skip;
     logged = outcome;
     return { outcome };
   } finally {

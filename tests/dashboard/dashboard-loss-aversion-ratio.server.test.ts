@@ -2,7 +2,14 @@
 // the memory page (built from the snapshot) and the drawer (read fresh) score a negative memory by it.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { MemoryDetail, MemoryPage } from '../../src/api/dashboard/types.js';
-import { get, isoAgo, makeStore, parse, seed, startDashboard } from '../_helpers/dashboard-fixture.js';
+import {
+  get,
+  isoAgo,
+  makeStore,
+  parse,
+  seed,
+  startDashboard,
+} from '../_helpers/dashboard-fixture.js';
 
 // Faded enough that the negative multiplier stays under the 1.0 clamp, so the ratio shows in the strength.
 const FADED_NEGATIVE = {
@@ -12,7 +19,9 @@ const FADED_NEGATIVE = {
   emotionalValence: 'negative',
 } as const;
 
-async function strengthsUnder(ratio: string | undefined): Promise<{ page: number; drawer: number }> {
+async function strengthsUnder(
+  ratio: string | undefined,
+): Promise<{ page: number; drawer: number }> {
   vi.stubEnv('HIPPO_LOSS_AVERSION_RATIO', ratio);
   const store = makeStore('dash-ratio');
   const entry = seed(store.hippoRoot, 'the deploy broke prod', FADED_NEGATIVE);

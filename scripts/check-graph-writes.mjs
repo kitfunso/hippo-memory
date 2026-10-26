@@ -91,17 +91,27 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const violations = findGraphWriteViolations(srcDir);
   if (violations.length > 0) {
     console.error('');
-    console.error(`Graph-write violation(s): the graph tables (${GRAPH_TABLES.join(', ')}) may only be`);
-    console.error(`written through the sanctioned writers ${WRITER_NAMES}, but found DATA writes elsewhere:`);
+    console.error(
+      `Graph-write violation(s): the graph tables (${GRAPH_TABLES.join(', ')}) may only be`,
+    );
+    console.error(
+      `written through the sanctioned writers ${WRITER_NAMES}, but found DATA writes elsewhere:`,
+    );
     for (const v of violations) {
       console.error(`  ${v.file}:${v.line}: ${v.text}`);
     }
     console.error('');
-    console.error('Fix: route the write through the store graph writers (insertEntityRow / insertRelationRow /');
-    console.error('enqueueExtraction), which applies the consolidated-source guard. The graph must');
+    console.error(
+      'Fix: route the write through the store graph writers (insertEntityRow / insertRelationRow /',
+    );
+    console.error(
+      'enqueueExtraction), which applies the consolidated-source guard. The graph must',
+    );
     console.error('never index the raw layer (ROADMAP-RESEARCH E3.3).');
     console.error('');
     process.exit(1);
   }
-  console.log(`No graph-write violations in ${srcDir}/. All graph writes funnel through ${WRITER_NAMES}. OK.`);
+  console.log(
+    `No graph-write violations in ${srcDir}/. All graph writes funnel through ${WRITER_NAMES}. OK.`,
+  );
 }

@@ -50,7 +50,16 @@ export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
     db,
     `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at, role, owner_subject, expires_at) VALUES ` +
       `(?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(key.keyId, key.keyHash, key.tenantId, key.label, key.createdAt, key.role, key.ownerSubject, key.expiresAt);
+  ).run(
+    key.keyId,
+    key.keyHash,
+    key.tenantId,
+    key.label,
+    key.createdAt,
+    key.role,
+    key.ownerSubject,
+    key.expiresAt,
+  );
 }
 
 export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOptions): CreateApiKeyResult {
@@ -63,7 +72,9 @@ export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOptions): C
     role: opts.role ?? 'member',
     createdAt: handleStamp(db),
     ownerSubject: opts.ownerSubject ?? null,
-    expiresAt: opts.expiresAt ?? new Date(handleNow(db).getTime() + DEFAULT_KEY_TTL_DAYS * DAY_MS).toISOString(),
+    expiresAt:
+      opts.expiresAt ??
+      new Date(handleNow(db).getTime() + DEFAULT_KEY_TTL_DAYS * DAY_MS).toISOString(),
   });
   return { keyId, plaintext };
 }
@@ -110,7 +121,9 @@ function verifyApiKey(db: DatabaseSyncLike, plaintext: string, now: number): Ver
   const keyId = mintedKeyId(plaintext);
   if (keyId === null) return null;
   const record = readApiKeyRecord(db, keyId);
-  return isUsableKey(record, now) && verifyKey(plaintext, record.keyHash) ? verifiedKeyOf(keyId, record) : null;
+  return isUsableKey(record, now) && verifyKey(plaintext, record.keyHash)
+    ? verifiedKeyOf(keyId, record)
+    : null;
 }
 
 export function validateApiKey(db: DatabaseSyncLike, plaintext: string): ValidateResult {
@@ -118,8 +131,15 @@ export function validateApiKey(db: DatabaseSyncLike, plaintext: string): Validat
   return found ? { valid: true, ...found } : { valid: false };
 }
 
-export function revokeApiKey(db: DatabaseSyncLike, keyId: string, at: string = handleStamp(db)): void {
-  cachedStatement(db, `UPDATE api_keys SET revoked_at = ? WHERE key_id = ? AND revoked_at IS NULL`).run(at, keyId);
+export function revokeApiKey(
+  db: DatabaseSyncLike,
+  keyId: string,
+  at: string = handleStamp(db),
+): void {
+  cachedStatement(
+    db,
+    `UPDATE api_keys SET revoked_at = ? WHERE key_id = ? AND revoked_at IS NULL`,
+  ).run(at, keyId);
 }
 
 /** Grant `keyId` read access to one restricted `scope`. Idempotent. */
@@ -133,14 +153,18 @@ export function grantScope(db: DatabaseSyncLike, keyId: string, scope: string): 
 
 /** Revoke `keyId`'s grant on `scope`. Not an error when no such grant exists. */
 export function ungrantScope(db: DatabaseSyncLike, keyId: string, scope: string): void {
-  cachedStatement(db, `DELETE FROM api_key_scope_grants WHERE key_id = ? AND scope = ?`).run(keyId, scope);
+  cachedStatement(db, `DELETE FROM api_key_scope_grants WHERE key_id = ? AND scope = ?`).run(
+    keyId,
+    scope,
+  );
 }
 
 /** Every restricted scope `keyId` may read. */
 function listScopeGrants(db: DatabaseSyncLike, keyId: string): string[] {
-  const rows = cachedStatement(db, `SELECT scope FROM api_key_scope_grants WHERE key_id = ? ORDER BY scope`).all(
-    keyId,
-  ) as Array<{ scope: string }>;
+  const rows = cachedStatement(
+    db,
+    `SELECT scope FROM api_key_scope_grants WHERE key_id = ? ORDER BY scope`,
+  ).all(keyId) as Array<{ scope: string }>;
   return rows.map((r) => r.scope);
 }
 

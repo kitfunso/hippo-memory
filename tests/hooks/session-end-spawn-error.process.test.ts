@@ -18,7 +18,11 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
 /** Runs hippo with a Node binary gone from disk (upgraded mid-session): every worker spawn fails with ENOENT, reported as an 'error' event. */
-function runWithMissingNode(args: readonly string[], logLevel: string, input?: string): SpawnSyncReturns<string> {
+function runWithMissingNode(
+  args: readonly string[],
+  logLevel: string,
+  input?: string,
+): SpawnSyncReturns<string> {
   const preload = path.join(dir, 'missing-node.mjs');
   // The Windows Codex shim is started with Node too, so that one start (a script named codex.js) keeps the real Node.
   const lines = [

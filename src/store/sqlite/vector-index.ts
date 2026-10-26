@@ -1,6 +1,12 @@
 // Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows: every read and
 // write of the three.
-import { getMeta, setMeta, withReadSnapshot, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import {
+  getMeta,
+  setMeta,
+  withReadSnapshot,
+  withWriteScope,
+  type DatabaseSyncLike,
+} from '../../db/index.js';
 import {
   physicsSpeedSum,
   loadAllPhysicsState,
@@ -22,7 +28,12 @@ import { initializeParticle } from '../../base/rank/physics.js';
 import { float32ToBuffer } from '../../base/util/vector-codec.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
-import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from '../../base/ports/store.js';
+import type {
+  VectorBackfillQuery,
+  VectorRowWrite,
+  VectorWrite,
+  VectorWriteResult,
+} from '../../base/ports/store.js';
 import {
   EMBEDDING_MODEL_META_KEY,
   countVectors,
@@ -85,7 +96,10 @@ export function saveStoredEmbeddingModel(on: OnHandle, model: string): void {
   });
 }
 
-function resolveIndexedEmbeddingModel(on: OnHandle, index?: Record<string, number[]>): string | null {
+function resolveIndexedEmbeddingModel(
+  on: OnHandle,
+  index?: Record<string, number[]>,
+): string | null {
   const storedModel = readStoredEmbeddingModel(on);
   if (storedModel) return storedModel;
   return indexedModel({
@@ -94,7 +108,11 @@ function resolveIndexedEmbeddingModel(on: OnHandle, index?: Record<string, numbe
   });
 }
 
-export function embeddingModelRequiresReindex(on: OnHandle, model: string, index?: Record<string, number[]>): boolean {
+export function embeddingModelRequiresReindex(
+  on: OnHandle,
+  model: string,
+  index?: Record<string, number[]>,
+): boolean {
   return indexNeedsRebuild(resolveIndexedEmbeddingModel(on, index), model);
 }
 
@@ -110,7 +128,10 @@ export function storedVectorSummary(db: DatabaseSyncLike): StoredVectorSummary {
 }
 
 /** Stored vectors for `ids` only, as Float32 views with no copy. */
-export function readStoredVectorViews(db: DatabaseSyncLike, ids: readonly string[]): Map<string, Float32Array> {
+export function readStoredVectorViews(
+  db: DatabaseSyncLike,
+  ids: readonly string[],
+): Map<string, Float32Array> {
   if (ids.length === 0) return new Map();
   return loadVectorViews(db, ids);
 }
@@ -160,7 +181,10 @@ export function pendingVectorIds(db: DatabaseSyncLike, page: IdPageRequest): IdP
   return idPageOf(rows, page.limit);
 }
 
-export function entriesWithoutVector(db: DatabaseSyncLike, query: VectorBackfillQuery): MemoryEntry[] {
+export function entriesWithoutVector(
+  db: DatabaseSyncLike,
+  query: VectorBackfillQuery,
+): MemoryEntry[] {
   if (!Number.isInteger(query.limit)) throw new RangeError('limit must be an integer');
   const limit = Math.max(1, Math.min(query.limit, MAX_BACKFILL_PAGE));
   const tenant = tenantAnd(query.tenantId);
@@ -251,7 +275,10 @@ export function particleStats(db: DatabaseSyncLike, fullUpTo: number): ParticleS
 /** The memory id of every stored particle in listStoredParticles's order, so a caller reads only the particles it
  * keeps. */
 export function storedParticleIds(db: DatabaseSyncLike): string[] {
-  const rows = cachedStatement(db, 'SELECT memory_id FROM memory_physics ORDER BY rowid').all() as Array<{
+  const rows = cachedStatement(
+    db,
+    'SELECT memory_id FROM memory_physics ORDER BY rowid',
+  ).all() as Array<{
     memory_id: string;
   }>;
   return rows.map((row) => row.memory_id);

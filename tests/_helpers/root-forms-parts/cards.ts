@@ -19,11 +19,19 @@ export async function createCard(
   return await sqliteStore(hippoRoot).cards.create(tenantId, input);
 }
 
-export async function loadCard(hippoRoot: string, tenantId: string, id: string): Promise<Card | null> {
+export async function loadCard(
+  hippoRoot: string,
+  tenantId: string,
+  id: string,
+): Promise<Card | null> {
   return (await sqliteStore(hippoRoot).cards.detail(tenantId, id))?.card ?? null;
 }
 
-export async function loadCardRuns(hippoRoot: string, tenantId: string, id: string): Promise<CardRun[]> {
+export async function loadCardRuns(
+  hippoRoot: string,
+  tenantId: string,
+  id: string,
+): Promise<CardRun[]> {
   assertTenantId('loadCardRuns', tenantId);
   return (await sqliteStore(hippoRoot).cards.detail(tenantId, id))?.runs ?? [];
 }

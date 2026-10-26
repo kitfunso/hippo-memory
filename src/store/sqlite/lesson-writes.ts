@@ -36,7 +36,9 @@ const lessonReadsBodies: Bodies<Pick<LessonWrites, 'textsHolding' | 'contentsWit
   contentsWithTag: contentsWithTag,
 };
 
-function lessonWritesBodies(files: StoreFiles): Bodies<Omit<LessonWrites, 'textsHolding' | 'contentsWithTag'>> {
+function lessonWritesBodies(
+  files: StoreFiles,
+): Bodies<Omit<LessonWrites, 'textsHolding' | 'contentsWithTag'>> {
   return {
     writeSkippingRejected: (db, ...args) => writeSkippingRejected(db, files, ...args),
     writeTogether: (db, entries) => {

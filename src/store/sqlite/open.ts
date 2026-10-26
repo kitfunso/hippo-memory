@@ -45,7 +45,10 @@ export type HandleOpener = (hippoRoot: string) => DatabaseSyncLike;
 
 /** One call on a handle of the store's own, closed after; `open` defaults to a bare handle, `openStore` also sets up
  * the mirror folders. */
-export type OnHandle = <T>(fn: (db: DatabaseSyncLike, files: StoreFiles) => T, open?: HandleOpener) => T;
+export type OnHandle = <T>(
+  fn: (db: DatabaseSyncLike, files: StoreFiles) => T,
+  open?: HandleOpener,
+) => T;
 
 export type OnHandleAsync = <T>(
   fn: (db: DatabaseSyncLike, files: StoreFiles) => Promise<T>,
@@ -181,7 +184,10 @@ function readLegacyMarkdownEntries(hippoRoot: string, now: Date): MemoryEntry[] 
         const entry = deserializeEntry(fs.readFileSync(path.join(dir, file), 'utf8'), now);
         if (entry) entries.push(entry);
       } catch (err) {
-        log.warn(`store: skipped unreadable legacy file ${file}: ${errorMessage(err)}`, errorFields(err));
+        log.warn(
+          `store: skipped unreadable legacy file ${file}: ${errorMessage(err)}`,
+          errorFields(err),
+        );
       }
     }
   }
@@ -193,7 +199,10 @@ function readLegacyJsonObject(file: string): { [key: string]: JsonValue } | null
   try {
     parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (err) {
-    log.warn(`store: unreadable ${path.basename(file)} read as empty: ${errorMessage(err)}`, errorFields(err));
+    log.warn(
+      `store: unreadable ${path.basename(file)} read as empty: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return null;
   }
   if (!isJsonObject(parsed)) {
@@ -205,7 +214,12 @@ function readLegacyJsonObject(file: string): { [key: string]: JsonValue } | null
 
 function readLegacyIndexFile(hippoRoot: string): HippoIndex {
   const indexPath = path.join(hippoRoot, 'index.json');
-  const empty: HippoIndex = { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
+  const empty: HippoIndex = {
+    version: 1,
+    entries: {},
+    last_retrieval_ids: [],
+    last_trace_id: null,
+  };
   if (!fs.existsSync(indexPath)) return empty;
   // SAFETY: index.json is written by writeIndexMirror as a HippoIndex; readers default every field, so only the object
   // shape is checked.
@@ -214,7 +228,12 @@ function readLegacyIndexFile(hippoRoot: string): HippoIndex {
 
 function readLegacyStatsFile(hippoRoot: string): LegacyStats {
   const statsPath = path.join(hippoRoot, 'stats.json');
-  const empty: LegacyStats = { total_remembered: 0, total_recalled: 0, total_forgotten: 0, consolidation_runs: [] };
+  const empty: LegacyStats = {
+    total_remembered: 0,
+    total_recalled: 0,
+    total_forgotten: 0,
+    consolidation_runs: [],
+  };
   if (!fs.existsSync(statsPath)) return empty;
   // SAFETY: callers guard every field read with `?? 0` / `Array.isArray`, so only the object shape is checked.
   return (readLegacyJsonObject(statsPath) as LegacyStats | null) ?? empty;

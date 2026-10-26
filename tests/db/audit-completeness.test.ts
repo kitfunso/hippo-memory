@@ -25,7 +25,10 @@ describe('audit log captures every mutation', () => {
     const env = { ...process.env, HIPPO_HOME: home };
     await runCliOut(['init'], { env, cwd: home });
     await runCliOut(['init', '--global'], { env, cwd: home });
-    await runCliOut(['remember', 'audit-canary-99 distinguishing token', '--global'], { env, cwd: home });
+    await runCliOut(['remember', 'audit-canary-99 distinguishing token', '--global'], {
+      env,
+      cwd: home,
+    });
     await runCliOut(['recall', 'audit-canary-99'], { env, cwd: home });
 
     const db = openHippoDb(home);
@@ -44,7 +47,10 @@ describe('audit log captures every mutation', () => {
     const env = { ...process.env, HIPPO_HOME: home };
     await runCliOut(['init'], { env, cwd: home });
     await runCliOut(['init', '--global'], { env, cwd: home });
-    await runCliOut(['remember', 'audit-promote-canary-55 distinguishing token'], { env, cwd: home });
+    await runCliOut(['remember', 'audit-promote-canary-55 distinguishing token'], {
+      env,
+      cwd: home,
+    });
     const localRoot = join(home, '.hippo');
     const dbLocal = openHippoDb(localRoot);
     let localId: string | undefined;
@@ -92,7 +98,10 @@ describe('audit log captures every mutation', () => {
     }
     expect(oldId, 'expected to find old row id').toMatch(/^mem_[0-9a-f]+$/);
 
-    await runCliOut(['supersede', oldId!, 'audit-supersede-canary-33 new content'], { env, cwd: home });
+    await runCliOut(['supersede', oldId!, 'audit-supersede-canary-33 new content'], {
+      env,
+      cwd: home,
+    });
 
     const db2 = openHippoDb(localRoot);
     try {
@@ -140,7 +149,10 @@ describe('audit log captures every mutation', () => {
     // Local store flow (forgetMemory is local-store only). Remember + forget
     // both target the local .hippo dir under cwd=home.
     await runCliOut(['init'], { env, cwd: home });
-    await runCliOut(['remember', 'audit-forget-canary-77 distinguishing token'], { env, cwd: home });
+    await runCliOut(['remember', 'audit-forget-canary-77 distinguishing token'], {
+      env,
+      cwd: home,
+    });
     const localRoot = join(home, '.hippo');
     const db = openHippoDb(localRoot);
     let rememberedId: string | undefined;

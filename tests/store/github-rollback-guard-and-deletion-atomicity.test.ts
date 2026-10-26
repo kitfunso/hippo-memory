@@ -17,7 +17,10 @@ import { openHippoDb, closeHippoDb, getMeta, setMeta } from '../../src/db/index.
 import { compareSemver, PACKAGE_VERSION } from '../../src/base/util/version.js';
 import { handleCommentDeleted } from '../../src/surface/connectors/github/deletion.js';
 import { backfillRepo } from '../../src/surface/connectors/github/backfill.js';
-import type { GitHubFetcher, GitHubBackfillPage } from '../../src/surface/connectors/github/octokit-client.js';
+import type {
+  GitHubFetcher,
+  GitHubBackfillPage,
+} from '../../src/surface/connectors/github/octokit-client.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -135,7 +138,9 @@ describe('deletion atomicity', () => {
     const dbCheck = openHippoDb(home);
     try {
       // SAFETY: `SELECT id` names exactly this one text column.
-      const rows = dbCheck.prepare(`SELECT id FROM memories WHERE artifact_ref=? AND kind='raw'`).all(ref) as Array<{
+      const rows = dbCheck
+        .prepare(`SELECT id FROM memories WHERE artifact_ref=? AND kind='raw'`)
+        .all(ref) as Array<{
         id: string;
       }>;
       expect(rows).toHaveLength(3);
@@ -214,7 +219,9 @@ describe('deletion atomicity', () => {
       // written.
       const log = dbAfter
         .prepare(`SELECT idempotency_key, memory_id FROM github_event_log WHERE idempotency_key=?`)
-        .get('test-key-multi-archive') as { idempotency_key: string; memory_id: string } | undefined;
+        .get('test-key-multi-archive') as
+        | { idempotency_key: string; memory_id: string }
+        | undefined;
       expect(log).toMatchObject({ idempotency_key: 'test-key-multi-archive' });
     } finally {
       closeHippoDb(dbAfter);
@@ -244,22 +251,52 @@ describe('backfill HWM stays put on capped streams', () => {
     // After v1.3.0: HWM advanced to issue 1's updated_at, skipping issues 2-3.
     // After v1.3.1: drained=false, HWM unchanged.
     const items = [
-      { number: 1, title: 'one', body: 'b1', user: { login: 'a', id: 1 }, updated_at: '2026-05-04T10:00:00Z' },
-      { number: 2, title: 'two', body: 'b2', user: { login: 'a', id: 1 }, updated_at: '2026-05-04T11:00:00Z' },
-      { number: 3, title: 'three', body: 'b3', user: { login: 'a', id: 1 }, updated_at: '2026-05-04T12:00:00Z' },
+      {
+        number: 1,
+        title: 'one',
+        body: 'b1',
+        user: { login: 'a', id: 1 },
+        updated_at: '2026-05-04T10:00:00Z',
+      },
+      {
+        number: 2,
+        title: 'two',
+        body: 'b2',
+        user: { login: 'a', id: 1 },
+        updated_at: '2026-05-04T11:00:00Z',
+      },
+      {
+        number: 3,
+        title: 'three',
+        body: 'b3',
+        user: { login: 'a', id: 1 },
+        updated_at: '2026-05-04T12:00:00Z',
+      },
     ];
 
     let issuesPageServed = false;
     const fetcher: GitHubFetcher = async ({ url }) => {
       if (url.includes('/issues?') || url.includes('/issues/?')) {
         if (issuesPageServed) {
-          return { items: [], next: null, rateLimit: { sleepSeconds: 0, reason: 'none' } } satisfies GitHubBackfillPage;
+          return {
+            items: [],
+            next: null,
+            rateLimit: { sleepSeconds: 0, reason: 'none' },
+          } satisfies GitHubBackfillPage;
         }
         issuesPageServed = true;
-        return { items, next: null, rateLimit: { sleepSeconds: 0, reason: 'none' } } satisfies GitHubBackfillPage;
+        return {
+          items,
+          next: null,
+          rateLimit: { sleepSeconds: 0, reason: 'none' },
+        } satisfies GitHubBackfillPage;
       }
       // Other streams (issues/comments, pulls/comments) return empty.
-      return { items: [], next: null, rateLimit: { sleepSeconds: 0, reason: 'none' } } satisfies GitHubBackfillPage;
+      return {
+        items: [],
+        next: null,
+        rateLimit: { sleepSeconds: 0, reason: 'none' },
+      } satisfies GitHubBackfillPage;
     };
 
     await backfillRepo(ctx(home), {
@@ -326,9 +363,17 @@ describe('backfill issues_hwm advances past skipped PRs', () => {
 
     const fetcher: GitHubFetcher = async ({ url }) => {
       if (url.includes('/issues?') || url.includes('/issues/?')) {
-        return { items, next: null, rateLimit: { sleepSeconds: 0, reason: 'none' } } satisfies GitHubBackfillPage;
+        return {
+          items,
+          next: null,
+          rateLimit: { sleepSeconds: 0, reason: 'none' },
+        } satisfies GitHubBackfillPage;
       }
-      return { items: [], next: null, rateLimit: { sleepSeconds: 0, reason: 'none' } } satisfies GitHubBackfillPage;
+      return {
+        items: [],
+        next: null,
+        rateLimit: { sleepSeconds: 0, reason: 'none' },
+      } satisfies GitHubBackfillPage;
     };
 
     const result = await backfillRepo(ctx(home), {

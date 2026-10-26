@@ -27,9 +27,15 @@ describe('the object backing reads', () => {
   beforeEach(async () => {
     root = makeRoot('object-backing');
     const days = loadConfig(root).defaultHalfLifeDays;
-    const live = await saveDecision(objectsAt(root), days, 'default', { decisionText: 'ship on tuesdays' });
-    const old = await saveDecision(objectsAt(root), days, 'default', { decisionText: 'ship on mondays' });
-    withDb(root, (db) => db.prepare("UPDATE decisions SET status = 'superseded' WHERE id = ?").run(old.id));
+    const live = await saveDecision(objectsAt(root), days, 'default', {
+      decisionText: 'ship on tuesdays',
+    });
+    const old = await saveDecision(objectsAt(root), days, 'default', {
+      decisionText: 'ship on mondays',
+    });
+    withDb(root, (db) =>
+      db.prepare("UPDATE decisions SET status = 'superseded' WHERE id = ?").run(old.id),
+    );
     backed = [live.memoryId!, old.memoryId!];
     const notes = Array.from({ length: 3 }, (_, i) => createMemory(`plain note ${i}`));
     writeEntriesTogether(root, notes);
@@ -42,24 +48,31 @@ describe('the object backing reads', () => {
     const { statements } = recordStatements(() => memoriesBackingAmong(root, plain));
     const union = statements.find((sql) => sql.includes('UNION'))!;
     // SAFETY: EXPLAIN QUERY PLAN answers id, parent, notused and detail for each step.
-    const plan = withDb(root, (db) => db.prepare(`EXPLAIN QUERY PLAN ${union}`).all() as Array<{ detail: string }>);
-    expect(plan.map((p) => p.detail).filter((d) => /^SCAN (decisions|incidents|skills|predictions)\b/.test(d))).toEqual(
-      [],
+    const plan = withDb(
+      root,
+      (db) => db.prepare(`EXPLAIN QUERY PLAN ${union}`).all() as Array<{ detail: string }>,
     );
+    expect(
+      plan
+        .map((p) => p.detail)
+        .filter((d) => /^SCAN (decisions|incidents|skills|predictions)\b/.test(d)),
+    ).toEqual([]);
   });
 
   it('flags each row of the half-life cursor with the object it backs, reading no object row', () => {
     const { result, reads } = recordStatements(() =>
-      withDb(root, (db) => [...iterateRowsWithObjects(db)].map((r) => [r.entry.id, r.object] as const)),
+      withDb(root, (db) =>
+        [...iterateRowsWithObjects(db)].map((r) => [r.entry.id, r.object] as const),
+      ),
     );
     const flags = new Map(result);
-    expect([flags.get(backed[0]), flags.get(backed[1]), ...plain.map((id) => flags.get(id))]).toEqual([
-      'live',
-      'retired',
-      null,
-      null,
-      null,
-    ]);
-    expect(reads.filter((r) => /FROM (decisions|incidents)\b/.test(r.sql) && !r.sql.includes('EXISTS'))).toEqual([]);
+    expect([
+      flags.get(backed[0]),
+      flags.get(backed[1]),
+      ...plain.map((id) => flags.get(id)),
+    ]).toEqual(['live', 'retired', null, null, null]);
+    expect(
+      reads.filter((r) => /FROM (decisions|incidents)\b/.test(r.sql) && !r.sql.includes('EXISTS')),
+    ).toEqual([]);
   });
 });

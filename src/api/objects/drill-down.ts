@@ -71,7 +71,10 @@ export async function drillDown(
   const limit = opts.limit ?? DEFAULT_DRILL_DOWN_LIMIT;
   // The cap bounds the walk on a pathologically deep tree; CLI, HTTP and MCP reject invalid values before this.
   const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), MAX_DRILL_DOWN_DEPTH));
-  const admit: DescendantAdmission = { ownScope: personalScopeOf(ctx.actor) ?? undefined, project: opts.project };
+  const admit: DescendantAdmission = {
+    ownScope: personalScopeOf(ctx.actor) ?? undefined,
+    project: opts.project,
+  };
   const pastLimit = Math.floor(limit) + 1;
   const walked = await ctx.store.dagReads.summaryWithDescendants(ctx.tenantId, summaryId, {
     depth,
@@ -136,7 +139,12 @@ interface CappedChildren {
 }
 
 /** Global cumulative token budget first, then the `limit` cap. */
-function capChildren(all: DrillDownChild[], fixed: number, opts: DrillDownOptions, limit: number): CappedChildren {
+function capChildren(
+  all: DrillDownChild[],
+  fixed: number,
+  opts: DrillDownOptions,
+  limit: number,
+): CappedChildren {
   let children = all;
   let truncated = false;
   if (opts.budget !== undefined) {

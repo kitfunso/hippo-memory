@@ -50,7 +50,8 @@ function storedKey(row: StoredEntity): string | null {
   return keyText(row.entity_type, row.source_object_type, row.source_object_id);
 }
 
-export const relationKey = (from: string, to: string, relType: string): string => `${from}>${to}|${relType}`;
+export const relationKey = (from: string, to: string, relType: string): string =>
+  `${from}>${to}|${relType}`;
 
 /** Memory id to kind, so a desired row's source_kind is known before the write resolves it the same way. */
 export type MemoryKinds = ReadonlyMap<string, string>;
@@ -93,7 +94,8 @@ function diffEntities(
   const deletes: GraphOp[] = [];
   for (const row of stored) {
     const key = storedKey(row);
-    if (key === null || kept.has(key) || !wanted.has(key)) deletes.push({ op: 'deleteEntity', id: row.id });
+    if (key === null || kept.has(key) || !wanted.has(key))
+      deletes.push({ op: 'deleteEntity', id: row.id });
     else kept.set(key, row);
   }
   const updates: GraphOp[] = [];
@@ -137,7 +139,8 @@ function diffRelations(
     else deletes.push({ op: 'deleteRelation', id: row.id });
   }
   const inserts: GraphOp[] = [];
-  for (const [key, relation] of wanted) if (!kept.has(key)) inserts.push({ op: 'insertRelation', relation });
+  for (const [key, relation] of wanted)
+    if (!kept.has(key)) inserts.push({ op: 'insertRelation', relation });
   return [...deletes, ...inserts];
 }
 
@@ -147,6 +150,11 @@ export function diffGraph(stored: StoredGraph, desired: DesiredGraph): GraphOp[]
   const entityDelta = diffEntities(stored.entities, wantedEntities(desired), stored.kinds);
   return [
     ...entityDelta.ops,
-    ...diffRelations(stored.relations, wantedRelations(desired), entityDelta.keptKeyById, stored.kinds),
+    ...diffRelations(
+      stored.relations,
+      wantedRelations(desired),
+      entityDelta.keptKeyById,
+      stored.kinds,
+    ),
   ];
 }

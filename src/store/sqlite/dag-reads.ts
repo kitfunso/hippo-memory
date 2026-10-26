@@ -5,7 +5,12 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { readEntriesByIds, countSessionRawMemories, readChildrenByParent } from './entry-reads.js';
 import { TENANT_IS } from './tenant.js';
 import { chunked } from '../../base/util/chunked.js';
-import type { DescendantOrigin, SummaryDescendants, DagReads, DescendantWalk } from '../../base/ports/store.js';
+import type {
+  DescendantOrigin,
+  SummaryDescendants,
+  DagReads,
+  DescendantWalk,
+} from '../../base/ports/store.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { descendantAdmits } from '../../base/scope/read-admission.js';
 import type { OnHandle } from './open.js';
@@ -43,7 +48,11 @@ interface ChildGroup extends DescendantOrigin {
 
 /** The walk `summaryWithDescendants` documents, with `levels` cut to the first `rows` rows and each level's full count
  * in `sizes`. */
-function pagedDescendants(db: DatabaseSyncLike, walk: PagedWalk, summaryAdmitted: boolean): SummaryDescendants {
+function pagedDescendants(
+  db: DatabaseSyncLike,
+  walk: PagedWalk,
+  summaryAdmitted: boolean,
+): SummaryDescendants {
   const sizes: number[] = [];
   const levels: MemoryEntry[][] = [];
   const seen = new Set<string>([walk.summary.id]);
@@ -116,7 +125,10 @@ function countedLevel(
     ).all(JSON.stringify(chunk), walk.tenantId, walk.summary.id) as ChildGroup[];
     for (const group of groups) {
       if (!walk.admit(group)) return null;
-      perParent.set(group.dag_parent_id, (perParent.get(group.dag_parent_id) ?? 0) + Number(group.n));
+      perParent.set(
+        group.dag_parent_id,
+        (perParent.get(group.dag_parent_id) ?? 0) + Number(group.n),
+      );
     }
   }
   let size = 0;
@@ -145,7 +157,11 @@ function firstRows(
   for (const parentId of parents) {
     if (left <= 0) break;
     const n = at.perParent.get(parentId) ?? 0;
-    if (n >= left) return [...childrenInOrder(db, walk, whole, -1), ...childrenInOrder(db, walk, [parentId], left)];
+    if (n >= left)
+      return [
+        ...childrenInOrder(db, walk, whole, -1),
+        ...childrenInOrder(db, walk, [parentId], left),
+      ];
     whole.push(parentId);
     left -= n;
   }
@@ -196,8 +212,15 @@ function summaryWithDescendants(
   const summary = readEntriesByIds(db, [id], tenantId).get(id);
   if (!summary) return null;
   const readable = (row: DescendantOrigin): boolean => descendantAdmits(row, admit);
-  const walked = readable(summary) && (minSummaryLevel === undefined || (summary.dagLevel ?? 0) >= minSummaryLevel);
-  if (page) return pagedDescendants(db, { tenantId, summary, depth, rows: page.rows, admit: readable }, walked);
+  const walked =
+    readable(summary) &&
+    (minSummaryLevel === undefined || (summary.dagLevel ?? 0) >= minSummaryLevel);
+  if (page)
+    return pagedDescendants(
+      db,
+      { tenantId, summary, depth, rows: page.rows, admit: readable },
+      walked,
+    );
   const levels: MemoryEntry[][] = [];
   const seen = new Set<string>([id]);
   let parents = walked ? [id] : [];

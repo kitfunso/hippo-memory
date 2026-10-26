@@ -37,7 +37,12 @@ import { PREDICTION_ROUTES } from './routes/predictions.js';
 import { PROCESS_ROUTES } from './routes/processes.js';
 import { PROJECT_BRIEF_ROUTES } from './routes/project-briefs.js';
 import { SKILL_ROUTES } from './routes/skills.js';
-import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './routes/recall.js';
+import {
+  handleAssembleSession,
+  handleDrillRecall,
+  handleGetContext,
+  handleRecallMemories,
+} from './routes/recall.js';
 import { handleNearestVectors } from './routes/vectors.js';
 import { parseJsonBody } from './validation.js';
 import type {
@@ -214,7 +219,10 @@ export const V1_ROUTES: readonly Route[] = [
 ];
 
 /** The handler bound to this path's params, or null when the path differs. */
-export function bindPath<R>(route: RouteEndpoint<R>, path: string): ((r: R) => Promise<void>) | null {
+export function bindPath<R>(
+  route: RouteEndpoint<R>,
+  path: string,
+): ((r: R) => Promise<void>) | null {
   if ('path' in route) return path === route.path ? route.handler : null;
   if ('pattern' in route) {
     const params = matchPath(route.pattern, path);
@@ -231,7 +239,11 @@ export function routeServes(route: Route, method: string, path: string): boolean
 
 /** The route's run for this request, gate first, or null when method or path differ. The matcher runs before the method
  * check, as the inline route blocks did, so a malformed `%` escape still throws from matchPath on any method. */
-function routeMatches(route: BoundRoute, method: string, path: string): ((r: RouteRequest) => Promise<void>) | null {
+function routeMatches(
+  route: BoundRoute,
+  method: string,
+  path: string,
+): ((r: RouteRequest) => Promise<void>) | null {
   if (route.auth === 'webhook-signature') {
     const run = bindPath<RouteRequest>(route, path);
     return run === null || method !== route.method ? null : run;
@@ -250,11 +262,15 @@ async function passAuthGate(
   const label = routeLabel(route);
   // Defence in depth, not the boundary: a proxy or a browser page on this host connects from loopback too.
   if (route.auth === 'host-admin-local' && !isLocalCaller(req)) {
-    throw new HttpError(403, `${label} is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)`);
+    throw new HttpError(
+      403,
+      `${label} is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)`,
+    );
   }
   const ctx = await buildContextWithAuth(req, opts);
   if (route.unported) await notPorted();
-  if (route.auth === 'admin' && ctx.actor.role !== 'admin') throw new HttpError(403, `${label} requires admin role`);
+  if (route.auth === 'admin' && ctx.actor.role !== 'admin')
+    throw new HttpError(403, `${label} requires admin role`);
   if (route.auth === 'host-admin-local') assertCrossTenantAdmin(ctx, label);
   return ctx;
 }
@@ -282,7 +298,9 @@ function boundRoute(route: Route, store: HippoStore, onHippoDb: boolean): BoundR
   }
   // A hippoDbOnly row needs hippo.db; a row naming no group runs on any store.
   const meets =
-    route.hippoDbOnly === undefined ? route.storeReady === undefined || hasGroup(store, route.storeReady) : onHippoDb;
+    route.hippoDbOnly === undefined
+      ? route.storeReady === undefined || hasGroup(store, route.storeReady)
+      : onHippoDb;
   return meets ? route : { ...route, unported: true };
 }
 
@@ -295,7 +313,11 @@ export function bindV1Routes(store: HippoStore, onHippoDb: boolean): RouteLookup
 }
 
 /** Run the first /v1 route whose method and path match. */
-export async function dispatchV1Route(r: RouteRequest, method: string, path: string): Promise<boolean> {
+export async function dispatchV1Route(
+  r: RouteRequest,
+  method: string,
+  path: string,
+): Promise<boolean> {
   const match = r.opts.v1Routes(method, path);
   if (match === null) return false;
   const { route, run } = match;
@@ -377,7 +399,11 @@ export async function dispatchHostRoute(
 }
 
 /** No auth, body read or store access, so a caller with no key gets it under any store. */
-export function dispatchPublicJson({ req, res, opts }: RouteRequest, method: string, path: string): boolean {
+export function dispatchPublicJson(
+  { req, res, opts }: RouteRequest,
+  method: string,
+  path: string,
+): boolean {
   const text = method === 'GET' ? opts.publicJsonBodies.get(path) : undefined;
   if (text === undefined) return false;
   noteAccess(req, { route: path });

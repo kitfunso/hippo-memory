@@ -81,7 +81,9 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
 
   it('case 1: invalidateMatching(..., tenant-a) does NOT weaken tenant-b matches', async () => {
     seedFor(hippoRoot, 'tenant-a', 'REST API uses Bearer tokens', { tags: ['api'] });
-    const bId = seedFor(hippoRoot, 'tenant-b', 'REST API documentation incomplete', { tags: ['docs'] });
+    const bId = seedFor(hippoRoot, 'tenant-b', 'REST API documentation incomplete', {
+      tags: ['docs'],
+    });
 
     const result = await invalidateMatching(
       hookStore(hippoRoot),
@@ -112,7 +114,9 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
       llm: anthropicLlm({
         apiKey: 'test',
         fetcher: async () =>
-          new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
+          new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), {
+            status: 200,
+          }),
       }),
       tenantId: 'tenant-a',
     });
@@ -123,7 +127,9 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
       llm: anthropicLlm({
         apiKey: 'test',
         fetcher: async () =>
-          new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
+          new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), {
+            status: 200,
+          }),
       }),
       dryRun: true,
     });
@@ -153,9 +159,13 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     const fetcher = async (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
       // Capture how many sources were sent to the LLM
       const body = init?.body ? JSON.parse(String(init.body)) : {};
-      const userMsg = body.messages?.find((m: { role: string }) => m.role === 'user')?.content ?? '';
+      const userMsg =
+        body.messages?.find((m: { role: string }) => m.role === 'user')?.content ?? '';
       refineCallSources = (userMsg.match(/Source \d/g) ?? []).length;
-      return new Response(JSON.stringify({ choices: [{ message: { content: 'refined output' } }] }), { status: 200 });
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: 'refined output' } }] }),
+        { status: 200 },
+      );
     };
 
     const result = await refineStore(hippoRoot, {
@@ -275,7 +285,9 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     seedFor(hippoRoot, 'tenant-a', 'a-lesson: prefer explicit imports over wildcards', {
       tags: ['lesson', 'global-relevant'],
     });
-    seedFor(hippoRoot, 'tenant-b', 'b-lesson: do not commit secrets to git', { tags: ['lesson', 'global-relevant'] });
+    seedFor(hippoRoot, 'tenant-b', 'b-lesson: do not commit secrets to git', {
+      tags: ['lesson', 'global-relevant'],
+    });
 
     // dryRun returns the candidate list without writing
     const candidates = await autoShare(...sharingStores(hippoRoot), {
@@ -325,7 +337,9 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
       llm: anthropicLlm({
         apiKey: 'test',
         fetcher: async () =>
-          new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), { status: 200 }),
+          new Response(JSON.stringify({ choices: [{ message: { content: 'refined' } }] }), {
+            status: 200,
+          }),
       }),
       dryRun: true,
     });
@@ -425,7 +439,9 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     seedFor(globalRoot, 'tenant-a', 'global memory from tenant-a', {});
     seedFor(globalRoot, 'tenant-b', 'global memory from tenant-b', {});
 
-    expect(await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { embed: TEST_RUN })).toBe(0);
+    expect(
+      await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { embed: TEST_RUN }),
+    ).toBe(0);
 
     // Under v39 the seeded rows carry the seed store's own project origin, so the default sync gates them above; this case's
     // original guarantee - the global read is host-wide across TENANTS - still holds once the origin gate is explicitly

@@ -62,7 +62,10 @@ describe('check-test-only-exports.mjs: script callers and the purity rule', () =
     file('src/index.ts', 'export const entry = 1;\n');
     file('src/calc.ts', CALC);
     file('src/state.ts', STATE);
-    file('src/grow.ts', `import { table } from './state.js';\nexport function grow(): void { table.push(2); }\n`);
+    file(
+      'src/grow.ts',
+      `import { table } from './state.js';\nexport function grow(): void { table.push(2); }\n`,
+    );
     file('src/db/rows.ts', 'export function rowCount(): number { return 1; }\n');
     file(
       'src/disk.ts',
@@ -86,7 +89,9 @@ describe('check-test-only-exports.mjs: script callers and the purity rule', () =
   /** The names of one src file that the gate still counts as test-only. */
   function counted(srcFile: string): string[] {
     return judgeExports(dir)
-      .filter((r: { key: string; counted: boolean }) => r.counted && r.key.startsWith(`src/${srcFile}:`))
+      .filter(
+        (r: { key: string; counted: boolean }) => r.counted && r.key.startsWith(`src/${srcFile}:`),
+      )
       .map((r: { key: string }) => r.key.slice(r.key.lastIndexOf(':') + 1));
   }
 
@@ -118,7 +123,9 @@ describe('check-test-only-exports.mjs: script callers and the purity rule', () =
   });
 
   it('counts a function that reaches the db layer, fs through a second module, console or process.env', () => {
-    expect(counted('report.ts')).toEqual(expect.arrayContaining(['describeRows', 'firstLine', 'home', 'shout']));
+    expect(counted('report.ts')).toEqual(
+      expect.arrayContaining(['describeRows', 'firstLine', 'home', 'shout']),
+    );
   });
 
   it('counts both halves of a mutual recursion when only one of them reaches fs', () => {
@@ -126,7 +133,14 @@ describe('check-test-only-exports.mjs: script callers and the purity rule', () =
   });
 
   it('counts every export of a module that no script imports', () => {
-    expect(counted('rates.ts')).toEqual(['RATE', 'onlyNamed', 'viaBarrel', 'viaLoader', 'viaNamed', 'viaNamespace']);
+    expect(counted('rates.ts')).toEqual([
+      'RATE',
+      'onlyNamed',
+      'viaBarrel',
+      'viaLoader',
+      'viaNamed',
+      'viaNamespace',
+    ]);
   });
 
   it('takes a script or benchmark that imports the module as a caller, and ignores one that only shares the identifier', () => {
@@ -134,7 +148,10 @@ describe('check-test-only-exports.mjs: script callers and the purity rule', () =
       'scripts/eval.mjs',
       `import { RATE, viaNamed } from '../dist/rates.js';\nimport { viaBarrel } from '../dist/barrel.js';\nconsole.log(RATE, viaNamed(), viaBarrel());\n`,
     );
-    file('benchmarks/run.mjs', `import * as rates from '../dist/rates.js';\nconsole.log(rates.viaNamespace());\n`);
+    file(
+      'benchmarks/run.mjs',
+      `import * as rates from '../dist/rates.js';\nconsole.log(rates.viaNamespace());\n`,
+    );
     file(
       'scripts/loader.mjs',
       `const load = (f) => import(new URL('../dist/' + f, import.meta.url));\nconst { viaLoader } = await load('rates.js');\nviaLoader();\n`,

@@ -36,7 +36,11 @@ import {
   type RenderedRecall,
   type RenderSlot,
 } from './tool-text.js';
-import type { RecallResultItem, RecallSuppressionSummary, ShowRanking } from '../../api/recall/types.js';
+import type {
+  RecallResultItem,
+  RecallSuppressionSummary,
+  ShowRanking,
+} from '../../api/recall/types.js';
 
 /**
  * Builds the presenter that renders the list the tool shows, parks the render in `out` and hands back its hint rows.
@@ -99,7 +103,9 @@ function suppressionCounts(i: SuppressionInputs): SuppressionCounts {
 function unshownTail(list: SearchResult[], tailRows: RecallResultItem[]): RecallResultItem[] {
   const shownIds = new Set(list.map((r) => r.entry.id));
   const shownKeys = storedTextKeys(list.map((r) => r.entry));
-  const unshown = tailRows.filter((r) => !shownIds.has(r.id) && !shownKeys.has(duplicateKey(r.content)));
+  const unshown = tailRows.filter(
+    (r) => !shownIds.has(r.id) && !shownKeys.has(duplicateKey(r.content)),
+  );
   return dropHeldCopies(unshown, (r) => r);
 }
 
@@ -116,14 +122,21 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): ShowR
     const tailRows = apiResult.results.filter((r) => r.isFreshTail || r.isSummary);
     const showTail = tailRows.length > 0 && pays(tailSection(tailRows));
     const continuityPiece =
-      includeContinuity && apiResult.continuity ? `\n\n${formatContinuityBlock(apiResult.continuity)}` : '';
+      includeContinuity && apiResult.continuity
+        ? `\n\n${formatContinuityBlock(apiResult.continuity)}`
+        : '';
     const showContinuity = continuityPiece !== '' && pays(continuityPiece);
 
     // The hints and Cutoff block describe the list the tool shows, not the window band in apiResult.
     const render = (cut: SearchResult[]): RenderedRecall => {
       // After every cut, so a merged row cut here never hides its sources.
       const list = dropHeldCopies(cut, (r) => r.entry);
-      const { anchoring, availability } = detectRecallHints({ list, pool: hintPool, anchorRing, queryHash });
+      const { anchoring, availability } = detectRecallHints({
+        list,
+        pool: hintPool,
+        anchorRing,
+        queryHash,
+      });
       const tail = showTail ? unshownTail(list, tailRows) : [];
       const counts = suppressionCounts({ poolSize: pool.length, droppedByScope, cut, list, tail });
       const s = suppressionSummary(counts, anchoring);
@@ -133,7 +146,8 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): ShowR
       if (showPlan) text += planPiece;
       text += cutoffSection(s, list.length);
       // The window band's fresh-tail and summary rows follow the ranked list, or the tool's fields go unanswered.
-      text += formatMemories(list, now) + tailSection(tail) + (showContinuity ? continuityPiece : '');
+      text +=
+        formatMemories(list, now) + tailSection(tail) + (showContinuity ? continuityPiece : '');
       return { anchoring, availability, text, list };
     };
     const fit = { room: Math.max(0, purse.left()), budget, floor: 1, cost: memoryCostAt(now) };
@@ -199,6 +213,7 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
     }),
   );
   const { rendered } = out;
-  if (!rendered) throw new Error('hippo_recall: api.retrieveRanking returned without calling its presenter');
+  if (!rendered)
+    throw new Error('hippo_recall: api.retrieveRanking returned without calling its presenter');
   return rendered.text;
 }

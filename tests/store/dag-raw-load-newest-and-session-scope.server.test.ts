@@ -23,7 +23,11 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { retrieve, assemble } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { loadSessionRawMemories, loadFreshRawMemories, writeEntry } from '../_helpers/root-forms.js';
+import {
+  loadSessionRawMemories,
+  loadFreshRawMemories,
+  writeEntry,
+} from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -82,7 +86,11 @@ describe('loadSessionRawMemories cap preserves NEWEST rows', () => {
       writeEntry(root, e);
       ids.push(e.id);
     }
-    const r = await assemble(ctxFor(root), 'sess-y', { rowCap: 5, freshTailCount: 3, budget: 100000 });
+    const r = await assemble(ctxFor(root), 'sess-y', {
+      rowCap: 5,
+      freshTailCount: 3,
+      budget: 100000,
+    });
     expect(r.truncated).toBe(true);
     // Pre-v1.6.2: items would be ids[0..4] (oldest), and freshTailCount=3 would
     // mark ids[2..4] as fresh-tail — actually stale relative to ids[9..11].
@@ -191,7 +199,9 @@ describe('HTTP /v1/memories accepts new RecallOptions', () => {
     expect(res.status).toBe(200);
     // SAFETY: /v1/memories route under test always responds with a RecallResult JSON body
     // whose results carry content and isFreshTail per the recall contract.
-    const body = (await res.json()) as { results: Array<{ content: string; isFreshTail?: boolean }> };
+    const body = (await res.json()) as {
+      results: Array<{ content: string; isFreshTail?: boolean }>;
+    };
     const tail = body.results.filter((it) => it.isFreshTail);
     expect(tail.some((it) => it.content === 'row in session A http')).toBe(true);
     expect(tail.every((it) => it.content !== 'row in session B http')).toBe(true);

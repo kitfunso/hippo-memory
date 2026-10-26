@@ -10,7 +10,11 @@ import type { KeysetPosition } from '../../src/base/util/keyset.js';
 import type { CliFlags } from '../../src/surface/cli/flag-values.js';
 import { handleConflicts } from '../../src/surface/cli/curate.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
+import {
+  countMatching,
+  peakRowsRead,
+  recordStatementsAsync,
+} from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
 
@@ -48,7 +52,12 @@ async function wholeList(): Promise<ConflictPage['conflicts']> {
   const all: ConflictPage['conflicts'] = [];
   let after: KeysetPosition | undefined;
   do {
-    const page = await conflictList(apiCtx(root), 'open', { everyTenant: true }, { limit: 1000, after });
+    const page = await conflictList(
+      apiCtx(root),
+      'open',
+      { everyTenant: true },
+      { limit: 1000, after },
+    );
     all.push(...page.conflicts);
     after = page.next ?? undefined;
   } while (after);
@@ -77,7 +86,11 @@ async function printed(flags: CliFlags) {
     handleConflicts({ hippoRoot: root, tenantId: 'default', args: [], flags }),
   );
   vi.restoreAllMocks();
-  return { lines, reads: countMatching(log.statements, LIST_READ), peak: peakRowsRead(log.reads, LIST_READ) };
+  return {
+    lines,
+    reads: countMatching(log.statements, LIST_READ),
+    peak: peakRowsRead(log.reads, LIST_READ),
+  };
 }
 
 describe('hippo conflicts pages', () => {
@@ -99,7 +112,9 @@ describe('hippo conflicts pages', () => {
       expect(text.peak).toBeLessThanOrEqual(1001);
 
       const json = await printed({ json: true });
-      expect(json.lines.join('\n')).toBe(JSON.stringify({ conflicts: whole.map(conflictToWire) }, null, 2));
+      expect(json.lines.join('\n')).toBe(
+        JSON.stringify({ conflicts: whole.map(conflictToWire) }, null, 2),
+      );
       expect(json.reads).toBe(jsonReads);
       expect(json.peak).toBeLessThanOrEqual(1001);
     },

@@ -27,8 +27,10 @@ afterEach(() => closeHippoDb(db));
 async function promoteFamily(children: number): Promise<void> {
   const parent = (await cards.create(TENANT, { title: 'parent' })).id;
   const others: string[] = [];
-  for (let i = 0; i < children; i++) others.push((await cards.create(TENANT, { title: `other ${i}` })).id);
-  for (let i = 0; i < children; i++) await cards.create(TENANT, { title: `child ${i}`, dependsOn: [parent] });
+  for (let i = 0; i < children; i++)
+    others.push((await cards.create(TENANT, { title: `other ${i}` })).id);
+  for (let i = 0; i < children; i++)
+    await cards.create(TENANT, { title: `child ${i}`, dependsOn: [parent] });
   await cards.create(TENANT, { title: 'waits on all', dependsOn: others });
   await cards.claim(TENANT, parent, 'test-runtime');
   await cards.review(TENANT, parent);
@@ -43,7 +45,9 @@ describe('list-bound card statements', () => {
       await promoteFamily(30);
       const freshPrepares = spy.mock.calls
         .map(([text]) => text)
-        .filter((text) => /UPDATE cards SET status|FROM cards WHERE tenant_id = \? AND id/.test(text));
+        .filter((text) =>
+          /UPDATE cards SET status|FROM cards WHERE tenant_id = \? AND id/.test(text),
+        );
       expect(freshPrepares).toEqual([]);
     } finally {
       spy.mockRestore();

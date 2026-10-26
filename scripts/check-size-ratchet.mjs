@@ -19,14 +19,20 @@ function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
     if (e.isDirectory()) tsFiles(p, out);
-    else if (/\.([cm]?ts|mjs)$/.test(e.name) && !/\.d\.[cm]?ts$/.test(e.name)) out.push(p.replace(/\\/g, '/'));
+    else if (/\.([cm]?ts|mjs)$/.test(e.name) && !/\.d\.[cm]?ts$/.test(e.name))
+      out.push(p.replace(/\\/g, '/'));
   }
   return out.sort();
 }
 
 function propName(name) {
   if (!name) return undefined;
-  if (ts.isIdentifier(name) || ts.isPrivateIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
+  if (
+    ts.isIdentifier(name) ||
+    ts.isPrivateIdentifier(name) ||
+    ts.isStringLiteral(name) ||
+    ts.isNumericLiteral(name)
+  ) {
     return name.text;
   }
   return '[computed]';
@@ -35,7 +41,10 @@ function propName(name) {
 /** The variable or property an object literal is assigned to, so its methods read `handlers.run`. */
 function ownerOf(obj) {
   const p = obj.parent;
-  if (p && (ts.isVariableDeclaration(p) || ts.isPropertyAssignment(p) || ts.isPropertyDeclaration(p))) {
+  if (
+    p &&
+    (ts.isVariableDeclaration(p) || ts.isPropertyAssignment(p) || ts.isPropertyDeclaration(p))
+  ) {
     return propName(p.name);
   }
   return undefined;
@@ -129,7 +138,8 @@ function findOffenders() {
     const limit = FUNCTION_LIMITS[file.split('/')[0]];
     for (const [key, n] of functionLengths(file, text)) if (n > limit) functions[key] = n;
   }
-  const sorted = (o) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+  const sorted = (o) =>
+    Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
   return { files: sorted(files), functions: sorted(functions), longLines: sorted(longLines) };
 }
 
@@ -166,9 +176,11 @@ if (args.includes('--update')) {
 
 if (args.includes('--list')) {
   for (const kind of ['files', 'functions']) {
-    for (const [key, n] of Object.entries(current[kind]).sort(([, a], [, b]) => b - a)) console.log(`${n}\t${key}`);
+    for (const [key, n] of Object.entries(current[kind]).sort(([, a], [, b]) => b - a))
+      console.log(`${n}\t${key}`);
   }
-  for (const [key, n] of Object.entries(oversized).sort(([, a], [, b]) => b - a)) console.log(`${n}\t${key}`);
+  for (const [key, n] of Object.entries(oversized).sort(([, a], [, b]) => b - a))
+    console.log(`${n}\t${key}`);
   process.exit(0);
 }
 
@@ -187,7 +199,8 @@ for (const kind of ['files', 'functions', 'longLines']) {
   // A baseline that has never held the longLines key is a first write, not a rise; once written it ratchets like the rest.
   if (kind === 'longLines' && baseline.longLines === undefined) continue;
   const was = baseline[kind] ?? {};
-  for (const [key, n] of Object.entries(current[kind])) if (n > (was[key] ?? 0)) rose.push([key, was[key] ?? 'new', n]);
+  for (const [key, n] of Object.entries(current[kind]))
+    if (n > (was[key] ?? 0)) rose.push([key, was[key] ?? 'new', n]);
   for (const [key, n] of Object.entries(was)) if ((current[kind][key] ?? 0) < n) fell.push(key);
 }
 
@@ -199,7 +212,9 @@ if (rose.length > 0) {
   console.error(
     'Split the new code into a smaller function or module, or wrap the long line, instead of growing an offender.',
   );
-  console.error('`node scripts/check-size-ratchet.mjs --list` shows every offender, longest first.');
+  console.error(
+    '`node scripts/check-size-ratchet.mjs --list` shows every offender, longest first.',
+  );
   process.exit(1);
 }
 if (fell.length > 0) {

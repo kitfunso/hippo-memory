@@ -5,7 +5,8 @@ import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
 // bytes, as startsWith does, where LIKE would fold case.
 export const quarantinedIn = (t: string): string =>
   `(${t}scope IS NOT NULL AND substr(${t}scope, 1, ${QUARANTINE_SCOPE_PREFIX.length}) = '${QUARANTINE_SCOPE_PREFIX}')`;
-export const supersededIn = (t: string): string => `(${t}superseded_by IS NOT NULL AND ${t}superseded_by <> '')`;
+export const supersededIn = (t: string): string =>
+  `(${t}superseded_by IS NOT NULL AND ${t}superseded_by <> '')`;
 export const kindIn = (t: string): string => `COALESCE(${t}kind, 'distilled')`;
 const liveIn = (t: string): string =>
   `NOT ${supersededIn(t)} AND ${kindIn(t)} IN ('raw', 'distilled') AND NOT ${quarantinedIn(t)}`;

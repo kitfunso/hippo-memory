@@ -120,7 +120,10 @@ export interface CliCoreRecall extends CliCoreRanking {
   hostSessionId?: string;
   /** Where a shown list is kept as the last recall, for a later `hippo outcome` with no ids. */
   lastRecall: LastRecall;
-  show: (ranking: RankRecallResult, planning: PlanningFallacyOutput) => ShownCliCore | Promise<ShownCliCore>;
+  show: (
+    ranking: RankRecallResult,
+    planning: PlanningFallacyOutput,
+  ) => ShownCliCore | Promise<ShownCliCore>;
 }
 
 /** A read-only look at the ranking (`hippo explain`): no hint is evaluated and nothing is written. */

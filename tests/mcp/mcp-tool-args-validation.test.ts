@@ -28,7 +28,11 @@ function reply(res: McpResponse | null): ToolReply {
     error?: { code: number; message: string };
     result?: { isError?: boolean; content?: Array<{ text?: string }> };
   } | null;
-  return { error: r?.error, isError: r?.result?.isError === true, text: r?.result?.content?.[0]?.text ?? '' };
+  return {
+    error: r?.error,
+    isError: r?.result?.isError === true,
+    text: r?.result?.content?.[0]?.text ?? '',
+  };
 }
 
 describe('MCP tool argument validation', () => {
@@ -131,14 +135,16 @@ describe('MCP tool argument validation', () => {
 
   it('refuses a string past the HTTP route cap, so a too-long tag writes nothing', async () => {
     // The transport answers a thrown BadRequestError with its text, as it does for the api's own refusals.
-    await expect(call('hippo_remember', { text: 'kept out', tag: 'x'.repeat(MAX_ID_LEN + 1) })).rejects.toThrow(
-      `tag exceeds ${MAX_ID_LEN}-character cap`,
-    );
+    await expect(
+      call('hippo_remember', { text: 'kept out', tag: 'x'.repeat(MAX_ID_LEN + 1) }),
+    ).rejects.toThrow(`tag exceeds ${MAX_ID_LEN}-character cap`);
     expect(loadAllEntries(home, 'default')).toHaveLength(0);
   });
 
   it('lets a valid call through unchanged', async () => {
-    const remembered = await call('hippo_remember', { text: 'validation keeps valid calls working' });
+    const remembered = await call('hippo_remember', {
+      text: 'validation keeps valid calls working',
+    });
     expect(remembered.isError).toBe(false);
     expect(remembered.text).toMatch(/^Remembered \[/);
     const recalled = await call('hippo_recall', { query: 'validation', budget: 4000 });
@@ -188,7 +194,9 @@ describe('validateToolArgs numeric strings', () => {
 
   it('coerces a trimmed numeric string before the integer and range checks', () => {
     expect(validateToolArgs(schema, { depth: ' 3 ' })).toEqual([]);
-    expect(validateToolArgs(schema, { depth: '1.5' })).toEqual(['depth must be an integer (got "1.5")']);
+    expect(validateToolArgs(schema, { depth: '1.5' })).toEqual([
+      'depth must be an integer (got "1.5")',
+    ]);
     expect(validateToolArgs(schema, { depth: '11' })).toEqual(['depth must be <= 10 (got "11")']);
   });
 

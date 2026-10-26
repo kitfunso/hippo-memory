@@ -4,9 +4,21 @@ import { MemoryEntry } from '../../base/memory/entry.js';
 import type { Decision } from '../../base/records/object-types.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import { decisionIdByMemory, decisionMemoryWeaken } from '../../api/objects/object-kinds.js';
-import { objectClose, objectCreate, objectGet, objectList, objectStates } from '../../api/objects/objects.js';
+import {
+  objectClose,
+  objectCreate,
+  objectGet,
+  objectList,
+  objectStates,
+} from '../../api/objects/objects.js';
 import { printError } from './output.js';
-import { type CliFlags, type CommandContext, flagValueless, nonEmptyStringFlag, stringFlag } from './flag-values.js';
+import {
+  type CliFlags,
+  type CommandContext,
+  flagValueless,
+  nonEmptyStringFlag,
+  stringFlag,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
 import type { Context } from '../../api/index.js';
@@ -54,7 +66,12 @@ function decideClose(ctx: Context, args: string[]): Promise<void> {
   return closeObjectVerb(args, DECISION, (id) => objectClose(ctx, 'decision', id));
 }
 
-export async function handleDecide({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleDecide({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -104,7 +121,11 @@ function exitWithDecideUsage(): never {
   fail('       hippo decide close <id>');
 }
 
-async function weakenOrWarn(ctx: Context, oldEntry: MemoryEntry, supersedesMemId: string | null): Promise<void> {
+async function weakenOrWarn(
+  ctx: Context,
+  oldEntry: MemoryEntry,
+  supersedesMemId: string | null,
+): Promise<void> {
   // Best-effort and last: the decision already committed. Failing here would make a retry find no active decision for
   // the old memory and create a duplicate active successor, so warn instead.
   try {

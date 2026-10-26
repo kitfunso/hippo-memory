@@ -54,7 +54,10 @@ let store: string;
 let handle: ServerHandle | undefined;
 let aliceKey = '';
 const realFetch = globalThis.fetch;
-const BASE_CONFIG = { sharedStore: true, embeddings: { provider: 'openai', model: 'text-embedding-3-small' } };
+const BASE_CONFIG = {
+  sharedStore: true,
+  embeddings: { provider: 'openai', model: 'text-embedding-3-small' },
+};
 
 const ids = {
   acme: '',
@@ -79,8 +82,15 @@ const ids = {
 };
 const pairs = { acme: 0, beta: 0, slack: 0, none: 0 };
 
-function seed(content: string, origin: string | null, opts: Partial<CreateMemoryOptions> = {}): string {
-  const entry: MemoryEntry = { ...createMemory(content, { tenantId: TENANT, ...opts }), originProject: origin };
+function seed(
+  content: string,
+  origin: string | null,
+  opts: Partial<CreateMemoryOptions> = {},
+): string {
+  const entry: MemoryEntry = {
+    ...createMemory(content, { tenantId: TENANT, ...opts }),
+    originProject: origin,
+  };
   writeEntry(store, entry);
   return entry.id;
 }
@@ -96,7 +106,11 @@ function raw(content: string, origin: string | null, parent?: string): string {
   });
 }
 
-async function tool(repo: Repo, name: string, args: Record<string, JsonValue> = {}): Promise<Reply> {
+async function tool(
+  repo: Repo,
+  name: string,
+  args: Record<string, JsonValue> = {},
+): Promise<Reply> {
   const res = await realFetch(`${handle!.url}/mcp`, {
     method: 'POST',
     headers: {
@@ -105,7 +119,12 @@ async function tool(repo: Repo, name: string, args: Record<string, JsonValue> = 
       authorization: `Bearer ${aliceKey}`,
       'x-hippo-project': repo,
     },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name, arguments: args },
+    }),
   });
   expect(res.status).toBe(200);
   // SAFETY: a tools/call reply is a result with text content or a JSON-RPC error; only those fields are read.
@@ -127,7 +146,9 @@ async function shown(
 ): Promise<string[]> {
   const r = await tool(repo, name, args);
   expect(r.isError, r.text).toBe(false);
-  return Object.values(ids).filter((id) => r.text.includes(readEntry(store, id)?.content ?? '\u0000'));
+  return Object.values(ids).filter((id) =>
+    r.text.includes(readEntry(store, id)?.content ?? '\u0000'),
+  );
 }
 
 function expectOnly(
@@ -164,7 +185,10 @@ beforeAll(async () => {
       if (handle && url.startsWith(handle.url)) return realFetch(input, init);
       // SAFETY: body is the OpenAI embeddings request the provider just serialised.
       const body = JSON.parse(String(init?.body)) as { input: string[] };
-      return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }), { status: 200 });
+      return new Response(
+        JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }),
+        { status: 200 },
+      );
     }),
   );
 
@@ -188,9 +212,15 @@ beforeAll(async () => {
   ids.beta = seed('betamark lighthouse keeper log for the beta repo', 'beta');
   ids.global = seed('globalmark lighthouse keeper log for every repo', '');
   ids.none = seed('nullmark lighthouse keeper log with no project', null);
-  ids.other = seed('othermark lighthouse keeper log in another tenant', 'acme', { tenantId: 'other' });
-  ids.alice = seed('alicemark lighthouse keeper log kept by alice', '', { scope: 'personal:private:alice' });
-  ids.bob = seed('bobmark lighthouse keeper log kept by bob', '', { scope: 'personal:private:bob' });
+  ids.other = seed('othermark lighthouse keeper log in another tenant', 'acme', {
+    tenantId: 'other',
+  });
+  ids.alice = seed('alicemark lighthouse keeper log kept by alice', '', {
+    scope: 'personal:private:alice',
+  });
+  ids.bob = seed('bobmark lighthouse keeper log kept by bob', '', {
+    scope: 'personal:private:bob',
+  });
   // Shares no word with the query, so only the vector arm can bring it in.
   ids.betaNear = seed('zebrafinch quokka marmalade', 'beta');
   const vectors: Record<string, number[]> = {};
@@ -199,7 +229,10 @@ beforeAll(async () => {
   }
   vectors[ids.betaNear] = [1, 0, 0];
   saveEmbeddingIndex(store, vectors);
-  saveStoredEmbeddingModel(handlesOf(store).on, resolveEmbeddingProvider(loadConfig(store).embeddings).id);
+  saveStoredEmbeddingModel(
+    handlesOf(store).on,
+    resolveEmbeddingProvider(loadConfig(store).embeddings).id,
+  );
 
   ids.acmeSum = seed('acmesum rollup of the acme session work', 'acme', SUMMARY);
   ids.betaSum = seed('betasum rollup of the beta session work', 'beta', SUMMARY);
@@ -215,11 +248,22 @@ beforeAll(async () => {
   ids.acmeSumO = seed('overflow rollup for acme', 'acme', SUMMARY);
   ids.betaSumO = seed('overflow rollup for beta', 'beta', SUMMARY);
   for (let i = 0; i < 6; i++) {
-    seed(`harbourline leaf ${i} under the acme rollup`, 'acme', { dagLevel: 1, dagParentId: ids.acmeSumO });
-    seed(`harbourline leaf ${i} under the beta rollup`, 'acme', { dagLevel: 1, dagParentId: ids.betaSumO });
+    seed(`harbourline leaf ${i} under the acme rollup`, 'acme', {
+      dagLevel: 1,
+      dagParentId: ids.acmeSumO,
+    });
+    seed(`harbourline leaf ${i} under the beta rollup`, 'acme', {
+      dagLevel: 1,
+      dagParentId: ids.betaSumO,
+    });
   }
 
-  const pair = (a: string, b: string, reason: string) => ({ memory_a_id: a, memory_b_id: b, reason, score: 0.9 });
+  const pair = (a: string, b: string, reason: string) => ({
+    memory_a_id: a,
+    memory_b_id: b,
+    reason,
+    score: 0.9,
+  });
   const conflictRows = {
     acme: [
       seed('the acme cache must stay on during deploys', 'acme'),
@@ -244,18 +288,33 @@ beforeAll(async () => {
   );
   const open = await listMemoryConflicts(store, 'open', TENANT);
   const idOf = (k: string): number => open.find((c) => c.reason === `two-repo ${k}`)!.id;
-  Object.assign(pairs, { acme: idOf('acme'), beta: idOf('beta'), slack: idOf('slack'), none: idOf('none') });
+  Object.assign(pairs, {
+    acme: idOf('acme'),
+    beta: idOf('beta'),
+    slack: idOf('slack'),
+    none: idOf('none'),
+  });
 
   saveActiveTaskSnapshot(
     store,
     TENANT,
-    { task: 'acmetask ship the release', summary: 'acme summary', nextStep: 'acme next', sessionId: 'acme-s' },
+    {
+      task: 'acmetask ship the release',
+      summary: 'acme summary',
+      nextStep: 'acme next',
+      sessionId: 'acme-s',
+    },
     { owner: 'alice', project: ['acme'] },
   );
   saveActiveTaskSnapshot(
     store,
     TENANT,
-    { task: 'betatask fix the build', summary: 'beta summary', nextStep: 'beta next', sessionId: 'beta-s' },
+    {
+      task: 'betatask fix the build',
+      summary: 'beta summary',
+      nextStep: 'beta next',
+      sessionId: 'beta-s',
+    },
     { owner: 'alice', project: ['beta'] },
   );
   saveSessionHandoff(
@@ -316,10 +375,16 @@ describe('MCP on a shared store with two repos', () => {
   });
 
   it('include_continuity gives each repo its own task snapshot', async () => {
-    const acme = await tool('acme', 'hippo_recall', { query: 'lighthouse', include_continuity: true });
+    const acme = await tool('acme', 'hippo_recall', {
+      query: 'lighthouse',
+      include_continuity: true,
+    });
     expect(acme.text).toContain('acmetask');
     expect(acme.text).not.toContain('betatask');
-    const beta = await tool('beta', 'hippo_recall', { query: 'lighthouse', include_continuity: true });
+    const beta = await tool('beta', 'hippo_recall', {
+      query: 'lighthouse',
+      include_continuity: true,
+    });
     expect(beta.text).toContain('betatask');
     expect(beta.text).not.toContain('acmetask');
   });
@@ -337,13 +402,24 @@ describe('MCP on a shared store with two repos', () => {
     const beta = await tool('beta', 'hippo_assemble', { session_id: SESSION, fresh_tail_count: 0 });
     expect(beta.isError, beta.text).toBe(false);
     expect(beta.text).toContain(ids.betaSum);
-    for (const id of [ids.acmeSum, ids.acmeRaw1, ids.acmeRaw2, ids.acmeOdd1, ids.acmeOdd2, ids.nullRaw]) {
+    for (const id of [
+      ids.acmeSum,
+      ids.acmeRaw1,
+      ids.acmeRaw2,
+      ids.acmeOdd1,
+      ids.acmeOdd2,
+      ids.nullRaw,
+    ]) {
       expect(beta.text, `beta assemble should hide ${id}`).not.toContain(id);
     }
   });
 
   it("assemble cut short by its row cap counts only the caller's repo rows, not beta's or the NULL-origin one", async () => {
-    const r = await assemble(acmeCtx(), SESSION, { project: ACME, rowCap: 1, summarizeOlder: false });
+    const r = await assemble(acmeCtx(), SESSION, {
+      project: ACME,
+      rowCap: 1,
+      summarizeOlder: false,
+    });
     expect(r.truncated).toBe(true);
     expect(r.totalRaw).toBe(4);
   });
@@ -369,25 +445,44 @@ describe('MCP on a shared store with two repos', () => {
     expect((await tool('beta', 'hippo_drill', { summary_id: ids.acmeRaw1 })).text).toBe(
       `No drillable summary at id=${ids.acmeRaw1}.`,
     );
-    expect((await tool('acme', 'hippo_drill', { summary_id: ids.acmeRaw1 })).text).toContain('is a leaf row');
+    expect((await tool('acme', 'hippo_drill', { summary_id: ids.acmeRaw1 })).text).toContain(
+      'is a leaf row',
+    );
   });
 
   it("hippo_context returns the caller's repo and user-global rows only", async () => {
-    expectOnly(await shown('acme', 'hippo_context'), [ids.acme, ids.global], HIDDEN_FROM_ACME(), 'acme context');
-    expectOnly(await shown('beta', 'hippo_context'), [ids.beta, ids.global], HIDDEN_FROM_BETA(), 'beta context');
+    expectOnly(
+      await shown('acme', 'hippo_context'),
+      [ids.acme, ids.global],
+      HIDDEN_FROM_ACME(),
+      'acme context',
+    );
+    expectOnly(
+      await shown('beta', 'hippo_context'),
+      [ids.beta, ids.global],
+      HIDDEN_FROM_BETA(),
+      'beta context',
+    );
   });
 
   it('hippo_context gives each repo its own task snapshot and handoff, even when the other repo saved last', async () => {
     const taskState = async (repo: Repo): Promise<string[]> => {
       const r = await tool(repo, 'hippo_context');
       expect(r.isError, r.text).toBe(false);
-      return ['acmetask', 'acmehandoff', 'betatask', 'betahandoff'].filter((word) => r.text.includes(word));
+      return ['acmetask', 'acmehandoff', 'betatask', 'betahandoff'].filter((word) =>
+        r.text.includes(word),
+      );
     };
     expect(await taskState('acme')).toEqual(['acmetask', 'acmehandoff']);
     saveActiveTaskSnapshot(
       store,
       TENANT,
-      { task: 'acmetask ship the release', summary: 'acme summary', nextStep: 'acme next', sessionId: 'acme-s' },
+      {
+        task: 'acmetask ship the release',
+        summary: 'acme summary',
+        nextStep: 'acme next',
+        sessionId: 'acme-s',
+      },
       { owner: 'alice', project: ['acme'] },
     );
     expect(await taskState('beta')).toEqual(['betatask', 'betahandoff']);
@@ -397,15 +492,21 @@ describe('MCP on a shared store with two repos', () => {
     const acme = await tool('acme', 'hippo_conflicts');
     expect(acme.isError, acme.text).toBe(false);
     expect(acme.text).toContain(`conflict_${pairs.acme}:`);
-    for (const id of [pairs.beta, pairs.slack, pairs.none]) expect(acme.text).not.toContain(`conflict_${id}:`);
+    for (const id of [pairs.beta, pairs.slack, pairs.none])
+      expect(acme.text).not.toContain(`conflict_${id}:`);
     const beta = await tool('beta', 'hippo_conflicts');
     expect(beta.text).toContain(`conflict_${pairs.beta}:`);
-    for (const id of [pairs.acme, pairs.slack, pairs.none]) expect(beta.text).not.toContain(`conflict_${id}:`);
+    for (const id of [pairs.acme, pairs.slack, pairs.none])
+      expect(beta.text).not.toContain(`conflict_${id}:`);
   });
 
   it("overflow substitution never brings in another repo's parent summary", async () => {
     const summaries = (
-      await retrieve(acmeCtx(), { query: 'harbourline', window: { limit: 4 }, filter: { project: ACME } })
+      await retrieve(acmeCtx(), {
+        query: 'harbourline',
+        window: { limit: 4 },
+        filter: { project: ACME },
+      })
     ).results
       .filter((r) => r.isSummary)
       .map((r) => r.id);
@@ -416,13 +517,17 @@ describe('MCP on a shared store with two repos', () => {
   it.skipIf(needsHippoDb('db'))(
     "hippo_remember stamps the caller's repo, and hippo_outcome touches only what that repo recalled",
     async () => {
-      const remembered = await tool('acme', 'hippo_remember', { text: 'the acme repo pins node twenty two' });
+      const remembered = await tool('acme', 'hippo_remember', {
+        text: 'the acme repo pins node twenty two',
+      });
       const newId = /Remembered \[([^\]]+)\]/.exec(remembered.text)?.[1] ?? '';
       expect(readEntry(store, newId)?.originProject, remembered.text).toBe('acme');
 
       await shown('beta', 'hippo_recall', { query: 'lighthouse' });
       await shown('acme', 'hippo_recall', { query: 'lighthouse' });
-      const before = new Map(loadAllEntries(store, 'default').map((e) => [e.id, e.outcomePositive]));
+      const before = new Map(
+        loadAllEntries(store, 'default').map((e) => [e.id, e.outcomePositive]),
+      );
       const applied = await tool('acme', 'hippo_outcome', { good: true });
       expect(applied.text).toMatch(/Applied positive outcome to [1-9]\d* memories/);
       const touched = loadAllEntries(store, 'default')

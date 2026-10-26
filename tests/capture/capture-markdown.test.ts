@@ -6,7 +6,9 @@ const TAG_RULE = 'Always tag releases from main because CI publishes tags.';
 
 describe('capture reads markdown the way it renders', () => {
   it('treats a backtick run with a backtick after it as inline code', () => {
-    expect(contents(`\`\`\`npm test\`\`\` runs the unit suite.\n${TAG_RULE}`)).toEqual([TAG_RULE.slice(0, -1)]);
+    expect(contents(`\`\`\`npm test\`\`\` runs the unit suite.\n${TAG_RULE}`)).toEqual([
+      TAG_RULE.slice(0, -1),
+    ]);
   });
 
   it('closes a fence only with a bare run of the same character at least as long', () => {
@@ -46,21 +48,22 @@ describe('capture reads markdown the way it renders', () => {
 
   it('joins a lowercase line only to a line that has not ended its sentence', () => {
     expect(
-      contents('We decided to use pnpm 9 for installs.\nnpm is still used in CI because the runner image ships it.'),
+      contents(
+        'We decided to use pnpm 9 for installs.\nnpm is still used in CI because the runner image ships it.',
+      ),
     ).toEqual(['We decided to use pnpm 9 for installs']);
-    expect(contents('The API must retry after HTTP 429\nbecause the provider enforces a quota.')).toEqual([
-      'The API must retry after HTTP 429 because the provider enforces a quota',
-    ]);
+    expect(
+      contents('The API must retry after HTTP 429\nbecause the provider enforces a quota.'),
+    ).toEqual(['The API must retry after HTTP 429 because the provider enforces a quota']);
     expect(contents('We should always prefer fast tools, e.g.\nripgrep over grep.')).toEqual([
       'We should always prefer fast tools, e.g. ripgrep over grep',
     ]);
   });
 
   it('starts a new statement at a lowercase label', () => {
-    expect(contents('Never edit the lockfile by hand\ndecision: we use pnpm 9 for every install')).toEqual([
-      'Never edit the lockfile by hand',
-      'we use pnpm 9 for every install',
-    ]);
+    expect(
+      contents('Never edit the lockfile by hand\ndecision: we use pnpm 9 for every install'),
+    ).toEqual(['Never edit the lockfile by hand', 'we use pnpm 9 for every install']);
   });
 
   it('reads a spec bullet with its wrapped lines and skips questions', () => {
@@ -83,18 +86,22 @@ describe('capture reads markdown the way it renders', () => {
   });
 
   it('reads a 4-space line under prose as its continuation and one after a blank line as code', () => {
-    const spec = ['## Plan', '- Move the cache to Redis so restarts keep', '    warm entries for the API'].join('\n');
+    const spec = [
+      '## Plan',
+      '- Move the cache to Redis so restarts keep',
+      '    warm entries for the API',
+    ].join('\n');
     expect(extractFromTexts([spec]).map((item) => item.content)).toEqual([
       'Move the cache to Redis so restarts keep warm entries for the API',
     ]);
-    expect(contents('The API must retry after HTTP 429\n    because the provider enforces a quota.')).toEqual([
-      'The API must retry after HTTP 429 because the provider enforces a quota',
-    ]);
+    expect(
+      contents('The API must retry after HTTP 429\n    because the provider enforces a quota.'),
+    ).toEqual(['The API must retry after HTTP 429 because the provider enforces a quota']);
     expect(contents(`${TAG_RULE}\n\n    Never push from the VM because it has no tests.`)).toEqual([
       TAG_RULE.slice(0, -1),
     ]);
-    expect(contents(`## Notes\n    Never push from the VM because it has no tests.\n${TAG_RULE}`)).toEqual([
-      TAG_RULE.slice(0, -1),
-    ]);
+    expect(
+      contents(`## Notes\n    Never push from the VM because it has no tests.\n${TAG_RULE}`),
+    ).toEqual([TAG_RULE.slice(0, -1)]);
   });
 });

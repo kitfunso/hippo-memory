@@ -85,7 +85,10 @@ describe('embedding writes', () => {
       }
     });
 
-    const runs = Promise.all([embedAll(targetOn(root, provider)), embedAll(targetOn(root, provider))]);
+    const runs = Promise.all([
+      embedAll(targetOn(root, provider)),
+      embedAll(targetOn(root, provider)),
+    ]);
     await entered;
     // One turn of the event loop runs every queued microtask, which is all the second handle's way to embed needs.
     await new Promise<void>((resolve) => setImmediate(resolve));

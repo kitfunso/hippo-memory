@@ -5,7 +5,11 @@ import { NotFoundError } from '../../src/base/errors/api-errors.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../src/base/errors/http-errors.js';
 import { log } from '../../src/base/util/log.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { handleMcpRequest, mcpErrorResponse, type McpContext } from '../../src/surface/mcp/server.js';
+import {
+  handleMcpRequest,
+  mcpErrorResponse,
+  type McpContext,
+} from '../../src/surface/mcp/server.js';
 import type { McpHost } from '../../src/surface/mcp/protocol.js';
 import { startStdioLoop } from '../../src/surface/mcp/stdio.js';
 import { TOOLS } from '../../src/surface/mcp/tools.js';
@@ -13,7 +17,13 @@ import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { withoutFolderGroups } from '../_helpers/port-only-store.js';
-import { captureWrites, fire, recordListeners, stubExit, type Listener } from '../_helpers/process-stubs.js';
+import {
+  captureWrites,
+  fire,
+  recordListeners,
+  stubExit,
+  type Listener,
+} from '../_helpers/process-stubs.js';
 import { testInfra } from '../_helpers/infra.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -51,26 +61,37 @@ async function call(
   args: JsonValue | undefined,
   over?: Partial<McpContext>,
 ): Promise<string> {
-  const params: Record<string, JsonValue> = args === undefined ? { name } : { name, arguments: args };
-  return JSON.stringify(await handleMcpRequest({ jsonrpc: '2.0', id, method: 'tools/call', params }, ctx(over)));
+  const params: Record<string, JsonValue> =
+    args === undefined ? { name } : { name, arguments: args };
+  return JSON.stringify(
+    await handleMcpRequest({ jsonrpc: '2.0', id, method: 'tools/call', params }, ctx(over)),
+  );
 }
 
 describe('replies built by the dispatcher', () => {
   it('initialize', async () => {
-    const reply = JSON.stringify(await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'initialize' }, undefined));
+    const reply = JSON.stringify(
+      await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'initialize' }, undefined),
+    );
     expect(reply).toMatch(
       /^\{"jsonrpc":"2.0","id":1,"result":\{"protocolVersion":"2024-11-05","capabilities":\{"tools":\{\}\},"serverInfo":\{"name":"hippo-memory","version":"[^"]+"\}\}\}$/,
     );
   });
 
   it('tools/list', async () => {
-    const reply = JSON.stringify(await handleMcpRequest({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, undefined));
+    const reply = JSON.stringify(
+      await handleMcpRequest({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, undefined),
+    );
     expect(reply).toBe(`{"jsonrpc":"2.0","id":2,"result":{"tools":${JSON.stringify(TOOLS)}}}`);
   });
 
   it('a method it does not know, with -32601', async () => {
-    const reply = JSON.stringify(await handleMcpRequest({ jsonrpc: '2.0', id: 3, method: 'no/such' }, undefined));
-    expect(reply).toBe('{"jsonrpc":"2.0","id":3,"error":{"code":-32601,"message":"Method not found: no/such"}}');
+    const reply = JSON.stringify(
+      await handleMcpRequest({ jsonrpc: '2.0', id: 3, method: 'no/such' }, undefined),
+    );
+    expect(reply).toBe(
+      '{"jsonrpc":"2.0","id":3,"error":{"code":-32601,"message":"Method not found: no/such"}}',
+    );
   });
 
   it('a tool it does not know, with -32602', async () => {
@@ -114,15 +135,15 @@ describe('replies built by the dispatcher', () => {
 
 describe('replies for a request that threw', () => {
   it('a busy store, with -32603 and the busy text', () => {
-    expect(JSON.stringify(mcpErrorResponse(10, new HttpError(503, 'store busy, retry'), 'rid-1'))).toBe(
-      '{"jsonrpc":"2.0","id":10,"error":{"code":-32603,"message":"store busy, retry"}}',
-    );
+    expect(
+      JSON.stringify(mcpErrorResponse(10, new HttpError(503, 'store busy, retry'), 'rid-1')),
+    ).toBe('{"jsonrpc":"2.0","id":10,"error":{"code":-32603,"message":"store busy, retry"}}');
   });
 
   it('a typed error keeps its text', () => {
-    expect(JSON.stringify(mcpErrorResponse('a', new NotFoundError('Memory not found: x'), 'rid-2'))).toBe(
-      '{"jsonrpc":"2.0","id":"a","error":{"code":-32603,"message":"Memory not found: x"}}',
-    );
+    expect(
+      JSON.stringify(mcpErrorResponse('a', new NotFoundError('Memory not found: x'), 'rid-2')),
+    ).toBe('{"jsonrpc":"2.0","id":"a","error":{"code":-32603,"message":"Memory not found: x"}}');
   });
 
   it('an untyped error is generic and carries the request id', () => {
@@ -154,7 +175,9 @@ describe('replies the stdio loop writes', () => {
   it('a frame that is not JSON, with -32700', () => {
     startStdioLoop(cliStdioHost());
     feed('not json\n');
-    expect(written).toEqual(['{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}\n']);
+    expect(written).toEqual([
+      '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}\n',
+    ]);
   });
 
   it('a frame with an id and no method, with -32600', () => {

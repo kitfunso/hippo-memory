@@ -19,7 +19,9 @@ export function compareSemver(a: string, b: string): number {
   const parse = (v: string): number[] => {
     const parts = v.split('.');
     if (parts.length !== 3 || parts.some((n) => !/^\d+$/.test(n))) {
-      throw new Error(`compareSemver: expected numeric x.y.z without pre-release/build metadata: ${v}`);
+      throw new Error(
+        `compareSemver: expected numeric x.y.z without pre-release/build metadata: ${v}`,
+      );
     }
     return parts.map(Number);
   };

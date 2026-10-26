@@ -10,7 +10,8 @@ import { createPurityRule } from './lib/export-purity.mjs';
 import { scriptCallers } from './lib/script-callers.mjs';
 import { stripComments } from './lib/source-text.mjs';
 
-const EXPORT_RE = /^export\s+(?:async\s+)?(?:function\*?|const|let|var|class|enum)\s+([A-Za-z_$][\w$]*)/gm;
+const EXPORT_RE =
+  /^export\s+(?:async\s+)?(?:function\*?|const|let|var|class|enum)\s+([A-Za-z_$][\w$]*)/gm;
 const IDENT_RE = /[A-Za-z_$][\w$]*/g;
 const DIST_RE = /dist\/[\w./-]+\.js/g;
 const SEAM_RE = /^_[a-z][A-Za-z0-9]*ForTests$/;
@@ -40,11 +41,14 @@ function entryFiles(root, pkg) {
   const dists = [...JSON.stringify(pkg.exports ?? {}).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   const bins = pkg.bin?.constructor === Object ? Object.values(pkg.bin) : [pkg.bin ?? []].flat();
   for (const bin of bins) {
-    if (existsSync(join(root, bin))) dists.push(...(readFileSync(join(root, bin), 'utf8').match(DIST_RE) ?? []));
+    if (existsSync(join(root, bin)))
+      dists.push(...(readFileSync(join(root, bin), 'utf8').match(DIST_RE) ?? []));
     else dists.push(bin);
   }
   return new Set(
-    dists.filter((d) => /(^|\/)dist\//.test(d)).map((d) => toSrc(d.replace(/^\.\//, '').replace(/^.*?(dist\/)/, '$1'))),
+    dists
+      .filter((d) => /(^|\/)dist\//.test(d))
+      .map((d) => toSrc(d.replace(/^\.\//, '').replace(/^.*?(dist\/)/, '$1'))),
   );
 }
 
@@ -52,7 +56,8 @@ function entryFiles(root, pkg) {
 function namedOnlyByTests(files, tests, entries) {
   const users = new Map();
   for (const f of files) {
-    for (const id of idents(stripComments(f.text))) users.set(id, (users.get(id) ?? new Set()).add(f.file));
+    for (const id of idents(stripComments(f.text)))
+      users.set(id, (users.get(id) ?? new Set()).add(f.file));
   }
   const inTests = new Set();
   for (const t of tests) for (const id of idents(t.text)) inTests.add(id);
@@ -122,7 +127,9 @@ function check(current) {
     console.error(
       'Assert through the path src uses, move the helper to tests/_helpers, or give it a production caller.',
     );
-    console.error('`node scripts/check-test-only-exports.mjs --why` shows why each one is counted.');
+    console.error(
+      '`node scripts/check-test-only-exports.mjs --why` shows why each one is counted.',
+    );
     return 1;
   }
   console.log('Test-only export check OK: no src export is named only by tests.');
@@ -136,7 +143,8 @@ function main(args) {
   }
   const rows = judgeExports('.');
   if (args.includes('--why')) {
-    for (const r of rows) console.log(`${r.counted ? 'counted' : 'not counted'}\t${r.key}\t${r.why}`);
+    for (const r of rows)
+      console.log(`${r.counted ? 'counted' : 'not counted'}\t${r.key}\t${r.why}`);
     return 0;
   }
   const current = rows.filter((r) => r.counted).map((r) => r.key);

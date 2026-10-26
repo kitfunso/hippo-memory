@@ -11,7 +11,8 @@ type ServeOptions = Parameters<typeof serve>[0];
 export function mintAdminKey(hippoRoot: string): string {
   const db = openHippoDb(hippoRoot);
   try {
-    return createApiKey(db, { tenantId: resolveTenantId({}), label: 'test-admin', role: 'admin' }).plaintext;
+    return createApiKey(db, { tenantId: resolveTenantId({}), label: 'test-admin', role: 'admin' })
+      .plaintext;
   } finally {
     closeHippoDb(db);
   }

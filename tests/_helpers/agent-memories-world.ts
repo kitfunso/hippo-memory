@@ -8,7 +8,12 @@ import { pathToFileURL } from 'node:url';
 import { vi } from 'vitest';
 import { adminActor } from '../../src/api/index.js';
 import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js';
-import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/base/memory/agent-memory-report.js';
+import {
+  emptyTally,
+  totalTally,
+  type ImportReport,
+  type Tally,
+} from '../../src/base/memory/agent-memory-report.js';
 import type { Machine } from '../../src/base/util/agent-homes.js';
 import type { ToolId } from '../../src/base/memory/agent-memory-tools.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
@@ -72,7 +77,11 @@ export const projectNotes = (w: World, project = w.project): string =>
 export function userNotes(w: World): string {
   const dir = join(w.home, 'automem');
   mkdirSync(join(w.home, '.claude'), { recursive: true });
-  writeFileSync(join(w.home, '.claude', 'settings.json'), JSON.stringify({ autoMemoryDirectory: dir }), 'utf8');
+  writeFileSync(
+    join(w.home, '.claude', 'settings.json'),
+    JSON.stringify({ autoMemoryDirectory: dir }),
+    'utf8',
+  );
   return dir;
 }
 
@@ -95,9 +104,12 @@ export function writeConfig(root: string, tools: readonly string[] | null): void
 }
 
 export const agentRows = (root: string): MemoryEntry[] =>
-  isInitialized(root) ? loadAllEntries(root, 'default').filter((e) => e.source.startsWith('agent-memory:')) : [];
+  isInitialized(root)
+    ? loadAllEntries(root, 'default').filter((e) => e.source.startsWith('agent-memory:'))
+    : [];
 
-export const liveRows = (root: string): MemoryEntry[] => agentRows(root).filter((e) => !e.supersededBy);
+export const liveRows = (root: string): MemoryEntry[] =>
+  agentRows(root).filter((e) => !e.supersededBy);
 
 export const liveTexts = (root: string): string[] =>
   liveRows(root)
@@ -121,7 +133,9 @@ export const auditCount = (root: string, op: AuditOp): number =>
 
 export function auditTotal(root: string): number {
   // SAFETY: the SELECT names one aliased COUNT column.
-  const row = withDb(root, (db) => db.prepare('SELECT COUNT(*) AS n FROM audit_log').get()) as { n: number };
+  const row = withDb(root, (db) => db.prepare('SELECT COUNT(*) AS n FROM audit_log').get()) as {
+    n: number;
+  };
   return Number(row.n);
 }
 
@@ -132,7 +146,8 @@ export const tally = (report: ImportReport): Tally => totalTally(report);
 
 export const ctxFor = (root: string): FullContext => apiCtx(root, 'default', adminActor('test'));
 
-export const sha = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
+export const sha = (text: string): string =>
+  createHash('sha256').update(text, 'utf8').digest('hex');
 
 /** Design 3's container id, worked out here rather than taken from the code under test. */
 export function expectedContainer(dir: string, scope: 'p' | 'u'): string {

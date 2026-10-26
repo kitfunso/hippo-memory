@@ -57,7 +57,8 @@ export function dashboardTickets(): DashboardTickets {
     },
     redeem(given, nowMs) {
       dropLate(nowMs);
-      for (const ticket of minted.keys()) if (sameSecret(given, ticket)) return minted.delete(ticket);
+      for (const ticket of minted.keys())
+        if (sameSecret(given, ticket)) return minted.delete(ticket);
       return false;
     },
   };
@@ -74,14 +75,25 @@ function cookieValue(header: string | undefined, name: string): string | undefin
 /** The session cookie's value: the issue time and a MAC of it with the token, so a read of the browser's cookie store
  * never yields the token and the server can age the cookie out. */
 function sessionValue(token: string, port: number, issuedAtMs: number): string {
-  const mac = createHmac('sha256', token).update(`hippo-dashboard-session:${port}:${issuedAtMs}`).digest('hex');
+  const mac = createHmac('sha256', token)
+    .update(`hippo-dashboard-session:${port}:${issuedAtMs}`)
+    .digest('hex');
   return `${issuedAtMs}.${mac}`;
 }
 
 /** Whether `given` is a cookie this token issued for this port, within the cookie's Max-Age. */
-function liveSession(given: string | undefined, token: string, port: number, nowMs: number): boolean {
+function liveSession(
+  given: string | undefined,
+  token: string,
+  port: number,
+  nowMs: number,
+): boolean {
   const issuedAtMs = Number(given?.split('.', 1)[0]);
-  if (!Number.isSafeInteger(issuedAtMs) || issuedAtMs > nowMs || nowMs - issuedAtMs >= COOKIE_MAX_AGE_S * 1000) {
+  if (
+    !Number.isSafeInteger(issuedAtMs) ||
+    issuedAtMs > nowMs ||
+    nowMs - issuedAtMs >= COOKIE_MAX_AGE_S * 1000
+  ) {
     return false;
   }
   return sameSecret(given, sessionValue(token, port, issuedAtMs));
@@ -111,6 +123,7 @@ export function passDashboardSession(
     );
     return 'ticket';
   }
-  if (liveSession(cookieValue(req.headers.cookie, cookieName), access.token, port, now())) return 'cookie';
+  if (liveSession(cookieValue(req.headers.cookie, cookieName), access.token, port, now()))
+    return 'cookie';
   throw new HttpError(401, UNAUTHORIZED);
 }

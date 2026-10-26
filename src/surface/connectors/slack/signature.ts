@@ -37,7 +37,12 @@ export interface VerifyOptions {
   skewSeconds?: number;
 }
 
-function verifyOne(rawBody: string | Uint8Array, signature: string, timestamp: string, secret: string): boolean {
+function verifyOne(
+  rawBody: string | Uint8Array,
+  signature: string,
+  timestamp: string,
+  secret: string,
+): boolean {
   return matchesHmacSha256('v0=', [`v0:${timestamp}:`, rawBody], secret, signature);
 }
 

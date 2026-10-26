@@ -4,7 +4,11 @@ import { handleContext } from '../../src/surface/cli/context.js';
 import { withHookStdin } from '../_helpers/hook-stdin.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
+import {
+  saveActiveTaskSnapshot,
+  appendSessionEvent,
+  saveSessionHandoff,
+} from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -26,7 +30,9 @@ afterEach(() => {
 /** `hippo context` run in this process against the temp store; a non-zero exit fails the test as a spawn would. */
 async function runHippo(flags: Record<string, string>): Promise<string> {
   const r = await runInProcess(() =>
-    withHookStdin(undefined, () => handleContext({ hippoRoot: hippoDir, tenantId: 'default', args: [], flags })),
+    withHookStdin(undefined, () =>
+      handleContext({ hippoRoot: hippoDir, tenantId: 'default', args: [], flags }),
+    ),
   );
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
@@ -46,7 +52,8 @@ async function seedContinuityState(): Promise<void> {
   await appendSessionEvent(hippoDir, 'default', {
     sessionId: 'sess-current',
     eventType: 'note',
-    content: 'Checked the latest branch state and confirmed the matching handoff should drive the next action.',
+    content:
+      'Checked the latest branch state and confirmed the matching handoff should drive the next action.',
     source: 'test',
   });
 

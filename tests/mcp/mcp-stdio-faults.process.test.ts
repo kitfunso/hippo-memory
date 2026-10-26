@@ -55,7 +55,9 @@ function start(args: string[], env: NodeJS.ProcessEnv = {}): Run {
     err += chunk.toString('utf8');
   });
   // 'close' fires after stdio drains; 'exit' can beat the last stderr chunk.
-  const exited = new Promise<number | null>((resolve) => proc.once('close', (code) => resolve(code)));
+  const exited = new Promise<number | null>((resolve) =>
+    proc.once('close', (code) => resolve(code)),
+  );
   const nextLine = (): Promise<string> =>
     new Promise((resolve) => {
       const cached = lines.shift();
@@ -159,7 +161,11 @@ describe('MCP stdio fault handling', () => {
     const run = start([serverPath]);
     run.proc.stdin.write('{"jsonrpc":"2.0","id":1,"method":\n');
     const reply = JSON.parse(await run.nextLine());
-    expect(reply).toEqual({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
+    expect(reply).toEqual({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32700, message: 'Parse error' },
+    });
 
     run.proc.stdin.write('null\n[1,2]\n');
     run.proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`);
@@ -170,7 +176,9 @@ describe('MCP stdio fault handling', () => {
 
   it('answers a frame that has an id and no string method with -32600, and only logs one that has neither', async () => {
     const run = start([serverPath]);
-    run.proc.stdin.write('{"jsonrpc":"2.0","id":2,"method":7}\n{"jsonrpc":"2.0","id":"abc","result":{}}\n');
+    run.proc.stdin.write(
+      '{"jsonrpc":"2.0","id":2,"method":7}\n{"jsonrpc":"2.0","id":"abc","result":{}}\n',
+    );
     const invalid = { code: -32600, message: 'Invalid Request: method must be a string' };
     expect(JSON.parse(await run.nextLine())).toEqual({ jsonrpc: '2.0', id: 2, error: invalid });
     expect(JSON.parse(await run.nextLine())).toEqual({ jsonrpc: '2.0', id: 'abc', error: invalid });
@@ -208,7 +216,9 @@ describe('MCP stdio fault handling', () => {
     const embeddings = await heldEmbeddings();
     try {
       const run = start([serverPath]);
-      run.proc.stdin.write(toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }));
+      run.proc.stdin.write(
+        toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }),
+      );
       expect(JSON.parse(await run.nextLine()).id).toBe(1);
       // Recall embeds its query only when the store holds a vector to compare it with.
       expect(await embedAll(localIndex(embeddings.store))).toBe(1);
@@ -230,13 +240,18 @@ describe('MCP stdio fault handling', () => {
   });
 
   describe('a call still running at its request deadline', () => {
-    const list = (id: number): string => `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}\n`;
+    const list = (id: number): string =>
+      `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}\n`;
 
     /** A server on a 1500 ms deadline over a store with one embedded memory, where every later embedding request is held. */
-    async function startOnShortDeadline(embeddings: Awaited<ReturnType<typeof heldEmbeddings>>): Promise<Run> {
+    async function startOnShortDeadline(
+      embeddings: Awaited<ReturnType<typeof heldEmbeddings>>,
+    ): Promise<Run> {
       // Seeded by a server on the default deadline, so only a held recall can reach the short one.
       const seed = start([serverPath]);
-      seed.proc.stdin.write(toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }));
+      seed.proc.stdin.write(
+        toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }),
+      );
       expect(JSON.parse(await seed.nextLine()).id).toBe(1);
       seed.proc.stdin.end();
       expect(await seed.exited).toBe(0);
@@ -310,8 +325,13 @@ describe('MCP stdio fault handling', () => {
 
   it('refuses a frame over 1 MB with a parse error, buffers none of it, and keeps serving', async () => {
     const run = start([serverPath]);
-    const list = (id: number): string => `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}\n`;
-    const refusal = { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error: frame exceeds 1MB' } };
+    const list = (id: number): string =>
+      `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}\n`;
+    const refusal = {
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32700, message: 'Parse error: frame exceeds 1MB' },
+    };
 
     // A declared length over the cap is refused at the header; its body is dropped as it arrives, so the next frame is read as itself.
     const declared = 2 * 1024 * 1024;
@@ -331,7 +351,8 @@ describe('MCP stdio fault handling', () => {
 
   it('reads a newline-delimited frame and a Content-Length frame written whole, in order', async () => {
     const run = start([serverPath]);
-    const list = (id: number): string => JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' });
+    const list = (id: number): string =>
+      JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' });
 
     run.proc.stdin.write(`${list(1)}\n`);
     expect(JSON.parse(await run.nextLine()).id).toBe(1);

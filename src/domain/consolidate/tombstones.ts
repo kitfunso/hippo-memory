@@ -16,7 +16,10 @@ export interface TombstoneChecks {
 }
 
 /** The checks of one sleep on `store`; under dryRun no call reaches the store. */
-export function tombstoneChecks(store: StoreWith<'consolidation'>, dryRun: boolean): TombstoneChecks {
+export function tombstoneChecks(
+  store: StoreWith<'consolidation'>,
+  dryRun: boolean,
+): TombstoneChecks {
   const audit = async (event: AppendAuditOptions): Promise<void> => {
     if (!dryRun) await store.appendAuditEvents([event]);
   };
@@ -25,7 +28,9 @@ export function tombstoneChecks(store: StoreWith<'consolidation'>, dryRun: boole
       dryRun ? null : ((await store.consolidation.rejected(tenantId, [digest]))[0] ?? null),
     async rejectedAmong(tenantId, digests) {
       if (dryRun || digests.length === 0) return new Set();
-      return new Set((await store.consolidation.rejected(tenantId, digests)).map((row) => row.digest));
+      return new Set(
+        (await store.consolidation.rejected(tenantId, digests)).map((row) => row.digest),
+      );
     },
     audit,
     async auditOrCount(event) {

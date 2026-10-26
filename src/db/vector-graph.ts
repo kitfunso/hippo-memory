@@ -56,7 +56,9 @@ export interface GraphHit {
 }
 
 /** `visited` counts the nodes the bottom layer's walk reached, so a caller can tell a walk that reached every node. */
-export type SearchResult = { aborted: false; hits: GraphHit[]; visited: number } | { aborted: true };
+export type SearchResult =
+  | { aborted: false; hits: GraphHit[]; visited: number }
+  | { aborted: true };
 
 type VectorLookup = (node: number) => Float32Array;
 
@@ -71,7 +73,17 @@ export function createVectorGraph(opts: VectorGraphOptions): VectorGraph {
   const { dim, m = GRAPH_M, efConstruction = GRAPH_EF_CONSTRUCTION, seed } = opts;
   if (!Number.isInteger(dim) || dim < 1) throw new Error(`vector graph: bad dim ${dim}`);
   if (!Number.isInteger(m) || m < 2) throw new Error(`vector graph: bad m ${m}`);
-  return { dim, m, efConstruction, seed, rng: seed >>> 0, entry: -1, maxLevel: -1, nodes: new Map(), unit: new Map() };
+  return {
+    dim,
+    m,
+    efConstruction,
+    seed,
+    rng: seed >>> 0,
+    entry: -1,
+    maxLevel: -1,
+    nodes: new Map(),
+    unit: new Map(),
+  };
 }
 
 function nextRandom(graph: VectorGraph): number {
@@ -149,7 +161,12 @@ interface WalkContext {
 }
 
 /** Best-first walk of one layer: the ef best admitted candidates, best first, or null when the budget ran out. */
-function searchLayer(ctx: WalkContext, entries: GraphHit[], ef: number, level: number): GraphHit[] | null {
+function searchLayer(
+  ctx: WalkContext,
+  entries: GraphHit[],
+  ef: number,
+  level: number,
+): GraphHit[] | null {
   const visited = new Set<number>();
   const frontier = new Heap(1);
   const result = new Heap(-1);
@@ -201,11 +218,23 @@ const NO_LINKS: readonly number[] = [];
 /** The in-memory graph as a search walks it. */
 function viewOf(graph: VectorGraph): GraphView {
   const { dim, entry, maxLevel, nodes } = graph;
-  return { dim, entry, maxLevel, linksOf: (node, level) => nodes.get(node)?.links[level] ?? NO_LINKS };
+  return {
+    dim,
+    entry,
+    maxLevel,
+    linksOf: (node, level) => nodes.get(node)?.links[level] ?? NO_LINKS,
+  };
 }
 
-export function searchGraph(graph: VectorGraph, query: Float32Array, opts: SearchOptions): SearchResult {
-  return searchView(viewOf(graph), query, { ...opts, vectorOf: opts.vectorOf ?? ((n: number) => unitOf(graph, n)) });
+export function searchGraph(
+  graph: VectorGraph,
+  query: Float32Array,
+  opts: SearchOptions,
+): SearchResult {
+  return searchView(viewOf(graph), query, {
+    ...opts,
+    vectorOf: opts.vectorOf ?? ((n: number) => unitOf(graph, n)),
+  });
 }
 
 /** searchGraph over any view; `vectorOf` scores each node it reaches. */
@@ -214,11 +243,13 @@ export function searchView(
   query: Float32Array,
   opts: SearchOptions & { vectorOf: VectorLookup },
 ): SearchResult {
-  if (graph.entry < 0 || opts.k <= 0 || query.length !== graph.dim) return { aborted: false, hits: [], visited: 0 };
+  if (graph.entry < 0 || opts.k <= 0 || query.length !== graph.dim)
+    return { aborted: false, hits: [], visited: 0 };
   const qNorm = norm(query);
   const vectorOf = opts.vectorOf;
   // A directionless query or row scores 0, where the full scan in vector-store.ts drops it.
-  const score = (n: number): number => (qNorm < ZERO_NORM ? 0 : (cosineToQuery(query, qNorm, vectorOf(n)) ?? 0));
+  const score = (n: number): number =>
+    qNorm < ZERO_NORM ? 0 : (cosineToQuery(query, qNorm, vectorOf(n)) ?? 0);
   const seen = new Map<number, boolean>();
   const admit = opts.admit;
   const memo = admit
@@ -262,7 +293,13 @@ function selectNeighbours(cands: GraphHit[], m: number, unitFor: VectorLookup): 
   return kept;
 }
 
-function addBackLink(graph: VectorGraph, from: number, to: number, level: number, unitFor: VectorLookup): void {
+function addBackLink(
+  graph: VectorGraph,
+  from: number,
+  to: number,
+  level: number,
+  unitFor: VectorLookup,
+): void {
   const data = graph.nodes.get(from);
   if (!data) return;
   const cap = level === 0 ? 2 * graph.m : graph.m;
@@ -284,10 +321,14 @@ function unreachable(): never {
 
 /** Add one node. A vector already of unit length is kept as given, not copied, so the caller must not change it. */
 export function insertNode(graph: VectorGraph, node: number, vector: Float32Array): void {
-  if (vector.length !== graph.dim) throw new Error(`vector graph: expected dim ${graph.dim}, got ${vector.length}`);
+  if (vector.length !== graph.dim)
+    throw new Error(`vector graph: expected dim ${graph.dim}, got ${vector.length}`);
   if (graph.nodes.has(node)) throw new Error(`vector graph: node ${node} already inserted`);
   const q = Math.abs(dot(vector, vector) - 1) < UNIT_TOLERANCE ? vector : toUnit(vector);
-  const level = Math.min(MAX_LEVEL, Math.floor(-Math.log(1 - nextRandom(graph)) / Math.log(graph.m)));
+  const level = Math.min(
+    MAX_LEVEL,
+    Math.floor(-Math.log(1 - nextRandom(graph)) / Math.log(graph.m)),
+  );
   graph.unit.set(node, q);
   const data: GraphNodeData = { level, links: Array.from({ length: level + 1 }, () => []) };
   if (graph.entry < 0) {
@@ -297,7 +338,12 @@ export function insertNode(graph: VectorGraph, node: number, vector: Float32Arra
     return;
   }
   const unitFor = (n: number) => unitOf(graph, n);
-  const ctx: WalkContext = { graph: viewOf(graph), score: (n) => dot(q, unitFor(n)), budget: { left: -1 }, visited: 0 };
+  const ctx: WalkContext = {
+    graph: viewOf(graph),
+    score: (n) => dot(q, unitFor(n)),
+    budget: { left: -1 },
+    visited: 0,
+  };
   let entries = descend(ctx, level) ?? unreachable();
   for (let l = Math.min(level, graph.maxLevel); l >= 0; l--) {
     const found = searchLayer(ctx, entries, graph.efConstruction, l) ?? unreachable();

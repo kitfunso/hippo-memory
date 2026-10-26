@@ -16,14 +16,28 @@ import { memoryList } from '../../api/memories/memories.js';
 import { cliApiContext, cliInitGlobal, cliSyncOptions } from './api-context.js';
 import { isGitRepo } from '../../base/ports/git.js';
 import { processGit } from '../../infra/git-runner.js';
-import { importForStore, importProjectMemories, importUserMemories } from '../../api/agent-memories.js';
+import {
+  importForStore,
+  importProjectMemories,
+  importUserMemories,
+} from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
 import { emptyReport, mergeReports } from '../../base/memory/agent-memory-report.js';
 import { registerWorkspace } from './scheduler.js';
-import { type CliFlags, numberFlag, stringFlag, type CommandContext, boolFlag } from './flag-values.js';
+import {
+  type CliFlags,
+  numberFlag,
+  stringFlag,
+  type CommandContext,
+  boolFlag,
+} from './flag-values.js';
 import { printAgentImport } from './print.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
-import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
+import {
+  installCodexMemoryHooks,
+  setupDailySchedule,
+  warnClaudeSettingsUnusable,
+} from './install-steps.js';
 import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
 import { appendHookBlock, HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks-install/instructions.js';
 import { HIPPO_DIR } from '../../base/util/agent-homes.js';
@@ -39,7 +53,8 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
-        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name.startsWith('.')) continue;
+        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name.startsWith('.'))
+          continue;
         const full = path.join(dir, entry.name);
         if (fs.existsSync(path.join(full, '.git'))) {
           repos.push(full);
@@ -63,7 +78,11 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
 }
 
 /** Creates the repo's store when absent and registers it; returns whether it already existed. */
-async function initScannedRepo(repo: string, tenantId: string, globalRoot: string): Promise<boolean> {
+async function initScannedRepo(
+  repo: string,
+  tenantId: string,
+  globalRoot: string,
+): Promise<boolean> {
   const repoHippo = path.join(repo, HIPPO_DIR);
   const alreadyExists = isInitialized(repoHippo);
   if (!alreadyExists) {
@@ -95,7 +114,11 @@ async function learnScannedRepo(
     added = result.added;
     lowInfo = result.lowInfo;
   }
-  if (learn) mergeReports(agentImport, await importProjectMemories(repoHippo, cliSyncOptions(tenantId, machine)));
+  if (learn)
+    mergeReports(
+      agentImport,
+      await importProjectMemories(repoHippo, cliSyncOptions(tenantId, machine)),
+    );
   return { added, lowInfo };
 }
 
@@ -151,12 +174,21 @@ async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFla
 
   for (const repo of repos) {
     const alreadyExists = await initScannedRepo(repo, tenantId, globalRoot);
-    const { added, lowInfo } = await learnScannedRepo({ repo, tenantId, seedDays, learn, machine, agentImport });
+    const { added, lowInfo } = await learnScannedRepo({
+      repo,
+      tenantId,
+      seedDays,
+      learn,
+      machine,
+      agentImport,
+    });
     totalLessons += added;
     totalLowInfo += lowInfo;
 
     const status = alreadyExists ? 'existing' : 'new';
-    const entries = await memoryList(cliApiContext(path.join(repo, HIPPO_DIR), tenantId), { everyTenant: true });
+    const entries = await memoryList(cliApiContext(path.join(repo, HIPPO_DIR), tenantId), {
+      everyTenant: true,
+    });
     console.log(
       `  ${path.basename(repo).padEnd(25)} ${status.padEnd(10)} ${entries.length} ` +
         `memories${added > 0 ? ` (+${added} from git)` : ''}`,
@@ -165,7 +197,10 @@ async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFla
 
   printScanSummary(repos.length, totalLessons, totalLowInfo);
   if (learn) {
-    mergeReports(agentImport, await importUserMemories(globalRoot, cliSyncOptions(tenantId, machine)));
+    mergeReports(
+      agentImport,
+      await importUserMemories(globalRoot, cliSyncOptions(tenantId, machine)),
+    );
     printAgentImport(agentImport, '');
   }
   console.log(`Global store: ${globalRoot}`);
@@ -185,7 +220,9 @@ async function initGlobalOnly(tenantId: string, flags: CliFlags): Promise<void> 
     console.log('Initialized global Hippo store at', globalRoot);
   }
   if (!boolFlag(flags, 'no-learn')) {
-    printAgentImport(await importUserMemories(globalRoot, cliSyncOptions(tenantId, currentMachine())));
+    printAgentImport(
+      await importUserMemories(globalRoot, cliSyncOptions(tenantId, currentMachine())),
+    );
   }
 }
 
@@ -237,10 +274,12 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
 
   const learn = !boolFlag(flags, 'no-learn') && !skipLearnOnSharedStore(hippoRoot);
   // Seed with git history on first init (unless --no-learn)
-  if (!alreadyExists && learn && !boolFlag(flags, 'global')) await seedFromGitHistory(hippoRoot, tenantId);
+  if (!alreadyExists && learn && !boolFlag(flags, 'global'))
+    await seedFromGitHistory(hippoRoot, tenantId);
 
   // Every run, not only the first: an agent's notes change between inits.
-  if (learn) printAgentImport(await importForStore(hippoRoot, cliSyncOptions(tenantId, currentMachine())));
+  if (learn)
+    printAgentImport(await importForStore(hippoRoot, cliSyncOptions(tenantId, currentMachine())));
 }
 
 /**
@@ -250,7 +289,9 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
 function initInstallsIntegrations(flags: CliFlags): boolean {
   if (boolFlag(flags, 'no-hooks')) return false;
   if (!envSkipAutoIntegrations()) return true;
-  console.log('   HIPPO_SKIP_AUTO_INTEGRATIONS=1, so init left agent instruction files and hooks alone.');
+  console.log(
+    '   HIPPO_SKIP_AUTO_INTEGRATIONS=1, so init left agent instruction files and hooks alone.',
+  );
   return false;
 }
 
@@ -260,7 +301,9 @@ function autoInstallHooks(): void {
   const agents = detectAgentHooks([cwd]);
   const agentsMd = path.join(cwd, HOOKS.codex.file);
   // Read before patching: a re-run of init finds its own block and skips the Codex hint.
-  const codexHint = !(fs.existsSync(agentsMd) && fs.readFileSync(agentsMd, 'utf8').includes(HOOK_MARKERS.start));
+  const codexHint = !(
+    fs.existsSync(agentsMd) && fs.readFileSync(agentsMd, 'utf8').includes(HOOK_MARKERS.start)
+  );
   patchInstructionFiles(cwd, agents);
   installUserLevelHooks(agents, codexHint);
 }
@@ -311,7 +354,9 @@ function refreshShippedBlock(filePath: string, text: string, hook: string): void
   const { start, end, eol, owner } = block;
   const name = path.basename(filePath);
   if (!owner) {
-    console.log(`   Left the edited hippo block in ${name} as is; \`hippo hook install ${hook}\` replaces it.`);
+    console.log(
+      `   Left the edited hippo block in ${name} as is; \`hippo hook install ${hook}\` replaces it.`,
+    );
     return;
   }
   writeFileAtomic(
@@ -337,19 +382,25 @@ function installClaudeCodeSettingsHooks(hook: 'claude-code'): void {
     console.log(`   Auto-installed hippo pre-compact PreCompact hook in ${hook} settings`);
   }
   if (result.installedCompactResume) {
-    console.log(`   Auto-installed hippo compact-resume SessionStart(compact) hook in ${hook} settings`);
+    console.log(
+      `   Auto-installed hippo compact-resume SessionStart(compact) hook in ${hook} settings`,
+    );
   }
   if (result.installedPostCompact) {
     console.log(`   Auto-installed hippo post-compact PostCompact hook in ${hook} settings`);
   }
   if (result.installedCaptureError) {
-    console.log(`   Auto-installed hippo capture-error PostToolUseFailure hook in ${hook} settings`);
+    console.log(
+      `   Auto-installed hippo capture-error PostToolUseFailure hook in ${hook} settings`,
+    );
   }
   if (result.migratedFromStop) {
     console.log(`   Migrated legacy Stop hook → SessionEnd (no longer runs every turn)`);
   }
   if (result.migratedSplitSessionEnd) {
-    console.log(`   Migrated split sleep+capture SessionEnd entries → single detached hippo session-end`);
+    console.log(
+      `   Migrated split sleep+capture SessionEnd entries → single detached hippo session-end`,
+    );
   } else if (result.migratedLegacySessionEnd) {
     console.log(`   Migrated legacy SessionEnd entry to the new detached form`);
   }
@@ -363,7 +414,9 @@ function installOpencodeUserPlugin(): void {
     console.log(`   Auto-installed hippo opencode plugin -> ${result.pluginPath}`);
   }
   if (result.migratedLegacyHooks) {
-    console.log(`   Removed legacy Claude Code-style hooks block from opencode.json — opencode can now launch`);
+    console.log(
+      `   Removed legacy Claude Code-style hooks block from opencode.json — opencode can now launch`,
+    );
   }
   if (result.jsonRepairFailed) {
     console.log(

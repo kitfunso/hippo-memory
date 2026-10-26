@@ -29,7 +29,9 @@ export async function foldEdges(audit: AuditReads, tenantId: string): Promise<Pr
   const repairs = await projectAudit(audit, tenantId, 'project_repair');
   return [
     ...merges.flatMap((e) => foldOf(e.metadata)),
-    ...repairs.flatMap((e) => (Array.isArray(e.metadata.folds) ? e.metadata.folds.flatMap(foldOf) : [])),
+    ...repairs.flatMap((e) =>
+      Array.isArray(e.metadata.folds) ? e.metadata.folds.flatMap(foldOf) : [],
+    ),
   ];
 }
 

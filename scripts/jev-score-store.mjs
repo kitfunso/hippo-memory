@@ -47,7 +47,8 @@ const all = db
     AND (? IS NULL OR source = ?)
 `)
   .all(sourceFilter, sourceFilter);
-if (sourceFilter) console.log(`DIAGNOSTIC LANE: source = '${sourceFilter}' (not a pre-registered verdict lane)`);
+if (sourceFilter)
+  console.log(`DIAGNOSTIC LANE: source = '${sourceFilter}' (not a pre-registered verdict lane)`);
 
 const rows = all
   .map((r) => ({ r, k: rng() }))
@@ -68,7 +69,9 @@ const elapsed = (Date.now() - started) / 1000;
 const scored = rows.map((r, i) => ({ row: r, j: judgments[i] })).filter((x) => x.j !== null);
 const failed = rows.length - scored.length;
 if (scored.length < 50) {
-  console.error(`Only ${scored.length} calls succeeded (${failed} failed). Too thin to judge; aborting.`);
+  console.error(
+    `Only ${scored.length} calls succeeded (${failed} failed). Too thin to judge; aborting.`,
+  );
   process.exit(1);
 }
 
@@ -87,7 +90,8 @@ function auc(items, score, label) {
 
 const LABELS = {
   'useful (raw)': (r) => r.retrieval_count >= 3 || r.outcome_positive > 0 || r.pinned === 1,
-  'useful (age-normalised)': (r) => r.retrieval_count / Math.max(r.age_days, 1) >= 0.05 || r.outcome_positive > 0,
+  'useful (age-normalised)': (r) =>
+    r.retrieval_count / Math.max(r.age_days, 1) >= 0.05 || r.outcome_positive > 0,
   'positive outcome only': (r) => r.outcome_positive > 0,
 };
 
@@ -120,19 +124,28 @@ function pairedDelta(label, baselineName) {
   const point = auc(scored, jev, label) - auc(scored, baseline, label);
   const deltas = [];
   for (let d = 0; d < BOOTSTRAP_DRAWS; d++) {
-    const sample = Array.from({ length: scored.length }, () => scored[Math.floor(rng() * scored.length)]);
+    const sample = Array.from(
+      { length: scored.length },
+      () => scored[Math.floor(rng() * scored.length)],
+    );
     const v = auc(sample, jev, label) - auc(sample, baseline, label);
     if (Number.isFinite(v)) deltas.push(v);
   }
   deltas.sort((a, b) => a - b);
-  return { point, lo: deltas[Math.floor(deltas.length * 0.025)], hi: deltas[Math.floor(deltas.length * 0.975)] };
+  return {
+    point,
+    lo: deltas[Math.floor(deltas.length * 0.025)],
+    hi: deltas[Math.floor(deltas.length * 0.975)],
+  };
 }
 
 console.log('\nPrimary verdict — Jev vs the best baseline, paired bootstrap 95% CI\n');
 const verdicts = {};
 for (const [lName, label] of Object.entries(LABELS)) {
   const competitors = Object.keys(SCORERS).filter((s) => s !== 'Jev durable');
-  const best = competitors.reduce((a, b) => (auc(scored, SCORERS[a], label) >= auc(scored, SCORERS[b], label) ? a : b));
+  const best = competitors.reduce((a, b) =>
+    auc(scored, SCORERS[a], label) >= auc(scored, SCORERS[b], label) ? a : b,
+  );
   const d = pairedDelta(label, best);
   const passes = d.point > NOISE_FLOOR_AUC && d.lo > 0;
   verdicts[lName] = { best_baseline: best, ...d, passes };
@@ -149,7 +162,9 @@ const flat = scored.filter((x) => x.row.schema_fit === 0.5).map((x) => x.j.durab
 console.log(`\nJev kind distribution: ${JSON.stringify(kinds)}`);
 console.log(
   `On the flat schema_fit 0.5 default: ${flat.length}/${scored.length} rows, ` +
-    (flat.length ? `Jev spreads them ${fmt(Math.min(...flat))}..${fmt(Math.max(...flat))}` : 'none'),
+    (flat.length
+      ? `Jev spreads them ${fmt(Math.min(...flat))}..${fmt(Math.max(...flat))}`
+      : 'none'),
 );
 console.log(
   `Failed calls: ${failed}/${rows.length}   wall: ${elapsed.toFixed(1)}s   cost: $${(rows.length * COST_PER_CALL_USD).toFixed(4)}`,

@@ -12,8 +12,12 @@ import {
 import type { HippoStore } from '../../base/ports/store.js';
 import { Lru } from '../../base/util/lru.js';
 
-const scryptOffLoop: (password: string, salt: Buffer, keylen: number, params: ScryptParams) => Promise<Buffer> =
-  promisify(scrypt);
+const scryptOffLoop: (
+  password: string,
+  salt: Buffer,
+  keylen: number,
+  params: ScryptParams,
+) => Promise<Buffer> = promisify(scrypt);
 
 const VERIFIED_KEY_CACHE_CAP = 1_000;
 
@@ -72,7 +76,8 @@ async function secretMatches(
   const id = `${keyHash}\u0000${secretDigest(plaintext).toString('hex')}`;
   const running = checksInFlight.get(id);
   if (running) return running;
-  const derive = (): Promise<Buffer> => scryptOffLoop(plaintext, parsed.salt, parsed.keylen, parsed.params);
+  const derive = (): Promise<Buffer> =>
+    scryptOffLoop(plaintext, parsed.salt, parsed.keylen, parsed.params);
   const check = (bound ? bound(keyId, derive) : derive()).then((derived) => {
     const matched = parsed.matches(derived);
     // Only successes are kept: keeping misses would let junk tokens fill the cache and evict real keys.
@@ -103,5 +108,7 @@ export async function verifyApiKeyCached(
     onUnusable?.();
     return null;
   }
-  return (await secretMatches(keyId, plaintext, record.keyHash, bound)) ? verifiedKeyOf(keyId, record) : null;
+  return (await secretMatches(keyId, plaintext, record.keyHash, bound))
+    ? verifiedKeyOf(keyId, record)
+    : null;
 }

@@ -1,7 +1,12 @@
 // Schema v61 adds the predictions page index and the memories project index; the real reads must plan onto them.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  getSchemaVersion,
+  openHippoDb,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { listEntriesWhere } from '../../src/store/sqlite/entry-filter.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -47,7 +52,8 @@ function insertPredictions(db: DatabaseSyncLike, count: number): void {
   const add = db.prepare(
     `INSERT INTO predictions (tenant_id, class_tag, claim_text, created_at) VALUES ('default', 'c', ?, ?)`,
   );
-  for (let i = 0; i < count; i++) add.run(`claim ${i}`, new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString());
+  for (let i = 0; i < count; i++)
+    add.run(`claim ${i}`, new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString());
 }
 
 beforeEach(() => {
@@ -70,7 +76,9 @@ describe('schema v61', () => {
           after: { key: last.createdAt, id: last.id },
         }),
     );
-    const sql = statements.find((s) => s.includes('FROM predictions') && s.includes('ORDER BY created_at DESC'));
+    const sql = statements.find(
+      (s) => s.includes('FROM predictions') && s.includes('ORDER BY created_at DESC'),
+    );
     withDb((db) => {
       const detail = plan(db, sql ?? failNoSql());
       expect(detail).toContain(`USING INDEX ${PRED_INDEX}`);
@@ -87,10 +95,16 @@ describe('schema v61', () => {
     }
     const { statements } = recordStatements(() =>
       withDb((db) =>
-        listEntriesWhere(db, { tenantId: 'default', origins: ['alpha'], live: true }, { limit: 2, after: undefined }),
+        listEntriesWhere(
+          db,
+          { tenantId: 'default', origins: ['alpha'], live: true },
+          { limit: 2, after: undefined },
+        ),
       ),
     );
-    const sql = statements.find((s) => s.includes('origin_project = ?') && s.includes('ORDER BY created ASC'));
+    const sql = statements.find(
+      (s) => s.includes('origin_project = ?') && s.includes('ORDER BY created ASC'),
+    );
     withDb((db) => {
       const detail = plan(db, sql ?? failNoSql());
       expect(detail).toContain(`USING INDEX ${MEM_INDEX}`);
@@ -100,7 +114,10 @@ describe('schema v61', () => {
 
   it('upgrades a v60 store with rows in it and keeps every row', () => {
     withDb((db) => insertPredictions(db, 4));
-    writeEntry(home, { ...createMemory('kept', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), originProject: 'alpha' });
+    writeEntry(home, {
+      ...createMemory('kept', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      originProject: 'alpha',
+    });
     withDb((db) => {
       db.exec(`DROP INDEX ${PRED_INDEX}`);
       db.exec(`DROP INDEX ${MEM_INDEX}`);
@@ -111,7 +128,9 @@ describe('schema v61', () => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: one `name` TEXT column.
       const names = (
-        db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all() as Array<{ name: string }>
+        db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all() as Array<{
+          name: string;
+        }>
       ).map((r) => r.name);
       expect(names).toEqual(expect.arrayContaining([PRED_INDEX, MEM_INDEX]));
       expect(count(db, 'predictions')).toBe(4);

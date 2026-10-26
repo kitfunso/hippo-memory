@@ -144,7 +144,11 @@ interface ComposeRecallOptions {
   readonly auditWindow?: boolean;
 }
 
-export function composeRecall(ctx: Context, opts: RecallOptions, options: ComposeRecallOptions): ComposedRecall {
+export function composeRecall(
+  ctx: Context,
+  opts: RecallOptions,
+  options: ComposeRecallOptions,
+): ComposedRecall {
   const { windowSize, all, plan, reads, auditWindow = true } = options;
   const { window } = plan;
   const bands = rankBands(opts, plan, reads);
@@ -157,7 +161,11 @@ export function composeRecall(ctx: Context, opts: RecallOptions, options: Compos
     plan.claim && reads.planning
       ? decidePlanningFallacy(plan.claim, reads.planning, ctx.tenantId, ctx.actor.subject)
       : null;
-  const { anchoringHint, suppressedByInterference } = detectRecallAnchoring(ctx, opts, rankedOut[0]?.id ?? null);
+  const { anchoringHint, suppressedByInterference } = detectRecallAnchoring(
+    ctx,
+    opts,
+    rankedOut[0]?.id ?? null,
+  );
   const availabilityHint = detectRecallAvailability(ctx, opts, bands.baseSlice, window.entries);
 
   const result: RecallResult = {
@@ -188,7 +196,10 @@ export function composeRecall(ctx: Context, opts: RecallOptions, options: Compos
     : [];
   if (planning?.audit) audit.push(planning.audit);
   audit.push(...anchoringRows(who, anchoringHint), ...availabilityRows(who, availabilityHint));
-  return { result, writes: { goalLog: bands.goalLog, audit, trace: recallTrace(ctx, opts, rankedOut) } };
+  return {
+    result,
+    writes: { goalLog: bands.goalLog, audit, trace: recallTrace(ctx, opts, rankedOut) },
+  };
 }
 
 // The SQL load already applied tenant and scope; a recall candidate loader must go through store.searchRecallEntries.
@@ -206,7 +217,9 @@ function admitCandidates(
     entries = current.filter((e) => e.scope === scope);
   } else {
     // SQL pre-filtered ':private:' loosely before the window; this is the exact anchored `<source>:private:*` rule.
-    entries = current.filter((e) => passesScopeFilterForRecall(e.scope ?? null, undefined, personalScope));
+    entries = current.filter((e) =>
+      passesScopeFilterForRecall(e.scope ?? null, undefined, personalScope),
+    );
   }
   const droppedPreRank = all.length - entries.length;
   entries = entries
@@ -253,7 +266,9 @@ function rankBands(opts: RecallOptions, plan: RecallPlan, reads: RecallReads): R
           recent: reads.freshRaws,
           baseRanked,
           summaryRanked,
-          shownEntries: opts.filter?.keepHeldCopies ? [] : [...baseSlice, ...substituted.map((s) => s.entry)],
+          shownEntries: opts.filter?.keepHeldCopies
+            ? []
+            : [...baseSlice, ...substituted.map((s) => s.entry)],
           personalScope,
         })
       : [];
@@ -287,9 +302,17 @@ interface SubstituteOverflowOptions {
   readonly personalScope: string | undefined;
 }
 
-function substituteOverflow(opts: RecallOptions, options: SubstituteOverflowOptions): SummaryDecoration[] {
+function substituteOverflow(
+  opts: RecallOptions,
+  options: SubstituteOverflowOptions,
+): SummaryDecoration[] {
   const { overflowByParent, parents, limit, personalScope } = options;
-  const eligibleParents = eligibleSummaryParents(parents, opts.filter?.scope, personalScope, opts.filter?.project);
+  const eligibleParents = eligibleSummaryParents(
+    parents,
+    opts.filter?.scope,
+    personalScope,
+    opts.filter?.project,
+  );
   const maxSub = Math.max(1, Math.ceil(limit * SUMMARY_SUB_FRACTION));
   // Most overflowed children first; compareEntryIdentity only breaks a tie, which used to fall to scan order.
   eligibleParents.sort((a, b) => {
@@ -318,7 +341,9 @@ function overflowGroups(window: CandidateWindow, limit: number): Map<string, Mem
     list.push(e);
     overflowByParent.set(parentId, list);
   }
-  return new Map([...overflowByParent].filter(([pid, children]) => children.length >= 2 && !baseIds.has(pid)));
+  return new Map(
+    [...overflowByParent].filter(([pid, children]) => children.length >= 2 && !baseIds.has(pid)),
+  );
 }
 
 function baseItem(
@@ -376,7 +401,9 @@ interface FreshTailBandOptions {
 function freshTailBand(opts: RecallOptions, options: FreshTailBandOptions): RecallResultItem[] {
   const { recent, baseRanked, summaryRanked, shownEntries, personalScope } = options;
   const recentScoped = recent.filter(
-    (m) => passesScopeFilterForRecall(m.scope ?? null, opts.filter?.scope, personalScope) && inCallerProject(m, opts),
+    (m) =>
+      passesScopeFilterForRecall(m.scope ?? null, opts.filter?.scope, personalScope) &&
+      inCallerProject(m, opts),
   );
   const recentIdSet = new Set(recentScoped.map((m) => m.id));
   for (const r of baseRanked) {
@@ -404,7 +431,11 @@ function freshTailBand(opts: RecallOptions, options: FreshTailBandOptions): Reca
 }
 
 // The trace is observability, not retrieval state; a caller that traces its own result set suppresses it.
-function recallTrace(ctx: Context, opts: RecallOptions, rankedOut: RecallResultItem[]): RecallTraceInput | undefined {
+function recallTrace(
+  ctx: Context,
+  opts: RecallOptions,
+  rankedOut: RecallResultItem[],
+): RecallTraceInput | undefined {
   if (opts.trace?.suppressRecallTrace) return undefined;
   return {
     tenantId: ctx.tenantId,
@@ -426,10 +457,14 @@ function scopeContinuity(
   scope: string | undefined,
   personalScope: string | undefined,
 ): ContinuityBlock {
-  const rowScope = (r: { scope?: string | null } | null | undefined): string | null => r?.scope ?? null;
+  const rowScope = (r: { scope?: string | null } | null | undefined): string | null =>
+    r?.scope ?? null;
   const { activeSnapshot: snapshot, sessionHandoff } = block;
   return {
-    activeSnapshot: snapshot && passesScopeFilterForRecall(rowScope(snapshot), scope, personalScope) ? snapshot : null,
+    activeSnapshot:
+      snapshot && passesScopeFilterForRecall(rowScope(snapshot), scope, personalScope)
+        ? snapshot
+        : null,
     sessionHandoff:
       sessionHandoff && passesScopeFilterForRecall(rowScope(sessionHandoff), scope, personalScope)
         ? sessionHandoff
@@ -452,7 +487,9 @@ function continuityTokensOf(c: ContinuityBlock): number {
     tokenCount(filteredHandoff?.nextAction) +
     (filteredHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenCount(a), 0) +
     (filteredHandoff?.constraints ?? []).reduce((acc, c) => acc + tokenCount(c), 0) +
-    tokenCount(filteredHandoff?.evidence ? formatHandoffEvidenceLine(filteredHandoff.evidence) : null) +
+    tokenCount(
+      filteredHandoff?.evidence ? formatHandoffEvidenceLine(filteredHandoff.evidence) : null,
+    ) +
     tokenCount(filteredHandoff?.outcome) +
     tokenCount(filteredHandoff?.targetRuntime) +
     tokenCount(filteredHandoff?.cardId) +
@@ -462,12 +499,20 @@ function continuityTokensOf(c: ContinuityBlock): number {
 
 // A pure read of the caller's recallHistory snapshot against this top-1. HIPPO_ANCHORING=off skips even the detect
 // call; CLI paths pass no history (printRecall computes its own hint), so the hint stays absent there.
-function detectRecallAnchoring({ config }: Context, opts: RecallOptions, topMemoryId: string | null): AnchoringOutcome {
+function detectRecallAnchoring(
+  { config }: Context,
+  opts: RecallOptions,
+  topMemoryId: string | null,
+): AnchoringOutcome {
   const history = opts.hints?.recallHistory;
-  if (!biasHintEnabled(config, 'anchoring') || !history) return { anchoringHint: null, suppressedByInterference: 0 };
+  if (!biasHintEnabled(config, 'anchoring') || !history)
+    return { anchoringHint: null, suppressedByInterference: 0 };
   const queryHash = hashQueryText(opts.query);
   const anchoringHint = detectAnchoring(history, queryHash, topMemoryId);
-  return { anchoringHint, suppressedByInterference: anchoringHint?.reason === 'memory_dominance' ? 1 : 0 };
+  return {
+    anchoringHint,
+    suppressedByInterference: anchoringHint?.reason === 'memory_dominance' ? 1 : 0,
+  };
 }
 
 // Compares the returned top-K's ages with the scope-filtered pool it came from, never `all`, whose hidden rows would
@@ -478,7 +523,8 @@ function detectRecallAvailability(
   baseSlice: MemoryEntry[],
   entries: MemoryEntry[],
 ): AvailabilityHint | null {
-  if (!biasHintEnabled(ctx.config, 'availability') || opts.hints?.suppressAvailabilityHint) return null;
+  if (!biasHintEnabled(ctx.config, 'availability') || opts.hints?.suppressAvailabilityHint)
+    return null;
   return detectAvailabilityBias({
     topK: baseSlice.map((e) => ({ id: e.id, created: e.created })),
     pool: entries.map((e) => ({ id: e.id, created: e.created })),

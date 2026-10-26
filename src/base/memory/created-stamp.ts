@@ -11,5 +11,7 @@ const ISO_STAMP_CHARS = 24;
 
 /** `stamp` itself in toISOString's form, else the instant Date reads in it, else '' so it sorts oldest. */
 export function sortableStamp(stamp: string): string {
-  return [...stamp].length === ISO_STAMP_CHARS && /z$/i.test(stamp) ? stamp : (isoInstant(stamp) ?? '');
+  return [...stamp].length === ISO_STAMP_CHARS && /z$/i.test(stamp)
+    ? stamp
+    : (isoInstant(stamp) ?? '');
 }

@@ -36,7 +36,11 @@ export function audit(db: DatabaseSyncLike, op: AuditOp, options: AuditOptions):
 
 /** Refusal audit for the rejected-value guard, written by the transaction owner after rollback so the caller's own
  * rollback cannot claw it back. Best-effort like `audit()`: never throws. */
-export function auditRejectionRefusal(db: DatabaseSyncLike, err: RejectedValueError, actor: string): void {
+export function auditRejectionRefusal(
+  db: DatabaseSyncLike,
+  err: RejectedValueError,
+  actor: string,
+): void {
   const row = refusalAudit(err.tenantId, actor, err.entryId, err);
   audit(db, row.op, row);
 }

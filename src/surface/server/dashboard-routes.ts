@@ -17,7 +17,11 @@ import {
 import { pageRoute, SECURITY_HEADERS } from '../dashboard/dashboard-page.js';
 import type { StaticFiles } from '../dashboard/static-file.js';
 import type { DashboardReader } from './dashboard-reader.js';
-import { passDashboardSession, type DashboardAccess, type DashboardSession } from './dashboard-session.js';
+import {
+  passDashboardSession,
+  type DashboardAccess,
+  type DashboardSession,
+} from './dashboard-session.js';
 import type { DashboardRoute, DashboardRouteRequest } from './dashboard-types.js';
 import { noteAccess, parseRequest, sendError } from './request.js';
 import { routeLookup } from './route-lookup.js';
@@ -29,7 +33,12 @@ const PAGE = /^\/(?!api\/).*$/;
 
 export const DASHBOARD_ROUTES: readonly DashboardRoute[] = [
   { method: 'GET', path: '/api/overview', auth: SESSION, handler: overviewRoute },
-  { method: 'GET', pattern: '/api/projects/:key/memories', auth: SESSION, handler: memoryPageRoute },
+  {
+    method: 'GET',
+    pattern: '/api/projects/:key/memories',
+    auth: SESSION,
+    handler: memoryPageRoute,
+  },
   { method: 'GET', pattern: '/api/projects/:key', auth: SESSION, handler: projectRoute },
   { method: 'GET', pattern: '/api/memory/:id', auth: SESSION, handler: memoryRoute },
   { method: 'GET', path: '/api/search', auth: SESSION, handler: searchRoute },

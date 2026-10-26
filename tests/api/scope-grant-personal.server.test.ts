@@ -41,12 +41,17 @@ function recallAs(key: string, scope: string): Promise<Response> {
 
 beforeEach(async () => {
   root = makeRoot('scope-grant-personal', { config: { embeddings: { enabled: false } } });
-  keyB = withDb((db) => createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'oid-b' }));
+  keyB = withDb((db) =>
+    createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'oid-b' }),
+  );
   adminCtx = apiCtx(root, 'default', api.adminActor('cli'));
-  await api.remember(apiCtx(root, 'default', { subject: 'api_key:hk_a', role: 'member', owner: 'oid-a' }), {
-    content: A_TEXT,
-    personal: true,
-  });
+  await api.remember(
+    apiCtx(root, 'default', { subject: 'api_key:hk_a', role: 'member', owner: 'oid-a' }),
+    {
+      content: A_TEXT,
+      personal: true,
+    },
+  );
   handle = await serve({ hippoRoot: root, port: 0 });
 });
 
@@ -99,7 +104,12 @@ describe('scope grants and personal scopes', () => {
       viaAuthResolver: true,
     };
     const adminB: api.Actor = { ...memberB, role: 'admin' };
-    const ownerA: api.Actor = { subject: 'oidc:a', role: 'member', owner: 'oid-a', viaAuthResolver: true };
+    const ownerA: api.Actor = {
+      subject: 'oidc:a',
+      role: 'member',
+      owner: 'oid-a',
+      viaAuthResolver: true,
+    };
     expect(canReadScope(memberB, A_SCOPE)).toBe(false);
     expect(canReadScope(adminB, A_SCOPE)).toBe(false);
     expect(canReadScope(memberB, CONNECTOR_SCOPE)).toBe(true);

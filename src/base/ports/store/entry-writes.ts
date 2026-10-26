@@ -70,7 +70,11 @@ export interface EntryWrites {
 export interface LessonWrites {
   /** Content, source and origin of the tenant's rows that may hold one of `texts`, as `captures.textsHolding` reads
    * them, among the rows a team member or `ownScope`'s owner may touch. */
-  textsHolding(tenantId: string, texts: readonly string[], ownScope: string | null): Promise<HeldText[]>;
+  textsHolding(
+    tenantId: string,
+    texts: readonly string[],
+    ownScope: string | null,
+  ): Promise<HeldText[]>;
   /** Contents of the tenant's team-visible rows tagged `tag`; with `origins`, only those projects' and user-global. */
   contentsWithTag(tenantId: string, tag: string, origins?: readonly string[]): Promise<string[]>;
   /** Writes each entry in one transaction; a rejected value writes its refusal row and is skipped. Resolves to the ids

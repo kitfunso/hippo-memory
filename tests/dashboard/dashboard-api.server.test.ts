@@ -56,7 +56,10 @@ afterAll(async () => {
 });
 
 /** Builds a read over a store of its own holding only `entries`, so a case needs no server. */
-async function inStoreOf<T>(entries: MemoryEntry[], read: (view: ReturnType<typeof dashboardOf>) => Promise<T>) {
+async function inStoreOf<T>(
+  entries: MemoryEntry[],
+  read: (view: ReturnType<typeof dashboardOf>) => Promise<T>,
+) {
   const own = makeStore('hippo-dash-api-own');
   try {
     writeEntriesTogether(own.hippoRoot, entries);
@@ -110,7 +113,9 @@ describe('overview and project', () => {
     expect(points.points).toHaveLength(7);
     expect(points.ids).toHaveLength(7);
 
-    expect((await get(dash.port, `/api/projects/${encodeURIComponent('p:nope')}`)).status).toBe(404);
+    expect((await get(dash.port, `/api/projects/${encodeURIComponent('p:nope')}`)).status).toBe(
+      404,
+    );
     expect((await get(dash.port, '/api/projects/p:alpha/extra/path')).status).toBe(404);
   });
 
@@ -150,7 +155,12 @@ describe('KPI series', () => {
   });
 
   it('sends 91 cumulative points whose first-to-last difference counts memories created inside the window', async () => {
-    const total = await seriesOf('total', [aged(89.5, 'a'), aged(95, 'b'), aged(10, 'c'), aged(0.2, 'c')]);
+    const total = await seriesOf('total', [
+      aged(89.5, 'a'),
+      aged(95, 'b'),
+      aged(10, 'c'),
+      aged(0.2, 'c'),
+    ]);
 
     expect(total).toHaveLength(91);
     expect(total[0]).toBe(1);
@@ -161,7 +171,11 @@ describe('KPI series', () => {
   });
 
   it('counts a project from its first memory, so a project first seen 95 days ago stays in the base', async () => {
-    const projects = await seriesOf('projects', [aged(89.5, 'new'), aged(95, 'old'), aged(3, 'old')]);
+    const projects = await seriesOf('projects', [
+      aged(89.5, 'new'),
+      aged(95, 'old'),
+      aged(3, 'old'),
+    ]);
 
     expect(projects[0]).toBe(1);
     expect(projects[90] - projects[0]).toBe(1);
@@ -189,7 +203,9 @@ describe('memory page', () => {
   });
 
   it('filters by layer, by the age and strength brush, and by search text', async () => {
-    expect((await memories('?layers=semantic')).rows.map((r) => r.content)).toEqual(['semantic fact']);
+    expect((await memories('?layers=semantic')).rows.map((r) => r.content)).toEqual([
+      'semantic fact',
+    ]);
     expect((await memories('?layers=buffer,semantic')).total).toBe(2);
     expect((await memories('?smax=0.5')).rows.map((r) => r.content)).toEqual(['mid fading']);
     expect((await memories('?amin=100')).rows.map((r) => r.content)).toEqual(['mid fading']);
@@ -230,7 +246,10 @@ describe('memory page', () => {
       ['limit=1.5', limit],
       ['offset=-1', offset],
       ['offset=abc', offset],
-      ['sort=nope', 'sort must be one of content, layer, strength, retrievals, last, age, confidence, scope'],
+      [
+        'sort=nope',
+        'sort must be one of content, layer, strength, retrievals, last, age, confidence, scope',
+      ],
       ['dir=up', 'dir must be one of asc, desc'],
       ['chip=all,risk', 'chip must be one of all, risk, pinned, conflict'],
       ['layers=', layers],
@@ -240,7 +259,10 @@ describe('memory page', () => {
       [`q=${'a'.repeat(201)}`, 'q must be at most 200 characters'],
     ];
     for (const [query, message] of bad) {
-      const reply = await get(dash.port, `/api/projects/${encodeURIComponent('p:alpha')}/memories?${query}`);
+      const reply = await get(
+        dash.port,
+        `/api/projects/${encodeURIComponent('p:alpha')}/memories?${query}`,
+      );
       expect(reply.status, query).toBe(400);
       expect(parse<{ error: string }>(reply).error, query).toBe(message);
     }

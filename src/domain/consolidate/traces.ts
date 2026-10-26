@@ -12,7 +12,9 @@ import { DAY_MS } from '../../base/util/time.js';
 
 /** The sessions whose traces this sleep promotes: the caller's tenant's, completed within the window, with no trace
  * yet; none under dryRun or with auto-trace off. */
-export function traceWindow(run: Pick<SleepRun, 'tenantId' | 'now' | 'dryRun' | 'config'>): SleepBegin['traces'] {
+export function traceWindow(
+  run: Pick<SleepRun, 'tenantId' | 'now' | 'dryRun' | 'config'>,
+): SleepBegin['traces'] {
   if (run.dryRun || run.config.autoTraceCapture === false) return undefined;
   const windowDays = run.config.autoTraceWindowDays ?? 7;
   // Auto-trace runs for the caller's tenant alone; consolidating every tenant needs a per-tenant loop on top of this.
@@ -22,7 +24,10 @@ export function traceWindow(run: Pick<SleepRun, 'tenantId' | 'now' | 'dryRun' | 
 // 1.4. Auto-promote complete sessions to traces: each session `traceWindow` names (idempotent via source_session_id)
 // is rendered as markdown and persisted as a Layer.Trace memory, which inherits decay, search, replay and physics. The
 // store read the sessions with their events at sleep begin, and one tombstone read covers every trace.
-export async function promoteSessionTraces(run: SleepRun, sessions: readonly UntracedSession[]): Promise<void> {
+export async function promoteSessionTraces(
+  run: SleepRun,
+  sessions: readonly UntracedSession[],
+): Promise<void> {
   const { result } = run;
   const built = sessions.flatMap((session) => sessionTrace(run, run.tenantId, session) ?? []);
   const rejected = await run.tombstones.rejectedAmong(
@@ -95,7 +100,9 @@ function sessionTrace(
 }
 
 /** The outcome and title a session's terminal event carries, or null when it has none or the event is malformed. */
-function sessionEnding(events: readonly SessionEvent[]): { outcome: TraceOutcome; summary: string } | null {
+function sessionEnding(
+  events: readonly SessionEvent[],
+): { outcome: TraceOutcome; summary: string } | null {
   const completeEvent = events.find((e) => e.eventType === 'session_complete');
   if (!completeEvent) return null; // defence-in-depth; the store's untraced-session read filters already.
 
@@ -113,7 +120,11 @@ function sessionEnding(events: readonly SessionEvent[]): { outcome: TraceOutcome
 }
 
 // A tombstoned trace is left out; its refusal row names the session, and the digest it was refused under.
-async function auditRejectedTrace(run: SleepRun, trace: MemoryEntry, sessionId: string): Promise<void> {
+async function auditRejectedTrace(
+  run: SleepRun,
+  trace: MemoryEntry,
+  sessionId: string,
+): Promise<void> {
   const traceDigest = rejectionDigest(trace.content);
   const tombstone = await run.tombstones.find(trace.tenantId, traceDigest);
   await run.tombstones.auditOrCount({
@@ -137,7 +148,9 @@ export async function replayPass(run: SleepRun): Promise<void> {
   // the whole pass; persisting unmutated entries anyway would still refresh updated_at and mirrors.
   if (!(replayCount > 0 && survivors.size > 0 && run.strength.recallStrengthens)) return;
   const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
-  const picked = await survivors.get(await sampleForReplay(survivors.rows(), replayCount, now, seed, run.strength));
+  const picked = await survivors.get(
+    await sampleForReplay(survivors.rows(), replayCount, now, seed, run.strength),
+  );
   if (picked.length === 0) return;
   const rehearsed = markRetrieved(picked, now, run.strength);
   // Update survivors in place so downstream passes see rehearsed state.

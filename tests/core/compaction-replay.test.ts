@@ -100,7 +100,10 @@ function rows<T>(sql: string): T[] {
 
 const spoolDir = (): string => path.join(s.hippoRoot, 'compactions-spool');
 
-function writeSpool(name: string, over: { tenantId?: string; sessionId?: string; items?: string[] } = {}): string {
+function writeSpool(
+  name: string,
+  over: { tenantId?: string; sessionId?: string; items?: string[] } = {},
+): string {
   fs.mkdirSync(spoolDir(), { recursive: true });
   const file = path.join(spoolDir(), name);
   fs.writeFileSync(
@@ -165,13 +168,21 @@ describe('replay of records a killed hook left', () => {
         .map((r) => r.content)
         .sort(),
     ).toEqual([...ITEMS].sort());
-    expect(warned.mock.calls.map(([, message]) => message).join('')).toContain('compaction cmp-bad skipped');
+    expect(warned.mock.calls.map(([, message]) => message).join('')).toContain(
+      'compaction cmp-bad skipped',
+    );
   });
 
   it('warns once for several malformed records, so the once-only key set does not grow with the rows', async () => {
     const warned = vi.spyOn(hippoLog, 'warnThenDebug').mockImplementation(() => undefined);
     for (const id of ['cmp-bad-1', 'cmp-bad-2', 'cmp-bad-3']) {
-      seed(s.hippoRoot, { id, status: 'summarised', startedMinutesAgo: 40, summarizedMinutesAgo: 30, items: ITEMS });
+      seed(s.hippoRoot, {
+        id,
+        status: 'summarised',
+        startedMinutesAgo: 40,
+        summarizedMinutesAgo: 30,
+        items: ITEMS,
+      });
       run(s.hippoRoot, `UPDATE compactions SET items_json = '{not json' WHERE id = '${id}'`);
     }
     expect(await replayCompactions(compactionFolder(s.hippoRoot), log)).toBe(0);
@@ -181,15 +192,25 @@ describe('replay of records a killed hook left', () => {
 
   it('answers a request lookup that lands on a record with malformed items with null and a warning, not a throw', () => {
     const warned = vi.spyOn(hippoLog, 'warnThenDebug').mockImplementation(() => undefined);
-    seed(s.hippoRoot, { id: 'cmp-bad', status: 'summarised', startedMinutesAgo: 40, summarizedMinutesAgo: 30 });
-    run(s.hippoRoot, `UPDATE compactions SET items_json = '{not json', request_id = 'req-1' WHERE id = 'cmp-bad'`);
+    seed(s.hippoRoot, {
+      id: 'cmp-bad',
+      status: 'summarised',
+      startedMinutesAgo: 40,
+      summarizedMinutesAgo: 30,
+    });
+    run(
+      s.hippoRoot,
+      `UPDATE compactions SET items_json = '{not json', request_id = 'req-1' WHERE id = 'cmp-bad'`,
+    );
     const db = openHippoDb(s.hippoRoot);
     try {
       expect(compactionByRequest(db, 'default', 'req-1', 's1')).toBeNull();
     } finally {
       closeHippoDb(db);
     }
-    expect(warned.mock.calls.map(([, message]) => message).join('')).toContain('compaction cmp-bad skipped');
+    expect(warned.mock.calls.map(([, message]) => message).join('')).toContain(
+      'compaction cmp-bad skipped',
+    );
   });
 
   it('leaves a record that is under 10 minutes old to its own hook', async () => {
@@ -280,7 +301,10 @@ describe('replay of records a killed hook left', () => {
     const transcript = path.join(s.proj, 't.jsonl');
     fs.writeFileSync(transcript, transcriptLine(50, true, CONTINUED(ITEMS)) + '\n');
     seed(s.hippoRoot, { id: 'cmp-old', status: 'started', startedMinutesAgo: 30, transcript });
-    fs.writeFileSync(path.join(s.proj, 'fresh.jsonl'), transcriptLine(1, true, CONTINUED(ITEMS)) + '\n');
+    fs.writeFileSync(
+      path.join(s.proj, 'fresh.jsonl'),
+      transcriptLine(1, true, CONTINUED(ITEMS)) + '\n',
+    );
     seed(s.hippoRoot, {
       id: 'cmp-new',
       status: 'started',
@@ -339,21 +363,35 @@ describe('replay of records a killed hook left', () => {
     seed(s.hippoRoot, { id: 'cmp-1', status: 'started', startedMinutesAgo: 5 });
     await saveCompaction(
       compactionFolder(s.hippoRoot),
-      { sessionId: 's1', trigger: 'auto', cwd: s.proj, transcriptPath: null, compactSummary: summaryWith(ITEMS) },
+      {
+        sessionId: 's1',
+        trigger: 'auto',
+        cwd: s.proj,
+        transcriptPath: null,
+        compactSummary: summaryWith(ITEMS),
+      },
       log,
     );
-    expect(compactionRows(s.hippoRoot)).toMatchObject([{ id: 'cmp-1', status: 'done', items_written: 2 }]);
+    expect(compactionRows(s.hippoRoot)).toMatchObject([
+      { id: 'cmp-1', status: 'done', items_written: 2 },
+    ]);
   });
 
   it('leaves a record another process filled first alone instead of writing a second one', async () => {
     const transcript = path.join(s.proj, 't.jsonl');
-    fs.writeFileSync(transcript, transcriptLine(29, true, 'Summary:\n1. Primary Request: fix the login test.') + '\n');
+    fs.writeFileSync(
+      transcript,
+      transcriptLine(29, true, 'Summary:\n1. Primary Request: fix the login test.') + '\n',
+    );
     seed(s.hippoRoot, { id: 'cmp-1', status: 'started', startedMinutesAgo: 30, transcript });
     // The transcript summary has no memories list, so this log line is the moment between the search and the update.
     const otherProcessFinishes = (message: string): void => {
       log(message);
       if (message.includes('no memories section')) {
-        run(s.hippoRoot, `UPDATE compactions SET status = 'done', items_written = 7 WHERE id = 'cmp-1'`);
+        run(
+          s.hippoRoot,
+          `UPDATE compactions SET status = 'done', items_written = 7 WHERE id = 'cmp-1'`,
+        );
       }
     };
     expect(await replayCompactions(compactionFolder(s.hippoRoot), otherProcessFinishes)).toBe(0);
@@ -379,7 +417,10 @@ describe('replay of records a killed hook left', () => {
 
   it('counts the rows it writes in the remembered counter', async () => {
     const remembered = (): number =>
-      Number(rows<{ value: string }>(`SELECT value FROM meta WHERE key = 'total_remembered'`)[0]?.value ?? 0);
+      Number(
+        rows<{ value: string }>(`SELECT value FROM meta WHERE key = 'total_remembered'`)[0]
+          ?.value ?? 0,
+      );
     const before = remembered();
     seed(s.hippoRoot, {
       id: 'cmp-1',
@@ -395,7 +436,9 @@ describe('replay of records a killed hook left', () => {
   it('returns 0 and logs instead of throwing when the store cannot be opened', async () => {
     const notADirectory = path.join(s.dir, 'a-file');
     fs.writeFileSync(notADirectory, 'x');
-    expect(await replayCompactions(compactionFolder(path.join(notADirectory, 'store')), log)).toBe(0);
+    expect(await replayCompactions(compactionFolder(path.join(notADirectory, 'store')), log)).toBe(
+      0,
+    );
     expect(logs.join('\n')).toContain('replay failed');
   });
 
@@ -472,7 +515,9 @@ describe('two replayers working the same store', () => {
     expect(await replayCompactions(compactionFolder(s.hippoRoot), log)).toBe(1);
     expect(fs.readdirSync(spoolDir())).toEqual([]);
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
-    expect(compactionRows(s.hippoRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2 }]);
+    expect(compactionRows(s.hippoRoot)).toMatchObject([
+      { session_id: 's1', status: 'done', items_written: 2 },
+    ]);
   });
 
   it('puts a spool file back when its import fails, so the next replay retries it', async () => {
@@ -494,7 +539,9 @@ describe('two replayers working the same store', () => {
     writeSpool('sa-1.json', { tenantId: 'acme', sessionId: 'sa', items: [ITEMS[0]] });
     writeSpool('sb-1.json', { sessionId: 'sb', items: [ITEMS[1]] });
     expect(await replayCompactions(compactionFolder(s.hippoRoot), log)).toBe(2);
-    expect(rows(`SELECT tenant_id, session_id, status FROM compactions ORDER BY session_id`)).toEqual([
+    expect(
+      rows(`SELECT tenant_id, session_id, status FROM compactions ORDER BY session_id`),
+    ).toEqual([
       { tenant_id: 'acme', session_id: 'sa', status: 'done' },
       { tenant_id: 'default', session_id: 'sb', status: 'done' },
     ]);
@@ -514,11 +561,20 @@ describe('hippo sleep finishes what the hook could not', () => {
 
   it('a hook killed after the record step: sleep writes the items once', async () => {
     initTestStore(s.hippoRoot);
-    const hook = await runHippo(['post-compact'], s.proj, s.env, fixturePayload(0, { cwd: s.proj }));
+    const hook = await runHippo(
+      ['post-compact'],
+      s.proj,
+      s.env,
+      fixturePayload(0, { cwd: s.proj }),
+    );
     expect(oneLine(hook.stdout)).toBe('Hippo saved 4 memories from this compaction.');
 
     run(s.hippoRoot, `DELETE FROM memories WHERE instr(tags_json, '"compaction-memory"') > 0`);
-    run(s.hippoRoot, `UPDATE compactions SET status = 'summarised', items_written = 0, summarised_at = ?`, ago(20));
+    run(
+      s.hippoRoot,
+      `UPDATE compactions SET status = 'summarised', items_written = 0, summarised_at = ?`,
+      ago(20),
+    );
     expect(compactionMemories(s.hippoRoot)).toEqual([]);
 
     const first = await sleep();
@@ -584,7 +640,9 @@ describe('the daily runner finishes the global store', { timeout: 30_000 }, () =
         s.env,
         postCompactPayload('s1', s.proj, summaryWith(ITEMS)),
       );
-      expect(oneLine(hook.stdout)).toBe('Hippo will finish saving this compaction at the next sleep.');
+      expect(oneLine(hook.stdout)).toBe(
+        'Hippo will finish saving this compaction at the next sleep.',
+      );
     } finally {
       db.exec('ROLLBACK');
       closeHippoDb(db);
@@ -597,6 +655,8 @@ describe('the daily runner finishes the global store', { timeout: 30_000 }, () =
     expect(daily.stdout).toContain('Finished saving 1 compaction left over in the global store.');
     expect(fs.readdirSync(path.join(s.globalRoot, 'compactions-spool'))).toEqual([]);
     expect(compactionMemories(s.globalRoot)).toHaveLength(2);
-    expect(compactionRows(s.globalRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2 }]);
+    expect(compactionRows(s.globalRoot)).toMatchObject([
+      { session_id: 's1', status: 'done', items_written: 2 },
+    ]);
   });
 });

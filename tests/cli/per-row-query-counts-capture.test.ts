@@ -31,7 +31,12 @@ describe('writeMemory', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
       const { statements } = await recordStatementsAsync(() =>
-        handleRemember({ hippoRoot: root, tenantId: 'default', args: [text], flags: { tag: ['topic:cache'] } }),
+        handleRemember({
+          hippoRoot: root,
+          tenantId: 'default',
+          args: [text],
+          flags: { tag: ['topic:cache'] },
+        }),
       );
       return { statements, printed: log.mock.calls.map((call) => String(call[0])) };
     } finally {
@@ -42,13 +47,21 @@ describe('writeMemory', () => {
   it('scores schema fit without reading a stored row, and reads back only the row it wrote', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-remember');
-      fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
+      fs.writeFileSync(
+        path.join(root, 'config.json'),
+        JSON.stringify({ embeddings: { enabled: false } }),
+      );
       seed(ctxFor(root), rows(n, 'remember', { tags: ['topic:cache'] }));
       const { statements, printed } = await remember(root, 'a new note about the zephyrine cache');
       expect(printed[0]).toMatch(/^Remembered \[/);
       // The write goes through the api, which answers an id, so the printout reads that one row by id.
       expect(countMatching(statements, ROW_READ)).toBe(1);
-      expect(countMatching(statements, /FROM memories WHERE id IN \(SELECT value FROM json_each\(\?\)\) AND /)).toBe(1);
+      expect(
+        countMatching(
+          statements,
+          /FROM memories WHERE id IN \(SELECT value FROM json_each\(\?\)\) AND /,
+        ),
+      ).toBe(1);
     }
   });
 
@@ -57,7 +70,10 @@ describe('writeMemory', () => {
       const root = freshRoot('qc-remember-salience');
       fs.writeFileSync(
         path.join(root, 'config.json'),
-        JSON.stringify({ embeddings: { enabled: false }, salience: { enabled: true, recentWindow: 3 } }),
+        JSON.stringify({
+          embeddings: { enabled: false },
+          salience: { enabled: true, recentWindow: 3 },
+        }),
       );
       const stored = rows(n, 'salience').map((e, i) => ({
         ...e,
@@ -68,7 +84,9 @@ describe('writeMemory', () => {
       const inWindow = await remember(root, stored[n - 1].content);
       expect(inWindow.printed[0]).toMatch(/^Skipped \(salience: duplicate/);
       expect(countMatching(inWindow.statements, ROW_READ)).toBe(1);
-      expect(countMatching(inWindow.statements, /ORDER BY created DESC, id DESC LIMIT \?$/)).toBe(1);
+      expect(countMatching(inWindow.statements, /ORDER BY created DESC, id DESC LIMIT \?$/)).toBe(
+        1,
+      );
 
       const beforeWindow = await remember(root, stored[n - 4].content);
       expect(beforeWindow.printed[0]).toMatch(/^Remembered \[/);
@@ -83,14 +101,20 @@ describe('trace lineage', () => {
       const root = freshRoot('qc-trace-lineage');
       vi.stubEnv('HIPPO_HOME', path.join(root, 'global'));
       const sources = rows(parents, 'parent');
-      const child = memory('a child merged from the parents', { parents: sources.map((p) => p.id) });
+      const child = memory('a child merged from the parents', {
+        parents: sources.map((p) => p.id),
+      });
       seed(ctxFor(root), [...sources, child]);
       const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       try {
         const { statements } = await recordStatementsAsync(() =>
-          cliRequest(() => handleTrace({ hippoRoot: root, tenantId: 'default', args: [child.id], flags: {} })),
+          cliRequest(() =>
+            handleTrace({ hippoRoot: root, tenantId: 'default', args: [child.id], flags: {} }),
+          ),
         );
-        expect(log.mock.calls.map((call) => String(call[0])).join(' ')).toContain('parent memory number 0');
+        expect(log.mock.calls.map((call) => String(call[0])).join(' ')).toContain(
+          'parent memory number 0',
+        );
         reads.push(countMatching(statements, ROW_READ));
       } finally {
         log.mockRestore();
@@ -106,7 +130,10 @@ describe('runCapture', () => {
     for (const n of SIZES) {
       for (const items of [1, 10]) {
         const root = freshRoot('qc-capture');
-        fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
+        fs.writeFileSync(
+          path.join(root, 'config.json'),
+          JSON.stringify({ embeddings: { enabled: false } }),
+        );
         const held = 'Never deploy service 0 on Fridays because the on-call rota is thin';
         seed(ctxFor(root), [...rows(n, 'capture'), memory(held)]);
         const sessionTurns = Array.from({ length: items + 1 }, (_, i) => ({
@@ -124,7 +151,9 @@ describe('runCapture', () => {
               tenantId: 'default',
             }),
           );
-          expect(log.mock.calls.at(-1)?.[0]).toContain(`Captured ${items} items (1 skipped as duplicates)`);
+          expect(log.mock.calls.at(-1)?.[0]).toContain(
+            `Captured ${items} items (1 skipped as duplicates)`,
+          );
           expect(countMatching(statements, ROW_READ)).toBe(0);
           counts.push(countMatching(statements, STORE_OPEN));
         } finally {

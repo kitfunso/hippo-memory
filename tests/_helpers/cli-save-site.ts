@@ -8,7 +8,12 @@ import { evalNow } from '../../src/infra/eval-switches.js';
 
 /** Where a CLI save on `root` records an object: that root's half-life, under the CLI actor. */
 function cliSaveSite(root: string, tenantId: string): ObjectSaveSite {
-  return { now: evalNow(), baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, tenantId, actor: CLI_ACTOR };
+  return {
+    now: evalNow(),
+    baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
+    tenantId,
+    actor: CLI_ACTOR,
+  };
 }
 
 /** Saves one object of kind `d` on the hippo.db under `root` as the CLI would. */

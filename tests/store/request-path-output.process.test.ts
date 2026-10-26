@@ -6,7 +6,11 @@ import { join } from 'node:path';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
+import {
+  handleMcpRequest,
+  type McpContext,
+  type McpResponse,
+} from '../../src/surface/mcp/server.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -31,13 +35,18 @@ const COMMIT_SUBJECTS = [
 function gitRepoWithCommits(dir: string): void {
   mkdirSync(dir, { recursive: true });
   const git = (...args: string[]): void => {
-    execFileSync('git', ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', ...args], {
-      cwd: dir,
-      stdio: 'ignore',
-    });
+    execFileSync(
+      'git',
+      ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', ...args],
+      {
+        cwd: dir,
+        stdio: 'ignore',
+      },
+    );
   };
   git('init', '-q');
-  for (const subject of [...COMMIT_SUBJECTS].reverse()) git('commit', '-q', '--allow-empty', '-m', subject);
+  for (const subject of [...COMMIT_SUBJECTS].reverse())
+    git('commit', '-q', '--allow-empty', '-m', subject);
 }
 
 const NOW = '2026-06-01T00:00:00.000Z';
@@ -68,7 +77,14 @@ function localRow(i: number): MemoryEntry {
     tags: i % 8 === 0 ? ['error'] : i % 29 === 9 ? ['secret'] : [`t${i % 4}`],
     pinned: i % 25 === 0,
     emotionalValence: i % 9 === 0 ? 'negative' : 'neutral',
-    scope: i % 17 === 3 ? 'slack:private:c1' : i % 19 === 4 ? 'unknown:legacy' : i % 13 === 5 ? 'team:x' : null,
+    scope:
+      i % 17 === 3
+        ? 'slack:private:c1'
+        : i % 19 === 4
+          ? 'unknown:legacy'
+          : i % 13 === 5
+            ? 'team:x'
+            : null,
     tenantId: i % 15 === 14 ? 'acme' : 'default',
   });
   return {
@@ -88,7 +104,13 @@ function localRow(i: number): MemoryEntry {
 
 function globalRow(j: number): MemoryEntry {
   const source =
-    j % 3 === 0 ? `shared:proj${j % 4}:x` : j % 3 === 1 ? '/tmp/projB/.hippo' : j % 5 === 0 ? 'cli-global' : 'cli';
+    j % 3 === 0
+      ? `shared:proj${j % 4}:x`
+      : j % 3 === 1
+        ? '/tmp/projB/.hippo'
+        : j % 5 === 0
+          ? 'cli-global'
+          : 'cli';
   // Pairs share a timestamp so peer order and rank ties fall to the id.
   const created = base - Math.floor(j / 2) * 13 * HOUR;
   const entry = createMemory(
@@ -111,7 +133,10 @@ function globalRow(j: number): MemoryEntry {
 }
 
 function merged(): MemoryEntry {
-  const held = ['the loader must handle a null cache key before it reads the\nindex file', 'the loader retries twice'];
+  const held = [
+    'the loader must handle a null cache key before it reads the\nindex file',
+    'the loader retries twice',
+  ];
   const entry = createMemory(mergedText('Two related fixes', held), {
     source: 'consolidation',
     tenantId: 'default',
@@ -174,7 +199,10 @@ describe('request-path output on a fixed store', () => {
   };
   type ToolArgs = { scope?: string };
   const call = (name: string, args: ToolArgs = {}): Promise<McpResponse | null> =>
-    handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, mcpCtx());
+    handleMcpRequest(
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
+      mcpCtx(),
+    );
 
   /** The first content line of each row hippo_context prints, in print order. */
   const blocks = (text: string): string[] =>
@@ -197,7 +225,11 @@ describe('request-path output on a fixed store', () => {
 
   it('mcp hippo_context shows every eligible row of both stores, and a scope keeps only its own rows', async () => {
     const all = textOf(await call('hippo_context'));
-    const shown = [...LOCAL.filter(shownLocal), merged(), ...GLOBAL.filter((e) => e.tenantId === 'default')];
+    const shown = [
+      ...LOCAL.filter(shownLocal),
+      merged(),
+      ...GLOBAL.filter((e) => e.tenantId === 'default'),
+    ];
     expect(shown).toHaveLength(91);
     expect(all.split('\n')[0]).toBe('Found 91 memories:');
     expect(blocks(all).sort()).toEqual(firstLines(shown));

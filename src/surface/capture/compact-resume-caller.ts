@@ -29,7 +29,8 @@ export async function compactResumeForCaller(
 ): Promise<CallerHookOutput> {
   const ctx = withEntryInfra(given);
   const key = await bindCaller(ctx, req.sessionId, req.project);
-  if (req.source !== 'compact' || (await callerInHoldout(ctx, req.sessionId))) return { stdout: '' };
+  if (req.source !== 'compact' || (await callerInHoldout(ctx, req.sessionId)))
+    return { stdout: '' };
   const { sessions } = ctx.store;
   const ambient = { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS };
   const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, key);
@@ -54,7 +55,11 @@ export async function compactResumeForCaller(
 }
 
 /** A bad trail row costs the trail, not the snapshot. */
-async function sessionTrail(ctx: Context, sessions: Sessions, sessionId: string | null): Promise<SessionEvent[]> {
+async function sessionTrail(
+  ctx: Context,
+  sessions: Sessions,
+  sessionId: string | null,
+): Promise<SessionEvent[]> {
   if (!sessionId) return [];
   try {
     return (await sessions.read(ctx.tenantId, 'event', { sessionId })).map((e) => ({

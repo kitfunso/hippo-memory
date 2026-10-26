@@ -5,7 +5,12 @@ const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string
   activeGoalsWithPolicies(root, opts).goals;
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { activeGoalsWithPolicies, pushGoal, completeGoal, suspendGoal } from '../_helpers/root-forms.js';
+import {
+  activeGoalsWithPolicies,
+  pushGoal,
+  completeGoal,
+  suspendGoal,
+} from '../_helpers/root-forms.js';
 
 describe('goal lifecycle', () => {
   let root: string;
@@ -22,7 +27,9 @@ describe('goal lifecycle', () => {
       // SAFETY: the goal_stack table's status/completed_at/outcome_score columns are
       // TEXT/TEXT/REAL per the migration in src/db/index.ts; this query selects exactly
       // those three columns for a single row by primary key.
-      const row = db.prepare(`SELECT status, completed_at, outcome_score FROM goal_stack WHERE id = ?`).get(g.id) as {
+      const row = db
+        .prepare(`SELECT status, completed_at, outcome_score FROM goal_stack WHERE id = ?`)
+        .get(g.id) as {
         status: string;
         completed_at: string;
         outcome_score: number;
@@ -44,7 +51,9 @@ describe('goal lifecycle', () => {
     try {
       // SAFETY: status is a TEXT column on goal_stack per the migration in src/db/index.ts;
       // this query selects exactly that one column for a single row by primary key.
-      const row = db.prepare(`SELECT status FROM goal_stack WHERE id = ?`).get(g.id) as { status: string };
+      const row = db.prepare(`SELECT status FROM goal_stack WHERE id = ?`).get(g.id) as {
+        status: string;
+      };
       expect(row.status).toBe('completed');
     } finally {
       closeHippoDb(db);

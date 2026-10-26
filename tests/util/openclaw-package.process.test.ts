@@ -36,7 +36,9 @@ describe('openclaw package metadata', () => {
   // name='hippo-memory'.
   it('keeps nested extensions/openclaw-plugin manifests aligned with root version', () => {
     const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
-    const nestedPkg = JSON.parse(readFileSync(join(repoRoot, 'extensions/openclaw-plugin/package.json'), 'utf8'));
+    const nestedPkg = JSON.parse(
+      readFileSync(join(repoRoot, 'extensions/openclaw-plugin/package.json'), 'utf8'),
+    );
     const nestedPlugin = JSON.parse(
       readFileSync(join(repoRoot, 'extensions/openclaw-plugin/openclaw.plugin.json'), 'utf8'),
     );

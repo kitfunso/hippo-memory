@@ -12,7 +12,15 @@ import { buildOverview } from '../../src/api/dashboard/overview.js';
 import { buildMemoryPage, type MemoryQuery } from '../../src/api/dashboard/queries.js';
 import type { Overview, ProjectSummary } from '../../src/api/dashboard/types.js';
 import type { DashboardTotals, ProjectTally } from '../../src/base/ports/store/dashboard-reads.js';
-import { dashboardOf, embed, isoAgo, makeStore, NOW, seed, type TmpStore } from '../_helpers/dashboard-fixture.js';
+import {
+  dashboardOf,
+  embed,
+  isoAgo,
+  makeStore,
+  NOW,
+  seed,
+  type TmpStore,
+} from '../_helpers/dashboard-fixture.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import {
   listMemoryConflicts,
@@ -50,7 +58,8 @@ async function totals(): Promise<DashboardTotals> {
   }
 }
 
-const summaryOf = (o: Overview, key: string): ProjectSummary => o.projects.find((p) => p.key === key)!;
+const summaryOf = (o: Overview, key: string): ProjectSummary =>
+  o.projects.find((p) => p.key === key)!;
 
 // Ten day half-life, just retrieved: strong today, under 0.2 in thirty days.
 const AT_RISK = { halfLifeDays: 10, created: isoAgo(0), lastRetrieved: isoAgo(0) } as const;
@@ -69,16 +78,24 @@ const EVERY_ROW: MemoryQuery = {
 };
 
 /** The tally a fold over whole entries gives, the way the in-memory snapshot counted before SQL did. */
-function foldOf(entries: readonly MemoryEntry[], vectors: ReadonlySet<string>): Omit<ProjectTally, 'openConflicts'>[] {
+function foldOf(
+  entries: readonly MemoryEntry[],
+  vectors: ReadonlySet<string>,
+): Omit<ProjectTally, 'openConflicts'>[] {
   const byOrigin = new Map<string | null, MemoryEntry[]>();
-  const ordered = [...entries].sort((a, b) => (a.created + '\u0001' + a.id < b.created + '\u0001' + b.id ? -1 : 1));
-  for (const e of ordered) byOrigin.set(e.originProject ?? null, [...(byOrigin.get(e.originProject ?? null) ?? []), e]);
+  const ordered = [...entries].sort((a, b) =>
+    a.created + '\u0001' + a.id < b.created + '\u0001' + b.id ? -1 : 1,
+  );
+  for (const e of ordered)
+    byOrigin.set(e.originProject ?? null, [...(byOrigin.get(e.originProject ?? null) ?? []), e]);
   return [...byOrigin].map(([origin, rows]) => {
     const facts = rows.map((e) => memoryFacts(e, NOW, PRODUCTION_STRENGTH));
     const count = (pick: (i: number) => boolean): number => rows.filter((_, i) => pick(i)).length;
     const createdDays = Array.from({ length: 91 }, () => 0);
     for (const e of rows) {
-      createdDays[seriesDay(Number.isFinite(Date.parse(e.created)) ? Date.parse(e.created) : NOW, NOW)]++;
+      createdDays[
+        seriesDay(Number.isFinite(Date.parse(e.created)) ? Date.parse(e.created) : NOW, NOW)
+      ]++;
     }
     return {
       origin,
@@ -133,7 +150,8 @@ describe('dashboard tallies', () => {
     seed(store.hippoRoot, 'buffer one', { layer: Layer.Buffer, ...AT_RISK });
 
     const alpha = summaryOf(await overview(), 'p:alpha');
-    const sum = (counts: Record<string, number>): number => Object.values(counts).reduce((a, b) => a + b, 0);
+    const sum = (counts: Record<string, number>): number =>
+      Object.values(counts).reduce((a, b) => a + b, 0);
 
     expect(alpha.live).toBe(4);
     expect(sum(alpha.bands)).toBe(alpha.live);
@@ -189,16 +207,28 @@ describe('dashboard tallies', () => {
 
   it("tallies in SQL what a fold over the tenant's whole rows counts", async () => {
     const root = store.hippoRoot;
-    const pinned = seed(root, 'pinned with tags', { pinned: true, tags: ['Deploy', 'error'], confidence: 'verified' });
+    const pinned = seed(root, 'pinned with tags', {
+      pinned: true,
+      tags: ['Deploy', 'error'],
+      confidence: 'verified',
+    });
     const wrong = seed(root, 'marked wrong twice', {
       outcomeNegative: 2,
       emotionalValence: 'negative',
       retrievalCount: 7,
     });
-    seed(root, 'raw global row', { kind: 'raw', originProject: '', layer: Layer.Buffer, ...AT_RISK });
+    seed(root, 'raw global row', {
+      kind: 'raw',
+      originProject: '',
+      layer: Layer.Buffer,
+      ...AT_RISK,
+    });
     seed(root, 'unassigned and long unused', { originProject: null, ...FADING });
     // The prefix test is exact, so a scope that differs only in case stays live.
-    seed(root, 'scope that only looks quarantined', { scope: 'Quarantine:private:team', originProject: 'beta' });
+    seed(root, 'scope that only looks quarantined', {
+      scope: 'Quarantine:private:team',
+      originProject: 'beta',
+    });
     seed(root, 'x'.repeat(300), { originProject: 'beta', layer: Layer.Semantic });
     seed(root, 'replaced by the pinned one', { supersededBy: pinned.id });
     seed(root, 'superseded by kind alone', { kind: 'superseded' });
@@ -218,9 +248,9 @@ describe('dashboard tallies', () => {
     try {
       // SAFETY: the SELECT names the one column read.
       vectors = new Set(
-        (db.prepare('SELECT memory_id FROM memory_vectors').all() as Array<{ memory_id: string }>).map(
-          (r) => r.memory_id,
-        ),
+        (
+          db.prepare('SELECT memory_id FROM memory_vectors').all() as Array<{ memory_id: string }>
+        ).map((r) => r.memory_id),
       );
     } finally {
       closeHippoDb(db);
@@ -229,7 +259,9 @@ describe('dashboard tallies', () => {
 
     expect(got.excluded).toEqual({ superseded: 3, archived: 1, quarantined: 2 });
     expect(got.openConflicts).toBe(1);
-    expect(got.projects.map(({ openConflicts: _, ...rest }) => rest)).toEqual(foldOf(live, vectors));
+    expect(got.projects.map(({ openConflicts: _, ...rest }) => rest)).toEqual(
+      foldOf(live, vectors),
+    );
     expect(got.projects.map((p) => [p.origin, p.openConflicts])).toEqual(
       got.projects.map((p) => [p.origin, p.origin === 'alpha' ? 1 : 0]),
     );

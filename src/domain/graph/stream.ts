@@ -92,7 +92,10 @@ function bestStrengthAtDepth(
     } else continue;
     if (visited.has(neighborId)) continue;
     const seedStrength = frontierStrength.get(reacherId) ?? originStrength.get(reacherId) ?? 0;
-    bestStrengthThisDepth.set(neighborId, Math.max(bestStrengthThisDepth.get(neighborId) ?? 0, seedStrength));
+    bestStrengthThisDepth.set(
+      neighborId,
+      Math.max(bestStrengthThisDepth.get(neighborId) ?? 0, seedStrength),
+    );
   }
   return bestStrengthThisDepth;
 }
@@ -120,9 +123,19 @@ async function reachedEntityScores(
   for (let depth = 1; depth <= hops && frontier.length > 0; depth++) {
     const frontierSet = new Set(frontier);
     const limit = Math.max(maxNeighbors, maxNeighbors * frontier.length);
-    const { relations: rels } = await store.graphReads.graphRows(tenantId, { by: 'neighbor', ids: frontier, limit });
+    const { relations: rels } = await store.graphReads.graphRows(tenantId, {
+      by: 'neighbor',
+      ids: frontier,
+      limit,
+    });
     const hopFactor = Math.pow(decay, depth);
-    const bestStrengthThisDepth = bestStrengthAtDepth(rels, frontierSet, visited, frontierStrength, originStrength);
+    const bestStrengthThisDepth = bestStrengthAtDepth(
+      rels,
+      frontierSet,
+      visited,
+      frontierStrength,
+      originStrength,
+    );
     // Pass 2: commit strongest-first (then id asc, so deterministic), so the per-hop fanout cap keeps the
     // highest-scoring neighbors rather than whichever the store happened to return.
     const nextFrontier: number[] = [];
@@ -135,7 +148,10 @@ async function reachedEntityScores(
       if (nextFrontier.length >= maxNeighbors) break; // per-hop fanout cap (strongest kept)
       const seedStrength = bestStrengthThisDepth.get(neighborId)!;
       visited.add(neighborId);
-      reachedScore.set(neighborId, Math.max(reachedScore.get(neighborId) ?? 0, seedStrength * hopFactor));
+      reachedScore.set(
+        neighborId,
+        Math.max(reachedScore.get(neighborId) ?? 0, seedStrength * hopFactor),
+      );
       nextStrength.set(neighborId, seedStrength);
       nextFrontier.push(neighborId);
     }
@@ -176,7 +192,10 @@ async function accumulateForStore(
     strengthByMemId.set(memId, Math.max(strengthByMemId.get(memId) ?? 0, s.strength));
   }
   const seedIds = [...strengthByMemId.keys()];
-  const { entities: seedEntities } = await store.graphReads.graphRows(tenantId, { by: 'memory', ids: seedIds });
+  const { entities: seedEntities } = await store.graphReads.graphRows(tenantId, {
+    by: 'memory',
+    ids: seedIds,
+  });
   if (seedEntities.length === 0) return;
 
   // entityId -> origin seed strength. Seeds load by memory id so memoryId is non-null here; the guard keeps the widened
@@ -199,7 +218,10 @@ async function accumulateForStore(
 
   // Reached entity ids -> source memory ids -> in-pool entry indices.
   const reachedIds = [...reachedScore.keys()];
-  const { entities: reachedEntities } = await store.graphReads.graphRows(tenantId, { by: 'entity', ids: reachedIds });
+  const { entities: reachedEntities } = await store.graphReads.graphRows(tenantId, {
+    by: 'entity',
+    ids: reachedIds,
+  });
   for (const ent of reachedEntities) {
     if (ent.memoryId === null) continue; // mirror-less node: no pool memory to re-rank
     const idx = memIdToIndex.get(ent.memoryId);
@@ -230,7 +252,8 @@ export async function graphRankStream(
   for (let i = 0; i < entries.length; i++) memIdToIndex.set(entries[i].id, i);
 
   const graphScore = new Map<number, number>();
-  const stores = opts.global && opts.global !== opts.store ? [opts.store, opts.global] : [opts.store];
+  const stores =
+    opts.global && opts.global !== opts.store ? [opts.store, opts.global] : [opts.store];
   for (const store of stores) {
     await accumulateForStore(store, seeds, entries, {
       memIdToIndex,

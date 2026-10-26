@@ -4,7 +4,8 @@ const childProcess = require('node:child_process');
 
 const realSpawn = childProcess.spawn;
 childProcess.spawn = function recordingSpawn(...args) {
-  if (process.env.RECORD_SPAWN_FILE) fs.appendFileSync(process.env.RECORD_SPAWN_FILE, `${JSON.stringify(args[1])}\n`);
+  if (process.env.RECORD_SPAWN_FILE)
+    fs.appendFileSync(process.env.RECORD_SPAWN_FILE, `${JSON.stringify(args[1])}\n`);
   return realSpawn.apply(this, args);
 };
 // The CLI is ESM; without this its named `spawn` import keeps the unpatched function.

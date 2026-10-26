@@ -12,7 +12,8 @@ export type Reply = readonly [
 
 export const over = (cap: number): string => 'x'.repeat(cap + 1);
 export const at = (cap: number): string => 'x'.repeat(cap);
-export const BAD_STATUS = 'status must be one of: active | superseded | closed | all (got "retired")';
+export const BAD_STATUS =
+  'status must be one of: active | superseded | closed | all (got "retired")';
 
 const DEC = '/v1/decisions';
 const DEC_MISSING = '/v1/decisions/99999/supersede';
@@ -85,8 +86,22 @@ export const DECISION_REPLIES: readonly Reply[] = [
     409,
     DEC_NO_TARGET,
   ],
-  ['create: spaces-only text', 'POST', DEC, { text: '  ' }, 400, 'text is required (non-empty string)'],
-  ['supersede: empty text', 'POST', DEC_MISSING, { text: '', context: 7 }, 400, 'text is required (non-empty string)'],
+  [
+    'create: spaces-only text',
+    'POST',
+    DEC,
+    { text: '  ' },
+    400,
+    'text is required (non-empty string)',
+  ],
+  [
+    'supersede: empty text',
+    'POST',
+    DEC_MISSING,
+    { text: '', context: 7 },
+    400,
+    'text is required (non-empty string)',
+  ],
   [
     'supersede: text over the cap',
     'POST',
@@ -95,7 +110,14 @@ export const DECISION_REPLIES: readonly Reply[] = [
     400,
     'text exceeds 4096-character cap',
   ],
-  ['supersede: context not a string', 'POST', DEC_MISSING, { text: 't', context: 7 }, 400, 'context must be a string'],
+  [
+    'supersede: context not a string',
+    'POST',
+    DEC_MISSING,
+    { text: 't', context: 7 },
+    400,
+    'context must be a string',
+  ],
   [
     'supersede: context over the cap',
     'POST',
@@ -120,7 +142,14 @@ export const DECISION_REPLIES: readonly Reply[] = [
     404,
     DEC_NO_TARGET,
   ],
-  ['supersede: spaces-only text', 'POST', DEC_MISSING, { text: '  ' }, 400, 'text is required (non-empty string)'],
+  [
+    'supersede: spaces-only text',
+    'POST',
+    DEC_MISSING,
+    { text: '  ' },
+    400,
+    'text is required (non-empty string)',
+  ],
 ];
 
 const NOTE = '/v1/customer-notes';
@@ -129,7 +158,14 @@ const NOTE_MISSING = '/v1/customer-notes/99999/supersede';
 // so a row pins which check answers first as well as the reply text.
 export const NOTE_REPLIES: readonly Reply[] = [
   ['list: an unknown status', 'GET', `${NOTE}?status=retired`, undefined, 400, BAD_STATUS],
-  ['create: blank customer', 'POST', NOTE, { customer: '  ', note: 7 }, 400, 'customer is required (non-empty string)'],
+  [
+    'create: blank customer',
+    'POST',
+    NOTE,
+    { customer: '  ', note: 7 },
+    400,
+    'customer is required (non-empty string)',
+  ],
   [
     'create: customer over the cap',
     'POST',
@@ -138,7 +174,14 @@ export const NOTE_REPLIES: readonly Reply[] = [
     400,
     'customer exceeds 256-character cap',
   ],
-  ['create: blank note', 'POST', NOTE, { customer: 'c', note: '  ' }, 400, 'note is required (non-empty string)'],
+  [
+    'create: blank note',
+    'POST',
+    NOTE,
+    { customer: 'c', note: '  ' },
+    400,
+    'note is required (non-empty string)',
+  ],
   [
     'create: note over the cap',
     'POST',
@@ -283,8 +326,22 @@ export const INCIDENT_REPLIES: readonly Reply[] = [
     409,
     INC_NO_MEMORY,
   ],
-  ['create: spaces-only text', 'POST', INC, { text: '  ' }, 400, 'text is required (non-empty string)'],
-  ['resolve: no resolutionText', 'POST', INC_MISSING, {}, 400, 'resolutionText is required (non-empty string)'],
+  [
+    'create: spaces-only text',
+    'POST',
+    INC,
+    { text: '  ' },
+    400,
+    'text is required (non-empty string)',
+  ],
+  [
+    'resolve: no resolutionText',
+    'POST',
+    INC_MISSING,
+    {},
+    400,
+    'resolutionText is required (non-empty string)',
+  ],
   [
     'resolve: blank resolutionText',
     'POST',

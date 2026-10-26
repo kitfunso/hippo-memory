@@ -214,7 +214,10 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     });
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
 
-    const payload = JSON.stringify({ session_id: 'sess-other', hook_event_name: 'UserPromptSubmit' });
+    const payload = JSON.stringify({
+      session_id: 'sess-other',
+      hook_event_name: 'UserPromptSubmit',
+    });
     const result = await runHippo(['context', '--format', 'json'], dir, env, payload);
 
     expect(result.status).toBe(0);
@@ -232,7 +235,10 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     });
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
 
-    const payload = JSON.stringify({ session_id: 'sess-owner', hook_event_name: 'UserPromptSubmit' });
+    const payload = JSON.stringify({
+      session_id: 'sess-owner',
+      hook_event_name: 'UserPromptSubmit',
+    });
     const result = await runHippo(['context', '--format', 'json'], dir, env, payload);
 
     expect(result.status).toBe(0);
@@ -274,7 +280,10 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     delete env.HIPPO_SESSION_ID;
     delete env.CLAUDE_CODE_SESSION_ID;
     env.CLAUDE_CODE_SESSION_ID = 'sess-owner-hostvar2';
-    const payload = JSON.stringify({ session_id: 'sess-other', hook_event_name: 'UserPromptSubmit' });
+    const payload = JSON.stringify({
+      session_id: 'sess-other',
+      hook_event_name: 'UserPromptSubmit',
+    });
     const result = await runHippo(['context', '--format', 'json'], dir, env, payload);
 
     expect(result.status).toBe(0);

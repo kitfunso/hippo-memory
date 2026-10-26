@@ -8,7 +8,11 @@ const mk = (text: string) => createMemory(text, { baseHalfLifeDays: DEFAULT_HALF
 
 describe('bm25 search corpus reuse', () => {
   it('repeats the same results on one array and never reuses a corpus for a different pool', () => {
-    const entries = [mk('cache refresh pipeline error'), mk('jwt authentication tokens'), mk('deploy rollback plan')];
+    const entries = [
+      mk('cache refresh pipeline error'),
+      mk('jwt authentication tokens'),
+      mk('deploy rollback plan'),
+    ];
     const first = rankBm25('cache pipeline', entries, { now: evalNow() });
     expect(rankBm25('cache pipeline', entries, { now: evalNow() }).map((r) => r.entry.id)).toEqual(
       first.map((r) => r.entry.id),

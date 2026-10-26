@@ -71,19 +71,22 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     expect(await res.text()).toContain('tenant contains invalid characters');
   });
 
-  it.skipIf(needsHippoDb('db'))('round-trips an outcome row (drift the Set update closed)', async () => {
-    const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
-    const m1 = await remember(ctx, { content: 'outcome-target' });
-    await outcome(ctx, [m1.id], true);
+  it.skipIf(needsHippoDb('db'))(
+    'round-trips an outcome row (drift the Set update closed)',
+    async () => {
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const m1 = await remember(ctx, { content: 'outcome-target' });
+      await outcome(ctx, [m1.id], true);
 
-    const res = await fetch(`${handle.url}/v1/audit?op=outcome`);
-    // Pre-v1.11.5 this returned 400 'invalid op' even though rows existed.
-    // Post-v1.11.5 it returns 200 with the rows.
-    expect(res.status).toBe(200);
-    // SAFETY: GET /v1/audit's response body is the serialized AuditEvent[]
-    // from src/store/audit.ts, checked immediately by the assertion below.
-    const body = (await res.json()) as Array<{ op: string }>;
-    expect(body.length).toBeGreaterThanOrEqual(1);
-    expect(body.every((e) => e.op === 'outcome')).toBe(true);
-  });
+      const res = await fetch(`${handle.url}/v1/audit?op=outcome`);
+      // Pre-v1.11.5 this returned 400 'invalid op' even though rows existed.
+      // Post-v1.11.5 it returns 200 with the rows.
+      expect(res.status).toBe(200);
+      // SAFETY: GET /v1/audit's response body is the serialized AuditEvent[]
+      // from src/store/audit.ts, checked immediately by the assertion below.
+      const body = (await res.json()) as Array<{ op: string }>;
+      expect(body.length).toBeGreaterThanOrEqual(1);
+      expect(body.every((e) => e.op === 'outcome')).toBe(true);
+    },
+  );
 });

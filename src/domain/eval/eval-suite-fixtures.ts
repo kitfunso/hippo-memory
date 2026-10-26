@@ -198,10 +198,15 @@ function directRecallLateEntries(now: Date): MemoryEntry[] {
         tags: ['topic:caching'],
       },
     ),
-    mem(now, 'dr-8', 'GraphQL resolver for nested comments has N+1 query problem solved by DataLoader batching', {
-      created: dateOffset(8),
-      tags: ['topic:api'],
-    }),
+    mem(
+      now,
+      'dr-8',
+      'GraphQL resolver for nested comments has N+1 query problem solved by DataLoader batching',
+      {
+        created: dateOffset(8),
+        tags: ['topic:api'],
+      },
+    ),
   ];
 }
 

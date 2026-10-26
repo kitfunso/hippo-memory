@@ -12,7 +12,9 @@ export async function repairQualityOnce(root: string, tenantId: string): Promise
     const result = await memoryQualityRepairOnce(cliApiContext(root, tenantId));
     if (result === null) return;
     if (!result.supported) {
-      log.warn(`memory quality repair skipped, tried again next time: ${result.blockers.join('; ')}`);
+      log.warn(
+        `memory quality repair skipped, tried again next time: ${result.blockers.join('; ')}`,
+      );
       return;
     }
     // A sleep run from a folder with no project store can resolve to the global store too.
@@ -23,11 +25,16 @@ export async function repairQualityOnce(root: string, tenantId: string): Promise
         `Set aside ${moved} automatic ${moved === 1 ? 'memory' : 'memories'} with a certain defect, ` +
           `once after the upgrade (backup: ${result.backup}).`,
       );
-      console.log(`  List them: hippo dormant${scope}   Bring one back: hippo dormant restore <id>${scope}`);
+      console.log(
+        `  List them: hippo dormant${scope}   Bring one back: hippo dormant restore <id>${scope}`,
+      );
     }
     const review = result.issues.filter((issue) => issue.disposition === 'review').length;
     if (review > 0) {
-      const lead = moved > 0 ? `  ${review} more` : `Checked old automatic memories once after the upgrade: ${review}`;
+      const lead =
+        moved > 0
+          ? `  ${review} more`
+          : `Checked old automatic memories once after the upgrade: ${review}`;
       console.log(
         `${lead} ${review === 1 ? 'looks' : 'look'} doubtful and ${review === 1 ? 'was' : 'were'} kept; hippo audit ` +
           `repair${scope} lists them.`,
@@ -35,6 +42,9 @@ export async function repairQualityOnce(root: string, tenantId: string): Promise
     }
     for (const warning of result.warnings) log.warn(warning);
   } catch (err) {
-    log.warn(`memory quality repair skipped, tried again next time: ${errorMessage(err)}`, errorFields(err));
+    log.warn(
+      `memory quality repair skipped, tried again next time: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
 }

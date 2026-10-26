@@ -21,8 +21,16 @@ beforeEach(async () => {
   const root = makeRoot('route-gates');
   const db = openHippoDb(root);
   try {
-    adminKey = createApiKey(db, { tenantId: 'default', label: 'gate-admin', role: 'admin' }).plaintext;
-    memberKey = createApiKey(db, { tenantId: 'default', label: 'gate-member', role: 'member' }).plaintext;
+    adminKey = createApiKey(db, {
+      tenantId: 'default',
+      label: 'gate-admin',
+      role: 'admin',
+    }).plaintext;
+    memberKey = createApiKey(db, {
+      tenantId: 'default',
+      label: 'gate-member',
+      role: 'member',
+    }).plaintext;
   } finally {
     closeHippoDb(db);
   }
@@ -34,7 +42,12 @@ afterEach(async () => {
 });
 
 // node:http, since fetch will not send a Host header of the caller's choosing.
-function post(path: string, key: string, body: string, headers: Record<string, string> = {}): Promise<Reply> {
+function post(
+  path: string,
+  key: string,
+  body: string,
+  headers: Record<string, string> = {},
+): Promise<Reply> {
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
@@ -51,7 +64,10 @@ function post(path: string, key: string, body: string, headers: Record<string, s
           text += chunk;
         });
         res.on('end', () =>
-          resolve({ status: res.statusCode ?? 0, error: String(JSON.parse(text || '{}').error ?? '') }),
+          resolve({
+            status: res.statusCode ?? 0,
+            error: String(JSON.parse(text || '{}').error ?? ''),
+          }),
         );
       },
     );
@@ -81,7 +97,11 @@ describe('POST /v1/auth/keys', () => {
   });
 
   it('refuses a member key before reading a body over the mint cap', async () => {
-    const r = await post('/v1/auth/keys', memberKey, JSON.stringify({ label: 'x'.repeat(8 * 1024) }));
+    const r = await post(
+      '/v1/auth/keys',
+      memberKey,
+      JSON.stringify({ label: 'x'.repeat(8 * 1024) }),
+    );
     expect(r.status).toBe(403);
   });
 

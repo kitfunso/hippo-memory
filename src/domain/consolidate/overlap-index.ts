@@ -16,7 +16,10 @@ export function jaccardMinShared(threshold: number, atLeast = 1): MinShared {
  * Maps i to each j > i, ascending, that may share `minShared` tokens with set i; a superset the caller checks exactly,
  * never a pair sharing no token.
  */
-export function overlapPartners(sets: readonly ReadonlySet<string>[], minShared: MinShared): (i: number) => number[] {
+export function overlapPartners(
+  sets: readonly ReadonlySet<string>[],
+  minShared: MinShared,
+): (i: number) => number[] {
   const docFreq = new Map<string, number>();
   for (const set of sets) for (const t of set) docFreq.set(t, (docFreq.get(t) ?? 0) + 1);
   const rareFirst = (a: string, b: string): number =>

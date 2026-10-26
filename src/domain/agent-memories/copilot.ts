@@ -87,9 +87,16 @@ function projectContainers(
   for (const id of ids) {
     const repo = path.join(storage, id, ...MEMORY_TOOL, 'repo');
     if (!ctx.files.isFolder(repo)) continue;
-    const folder = workspaceFolder(ctx.files, path.join(storage, id, 'workspace.json'), ctx.platform, warnings);
+    const folder = workspaceFolder(
+      ctx.files,
+      path.join(storage, id, 'workspace.json'),
+      ctx.platform,
+      warnings,
+    );
     const container =
-      folder !== null && matches(folder) ? readFolderStore(ctx.files, repo, 'project', EVERY_FILE) : null;
+      folder !== null && matches(folder)
+        ? readFolderStore(ctx.files, repo, 'project', EVERY_FILE)
+        : null;
     if (container) found.push(container);
   }
   return found;

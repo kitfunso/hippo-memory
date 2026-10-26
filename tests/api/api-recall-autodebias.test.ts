@@ -54,7 +54,9 @@ function countAuditOps(root: string, op: string): number {
   try {
     // SAFETY: query is a fixed `COUNT(*) AS n` aggregate, which always
     // returns exactly one row shaped { n: number }.
-    const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = ?`).get(op) as { n: number };
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = ?`).get(op) as {
+      n: number;
+    };
     return row.n;
   } finally {
     closeHippoDb(db);
@@ -66,9 +68,9 @@ function lastAuditActor(root: string, op: string): string | null {
   try {
     // SAFETY: query selects only the `actor` text column, so the row (if
     // any — LIMIT 1 with no matching op yields undefined) is { actor: string }.
-    const row = db.prepare(`SELECT actor FROM audit_log WHERE op = ? ORDER BY id DESC LIMIT 1`).get(op) as
-      | { actor: string }
-      | undefined;
+    const row = db
+      .prepare(`SELECT actor FROM audit_log WHERE op = ? ORDER BY id DESC LIMIT 1`)
+      .get(op) as { actor: string } | undefined;
     return row?.actor ?? null;
   } finally {
     closeHippoDb(db);
@@ -170,7 +172,10 @@ describe('api.recall planningFallacyHint', () => {
 
   it('actor attribution: HTTP api_key:* subject flows through to audit', async () => {
     await seedMigrationEffortBaserate(root);
-    const httpCtx: FullContext = apiCtx(root, 'default', { subject: 'api_key:hk_demo123', role: 'admin' });
+    const httpCtx: FullContext = apiCtx(root, 'default', {
+      subject: 'api_key:hk_demo123',
+      role: 'admin',
+    });
     await retrieve(httpCtx, { query: 'migration effort will take 3 days' });
     expect(lastAuditActor(root, 'recall_autodebias_hint')).toBe('api_key:hk_demo123');
   });

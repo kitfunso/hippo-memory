@@ -54,7 +54,10 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 afterEach(() => vi.useRealTimers());
 
 /** Each call one second after the one before. */
-async function conforms<G extends 'lessonWrites' | 'keyWrites'>(group: G, calls: readonly GroupCall<G, unknown>[]) {
+async function conforms<G extends 'lessonWrites' | 'keyWrites'>(
+  group: G,
+  calls: readonly GroupCall<G, unknown>[],
+) {
   const timed = calls.map((call, i): GroupCall<G, unknown> => (methods, store) => {
     vi.setSystemTime(START + i * 1000);
     return call(methods, store);
@@ -63,7 +66,8 @@ async function conforms<G extends 'lessonWrites' | 'keyWrites'>(group: G, calls:
 }
 
 describe('LessonWrites', () => {
-  const sorted = (held: { content: string }[]) => [...held].sort((a, b) => a.content.localeCompare(b.content));
+  const sorted = (held: { content: string }[]) =>
+    [...held].sort((a, b) => a.content.localeCompare(b.content));
 
   it('reads the copies of texts within reach, writes a batch skipping a refused value, and counts it', async () => {
     const first = entry('lessons batch one');
@@ -77,7 +81,13 @@ describe('LessonWrites', () => {
       (g) => g.textsHolding(TENANT_A, [heldByB.content], null),
       (g) => g.textsHolding(TENANT_A, ['Deploy  from\nmain after the tests pass', '!!'], null),
       (_g, s) =>
-        s.rejections.apply({ tenantId: TENANT_A, actor: 'cli', reason: 'wrong', ownScope: null, value: REFUSED }),
+        s.rejections.apply({
+          tenantId: TENANT_A,
+          actor: 'cli',
+          reason: 'wrong',
+          ownScope: null,
+          value: REFUSED,
+        }),
       (g) => g.writeSkippingRejected([first, refused, second], 'git-learn'),
       (g) => g.writeSkippingRejected([], 'git-learn'),
       (g) => g.writeTogether(together),
@@ -93,7 +103,9 @@ describe('LessonWrites', () => {
       (_g, s) => s.reports.stats().then((stats) => stats.total_remembered),
     ]);
     const contents = (o: (typeof outcomes)[number]) =>
-      'value' in o && Array.isArray(o.value) ? o.value.map((held: { content: string }) => held.content) : o;
+      'value' in o && Array.isArray(o.value)
+        ? o.value.map((held: { content: string }) => held.content)
+        : o;
     // A copy matches a row apart from spacing only: case, a missing word and another tenant's row each miss.
     expect(outcomes.slice(0, 5).map(contents)).toEqual([
       ['Deploy from main after the tests pass', 'the deploy key rotates monthly'],
@@ -104,7 +116,9 @@ describe('LessonWrites', () => {
     ]);
     expect(outcomes[6]).toEqual({ value: [first.id, second.id] });
     expect(
-      audit.filter((row) => row.op === 'remember' && row.actor === 'git-learn').map((row) => row.targetId),
+      audit
+        .filter((row) => row.op === 'remember' && row.actor === 'git-learn')
+        .map((row) => row.targetId),
     ).toEqual([first.id, second.id]);
   });
 
@@ -112,17 +126,21 @@ describe('LessonWrites', () => {
     const taken = { ...entry('acme now owns this row'), id: heldByB.id };
     const kept = entry('written beside the foreign id');
     const lost = entry('rolled back with the foreign id');
-    const rowB: GroupCall<'lessonWrites', unknown> = (_g, s) => s.entriesByIds([heldByB.id], TENANT_B);
+    const rowB: GroupCall<'lessonWrites', unknown> = (_g, s) =>
+      s.entriesByIds([heldByB.id], TENANT_B);
     const { outcomes } = await conforms('lessonWrites', [
       rowB,
       (g) => g.writeSkippingRejected([taken, kept], 'git-learn'),
       rowB,
       (g) => g.writeTogether([lost, taken]),
       rowB,
-      (_g, s) => s.entriesByIds([kept.id, lost.id], TENANT_A).then((rows) => rows.map((e) => e.content)),
+      (_g, s) =>
+        s.entriesByIds([kept.id, lost.id], TENANT_A).then((rows) => rows.map((e) => e.content)),
     ]);
     expect(outcomes[1]).toEqual({ value: [kept.id] });
-    expect(outcomes[3]).toEqual({ error: `ConflictError: Memory ${heldByB.id} belongs to another tenant` });
+    expect(outcomes[3]).toEqual({
+      error: `ConflictError: Memory ${heldByB.id} belongs to another tenant`,
+    });
     expect(outcomes[2]).toEqual(outcomes[0]);
     expect(outcomes[4]).toEqual(outcomes[0]);
     expect(outcomes[5]).toEqual({ value: [kept.content] });
@@ -132,7 +150,12 @@ describe('LessonWrites', () => {
 describe('KeyWrites scope change', () => {
   it('grants and ungrants a scope with one audit row each, and refuses a revoked key and another tenant', async () => {
     const { keys } = fixture;
-    const change = (keyId: string, scope: string, op: 'auth_grant' | 'auth_ungrant', tenantId = TENANT_A) => ({
+    const change = (
+      keyId: string,
+      scope: string,
+      op: 'auth_grant' | 'auth_ungrant',
+      tenantId = TENANT_A,
+    ) => ({
       tenantId,
       keyId,
       scope,
@@ -154,6 +177,8 @@ describe('KeyWrites scope change', () => {
     ]);
     expect(outcomes.slice(5, 9).map((o) => 'error' in o)).toEqual([true, false, true, true]);
     expect(outcomes[9]).toMatchObject({ value: { scopes: ['team:ops'] } });
-    expect(audit.filter((row) => row.op.startsWith('auth_') && row.op !== 'auth_create')).toHaveLength(6);
+    expect(
+      audit.filter((row) => row.op.startsWith('auth_') && row.op !== 'auth_create'),
+    ).toHaveLength(6);
   });
 });

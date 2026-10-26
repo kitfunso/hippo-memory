@@ -1,9 +1,16 @@
 // The typed objects as one seam: each call names its kind, so the HTTP routes and the CLI verbs make the same calls,
 // and the caller's tenant, actor and half-life come from the Context alone.
 import type { ObjectByKind, ObjectKind, SavableKind } from '../../base/records/object-types.js';
-import { CUSTOMER_NOTE, type SaveCustomerNoteOptions } from '../../domain/objects/customer-notes.js';
+import {
+  CUSTOMER_NOTE,
+  type SaveCustomerNoteOptions,
+} from '../../domain/objects/customer-notes.js';
 import { DECISION, type SaveDecisionOptions } from '../../domain/objects/decisions.js';
-import type { ObjectDescriptor, ObjectListOptions, SavableDescriptor } from '../../domain/objects/descriptor.js';
+import type {
+  ObjectDescriptor,
+  ObjectListOptions,
+  SavableDescriptor,
+} from '../../domain/objects/descriptor.js';
 import { INCIDENT } from '../../domain/objects/incidents.js';
 import {
   closeObject,
@@ -14,7 +21,10 @@ import {
 } from '../../domain/objects/lifecycle.js';
 import { POLICY, type SavePolicyOptions } from '../../domain/objects/policies.js';
 import { PROCESS, type SaveProcessOptions } from '../../domain/objects/processes.js';
-import { PROJECT_BRIEF, type SaveProjectBriefOptions } from '../../domain/objects/project-briefs.js';
+import {
+  PROJECT_BRIEF,
+  type SaveProjectBriefOptions,
+} from '../../domain/objects/project-briefs.js';
 import { SKILL, type SaveSkillOptions } from '../../domain/objects/skills.js';
 import { extractPathTags } from '../../domain/search/path-context.js';
 import type { Objects } from '../../base/ports/store.js';
@@ -60,16 +70,26 @@ export function objectsOf(ctx: Context): Objects {
 /** The caller a save of this request records, under the store root's half-life. */
 export function saveSiteOf(ctx: Context): ObjectSaveSite {
   const { defaultHalfLifeDays: baseHalfLifeDays } = ctx.config;
-  return { baseHalfLifeDays, tenantId: ctx.tenantId, actor: ctx.actor.subject, now: ctx.infra.clock() };
+  return {
+    baseHalfLifeDays,
+    tenantId: ctx.tenantId,
+    actor: ctx.actor.subject,
+    now: ctx.infra.clock(),
+  };
 }
 
 /** The write with the tags its origin adds; a write with no origin keeps its own. */
-export function taggedFrom<W extends { extraTags?: string[] }>(write: W, origin: WriteOrigin | undefined): W {
+export function taggedFrom<W extends { extraTags?: string[] }>(
+  write: W,
+  origin: WriteOrigin | undefined,
+): W {
   return origin === undefined ? write : { ...write, extraTags: extractPathTags(origin.folder) };
 }
 
 /** The statuses a kind's rows take, in the order its error text lists them. */
-export function objectStates<K extends ObjectKind>(kind: K): ReadonlySet<ObjectByKind[K]['status']> {
+export function objectStates<K extends ObjectKind>(
+  kind: K,
+): ReadonlySet<ObjectByKind[K]['status']> {
   return DESCRIPTORS[kind].states;
 }
 
@@ -83,12 +103,20 @@ export function objectList<K extends ObjectKind>(
 }
 
 /** One object by table id, or null when the caller's tenant has none. */
-export function objectGet<K extends ObjectKind>(ctx: Context, kind: K, id: number): Promise<ObjectByKind[K] | null> {
+export function objectGet<K extends ObjectKind>(
+  ctx: Context,
+  kind: K,
+  id: number,
+): Promise<ObjectByKind[K] | null> {
   return objectById(objectsOf(ctx), DESCRIPTORS[kind], ctx.tenantId, id);
 }
 
 /** Retires one object as the caller; its mirror memory stays as saved. */
-export function objectClose<K extends ObjectKind>(ctx: Context, kind: K, id: number): Promise<ObjectByKind[K]> {
+export function objectClose<K extends ObjectKind>(
+  ctx: Context,
+  kind: K,
+  id: number,
+): Promise<ObjectByKind[K]> {
   return closeObject(objectsOf(ctx), DESCRIPTORS[kind], ctx.tenantId, id, {
     actor: ctx.actor.subject,
     now: ctx.infra.clock(),

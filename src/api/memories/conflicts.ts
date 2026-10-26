@@ -8,7 +8,11 @@ import {
   scopeReaderOf,
 } from '../../base/scope/recall-scope.js';
 import type { MemoryConflict } from '../../base/ports/store/conflicts.js';
-import type { ConflictMember, ConflictRow, ConflictSide } from '../../base/ports/store/conflicts.js';
+import type {
+  ConflictMember,
+  ConflictRow,
+  ConflictSide,
+} from '../../base/ports/store/conflicts.js';
 import { conflictLoserFate } from '../../domain/consolidate/conflicts.js';
 import { classifyOriginProject } from '../../base/scope/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
@@ -69,7 +73,10 @@ async function touchableConflict(ctx: Context, conflictId: number): Promise<Conf
 }
 
 /** Conflict `conflictId` in the caller's tenant, any status; null when missing or a row of it is out of reach. */
-export async function conflictGet(ctx: Context, conflictId: number): Promise<MemoryConflict | null> {
+export async function conflictGet(
+  ctx: Context,
+  conflictId: number,
+): Promise<MemoryConflict | null> {
   return (await touchableConflict(ctx, conflictId))?.conflict ?? null;
 }
 
@@ -84,10 +91,13 @@ export async function conflictResolve(
   // Any status, so a resolved conflict answers 409 while one holding another person's personal row stays a 404.
   const row = await touchableConflict(ctx, conflictId);
   if (!row) throw new NotFoundError(`conflict not found: ${conflictId}`);
-  if (row.conflict.status !== 'open') throw new ConflictError(`conflict ${conflictId} is already resolved`);
+  if (row.conflict.status !== 'open')
+    throw new ConflictError(`conflict ${conflictId} is already resolved`);
   const { keep, loser } = sidesOf(row, opts.keepId);
   if (!isLive(row.a) || !isLive(row.b)) {
-    throw new NotFoundError(`conflict ${conflictId} names a memory that is superseded, archived or quarantined`);
+    throw new NotFoundError(
+      `conflict ${conflictId} names a memory that is superseded, archived or quarantined`,
+    );
   }
   const reason = opts.reason ?? `resolveConflict ${conflictId}: kept ${keep.id}`;
   const fate = conflictLoserFate(opts, loser, personalScopeOf(ctx.actor));
@@ -124,7 +134,9 @@ function sidesOf(row: ConflictRow, keepId: string): ResolveSides {
   const b = { id: conflict.memoryBId, scope: row.b?.scope ?? null };
   if (keepId === a.id) return { keep: a, loser: b };
   if (keepId === b.id) return { keep: b, loser: a };
-  throw new BadRequestError(`keep must be one of the two memories in conflict ${conflict.id}: ${a.id}, ${b.id}`);
+  throw new BadRequestError(
+    `keep must be one of the two memories in conflict ${conflict.id}: ${a.id}, ${b.id}`,
+  );
 }
 
 /** One page of open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall: its
@@ -146,7 +158,8 @@ export async function conflictListOpen(
     (member !== null &&
       classifyOriginProject(member.origin_project, project) !== 'cross-project' &&
       passesScopeFilterForRecall(member.scope, undefined, own));
-  const shown = (row: ConflictRow): boolean => touchable(ctx.actor, row) && recallable(row.a) && recallable(row.b);
+  const shown = (row: ConflictRow): boolean =>
+    touchable(ctx.actor, row) && recallable(row.a) && recallable(row.b);
   return { conflicts: page.rows.filter(shown).map((row) => row.conflict), next: page.next };
 }
 

@@ -1,4 +1,10 @@
-import { createMemory, DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import {
+  createMemory,
+  DAG_LEVEL,
+  EXTRACTED_TAG,
+  Layer,
+  type MemoryEntry,
+} from '../../base/memory/entry.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { generateDagSummary, type DagSummaryOptions } from './dag-summary.js';
 import { overlapPartners } from './overlap-index.js';
@@ -29,7 +35,9 @@ export interface FactCluster {
 export function clusterFacts(facts: MemoryEntry[]): FactCluster[] {
   if (facts.length === 0) return [];
 
-  const entityTags = facts.map((f) => f.tags.filter((t) => t.startsWith('speaker:') || t.startsWith('topic:')));
+  const entityTags = facts.map((f) =>
+    f.tags.filter((t) => t.startsWith('speaker:') || t.startsWith('topic:')),
+  );
 
   const tagSets = entityTags.map((tags) => new Set(tags));
   // Every tag indexed, not a prefix: a repeated tag counts twice in `shared`, so the prefix-filter bound would not
@@ -54,9 +62,12 @@ export function clusterFacts(facts: MemoryEntry[]): FactCluster[] {
     }
 
     const members = cluster.map((idx) => facts[idx]);
-    const sharedTags = entityTags[cluster[0]].filter((t) => cluster.every((idx) => tagSets[idx].has(t)));
+    const sharedTags = entityTags[cluster[0]].filter((t) =>
+      cluster.every((idx) => tagSets[idx].has(t)),
+    );
     const label =
-      sharedTags.map((t) => t.split(':')[1]).join(': ') || members[0].content.slice(0, SUMMARY_FALLBACK_CHARS);
+      sharedTags.map((t) => t.split(':')[1]).join(': ') ||
+      members[0].content.slice(0, SUMMARY_FALLBACK_CHARS);
 
     clusters.push({ label, members, entityTags: sharedTags });
   }
@@ -96,7 +107,11 @@ interface PartitionHome {
 }
 
 /** The L2 summary entry for one cluster, landing in the facts' own tenant and scope. */
-function createClusterSummaryEntry(summary: string, cluster: FactCluster, home: PartitionHome): MemoryEntry {
+function createClusterSummaryEntry(
+  summary: string,
+  cluster: FactCluster,
+  home: PartitionHome,
+): MemoryEntry {
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
   // Every cluster member shares home.tenantId (tenant partition above), so the summary lands in the facts' tenant, not
   // 'default'.
@@ -145,7 +160,10 @@ async function summarizeCluster(
   } catch (err) {
     if (err instanceof RejectedValueError) {
       result.rejected++;
-      log.warn(`buildDag: cluster "${cluster.label}" skipped: summary matches a rejected value`, errorFields(err));
+      log.warn(
+        `buildDag: cluster "${cluster.label}" skipped: summary matches a rejected value`,
+        errorFields(err),
+      );
       return;
     }
     throw err;
@@ -158,8 +176,17 @@ async function summarizeCluster(
   await settleFreshSummary(store, summaryEntry, 'buildDag', 'buildDag-clean');
 }
 
-export async function buildDag(store: DagStore, facts: MemoryEntry[], opts: DagBuildOptions): Promise<DagBuildResult> {
-  const result: DagBuildResult = { candidateClusters: 0, summariesCreated: 0, factsLinked: 0, rejected: 0 };
+export async function buildDag(
+  store: DagStore,
+  facts: MemoryEntry[],
+  opts: DagBuildOptions,
+): Promise<DagBuildResult> {
+  const result: DagBuildResult = {
+    candidateClusters: 0,
+    summariesCreated: 0,
+    factsLinked: 0,
+    rejected: 0,
+  };
   const { baseHalfLifeDays, now } = opts;
 
   const unparented = facts.filter(
@@ -308,7 +335,14 @@ export async function rebuildDirtySummaries(
       await new Promise((resolve) => setImmediate(resolve));
     }
     try {
-      await rebuildOneSummary({ store, summary, opts, result, preloaded: children, rebuiltContent });
+      await rebuildOneSummary({
+        store,
+        summary,
+        opts,
+        result,
+        preloaded: children,
+        rebuiltContent,
+      });
     } catch (err) {
       // One throw doesn't abort the queue; log enough to triage an exotic failure (store I/O, prepare), since audit()
       // already catches its own.
@@ -335,7 +369,11 @@ export interface EntityProfilesBuildResult {
 }
 
 /** The L3 profile entry for one cluster of L2 summaries. */
-function createProfileEntry(summary: string, cluster: FactCluster, home: PartitionHome): MemoryEntry {
+function createProfileEntry(
+  summary: string,
+  cluster: FactCluster,
+  home: PartitionHome,
+): MemoryEntry {
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
   const nowIso = home.now.toISOString();
   const profileEntry = createMemory(

@@ -1,5 +1,10 @@
 import type { Context } from '../../../api/index.js';
-import { replayParked, type ConnectorDlq, type ReplayResult, type SignatureRefusal } from '../dlq.js';
+import {
+  replayParked,
+  type ConnectorDlq,
+  type ReplayResult,
+  type SignatureRefusal,
+} from '../dlq.js';
 import { verifyGitHubSignature } from './signature.js';
 import { isGitHubWebhookEnvelope, type GitHubWebhookEnvelope } from './types.js';
 import type { JsonValue } from '../../../base/util/json.js';
@@ -11,7 +16,10 @@ import type {
 
 export type { DlqBucket, DlqItem };
 
-type GitHubOwnColumns = Pick<GitHubDlqInsert, 'eventName' | 'deliveryId' | 'installationId' | 'repoFullName'>;
+type GitHubOwnColumns = Pick<
+  GitHubDlqInsert,
+  'eventName' | 'deliveryId' | 'installationId' | 'repoFullName'
+>;
 
 /** GitHub's dead-letter table; the event, delivery, installation and repo columns let an operator triage a row without
  * re-reading the payload. */
@@ -53,12 +61,18 @@ export async function replayGithubDlqEntry(
     {
       dlq: githubDlq,
       // The secret in effect now, not the one in effect when the row was parked.
-      refuseSignature: (row) => (webhookSecret ? refuseSignature(row, webhookSecret, previousSecret) : null),
+      refuseSignature: (row) =>
+        webhookSecret ? refuseSignature(row, webhookSecret, previousSecret) : null,
       isEnvelope: isGitHubWebhookEnvelope,
       notEnvelope: 'not a GitHub webhook envelope',
       reingest: async (row) => {
         if (!ingestHook) {
-          return { ok: true, status: 'replayed', memoryId: null, reason: 'dry-run: no ingest hook supplied' };
+          return {
+            ok: true,
+            status: 'replayed',
+            memoryId: null,
+            reason: 'dry-run: no ingest hook supplied',
+          };
         }
         // The hook owns routing, idempotency and the memory write, and re-derives the key from the parsed event.
         const { memoryId } = await ingestHook(ctx, {
@@ -87,11 +101,19 @@ function refuseSignature(
       reason: 'row has no signature (legacy, or redacted before storing); pass --force to replay',
     };
   }
-  if (verifyGitHubSignature({ rawBody: row.rawPayload, signature: row.signature, webhookSecret, previousSecret })) {
+  if (
+    verifyGitHubSignature({
+      rawBody: row.rawPayload,
+      signature: row.signature,
+      webhookSecret,
+      previousSecret,
+    })
+  ) {
     return null;
   }
   return {
     status: 'sig_fail',
-    reason: 'signature did not verify against current GITHUB_WEBHOOK_SECRET; pass --force to replay anyway',
+    reason:
+      'signature did not verify against current GITHUB_WEBHOOK_SECRET; pass --force to replay anyway',
   };
 }

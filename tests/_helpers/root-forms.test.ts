@@ -35,7 +35,9 @@ describe('entries', () => {
   });
 
   it('writes a batch together and reports how many landed', () => {
-    const rows = ['one note about caches', 'two notes about queues', 'three notes about locks'].map((t) => row(t));
+    const rows = ['one note about caches', 'two notes about queues', 'three notes about locks'].map(
+      (t) => row(t),
+    );
     expect(writeEntriesTogether(root, rows)).toBe(3);
     expect(
       loadAllEntries(root, 'default')
@@ -58,7 +60,9 @@ describe('entries', () => {
   });
 
   it('joins every text-key page whatever the page size', () => {
-    const rows = Array.from({ length: 7 }, (_, i) => row(`distinct note number ${i} on the release train`));
+    const rows = Array.from({ length: 7 }, (_, i) =>
+      row(`distinct note number ${i} on the release train`),
+    );
     writeEntriesTogether(root, rows);
     const whole = loadEntryTextKeys(root);
     const paged = loadEntryTextKeys(root, undefined, 2);
@@ -73,13 +77,17 @@ describe('conflicts', () => {
       row(`${t} for the dev server`),
     );
     writeEntriesTogether(root, [x!, y!, z!]);
-    replaceDetectedConflicts(root, [{ memory_a_id: x!.id, memory_b_id: y!.id, reason: 'contradiction', score: 0.9 }]);
+    replaceDetectedConflicts(root, [
+      { memory_a_id: x!.id, memory_b_id: y!.id, reason: 'contradiction', score: 0.9 },
+    ]);
     return { x: x!, y: y! };
   };
 
   it('lists open conflicts and none under another status', async () => {
     const { x, y } = seed();
-    expect((await listMemoryConflicts(root)).map((c) => [c.memoryAId, c.memoryBId])).toEqual([[x.id, y.id].sort()]);
+    expect((await listMemoryConflicts(root)).map((c) => [c.memoryAId, c.memoryBId])).toEqual([
+      [x.id, y.id].sort(),
+    ]);
     expect(await listMemoryConflicts(root, 'resolved')).toEqual([]);
   });
 

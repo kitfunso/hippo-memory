@@ -43,7 +43,11 @@ interface UploadReply {
 }
 
 // Unpaced and never ended, as a large upload is, so only the server can close the connection.
-function uploadUnpaced(port: number, path: string, headers: Record<string, string> = {}): Promise<UploadReply> {
+function uploadUnpaced(
+  port: number,
+  path: string,
+  headers: Record<string, string> = {},
+): Promise<UploadReply> {
   const chunk = Buffer.alloc(64 * 1024, 'x');
   return new Promise<UploadReply>((resolve, reject) => {
     const req = httpRequest({
@@ -64,7 +68,11 @@ function uploadUnpaced(port: number, path: string, headers: Record<string, strin
       const parts: Buffer[] = [];
       res.on('data', (part: Buffer) => parts.push(part));
       res.on('end', () =>
-        resolve({ status: res.statusCode ?? 0, body: Buffer.concat(parts).toString('utf8'), closed }),
+        resolve({
+          status: res.statusCode ?? 0,
+          body: Buffer.concat(parts).toString('utf8'),
+          closed,
+        }),
       );
       res.on('error', reject);
     });
@@ -73,7 +81,11 @@ function uploadUnpaced(port: number, path: string, headers: Record<string, strin
       if (!answered) reject(err);
     });
     const send = async (): Promise<void> => {
-      for (let sent = 0; sent < 8 * 1024 * 1024 && !req.destroyed && !answered; sent += chunk.length) {
+      for (
+        let sent = 0;
+        sent < 8 * 1024 * 1024 && !req.destroyed && !answered;
+        sent += chunk.length
+      ) {
         await new Promise<void>((done) => req.write(chunk, () => done()));
       }
     };
@@ -277,7 +289,9 @@ describe('/v1 rate limiting', () => {
       const handle = await serveKeyed({ hippoRoot: home, port: 0 });
       try {
         const mcp = await Promise.all(
-          Array.from({ length: 12 }, () => fetch(`${handle.url}/mcp`, { method: 'POST', body: '{}' })),
+          Array.from({ length: 12 }, () =>
+            fetch(`${handle.url}/mcp`, { method: 'POST', body: '{}' }),
+          ),
         );
         expect(mcp.some((r) => r.status === 429)).toBe(true);
         const stream = await fetch(`${handle.url}/mcp/stream`, { signal: ac.signal });

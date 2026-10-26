@@ -39,7 +39,10 @@ interface Scenario {
   reaches?: (replies: readonly Reply[]) => void;
 }
 
-const on = (via: Surface, query: string, args: Args = {}): Call => ({ via, args: { query, ...args } });
+const on = (via: Surface, query: string, args: Args = {}): Call => ({
+  via,
+  args: { query, ...args },
+});
 const SURFACES: readonly Surface[] = ['http', 'mcp'];
 const KEYED_TASK = 'ship the eu cluster for the loopback caller';
 // The seeded rows sit in a temp folder outside any project, so they are user-global and any project's recall reaches them.
@@ -56,13 +59,19 @@ const SCENARIOS: readonly Scenario[] = [
     {
       name: `${via}: anchoring hints over repeated recalls in one session`,
       kind: 'local',
-      calls: ['deploy', 'deploy', 'deploy target', 'deploy rollout'].map((q) => on(via, q, { session_id: SESSION })),
+      calls: ['deploy', 'deploy', 'deploy target', 'deploy rollout'].map((q) =>
+        on(via, q, { session_id: SESSION }),
+      ),
     },
   ]),
   {
     name: 'candidate window',
     kind: 'wide',
-    calls: [on('http', 'deploy'), on('http', 'deploy', { scorer_window: '50' }), on('mcp', 'deploy')],
+    calls: [
+      on('http', 'deploy'),
+      on('http', 'deploy', { scorer_window: '50' }),
+      on('mcp', 'deploy'),
+    ],
   },
   { name: 'mcp budget 80', kind: 'local', calls: [on('mcp', 'deploy', { budget: 80 })] },
   {
@@ -88,7 +97,9 @@ const SCENARIOS: readonly Scenario[] = [
 /** MCP replies with text, so only the HTTP body proves a branch ran, except continuity: REST names no project, so a shared store's block is empty. */
 function branchReached(via: Surface, b: (typeof RECALL_BRANCHES)[number]): Scenario['reaches'] {
   if (b.name === 'include_continuity') {
-    return via === 'mcp' ? (replies) => expect(JSON.stringify(replies[0]!.body)).toContain(KEYED_TASK) : undefined;
+    return via === 'mcp'
+      ? (replies) => expect(JSON.stringify(replies[0]!.body)).toContain(KEYED_TASK)
+      : undefined;
   }
   if (via === 'mcp' || !b.reaches) return undefined;
   return (replies) => {
@@ -98,7 +109,8 @@ function branchReached(via: Surface, b: (typeof RECALL_BRANCHES)[number]): Scena
   };
 }
 
-const send = (url: string, call: Call): Promise<Reply> => sendRecall(url, call.via, call.args, PROJECT);
+const send = (url: string, call: Call): Promise<Reply> =>
+  sendRecall(url, call.via, call.args, PROJECT);
 
 interface Pass {
   replies: Reply[];
@@ -108,7 +120,10 @@ interface Pass {
 let templates: Templates;
 
 /** One scenario on a fresh store copy and a fresh server, so no ring or last-shown list carries over. */
-async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoStore): Promise<Pass> {
+async function runPass(
+  scenario: Scenario,
+  makeStore?: (root: string) => HippoStore,
+): Promise<Pass> {
   const s = freshStore(templates, scenario.kind);
   try {
     // serve() reads a port store as shared, so the hippo.db pass must be shared too to compare like with like.
@@ -136,7 +151,12 @@ beforeAll(async () => {
     saveActiveTaskSnapshot(
       root,
       TENANT,
-      { task: KEYED_TASK, summary: 'cutover planned', nextStep: 'run the canary', sessionId: SESSION },
+      {
+        task: KEYED_TASK,
+        summary: 'cutover planned',
+        nextStep: 'run the canary',
+        sessionId: SESSION,
+      },
       key,
     );
   });

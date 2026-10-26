@@ -158,7 +158,12 @@ type StoreStatus =
 
 /** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, nothing, for a
  * route whose handler checks the sender's signature itself, or the dashboard's session, which only its rows take. */
-export type RouteAuth = 'caller' | 'admin' | 'host-admin-local' | 'webhook-signature' | 'dashboard-session';
+export type RouteAuth =
+  | 'caller'
+  | 'admin'
+  | 'host-admin-local'
+  | 'webhook-signature'
+  | 'dashboard-session';
 
 /** A pattern row's params by name; a `:name(int)` value holds digits only. */
 export type RouteParams = Readonly<Record<string, string>>;
@@ -175,7 +180,9 @@ export type RouteEndpoint<R> =
 
 /** A route as the gate runs it, its store need already settled at boot. */
 export type BoundRoute = { method: string; unported?: true } & (
-  | ({ auth: Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'> } & PathEndpoint<AuthedRouteRequest>)
+  | ({
+      auth: Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'>;
+    } & PathEndpoint<AuthedRouteRequest>)
   | ({ auth: 'webhook-signature' } & PathEndpoint<RouteRequest>)
 );
 
@@ -186,7 +193,10 @@ export interface FolderRoute {
   storeReady: 'folderFiles';
   hippoDbOnly?: never;
   pattern: string;
-  handler: (r: AuthedRouteRequest & { ctx: ContextWith<'folderFiles'> }, params: RouteParams) => Promise<void>;
+  handler: (
+    r: AuthedRouteRequest & { ctx: ContextWith<'folderFiles'> },
+    params: RouteParams,
+  ) => Promise<void>;
 }
 
 /** One /v1 route: an exact path or a matchPath pattern, paired with one method's handler. Under another store it runs

@@ -22,7 +22,11 @@ describe('hippo-memory/server exports authCreate', () => {
     expect(minted.role).toBe('admin');
     const db = openHippoDb(root);
     try {
-      expect(validateApiKey(db, minted.plaintext)).toMatchObject({ valid: true, tenantId: 'acme', role: 'admin' });
+      expect(validateApiKey(db, minted.plaintext)).toMatchObject({
+        valid: true,
+        tenantId: 'acme',
+        role: 'admin',
+      });
     } finally {
       closeHippoDb(db);
     }

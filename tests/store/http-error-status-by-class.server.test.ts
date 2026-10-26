@@ -8,7 +8,12 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../src/base/errors/api-errors.js';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../src/base/errors/api-errors.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { StoreBusyError } from '../../src/base/ports/store.js';
 import {
@@ -71,9 +76,15 @@ describe('mapApiError maps by class, never by message', () => {
       'Memory m is already superseded by n',
       'scope s requires admin role',
     ]) {
-      expect(mapApiError(new Error(text))).toEqual({ status: 500, message: INTERNAL_ERROR_MESSAGE });
+      expect(mapApiError(new Error(text))).toEqual({
+        status: 500,
+        message: INTERNAL_ERROR_MESSAGE,
+      });
     }
-    expect(mapApiError('a thrown string')).toEqual({ status: 500, message: INTERNAL_ERROR_MESSAGE });
+    expect(mapApiError('a thrown string')).toEqual({
+      status: 500,
+      message: INTERNAL_ERROR_MESSAGE,
+    });
   });
 });
 
@@ -103,7 +114,9 @@ describe('typed errors from real domain paths keep their status and message', ()
   });
 
   it('ConflictError -> 409: superseding a row that is already superseded', async () => {
-    const old = createMemory('the build runs on node 20', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const old = createMemory('the build runs on node 20', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(home, old);
     // The local key is a member, which may not supersede a row it does not own, so this sends an admin key.
     const db = openHippoDb(home);
@@ -135,7 +148,11 @@ describe('typed errors from real domain paths keep their status and message', ()
     const db = openHippoDb(home);
     let plaintext: string;
     try {
-      plaintext = createApiKey(db, { tenantId: 'default', label: 'member-test', role: 'member' }).plaintext;
+      plaintext = createApiKey(db, {
+        tenantId: 'default',
+        label: 'member-test',
+        role: 'member',
+      }).plaintext;
     } finally {
       closeHippoDb(db);
     }

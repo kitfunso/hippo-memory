@@ -26,15 +26,22 @@ interface TransformersModuleNamespace extends TransformersExports {
   default?: TransformersExports;
 }
 
-type ImportModule = () => Promise<{ readonly name: string; readonly mod: TransformersModuleNamespace } | null>;
+type ImportModule = () => Promise<{
+  readonly name: string;
+  readonly mod: TransformersModuleNamespace;
+} | null>;
 
-async function importModelClasses(importModule: ImportModule): Promise<Required<TransformersExports>> {
+async function importModelClasses(
+  importModule: ImportModule,
+): Promise<Required<TransformersExports>> {
   const imported = await importModule();
   if (!imported) throw new Error('no Transformers.js package is installed');
   const { name, mod } = imported;
   const tok = mod.AutoTokenizer ?? mod.default?.AutoTokenizer;
-  const seq = mod.AutoModelForSequenceClassification ?? mod.default?.AutoModelForSequenceClassification;
-  if (!tok || !seq) throw new Error(`${name} exports no AutoTokenizer or AutoModelForSequenceClassification`);
+  const seq =
+    mod.AutoModelForSequenceClassification ?? mod.default?.AutoModelForSequenceClassification;
+  if (!tok || !seq)
+    throw new Error(`${name} exports no AutoTokenizer or AutoModelForSequenceClassification`);
   return { AutoTokenizer: tok, AutoModelForSequenceClassification: seq };
 }
 
@@ -62,7 +69,9 @@ async function buildPipeline(importModule: ImportModule): Promise<CrossEncoderFn
 
 /** One model per loader, so each reranker built on one owns its model; a failure is answered from memory until the
  * backoff ends, and the reranker's outage warning reports it. */
-export function transformersCrossEncoder(importModule: ImportModule = importTransformers): CrossEncoderLoad {
+export function transformersCrossEncoder(
+  importModule: ImportModule = importTransformers,
+): CrossEncoderLoad {
   const pipelines = createModelLoads<CrossEncoderFn>(MODEL_LOAD_POLICY);
   return () => pipelines.load(MODEL_NAME, () => buildPipeline(importModule));
 }

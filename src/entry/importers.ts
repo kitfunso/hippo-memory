@@ -9,18 +9,31 @@ import {
 import * as sources from '../surface/importers/sources.js';
 import { importMarkdownInto } from '../surface/importers/markdown.js';
 import { importVaultInto } from '../surface/importers/vault.js';
-import { defaultImportFiles, defaultStore, runStoreBatch, runStoreRequest } from '../surface/open-store.js';
+import {
+  defaultImportFiles,
+  defaultStore,
+  runStoreBatch,
+  runStoreRequest,
+} from '../surface/open-store.js';
 import { entryInfra } from '../surface/entry-infra.js';
 import { evalClock } from '../infra/eval-switches.js';
 
 function targeted(options: ImportOptions): TargetedImport {
   const root = importRoot(options);
-  return { ...options, target: { root, files: defaultImportFiles(root), batch: runStoreBatch, clock: evalClock() } };
+  return {
+    ...options,
+    target: { root, files: defaultImportFiles(root), batch: runStoreBatch, clock: evalClock() },
+  };
 }
 
 /** Given an array of raw text chunks, deduplicate against existing memories, create MemoryEntry objects, write them
  *  (unless dry-run), and return a result. */
-export function importEntries(chunks: string[], source: string, tags: string[], options: ImportOptions): ImportResult {
+export function importEntries(
+  chunks: string[],
+  source: string,
+  tags: string[],
+  options: ImportOptions,
+): ImportResult {
   return importEntriesInto(chunks, source, tags, targeted(options));
 }
 
@@ -49,6 +62,10 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
  * `existing` Map loaded once, so two concurrent runs over one vault can double-insert. */
 export function importVault(folderPath: string, options: ImportOptions): Promise<ImportResult> {
   const batch = <T>(run: () => Promise<T>): Promise<T> => runStoreRequest(run, 'cli');
-  return importVaultInto(folderPath, options, { store: defaultStore(options.hippoRoot), batch, infra: entryInfra() });
+  return importVaultInto(folderPath, options, {
+    store: defaultStore(options.hippoRoot),
+    batch,
+    infra: entryInfra(),
+  });
 }
 export type { ImportResult, ImportOptions } from '../surface/importers/core.js';

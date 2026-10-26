@@ -16,7 +16,11 @@ export function loadExtractionQueue(
   const db = openHippoDb(hippoRoot);
   try {
     const status = opts.status === undefined ? '' : ' AND status = ?';
-    const params = [tenantId, ...(opts.status === undefined ? [] : [opts.status]), opts.limit ?? 100];
+    const params = [
+      tenantId,
+      ...(opts.status === undefined ? [] : [opts.status]),
+      opts.limit ?? 100,
+    ];
     // SAFETY: the SELECT names exactly QUEUE_COLS, matching QueueRow.
     const rows = db
       .prepare(

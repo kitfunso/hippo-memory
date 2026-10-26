@@ -35,7 +35,12 @@ afterEach(() => {
 });
 
 const EXT = 'ext.good';
-const GOOD: ResolvedBearer = { tenantId: 'ext-tenant', subject: 'user-1', role: 'member', scopes: [] };
+const GOOD: ResolvedBearer = {
+  tenantId: 'ext-tenant',
+  subject: 'user-1',
+  role: 'member',
+  scopes: [],
+};
 const PRIVATE_SCOPE = 'slack:private:C1';
 
 let home: string;
@@ -138,7 +143,10 @@ function post(path: string, token: string, body: Record<string, string>): Promis
 }
 
 function del(path: string, token: string): Promise<Response> {
-  return fetch(`${handle!.url}${path}`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
+  return fetch(`${handle!.url}${path}`, {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${token}` },
+  });
 }
 
 beforeEach(() => {
@@ -203,8 +211,14 @@ describe('auth resolver routing by token shape', () => {
   it('lets no resolver answer override an API key identity', async () => {
     const evil: ResolvedBearer = { tenantId: 'evil', subject: 'mallory', role: 'admin' };
     await start(() => evil);
-    expect((await post('/v1/memories', apiKey.plaintext, { content: 'key wrote this' })).status).toBe(200);
-    expect(auditRows('default').some((r) => r.op === 'remember' && r.actor === `api_key:${apiKey.keyId}`)).toBe(true);
+    expect(
+      (await post('/v1/memories', apiKey.plaintext, { content: 'key wrote this' })).status,
+    ).toBe(200);
+    expect(
+      auditRows('default').some(
+        (r) => r.op === 'remember' && r.actor === `api_key:${apiKey.keyId}`,
+      ),
+    ).toBe(true);
     expect(auditRows('evil')).toHaveLength(0);
     expect((await get('/v1/memories?q=x', 'hk_forged.secret')).status).toBe(401);
   });
@@ -243,7 +257,10 @@ describe('auth resolver tenant boundary', () => {
       expect((await post('/v1/sleep', EXT, {})).status).toBe(403);
       const ok = await fetch(`${handle!.url}/v1/sleep`, {
         method: 'POST',
-        headers: { authorization: `Bearer ${apiKey.plaintext}`, 'content-type': 'application/json' },
+        headers: {
+          authorization: `Bearer ${apiKey.plaintext}`,
+          'content-type': 'application/json',
+        },
         body: JSON.stringify({ dry_run: true }),
       });
       expect(ok.status).toBe(200);
@@ -273,7 +290,9 @@ describe('auth resolver failure', () => {
       throw new Error('first\r\n[hippo] forged line');
     });
     expect((await get('/v1/memories?q=x', 'tok')).status).toBe(503);
-    const chunks = write.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('auth resolver'));
+    const chunks = write.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes('auth resolver'));
     expect(chunks).toHaveLength(1);
     expect(chunks[0]!.replace(/\n$/, '')).not.toMatch(/[\r\n]/);
   });
@@ -292,7 +311,9 @@ describe('auth resolver failure', () => {
     await start(() => new Promise<null>(() => undefined), home, { authResolverTimeoutMs: 100 });
     const res = await get('/v1/memories?q=x', 'ext.slow');
     expect(res.status).toBe(503);
-    const lines = write.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('auth resolver'));
+    const lines = write.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes('auth resolver'));
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain('no answer within 100 ms');
   });
@@ -348,7 +369,9 @@ describe('auth resolver sanitising', () => {
       return bad;
     });
     expect((await get('/v1/memories?q=x', EXT)).status).toBe(401);
-    const lines = write.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('auth resolver'));
+    const lines = write.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes('auth resolver'));
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain('getter exploded');
   });
@@ -402,7 +425,10 @@ describe('auth resolver sanitising', () => {
   });
 
   it('copies string scopes only and drops the rest', async () => {
-    writeEntry(home, { ...createMemory('payroll for kowalski', { layer: Layer.Episodic }), scope: PRIVATE_SCOPE });
+    writeEntry(home, {
+      ...createMemory('payroll for kowalski', { layer: Layer.Episodic }),
+      scope: PRIVATE_SCOPE,
+    });
     const scoped = `/v1/memories?q=kowalski&scope=${encodeURIComponent(PRIVATE_SCOPE)}`;
     await start(tokenResolver({ tenantId: 'default', scopes: [7, null, PRIVATE_SCOPE] }));
     expect((await get(scoped, EXT)).status).toBe(200);
@@ -436,7 +462,11 @@ describe('auth resolver and key routes', () => {
       const created = await post('/v1/auth/keys', EXT, {});
       expect(created.status).toBe(200);
       // SAFETY: a 200 from POST /v1/auth/keys returns the created key record, asserted above.
-      const minted = (await created.json()) as { plaintext: string; role: string; tenantId: string };
+      const minted = (await created.json()) as {
+        plaintext: string;
+        role: string;
+        tenantId: string;
+      };
       expect(minted).toMatchObject({ role: 'member', tenantId: 'ext-tenant' });
       expect((await get('/v1/audit?tenant=default', minted.plaintext)).status).toBe(403);
       expect((await post('/v1/sleep', minted.plaintext, {})).status).toBe(403);
@@ -497,9 +527,12 @@ describe('exported authRevoke for add-ons', () => {
 });
 
 describe('isReservedActor', () => {
-  it.each(['cli', 'CLI:x', 'api_key:k1', 'system:addon:u1', 'localhost:cli'])('is true for %s', (s) => {
-    expect(isReservedActor(s)).toBe(true);
-  });
+  it.each(['cli', 'CLI:x', 'api_key:k1', 'system:addon:u1', 'localhost:cli'])(
+    'is true for %s',
+    (s) => {
+      expect(isReservedActor(s)).toBe(true);
+    },
+  );
 
   it.each(['clinton@corp', 'alice@corp', 'systems-team'])('is false for %s', (s) => {
     expect(isReservedActor(s)).toBe(false);
@@ -600,7 +633,8 @@ describe('auth resolver stream', () => {
     expect(res.status).toBe(200);
     const text = collect(res);
     down = true;
-    const skipped = (): boolean => stderr.mock.calls.some((c) => String(c[0]).includes('heartbeat tick skipped'));
+    const skipped = (): boolean =>
+      stderr.mock.calls.some((c) => String(c[0]).includes('heartbeat tick skipped'));
     await waitFor(skipped, { timeoutMs: 3000 });
     ac.abort();
     expect(skipped()).toBe(true);
@@ -707,7 +741,9 @@ describe('package surface', () => {
       timeout: 30_000,
     });
     if (child.status !== 0) {
-      throw new Error(`self-reference import failed (run \`npm run build\` first):\n${child.stderr}`);
+      throw new Error(
+        `self-reference import failed (run \`npm run build\` first):\n${child.stderr}`,
+      );
     }
     const lines = child.stdout.trim().split('\n');
     // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.
@@ -725,7 +761,9 @@ describe('package surface', () => {
     expect(out.authCreateSelf).toBe('function');
     expect(out.isReservedActor).toBe('function');
     expect(out.forbidden).toBe('function');
-    expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(join(root, 'dist', 'server.js')));
+    expect(realpathSync(fileURLToPath(out.url))).toBe(
+      realpathSync(join(root, 'dist', 'server.js')),
+    );
     expect(out.serve).toBe('function');
     expect(out.leaked).toEqual([]);
     expect(out.indexServe).toBe(false);

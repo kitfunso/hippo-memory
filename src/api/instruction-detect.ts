@@ -26,7 +26,10 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
     name: 'role-reassignment',
     re: /\b(?:you are now|act as|pretend to be)\b[^.\n]{0,40}\b(?:an?\s+)?(?:ai|assistant|agent|system)\b/i,
   },
-  { name: 'chat-role-markup', re: /<\|im_start\|>|<\|system\|>|\[INST\]|<\/?system>|###\s*system\s*:/i },
+  {
+    name: 'chat-role-markup',
+    re: /<\|im_start\|>|<\|system\|>|\[INST\]|<\/?system>|###\s*system\s*:/i,
+  },
   {
     name: 'system-prompt-reference',
     re: new RegExp(
@@ -85,7 +88,8 @@ const NAMED_REFERENCES: ReadonlyMap<string, string> = new Map([
 
 // Drawn with no width, so one inside a word splits it for a pattern and not for a reader: soft hyphen, joiners,
 // zero-width and bidi format characters.
-const INVISIBLE_RE = /[\u034F\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
+const INVISIBLE_RE =
+  /[\u034F\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
 
 // Cyrillic, then Greek, letters drawn like a c e i j o p s x y; closed at those, so Russian or Greek prose folds into
 // no phrase a pattern names.
@@ -133,9 +137,15 @@ const GREEK_OR_CYRILLIC_RE = /[\u0370-\u03FF\u0400-\u04FF]/g;
 // full stop.
 const SPACE_RUN_RE = /[^\S\n]+/g;
 
-function referencedCharacter(reference: string, decimal?: string, hex?: string, name?: string): string {
+function referencedCharacter(
+  reference: string,
+  decimal?: string,
+  hex?: string,
+  name?: string,
+): string {
   if (name !== undefined) return NAMED_REFERENCES.get(name) ?? reference;
-  const code = decimal !== undefined ? Number.parseInt(decimal, 10) : Number.parseInt(hex ?? '', 16);
+  const code =
+    decimal !== undefined ? Number.parseInt(decimal, 10) : Number.parseInt(hex ?? '', 16);
   // NUL, half a surrogate pair and a number past Unicode name no character, so the reference is read as written.
   const drawn = code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
   return drawn ? String.fromCodePoint(code) : reference;

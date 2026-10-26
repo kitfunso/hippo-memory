@@ -14,7 +14,10 @@ oneRequestPerTest();
 async function connectionsDuring(run: () => Promise<object>): Promise<number> {
   const seen = new Set<unknown>();
   const prepare = DatabaseSync.prototype.prepare;
-  const spy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (this: DatabaseSyncLike, sql) {
+  const spy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (
+    this: DatabaseSyncLike,
+    sql,
+  ) {
     seen.add(this);
     return prepare.call(this, sql);
   });

@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { consolidate } from '../../src/index.js';
-import { listMemoryConflicts, writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
+import {
+  listMemoryConflicts,
+  writeEntry,
+  loadAllEntries,
+  readEntry,
+} from '../_helpers/root-forms.js';
 import { createMemory, calculateStrength, resolveConfidence } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
@@ -22,8 +27,10 @@ pinClock();
 oneRequestPerTest();
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
-const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) =>
-  createMemory(content, { baseHalfLifeDays: 7, ...options });
+const createMemory7 = (
+  content: string,
+  options: Partial<Parameters<typeof createMemory>[1]> = {},
+) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 let tmpDir: string;
 
@@ -34,7 +41,11 @@ beforeEach(() => {
 describe('Decay pass', () => {
   it('removes entries below the strength threshold (dormant opted out)', async () => {
     initTestStore(tmpDir);
-    fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ dormant: { enabled: false } }), 'utf8');
+    fs.writeFileSync(
+      path.join(tmpDir, 'config.json'),
+      JSON.stringify({ dormant: { enabled: false } }),
+      'utf8',
+    );
 
     // Create an entry that's very old (strength will be effectively 0)
     const entry = createMemory7('ancient memory');
@@ -67,7 +78,11 @@ describe('Decay pass', () => {
 
   it('dry-run does not remove entries', async () => {
     initTestStore(tmpDir);
-    fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ dormant: { enabled: false } }), 'utf8');
+    fs.writeFileSync(
+      path.join(tmpDir, 'config.json'),
+      JSON.stringify({ dormant: { enabled: false } }),
+      'utf8',
+    );
 
     const entry = createMemory7('ancient memory');
     const veryOldDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000 * 10).toISOString();
@@ -85,17 +100,32 @@ describe('Decay pass', () => {
 
   it('a dry run reports the same counts and detail lines the real run then produces', async () => {
     initTestStore(tmpDir);
-    fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
+    fs.writeFileSync(
+      path.join(tmpDir, 'config.json'),
+      JSON.stringify({ replay: { count: 0 } }),
+      'utf8',
+    );
     const now = new Date('2026-06-01T00:00:00.000Z');
     const at = new Date(now.getTime() - 400 * 24 * 60 * 60 * 1000).toISOString();
     const faded = { halfLifeDays: 1, created: at, lastRetrieved: at };
-    writeEntry(tmpDir, { ...createMemory7('an old note about a retired staging hostname nobody uses'), ...faded });
     writeEntry(tmpDir, {
-      ...createMemory7('an old note about rotating the staging deploy key', { tags: ['credential'] }),
+      ...createMemory7('an old note about a retired staging hostname nobody uses'),
       ...faded,
     });
-    writeEntry(tmpDir, createMemory7('cache refresh failure data pipeline error', { layer: Layer.Episodic }));
-    writeEntry(tmpDir, createMemory7('cache refresh failure data pipeline problem', { layer: Layer.Episodic }));
+    writeEntry(tmpDir, {
+      ...createMemory7('an old note about rotating the staging deploy key', {
+        tags: ['credential'],
+      }),
+      ...faded,
+    });
+    writeEntry(
+      tmpDir,
+      createMemory7('cache refresh failure data pipeline error', { layer: Layer.Episodic }),
+    );
+    writeEntry(
+      tmpDir,
+      createMemory7('cache refresh failure data pipeline problem', { layer: Layer.Episodic }),
+    );
 
     const dry = await consolidate(tmpDir, { dryRun: true, now });
     const real = await consolidate(tmpDir, { now });
@@ -117,7 +147,10 @@ describe('Decay pass', () => {
   it('keeps the stored confidence tier for old non-verified memories through sleep, while resolveConfidence reports stale', async () => {
     initTestStore(tmpDir);
 
-    const entry = createMemory7('stale memory candidate', { confidence: 'observed', tags: ['error'] });
+    const entry = createMemory7('stale memory candidate', {
+      confidence: 'observed',
+      tags: ['error'],
+    });
     const now = new Date();
     const oldDate = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000).toISOString();
     const staleCandidate = { ...entry, lastRetrieved: oldDate, confidence: 'observed' as const };
@@ -140,14 +173,28 @@ describe('Replay pass (integration)', () => {
 
     // 8 distinct memories, no text overlap → merge pass won't fire.
     const memories = [
-      createMemory7('elephants have long memories according to field study', { layer: Layer.Episodic }),
-      createMemory7('production pipeline deploys every friday at noon UTC', { layer: Layer.Episodic }),
+      createMemory7('elephants have long memories according to field study', {
+        layer: Layer.Episodic,
+      }),
+      createMemory7('production pipeline deploys every friday at noon UTC', {
+        layer: Layer.Episodic,
+      }),
       createMemory7('ravens can use tools and solve multi-step puzzles', { layer: Layer.Episodic }),
-      createMemory7('rust borrow checker prevents iterator invalidation bugs', { layer: Layer.Episodic }),
-      createMemory7('soybean oil futures ticker is ZL=F on yahoo finance', { layer: Layer.Episodic }),
-      createMemory7('quantum error correction requires logical qubit overhead', { layer: Layer.Episodic }),
-      createMemory7('the postgres vacuum process reclaims dead tuple space', { layer: Layer.Episodic }),
-      createMemory7('marine otters wrap kelp around themselves while sleeping', { layer: Layer.Episodic }),
+      createMemory7('rust borrow checker prevents iterator invalidation bugs', {
+        layer: Layer.Episodic,
+      }),
+      createMemory7('soybean oil futures ticker is ZL=F on yahoo finance', {
+        layer: Layer.Episodic,
+      }),
+      createMemory7('quantum error correction requires logical qubit overhead', {
+        layer: Layer.Episodic,
+      }),
+      createMemory7('the postgres vacuum process reclaims dead tuple space', {
+        layer: Layer.Episodic,
+      }),
+      createMemory7('marine otters wrap kelp around themselves while sleeping', {
+        layer: Layer.Episodic,
+      }),
     ];
     for (const m of memories) writeEntry(tmpDir, m);
 
@@ -183,7 +230,9 @@ describe('Replay pass (integration)', () => {
 
     const memories = [
       createMemory7('memory one with enough content to pass validation', { layer: Layer.Episodic }),
-      createMemory7('memory two also sufficiently long to store properly', { layer: Layer.Episodic }),
+      createMemory7('memory two also sufficiently long to store properly', {
+        layer: Layer.Episodic,
+      }),
     ];
     for (const m of memories) writeEntry(tmpDir, m);
 
@@ -220,8 +269,12 @@ describe('Merge pass', () => {
     initTestStore(tmpDir);
 
     // Two very similar episodic entries
-    const e1 = createMemory7('cache refresh failure data pipeline error', { layer: Layer.Episodic });
-    const e2 = createMemory7('cache refresh failure data pipeline problem', { layer: Layer.Episodic });
+    const e1 = createMemory7('cache refresh failure data pipeline error', {
+      layer: Layer.Episodic,
+    });
+    const e2 = createMemory7('cache refresh failure data pipeline problem', {
+      layer: Layer.Episodic,
+    });
     writeEntry(tmpDir, e1);
     writeEntry(tmpDir, e2);
 
@@ -229,7 +282,11 @@ describe('Merge pass', () => {
 
     expect(result.merged).toBe(2);
     expect(result.semanticCreated).toBe(1);
-    expect(detailLines(result).some((l) => l.startsWith('  🔀 merged 2 episodic entries into semantic: '))).toBe(true);
+    expect(
+      detailLines(result).some((l) =>
+        l.startsWith('  🔀 merged 2 episodic entries into semantic: '),
+      ),
+    ).toBe(true);
 
     const all = loadAllEntries(tmpDir, 'default');
     const semantics = all.filter((e) => e.layer === Layer.Semantic);
@@ -239,8 +296,12 @@ describe('Merge pass', () => {
   it('does not merge dissimilar entries', async () => {
     initTestStore(tmpDir);
 
-    const e1 = createMemory7('Python dict ordering is guaranteed since 3.7', { layer: Layer.Episodic });
-    const e2 = createMemory7('Gold model uses TIPS 10y inflation signal', { layer: Layer.Episodic });
+    const e1 = createMemory7('Python dict ordering is guaranteed since 3.7', {
+      layer: Layer.Episodic,
+    });
+    const e2 = createMemory7('Gold model uses TIPS 10y inflation signal', {
+      layer: Layer.Episodic,
+    });
     writeEntry(tmpDir, e1);
     writeEntry(tmpDir, e2);
 
@@ -252,8 +313,12 @@ describe('Merge pass', () => {
   it('demotes merged source episodics via half_life_days, not the inert stored-strength field', async () => {
     initTestStore(tmpDir);
 
-    const e1 = createMemory7('cache refresh failure data pipeline error', { layer: Layer.Episodic });
-    const e2 = createMemory7('cache refresh failure data pipeline problem', { layer: Layer.Episodic });
+    const e1 = createMemory7('cache refresh failure data pipeline error', {
+      layer: Layer.Episodic,
+    });
+    const e2 = createMemory7('cache refresh failure data pipeline problem', {
+      layer: Layer.Episodic,
+    });
     writeEntry(tmpDir, e1);
     writeEntry(tmpDir, e2);
 
@@ -275,7 +340,9 @@ describe('Merge pass', () => {
     // the same time with the same default half-life.
     const later = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000);
     const unmergedPeer = {
-      ...createMemory('completely unrelated standalone topic', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ...createMemory('completely unrelated standalone topic', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
       halfLifeDays: e1.halfLifeDays,
     };
     expect(calculateStrength(m1!, later)).toBeLessThan(calculateStrength(unmergedPeer, later));
@@ -363,7 +430,10 @@ describe('Merge pass', () => {
     const pairs = [
       ['Always use Sled for local storage', 'Never use Sled for local storage'],
       ['API auth must be enabled in prod', 'Disable API auth in prod'],
-      ['Production deploys must require approval', 'Production deploys should not require approval'],
+      [
+        'Production deploys must require approval',
+        'Production deploys should not require approval',
+      ],
       ['Metrics endpoint is available in staging', 'Metrics endpoint is missing in staging'],
       ['Background sync works on iOS', 'Background sync is broken on iOS'],
     ] as const;
@@ -407,7 +477,10 @@ describe('Merge pass', () => {
     initTestStore(tmpDir);
 
     const pairs = [
-      ['Always create a worktree when working in exemem-workspace', "Don't touch other agents' worktrees"],
+      [
+        'Always create a worktree when working in exemem-workspace',
+        "Don't touch other agents' worktrees",
+      ],
       ['Schema service owns schema creation', 'Schemas are global'],
       ['Multi-node dogfood snapshots', 'Dogfood database snapshot'],
     ] as const;
@@ -461,7 +534,12 @@ describe('Merge pass', () => {
 });
 
 describe('Physics pass', () => {
-  const STALE = { mass: 99, charge: 0.9, temperature: 0.123, lastSimulation: '2000-01-01T00:00:00.000Z' };
+  const STALE = {
+    mass: 99,
+    charge: 0.9,
+    temperature: 0.123,
+    lastSimulation: '2000-01-01T00:00:00.000Z',
+  };
 
   function storedParticles(): PhysicsParticle[] {
     const db = openHippoDb(tmpDir);
@@ -520,11 +598,22 @@ describe('Physics pass', () => {
     expect(entries.map((e) => e.halfLifeDays)).toEqual([30, 30, 30]);
 
     // The same steps the pass must take, on the same particles in the same order.
-    const expected = seeded.map((p) => ({ ...p, position: [...p.position], velocity: [...p.velocity] }));
-    refreshParticleProperties(expected, new Map(entries.map((e) => [e.id, e])), now, PRODUCTION_STRENGTH);
+    const expected = seeded.map((p) => ({
+      ...p,
+      position: [...p.position],
+      velocity: [...p.velocity],
+    }));
+    refreshParticleProperties(
+      expected,
+      new Map(entries.map((e) => [e.id, e])),
+      now,
+      PRODUCTION_STRENGTH,
+    );
     const stats = simulate(expected, {
       conflictPairs: new Map(
-        entries.filter((e) => e.conflictsWith.length > 0).map((e) => [e.id, new Set(e.conflictsWith)]),
+        entries
+          .filter((e) => e.conflictsWith.length > 0)
+          .map((e) => [e.id, new Set(e.conflictsWith)]),
       ),
       halfLives: new Map(entries.map((e) => [e.id, e.halfLifeDays])),
       config: loadConfig(tmpDir).physics,
@@ -574,7 +663,11 @@ describe('Physics pass', () => {
     expect(storedParticles()).toEqual(seeded);
 
     const empty = makeRoot('consolidate-nophysics');
-    fs.writeFileSync(path.join(empty, 'config.json'), JSON.stringify({ physics: { enabled: true } }), 'utf8');
+    fs.writeFileSync(
+      path.join(empty, 'config.json'),
+      JSON.stringify({ physics: { enabled: true } }),
+      'utf8',
+    );
     writeEntry(empty, createMemory7('A memory with no particle stored for it'));
     const result = await consolidate(empty, { now: FIXED_NOW });
     expect(result.physicsSimulated).toBe(0);

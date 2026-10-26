@@ -31,7 +31,10 @@ function sleepCountLines(result: api.SleepResult): string[] {
   if (result.dormantExpired !== undefined && result.dormantExpired > 0) {
     lines.push(`   Expired dormant:   ${result.dormantExpired}  (past dormant.retentionDays)`);
   }
-  lines.push(`   Merged episodic:   ${result.mergedEpisodic}`, `   New semantic:      ${result.newSemantic}`);
+  lines.push(
+    `   Merged episodic:   ${result.mergedEpisodic}`,
+    `   New semantic:      ${result.newSemantic}`,
+  );
   if (result.events && result.events.length > 0) {
     lines.push('\nDetails:', ...sleepEventLines(result.events, result.dryRun));
   }
@@ -83,7 +86,9 @@ function sleepShareAndGraphLines(result: api.SleepResult): string[] {
   if (result.ambient) lines.push(`\n${renderAmbientSummary(result.ambient)}`);
   if (result.graph && result.graph.tenants > 0) {
     const { tenants, entities, relations } = result.graph;
-    lines.push(`\nGraph: rebuilt ${plural(tenants, 'tenant')} (${entities} entities, ${relations} relations).`);
+    lines.push(
+      `\nGraph: rebuilt ${plural(tenants, 'tenant')} (${entities} entities, ${relations} relations).`,
+    );
   }
   return lines;
 }

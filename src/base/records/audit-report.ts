@@ -20,7 +20,11 @@ let auditWriteFailures = 0;
 /** For callers that keep a mutation when its audit row fails: the failure is logged and counted, never silent. */
 export function reportAuditWriteFailure<E>(op: AuditOp, err: E, targetId?: string | null): void {
   auditWriteFailures++;
-  log.error(`audit write failed: ${errorMessage(err)}`, { op, target: targetId ?? undefined, ...errorFields(err) });
+  log.error(`audit write failed: ${errorMessage(err)}`, {
+    op,
+    target: targetId ?? undefined,
+    ...errorFields(err),
+  });
 }
 
 /** Audit rows this process failed to write; the loopback `/health` body reports it. */

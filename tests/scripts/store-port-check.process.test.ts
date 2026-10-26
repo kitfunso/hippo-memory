@@ -95,7 +95,10 @@ const list = (run: Run) =>
 describe('check-store-port.mjs', () => {
   it('counts a plain call outside the data layer', () => {
     withFixture(
-      { 'src/a.ts': "import { openHippoDb } from './db.js';\nexport const f = () => openHippoDb('r');\n" },
+      {
+        'src/a.ts':
+          "import { openHippoDb } from './db.js';\nexport const f = () => openHippoDb('r');\n",
+      },
       null,
       ({ run }) => {
         expect(list(run)).toMatchObject({ openersOutside: '1', 'src/a.ts': '1' });
@@ -117,20 +120,31 @@ describe('check-store-port.mjs', () => {
       },
       null,
       ({ run, baseline }) => {
-        expect(list(run)).toMatchObject({ handleHoldersOutside: '2', 'src/a.ts': '1', 'src/surface/cli/e.ts': '1' });
+        expect(list(run)).toMatchObject({
+          handleHoldersOutside: '2',
+          'src/a.ts': '1',
+          'src/surface/cli/e.ts': '1',
+        });
         run('--update');
-        expect(baseline().handleHoldersOutsideByFile).toEqual({ 'src/a.ts': 1, 'src/surface/cli/e.ts': 1 });
+        expect(baseline().handleHoldersOutsideByFile).toEqual({
+          'src/a.ts': 1,
+          'src/surface/cli/e.ts': 1,
+        });
       },
     );
   });
 
   it('fails when a new file starts holding a handle', () => {
     const src = "import type { DatabaseSync } from 'node:sqlite';\nexport type H = DatabaseSync;\n";
-    withFixture({ 'src/a.ts': src }, { handleHoldersOutside: 0, handleHoldersOutsideByFile: {} }, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('handleHoldersOutside: 0 -> 1');
-    });
+    withFixture(
+      { 'src/a.ts': src },
+      { handleHoldersOutside: 0, handleHoldersOutsideByFile: {} },
+      ({ run }) => {
+        const r = run();
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain('handleHoldersOutside: 0 -> 1');
+      },
+    );
   });
 
   it('does not count calls under src/db, src/store, src/surface/cli or src/db/index.ts in number 1', () => {
@@ -171,9 +185,17 @@ describe('check-store-port.mjs', () => {
       "export function fooThroughStore() {}\nexport const f = (ctx: any) => (ctx.store ? 1 : 2);\nexport const g = (store: any) => store.kind !== 'sqlite';\nexport const h = ({ store }: any) => (store ? 1 : 2);\n";
     const server =
       "const V1_ROUTES = [\n  { method: 'GET', path: '/a', handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n];\n";
-    withFixture({ 'src/api/a.ts': api, 'src/surface/server/route-table.ts': server }, null, ({ run }) => {
-      expect(list(run)).toMatchObject({ storeBranches: '3', twinFunctions: '1', routesNeedingHippoDb: '1' });
-    });
+    withFixture(
+      { 'src/api/a.ts': api, 'src/surface/server/route-table.ts': server },
+      null,
+      ({ run }) => {
+        expect(list(run)).toMatchObject({
+          storeBranches: '3',
+          twinFunctions: '1',
+          routesNeedingHippoDb: '1',
+        });
+      },
+    );
   });
 
   it('fails with exit 1 naming the file when a count rises', () => {
@@ -207,25 +229,33 @@ describe('check-store-port.mjs', () => {
   });
 
   it('--update refuses to raise a number', () => {
-    withFixture({ 'src/a.ts': "export const f = () => openStore('r');\n" }, {}, ({ run, baseline }) => {
-      const r = run('--update');
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('Refusing to raise');
-      expect(baseline().openersOutside).toBe(0);
-    });
+    withFixture(
+      { 'src/a.ts': "export const f = () => openStore('r');\n" },
+      {},
+      ({ run, baseline }) => {
+        const r = run('--update');
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain('Refusing to raise');
+        expect(baseline().openersOutside).toBe(0);
+      },
+    );
   });
 
   it('fails on a SqliteLocal method the baseline does not list, and --update will not add it', () => {
     const local =
       'export interface SqliteLocal {\n  archiveRaw(id: string): string;\n  writeEntry(id: string): void;\n}\n';
-    withFixture({ 'src/store/sqlite/local.ts': local }, { sqliteLocalMethods: ['archiveRaw'] }, ({ run, baseline }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('SqliteLocal.writeEntry: unlisted -> declared');
-      expect(r.stderr).not.toContain('SqliteLocal.archiveRaw');
-      expect(run('--update').status).toBe(1);
-      expect(baseline().sqliteLocalMethods).toEqual(['archiveRaw']);
-    });
+    withFixture(
+      { 'src/store/sqlite/local.ts': local },
+      { sqliteLocalMethods: ['archiveRaw'] },
+      ({ run, baseline }) => {
+        const r = run();
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain('SqliteLocal.writeEntry: unlisted -> declared');
+        expect(r.stderr).not.toContain('SqliteLocal.archiveRaw');
+        expect(run('--update').status).toBe(1);
+        expect(baseline().sqliteLocalMethods).toEqual(['archiveRaw']);
+      },
+    );
     withFixture(
       { 'src/store/sqlite/local.ts': local },
       { sqliteLocalMethods: ['archiveRaw', 'writeEntry', 'gone'] },
@@ -239,17 +269,22 @@ describe('check-store-port.mjs', () => {
 
   it('fails and names the file when a prepare call appears outside the data layer, and ignores src/store', () => {
     const call = "export const f = (db: any) => db.prepare('SELECT 1');\n";
-    withFixture({ 'src/a.ts': call, 'src/store/b.ts': call }, { sqlOutside: 0, sqlOutsideByFile: {} }, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/a.ts: new -> 1');
-      expect(r.stderr).toContain('sqlOutside: 0 -> 1');
-      expect(r.stderr).not.toContain('src/store/b.ts');
-    });
+    withFixture(
+      { 'src/a.ts': call, 'src/store/b.ts': call },
+      { sqlOutside: 0, sqlOutsideByFile: {} },
+      ({ run }) => {
+        const r = run();
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain('src/a.ts: new -> 1');
+        expect(r.stderr).toContain('sqlOutside: 0 -> 1');
+        expect(r.stderr).not.toContain('src/store/b.ts');
+      },
+    );
   });
 
   it('counts resolveTenantId calls under src/surface/cli/ only, not the import or other folders', () => {
-    const call = "import { resolveTenantId } from './t.js';\nexport const f = () => resolveTenantId({});\n";
+    const call =
+      "import { resolveTenantId } from './t.js';\nexport const f = () => resolveTenantId({});\n";
     withFixture(
       { 'src/surface/cli/a.ts': call, 'src/cli.ts': call, 'src/api/b.ts': call },
       { tenantResolvesInCli: 0 },
@@ -290,7 +325,8 @@ describe('check-store-port.mjs', () => {
 
   it('storeImportsInCli skips the CLI composition root, which builds the store', () => {
     const files = {
-      'src/surface/cli/api-context.ts': "import { sqliteStore } from '../../store/sqlite/store.js';\n",
+      'src/surface/cli/api-context.ts':
+        "import { sqliteStore } from '../../store/sqlite/store.js';\n",
       'src/surface/cli/a.ts': "import { readEntry } from '../../store/entry-reads.js';\n",
     };
     withFixture(files, null, ({ run }) => {
@@ -299,7 +335,9 @@ describe('check-store-port.mjs', () => {
   });
 
   it('a baseline without storeImportsInCli passes and --update writes it', () => {
-    const files = { 'src/surface/cli/a.ts': "import { readEntry } from '../../store/entry-reads.js';\n" };
+    const files = {
+      'src/surface/cli/a.ts': "import { readEntry } from '../../store/entry-reads.js';\n",
+    };
     withFixture(files, { storeImportsInCli: undefined }, ({ run, baseline }) => {
       expect(run().status).toBe(0);
       expect(run('--update').status).toBe(0);
@@ -308,7 +346,8 @@ describe('check-store-port.mjs', () => {
   });
 
   it('counts a BEGIN literal outside src/db/busy.ts and not inside it', () => {
-    const tx = "export const a = 'BEGIN IMMEDIATE';\nexport const b = `BEGIN`;\nexport const c = `BEGIN ${'x'}`;\n";
+    const tx =
+      "export const a = 'BEGIN IMMEDIATE';\nexport const b = `BEGIN`;\nexport const c = `BEGIN ${'x'}`;\n";
     withFixture({ 'src/a.ts': tx, 'src/db/busy.ts': tx }, { txLiterals: 0 }, ({ run }) => {
       expect(list(run).txLiterals).toBe('3');
       const r = run();
@@ -336,7 +375,11 @@ describe('check-store-port.mjs', () => {
     withFixture({ 'src/surface/server/route-table.ts': table }, null, ({ run }) => {
       expect(list(run)).toMatchObject({ routesNeedingHippoDb: '2', hippoDbOnlyRoutes: '1' });
     });
-    const listed = { routesNeedingHippoDb: 1, hippoDbOnlyRoutes: 1, hippoDbOnlyRoutesList: ['POST /c'] };
+    const listed = {
+      routesNeedingHippoDb: 1,
+      hippoDbOnlyRoutes: 1,
+      hippoDbOnlyRoutesList: ['POST /c'],
+    };
     withFixture({ 'src/surface/server/route-table.ts': table }, listed, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
@@ -350,7 +393,10 @@ describe('check-store-port.mjs', () => {
       ["{ method: 'GET', path: '/a', storeReady: someIdentifier, handler: a },", 'GET /a'],
       ["{ method: 'POST', path: '/b', hippoDbOnly: reason, handler: b },", 'POST /b'],
       ["{ method: 'POST', path: '/c', hippoDbOnly: '', handler: c },", 'POST /c'],
-      ["{ method: 'POST', path: '/d', storeReady: 'base', hippoDbOnly: 'x', handler: d },", 'POST /d'],
+      [
+        "{ method: 'POST', path: '/d', storeReady: 'base', hippoDbOnly: 'x', handler: d },",
+        'POST /d',
+      ],
       ['...MORE_ROUTES,', 'spread'],
     ];
     for (const [row, named] of cases) {
@@ -375,7 +421,9 @@ describe('check-store-port.mjs', () => {
     withFixture(rows("export const row = { storeReady: 'localFiles' };\n"), null, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('kind-routes.ts builds rows that name a storeReady or hippoDbOnly');
+      expect(r.stderr).toContain(
+        'kind-routes.ts builds rows that name a storeReady or hippoDbOnly',
+      );
     });
   });
 
@@ -398,7 +446,8 @@ describe('check-store-port.mjs', () => {
 
   it('counts a store import from a domain folder that layers.json marks, outside the first three', () => {
     const files = {
-      'src/domain/trust/a.ts': "import { openHippoDb } from '../../db/busy.js';\nexport const f = openHippoDb;\n",
+      'src/domain/trust/a.ts':
+        "import { openHippoDb } from '../../db/busy.js';\nexport const f = openHippoDb;\n",
     };
     withFixture(files, { storeImportsInDomain: 0 }, ({ run }) => {
       expect(list(run).storeImportsInDomain).toBe('1');
@@ -407,15 +456,20 @@ describe('check-store-port.mjs', () => {
   });
 
   it('exits 1 when src/surface/server/route-table.ts has no V1_ROUTES', () => {
-    withFixture({ 'src/surface/server/route-table.ts': 'export const ROUTES = [];\n' }, null, ({ run }) => {
-      const r = run('--list');
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('V1_ROUTES');
-    });
+    withFixture(
+      { 'src/surface/server/route-table.ts': 'export const ROUTES = [];\n' },
+      null,
+      ({ run }) => {
+        const r = run('--list');
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain('V1_ROUTES');
+      },
+    );
   });
 
   it('fails and names a file outside the list that names the carrier, a file defining it included', () => {
-    const use = "import { onStore } from './on-store.js';\nexport const f = (ctx: any) => onStore(ctx, () => 1);\n";
+    const use =
+      "import { onStore } from './on-store.js';\nexport const f = (ctx: any) => onStore(ctx, () => 1);\n";
     const reply = 'export type R = StoreReply<object, number>;\n';
     const files = {
       'src/api/on-store.ts': 'export const onStore = andThen;\n',
@@ -423,14 +477,20 @@ describe('check-store-port.mjs', () => {
       'src/api/new.ts': use,
       'src/api/reply.ts': reply,
     };
-    withFixture(files, { carrierFiles: 2, carrierFilesList: ['src/api/old.ts', 'src/api/gone.ts'] }, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/api/new.ts: not a carrier file -> uses andThen, onStore or StoreReply');
-      expect(r.stderr).toContain('src/api/on-store.ts: not a carrier file');
-      expect(r.stderr).toContain('src/api/reply.ts: not a carrier file');
-      expect(r.stderr).not.toContain('src/api/old.ts');
-    });
+    withFixture(
+      files,
+      { carrierFiles: 2, carrierFilesList: ['src/api/old.ts', 'src/api/gone.ts'] },
+      ({ run }) => {
+        const r = run();
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain(
+          'src/api/new.ts: not a carrier file -> uses andThen, onStore or StoreReply',
+        );
+        expect(r.stderr).toContain('src/api/on-store.ts: not a carrier file');
+        expect(r.stderr).toContain('src/api/reply.ts: not a carrier file');
+        expect(r.stderr).not.toContain('src/api/old.ts');
+      },
+    );
   });
 
   it('fails and names each surface file that records a recall itself, in a route, a CLI verb or an MCP tool', () => {
@@ -441,7 +501,8 @@ describe('check-store-port.mjs', () => {
       "  recordTokens(ctx, 'http_recall', {});",
       '};',
     ].join('\n');
-    const verb = "export const g = (store: any) => store.recordTokens({ surface: 'recall', items: 1 });\n";
+    const verb =
+      "export const g = (store: any) => store.recordTokens({ surface: 'recall', items: 1 });\n";
     const tool = "export const h = (ctx: any) => ctx.callers?.lastShown.set('k', []);\n";
     const files = {
       'src/surface/server/routes/recall.ts': route,
@@ -454,7 +515,9 @@ describe('check-store-port.mjs', () => {
         expect(r.status, args.join()).toBe(1);
         expect(r.stderr).toContain('src/surface/server/routes/recall.ts:1 noteRecall');
         expect(r.stderr).toContain('src/surface/server/routes/recall.ts:3 bumpRecallStats');
-        expect(r.stderr).toContain('src/surface/server/routes/recall.ts:4 recordTokens with a recall label');
+        expect(r.stderr).toContain(
+          'src/surface/server/routes/recall.ts:4 recordTokens with a recall label',
+        );
         expect(r.stderr).toContain('src/surface/cli/recall.ts:1 recordTokens with a recall label');
         expect(r.stderr).toContain('src/surface/mcp/recall-tools.ts:1 lastShown');
         expect(r.stderr).toContain('recall/finish.ts');
@@ -479,7 +542,8 @@ describe('check-store-port.mjs', () => {
     withFixture(
       {
         'src/api/recall/finish.ts': records,
-        'src/surface/mcp/request.ts': "export const t = (ctx: any) => recordTokens(ctx, 'mcp_context', {});\n",
+        'src/surface/mcp/request.ts':
+          "export const t = (ctx: any) => recordTokens(ctx, 'mcp_context', {});\n",
         'src/surface/server/routes/recall.ts': route,
       },
       {},
@@ -499,21 +563,25 @@ describe('check-store-port.mjs', () => {
       'src/store/scope.ts':
         "// db.prepare('SELECT 1') in a comment is no SQL call\nexport const isPrivate = (s: string) => s.includes(':private:');\n",
     };
-    withFixture(files, { storeFilesWithoutSql: 1, storeFilesWithoutSqlList: ['src/store/old.ts'] }, ({ run }) => {
-      expect(list(run)).toMatchObject({
-        storeFilesWithoutSql: '2',
-        'src/store/scope.ts': 'no SQL',
-        'src/store/old.ts': 'no SQL',
-      });
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('storeFilesWithoutSql: 1 -> 2');
-      expect(r.stderr).toContain('src/store/scope.ts: unlisted -> under src/store, runs no SQL');
-      for (const quiet of ['plumbing.ts', 'reads.ts', 'opens.ts', 'old.ts']) {
-        expect(r.stderr).not.toContain(quiet);
-      }
-      expect(run('--update').status).toBe(1);
-    });
+    withFixture(
+      files,
+      { storeFilesWithoutSql: 1, storeFilesWithoutSqlList: ['src/store/old.ts'] },
+      ({ run }) => {
+        expect(list(run)).toMatchObject({
+          storeFilesWithoutSql: '2',
+          'src/store/scope.ts': 'no SQL',
+          'src/store/old.ts': 'no SQL',
+        });
+        const r = run();
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain('storeFilesWithoutSql: 1 -> 2');
+        expect(r.stderr).toContain('src/store/scope.ts: unlisted -> under src/store, runs no SQL');
+        for (const quiet of ['plumbing.ts', 'reads.ts', 'opens.ts', 'old.ts']) {
+          expect(r.stderr).not.toContain(quiet);
+        }
+        expect(run('--update').status).toBe(1);
+      },
+    );
   });
 
   it('portImportsFromSql counts a port file import of a store file outside the port or a db file that runs SQL, and nothing else', () => {
@@ -525,7 +593,8 @@ describe('check-store-port.mjs', () => {
       'src/base/ports/store/h.ts': 'export type E = 1;\n',
       'src/base/ports/store-groups.ts':
         "import type { B } from '../../store/pure.js';\nimport type { C } from './store/g.js';\n",
-      'src/store/sql.ts': "export type A = 1;\nexport const f = (db: any) => db.prepare('SELECT 1');\n",
+      'src/store/sql.ts':
+        "export type A = 1;\nexport const f = (db: any) => db.prepare('SELECT 1');\n",
       'src/store/pure.ts': 'export type B = 2;\n',
       'src/db/pure.ts': 'export type F = 3;\n',
       'src/db/sql.ts': "export type G = 4;\nexport const g = (db: any) => db.exec('SELECT 1');\n",
@@ -571,7 +640,9 @@ describe('check-store-port.mjs', () => {
 
   it('groupChecksInApi counts requireGroup and hasGroup in the api and domain layers only', () => {
     const files = {
-      'layers.json': JSON.stringify({ folders: { api: 'api', domain: 'domain', surface: 'surface' } }),
+      'layers.json': JSON.stringify({
+        folders: { api: 'api', domain: 'domain', surface: 'surface' },
+      }),
       'src/api/a.ts': "export const f = (s: any) => requireGroup(s, 'localFiles');\n",
       'src/domain/consolidate/b.ts': "export const g = (s: any) => hasGroup(s, 'localFiles');\n",
       'src/surface/cli/c.ts': "export const h = (s: any) => requireGroup(s, 'localFiles');\n",
@@ -610,7 +681,9 @@ describe('check-store-port.mjs', () => {
       expect(l['src/base/ports/store.ts:5 Group.visit(each)']).toBe('portFunctionParams');
       expect(l['src/base/ports/store.ts:6 Group.repair(protect)']).toBe('portFunctionParams');
       expect(l['src/base/ports/store.ts:7 Group.resolve(fate.inReach)']).toBe('portFunctionParams');
-      expect(l['src/base/ports/store-groups.ts:2 G.start(later.every.on.tick)']).toBe('portFunctionParams');
+      expect(l['src/base/ports/store-groups.ts:2 G.start(later.every.on.tick)']).toBe(
+        'portFunctionParams',
+      );
     });
   });
 
@@ -632,11 +705,15 @@ describe('check-store-port.mjs', () => {
   });
 
   it('portFunctionParams fails on one function parameter, and --update cannot pin it', () => {
-    const files = { 'src/base/ports/store.ts': 'export interface Group { visit(each: () => void): void }\n' };
+    const files = {
+      'src/base/ports/store.ts': 'export interface Group { visit(each: () => void): void }\n',
+    };
     withFixture(files, {}, ({ run, baseline }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/base/ports/store.ts:1 Group.visit(each): data only -> takes a function');
+      expect(r.stderr).toContain(
+        'src/base/ports/store.ts:1 Group.visit(each): data only -> takes a function',
+      );
       expect(run('--update').status).toBe(1);
       expect(baseline()).not.toHaveProperty('portFunctionParams');
     });
@@ -662,7 +739,10 @@ describe('check-store-port.mjs', () => {
     withFixture(files, null, ({ run }) => {
       const l = list(run);
       const sites = Object.entries(l).filter(([, v]) => v === 'folderFormsAboveAdapter');
-      expect(sites.map(([k]) => k).sort()).toEqual(['src/store/reads.ts:3 readAll', 'src/store/reads.ts:4 byDefault']);
+      expect(sites.map(([k]) => k).sort()).toEqual([
+        'src/store/reads.ts:3 readAll',
+        'src/store/reads.ts:4 byDefault',
+      ]);
       const r = run();
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('Folder forms above src/store/sqlite: 2, none allowed');
@@ -694,7 +774,9 @@ describe('check-store-port.mjs', () => {
       const r = run();
       expect(r.status, r.stderr).toBe(0);
     });
-    const stray = { 'src/store/graph-apply.ts': "export const g = (db: any) => db.prepare('SELECT 2').get();\n" };
+    const stray = {
+      'src/store/graph-apply.ts': "export const g = (db: any) => db.prepare('SELECT 2').get();\n",
+    };
     withFixture({ ...kept, ...stray }, null, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);

@@ -3,9 +3,19 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { decodeVector, topVectorMatches, type VectorMatch } from '../../src/db/vector-store.js';
-import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
+import {
+  countMatching,
+  peakRowsRead,
+  recordStatementsAsync,
+} from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { clusteredVectors, near, SCAN_PAGE_ROWS, seedVectorRows, type VectorRowSeed } from '../_helpers/vector-rows.js';
+import {
+  clusteredVectors,
+  near,
+  SCAN_PAGE_ROWS,
+  seedVectorRows,
+  type VectorRowSeed,
+} from '../_helpers/vector-rows.js';
 
 const DIM = 8;
 const SCAN = 'FROM memory_vectors v CROSS JOIN memories m';
@@ -69,12 +79,15 @@ function fullSort(db: DatabaseSyncLike, query: readonly number[], k: number): Ve
 }
 
 describe('the paged nearest-vector scan', () => {
-  it.each([1, 50, 400])('keeps the full sort top %i over two and a half pages, ties included', async (k) => {
-    const { db, twin } = big;
-    for (const query of [twin, near(twin, 3), near(twin, 4)]) {
-      expect(await topVectorMatches(db, { query, k, ...IN_T1 })).toEqual(fullSort(db, query, k));
-    }
-  });
+  it.each([1, 50, 400])(
+    'keeps the full sort top %i over two and a half pages, ties included',
+    async (k) => {
+      const { db, twin } = big;
+      for (const query of [twin, near(twin, 3), near(twin, 4)]) {
+        expect(await topVectorMatches(db, { query, k, ...IN_T1 })).toEqual(fullSort(db, query, k));
+      }
+    },
+  );
 
   it('answers every admitted row, best first, when k is more than the store holds', async () => {
     const { db, twin } = small;

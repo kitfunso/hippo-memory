@@ -13,7 +13,10 @@ export class SleepRows {
   private readonly backed = new Set<string>();
 
   constructor(
-    private readonly store: Pick<StoreWith<'consolidation'>, 'entriesByIds' | 'consolidation' | 'auditMaintenance'>,
+    private readonly store: Pick<
+      StoreWith<'consolidation'>,
+      'entriesByIds' | 'consolidation' | 'auditMaintenance'
+    >,
     private readonly preview: ReadonlyMap<string, number>,
     readonly pageRows: number,
   ) {
@@ -24,8 +27,11 @@ export class SleepRows {
   async read(ids: readonly string[]): Promise<MemoryEntry[]> {
     const out: MemoryEntry[] = [];
     for (const page of chunked(ids, this.pageRows)) {
-      const byId = new Map((await this.store.entriesByIds(page, ALL_TENANTS)).map((e) => [e.id, e]));
-      for (const id of await this.store.auditMaintenance.objectBackedAmong([...byId.keys()])) this.backed.add(id);
+      const byId = new Map(
+        (await this.store.entriesByIds(page, ALL_TENANTS)).map((e) => [e.id, e]),
+      );
+      for (const id of await this.store.auditMaintenance.objectBackedAmong([...byId.keys()]))
+        this.backed.add(id);
       for (const id of page) {
         const row = byId.get(id);
         if (row) out.push(this.loaded(row));
@@ -89,7 +95,9 @@ export class Survivors {
   /** Changed rows, each kept in its place. */
   async set(rows: readonly MemoryEntry[]): Promise<void> {
     const fresh = rows.filter((row) => !this.held.has(row.id) && this.strength.has(row.id));
-    const loaded = new Map((await this.stored.read(fresh.map((row) => row.id))).map((row) => [row.id, row]));
+    const loaded = new Map(
+      (await this.stored.read(fresh.map((row) => row.id))).map((row) => [row.id, row]),
+    );
     // A row gone since decay read it is its own base, so the flush skips it rather than write it back.
     for (const row of fresh) this.bases.set(row.id, loaded.get(row.id) ?? row);
     for (const row of rows) this.held.set(row.id, row);

@@ -19,10 +19,21 @@ import { toWire } from '../../src/base/memory/memory-wire.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
-import { mvCandidate, scoreEntries, type MvFeatureVector } from '../../src/domain/consolidate/memory-value.js';
-import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/domain/consolidate/memory-value-weights.js';
+import {
+  mvCandidate,
+  scoreEntries,
+  type MvFeatureVector,
+} from '../../src/domain/consolidate/memory-value.js';
+import {
+  MEMORY_VALUE_WEIGHTS,
+  SOURCE_ARTIFACT_SHA256,
+} from '../../src/domain/consolidate/memory-value-weights.js';
 import { computeFeatures } from '../../benchmarks/memory-value/extract.mjs';
-import { loadEveryTenantEntries, loadSessionDecayContext, writeEntry } from '../_helpers/root-forms.js';
+import {
+  loadEveryTenantEntries,
+  loadSessionDecayContext,
+  writeEntry,
+} from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import {
   createMemory7,
@@ -42,7 +53,8 @@ oneRequestPerTest();
 useMemoryValueScratch();
 
 /** The features the decay pass scores an entry by, at the default loss-aversion rules. */
-const featuresOf = (entry: MemoryEntry): MvFeatureVector => mvCandidate(entry, NOW, PRODUCTION_STRENGTH).features;
+const featuresOf = (entry: MemoryEntry): MvFeatureVector =>
+  mvCandidate(entry, NOW, PRODUCTION_STRENGTH).features;
 // SAFETY: the frozen weights' keys; test (c) checks they are exactly the scorer's feature keys.
 const FEATURE_NAMES = Object.keys(MEMORY_VALUE_WEIGHTS) as ReadonlyArray<keyof MvFeatureVector>;
 
@@ -55,9 +67,12 @@ describe('(a) feature parity vs extract.mjs computeFeatures', () => {
     const built: MemoryEntry[] = [
       createMemory7('alpha short note about a topic', { layer: Layer.Episodic }),
       {
-        ...createMemory('a much longer memory entry with considerably more words describing something in detail', {
-          layer: Layer.Semantic,
-        }),
+        ...createMemory(
+          'a much longer memory entry with considerably more words describing something in detail',
+          {
+            layer: Layer.Semantic,
+          },
+        ),
         retrievalCount: 7,
         outcomePositive: 3,
         outcomeNegative: 1,
@@ -107,10 +122,15 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
       createMemory7('one', { layer: Layer.Semantic }),
       createMemory7('two two', { layer: Layer.Semantic }),
       createMemory7('three three three words here', { layer: Layer.Semantic }),
-      createMemory7('four four four four word entry with extra padding text', { layer: Layer.Semantic }),
-      createMemory7('five five five five five word entry with even more extra padding text added here', {
+      createMemory7('four four four four word entry with extra padding text', {
         layer: Layer.Semantic,
       }),
+      createMemory7(
+        'five five five five five word entry with even more extra padding text added here',
+        {
+          layer: Layer.Semantic,
+        },
+      ),
     ].map((e, i) => ({
       ...e,
       retrievalCount: i,
@@ -160,7 +180,9 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
     const built: MemoryEntry[] = [
       condemnedEntry('short'),
       condemnedEntry('a somewhat longer piece of content here'),
-      condemnedEntry('an even longer piece of content with quite a few more words in it than the others'),
+      condemnedEntry(
+        'an even longer piece of content with quite a few more words in it than the others',
+      ),
     ];
     for (const e of built) writeEntry(dir, e);
     const loaded = loadEveryTenantEntries(dir);
@@ -168,7 +190,9 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
 
     const sortedByLength = [...loaded].sort((a, b) => a.content.length - b.content.length);
     for (let i = 0; i < sortedByLength.length - 1; i++) {
-      expect(scores.get(sortedByLength[i].id)!).toBeGreaterThan(scores.get(sortedByLength[i + 1].id)!);
+      expect(scores.get(sortedByLength[i].id)!).toBeGreaterThan(
+        scores.get(sortedByLength[i + 1].id)!,
+      );
     }
   });
 });
@@ -178,11 +202,24 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
 // ---------------------------------------------------------------------------
 describe('(c) weights-sync vs the committed JSON artifact', () => {
   it('MEMORY_VALUE_WEIGHTS matches weights-learned.json values exactly; digest matches the meta sidecar', () => {
-    const weightsJsonPath = path.join(repoRoot, 'benchmarks', 'memory-value', 'weights-learned.json');
-    const metaJsonPath = path.join(repoRoot, 'benchmarks', 'memory-value', 'weights-learned.meta.json');
+    const weightsJsonPath = path.join(
+      repoRoot,
+      'benchmarks',
+      'memory-value',
+      'weights-learned.json',
+    );
+    const metaJsonPath = path.join(
+      repoRoot,
+      'benchmarks',
+      'memory-value',
+      'weights-learned.meta.json',
+    );
     // SAFETY: this repo's own committed benchmark artifact
     // (weights-learned.json), whose shape matches this type.
-    const artifactWeights = JSON.parse(fs.readFileSync(weightsJsonPath, 'utf8')) as Record<string, number>;
+    const artifactWeights = JSON.parse(fs.readFileSync(weightsJsonPath, 'utf8')) as Record<
+      string,
+      number
+    >;
     // SAFETY: this repo's own committed benchmark artifact
     // (weights-learned.meta.json), whose shape matches this type.
     const meta = JSON.parse(fs.readFileSync(metaJsonPath, 'utf8')) as { weightsFileSha256: string };
@@ -212,7 +249,12 @@ describe('(d) flag-off byte-identical', () => {
     fs.writeFileSync(
       configPath,
       JSON.stringify(
-        { replay: { count: 0 }, physics: { enabled: false }, autoTraceCapture: false, dormant: { enabled: false } },
+        {
+          replay: { count: 0 },
+          physics: { enabled: false },
+          autoTraceCapture: false,
+          dormant: { enabled: false },
+        },
         null,
         2,
       ),
@@ -233,7 +275,11 @@ describe('(d) flag-off byte-identical', () => {
         built.push(condemnedEntry(`${tenantId} condemned entry ${i}`, { tenantId }));
       }
       built.push({
-        ...createMemory(`${tenantId} pinned rule`, { pinned: true, layer: Layer.Semantic, tenantId }),
+        ...createMemory(`${tenantId} pinned rule`, {
+          pinned: true,
+          layer: Layer.Semantic,
+          tenantId,
+        }),
         created: ancientDate(3650),
         lastRetrieved: ancientDate(3650),
         halfLifeDays: 1,
@@ -267,7 +313,9 @@ describe('(d) flag-off byte-identical', () => {
       const strength = calculateStrength(entry, NOW, decayOpts);
       if (!entry.pinned && strength < 0.05) {
         expectedRemovedIds.add(entry.id);
-        expectedRemovedDetails.push(`  🗑  removed ${entry.id} (strength ${strength.toFixed(4)} < 0.05)`);
+        expectedRemovedDetails.push(
+          `  🗑  removed ${entry.id} (strength ${strength.toFixed(4)} < 0.05)`,
+        );
       } else {
         expectedSurvivorIds.add(entry.id);
       }

@@ -81,11 +81,14 @@ interface SaveRule<K extends SavableKind> {
   readonly supersedeKeys?: (fields: ObjectFields[K]) => JsonObject;
 }
 
-const hasText = (text: string | null | undefined): boolean => text !== undefined && text !== null && text !== '';
+const hasText = (text: string | null | undefined): boolean =>
+  text !== undefined && text !== null && text !== '';
 
 // Tells an auto-refresh from a manual write in the audit log without a fourth audit op.
 const refreshKeys = (f: ObjectFields['project_brief']): JsonObject =>
-  f.receiptCount === undefined ? { refreshed: false } : { refreshed: true, receipt_count: f.receiptCount };
+  f.receiptCount === undefined
+    ? { refreshed: false }
+    : { refreshed: true, receipt_count: f.receiptCount };
 
 type SaveRules = { readonly [K in SavableKind]: SaveRule<K> };
 
@@ -93,16 +96,29 @@ const SAVE_RULES: SaveRules = {
   decision: { versioned: false, createKeys: (f) => ({ has_context: hasText(f.context) }) },
   process: {
     versioned: true,
-    createKeys: (f, version) => ({ version, step_count: f.steps.length, has_description: hasText(f.description) }),
+    createKeys: (f, version) => ({
+      version,
+      step_count: f.steps.length,
+      has_description: hasText(f.description),
+    }),
   },
-  policy: { versioned: true, createKeys: (f, version) => ({ version, open_ended: f.validTo === null }) },
-  skill: { versioned: true, createKeys: (f, version) => ({ version, has_trigger: f.trigger !== null }) },
+  policy: {
+    versioned: true,
+    createKeys: (f, version) => ({ version, open_ended: f.validTo === null }),
+  },
+  skill: {
+    versioned: true,
+    createKeys: (f, version) => ({ version, has_trigger: f.trigger !== null }),
+  },
   project_brief: {
     versioned: true,
     createKeys: (f, version) => ({ repo: f.repo, version, ...refreshKeys(f) }),
     supersedeKeys: refreshKeys,
   },
-  customer_note: { versioned: true, createKeys: (f, version) => ({ customer: f.customer, version }) },
+  customer_note: {
+    versioned: true,
+    createKeys: (f, version) => ({ customer: f.customer, version }),
+  },
 };
 
 const isVersioned = (kind: SavableKind): boolean => SAVE_RULES[kind].versioned;
@@ -135,7 +151,11 @@ function supersedeAudit<K extends SavableKind>(
   const rule = SAVE_RULES[kind];
   const own: JsonObject = { [KINDS[kind].idKey]: replaced, superseded_by: id };
   if (rule.versioned) own.new_version = version;
-  return { op: `${kind}_supersede`, targetId: String(replaced), metadata: { ...own, ...rule.supersedeKeys?.(fields) } };
+  return {
+    op: `${kind}_supersede`,
+    targetId: String(replaced),
+    metadata: { ...own, ...rule.supersedeKeys?.(fields) },
+  };
 }
 
 function closeAudit(kind: ObjectKind, id: number): ObjectAudit {
@@ -185,7 +205,8 @@ function closeAny(on: OnHandle, ...[tenantId, kind, id, change]: ObjectCloseArgs
 
 function saveAny(on: OnHandle, files: StoreFiles, ...[tenantId, kind, object]: ObjectSaveArgs) {
   // The prediction writes its mirror files too, so it opens the store as every mirrored save does.
-  if (kind === 'prediction') return on((db) => writePrediction(db, files, tenantId, object), openStore);
+  if (kind === 'prediction')
+    return on((db) => writePrediction(db, files, tenantId, object), openStore);
   if (kind === 'incident') return openIncident(on, tenantId, object);
   return save(on, tenantId, kind, object);
 }
@@ -198,10 +219,10 @@ function readRow<K extends ObjectKind>(
 ): RowByKind[K] | undefined {
   const spec = rowSpec(kind);
   // SAFETY: the SELECT names spec.cols, the columns the kind's row declares.
-  return cachedStatement(db, `SELECT ${spec.cols} FROM ${objectTable(kind)} WHERE id = ? AND tenant_id = ?`).get(
-    id,
-    tenantId,
-  ) as RowByKind[K] | undefined;
+  return cachedStatement(
+    db,
+    `SELECT ${spec.cols} FROM ${objectTable(kind)} WHERE id = ? AND tenant_id = ?`,
+  ).get(id, tenantId) as RowByKind[K] | undefined;
 }
 
 function rowById<K extends ObjectKind>(
@@ -267,10 +288,10 @@ function closeRow<K extends ObjectKind>(
         `(${marks})`,
     ).run(close.at, id, tenantId, ...close.from);
     if (updated.changes === 0) {
-      const existing = cachedStatement(db, `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(
-        id,
-        tenantId,
-      ) as { status: string } | undefined;
+      const existing = cachedStatement(
+        db,
+        `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`,
+      ).get(id, tenantId) as { status: string } | undefined;
       return rollback<ObjectRefusal>(
         existing ? { refused: 'status', status: existing.status } : { refused: 'missing' },
       );
@@ -333,7 +354,10 @@ function insertRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K>):
   const values: ColumnValue[] = [row.memoryId, row.tenantId, ...insert.values(row.save.fields)];
   if (isVersioned(row.kind)) {
     cols.push('version', 'change_summary');
-    values.push(row.version, row.save.supersedesId === undefined ? null : (row.save.changeSummary ?? null));
+    values.push(
+      row.version,
+      row.save.supersedesId === undefined ? null : (row.save.changeSummary ?? null),
+    );
   }
   const result = cachedStatement(
     db,
@@ -378,14 +402,17 @@ function writeObjectRow<K extends SavableKind>(
   save: ObjectSave<K>,
 ): RowByKind[K] | ObjectRefusal {
   const replaced = save.supersedesId;
-  const next = replaced === undefined ? { version: 1 } : successorVersion(db, tenantId, kind, replaced);
+  const next =
+    replaced === undefined ? { version: 1 } : successorVersion(db, tenantId, kind, replaced);
   if (isObjectRefusal(next)) return next;
   const row: NewRow<K> = { tenantId, kind, memoryId, save, version: next.version };
   const id = insertRow(db, row);
   if (replaced !== undefined && !supersedeRow(db, row, replaced, id)) return { refused: 'raced' };
   const saved = readRow(db, kind, tenantId, id);
   if (!saved) return { refused: 'vanished' };
-  appendAuditEvents(db, [{ tenantId, actor: save.actor, ...createAudit(kind, id, save.fields, next.version) }]);
+  appendAuditEvents(db, [
+    { tenantId, actor: save.actor, ...createAudit(kind, id, save.fields, next.version) },
+  ]);
   return saved;
 }
 
@@ -407,7 +434,11 @@ interface MirroredWrite {
 
 /** Until the typed migration has run, a mirror goes in on the flat half-life that migration moves; the flag is read
  * under the save's write lock, so the two cannot interleave. */
-function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry, rules: StoreModel): MemoryEntry {
+function onStoreHalfLife(
+  db: DatabaseSyncLike,
+  mirror: MemoryEntry,
+  rules: StoreModel,
+): MemoryEntry {
   if (getMeta(db, META_KEY.typedHalfLife, '') !== '') return mirror;
   const legacy = { ...mirror, halfLifeDays: deriveHalfLife(LEGACY_TYPED_HALF_LIFE, mirror) };
   return { ...legacy, strength: calculateStrength(legacy, rules.clock(), rules.strength) };
@@ -486,7 +517,14 @@ function openIncidentRow(
       status, resolution_text, resolved_at, closed_at, linked_memory_ids, created_at
     ) VALUES (?, ?, ?, ?, 'open', NULL, NULL, NULL, ?, ?)
   `,
-  ).run(memoryId, tenantId, incidentText, context ?? null, JSON.stringify(linkedMemoryIds), open.at);
+  ).run(
+    memoryId,
+    tenantId,
+    incidentText,
+    context ?? null,
+    JSON.stringify(linkedMemoryIds),
+    open.at,
+  );
   const id = Number(result.lastInsertRowid ?? 0);
   const row = readRow(db, 'incident', tenantId, id);
   if (!row) return { refused: 'vanished' };
@@ -494,10 +532,16 @@ function openIncidentRow(
   return row;
 }
 
-function openIncident(on: OnHandle, tenantId: string, open: IncidentOpen): Incident | IncidentOpenRefusal {
+function openIncident(
+  on: OnHandle,
+  tenantId: string,
+  open: IncidentOpen,
+): Incident | IncidentOpenRefusal {
   const write: MirroredWrite = { mirror: open.mirror, actor: open.actor };
-  const written = withMirror<RowByKind['incident'], IncidentOpenRefusal>(on, write, (db, memoryId) =>
-    openIncidentRow(db, tenantId, memoryId, open),
+  const written = withMirror<RowByKind['incident'], IncidentOpenRefusal>(
+    on,
+    write,
+    (db, memoryId) => openIncidentRow(db, tenantId, memoryId, open),
   );
   return 'refused' in written ? written : rowSpec('incident').rowTo(written);
 }
@@ -519,10 +563,10 @@ function resolveRow(
     `,
     ).run(resolve.text, resolve.at, id, tenantId);
     if (updated.changes === 0) {
-      const existing = cachedStatement(db, `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`).get(
-        id,
-        tenantId,
-      ) as { status: string } | undefined;
+      const existing = cachedStatement(
+        db,
+        `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`,
+      ).get(id, tenantId) as { status: string } | undefined;
       return rollback<ObjectRefusal>(
         existing ? { refused: 'status', status: existing.status } : { refused: 'missing' },
       );
@@ -545,7 +589,11 @@ function resolveRow(
 /**
  * The successor is joined in so a superseded version is kept only while the row that replaced it is not yet in force.
  */
-function policiesInForce(db: DatabaseSyncLike, tenantId: string, query: PoliciesInForceQuery): Policy[] {
+function policiesInForce(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  query: PoliciesInForceQuery,
+): Policy[] {
   const { asOf, name } = query;
   const nameClause = name !== undefined ? 'AND p.policy_name = ?' : '';
   const params: Array<string | number> = [tenantId, asOf, asOf, asOf];
@@ -587,7 +635,12 @@ function skillsByName(db: DatabaseSyncLike, tenantId: string, query: SkillsByNam
 type BriefReceiptDbRow = BriefReceipt;
 
 /** The quotes around the tag stop `path:hip` matching a memory tagged `path:hippo`. */
-function briefReceipts(db: DatabaseSyncLike, tenantId: string, tag: string, limit: number): BriefReceipt[] {
+function briefReceipts(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  tag: string,
+  limit: number,
+): BriefReceipt[] {
   const admit = scopeAdmitSql('');
   return cachedStatement(
     db,

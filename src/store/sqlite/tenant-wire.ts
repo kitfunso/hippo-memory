@@ -19,16 +19,24 @@ export function markAllTenants(args: readonly unknown[]): MarkedArgs {
       allTenants.push([i, null]);
       return null;
     }
-    if (arg === null || arg === undefined || Object.getPrototypeOf(arg) !== Object.prototype) return arg;
-    const keys = Object.entries(arg).flatMap(([key, value]) => (value === ALL_TENANTS ? [key] : []));
+    if (arg === null || arg === undefined || Object.getPrototypeOf(arg) !== Object.prototype)
+      return arg;
+    const keys = Object.entries(arg).flatMap(([key, value]) =>
+      value === ALL_TENANTS ? [key] : [],
+    );
     for (const key of keys) allTenants.push([i, key]);
-    return keys.length === 0 ? arg : { ...arg, ...Object.fromEntries(keys.map((key) => [key, null])) };
+    return keys.length === 0
+      ? arg
+      : { ...arg, ...Object.fromEntries(keys.map((key) => [key, null])) };
   });
   return { args: sent, allTenants };
 }
 
 /** The arguments `markAllTenants` was given, from what it sent. */
-export function restoreAllTenants(args: readonly unknown[], marks: readonly TenantMark[]): unknown[] {
+export function restoreAllTenants(
+  args: readonly unknown[],
+  marks: readonly TenantMark[],
+): unknown[] {
   const out = [...args];
   for (const [i, key] of marks) {
     const arg = out[i];

@@ -57,7 +57,9 @@ export interface WalCheckpointer {
 
 /** The wal_autocheckpoint value for a new connection to `dbPath` under `runtime`. */
 export function autoCheckpointPages(dbPath: string, runtime = currentStoreRuntime()): number {
-  return runtime?.checkpointsInBackground(path.resolve(dbPath)) ? BACKSTOP_CHECKPOINT_PAGES : INLINE_CHECKPOINT_PAGES;
+  return runtime?.checkpointsInBackground(path.resolve(dbPath))
+    ? BACKSTOP_CHECKPOINT_PAGES
+    : INLINE_CHECKPOINT_PAGES;
 }
 
 interface CheckpointWorker {
@@ -98,7 +100,10 @@ function newCheckpointWorker(
  * Checkpoints `dbPath` off the calling thread until `stop()`; the worker starts with the first checkpoint that is due.
  * Connections `runtime` opens meanwhile leave checkpoints to it; outside a runtime they still checkpoint inline.
  */
-export function startWalCheckpointer(dbPath: string, runtime = currentStoreRuntime()): WalCheckpointer {
+export function startWalCheckpointer(
+  dbPath: string,
+  runtime = currentStoreRuntime(),
+): WalCheckpointer {
   const key = path.resolve(dbPath);
   let worker: Worker | undefined;
   let exited: Promise<void> | undefined;

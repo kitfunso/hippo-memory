@@ -91,7 +91,11 @@ export interface Relation {
 export interface GraphRebuild {
   /** Applies `ops` from `opts.from` in one transaction, stopping at the first op past `opts.holdMs`. Each insert and
    * update is checked against the rows as they stand, so one a writer made stale since the diff's read is skipped. */
-  applyOps(tenantId: string, ops: readonly GraphOp[], opts: ApplyGraphOpsOptions): Promise<ApplyGraphOpsResult>;
+  applyOps(
+    tenantId: string,
+    ops: readonly GraphOp[],
+    opts: ApplyGraphOpsOptions,
+  ): Promise<ApplyGraphOpsResult>;
 }
 
 /** A soft (type,id) pointer to the authoritative object row a graph row descends from; survives a mirror forget/prune

@@ -60,10 +60,15 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
   isAvailable(): boolean {
     return this.enabled && this.embedder.isAvailable();
   }
-  async embed(texts: string[], role?: EmbeddingRole, call: EmbedCallOptions = {}): Promise<number[][]> {
+  async embed(
+    texts: string[],
+    role?: EmbeddingRole,
+    call: EmbedCallOptions = {},
+  ): Promise<number[][]> {
     // A model that cannot load fails the call, as an API outage does; items then run one at a time on the shared
     // pipeline.
-    if (texts.length > 0) await this.embedder.requirePipeline(this.model, withRequestSignal(call.signal));
+    if (texts.length > 0)
+      await this.embedder.requirePipeline(this.model, withRequestSignal(call.signal));
     const out: number[][] = [];
     for (const text of texts) {
       out.push(await this.embedder.embed(text, this.model, role));
@@ -198,7 +203,11 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     return this.enabled && !!envByName(this.keyEnv)?.trim();
   }
 
-  async embed(texts: string[], role?: EmbeddingRole, call: EmbedCallOptions = {}): Promise<number[][]> {
+  async embed(
+    texts: string[],
+    role?: EmbeddingRole,
+    call: EmbedCallOptions = {},
+  ): Promise<number[][]> {
     if (texts.length === 0) return [];
     const key = envByName(this.keyEnv)?.trim();
     if (!key) {
@@ -234,18 +243,28 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     // []-padded rows.
     if (vectors.length !== chunk.length) {
       throw new Error(
-        redact(`${this.kind} embeddings returned ${vectors.length} vectors for ${chunk.length} inputs`, key),
+        redact(
+          `${this.kind} embeddings returned ${vectors.length} vectors for ${chunk.length} inputs`,
+          key,
+        ),
       );
     }
     for (let i = 0; i < vectors.length; i++) {
       if (!vectors[i] || vectors[i].length === 0) {
-        throw new Error(redact(`${this.kind} embeddings returned an empty vector at index ${i}`, key));
+        throw new Error(
+          redact(`${this.kind} embeddings returned an empty vector at index ${i}`, key),
+        );
       }
     }
     return vectors;
   }
 
-  private async postChunk(chunk: string[], key: string, role?: EmbeddingRole, signal?: AbortSignal): Promise<Response> {
+  private async postChunk(
+    chunk: string[],
+    key: string,
+    role?: EmbeddingRole,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     const spec = API_PROVIDER_SPECS[this.kind];
     const url = `${this.baseUrl.replace(/\/$/, '')}/${spec.path}`;
     try {
@@ -284,15 +303,24 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
         detail = await readCappedText(resp, ERROR_BODY_MAX_BYTES);
       } catch (err) {
         // The error thrown below already carries the status; the body is only extra detail.
-        log.debug(`${this.kind} embeddings error body unreadable: ${errorMessage(err)}`, errorFields(err));
+        log.debug(
+          `${this.kind} embeddings error body unreadable: ${errorMessage(err)}`,
+          errorFields(err),
+        );
       }
       throw new Error(
-        redact(`${this.kind} embeddings HTTP ${resp.status}: ${detail.slice(0, ERROR_DETAIL_CHARS)}`, key),
+        redact(
+          `${this.kind} embeddings HTTP ${resp.status}: ${detail.slice(0, ERROR_DETAIL_CHARS)}`,
+          key,
+        ),
       );
     }
 
     try {
-      return await readCappedJson(resp, EMBED_REPLY_BASE_BYTES + inputs * EMBED_REPLY_BYTES_PER_INPUT);
+      return await readCappedJson(
+        resp,
+        EMBED_REPLY_BASE_BYTES + inputs * EMBED_REPLY_BYTES_PER_INPUT,
+      );
     } catch (err) {
       const msg = errorMessage(err);
       throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key), {
@@ -323,14 +351,19 @@ export interface ResolveProviderOptions {
 /** Build the active embedding provider from config (or an explicit override). A missing key never throws here (it
  * surfaces via `isAvailable()`); only an invalid config (e.g. insecure apiBaseUrl) throws, deliberately loud, so
  * hot-path callers wrap it. */
-export function resolveEmbeddingProvider(cfg: EmbeddingsConfig, opts: ResolveProviderOptions = {}): EmbeddingProvider {
+export function resolveEmbeddingProvider(
+  cfg: EmbeddingsConfig,
+  opts: ResolveProviderOptions = {},
+): EmbeddingProvider {
   const requested = opts.provider ?? cfg.provider ?? 'local';
   // An explicit embeddings.enabled=false hard-disables embedding for BOTH local and API providers; for API this
   // prevents unwanted paid off-box calls.
   const enabled = cfg.enabled !== false;
 
   if (requested === 'local') {
-    const embedder = opts.transformers ? createLocalEmbedder(opts.transformers) : sharedLocalEmbedder;
+    const embedder = opts.transformers
+      ? createLocalEmbedder(opts.transformers)
+      : sharedLocalEmbedder;
     return new LocalEmbeddingProvider(resolveEmbeddingModel(cfg, opts.model), enabled, embedder);
   }
   if (!isApiProviderKind(requested)) {
@@ -347,7 +380,10 @@ export function resolveEmbeddingProvider(cfg: EmbeddingsConfig, opts: ResolvePro
   // If no API model was chosen (config left the local default in place), fall back to the provider's flagship model
   // rather than POSTing a local model id.
   const requestedModel = (opts.model ?? cfg.model)?.trim();
-  const model = requestedModel && requestedModel !== DEFAULT_EMBEDDING_MODEL ? requestedModel : spec.defaultModel;
+  const model =
+    requestedModel && requestedModel !== DEFAULT_EMBEDDING_MODEL
+      ? requestedModel
+      : spec.defaultModel;
   const baseUrl = validateBaseUrl(cfg.apiBaseUrl, spec.defaultBaseUrl);
   const batchSize =
     cfg.batchSize !== undefined && Number.isInteger(cfg.batchSize) && cfg.batchSize > 0

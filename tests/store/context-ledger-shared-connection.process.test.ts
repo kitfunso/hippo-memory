@@ -37,7 +37,10 @@ let preloadPath: string;
 let logPath: string;
 
 function seedCli(content: string, extra: Partial<MemoryEntry> = {}) {
-  writeEntry(hippoDir, { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra });
+  writeEntry(hippoDir, {
+    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    ...extra,
+  });
 }
 
 function enablePromptRecall(root: string) {
@@ -63,7 +66,9 @@ beforeEach(() => {
 
 describe('the static and recall ledger rows share one connection', () => {
   it('writes both token_ledger inserts through the same DatabaseSync connection', () => {
-    seedCli('the deploy rollback plan for the postgres migration', { created: '2026-01-01T00:00:00.000Z' });
+    seedCli('the deploy rollback plan for the postgres migration', {
+      created: '2026-01-01T00:00:00.000Z',
+    });
     seedCli('PINNED: always check the rollback plan before deploy', { pinned: true });
 
     execFileSync(
@@ -82,7 +87,10 @@ describe('the static and recall ledger rows share one connection', () => {
       {
         env: { ...process.env, HIPPO_HOME: globalDir, F5_CONN_LOG: logPath },
         cwd: cliTmp,
-        input: JSON.stringify({ session_id: 'sess-f5-1', prompt: 'postgres migration rollback plan' }),
+        input: JSON.stringify({
+          session_id: 'sess-f5-1',
+          prompt: 'postgres migration rollback plan',
+        }),
         encoding: 'utf8',
       },
     );

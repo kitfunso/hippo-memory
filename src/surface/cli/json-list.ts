@@ -2,7 +2,10 @@
 
 /** Prints what `console.log(JSON.stringify({ [key]: items }, null, 2))` prints for every item `pages` yields, with one
  * page in hand at a time. */
-export async function printJsonList<T>(key: string, pages: AsyncIterable<readonly T[]>): Promise<void> {
+export async function printJsonList<T>(
+  key: string,
+  pages: AsyncIterable<readonly T[]>,
+): Promise<void> {
   const name = JSON.stringify(key);
   let pending: string | null = null;
   for await (const page of pages) {

@@ -59,7 +59,8 @@ function boolOff(name: FlagName): () => boolean {
 export function validateFlags(): string[] {
   const bad: string[] = [];
   for (const name of Object.keys(FLAGS)) {
-    if (flagState(name) === 'unknown') bad.push(`${name}=${JSON.stringify(raw(name)!.trim().slice(0, 40))}`);
+    if (flagState(name) === 'unknown')
+      bad.push(`${name}=${JSON.stringify(raw(name)!.trim().slice(0, 40))}`);
   }
   return bad;
 }
@@ -300,4 +301,6 @@ export const envGitHubToken = text('GITHUB_TOKEN');
 export const envGitHubWebhookSecret = text('GITHUB_WEBHOOK_SECRET');
 export const envGitHubWebhookSecretPrevious = text('GITHUB_WEBHOOK_SECRET_PREVIOUS');
 export const envGitHubWebhookSecretPreviousUntil = text('GITHUB_WEBHOOK_SECRET_PREVIOUS_UNTIL');
-export const envGitHubAllowUnknownInstallationFallback = bool('GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK');
+export const envGitHubAllowUnknownInstallationFallback = bool(
+  'GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK',
+);

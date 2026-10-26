@@ -56,7 +56,10 @@ function importFact(node, line) {
     typeOnly: clause.isTypeOnly || allTypes,
     names,
     hasDefault: Boolean(clause.name),
-    specifiers: named.map((e) => ({ name: bindingName(e), typeOnly: clause.isTypeOnly || e.isTypeOnly })),
+    specifiers: named.map((e) => ({
+      name: bindingName(e),
+      typeOnly: clause.isTypeOnly || e.isTypeOnly,
+    })),
   };
 }
 
@@ -71,7 +74,10 @@ function exportFact(node, line) {
     typeOnly: node.isTypeOnly || allTypes,
     names: named ? named.map(bindingName) : ['*'],
     hasDefault: false,
-    specifiers: (named ?? []).map((e) => ({ name: bindingName(e), typeOnly: node.isTypeOnly || e.isTypeOnly })),
+    specifiers: (named ?? []).map((e) => ({
+      name: bindingName(e),
+      typeOnly: node.isTypeOnly || e.isTypeOnly,
+    })),
   };
 }
 
@@ -86,18 +92,32 @@ function isProcessEnvRead(node) {
     : ts.isBinaryExpression(node) && node.operatorToken.kind === K.EqualsToken
       ? node.left
       : null;
-  const source = ts.isVariableDeclaration(node) ? node.initializer : ts.isBinaryExpression(node) ? node.right : null;
+  const source = ts.isVariableDeclaration(node)
+    ? node.initializer
+    : ts.isBinaryExpression(node)
+      ? node.right
+      : null;
   if (!pattern || !source || !isProcess(source)) return false;
-  if (ts.isObjectBindingPattern(pattern)) return pattern.elements.some((e) => bindingName(e) === 'env');
+  if (ts.isObjectBindingPattern(pattern))
+    return pattern.elements.some((e) => bindingName(e) === 'env');
   return (
     ts.isObjectLiteralExpression(pattern) &&
     pattern.properties.some(
-      (p) => p.name?.text === 'env' || (ts.isShorthandPropertyAssignment(p) && p.name.text === 'env'),
+      (p) =>
+        p.name?.text === 'env' || (ts.isShorthandPropertyAssignment(p) && p.name.text === 'env'),
     )
   );
 }
 
-const ALL = ['imports', 'dynamic', 'calls', 'envReads', 'exportedFunctions', 'strings', 'identifiers'];
+const ALL = [
+  'imports',
+  'dynamic',
+  'calls',
+  'envReads',
+  'exportedFunctions',
+  'strings',
+  'identifiers',
+];
 const DYNAMIC_IMPORT = /\bimport\s*\(/;
 const WALKED = ['calls', 'envReads', 'strings', 'identifiers'];
 
@@ -151,10 +171,14 @@ function readDeep(sourceFile, want, facts, lineOf) {
       }
     } else if (
       want.has('strings') &&
-      (ts.isStringLiteralLike(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n))
+      (ts.isStringLiteralLike(n) ||
+        ts.isTemplateHead(n) ||
+        ts.isTemplateMiddle(n) ||
+        ts.isTemplateTail(n))
     ) {
       facts.strings.push({ text: n.text, line: lineOf(n) });
-    } else if (want.has('identifiers') && ts.isIdentifier(n)) facts.identifiers.push({ name: n.text, line: lineOf(n) });
+    } else if (want.has('identifiers') && ts.isIdentifier(n))
+      facts.identifiers.push({ name: n.text, line: lineOf(n) });
     if (want.has('envReads') && isProcessEnvRead(n)) facts.envReads.push({ line: lineOf(n) });
     ts.forEachChild(n, visit);
   };

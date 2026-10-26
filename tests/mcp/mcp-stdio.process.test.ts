@@ -42,7 +42,9 @@ describe('parseFrame', () => {
   });
 
   it('handles back-to-back NDJSON messages', () => {
-    const buf = Buffer.from('{"jsonrpc":"2.0","id":1,"method":"a"}\n{"jsonrpc":"2.0","id":2,"method":"b"}\n');
+    const buf = Buffer.from(
+      '{"jsonrpc":"2.0","id":1,"method":"a"}\n{"jsonrpc":"2.0","id":2,"method":"b"}\n',
+    );
     const first = parseFrame(buf);
     expect(first.kind).toBe('message');
     if (first.kind !== 'message') return;
@@ -138,6 +140,8 @@ describe('hippo mcp stdio', () => {
     expect(listResp.id).toBe(2);
     expect(Array.isArray(listResp.result?.tools)).toBe(true);
     // A tools/list on stdio has no store yet, so it lists every tool.
-    expect(listResp.result.tools.map((t: { name: string }) => t.name)).toEqual(TOOLS.map((t) => t.name));
+    expect(listResp.result.tools.map((t: { name: string }) => t.name)).toEqual(
+      TOOLS.map((t) => t.name),
+    );
   });
 });

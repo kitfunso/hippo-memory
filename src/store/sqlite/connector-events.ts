@@ -24,9 +24,15 @@ import type {
   TenantRoute,
 } from '../../base/ports/store/connectors.js';
 
-const queueOf = (connector: DeadLetterConnector) => (connector === 'slack' ? SLACK_DLQ : GITHUB_DLQ);
+const queueOf = (connector: DeadLetterConnector) =>
+  connector === 'slack' ? SLACK_DLQ : GITHUB_DLQ;
 
-function deadLetters(db: DatabaseSyncLike, connector: DeadLetterConnector, tenantId: string, which: DeadLetterQuery) {
+function deadLetters(
+  db: DatabaseSyncLike,
+  connector: DeadLetterConnector,
+  tenantId: string,
+  which: DeadLetterQuery,
+) {
   const queue = queueOf(connector);
   if (!('id' in which)) return queue.list(db, tenantId, which.limit);
   const row = queue.get(db, tenantId, which.id);
@@ -43,7 +49,12 @@ function cursor(db: DatabaseSyncLike, key: CursorKey): string | null {
     : githubCursor(db, key.tenantId, key.repo, key.stream);
 }
 
-function saveCursor(db: DatabaseSyncLike, key: CursorKey, value: string, opts: { keepSaved?: boolean } = {}): void {
+function saveCursor(
+  db: DatabaseSyncLike,
+  key: CursorKey,
+  value: string,
+  opts: { keepSaved?: boolean } = {},
+): void {
   const keepSaved = opts.keepSaved === true;
   if (key.connector === 'slack') saveSlackCursor(db, key.tenantId, key.channelId, value, keepSaved);
   else saveGitHubCursor(db, key, value, keepSaved);
@@ -55,7 +66,8 @@ const connectorBodies: Bodies<Omit<ConnectorEvents, 'deadLetters' | 'parkDeadLet
   claimDelivery,
   releaseDelivery,
   route,
-  markDeadLetterRetried: (db, connector, tenantId, id) => queueOf(connector).markRetried(db, tenantId, id),
+  markDeadLetterRetried: (db, connector, tenantId, id) =>
+    queueOf(connector).markRetried(db, tenantId, id),
   cursor,
   saveCursor,
   slackWorkspaces: listSlackWorkspaces,
@@ -68,10 +80,20 @@ export function sqliteConnectorEvents(on: OnHandle): ConnectorEvents {
     ...bound(on, connectorBodies),
     parkDeadLetter: (letter) =>
       answered(() =>
-        on((db) => (letter.connector === 'slack' ? SLACK_DLQ.insert(db, letter) : GITHUB_DLQ.insert(db, letter))),
+        on((db) =>
+          letter.connector === 'slack'
+            ? SLACK_DLQ.insert(db, letter)
+            : GITHUB_DLQ.insert(db, letter),
+        ),
       ),
     // SAFETY: queueOf(connector) is the queue holding C's rows, so what it reads is DeadLetterRows[C].
-    deadLetters: <C extends DeadLetterConnector>(connector: C, tenantId: string, which: DeadLetterQuery) =>
-      answered(() => on((db) => deadLetters(db, connector, tenantId, which) as DeadLetterRows[C][])),
+    deadLetters: <C extends DeadLetterConnector>(
+      connector: C,
+      tenantId: string,
+      which: DeadLetterQuery,
+    ) =>
+      answered(() =>
+        on((db) => deadLetters(db, connector, tenantId, which) as DeadLetterRows[C][]),
+      ),
   };
 }

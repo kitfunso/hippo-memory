@@ -19,7 +19,11 @@ import {
   type SearchResult,
   type ResultCost,
 } from '../../base/rank/search-types.js';
-import { startQueryEmbedDeadline, type HybridVectorCandidates, type VectorSource } from '../search/vector.js';
+import {
+  startQueryEmbedDeadline,
+  type HybridVectorCandidates,
+  type VectorSource,
+} from '../search/vector.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 import type { TenantId } from '../../base/util/tenant.js';
@@ -103,7 +107,11 @@ export async function searchBothHybrid(
   // Recall mode: push the scope predicate into SQL like api.recall, so quarantine/private rows never enter the
   // candidates, shadow duplicates or use budget.
   // The JS post-filter below is the regex-only `<source>:private:*` half plus defense in depth on exact match.
-  const loadEntries = async ({ store }: { readonly store: SharingStore }): Promise<MemoryEntry[]> => {
+  const loadEntries = async ({
+    store,
+  }: {
+    readonly store: SharingStore;
+  }): Promise<MemoryEntry[]> => {
     const { sharing } = store;
     if (!(await store.folderFiles.home()).exists) return [];
     return recallScope
@@ -131,17 +139,33 @@ export async function searchBothHybrid(
   const vectorCandidates: HybridVectorCandidates = {
     tenantId,
     scope: recallScope
-      ? recallScopeFilter(recallScope.requested, recallScope.additive ? 'additive' : 'exact', recallScope.ownScope)
+      ? recallScopeFilter(
+          recallScope.requested,
+          recallScope.additive ? 'additive' : 'exact',
+          recallScope.ownScope,
+        )
       : undefined,
     includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
     admit,
   };
-  const sources = { local: folderVectorSource(local, embedderFor), global: folderVectorSource(global, embedderFor) };
-  return rankBothStores(query, sources, { local: localEntries, global: globalEntries }, vectorCandidates, options);
+  const sources = {
+    local: folderVectorSource(local, embedderFor),
+    global: folderVectorSource(global, embedderFor),
+  };
+  return rankBothStores(
+    query,
+    sources,
+    { local: localEntries, global: globalEntries },
+    vectorCandidates,
+    options,
+  );
 }
 
 /** The store's own vectors, with the embedding provider its folder's config names. */
-function folderVectorSource({ store, config }: ConfiguredFolder<SharingStore>, embedderFor: EmbedderFor): VectorSource {
+function folderVectorSource(
+  { store, config }: ConfiguredFolder<SharingStore>,
+  embedderFor: EmbedderFor,
+): VectorSource {
   return vectorSourceOf({ store, config, onHippoDb: true, embedderFor });
 }
 
@@ -229,7 +253,18 @@ export async function rankBothStores(
     queryEmbedDeadline: startQueryEmbedDeadline(options.runtime?.queryEmbedTimeoutMs),
   };
   const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
-  const localResults = await hybridSearch(query, entries.local, { ...side(false), source: sources.local });
-  const globalResults = await hybridSearch(query, entries.global, { ...side(true), source: sources.global });
-  return fitBudget(mergeStoreResults(localResults, globalResults, localBump), budget, minResults ?? 1, cost);
+  const localResults = await hybridSearch(query, entries.local, {
+    ...side(false),
+    source: sources.local,
+  });
+  const globalResults = await hybridSearch(query, entries.global, {
+    ...side(true),
+    source: sources.global,
+  });
+  return fitBudget(
+    mergeStoreResults(localResults, globalResults, localBump),
+    budget,
+    minResults ?? 1,
+    cost,
+  );
 }

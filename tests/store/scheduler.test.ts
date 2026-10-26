@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 
@@ -40,10 +47,16 @@ describe('scheduler', () => {
 
     registerWorkspace(globalRoot, repoB);
     registerWorkspace(globalRoot, repoA);
-    expect(registryOf(globalRoot)).toEqual({ version: 1, workspaces: [norm(repoA), norm(repoB)].sort() });
+    expect(registryOf(globalRoot)).toEqual({
+      version: 1,
+      workspaces: [norm(repoA), norm(repoB)].sort(),
+    });
 
     registerWorkspace(globalRoot, repoA);
-    expect(registryOf(globalRoot)).toEqual({ version: 1, workspaces: [norm(repoA), norm(repoB)].sort() });
+    expect(registryOf(globalRoot)).toEqual({
+      version: 1,
+      workspaces: [norm(repoA), norm(repoB)].sort(),
+    });
   });
 
   it('moves a damaged registry aside and writes a fresh one', () => {
@@ -56,7 +69,9 @@ describe('scheduler', () => {
     registerWorkspace(globalRoot, repo);
 
     expect(registryOf(globalRoot)).toEqual({ version: 1, workspaces: [norm(repo)] });
-    const aside = readdirSync(globalRoot).filter((name) => name.startsWith('workspaces.json.corrupt-'));
+    const aside = readdirSync(globalRoot).filter((name) =>
+      name.startsWith('workspaces.json.corrupt-'),
+    );
     expect(aside).toHaveLength(1);
     expect(readFileSync(join(globalRoot, aside[0]), 'utf8')).toBe('{ not json');
     expect(existsSync(registryFile)).toBe(true);
@@ -110,7 +125,10 @@ describe('hippo daily-runner', () => {
     mkdirSync(globalRoot);
     mkdirSync(join(workspace, '.hippo'), PRIVATE_DIR);
     initTestStore(join(workspace, '.hippo'));
-    writeFileSync(workspaceRegistryPath(globalRoot), JSON.stringify({ version: 1, workspaces: [workspace] }));
+    writeFileSync(
+      workspaceRegistryPath(globalRoot),
+      JSON.stringify({ version: 1, workspaces: [workspace] }),
+    );
     // The runner runs in process so coverage sees it; each step it starts is still a real child with a real deadline.
     const run = (extraEnv: Record<string, string>) =>
       runCliAs(['daily-runner'], {
@@ -131,7 +149,9 @@ describe('hippo daily-runner', () => {
     expect(cut.stderr).toMatch(
       /error: daily-runner failed in .*repo during `sleep`: timed out after 1 ms and was stopped .*workspace=.*repo/,
     );
-    expect(cut.stderr).toMatch(/daily-runner failed in .*workspace=.* errorClass=\w+ stack=\S*Error.* at /);
+    expect(cut.stderr).toMatch(
+      /daily-runner failed in .*workspace=.* errorClass=\w+ stack=\S*Error.* at /,
+    );
     expect(cut.status).toBe(1);
 
     // Control: the same workspace inside the default deadline is a clean run.

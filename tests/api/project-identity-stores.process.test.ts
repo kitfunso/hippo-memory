@@ -87,7 +87,8 @@ function compaction(id: string, origin: string, cwd: string): void {
   );
 }
 
-const texts = (r: Awaited<ReturnType<typeof contextGet>>): string[] => r.entries.map((e) => e.entry.content);
+const texts = (r: Awaited<ReturnType<typeof contextGet>>): string[] =>
+  r.entries.map((e) => e.entry.content);
 const sync = (cwd: string) =>
   importAtSessionEnd(cwd, undefined, {
     run: TEST_RUN,
@@ -123,7 +124,12 @@ async function nextProcess() {
 const prefixFor = (cwd: string, origin: string): string =>
   containerPrefix(
     'claude-code',
-    containerId(projectNotes(w, cwd), 'project', { platform: process.platform, files: diskAgentFiles }, origin),
+    containerId(
+      projectNotes(w, cwd),
+      'project',
+      { platform: process.platform, files: diskAgentFiles },
+      origin,
+    ),
   );
 
 describe('two repos named api in one global store', () => {
@@ -143,10 +149,17 @@ describe('two repos named api in one global store', () => {
   });
 
   it('keeps new rows apart and shows the old rows to both through the legacy name', async () => {
-    expect(resolveProjectIdentity(a)).toMatchObject({ name: 'github.com/acme-pay/api', legacyName: 'api' });
+    expect(resolveProjectIdentity(a)).toMatchObject({
+      name: 'github.com/acme-pay/api',
+      legacyName: 'api',
+    });
     for (const mode of [{ pinnedOnly: true }, { pinnedOnly: false }, { q: 'api' }]) {
-      const inA = texts(await contextGet(ctxFor(w.global), { currentProject: resolveProjectIdentity(a), ...mode }));
-      const inB = texts(await contextGet(ctxFor(w.global), { currentProject: resolveProjectIdentity(b), ...mode }));
+      const inA = texts(
+        await contextGet(ctxFor(w.global), { currentProject: resolveProjectIdentity(a), ...mode }),
+      );
+      const inB = texts(
+        await contextGet(ctxFor(w.global), { currentProject: resolveProjectIdentity(b), ...mode }),
+      );
       expect(inA).toEqual(expect.arrayContaining([OLD, NEW_A]));
       expect(inA).not.toContain(NEW_B);
       expect(inB).toEqual(expect.arrayContaining([OLD, NEW_B]));
@@ -159,8 +172,16 @@ describe('two repos named api in one global store', () => {
     compaction('c-b', 'api', b);
     const plan = await planAt(w.global);
     expect(plan.folds).toEqual([]);
-    expect(plan.collisions).toEqual([{ name: 'api', ids: ['github.com/acme-pay/api', 'github.com/acme-search/api'] }]);
-    const report = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd: a, home: w.home, version: 'test' });
+    expect(plan.collisions).toEqual([
+      { name: 'api', ids: ['github.com/acme-pay/api', 'github.com/acme-search/api'] },
+    ]);
+    const report = await runDoctor({
+      diagnosticsBodies,
+      tenantId: 'default',
+      cwd: a,
+      home: w.home,
+      version: 'test',
+    });
     const check = report.checks.find((c) => c.id === 'projects');
     expect(check).toMatchObject({ status: 'warn' });
     expect(check?.detail).toContain('api (github.com/acme-pay/api, github.com/acme-search/api)');
@@ -243,7 +264,11 @@ describe('the upgrade re-sync', () => {
     expect(before.map((e) => e.originProject)).toEqual(['api', 'api']);
 
     globalConfig(true);
-    expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0, setAside: 0 });
+    expect(toolTally(await sync(api), 'claude-code')).toMatchObject({
+      renamed: 2,
+      imported: 0,
+      setAside: 0,
+    });
     const after = liveRows(w.global);
     expect(after.map((e) => e.id).sort()).toEqual(before.map((e) => e.id).sort());
     for (const e of after) {
@@ -258,7 +283,11 @@ describe('the upgrade re-sync', () => {
       source: expect.stringContaining(prefixFor(api, 'github.com/acme/api')),
     });
 
-    expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ renamed: 0, imported: 0, unchanged: 2 });
+    expect(toolTally(await sync(api), 'claude-code')).toMatchObject({
+      renamed: 0,
+      imported: 0,
+      unchanged: 2,
+    });
     note(projectNotes(w, api), 'n2.md', NOTES[2]);
     expect(toolTally(await sync(api), 'claude-code')).toMatchObject({ restored: 1, imported: 0 });
   });
@@ -313,9 +342,16 @@ describe('the upgrade re-sync', () => {
     const next = await nextProcess();
     expect((await next.merge('old-svc', 'new-svc')).setAside).toEqual([]);
 
-    expect(toolTally(await next.sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
+    expect(toolTally(await next.sync(svc), 'claude-code')).toMatchObject({
+      renamed: 1,
+      imported: 0,
+    });
     expect(liveRows(w.global)).toMatchObject([
-      { content: NOTES[0], originProject: 'new-svc', source: expect.stringContaining(prefixFor(svc, 'new-svc')) },
+      {
+        content: NOTES[0],
+        originProject: 'new-svc',
+        source: expect.stringContaining(prefixFor(svc, 'new-svc')),
+      },
     ]);
   });
 });
@@ -326,11 +362,15 @@ describe('a project store with an id', () => {
     const store = join(svc, '.hippo');
     initTestStore(store);
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
-    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe('svc');
+    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe(
+      'svc',
+    );
 
     const r = await projectNameRepair(cliApiContext(store, T), { dryRun: false });
     expect(r.folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
-    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe('github.com/acme/svc');
+    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe(
+      'github.com/acme/svc',
+    );
     expect((await planAt(store)).folds).toEqual([]);
   });
 
@@ -356,8 +396,13 @@ describe('repair on sleep', () => {
     initTestStore(store);
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
     const first = await projectNameRepairOnce(cliApiContext(store, T));
-    expect(first).toMatchObject({ folds: [{ from: 'svc', into: 'github.com/acme/svc' }], backup: expect.any(String) });
-    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe('github.com/acme/svc');
+    expect(first).toMatchObject({
+      folds: [{ from: 'svc', into: 'github.com/acme/svc' }],
+      backup: expect.any(String),
+    });
+    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.originProject).toBe(
+      'github.com/acme/svc',
+    );
     pinned(store, 'A later row under the old name.', 'svc');
     expect(await projectNameRepairOnce(cliApiContext(store, T))).toBeNull();
   });
@@ -369,6 +414,8 @@ describe('repair on sleep', () => {
     compaction('c-a', 'api', a);
     expect(await projectNameRepairOnce(cliApiContext(w.global, T))).toBeNull();
     expect(loadAllEntries(w.global, 'default').map((e) => e.originProject)).toEqual(['api']);
-    expect((await planAt(w.global)).folds).toEqual([{ from: 'api', into: 'github.com/acme-pay/api' }]);
+    expect((await planAt(w.global)).folds).toEqual([
+      { from: 'api', into: 'github.com/acme-pay/api' },
+    ]);
   });
 });

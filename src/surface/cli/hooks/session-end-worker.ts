@@ -1,5 +1,9 @@
 // The detached session-end worker (`__session-end-worker`): sleep, capture, digest and the handoff, each step logged.
-import { readSessionScan, recordSessionDigest, type SessionScan } from '../../capture/session-digest.js';
+import {
+  readSessionScan,
+  recordSessionDigest,
+  type SessionScan,
+} from '../../capture/session-digest.js';
 import type { ProjectRef } from '../../../base/scope/project-identity.js';
 import { runCapture } from '../../capture/command.js';
 import { transcriptWorkingState } from '../../capture/working-state.js';
@@ -12,7 +16,11 @@ import {
   turnsAfter,
   type WorkerMode,
 } from '../../capture/session-worker.js';
-import { type HeldLog, heldLog, sessionEndWork as runSessionEnd } from '../../../api/session-end.js';
+import {
+  type HeldLog,
+  heldLog,
+  sessionEndWork as runSessionEnd,
+} from '../../../api/session-end.js';
 import { cliApiContext } from '../api-context.js';
 import { type CliFlags, type CommandContext, boolFlag, stringFlag } from '../flag-values.js';
 import {
@@ -23,13 +31,24 @@ import {
   reportSessionEndFailure,
 } from '../hook-runtime.js';
 
-export async function handleSessionEndWorker({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  await runSessionWorker(stringFlag(flags, 'session-id') ?? null, boolFlag(flags, 'turn') ? 'turn' : 'full', (mode) =>
-    sessionEndWork(hippoRoot, tenantId, flags, mode),
+export async function handleSessionEndWorker({
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
+  await runSessionWorker(
+    stringFlag(flags, 'session-id') ?? null,
+    boolFlag(flags, 'turn') ? 'turn' : 'full',
+    (mode) => sessionEndWork(hippoRoot, tenantId, flags, mode),
   );
 }
 
-async function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mode: WorkerMode): Promise<void> {
+async function sessionEndWork(
+  hippoRoot: string,
+  tenantId: string,
+  flags: CliFlags,
+  mode: WorkerMode,
+): Promise<void> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
   const held = heldLog((line) => appendSessionEndCloseLog(logFile, line));
   await flushingOnExit(held, () => runSessionEndWork(hippoRoot, tenantId, flags, mode, held));

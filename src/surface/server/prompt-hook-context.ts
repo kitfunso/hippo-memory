@@ -23,7 +23,10 @@ export async function promptHookContext(
 
 /** The reach every root probes for a store kept in a folder, from the folder its port names; a store without
  * folderFiles keeps the Context's default, one project and no global store. */
-async function folderReach(store: HippoStore, opts: PromptHookOptions | undefined): Promise<ContextReach | undefined> {
+async function folderReach(
+  store: HippoStore,
+  opts: PromptHookOptions | undefined,
+): Promise<ContextReach | undefined> {
   if (!hasGroup(store, 'folderFiles')) return undefined;
   const { folder } = await store.folderFiles.home();
   const reach = defaultReach(folder, store, opts?.sharedStore, undefined, entryHost);

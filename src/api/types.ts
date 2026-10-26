@@ -3,7 +3,12 @@
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
 import type { HippoStore, StoreReach } from '../base/ports/store.js';
 import type { HippoConfig } from '../base/config/config.js';
-import type { GlobalTargetGroup, OptionalGroup, SleepGroup, StoreWith } from '../base/ports/store.js';
+import type {
+  GlobalTargetGroup,
+  OptionalGroup,
+  SleepGroup,
+  StoreWith,
+} from '../base/ports/store.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
 import type { InfraPorts } from '../base/ports/infra.js';
@@ -43,7 +48,10 @@ export interface ContextReach extends Omit<StoreReach, 'global' | 'globalTarget'
 }
 
 /** The global write target a host builds: without `embedderFor` the context's own embedder embeds the copy. */
-export type GlobalTargetInReach = Omit<ConfiguredFolder<StoreWith<GlobalTargetGroup>>, 'embedderFor'> &
+export type GlobalTargetInReach = Omit<
+  ConfiguredFolder<StoreWith<GlobalTargetGroup>>,
+  'embedderFor'
+> &
   Partial<Pick<ConfiguredFolder<StoreWith<GlobalTargetGroup>>, 'embedderFor'>>;
 
 export interface Context {
@@ -71,7 +79,9 @@ export function strengthOf(ctx: Pick<Context, 'infra' | 'config'>): StrengthMode
 }
 
 /** A Context as a published entry takes it: without `infra`, the entry fills in the real ports. */
-export type EntryContext<C extends Context = Context> = Omit<C, 'infra'> & { readonly infra?: InfraPorts };
+export type EntryContext<C extends Context = Context> = Omit<C, 'infra'> & {
+  readonly infra?: InfraPorts;
+};
 
 /** A root's reach with the global store's config loaded beside it; `configAt` is the root's own loader, and a promote
  * embeds its copy with `embedderFor`. */
@@ -88,7 +98,8 @@ export function contextReach(
     return last.config;
   };
   let withConfig: ContextReach = rest;
-  if (global !== undefined) withConfig = { ...withConfig, global: { ...global, config: at(global.root) } };
+  if (global !== undefined)
+    withConfig = { ...withConfig, global: { ...global, config: at(global.root) } };
   if (globalTarget !== undefined) {
     withConfig = {
       ...withConfig,

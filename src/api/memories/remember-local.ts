@@ -4,7 +4,11 @@
 // what comes back.
 
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../base/memory/entry.js';
-import { embedMemoryInto, folderEmbedTarget, type EmbedOutcome } from '../../domain/search/embed-memories.js';
+import {
+  embedMemoryInto,
+  folderEmbedTarget,
+  type EmbedOutcome,
+} from '../../domain/search/embed-memories.js';
 import { captureError } from '../../domain/learn/autolearn.js';
 import { extractFacts, storeExtractedFacts } from '../../domain/learn/extract.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -81,8 +85,15 @@ function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutco
 
 /** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and never awaited. A
  * refused value throws as `remember` does. */
-export async function rememberLocally(ctx: Context, input: LocalRememberInput): Promise<LocalRememberOutcome> {
-  const schemaFit = await ctx.store.contextReads.schemaFit(ctx.tenantId, input.content, input.fitTags ?? input.tags);
+export async function rememberLocally(
+  ctx: Context,
+  input: LocalRememberInput,
+): Promise<LocalRememberOutcome> {
+  const schemaFit = await ctx.store.contextReads.schemaFit(
+    ctx.tenantId,
+    input.content,
+    input.fitTags ?? input.tags,
+  );
   const written = await remember(ctx, {
     content: input.content,
     kind: input.kind,

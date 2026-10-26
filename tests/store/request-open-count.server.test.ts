@@ -39,7 +39,10 @@ const opened: string[] = [];
 function countConnections(): Array<{ mockRestore(): void }> {
   return (['exec', 'prepare'] as const).map((method) => {
     const original = DatabaseSync.prototype[method];
-    return vi.spyOn(DatabaseSync.prototype, method).mockImplementation(function (this: Connection, ...args: never[]) {
+    return vi.spyOn(DatabaseSync.prototype, method).mockImplementation(function (
+      this: Connection,
+      ...args: never[]
+    ) {
       if (!seen.has(this)) {
         seen.add(this);
         opened.push(this.location() ?? '');
@@ -96,7 +99,10 @@ beforeAll(async () => {
   // A global store left by another file in this worker would add its own open to every recall.
   vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
   const opts = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS };
-  writeEntry(root, createMemory('the postgres migration needs a rollback plan and a dry run', opts));
+  writeEntry(
+    root,
+    createMemory('the postgres migration needs a rollback plan and a dry run', opts),
+  );
   writeEntry(root, createMemory('deploy windows are Tuesday and Thursday afternoons only', opts));
   spies = countConnections();
   // Boot opens the held connection, so every count below is the requests' own.
@@ -121,7 +127,9 @@ describe('store opens per request', () => {
   it("POST /v1/memories opens no connection on the server thread, its write running on the store's writer thread", async () => {
     expect(
       await opensDuring(() =>
-        call('POST', '/v1/memories', { content: 'canary rollouts start at five percent of traffic' }),
+        call('POST', '/v1/memories', {
+          content: 'canary rollouts start at five percent of traffic',
+        }),
       ),
     ).toEqual({});
   });
@@ -144,7 +152,9 @@ describe('store opens per request', () => {
         call('GET', '/v1/memories?q=rollback'),
         call('GET', '/v1/memories?q=deploy'),
         call('POST', '/mcp', recallOverMcp),
-        call('POST', '/v1/memories', { content: 'the staging database is rebuilt every Sunday night' }),
+        call('POST', '/v1/memories', {
+          content: 'the staging database is rebuilt every Sunday night',
+        }),
       ]));
     expect(await opensDuring(requests)).toEqual({});
   });
@@ -172,7 +182,10 @@ describe('stdio MCP tool calls', () => {
     };
     const reply = (id: number, query: string) =>
       cliStdioHost().runRequest(() =>
-        handleMcpRequest({ ...recallOverMcp, id, params: { name: 'hippo_recall', arguments: { query } } }, ctx),
+        handleMcpRequest(
+          { ...recallOverMcp, id, params: { name: 'hippo_recall', arguments: { query } } },
+          ctx,
+        ),
       );
     let replies: Array<McpResponse | null> = [];
     const counts = await opensDuring(async () => {

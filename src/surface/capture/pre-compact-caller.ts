@@ -4,7 +4,12 @@ import type { Context, EntryContext } from '../../api/types.js';
 import { PRE_COMPACT_INSTRUCTION } from './compaction-record.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
-import { assertTrigger, bindCaller, callerInHoldout, checkedWorkingState } from './caller-session.js';
+import {
+  assertTrigger,
+  bindCaller,
+  callerInHoldout,
+  checkedWorkingState,
+} from './caller-session.js';
 import { mergeWorkingState, type WorkingState } from '../../base/session/working-state.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import { withEntryInfra } from '../entry-infra.js';
@@ -49,8 +54,14 @@ export async function preCompactForCaller(
     transcriptPath: null,
   };
   const { compactions } = ctx.store;
-  const recordId = await logged('compaction record not started', () => compactions.start(ctx.tenantId, start));
-  if (state !== null && (await saveOwnerSnapshot(ctx, req.sessionId, key, state)) && recordId !== null) {
+  const recordId = await logged('compaction record not started', () =>
+    compactions.start(ctx.tenantId, start),
+  );
+  if (
+    state !== null &&
+    (await saveOwnerSnapshot(ctx, req.sessionId, key, state)) &&
+    recordId !== null
+  ) {
     // Marked under ctx.tenantId, which the environment's tenant may not be.
     await logged('compaction record not marked with its snapshot', () =>
       compactions.markSnapshotSaved(ctx.tenantId, recordId),
@@ -67,10 +78,14 @@ async function saveOwnerSnapshot(
   state: WorkingState,
 ): Promise<boolean> {
   const { sessions } = ctx.store;
-  const existing = await logged('snapshot not loaded', () => sessions.loadSnapshot(ctx.tenantId, {}, key));
+  const existing = await logged('snapshot not loaded', () =>
+    sessions.loadSnapshot(ctx.tenantId, {}, key),
+  );
   const merged = mergeWorkingState(state, existing, sessionId);
   if (merged === null) return false;
   const snapshot = { ...merged, source: 'pre-compact', sessionId };
-  const saved = await logged('snapshot not saved', () => sessions.save(ctx.tenantId, 'snapshot', snapshot, key));
+  const saved = await logged('snapshot not saved', () =>
+    sessions.save(ctx.tenantId, 'snapshot', snapshot, key),
+  );
   return saved !== null;
 }

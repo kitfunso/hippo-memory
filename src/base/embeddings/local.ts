@@ -36,7 +36,9 @@ function entryUrl(name: string): string | null {
   // import.meta.resolve is missing under some module runners (vitest's included), so the require-based resolve stands
   // in there.
   const viaImport =
-    'resolve' in import.meta ? ignoringCodes(NOT_INSTALLED, () => import.meta.resolve(name)) : undefined;
+    'resolve' in import.meta
+      ? ignoringCodes(NOT_INSTALLED, () => import.meta.resolve(name))
+      : undefined;
   if (viaImport !== undefined) return viaImport;
   const viaRequire = ignoringCodes(NOT_INSTALLED, () => _require.resolve(name));
   return viaRequire === undefined ? null : pathToFileURL(viaRequire).href;
@@ -49,7 +51,10 @@ export function isEmbeddingAvailable(): boolean {
   return (installed ??= resolveTransformersPackage() !== null);
 }
 
-export function resolveEmbeddingModel(embeddings: EmbeddingsConfig, explicitModel?: string): string {
+export function resolveEmbeddingModel(
+  embeddings: EmbeddingsConfig,
+  explicitModel?: string,
+): string {
   const direct = explicitModel?.trim();
   if (direct) return direct;
 
@@ -57,7 +62,10 @@ export function resolveEmbeddingModel(embeddings: EmbeddingsConfig, explicitMode
     const configured = embeddings.model?.trim();
     if (configured) return configured;
   } catch (err) {
-    log.warn(`embedding model config unreadable, using the default model: ${errorMessage(err)}`, errorFields(err));
+    log.warn(
+      `embedding model config unreadable, using the default model: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
 
   return DEFAULT_EMBEDDING_MODEL;

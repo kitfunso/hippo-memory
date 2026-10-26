@@ -63,7 +63,9 @@ describe('api.sleep', () => {
 
       expect(result.dryRun).toBe(true);
       expect(result.removed).toBe(0);
-      expect((await contextGet(ctx, { currentProject: cwdProject(), budget: 1500 })).entries).toHaveLength(1);
+      expect(
+        (await contextGet(ctx, { currentProject: cwdProject(), budget: 1500 })).entries,
+      ).toHaveLength(1);
       // H10: the preview reports what a real sleep would dedupe and audit.
       expect(result.deduped).toBeUndefined();
       expect(result.audit).toEqual({ errorsRemoved: 0, warningCount: 1 });

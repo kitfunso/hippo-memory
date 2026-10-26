@@ -4,7 +4,12 @@ import {
   REPLAY_AFTER_MS,
   TRANSCRIPT_FILL_WINDOW_MS,
 } from '../../base/session/compaction-timing.js';
-import { errorFields, errorMessage, log as hippoLog, reportCompactionFailure } from '../../base/util/log.js';
+import {
+  errorFields,
+  errorMessage,
+  log as hippoLog,
+  reportCompactionFailure,
+} from '../../base/util/log.js';
 import { isSqliteBusy, type DatabaseSyncLike } from '../../db/index.js';
 import {
   closeStartedWithoutSummary,
@@ -59,7 +64,11 @@ const noteTo =
 const iso = (ms: number): string => new Date(ms).toISOString();
 
 /** The one place a record becomes the argument saveItems takes. */
-function itemContext(tenantId: string, record: CompactionRef, items: readonly string[]): ItemContext {
+function itemContext(
+  tenantId: string,
+  record: CompactionRef,
+  items: readonly string[],
+): ItemContext {
   return {
     tenantId,
     recordId: record.id,
@@ -141,11 +150,20 @@ function saveCompaction(on: OnHandle, save: CompactionSave): CompactionSaveOutco
 
 /** A row that will not map is skipped and a record that throws is noted, so the rest still run until the deadline; a
  * held lock stops the run, as every later row would wait on it too. */
-function saveStalled(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, opts: StalledOptions): StalledSaved {
+function saveStalled(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  tenantId: string,
+  opts: StalledOptions,
+): StalledSaved {
   const notes: string[] = [];
   const log = noteTo(notes);
   let saved = 0;
-  for (const row of stalledSummarizedRows(db, tenantId, iso(files.clock().getTime() - REPLAY_AFTER_MS))) {
+  for (const row of stalledSummarizedRows(
+    db,
+    tenantId,
+    iso(files.clock().getTime() - REPLAY_AFTER_MS),
+  )) {
     if (Date.now() > opts.deadline) break;
     try {
       const record = toRecord(row);
@@ -163,7 +181,11 @@ function saveStalled(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, 
   return { saved, notes };
 }
 
-function recordSpooled(db: DatabaseSyncLike, files: StoreFiles, spooled: SpooledSummary): RecordedCompaction {
+function recordSpooled(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  spooled: SpooledSummary,
+): RecordedCompaction {
   const { id, sessionId, originProject, cwd, items } = recordSummary(db, files, spooled.tenantId, {
     meta: spooled.payload,
     text: spooled.text,
@@ -181,7 +203,13 @@ function saveRecordItems(
 ): ItemsSaved {
   const notes: string[] = [];
   try {
-    saveItems(db, files, itemContext(tenantId, record, record.items), noteTo(notes), opts.baseHalfLifeDays);
+    saveItems(
+      db,
+      files,
+      itemContext(tenantId, record, record.items),
+      noteTo(notes),
+      opts.baseHalfLifeDays,
+    );
     return { notes, failure: null };
   } catch (err) {
     return { notes, failure: { busy: isSqliteBusy(err), message: errorMessage(err) } };
@@ -191,7 +219,12 @@ function saveRecordItems(
 /** Old enough that their PostCompact will not come, young enough that the transcript may still reach back to them. */
 function openRecords(db: DatabaseSyncLike, tenantId: string): OpenCompaction[] {
   const now = handleNow(db).getTime();
-  const rows = openTranscriptRows(db, tenantId, iso(now - REPLAY_AFTER_MS), iso(now - TRANSCRIPT_FILL_WINDOW_MS));
+  const rows = openTranscriptRows(
+    db,
+    tenantId,
+    iso(now - REPLAY_AFTER_MS),
+    iso(now - TRANSCRIPT_FILL_WINDOW_MS),
+  );
   return rows.flatMap((row) => {
     const record = toRecord(row);
     if (record === null) return [];
@@ -208,7 +241,12 @@ interface Fill {
   readonly log: Log;
 }
 
-function fillRecord(db: DatabaseSyncLike, files: StoreFiles, fill: Fill, baseHalfLifeDays: number): boolean {
+function fillRecord(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  fill: Fill,
+  baseHalfLifeDays: number,
+): boolean {
   const { tenantId, record, text, log } = fill;
   if (text === null) {
     // The record is past REPLAY_AFTER_MS, so a window that is fully scanned or out of reach stays empty.
@@ -217,7 +255,9 @@ function fillRecord(db: DatabaseSyncLike, files: StoreFiles, fill: Fill, baseHal
     }
     return false;
   }
-  if (!markSummarized(db, tenantId, record.id, { text, summarizedAt: files.clock().toISOString() })) {
+  if (
+    !markSummarized(db, tenantId, record.id, { text, summarizedAt: files.clock().toISOString() })
+  ) {
     log(`${record.id} was filled by another process`);
     return false;
   }
@@ -232,11 +272,18 @@ interface FillCall {
   readonly opts: ItemsOptions;
 }
 
-function fill(db: DatabaseSyncLike, files: StoreFiles, { tenantId, record, text, opts }: FillCall): FillOutcome {
+function fill(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  { tenantId, record, text, opts }: FillCall,
+): FillOutcome {
   const notes: string[] = [];
   const log = noteTo(notes);
   try {
-    return { saved: fillRecord(db, files, { tenantId, record, text, log }, opts.baseHalfLifeDays), notes };
+    return {
+      saved: fillRecord(db, files, { tenantId, record, text, log }, opts.baseHalfLifeDays),
+      notes,
+    };
   } catch (err) {
     log(`transcript fill of ${record.id} failed`, err);
     return { saved: false, notes };
@@ -248,7 +295,10 @@ type HookWaited = Pick<CompactionHooks, 'start' | 'markSnapshotSaved'>;
 function hookBodies(files: StoreFiles): Bodies<HookWaited> {
   return {
     start: (db, tenantId, start) =>
-      startCompaction(db, tenantId, { ...start, originProject: compactionOrigin(files, start.cwd) }),
+      startCompaction(db, tenantId, {
+        ...start,
+        originProject: compactionOrigin(files, start.cwd),
+      }),
     markSnapshotSaved: markSnapshotSaved,
   };
 }
@@ -258,14 +308,26 @@ export function sqliteCompactionHooks({ on, files }: Handles): CompactionHooks {
     ...bound(on, hookBodies(files), waitingOpener(COMPACTION_DB_WAIT_MS)),
     save: (save) => answered(() => saveCompaction(on, save)),
     saveStalled: (tenantId, opts) =>
-      answered(() => on((db) => saveStalled(db, files, tenantId, opts), waitingOpener(opts.busyWaitMs))),
+      answered(() =>
+        on((db) => saveStalled(db, files, tenantId, opts), waitingOpener(opts.busyWaitMs)),
+      ),
     recordSpooled: (spooled, wait) =>
       answered(() => on((db) => recordSpooled(db, files, spooled), waitingOpener(wait.busyWaitMs))),
     saveRecordItems: (tenantId, record, opts) =>
-      answered(() => on((db) => saveRecordItems(db, files, tenantId, record, opts), waitingOpener(opts.busyWaitMs))),
+      answered(() =>
+        on(
+          (db) => saveRecordItems(db, files, tenantId, record, opts),
+          waitingOpener(opts.busyWaitMs),
+        ),
+      ),
     openRecords: (tenantId, wait) =>
       answered(() => on((db) => openRecords(db, tenantId), waitingOpener(wait.busyWaitMs))),
     fill: (tenantId, record, text, opts) =>
-      answered(() => on((db) => fill(db, files, { tenantId, record, text, opts }), waitingOpener(opts.busyWaitMs))),
+      answered(() =>
+        on(
+          (db) => fill(db, files, { tenantId, record, text, opts }),
+          waitingOpener(opts.busyWaitMs),
+        ),
+      ),
   };
 }

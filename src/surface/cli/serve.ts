@@ -6,22 +6,43 @@ import { printDashboardBanner, reportListenFailure } from './dashboard-banner.js
 import { envBodyTimeoutMs, envPort, envTlsCert, envTlsKey } from '../../base/util/env.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { type CommandContext, boolFlag, numberFlag, stringFlag, stringFlagOrExit } from './flag-values.js';
+import {
+  type CommandContext,
+  boolFlag,
+  numberFlag,
+  stringFlag,
+  stringFlagOrExit,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { cliStdioHost } from './api-context.js';
-import { DEFAULT_DASHBOARD_PORT, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../server/defaults.js';
+import {
+  DEFAULT_DASHBOARD_PORT,
+  DEFAULT_SERVER_HOST,
+  DEFAULT_SERVER_PORT,
+} from '../server/defaults.js';
 import type { DashboardHandle } from '../server/dashboard-listener.js';
 import { localKeyPath } from '../server/local-key.js';
 
-export async function handleDashboard({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleDashboard({
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const port = numberFlag(flags, 'port') ?? DEFAULT_DASHBOARD_PORT;
   const { DashboardListenError, serveDashboard } = await import('../server/dashboard-listener.js');
   const { builtStaticRoot } = await import('../dashboard/static-file.js');
   const token = randomBytes(32).toString('base64url');
-  const opts = { hippoRoot, tenantId, port, token, handleSignals: true, bodyDeadlineMs: envBodyTimeoutMs() };
+  const opts = {
+    hippoRoot,
+    tenantId,
+    port,
+    token,
+    handleSignals: true,
+    bodyDeadlineMs: envBodyTimeoutMs(),
+  };
   let dashboard: DashboardHandle;
   try {
     dashboard = await serveDashboard(opts);

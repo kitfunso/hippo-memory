@@ -41,8 +41,18 @@ let globalRoot: string;
 let preloadPath: string;
 let logPath: string;
 
-function seed(root: string, content: string, created: string, extra: Partial<MemoryEntry> = {}): void {
-  writeEntry(root, { ...createMemory(content, { baseHalfLifeDays: 30 }), created, lastRetrieved: created, ...extra });
+function seed(
+  root: string,
+  content: string,
+  created: string,
+  extra: Partial<MemoryEntry> = {},
+): void {
+  writeEntry(root, {
+    ...createMemory(content, { baseHalfLifeDays: 30 }),
+    created,
+    lastRetrieved: created,
+    ...extra,
+  });
 }
 
 // Stamped by hand: derived from the temp dir, the origin is whichever project marker sits above it on this machine.
@@ -84,14 +94,22 @@ function runHook(args: string[], input: string): HookRun {
   const opens: Record<string, number> = {};
   for (const [file, n] of Object.entries(raw)) {
     const root = path.resolve(path.dirname(file));
-    const label = root === path.resolve(localRoot) ? 'local' : root === path.resolve(globalRoot) ? 'global' : file;
+    const label =
+      root === path.resolve(localRoot)
+        ? 'local'
+        : root === path.resolve(globalRoot)
+          ? 'global'
+          : file;
     opens[label] = n;
   }
   return { stdout, opens };
 }
 
 function setLedger(enabled: boolean): void {
-  fs.writeFileSync(path.join(localRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled } }));
+  fs.writeFileSync(
+    path.join(localRoot, 'config.json'),
+    JSON.stringify({ deliveryLedger: { enabled } }),
+  );
 }
 
 function ledgerRows(): number {
@@ -104,9 +122,19 @@ function ledgerRows(): number {
   }
 }
 
-const PROMPT_HOOK = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
+const PROMPT_HOOK = [
+  'context',
+  '--pinned-only',
+  '--include-recent',
+  '5',
+  '--format',
+  'additional-context',
+];
 const promptPayload = (sessionId: string): string =>
-  JSON.stringify({ session_id: sessionId, prompt: 'postgres migration rollback plan for the deploy' });
+  JSON.stringify({
+    session_id: sessionId,
+    prompt: 'postgres migration rollback plan for the deploy',
+  });
 
 beforeEach(() => {
   // Real path: the CLI logs opens by resolved path, and macOS spells the temp root through the /var symlink.
@@ -116,10 +144,27 @@ beforeEach(() => {
   globalRoot = path.join(tmp, 'global');
   fs.mkdirSync(projectDir, { recursive: true });
   initTestStore(localRoot);
-  seed(localRoot, 'PINNED: always check the rollback plan before deploy', '2026-05-01T00:00:00.000Z', { pinned: true });
-  seed(localRoot, 'the postgres migration needs a rollback plan and a dry run', '2026-05-20T00:00:00.000Z');
-  seed(localRoot, 'deploy windows are Tuesday and Thursday afternoons only', '2026-05-21T00:00:00.000Z');
-  seed(localRoot, 'release notes go out after the canary has been green for an hour', '2026-05-22T00:00:00.000Z');
+  seed(
+    localRoot,
+    'PINNED: always check the rollback plan before deploy',
+    '2026-05-01T00:00:00.000Z',
+    { pinned: true },
+  );
+  seed(
+    localRoot,
+    'the postgres migration needs a rollback plan and a dry run',
+    '2026-05-20T00:00:00.000Z',
+  );
+  seed(
+    localRoot,
+    'deploy windows are Tuesday and Thursday afternoons only',
+    '2026-05-21T00:00:00.000Z',
+  );
+  seed(
+    localRoot,
+    'release notes go out after the canary has been green for an hour',
+    '2026-05-22T00:00:00.000Z',
+  );
   preloadPath = path.join(tmp, 'open-count-preload.mjs');
   fs.writeFileSync(preloadPath, PRELOAD_SRC);
   logPath = path.join(tmp, 'opens.json');
@@ -164,20 +209,31 @@ describe('per-prompt context hook', () => {
 
 describe('session and tool-failure hooks', () => {
   it('compact-resume opens the store once', () => {
-    const run = runHook(['compact-resume'], JSON.stringify({ session_id: 'sess-open-4', source: 'compact' }));
+    const run = runHook(
+      ['compact-resume'],
+      JSON.stringify({ session_id: 'sess-open-4', source: 'compact' }),
+    );
     expect(run.stdout).toMatchInlineSnapshot(`""`);
     expect(run.opens).toEqual({ local: 1 });
   });
 
   it('compact-resume opens the store once with the delivery ledger on, as with it off', () => {
-    fs.writeFileSync(path.join(localRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled: true } }));
-    const run = runHook(['compact-resume'], JSON.stringify({ session_id: 'sess-open-7', source: 'compact' }));
+    fs.writeFileSync(
+      path.join(localRoot, 'config.json'),
+      JSON.stringify({ deliveryLedger: { enabled: true } }),
+    );
+    const run = runHook(
+      ['compact-resume'],
+      JSON.stringify({ session_id: 'sess-open-7', source: 'compact' }),
+    );
     expect(run.stdout).toBe('');
     expect(run.opens).toEqual({ local: 1 });
     const db = openHippoDb(localRoot);
     try {
       // SAFETY: a single COUNT(*) aggregate aliased `c`; proves the ledger was on, so the count above includes its write.
-      expect((db.prepare('SELECT COUNT(*) AS c FROM delivery_events').get() as { c: number }).c).toBe(1);
+      expect(
+        (db.prepare('SELECT COUNT(*) AS c FROM delivery_events').get() as { c: number }).c,
+      ).toBe(1);
     } finally {
       closeHippoDb(db);
     }
@@ -205,7 +261,10 @@ describe('session and tool-failure hooks', () => {
       trigger: 'manual',
       compact_summary: 'Rolled back the postgres migration and wrote the deploy plan.',
     };
-    const run = runHook(['post-compact', '--log-file', path.join(tmp, 'compact.log')], JSON.stringify(payload));
+    const run = runHook(
+      ['post-compact', '--log-file', path.join(tmp, 'compact.log')],
+      JSON.stringify(payload),
+    );
     expect(run.stdout).toMatchInlineSnapshot(`
       "Hippo kept this compaction's summary; it listed no new memories.
       "

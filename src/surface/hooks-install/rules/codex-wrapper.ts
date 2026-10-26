@@ -40,7 +40,13 @@ export interface CodexWrapperMetadata {
 }
 
 export interface EnsureCodexWrapperResult {
-  status: 'installed' | 'already-installed' | 'not-found' | 'source-checkout' | 'other-install' | 'foreign-metadata';
+  status:
+    | 'installed'
+    | 'already-installed'
+    | 'not-found'
+    | 'source-checkout'
+    | 'other-install'
+    | 'foreign-metadata';
   metadataPath?: string;
   realCodexPath?: string;
   commandPath?: string;
@@ -77,10 +83,12 @@ export const CODEX_LAUNCHER_NAMES: readonly string[] =
  * can drive is `codex.hippo-real<ext>` back onto that launcher. */
 export function namesInstallerPaths(metadata: CodexWrapperMetadata): boolean {
   const { originalCodexPath, realCodexPath, commandPath, backupPath } = metadata;
-  if (![originalCodexPath, realCodexPath, commandPath, backupPath].every(isJsonString)) return false;
+  if (![originalCodexPath, realCodexPath, commandPath, backupPath].every(isJsonString))
+    return false;
   if (!path.isAbsolute(originalCodexPath)) return false;
   const name = path.basename(originalCodexPath);
-  if (!CODEX_LAUNCHER_NAMES.includes(process.platform === 'win32' ? name.toLowerCase() : name)) return false;
+  if (!CODEX_LAUNCHER_NAMES.includes(process.platform === 'win32' ? name.toLowerCase() : name))
+    return false;
   const plan = resolveCodexInstallPlan(originalCodexPath);
   return (
     pathEquals(backupPath, plan.backupPath) &&
@@ -128,7 +136,11 @@ export function resolveCodexInstallPlan(originalCodexPath: string) {
 
 /** The wrapper script for a launcher at `commandPath`: PowerShell for .ps1, cmd for .cmd or .bat on Windows, else sh;
  * each runs `hippo codex-run` with the user's arguments. */
-export function codexLauncherWrapperText(commandPath: string, nodePath: string, hippoCliPath: string): string {
+export function codexLauncherWrapperText(
+  commandPath: string,
+  nodePath: string,
+  hippoCliPath: string,
+): string {
   const ext = path.extname(commandPath).toLowerCase();
   if (process.platform === 'win32' && ext === '.ps1') {
     return [
@@ -153,7 +165,10 @@ export function codexLauncherWrapperText(commandPath: string, nodePath: string, 
   ].join('\n');
 }
 
-export function installResult(metadataPath: string, metadata: CodexWrapperMetadata): CodexWrapperInstallResult {
+export function installResult(
+  metadataPath: string,
+  metadata: CodexWrapperMetadata,
+): CodexWrapperInstallResult {
   return {
     installed: true,
     metadataPath,
@@ -170,8 +185,10 @@ export function repairRefusal(
   metadata: CodexWrapperMetadata,
   hippoCliPath: string,
 ): 'other-install' | 'source-checkout' | null {
-  if (isJsonString(metadata.hippoCliPath) && !pathEquals(metadata.hippoCliPath, hippoCliPath)) return 'other-install';
+  if (isJsonString(metadata.hippoCliPath) && !pathEquals(metadata.hippoCliPath, hippoCliPath))
+    return 'other-install';
   const packageDir = path.dirname(path.dirname(hippoCliPath));
-  if (path.basename(path.dirname(packageDir)).toLowerCase() !== 'node_modules') return 'source-checkout';
+  if (path.basename(path.dirname(packageDir)).toLowerCase() !== 'node_modules')
+    return 'source-checkout';
   return null;
 }

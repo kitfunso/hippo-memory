@@ -47,7 +47,15 @@ describe('what one boundary hook call records', () => {
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).not.toBe('');
     const [e] = eventsN(p, 'b1', 1);
-    expect([e.event_type, e.runtime, e.surface, e.session_state, e.turn_seq, e.block_state, e.ledger_version]).toEqual([
+    expect([
+      e.event_type,
+      e.runtime,
+      e.surface,
+      e.session_state,
+      e.turn_seq,
+      e.block_state,
+      e.ledger_version,
+    ]).toEqual([
       'pre-compact',
       'claude-code',
       'hook',
@@ -56,8 +64,16 @@ describe('what one boundary hook call records', () => {
       'sent',
       DELIVERY_LEDGER_VERSION,
     ]);
-    expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
-    expect([e.candidates, e.considered_count, e.emitted_count, e.rejected_count]).toEqual([[], 0, 0, 0]);
+    expect([e.emitted_hash, e.injected_tokens]).toEqual([
+      blockHash(r.stdout),
+      estimateTokens(r.stdout),
+    ]);
+    expect([e.candidates, e.considered_count, e.emitted_count, e.rejected_count]).toEqual([
+      [],
+      0,
+      0,
+      0,
+    ]);
   });
 
   it('compact-resume with a fresh snapshot of the same session leaves one sent row and its token-ledger row', () => {
@@ -72,9 +88,15 @@ describe('what one boundary hook call records', () => {
       1,
       'sent',
     ]);
-    expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
+    expect([e.emitted_hash, e.injected_tokens]).toEqual([
+      blockHash(r.stdout),
+      estimateTokens(r.stdout),
+    ]);
     expect(
-      tableRows(p, `SELECT event FROM token_ledger WHERE surface = 'compact_resume' AND session_id = 'b3'`),
+      tableRows(
+        p,
+        `SELECT event FROM token_ledger WHERE surface = 'compact_resume' AND session_id = 'b3'`,
+      ),
     ).toHaveLength(1);
   });
 
@@ -93,12 +115,18 @@ describe('what one boundary hook call records', () => {
   });
 
   it('compact-resume records empty without a snapshot, empty for another session, disabled in the holdout arm', async () => {
-    expect((await hippoIn(p, ['compact-resume'], { input: resumePayload('b4-none') })).stdout).toBe('');
+    expect((await hippoIn(p, ['compact-resume'], { input: resumePayload('b4-none') })).stdout).toBe(
+      '',
+    );
     saveSnapshot(p, 'other-session');
-    expect((await hippoIn(p, ['compact-resume'], { input: resumePayload('b4-mismatch') })).stdout).toBe('');
+    expect(
+      (await hippoIn(p, ['compact-resume'], { input: resumePayload('b4-mismatch') })).stdout,
+    ).toBe('');
     writeConfig(p, { holdout: true });
     saveSnapshot(p, 'b4-holdout');
-    expect((await hippoIn(p, ['compact-resume'], { input: resumePayload('b4-holdout') })).stdout).toBe('');
+    expect(
+      (await hippoIn(p, ['compact-resume'], { input: resumePayload('b4-holdout') })).stdout,
+    ).toBe('');
     expect([
       eventsN(p, 'b4-none', 1)[0].block_state,
       eventsN(p, 'b4-mismatch', 1)[0].block_state,
@@ -108,8 +136,12 @@ describe('what one boundary hook call records', () => {
 
   it('a sub-agent payload leaves one subagent row with no turn number, on both hooks', async () => {
     saveSnapshot(p, 'b6');
-    const resume = await hippoIn(p, ['compact-resume'], { input: resumePayload('b6', { agent_id: 'agent-1' }) });
-    const pre = await hippoIn(p, ['pre-compact'], { input: preCompactPayload('b6', { agent_id: 'agent-1' }) });
+    const resume = await hippoIn(p, ['compact-resume'], {
+      input: resumePayload('b6', { agent_id: 'agent-1' }),
+    });
+    const pre = await hippoIn(p, ['pre-compact'], {
+      input: preCompactPayload('b6', { agent_id: 'agent-1' }),
+    });
     expect([resume.status, resume.stdout]).toEqual([0, '']);
     expect(pre.status).toBe(0);
     const rows = eventsN(p, 'b6', 2);
@@ -122,7 +154,9 @@ describe('what one boundary hook call records', () => {
   it('a sub-agent payload on compact-resume in a holdout session records empty, not disabled', async () => {
     writeConfig(p, { holdout: true });
     saveSnapshot(p, 'v6');
-    const r = await hippoIn(p, ['compact-resume'], { input: resumePayload('v6', { agent_id: 'agent-1' }) });
+    const r = await hippoIn(p, ['compact-resume'], {
+      input: resumePayload('v6', { agent_id: 'agent-1' }),
+    });
     expect([r.status, r.stdout]).toEqual([0, '']);
     const [e] = eventsN(p, 'v6', 1);
     expect([e.session_state, e.turn_seq, e.block_state]).toEqual(['subagent', null, 'empty']);
@@ -133,7 +167,11 @@ describe('what one boundary hook call records', () => {
     const r = await hippoIn(p, ['pre-compact'], { input });
     expect(r.status, r.stderr).toBe(0);
     const [e] = eventsN(p, 'v7b', 1);
-    expect([e.event_type, e.runtime, e.block_state]).toEqual(['pre-compact', 'claude-code', 'empty']);
+    expect([e.event_type, e.runtime, e.block_state]).toEqual([
+      'pre-compact',
+      'claude-code',
+      'empty',
+    ]);
   });
 
   it('a manual run records a row; the session comes from the environment, else it is missing and unnumbered', async () => {
@@ -157,7 +195,9 @@ describe('what one boundary hook call records', () => {
     const env = { HIPPO_SESSION_ID: 'b12-env' };
     await hippoIn(p, ['compact-resume'], { env });
     await hippoIn(p, ['pre-compact'], { env });
-    expect(eventsN(p, 'b12-env', 2).map((e) => [e.event_type, e.session_state, e.turn_seq])).toEqual([
+    expect(
+      eventsN(p, 'b12-env', 2).map((e) => [e.event_type, e.session_state, e.turn_seq]),
+    ).toEqual([
       ['compact-resume', 'env', 1],
       ['pre-compact', 'env', 1],
     ]);
@@ -174,10 +214,13 @@ describe('what one boundary hook call records', () => {
     ];
     for (const [args, input] of steps) expect((await hippoIn(p, args, { input })).status).toBe(0);
     // An agent's own `hippo context` run takes the session from the environment Claude Code gives its shell.
-    expect((await hippoIn(p, ['context', 'rollback', 'plan'], { env: { CLAUDE_CODE_SESSION_ID: 'b7' } })).status).toBe(
-      0,
-    );
-    expect((await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('b7') })).status).toBe(0);
+    expect(
+      (await hippoIn(p, ['context', 'rollback', 'plan'], { env: { CLAUDE_CODE_SESSION_ID: 'b7' } }))
+        .status,
+    ).toBe(0);
+    expect(
+      (await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('b7') })).status,
+    ).toBe(0);
     const rows = eventsN(p, 'b7', 7);
     expect(rows.map((e) => [e.event_type, e.block_state, e.turn_seq])).toEqual([
       ['prompt-submit', 'sent', 1],
@@ -218,7 +261,15 @@ describe('what one session-end hook call records', () => {
     const r = hippoNoWorker(p, ['session-end'], { input: sessionEndPayload('e1') });
     expect([r.status, r.stdout]).toEqual([0, '']);
     const [e] = eventsN(p, 'e1', 1);
-    expect([e.event_type, e.runtime, e.surface, e.session_state, e.turn_seq, e.block_state, e.ledger_version]).toEqual([
+    expect([
+      e.event_type,
+      e.runtime,
+      e.surface,
+      e.session_state,
+      e.turn_seq,
+      e.block_state,
+      e.ledger_version,
+    ]).toEqual([
       'session-end',
       'claude-code',
       'hook',
@@ -227,19 +278,21 @@ describe('what one session-end hook call records', () => {
       'empty',
       DELIVERY_LEDGER_VERSION,
     ]);
-    expect([e.emitted_hash, e.injected_tokens, e.prompt_hash, e.query_hash, e.recall_trace_id, e.candidates]).toEqual([
-      null,
-      0,
-      null,
-      null,
-      null,
-      [],
-    ]);
+    expect([
+      e.emitted_hash,
+      e.injected_tokens,
+      e.prompt_hash,
+      e.query_hash,
+      e.recall_trace_id,
+      e.candidates,
+    ]).toEqual([null, 0, null, null, null, []]);
   });
 
   it('a second fire inside the window is a duplicate of the first', async () => {
     for (let i = 0; i < 2; i++) {
-      expect((await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('e2') })).status).toBe(0);
+      expect(
+        (await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('e2') })).status,
+      ).toBe(0);
     }
     const [first, second] = eventsN(p, 'e2', 2);
     expect([first.turn_seq, first.duplicate_of, second.turn_seq, second.duplicate_of]).toEqual([
@@ -277,7 +330,9 @@ describe('what one session-end hook call records', () => {
       ).status,
     ).toBe(0);
     writeConfig(p, { ledger: false });
-    expect((await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('e4-off') })).status).toBe(0);
+    expect(
+      (await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('e4-off') })).status,
+    ).toBe(0);
     expect(eventCount(p)).toBe(0);
   });
 });

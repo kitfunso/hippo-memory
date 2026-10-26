@@ -10,7 +10,11 @@ import { contextGet, type ContextOptions } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { type HippoConfig } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } from '../../src/api/delivery-recorder.js';
+import {
+  createDeliveryRecorder,
+  type DeliveryFault,
+  type DeliveryRecorder,
+} from '../../src/api/delivery-recorder.js';
 import type { DeliveryEventInput, DeliveryEventType } from '../../src/base/session/delivery.js';
 import { blockHash } from '../../src/base/util/token-text.js';
 import { flushDeliveryRecorder } from '../../src/api/prompt-hook.js';
@@ -58,7 +62,10 @@ function configure(pinnedInject: Partial<HippoConfig['pinnedInject']>): void {
   ctx = { ...ctx, config: loadConfig(local) };
 }
 
-function recorder(fault?: DeliveryFault, ledger: Ledger = sqliteStore(local).ledger): DeliveryRecorder {
+function recorder(
+  fault?: DeliveryFault,
+  ledger: Ledger = sqliteStore(local).ledger,
+): DeliveryRecorder {
   return createDeliveryRecorder({
     now: evalNow(),
     fault,
@@ -66,7 +73,11 @@ function recorder(fault?: DeliveryFault, ledger: Ledger = sqliteStore(local).led
     storeHash: 'aaaaaaaaaaaaaaaa',
     writeStore: 'local',
     tenantId: 'default',
-    stdinText: JSON.stringify({ session_id: 's1', prompt: PROMPT, hook_event_name: 'UserPromptSubmit' }),
+    stdinText: JSON.stringify({
+      session_id: 's1',
+      prompt: PROMPT,
+      hook_event_name: 'UserPromptSubmit',
+    }),
   });
 }
 
@@ -95,8 +106,12 @@ async function observed(opts: ContextOptions = baseOpts): Promise<DeliveryEventI
 }
 
 function seedMixedStore(): void {
-  seed(local, 'pinned rule: always run the postgres migration tests before merging', { pinned: true });
-  seed(local, 'pinned rule: the deploy script lives in the ops folder for every release', { pinned: true });
+  seed(local, 'pinned rule: always run the postgres migration tests before merging', {
+    pinned: true,
+  });
+  seed(local, 'pinned rule: the deploy script lives in the ops folder for every release', {
+    pinned: true,
+  });
   seed(local, 'the postgres migration script needs a rollback plan before deploy', {
     created: '2026-05-01T00:00:00.000Z',
   });
@@ -116,8 +131,12 @@ function storeCounts(root: string): string {
   try {
     const tables = ['recall_traces', 'delivery_events', 'delivery_candidates', 'token_ledger'];
     // SAFETY: each query is a single COUNT(*) aliased `c`; the memories query names its three columns.
-    const counts = tables.map((t) => (db.prepare(`SELECT COUNT(*) AS c FROM ${t}`).get() as { c: number }).c);
-    const touched = db.prepare('SELECT id, retrieval_count, last_retrieved FROM memories ORDER BY id').all();
+    const counts = tables.map(
+      (t) => (db.prepare(`SELECT COUNT(*) AS c FROM ${t}`).get() as { c: number }).c,
+    );
+    const touched = db
+      .prepare('SELECT id, retrieval_count, last_retrieved FROM memories ORDER BY id')
+      .all();
     return JSON.stringify({ counts, touched });
   } finally {
     closeHippoDb(db);
@@ -177,7 +196,9 @@ describe('the observer never changes contextGet', () => {
     const rec = recorder('observe');
     expect(await contextGet(ctx, { ...baseOpts, deliveryObserver: rec })).toEqual(without);
     expect(rec.takeEvent()).toBeNull();
-    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] warn: delivery ledger skipped: recorder failed: /);
+    expect(String(err.mock.calls[0][0])).toMatch(
+      /^\[hippo\] warn: delivery ledger skipped: recorder failed: /,
+    );
     expect(String(err.mock.calls[0][0])).toContain('errorClass=Error');
   });
 
@@ -198,14 +219,21 @@ describe('the observer never changes contextGet', () => {
 });
 
 describe('rejection reasons', () => {
-  const rowsOf = (event: DeliveryEventInput) => event.candidates.filter((c) => c.outcome === 'rejected');
+  const rowsOf = (event: DeliveryEventInput) =>
+    event.candidates.filter((c) => c.outcome === 'rejected');
 
   it('budget, with the score and price that missed', async () => {
     configure({ promptRecall: false });
-    seed(local, 'pinned rule: always run the postgres migration tests before merging', { pinned: true });
-    const big = seed(local, `pinned rule: ${'the deploy checklist covers every service and region '.repeat(8)}`, {
+    seed(local, 'pinned rule: always run the postgres migration tests before merging', {
       pinned: true,
     });
+    const big = seed(
+      local,
+      `pinned rule: ${'the deploy checklist covers every service and region '.repeat(8)}`,
+      {
+        pinned: true,
+      },
+    );
     const event = await observed({ ...baseOpts, budget: 40 });
     const row = rowsOf(event).find((c) => c.memoryId === big.id);
     expect([row?.stage, row?.reason, row?.pool]).toEqual(['budget', 'budget', 'pin']);
@@ -217,11 +245,20 @@ describe('rejection reasons', () => {
   it('gate-below-threshold with its overlap score, and gate-max-items past the item cap', async () => {
     configure({ promptRecall: true, promptRecallMinShared: 2, promptRecallMaxItems: 1 });
     seed(local, 'the postgres migration script needs a rollback plan before deploy');
-    const second = seed(local, 'a migration rollback plan should name the owner and the restore point');
-    const weak = seed(local, 'postgres connection pooling settings need tuning for the reporting cluster');
+    const second = seed(
+      local,
+      'a migration rollback plan should name the owner and the restore point',
+    );
+    const weak = seed(
+      local,
+      'postgres connection pooling settings need tuning for the reporting cluster',
+    );
     const event = await observed();
     const rows = new Map(rowsOf(event).map((c) => [c.memoryId, c]));
-    expect([rows.get(second.id)?.stage, rows.get(second.id)?.reason]).toEqual(['gate', 'gate-max-items']);
+    expect([rows.get(second.id)?.stage, rows.get(second.id)?.reason]).toEqual([
+      'gate',
+      'gate-max-items',
+    ]);
     expect([rows.get(weak.id)?.stage, rows.get(weak.id)?.reason, rows.get(weak.id)?.pool]).toEqual([
       'gate',
       'gate-below-threshold',
@@ -239,7 +276,10 @@ describe('rejection reasons', () => {
     const junk = seed(local, 'postgres');
     const event = await observed();
     const rows = new Map(rowsOf(event).map((c) => [c.memoryId, c]));
-    expect([rows.get(foreign.id)?.stage, rows.get(foreign.id)?.reason]).toEqual(['eligible', 'scope']);
+    expect([rows.get(foreign.id)?.stage, rows.get(foreign.id)?.reason]).toEqual([
+      'eligible',
+      'scope',
+    ]);
     expect([rows.get(junk.id)?.stage, rows.get(junk.id)?.reason]).toEqual(['eligible', 'quality']);
   });
 
@@ -251,7 +291,12 @@ describe('rejection reasons', () => {
     const junk = seed(local, 'postgres', { created: '2026-06-02T00:00:00.000Z' });
     const event = await observed();
     const row = rowsOf(event).find((c) => c.memoryId === junk.id);
-    expect([row?.stage, row?.reason, row?.pool, row?.sourceStore]).toEqual(['load', 'quality', 'recent', 'local']);
+    expect([row?.stage, row?.reason, row?.pool, row?.sourceStore]).toEqual([
+      'load',
+      'quality',
+      'recent',
+      'local',
+    ]);
     expect([event.filteredCount, event.selectedCount]).toEqual([1, 1]);
   });
 
@@ -260,9 +305,13 @@ describe('rejection reasons', () => {
     const text = 'pinned rule: always run the postgres migration tests before merging';
     const pin = seed(local, text, { pinned: true });
     const copy = seed(local, text);
-    const other = seed(local, 'pinned rule: the deploy script lives in the ops folder for every release', {
-      pinned: true,
-    });
+    const other = seed(
+      local,
+      'pinned rule: the deploy script lives in the ops folder for every release',
+      {
+        pinned: true,
+      },
+    );
     const event = await observed({ ...baseOpts, limit: 1 });
     const kept = (await contextGet(ctx, { ...baseOpts, limit: 1 })).entries.map((e) => e.entry.id);
     const cut = [pin.id, other.id].filter((id) => !kept.includes(id));
@@ -275,17 +324,26 @@ describe('rejection reasons', () => {
   it('counts loaded rows past the recent take as rejected but unlisted, and admit refusals as filtered', async () => {
     configure({ promptRecall: false });
     for (let i = 0; i < 6; i++) {
-      seed(local, `office note ${i}: the coffee machine schedule changes for team lunch on friday`, {
-        created: `2026-06-0${i + 1}T00:00:00.000Z`,
-      });
+      seed(
+        local,
+        `office note ${i}: the coffee machine schedule changes for team lunch on friday`,
+        {
+          created: `2026-06-0${i + 1}T00:00:00.000Z`,
+        },
+      );
     }
     for (let i = 0; i < 3; i++) {
-      seed(local, `other project note ${i}: the billing export runs every night at two`, { originProject: 'proj-b' });
+      seed(local, `other project note ${i}: the billing export runs every night at two`, {
+        originProject: 'proj-b',
+      });
     }
     const event = await observed({ ...baseOpts, includeRecent: 2 });
-    expect([event.consideredCount, event.selectedCount, event.rejectedCount, event.rejectedUnlisted]).toEqual([
-      6, 2, 4, 4,
-    ]);
+    expect([
+      event.consideredCount,
+      event.selectedCount,
+      event.rejectedCount,
+      event.rejectedUnlisted,
+    ]).toEqual([6, 2, 4, 4]);
     expect(rowsOf(event)).toEqual([]);
     expect(event.filteredCount).toBe(3);
   });
@@ -300,7 +358,11 @@ describe('the event type of a recorder', () => {
       writeStore: 'local',
       tenantId: 'default',
       eventType: 'pre-compact',
-      stdinText: JSON.stringify({ session_id: 's1', prompt: PROMPT, hook_event_name: 'UserPromptSubmit' }),
+      stdinText: JSON.stringify({
+        session_id: 's1',
+        prompt: PROMPT,
+        hook_event_name: 'UserPromptSubmit',
+      }),
     });
     expect(eventOf(rec).eventType).toBe('pre-compact');
   });
@@ -328,7 +390,11 @@ describe('prompt facts on a boundary or context row', () => {
       writeStore: 'local',
       tenantId: 'default',
       eventType,
-      stdinText: JSON.stringify({ session_id: 's1', prompt: 'secret prompt', hook_event_name: 'UserPromptSubmit' }),
+      stdinText: JSON.stringify({
+        session_id: 's1',
+        prompt: 'secret prompt',
+        hook_event_name: 'UserPromptSubmit',
+      }),
     });
 
   for (const type of ['pre-compact', 'compact-resume', 'session-end', 'context'] as const) {
@@ -345,7 +411,10 @@ describe('prompt facts on a boundary or context row', () => {
     rec.traced(42);
     const event = eventOf(rec);
     expect([event.queryHash, event.recallTraceId]).toEqual([blockHash('postgres rollback'), 42]);
-    expect([eventOf(withPrompt()).queryHash, eventOf(withPrompt()).recallTraceId]).toEqual([null, null]);
+    expect([eventOf(withPrompt()).queryHash, eventOf(withPrompt()).recallTraceId]).toEqual([
+      null,
+      null,
+    ]);
   });
 
   it('a prompt-submit row still carries the prompt hash and length', () => {
@@ -357,7 +426,11 @@ describe('prompt facts on a boundary or context row', () => {
 });
 
 describe('the tool-failure recorder', () => {
-  const failureRecorder = (eventType: DeliveryEventType, payload: Record<string, string>, fault?: DeliveryFault) =>
+  const failureRecorder = (
+    eventType: DeliveryEventType,
+    payload: Record<string, string>,
+    fault?: DeliveryFault,
+  ) =>
     createDeliveryRecorder({
       now: evalNow(),
       fault,
@@ -366,12 +439,20 @@ describe('the tool-failure recorder', () => {
       writeStore: 'local',
       tenantId: 'default',
       eventType,
-      stdinText: JSON.stringify({ session_id: 's', hook_event_name: 'PostToolUseFailure', ...payload }),
+      stdinText: JSON.stringify({
+        session_id: 's',
+        hook_event_name: 'PostToolUseFailure',
+        ...payload,
+      }),
     });
 
   it('reads tool_use_id trimmed and cut to 128 characters, and a blank one as null', () => {
-    expect(eventOf(failureRecorder('tool-failure', { tool_use_id: '  toolu_1  ' })).toolUseId).toBe('toolu_1');
-    expect(eventOf(failureRecorder('tool-failure', { tool_use_id: 'x'.repeat(300) })).toolUseId).toBe('x'.repeat(128));
+    expect(eventOf(failureRecorder('tool-failure', { tool_use_id: '  toolu_1  ' })).toolUseId).toBe(
+      'toolu_1',
+    );
+    expect(
+      eventOf(failureRecorder('tool-failure', { tool_use_id: 'x'.repeat(300) })).toolUseId,
+    ).toBe('x'.repeat(128));
     expect(eventOf(failureRecorder('tool-failure', { tool_use_id: '   ' })).toolUseId).toBeNull();
     expect(eventOf(failureRecorder('tool-failure', {})).toolUseId).toBeNull();
   });
@@ -380,16 +461,20 @@ describe('the tool-failure recorder', () => {
     const rec = failureRecorder('tool-failure', { tool_use_id: 'toolu_1' });
     rec.logged(42);
     const input = eventOf(rec);
-    expect([input.eventType, input.surface, input.blockState, input.toolUseId, input.failureId]).toEqual([
-      'tool-failure',
-      'hook',
-      'empty',
-      'toolu_1',
-      42,
-    ]);
-    expect([input.candidates, input.consideredCount, input.emittedCount, input.promptHash, input.promptLength]).toEqual(
-      [[], 0, 0, null, 0],
-    );
+    expect([
+      input.eventType,
+      input.surface,
+      input.blockState,
+      input.toolUseId,
+      input.failureId,
+    ]).toEqual(['tool-failure', 'hook', 'empty', 'toolu_1', 42]);
+    expect([
+      input.candidates,
+      input.consideredCount,
+      input.emittedCount,
+      input.promptHash,
+      input.promptLength,
+    ]).toEqual([[], 0, 0, null, 0]);
     const other = failureRecorder('prompt-submit', { tool_use_id: 'toolu_1', prompt: 'hello' });
     other.logged(42);
     const o = eventOf(other);
@@ -420,7 +505,9 @@ describe('a recorder fault at the flush boundary', () => {
       rec.queried('a query');
       await expect(flushDeliveryRecorder(rec)).resolves.toBeUndefined();
       expect(write).not.toHaveBeenCalled();
-      const lines = err.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('delivery ledger'));
+      const lines = err.mock.calls
+        .map((c) => String(c[0]))
+        .filter((l) => l.includes('delivery ledger'));
       expect(lines).toHaveLength(1);
     },
   );

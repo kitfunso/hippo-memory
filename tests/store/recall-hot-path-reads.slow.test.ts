@@ -4,7 +4,11 @@ import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js'
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
-import { recordStatements, recordStatementsAsync, countMatching } from '../_helpers/count-statements.js';
+import {
+  recordStatements,
+  recordStatementsAsync,
+  countMatching,
+} from '../_helpers/count-statements.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -92,10 +96,14 @@ describe('rankRecall with a global store', () => {
     const global = freshRoot('hp-global');
     seed(
       local,
-      Array.from({ length: 6 }, (_, i) => memory(`local note ${i} on the zephyrine cache eviction`)),
+      Array.from({ length: 6 }, (_, i) =>
+        memory(`local note ${i} on the zephyrine cache eviction`),
+      ),
     );
     seed(global, [
-      ...Array.from({ length: 6 }, (_, i) => memory(`global note ${i} on the zephyrine cache warmup`)),
+      ...Array.from({ length: 6 }, (_, i) =>
+        memory(`global note ${i} on the zephyrine cache warmup`),
+      ),
       memory('local note 0 on the zephyrine cache eviction'),
     ]);
     const at = (root: string) => ({ store: sqliteStore(root), config: loadConfig(root) });
@@ -108,7 +116,9 @@ describe('rankRecall with a global store', () => {
     };
     // Recency reads the clock, so both rankings see one instant.
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
-    const { result, statements } = await recordStatementsAsync(() => rankRecall(ctx, recallOpts(local), BUDGET_RANKED));
+    const { result, statements } = await recordStatementsAsync(() =>
+      rankRecall(ctx, recallOpts(local), BUDGET_RANKED),
+    );
     expect(countMatching(statements, /memories_fts MATCH|LOWER\(content\) LIKE/)).toBe(2);
 
     const reloaded = await searchBothHybrid('zephyrine cache', ...sharingStores(local, global), {
@@ -125,7 +135,8 @@ describe('rankRecall with a global store', () => {
       includeSuperseded: false,
       recallScope: {},
     });
-    const ranking = (rs: typeof reloaded): Array<[string, number]> => rs.map((r) => [r.entry.id, r.score]);
+    const ranking = (rs: typeof reloaded): Array<[string, number]> =>
+      rs.map((r) => [r.entry.id, r.score]);
     expect(result.results.length).toBeGreaterThan(6);
     expect(ranking(result.results)).toEqual(ranking(reloaded).slice(0, 10));
   });
@@ -240,13 +251,19 @@ describe('loadAmbientCandidates', () => {
   it('reads past a window of refused rows without reading the rest of the store', () => {
     const read = [130, 260].map((older) => {
       const root = freshRoot('hp-ambient');
-      const kept = Array.from({ length: older }, (_, i) => memory(`kept zephyrine row ${i}`, { created: at(i) }));
+      const kept = Array.from({ length: older }, (_, i) =>
+        memory(`kept zephyrine row ${i}`, { created: at(i) }),
+      );
       const refused = Array.from({ length: 40 }, (_, i) =>
         memory(`refused zephyrine row ${i}`, { created: at(older + i) }),
       );
       seed(root, [...kept, ...refused]);
-      const { result, rowsRead } = recordStatements(() => loadAmbientCandidates(root, 'default', 3, admit));
-      const newest = [...result.entries].sort((a, b) => b.created.localeCompare(a.created)).slice(0, 3);
+      const { result, rowsRead } = recordStatements(() =>
+        loadAmbientCandidates(root, 'default', 3, admit),
+      );
+      const newest = [...result.entries]
+        .sort((a, b) => b.created.localeCompare(a.created))
+        .slice(0, 3);
       expect(newest.map((e) => e.id)).toEqual(
         kept
           .slice(-3)

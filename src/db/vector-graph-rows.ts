@@ -2,7 +2,13 @@
 // date, and the search whose candidates SQL admits and the stored vectors score.
 import type { DatabaseSyncLike } from './sqlite.js';
 import { getMeta } from './meta.js';
-import { createVectorGraph, insertNode, searchGraph, type SearchResult, type VectorGraph } from './vector-graph.js';
+import {
+  createVectorGraph,
+  insertNode,
+  searchGraph,
+  type SearchResult,
+  type VectorGraph,
+} from './vector-graph.js';
 import {
   admittedVectorsSql,
   decodeVector,
@@ -129,7 +135,9 @@ export class StagedRows {
  * of the newest rows does. SQLite hands a deleted top rowid out again, so rows above it may be new. */
 function intactRowid(db: DatabaseSyncLike, g: GraphRows): number | undefined {
   const rows = db
-    .prepare('SELECT rowid AS rowid, memory_id AS id FROM memory_vectors WHERE rowid <= ? ORDER BY rowid DESC LIMIT ?')
+    .prepare(
+      'SELECT rowid AS rowid, memory_id AS id FROM memory_vectors WHERE rowid <= ? ORDER BY rowid DESC LIMIT ?',
+    )
     .iterate(g.lastRowid, INTACT_WALK) as Iterable<{ rowid: number; id: string }>;
   let seen = 0;
   for (const row of rows) {
@@ -142,7 +150,9 @@ function intactRowid(db: DatabaseSyncLike, g: GraphRows): number | undefined {
 
 /** 'lost' when the graph no longer matches the store; 'behind' with where a background read starts when more rows are
  * new than one query should insert. */
-export type CatchUp = { readonly kind: 'current' | 'lost' } | { readonly kind: 'behind'; readonly afterRowid: number };
+export type CatchUp =
+  | { readonly kind: 'current' | 'lost' }
+  | { readonly kind: 'behind'; readonly afterRowid: number };
 
 /** Inserts the rows another connection wrote since the graph last read, up to `inlineRows` of them. */
 export function catchUp(db: DatabaseSyncLike, g: GraphRows, inlineRows: number): CatchUp {
@@ -157,7 +167,8 @@ export function catchUp(db: DatabaseSyncLike, g: GraphRows, inlineRows: number):
   if (rows.length > inlineRows) return { kind: 'behind', afterRowid };
   g.lastRowid = afterRowid;
   for (const row of rows) {
-    if (row.vector.byteLength === g.graph.dim * 4) addRow(g, row.rowid, row.id, decodeVector(row.vector));
+    if (row.vector.byteLength === g.graph.dim * 4)
+      addRow(g, row.rowid, row.id, decodeVector(row.vector));
   }
   return { kind: 'current' };
 }
@@ -172,7 +183,11 @@ export function admittedRows(
   if (keys.length === 0) return [];
   const among = `v.${key} IN (${placeholders(keys.length)}) AND `;
   // SAFETY: node:sqlite returns BLOBs as Uint8Array.
-  const rows = cachedStatement(db, admittedVectorsSql(where, among)).all(...keys, dim, ...params) as Array<{
+  const rows = cachedStatement(db, admittedVectorsSql(where, among)).all(
+    ...keys,
+    dim,
+    ...params,
+  ) as Array<{
     id: string;
     vector: Uint8Array;
   }>;

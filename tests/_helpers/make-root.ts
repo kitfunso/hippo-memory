@@ -22,10 +22,15 @@ export interface MadeStore {
 // Removed after the file's last test, not each test's: a store made in beforeAll must outlive its first test.
 const made: string[] = [];
 afterAll(() => {
-  for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const dir of made.splice(0))
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-function build(label: string, rootOf: (base: string) => string, { config, init = true }: MakeRootOptions): MadeStore {
+function build(
+  label: string,
+  rootOf: (base: string) => string,
+  { config, init = true }: MakeRootOptions,
+): MadeStore {
   const base = mkdtempSync(join(tmpdir(), `hippo-${label}-`));
   made.push(base);
   const root = rootOf(base);

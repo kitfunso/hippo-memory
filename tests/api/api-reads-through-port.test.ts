@@ -2,7 +2,13 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { adminActor, authCreate, authKeyTenant, NotFoundError, reject } from '../../src/api/index.js';
+import {
+  adminActor,
+  authCreate,
+  authKeyTenant,
+  NotFoundError,
+  reject,
+} from '../../src/api/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { listRejectionsForTenant } from '../../src/domain/trust/reject-flow.js';
@@ -39,7 +45,9 @@ describe('reads through a served store', () => {
     });
     writeEntry(plain, onlyInFolder);
     const ctx = { ...ctxAt(plain), store: portOnlyStore(served) };
-    await expect(reject(ctx, { memoryId: onlyInFolder.id, reason: 'wrong' })).rejects.toThrow(NotFoundError);
+    await expect(reject(ctx, { memoryId: onlyInFolder.id, reason: 'wrong' })).rejects.toThrow(
+      NotFoundError,
+    );
     expect(readEntry(plain, onlyInFolder.id, TENANT)).not.toBeNull();
     expect(await listRejectionsForTenant(sqliteStore(plain), TENANT)).toEqual([]);
   });
@@ -49,6 +57,8 @@ describe('reads through a served store', () => {
     const { keyId } = await authCreate(ctxAt(served), { label: 'served key' });
     const ctx = { ...ctxAt(root()), tenantId: 'default', store: portOnlyStore(served) };
     expect(await authKeyTenant(ctx, keyId)).toBe(TENANT);
-    expect(await authKeyTenant({ ...ctx, store: sqliteStore(ctx.hippoRoot) }, keyId)).toBeUndefined();
+    expect(
+      await authKeyTenant({ ...ctx, store: sqliteStore(ctx.hippoRoot) }, keyId),
+    ).toBeUndefined();
   });
 });

@@ -28,7 +28,12 @@ export interface SnapshotClock {
   currentId(): number;
 }
 
-function stillServes(held: HeldStamp, tenantId: string, dataVersion: number | null, wallMs: number): boolean {
+function stillServes(
+  held: HeldStamp,
+  tenantId: string,
+  dataVersion: number | null,
+  wallMs: number,
+): boolean {
   const age = wallMs - held.issuedAtMs;
   return (
     held.tenantId === tenantId &&

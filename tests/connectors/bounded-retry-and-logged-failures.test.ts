@@ -36,7 +36,8 @@ afterEach(() => {
 });
 
 describe('GitHub backfill rate-limit bound', () => {
-  const ctx = (): FullContext => apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' });
+  const ctx = (): FullContext =>
+    apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' });
 
   it('stops after five attempts and names the reset time', async () => {
     let calls = 0;
@@ -107,7 +108,9 @@ describe('write scope rollback failure', () => {
           throw new Error('original failure');
         }),
       ).toThrow('original failure');
-      expect(stderr).toMatch(/error: rollback of write scope r2 failed: disk I\/O error on rollback/);
+      expect(stderr).toMatch(
+        /error: rollback of write scope r2 failed: disk I\/O error on rollback/,
+      );
       db.exec('ROLLBACK');
     } finally {
       closeHippoDb(db);

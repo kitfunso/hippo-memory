@@ -10,7 +10,12 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { log } from '../../src/base/util/log.js';
-import { type Callers, leftBehind, type MovedReadsSeed, seedMovedReads } from '../_helpers/moved-reads-seed.js';
+import {
+  type Callers,
+  leftBehind,
+  type MovedReadsSeed,
+  seedMovedReads,
+} from '../_helpers/moved-reads-seed.js';
 import { CLEARED_ENV, FAKE_NOW, freshStore, TENANT } from '../_helpers/recall-golden-seed.js';
 import {
   auditRows,
@@ -57,7 +62,9 @@ const promote =
   (s) =>
     post(s, `/v1/memories/${id}/promote`, {}, as(who));
 const rpc = (method: string, params?: JsonValue): JsonValue =>
-  params === undefined ? { jsonrpc: '2.0', id: 1, method } : { jsonrpc: '2.0', id: 1, method, params };
+  params === undefined
+    ? { jsonrpc: '2.0', id: 1, method }
+    : { jsonrpc: '2.0', id: 1, method, params };
 const tool =
   (name: string, args: JsonValue = {}, who?: keyof Callers): Send =>
   (s) =>
@@ -105,7 +112,10 @@ function stream(who?: keyof Callers): Send {
     });
     const first = res.body === null ? undefined : (await res.body.getReader().read()).value;
     hangUp.abort();
-    return new Response(new TextDecoder().decode(first), { status: res.status, headers: res.headers });
+    return new Response(new TextDecoder().decode(first), {
+      status: res.status,
+      headers: res.headers,
+    });
   };
 }
 
@@ -168,10 +178,18 @@ const WEBHOOK_STEPS: readonly Step[] = [
   ['slack url check', slack({ type: 'url_verification', challenge: 'abc123' }), 200],
   ['slack message', slack(slackEvent('T_ACME', 'Ev_1', posted('1700.000001'))), 200],
   // Slack signs a retry afresh, so the event, not the replay window, is what the store must recognise.
-  ['slack redelivery', slack(slackEvent('T_ACME', 'Ev_1', posted('1700.000001')), { second: SLACK_SECOND + 1 }), 200],
+  [
+    'slack redelivery',
+    slack(slackEvent('T_ACME', 'Ev_1', posted('1700.000001')), { second: SLACK_SECOND + 1 }),
+    200,
+  ],
   ['slack from an unknown team', slack(slackEvent('T_OTHER', 'Ev_2', posted('1700.000002'))), 200],
   ['slack deletion', slack(slackEvent('T_ACME', 'Ev_3', removed('1700.000001'))), 200],
-  ['slack forged', slack(slackEvent('T_ACME', 'Ev_4', posted('1700.000004')), { secret: FORGED }), 401],
+  [
+    'slack forged',
+    slack(slackEvent('T_ACME', 'Ev_4', posted('1700.000004')), { secret: FORGED }),
+    401,
+  ],
   ['github comment', github('d-1', comment('created')), 200],
   ['github deletion', github('d-2', comment('deleted')), 200],
   ['github forged', github('d-3', comment('created'), FORGED), 401],
@@ -184,7 +202,11 @@ const HOST_STEPS: readonly Step[] = [
   // A host admin's context query comes from the server's own git state, which a slow `git diff` can time out of.
   ['mcp context as a member', tool('hippo_context', {}, 'member'), 200],
   ['mcp outcome', tool('hippo_outcome', { good: true }), 200],
-  ['mcp remember', tool('hippo_remember', { text: 'the canary needs ten minutes of traffic' }), 200],
+  [
+    'mcp remember',
+    tool('hippo_remember', { text: 'the canary needs ten minutes of traffic' }),
+    200,
+  ],
   ['mcp share', tool('hippo_share', { id: 'mem_p_plain', force: true }), 200],
   ['mcp share a missing memory', tool('hippo_share', { id: MISSING }), 200],
   ['mcp peers', tool('hippo_peers'), 200],
@@ -214,11 +236,9 @@ async function copy() {
   homes.push(made.home);
   await sqliteStore(made.root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT);
   onDb(made.root, (db) => {
-    db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(
-      '101',
-      TENANT,
-      FAKE_NOW,
-    );
+    db.prepare(
+      'INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)',
+    ).run('101', TENANT, FAKE_NOW);
     for (const [a, b] of [
       ['mem_p_plain', 'mem_p_noise'],
       ['mem_p_fill0', 'mem_x_cafe'],
@@ -227,7 +247,10 @@ async function copy() {
     }
   });
   // A promote or share embeds its copy after the reply, so a provider would race the server's stop.
-  writeFileSync(join(made.globalRoot, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
+  writeFileSync(
+    join(made.globalRoot, 'config.json'),
+    JSON.stringify({ embeddings: { enabled: false } }),
+  );
   return made;
 }
 
@@ -259,14 +282,18 @@ const rowsAt = (root: string): string[] =>
 
 async function runSteps(inProcess: boolean) {
   const { root, globalRoot } = await copy();
-  const replies = await onServer(root, inProcess ? sqliteStore(root) : undefined, async (server) => {
-    const seenSoFar = [];
-    for (const [label, send] of STEPS) {
-      const reply = await seen(label, await send(server), seed.keyIds);
-      seenSoFar.push({ ...reply, body: runFree(reply.body) });
-    }
-    return seenSoFar;
-  });
+  const replies = await onServer(
+    root,
+    inProcess ? sqliteStore(root) : undefined,
+    async (server) => {
+      const seenSoFar = [];
+      for (const [label, send] of STEPS) {
+        const reply = await seen(label, await send(server), seed.keyIds);
+        seenSoFar.push({ ...reply, body: runFree(reply.body) });
+      }
+      return seenSoFar;
+    },
+  );
   return {
     replies,
     audit: auditRows(root, seed.keyIds),
@@ -315,14 +342,22 @@ describe('the routes moved off the server thread, on store workers against the i
       expect(onWorkers.replies.map((reply) => [reply.label, reply.status])).toEqual(
         STEPS.map(([label, , status]) => [label, status]),
       );
-      const bodyOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.body]));
-      expect(bodyOf['context, reaching the global store']).toContain('global store about rollbacks');
+      const bodyOf = Object.fromEntries(
+        onWorkers.replies.map((reply) => [reply.label, reply.body]),
+      );
+      expect(bodyOf['context, reaching the global store']).toContain(
+        'global store about rollbacks',
+      );
       expect(bodyOf['slack message']).toContain('"status":"ingested"');
-      expect(bodyOf['slack redelivery']).toBe('{"ok":true,"status":"duplicate","memoryId":"<memory>"}');
+      expect(bodyOf['slack redelivery']).toBe(
+        '{"ok":true,"status":"duplicate","memoryId":"<memory>"}',
+      );
       expect(bodyOf['github deletion']).toContain('"status":"archived"');
       expect(bodyOf['mcp stream']).toBe(': ping\n\n');
       expect(bodyOf['mcp resolve']).toContain('weakened');
-      expect(bodyOf['mcp resolve, rejecting the loser']).toContain('rejected (tombstoned) and removed');
+      expect(bodyOf['mcp resolve, rejecting the loser']).toContain(
+        'rejected (tombstoned) and removed',
+      );
       expect(bodyOf['promote']).toBe('{"ok":true,"sourceId":"mem_p_noise","globalId":"<global>"}');
       expect(bodyOf['mcp share']).toContain('Shared [<global>] to global store');
       // The promoted and the shared copy both name the project folder.
@@ -334,7 +369,12 @@ describe('the routes moved off the server thread, on store workers against the i
 
 describe('the server-thread block of the routes this file covers', () => {
   const ROUTES: ReadonlyArray<
-    readonly [route: string, swapped: (inProcess: InProcess) => Partial<InProcess>, send: Send, status: number]
+    readonly [
+      route: string,
+      swapped: (inProcess: InProcess) => Partial<InProcess>,
+      send: Send,
+      status: number,
+    ]
   > = [
     ['GET /v1/recall/drill/:id', (p) => ({ dagReads: p.dagReads }), drill('mem_x_summary'), 501],
     [
@@ -343,7 +383,12 @@ describe('the server-thread block of the routes this file covers', () => {
       outcome({ good: true, ids: ['mem_p_plain'] }),
       501,
     ],
-    ['POST /v1/outcome on the last recall', (p) => ({ entryWrites: p.entryWrites }), outcome({ good: true }), 501],
+    [
+      'POST /v1/outcome on the last recall',
+      (p) => ({ entryWrites: p.entryWrites }),
+      outcome({ good: true }),
+      501,
+    ],
     ['GET /v1/context', (p) => ({ contextReads: p.contextReads }), context('?q=deploy'), 501],
     [
       'POST /v1/connectors/slack/events',
@@ -370,7 +415,12 @@ describe('the server-thread block of the routes this file covers', () => {
       tool('hippo_resolve', { conflict_id: 2, keep: 'mem_p_fill0', rejectLoser: true }),
       200,
     ],
-    ['POST /v1/memories/:id/promote', (p) => ({ entriesByIds: p.entriesByIds }), promote('mem_p_noise'), 501],
+    [
+      'POST /v1/memories/:id/promote',
+      (p) => ({ entriesByIds: p.entriesByIds }),
+      promote('mem_p_noise'),
+      501,
+    ],
     [
       'POST /mcp hippo_share',
       (p) => ({ entriesByIds: p.entriesByIds }),
@@ -387,13 +437,17 @@ describe('the server-thread block of the routes this file covers', () => {
       // The worker-backed store with one group or method swapped back to the in-process one: the defect the block exists to catch.
       const store = Object.assign(workerSqliteStore(root), swapped(sqliteStore(root)));
 
-      const res = await onServer(root, store, async (server) => seen('blocked', await send(server)));
+      const res = await onServer(root, store, async (server) =>
+        seen('blocked', await send(server)),
+      );
 
       expect(res.status).toBe(status);
       if (status === 200) expect(res.body).toContain('"code":-32603');
-      expect(info.mock.calls.map((call) => String(call[0])).filter((line) => line.includes(BLOCKED_LINE))).toHaveLength(
-        1,
-      );
+      expect(
+        info.mock.calls
+          .map((call) => String(call[0]))
+          .filter((line) => line.includes(BLOCKED_LINE)),
+      ).toHaveLength(1);
     },
   );
 });

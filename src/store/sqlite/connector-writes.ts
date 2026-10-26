@@ -20,7 +20,10 @@ class EventAlreadyLogged extends Error {}
 
 /** The record, then the log row, go in after the memory row and ahead of its remember row, as a second store must order
  * them. */
-function writeWithCompanions(db: DatabaseSyncLike, { entry, actor, event, quarantine }: ConnectorWrite): void {
+function writeWithCompanions(
+  db: DatabaseSyncLike,
+  { entry, actor, event, quarantine }: ConnectorWrite,
+): void {
   writeInOwnTenant(db, entry, actor, (handle, memoryId) => {
     if (quarantine) {
       recordQuarantine(handle, {
@@ -48,7 +51,11 @@ function writeOnce(db: DatabaseSyncLike, write: ConnectorWrite): ConnectorWriteO
 
 /** archiveRaw with the event logged in its write; the log write's answer is unread: a key logged before keeps its row
  * and the archive stands. */
-function archiveConnectorEntry(db: DatabaseSyncLike, files: StoreFiles, archive: ConnectorArchive): string {
+function archiveConnectorEntry(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  archive: ConnectorArchive,
+): string {
   return archiveRaw(db, files, archive, (handle, archivedId) => {
     logEvent(handle, archive.event, archivedId);
   });

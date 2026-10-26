@@ -22,7 +22,10 @@ import type { CallerState } from '../../api/callers.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 
 /** Same bounded walk as the CLI (ends at home, so HIPPO_HOME wins over ~/.hippo); cwd/opts are the test seam. */
-export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOptions): string | null {
+export function findHippoRoot(
+  cwd: string = process.cwd(),
+  opts?: ResolveProjectIdentityOptions,
+): string | null {
   const local = findHippoStoreDir(cwd, opts);
   if (local !== null) return local;
   // Global fallback (respects $HIPPO_HOME / $XDG_DATA_HOME)
@@ -47,15 +50,24 @@ export function mcpErrorResponse<E>(
   const where = call === undefined ? '' : ` (${call})`;
   const { status, message } = mapApiError(err);
   if (status === 503) {
-    log.warn(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, ...errorFields(err) });
+    log.warn(`mcp request${where} failed: ${errorMessage(err)}`, {
+      requestId,
+      ...errorFields(err),
+    });
     return errorReply(id, INTERNAL_ERROR, message);
   }
   if (status !== 500) {
-    log.info(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, status, ...errorClassFields(err) });
+    log.info(`mcp request${where} failed: ${errorMessage(err)}`, {
+      requestId,
+      status,
+      ...errorClassFields(err),
+    });
     return errorReply(id, INTERNAL_ERROR, message);
   }
   log.error(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, ...errorFields(err) });
-  return errorReply(id, INTERNAL_ERROR, `${INTERNAL_ERROR_MESSAGE} (request id ${requestId})`, { requestId });
+  return errorReply(id, INTERNAL_ERROR, `${INTERNAL_ERROR_MESSAGE} (request id ${requestId})`, {
+    requestId,
+  });
 }
 
 export type { McpRequest, McpResponse };

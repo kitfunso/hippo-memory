@@ -137,13 +137,21 @@ describe('rarestPromptTerms', () => {
       ['rarest', 1],
       ['tie', 3],
     ]);
-    const out = rarestPromptTerms(['common', 'mid', 'rare', 'rarest', 'tie'], (t) => counts.get(t) ?? 0, 3);
+    const out = rarestPromptTerms(
+      ['common', 'mid', 'rare', 'rarest', 'tie'],
+      (t) => counts.get(t) ?? 0,
+      3,
+    );
     expect(out).toEqual(['rarest', 'rare', 'tie']);
   });
 
   it('drops zero-count (out-of-vocab) terms entirely', () => {
     const counts = new Map([['known', 5]]);
-    const out = rarestPromptTerms(['known', 'unknown'], (t) => counts.get(t) ?? 0, RAREST_TERM_COUNT);
+    const out = rarestPromptTerms(
+      ['known', 'unknown'],
+      (t) => counts.get(t) ?? 0,
+      RAREST_TERM_COUNT,
+    );
     expect(out).toEqual(['known']);
   });
 
@@ -183,12 +191,16 @@ describe('rarestFtsQuery', () => {
       ['journal', 9],
       ['wal', 5],
     ]);
-    expect(rarestFtsQuery(['journal_nothing', '__', 'wal'], (part) => counts.get(part) ?? 0)).toBe('wal');
+    expect(rarestFtsQuery(['journal_nothing', '__', 'wal'], (part) => counts.get(part) ?? 0)).toBe(
+      'wal',
+    );
   });
 
   it('breaks ties by term and caps at RAREST_TERM_COUNT unless told otherwise', () => {
     const terms = Array.from({ length: 20 }, (_, i) => `t${String(i).padStart(2, '0')}`).reverse();
-    expect(rarestFtsQuery(terms, () => 1).split(' ')).toEqual(terms.slice().sort().slice(0, RAREST_TERM_COUNT));
+    expect(rarestFtsQuery(terms, () => 1).split(' ')).toEqual(
+      terms.slice().sort().slice(0, RAREST_TERM_COUNT),
+    );
     expect(rarestFtsQuery(terms, () => 1, 2)).toBe('t00 t01');
   });
 

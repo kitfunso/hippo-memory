@@ -82,7 +82,9 @@ describe('an add-on route behind serve()', () => {
   it.skipIf(needsHippoDb('addon'))(
     'hands the handler the key tenant and the parsed body, and sends its value back as 200 JSON',
     async () => {
-      await start([route(ECHO, async () => ({ seen: calls.length, nested: { list: [1, 'two', null] } }))]);
+      await start([
+        route(ECHO, async () => ({ seen: calls.length, nested: { list: [1, 'two', null] } })),
+      ]);
       const res = await post(ECHO, JSON.stringify({ a: 1, b: { c: 'd' } }));
       expect(res).toEqual({ status: 200, reply: { seen: 1, nested: { list: [1, 'two', null] } } });
       expect(calls).toHaveLength(1);
@@ -103,7 +105,8 @@ describe('an add-on route behind serve()', () => {
     'answers 400 and never runs the handler for a body that is not a JSON object',
     async () => {
       await start([echo()]);
-      for (const body of ['{not json', '[1,2]', '"text"']) expect((await post(ECHO, body)).status, body).toBe(400);
+      for (const body of ['{not json', '[1,2]', '"text"'])
+        expect((await post(ECHO, body)).status, body).toBe(400);
       expect(calls).toEqual([]);
     },
   );
@@ -195,8 +198,13 @@ describe('an add-on route behind serve()', () => {
 
   it("serves POST only: a GET on the add-on path is core's 404", async () => {
     await start([echo()]);
-    const res = await fetch(`${handle!.url}${ECHO}`, { headers: { authorization: `Bearer ${apiKey}` } });
-    expect({ status: res.status, reply: await res.json() }).toEqual({ status: 404, reply: { error: 'not found' } });
+    const res = await fetch(`${handle!.url}${ECHO}`, {
+      headers: { authorization: `Bearer ${apiKey}` },
+    });
+    expect({ status: res.status, reply: await res.json() }).toEqual({
+      status: 404,
+      reply: { error: 'not found' },
+    });
     expect(calls).toEqual([]);
   });
 });
@@ -208,18 +216,31 @@ describe("an add-on route with `loop: 'off'`", () => {
       path: LABELS,
       storeReady: 'keyWrites',
       handler: async ({ ctx }) =>
-        (await ctx.store.keyWrites.listApiKeys({ tenantId: ctx.tenantId, active: true })).map((row) => row.key.label),
+        (await ctx.store.keyWrites.listApiKeys({ tenantId: ctx.tenantId, active: true })).map(
+          (row) => row.key.label,
+        ),
     };
     return loop === undefined ? route : { ...route, loop };
   };
-  const blockedLines = (info: { readonly mock: { readonly calls: ReadonlyArray<readonly unknown[]> } }): string[] =>
+  const blockedLines = (info: {
+    readonly mock: { readonly calls: ReadonlyArray<readonly unknown[]> };
+  }): string[] =>
     info.mock.calls
       .map((call) => String(call[0]))
       .filter((line) => line.includes('opened on the server thread by a route'));
 
   /** One POST to the route on a server over `store`, stopped before it returns. */
-  async function once(route: AddonRoute, store?: HippoStore): Promise<{ status: number; reply: unknown }> {
-    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0, routes: [route], ...(store && { store }) });
+  async function once(
+    route: AddonRoute,
+    store?: HippoStore,
+  ): Promise<{ status: number; reply: unknown }> {
+    handle = await serve({
+      hippoRoot: root,
+      host: '127.0.0.1',
+      port: 0,
+      routes: [route],
+      ...(store && { store }),
+    });
     try {
       return await post(LABELS, '{}');
     } finally {
@@ -241,7 +262,8 @@ describe("an add-on route with `loop: 'off'`", () => {
   it('answers 501 when its handler opens hippo.db on the server thread, which an unset `loop` allows', async () => {
     const info = vi.spyOn(log, 'info');
     // The worker-backed store with keyWrites swapped back to the in-process one: the defect the fence exists to catch.
-    const swapped = () => Object.assign(workerSqliteStore(root), { keyWrites: sqliteStore(root).keyWrites });
+    const swapped = () =>
+      Object.assign(workerSqliteStore(root), { keyWrites: sqliteStore(root).keyWrites });
     expect((await once(labels('off'), swapped())).status).toBe(501);
     expect(blockedLines(info)).toHaveLength(1);
     expect(await once(labels(), swapped())).toEqual({ status: 200, reply: ['addon-test'] });
@@ -251,7 +273,9 @@ describe("an add-on route with `loop: 'off'`", () => {
   it("refuses at boot a `loop` other than 'off'", async () => {
     // An untyped add-on's typo, which Object.assign lets past the field's type as plain JavaScript would.
     const err = await bootError([Object.assign(echo(), { loop: 'on' })]);
-    expect(err?.message).toBe("add-on route '/v1/x-echo' has loop 'on'; set 'off' or leave it unset");
+    expect(err?.message).toBe(
+      "add-on route '/v1/x-echo' has loop 'on'; set 'off' or leave it unset",
+    );
     expect(existsSync(join(root, 'server.pid'))).toBe(false);
   });
 });
@@ -297,7 +321,9 @@ describe('serve() refuses an add-on route that could shadow or dodge core', () =
       expect(await post(near, '{}')).toEqual({ status: 200, reply: { near: true } });
       expect(calls).toHaveLength(1);
       // The real row is untouched: a numeric id still reaches core's handler, never the add-on's.
-      expect((await post('/v1/predictions/7/close', '{"state":"closed"}')).reply).not.toEqual({ near: true });
+      expect((await post('/v1/predictions/7/close', '{"state":"closed"}')).reply).not.toEqual({
+        near: true,
+      });
       expect(calls).toHaveLength(1);
     },
   );

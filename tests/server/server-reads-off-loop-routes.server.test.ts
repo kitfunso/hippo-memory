@@ -7,7 +7,10 @@ import type { ServerHandle } from '../../src/server.js';
 import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
-import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
+import {
+  startHashedEmbeddings,
+  type HashedEmbeddings,
+} from '../_helpers/hashed-embedding-server.js';
 import {
   EMBEDDING_MODEL,
   HELD_SCOPE,
@@ -16,7 +19,15 @@ import {
   seedMovedReads,
 } from '../_helpers/moved-reads-seed.js';
 import { CLEARED_ENV, FAKE_NOW, freshStore, SESSION } from '../_helpers/recall-golden-seed.js';
-import { auditRows, get, holdWriteLock, mirrorFiles, post, seen, undoAll } from '../_helpers/store-worker-server.js';
+import {
+  auditRows,
+  get,
+  holdWriteLock,
+  mirrorFiles,
+  post,
+  seen,
+  undoAll,
+} from '../_helpers/store-worker-server.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 type InProcess = HippoStore & StoreGroups;
@@ -95,7 +106,11 @@ const RECALL_STEPS: readonly Step[] = [
   ['recall with a fresh tail', recall(FRESH_TAIL), 200],
   ['recall a forward claim', recall(FORWARD_CLAIM), 200],
   ['recall with overflow summaries', recall('q=deploy&limit=2&summarize_overflow=true'), 200],
-  ['recall the approved memory in its scope', recall(`q=wipe&scope=${encodeURIComponent(HELD_SCOPE)}`), 200],
+  [
+    'recall the approved memory in its scope',
+    recall(`q=wipe&scope=${encodeURIComponent(HELD_SCOPE)}`),
+    200,
+  ],
   ['recall with a zero limit', recall('q=deploy&limit=0'), 400],
   ['recall as the other tenant', recall('q=deploy', 'other'), 200],
   ['recall with an unknown key', recall('q=deploy', 'unknown'), 401],
@@ -119,7 +134,9 @@ async function onServer<T>(
   store: HippoStore | undefined,
   use: (server: ServerHandle) => Promise<T>,
 ): Promise<T> {
-  const server = await serve(store ? { hippoRoot: root, port: 0, store } : { hippoRoot: root, port: 0 });
+  const server = await serve(
+    store ? { hippoRoot: root, port: 0, store } : { hippoRoot: root, port: 0 },
+  );
   try {
     return await use(server);
   } finally {
@@ -136,11 +153,16 @@ const left = (root: string) => ({
 
 async function runSteps(steps: readonly Step[], inProcess: boolean) {
   const root = copy();
-  const replies = await onServer(root, inProcess ? sqliteStore(root) : undefined, async (server) => {
-    const seenSoFar = [];
-    for (const [label, send] of steps) seenSoFar.push(await seen(label, await send({ server, seed }), seed.keyIds));
-    return seenSoFar;
-  });
+  const replies = await onServer(
+    root,
+    inProcess ? sqliteStore(root) : undefined,
+    async (server) => {
+      const seenSoFar = [];
+      for (const [label, send] of steps)
+        seenSoFar.push(await seen(label, await send({ server, seed }), seed.keyIds));
+      return seenSoFar;
+    },
+  );
   return { replies, ...left(root) };
 }
 
@@ -182,7 +204,9 @@ describe('the worker-backed graph, quarantine and recall routes against the in-p
       expect(onWorkers.replies.map((reply) => [reply.label, reply.status])).toEqual(
         STEPS.map(([label, , status]) => [label, status]),
       );
-      const bodyOf = Object.fromEntries(onWorkers.replies.map((reply) => [reply.label, reply.body]));
+      const bodyOf = Object.fromEntries(
+        onWorkers.replies.map((reply) => [reply.label, reply.body]),
+      );
       expect(bodyOf['graph from an entity']).toContain('RetryPolicy');
       expect(bodyOf['graph as the other tenant']).toContain('AcmePolicy');
       expect(bodyOf['list the approved']).toContain('before every commit');
@@ -205,15 +229,19 @@ describe('the worker-backed graph, quarantine and recall routes against the in-p
       const behindLock = async (inProcess: boolean) => {
         const root = copy();
         const before = left(root);
-        const replies = await onServer(root, inProcess ? sqliteStore(root) : undefined, async (server) => {
-          const lock = holdWriteLock(root);
-          const seenSoFar = [];
-          for (const [label, send] of busy) {
-            seenSoFar.push(await seen(label, await send({ server, seed }), seed.keyIds));
-          }
-          lock.release();
-          return seenSoFar;
-        });
+        const replies = await onServer(
+          root,
+          inProcess ? sqliteStore(root) : undefined,
+          async (server) => {
+            const lock = holdWriteLock(root);
+            const seenSoFar = [];
+            for (const [label, send] of busy) {
+              seenSoFar.push(await seen(label, await send({ server, seed }), seed.keyIds));
+            }
+            lock.release();
+            return seenSoFar;
+          },
+        );
         expect(left(root)).toEqual(before);
         return replies;
       };
@@ -233,7 +261,12 @@ describe('the worker-backed graph, quarantine and recall routes against the in-p
 describe("the server-thread block of a `loop: 'off'` route this file covers", () => {
   // The last column is false where the route has written before it reaches the swapped method.
   const ROUTES: ReadonlyArray<
-    readonly [route: string, swapped: (inProcess: InProcess) => Partial<InProcess>, send: Send, writesNothing: boolean]
+    readonly [
+      route: string,
+      swapped: (inProcess: InProcess) => Partial<InProcess>,
+      send: Send,
+      writesNothing: boolean,
+    ]
   > = [
     ['GET /v1/graph', (p) => ({ graphReads: p.graphReads }), graph(''), true],
     ['GET /v1/quarantine', (p) => ({ quarantine: p.quarantine }), held(''), true],
@@ -261,7 +294,12 @@ describe("the server-thread block of a `loop: 'off'` route this file covers", ()
       recall(`q=deploy&${WITH_SESSION}`),
       true,
     ],
-    ['GET /v1/memories, by its fresh tail', (p) => ({ freshRawEntries: p.freshRawEntries }), recall(FRESH_TAIL), true],
+    [
+      'GET /v1/memories, by its fresh tail',
+      (p) => ({ freshRawEntries: p.freshRawEntries }),
+      recall(FRESH_TAIL),
+      true,
+    ],
     [
       'GET /v1/memories, by its continuity block',
       (p) => ({ continuity: p.continuity }),
@@ -280,14 +318,24 @@ describe("the server-thread block of a `loop: 'off'` route this file covers", ()
       recall('q=deploy&limit=2&summarize_overflow=true'),
       true,
     ],
-    ['GET /v1/memories, by its closing write', (p) => ({ finishRecall: p.finishRecall }), recall('q=deploy'), true],
+    [
+      'GET /v1/memories, by its closing write',
+      (p) => ({ finishRecall: p.finishRecall }),
+      recall('q=deploy'),
+      true,
+    ],
     [
       'GET /v1/memories, by its recall counter',
       (p) => ({ bumpRecallStats: p.bumpRecallStats }),
       recall('q=deploy'),
       false,
     ],
-    ['GET /v1/memories, by its vector reads', (p) => ({ vectors: p.vectors }), recall('q=deploy&mode=hybrid'), true],
+    [
+      'GET /v1/memories, by its vector reads',
+      (p) => ({ vectors: p.vectors }),
+      recall('q=deploy&mode=hybrid'),
+      true,
+    ],
   ];
 
   it.each(ROUTES)(
@@ -296,7 +344,9 @@ describe("the server-thread block of a `loop: 'off'` route this file covers", ()
       const root = copy();
       writeFileSync(
         join(root, 'config.json'),
-        JSON.stringify({ embeddings: { provider: 'openai', model: EMBEDDING_MODEL, apiBaseUrl: embeddings.url } }),
+        JSON.stringify({
+          embeddings: { provider: 'openai', model: EMBEDDING_MODEL, apiBaseUrl: embeddings.url },
+        }),
       );
       vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
       const before = left(root);

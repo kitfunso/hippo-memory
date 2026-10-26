@@ -54,7 +54,11 @@ export interface DormantRestoreRequest {
 
 /** `ownScope` is the caller's personal scope; the store builds its own scope test, so no predicate crosses the port. */
 export interface Dormant {
-  list(tenantId: string, ownScope: string | null, opts: ListDormantOptions): Promise<DormantMemory[]>;
+  list(
+    tenantId: string,
+    ownScope: string | null,
+    opts: ListDormantOptions,
+  ): Promise<DormantMemory[]>;
   /** Revives inside the store's write, so a refused row changes nothing; its entry's origin is filled as writeEntry
    * fills one. */
   restore(tenantId: string, request: DormantRestoreRequest): Promise<DormantRestoreOutcome>;

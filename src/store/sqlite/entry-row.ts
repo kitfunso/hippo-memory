@@ -2,7 +2,13 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isoInstant } from '../../base/memory/created-stamp.js';
-import { type DatabaseSyncLike, ftsRowCounts, isFtsAvailable, repairFtsDrift, setFtsInSync } from '../../db/index.js';
+import {
+  type DatabaseSyncLike,
+  ftsRowCounts,
+  isFtsAvailable,
+  repairFtsDrift,
+  setFtsInSync,
+} from '../../db/index.js';
 import { fallbackOrigin, type Host } from '../../host/host.js';
 import { originFromSource } from '../../host/project-identity.js';
 import { CrossTenantIdError } from '../../base/errors/api-errors.js';
@@ -115,7 +121,11 @@ function markFtsDrifted(db: DatabaseSyncLike): void {
   try {
     setFtsInSync(db, false);
   } catch (err) {
-    log.warnThenSample('fts-sync', `could not clear the FTS in-sync flag: ${errorMessage(err)}`, errorFields(err));
+    log.warnThenSample(
+      'fts-sync',
+      `could not clear the FTS in-sync flag: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
 }
 
@@ -163,12 +173,18 @@ export function deleteFtsRow(db: DatabaseSyncLike, id: string): void {
 
 /** One set delete for `staleIds`, because `id` is UNINDEXED and each delete by id scans the whole index; then one
  * insert per row. */
-export function replaceFtsRows(db: DatabaseSyncLike, rows: readonly MemoryEntry[], staleIds: readonly string[]): void {
+export function replaceFtsRows(
+  db: DatabaseSyncLike,
+  rows: readonly MemoryEntry[],
+  staleIds: readonly string[],
+): void {
   if (!isFtsAvailable(db)) return;
   let kept: ReadonlySet<string> = new Set();
   if (staleIds.length > 0) {
     try {
-      db.prepare(`DELETE FROM memories_fts WHERE id IN (SELECT value FROM json_each(?))`).run(JSON.stringify(staleIds));
+      db.prepare(`DELETE FROM memories_fts WHERE id IN (SELECT value FROM json_each(?))`).run(
+        JSON.stringify(staleIds),
+      );
     } catch (err) {
       // Their old rows are still indexed, so inserting them again would index an id twice; only new ids go in.
       kept = new Set(staleIds);
@@ -199,7 +215,10 @@ export function replaceFtsRows(db: DatabaseSyncLike, rows: readonly MemoryEntry[
 
 /** Row counts of a full-text index that has drifted from `memories`, re-synced after the count when `repair`; null when
  * the two agree or there is no index. */
-export function ftsDrift(db: DatabaseSyncLike, repair: boolean): { memories: number; fts: number } | null {
+export function ftsDrift(
+  db: DatabaseSyncLike,
+  repair: boolean,
+): { memories: number; fts: number } | null {
   if (!isFtsAvailable(db)) return null;
   const counts = ftsRowCounts(db);
   if (counts === null) return null;
@@ -214,7 +233,10 @@ export function ftsDrift(db: DatabaseSyncLike, repair: boolean): { memories: num
 /** Stamp origin_project from the store's own location (parent of `<project>/.hippo`; the home store is '' =
  * user-global) when never stamped; returns a copy. NULL is PRESERVED: it means no known project and ambient context
  * denies it, so a writeback must not launder it. */
-export function stampOriginProject({ host, hippoRoot }: StoreFiles, entry: MemoryEntry): MemoryEntry {
+export function stampOriginProject(
+  { host, hippoRoot }: StoreFiles,
+  entry: MemoryEntry,
+): MemoryEntry {
   if (entry.originProject !== undefined) return entry;
   return { ...entry, originProject: fallbackOrigin(host, hippoRoot) };
 }
@@ -222,7 +244,11 @@ export function stampOriginProject({ host, hippoRoot }: StoreFiles, entry: Memor
 /** Import-time variant for a mirror with no origin field (an explicit null stays null), for rows predating the origin
  * column. Like the v39 backfill, the provenance source (`shared:<project>:` / `promoted:<localRoot>`) wins over the
  * destination store's location. */
-export function stampOriginProjectForImport(host: Host, hippoRoot: string, entry: MemoryEntry): MemoryEntry {
+export function stampOriginProjectForImport(
+  host: Host,
+  hippoRoot: string,
+  entry: MemoryEntry,
+): MemoryEntry {
   if (entry.originProject !== undefined) return entry;
   const fromSource = originFromSource(entry.source);
   return {

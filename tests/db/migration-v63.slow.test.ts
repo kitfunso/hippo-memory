@@ -3,7 +3,12 @@
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  getSchemaVersion,
+  openHippoDb,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { v63 } from '../../src/db/migrations/v63.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
 import { shareMemory } from '../../src/domain/sharing/share.js';
@@ -14,7 +19,11 @@ import { countMatching, recordStatements } from '../_helpers/count-statements.js
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
-import { readEntry, replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
+import {
+  readEntry,
+  replaceDetectedConflicts,
+  writeEntriesTogether,
+} from '../_helpers/root-forms.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
 
 const CONFLICTED = 'idx_memories_conflicted';
@@ -39,15 +48,19 @@ function plan(db: DatabaseSyncLike, sql: string): string {
 
 function indexNames(db: DatabaseSyncLike): string[] {
   // SAFETY: one `name` TEXT column.
-  return (db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all() as Array<{ name: string }>).map(
-    (r) => r.name,
-  );
+  return (
+    db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index'`).all() as Array<{
+      name: string;
+    }>
+  ).map((r) => r.name);
 }
 
 function refsOf(db: DatabaseSyncLike): Record<string, string> {
   // SAFETY: two TEXT columns.
   const rows = db
-    .prepare(`SELECT id, conflicts_with_json FROM memories WHERE conflicts_with_json != '[]' ORDER BY id`)
+    .prepare(
+      `SELECT id, conflicts_with_json FROM memories WHERE conflicts_with_json != '[]' ORDER BY id`,
+    )
     .all() as Array<{ id: string; conflicts_with_json: string }>;
   return Object.fromEntries(rows.map((r) => [r.id, r.conflicts_with_json]));
 }
@@ -68,10 +81,12 @@ const PAIRS = [
 /** Copies `templateId`'s row under `n` fresh ids in one statement, so 10,000 rows seed in well under a second. */
 function fill(db: DatabaseSyncLike, templateId: string, n: number): void {
   // SAFETY: pragma_table_info answers one TEXT `name` per column.
-  const cols = (db.prepare(`SELECT name FROM pragma_table_info('memories')`).all() as Array<{ name: string }>).map(
-    (r) => r.name,
-  );
-  const picks = cols.map((c) => (c === 'id' ? `printf('fill_%06d', n.i)` : `memories.${c}`)).join(', ');
+  const cols = (
+    db.prepare(`SELECT name FROM pragma_table_info('memories')`).all() as Array<{ name: string }>
+  ).map((r) => r.name);
+  const picks = cols
+    .map((c) => (c === 'id' ? `printf('fill_%06d', n.i)` : `memories.${c}`))
+    .join(', ');
   db.prepare(
     `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?) ` +
       `INSERT INTO memories (${cols.join(', ')}) SELECT ${picks} FROM memories, n WHERE memories.id = ?`,
@@ -81,7 +96,10 @@ function fill(db: DatabaseSyncLike, templateId: string, n: number): void {
 /** Five rows in three open conflicts among `size` memories, after one refresh has settled their refs. */
 function seededStore(size: number): string {
   const root = makeRoot('v63-flat');
-  writeEntriesTogether(root, [...['m_a', 'm_b', 'm_c', 'm_d', 'm_e'].map((id) => entry(id)), entry('m_plain')]);
+  writeEntriesTogether(root, [
+    ...['m_a', 'm_b', 'm_c', 'm_d', 'm_e'].map((id) => entry(id)),
+    entry('m_plain'),
+  ]);
   withDb(root, (db) => fill(db, 'm_plain', size - 6));
   replaceDetectedConflicts(root, PAIRS);
   return root;
@@ -146,7 +164,10 @@ describe('schema v63', () => {
     const root = makeRoot('v63-markdown', { init: false });
     const mirrored = entry('m_mirrored', { conflictsWith: ['m_gone'] });
     mkdirSync(layerDir(root, mirrored.layer), { recursive: true });
-    writeFileSync(join(layerDir(root, mirrored.layer), `${mirrored.id}.md`), serializeEntry(mirrored));
+    writeFileSync(
+      join(layerDir(root, mirrored.layer), `${mirrored.id}.md`),
+      serializeEntry(mirrored),
+    );
     expect(readEntry(root, mirrored.id)?.conflictsWith).toEqual(['m_gone']);
     replaceDetectedConflicts(root, []);
     expect(readEntry(root, mirrored.id)?.conflictsWith).toEqual([]);
@@ -161,7 +182,9 @@ describe('schema v63', () => {
       db.exec('PRAGMA user_version = 62');
     });
     const creates = /CREATE INDEX IF NOT EXISTS (idx_memories_conflicted|idx_recall_traces_ts) /;
-    const upgrade = recordStatements(() => withDb(root, (db) => [getSchemaVersion(db), indexNames(db)] as const));
+    const upgrade = recordStatements(() =>
+      withDb(root, (db) => [getSchemaVersion(db), indexNames(db)] as const),
+    );
     expect(countMatching(upgrade.statements, creates)).toBe(2);
     expect(upgrade.result[0]).toBe(LATEST_SCHEMA_VERSION);
     expect(upgrade.result[1]).toEqual(expect.arrayContaining(BOTH));

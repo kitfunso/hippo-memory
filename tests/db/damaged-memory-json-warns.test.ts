@@ -1,5 +1,14 @@
 // A memory row whose JSON column will not parse still reads, as empty, and the row is named once at warn so the damage can be found.
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -53,7 +62,8 @@ afterEach(() => {
 });
 
 afterAll(() => {
-  for (const dir of dirs) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const dir of dirs)
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe('a memory row with a damaged JSON column', () => {
@@ -86,11 +96,21 @@ describe('a memory row with a damaged JSON column', () => {
     // A column an earlier case named at warn repeats at debug for this process, so debug keeps this case its own.
     vi.stubEnv('HIPPO_LOG', 'debug');
     const root = newRoot();
-    const first = createMemory('first damaged row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });
-    const second = createMemory('second damaged row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });
+    const first = createMemory('first damaged row', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tenantId: TENANT,
+    });
+    const second = createMemory('second damaged row', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tenantId: TENANT,
+    });
     writeEntry(root, first);
     writeEntry(root, second);
-    runSql(root, `UPDATE memories SET conflicts_with_json = '[', parents_json = '{' WHERE id = ?`, first.id);
+    runSql(
+      root,
+      `UPDATE memories SET conflicts_with_json = '[', parents_json = '{' WHERE id = ?`,
+      first.id,
+    );
     runSql(root, `UPDATE memories SET tags_json = 'nope' WHERE id = ?`, second.id);
 
     const read = loadAllEntries(root, 'default');
@@ -103,14 +123,24 @@ describe('a memory row with a damaged JSON column', () => {
       damageLines()
         .map((line) => /id=(\S+) column=(\S+)/.exec(line)?.slice(1, 3).join(' '))
         .sort(),
-    ).toEqual([`${first.id} conflicts_with_json`, `${first.id} parents_json`, `${second.id} tags_json`].sort());
+    ).toEqual(
+      [
+        `${first.id} conflicts_with_json`,
+        `${first.id} parents_json`,
+        `${second.id} tags_json`,
+      ].sort(),
+    );
   });
 
   it('leaves a clean row silent', () => {
     const root = newRoot();
     writeEntry(
       root,
-      createMemory('clean row', { tags: ['a'], baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT }),
+      createMemory('clean row', {
+        tags: ['a'],
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tenantId: TENANT,
+      }),
     );
 
     expect(loadAllEntries(root, 'default').map((e) => e.tags)).toEqual([['a']]);
@@ -130,7 +160,9 @@ describe('a session event with damaged metadata', () => {
     });
     runSql(root, `UPDATE session_events SET metadata_json = '{"a":' WHERE id = ?`, event.id);
 
-    expect(listSessionEvents(root, TENANT, { session_id: 'sess-1' }).map((e) => e.metadata)).toEqual([{}]);
+    expect(
+      listSessionEvents(root, TENANT, { session_id: 'sess-1' }).map((e) => e.metadata),
+    ).toEqual([{}]);
     listSessionEvents(root, TENANT, { session_id: 'sess-1' });
 
     expect(damageLines()).toHaveLength(1);
@@ -165,7 +197,10 @@ describe('a working-memory item with damaged metadata', () => {
     await byContent();
 
     const lines = damageLines().filter((line) => line.includes('table=working_memory'));
-    expect(lines.map((line) => /column=(\S+)/.exec(line)?.[1])).toEqual(['metadata_json', 'metadata_json']);
+    expect(lines.map((line) => /column=(\S+)/.exec(line)?.[1])).toEqual([
+      'metadata_json',
+      'metadata_json',
+    ]);
     expect(lines.some((line) => line.includes('is not valid JSON'))).toBe(true);
     expect(lines.some((line) => line.includes('is wrong shape'))).toBe(true);
   });

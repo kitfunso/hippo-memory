@@ -15,7 +15,12 @@ import { loadAllEntries } from '../_helpers/root-forms.js';
 const MARKER = 'zebrafish-ledger';
 const WORKER_DONE = 'skip: no session_id in SessionEnd payload';
 
-function runHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string): SpawnSyncReturns<string> {
+function runHippo(
+  args: string[],
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  input?: string,
+): SpawnSyncReturns<string> {
   return hippoRun(args, { cwd, env, input });
 }
 
@@ -29,7 +34,9 @@ describe('session-end with no payload never scans other projects', () => {
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-session-end-no-scan-'));
     env = { ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir };
-    expect(runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], dir, env).status).toBe(0);
+    expect(runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], dir, env).status).toBe(
+      0,
+    );
   });
 
   afterEach(() => {
@@ -46,10 +53,16 @@ describe('session-end with no payload never scans other projects', () => {
     fs.writeFileSync(
       path.join(other, 'x.jsonl'),
       [
-        { type: 'user', message: { role: 'user', content: `we decided to adopt the ${MARKER} cache` } },
+        {
+          type: 'user',
+          message: { role: 'user', content: `we decided to adopt the ${MARKER} cache` },
+        },
         {
           type: 'assistant',
-          message: { role: 'assistant', content: [{ type: 'text', text: 'Adopted; the migration is next.' }] },
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Adopted; the migration is next.' }],
+          },
         },
       ]
         .map((e) => JSON.stringify(e))
@@ -59,10 +72,13 @@ describe('session-end with no payload never scans other projects', () => {
     const logFile = path.join(dir, 'session-end-no-payload.log');
     expect(runHippo(['session-end', '--log-file', logFile], dir, env, '').status).toBe(0);
 
-    await waitFor(() => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes(WORKER_DONE), {
-      ...WORKER_WAIT,
-      what: 'the worker skip line in the log',
-    });
+    await waitFor(
+      () => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes(WORKER_DONE),
+      {
+        ...WORKER_WAIT,
+        what: 'the worker skip line in the log',
+      },
+    );
     const logText = fs.readFileSync(logFile, 'utf8');
     expect(logText).toContain('skip capture: no transcript for this session');
 
@@ -82,10 +98,14 @@ describe('session-end with no payload never scans other projects', () => {
     const lastSleepLog = path.join(dir, '.hippo', 'logs', 'last-sleep.log');
     expect(runHippo(['session-end', '--runtime', 'opencode'], dir, env, '').status).toBe(0);
 
-    await waitFor(() => fs.existsSync(lastSleepLog) && fs.readFileSync(lastSleepLog, 'utf8').includes(WORKER_DONE), {
-      ...WORKER_WAIT,
-      what: 'the worker skip line in last-sleep.log',
-    });
+    await waitFor(
+      () =>
+        fs.existsSync(lastSleepLog) && fs.readFileSync(lastSleepLog, 'utf8').includes(WORKER_DONE),
+      {
+        ...WORKER_WAIT,
+        what: 'the worker skip line in last-sleep.log',
+      },
+    );
     expect(fs.readFileSync(lastSleepLog, 'utf8')).toContain('consolidating memory...');
   });
 });

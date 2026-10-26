@@ -20,7 +20,10 @@ afterEach(() => {
 
 describe('runCapture failure', () => {
   it.each([
-    ['a missing file', (): string => (initTestStore(path.join(dir, '.hippo')), path.join(dir, '.hippo'))],
+    [
+      'a missing file',
+      (): string => (initTestStore(path.join(dir, '.hippo')), path.join(dir, '.hippo')),
+    ],
     ['an uninitialised store', (): string => path.join(dir, 'no-store')],
   ])('restores stdio and sets exit code 1 for %s', async (_name, makeRoot) => {
     const root = makeRoot();

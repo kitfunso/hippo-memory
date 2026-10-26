@@ -50,14 +50,18 @@ export function slackHistoryFetcher(token: string, fetchImpl?: typeof fetch): Sl
         fetchFn: fetchImpl,
       },
     );
-    if (isRetryableStatus(r.status)) throw new Error(`slack: still rate-limited or unavailable (HTTP ${r.status})`);
+    if (isRetryableStatus(r.status))
+      throw new Error(`slack: still rate-limited or unavailable (HTTP ${r.status})`);
     const body = await readHistoryReply(r, url);
-    if (body.ok !== true) throw new Error(`slack: ${isJsonString(body.error) ? body.error : 'unknown error'}`);
+    if (body.ok !== true)
+      throw new Error(`slack: ${isJsonString(body.error) ? body.error : 'unknown error'}`);
     const messages: SlackMessageEvent[] = (Array.isArray(body.messages) ? body.messages : [])
       .filter(isSlackMessage)
       // Slack returns messages without `channel`; stamp it from the request.
       .map((m) => ({ ...m, channel: channelId }));
-    const nextCursor = isJsonObject(body.response_metadata) ? body.response_metadata.next_cursor : undefined;
+    const nextCursor = isJsonObject(body.response_metadata)
+      ? body.response_metadata.next_cursor
+      : undefined;
     return {
       messages,
       next_cursor: isJsonString(nextCursor) ? nextCursor : null,

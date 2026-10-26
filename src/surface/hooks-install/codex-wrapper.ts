@@ -63,7 +63,10 @@ function readCodexWrapperMetadata(): CodexWrapperMetadata | null {
   } catch (err) {
     // Unreadable metadata is treated like the missing-file case above, after the cause is logged.
     if (errorCode(err) !== 'ENOENT') {
-      log.warn(`codex wrapper metadata ${metadataPath} unreadable: ${errorMessage(err)}`, errorFields(err));
+      log.warn(
+        `codex wrapper metadata ${metadataPath} unreadable: ${errorMessage(err)}`,
+        errorFields(err),
+      );
     }
     return null;
   }
@@ -87,7 +90,9 @@ function isHippoCodexWrapperFile(filePath: string): boolean {
   return text !== null && text.includes(HIPPO_CODEX_WRAPPER_MARKER);
 }
 
-function isCodexWrapperMetadataValid(metadata: CodexWrapperMetadata | null): metadata is CodexWrapperMetadata {
+function isCodexWrapperMetadataValid(
+  metadata: CodexWrapperMetadata | null,
+): metadata is CodexWrapperMetadata {
   if (!metadata) return false;
   return (
     namesInstallerPaths(metadata) &&
@@ -98,7 +103,10 @@ function isCodexWrapperMetadataValid(metadata: CodexWrapperMetadata | null): met
 }
 
 function writeCodexLauncherWrapper(commandPath: string): void {
-  writeExecutableFile(commandPath, codexLauncherWrapperText(commandPath, process.execPath, resolveHippoCliPath()));
+  writeExecutableFile(
+    commandPath,
+    codexLauncherWrapperText(commandPath, process.execPath, resolveHippoCliPath()),
+  );
 }
 
 function cleanupLegacyCodexPathWrappers(paths: CodexWrapperPaths): void {
@@ -169,7 +177,11 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
 
   const paths = resolveCodexWrapperPaths();
   // These live under ~/.hippo, which this may be the first write to make.
-  for (const dir of [path.dirname(paths.metadataPath), path.dirname(paths.logFile), paths.runsDir]) {
+  for (const dir of [
+    path.dirname(paths.metadataPath),
+    path.dirname(paths.logFile),
+    paths.runsDir,
+  ]) {
     fs.mkdirSync(dir, PRIVATE_DIR);
   }
   cleanupLegacyCodexPathWrappers(paths);
@@ -185,7 +197,9 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
   if (!isHippoCodexWrapperFile(resolvedRealCodexPath)) {
     fs.renameSync(resolvedRealCodexPath, plan.backupPath);
   } else if (!fs.existsSync(plan.backupPath)) {
-    throw new Error(`${resolvedRealCodexPath} is hippo's wrapper and the Codex it wrapped is gone; reinstall Codex.`);
+    throw new Error(
+      `${resolvedRealCodexPath} is hippo's wrapper and the Codex it wrapped is gone; reinstall Codex.`,
+    );
   }
   writeCodexLauncherWrapper(plan.commandPath);
 
@@ -208,7 +222,9 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
  * not our wrapper. */
 function restoreCodexLauncher(metadata: CodexWrapperMetadata, metadataPath: string): boolean {
   if (!namesInstallerPaths(metadata)) {
-    log.warn(`codex wrapper metadata ${metadataPath} names paths hippo never wrote; no launcher file was moved`);
+    log.warn(
+      `codex wrapper metadata ${metadataPath} names paths hippo never wrote; no launcher file was moved`,
+    );
     return false;
   }
   const { originalCodexPath } = metadata;
@@ -220,7 +236,9 @@ function restoreCodexLauncher(metadata: CodexWrapperMetadata, metadataPath: stri
   }
   if (!fs.existsSync(plan.backupPath)) return changed;
   if (fs.existsSync(originalCodexPath)) {
-    log.warn(`kept ${plan.backupPath}: a newer codex launcher already sits at ${originalCodexPath}`);
+    log.warn(
+      `kept ${plan.backupPath}: a newer codex launcher already sits at ${originalCodexPath}`,
+    );
     return changed;
   }
   fs.renameSync(plan.backupPath, originalCodexPath);
@@ -290,7 +308,9 @@ export function isCodexWrapperInstalled(): boolean {
 
 /** Re-ensures the wrapper only where its metadata, the user's opt-in record, exists: replacing another vendor's binary
  * without `hippo hook install codex` breaks consent and reads as hijacking to security scanners. */
-export function repairCodexWrapperIfInstalled(hippoCliPath: string = resolveHippoCliPath()): EnsureCodexWrapperResult {
+export function repairCodexWrapperIfInstalled(
+  hippoCliPath: string = resolveHippoCliPath(),
+): EnsureCodexWrapperResult {
   const metadata = readCodexWrapperMetadata();
   if (metadata === null) {
     return { status: 'not-found' };

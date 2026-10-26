@@ -40,7 +40,9 @@ describe('store worker stop after a failed reply', () => {
         allTenants: [],
         args: [
           {
-            entry: createMemory('a write whose reply cannot be posted', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+            entry: createMemory('a write whose reply cannot be posted', {
+              baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+            }),
             actor: 'test',
           },
         ],
@@ -61,7 +63,10 @@ describe('store worker stop after a failed reply', () => {
       expect(closeStores).toHaveBeenCalledTimes(closesBefore + 1);
       expect(logged).toHaveBeenCalledWith(
         'store worker: no reply was posted for job 7',
-        expect.objectContaining({ errorClass: 'Error', stack: expect.stringContaining('port is gone') }),
+        expect.objectContaining({
+          errorClass: 'Error',
+          stack: expect.stringContaining('port is gone'),
+        }),
       );
       expect(unhandled).toEqual([]);
     } finally {

@@ -63,7 +63,9 @@ describe('upgrading a populated v1 store to the latest schema', () => {
     try {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: row shapes follow the selected columns.
-      const meta = db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as { value: string };
+      const meta = db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as {
+        value: string;
+      };
       expect(meta.value).toBe(String(LATEST_SCHEMA_VERSION));
       const runs = db.prepare(`SELECT decayed, merged, removed FROM consolidation_runs`).all();
       expect(runs).toEqual([{ decayed: 4, merged: 2, removed: 1 }]);

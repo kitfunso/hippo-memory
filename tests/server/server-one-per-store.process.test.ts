@@ -50,8 +50,16 @@ describe('one server per store', () => {
   });
 
   it('removes a pidfile left by a dead process and boots', async () => {
-    const dead = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' });
-    const stale = { schema: 1, pid: Number(dead.stdout), port: 6789, url: 'http://127.0.0.1:6789', started_at: 'old' };
+    const dead = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], {
+      encoding: 'utf8',
+    });
+    const stale = {
+      schema: 1,
+      pid: Number(dead.stdout),
+      port: 6789,
+      url: 'http://127.0.0.1:6789',
+      started_at: 'old',
+    };
     writeFileSync(join(root, 'server.pid'), JSON.stringify(stale));
     const handle = await boot();
     expect(JSON.parse(readFileSync(join(root, 'server.pid'), 'utf8')).port).toBe(handle.port);
@@ -67,7 +75,9 @@ describe('one server per store', () => {
     const otherRoot = makeRoot('one-per-store-other');
     const blocker = await serve({ hippoRoot: otherRoot, port: 0, host: '127.0.0.1' });
     try {
-      await expect(serve({ hippoRoot: root, port: blocker.port, host: '127.0.0.1' })).rejects.toThrow();
+      await expect(
+        serve({ hippoRoot: root, port: blocker.port, host: '127.0.0.1' }),
+      ).rejects.toThrow();
       expect(existsSync(join(root, 'server.pid'))).toBe(false);
     } finally {
       await blocker.stop();

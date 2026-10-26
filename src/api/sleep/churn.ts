@@ -23,7 +23,10 @@ async function markChurnStale(
   opts: { readonly repoDir: string; readonly dryRun: boolean },
 ): Promise<{ root: string; result: ChurnStaleResult }[]> {
   const { git, projectIdentity } = ctx.infra.machine;
-  const top = git.run(['rev-parse', '--show-toplevel'], { cwd: opts.repoDir, timeoutMs: GIT_CALL_TIMEOUT_MS });
+  const top = git.run(['rev-parse', '--show-toplevel'], {
+    cwd: opts.repoDir,
+    timeoutMs: GIT_CALL_TIMEOUT_MS,
+  });
   if (!top.ok) throw top.error;
   const repo = { root: top.stdout.trim(), git };
   const { name: projectName, legacyName } = projectIdentity(opts.repoDir);

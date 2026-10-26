@@ -13,7 +13,9 @@ export function isHeaderString(value: string | string[] | undefined): value is s
 }
 
 function sizeLabel(bytes: number): string {
-  return bytes % (1024 * 1024) === 0 ? `${bytes / (1024 * 1024)}MB` : `${Math.ceil(bytes / 1024)}KB`;
+  return bytes % (1024 * 1024) === 0
+    ? `${bytes / (1024 * 1024)}MB`
+    : `${Math.ceil(bytes / 1024)}KB`;
 }
 
 // How long a refused upload is still read and discarded after its reply, so a client that never stops cannot hold the
@@ -50,7 +52,10 @@ export interface ReadBodyOptions {
 }
 
 /** The body as UTF-8 text, under readBodyBytes' limits. */
-export async function readBody(req: IncomingMessage, options: ReadBodyOptions = {}): Promise<string> {
+export async function readBody(
+  req: IncomingMessage,
+  options: ReadBodyOptions = {},
+): Promise<string> {
   return (await readBodyBytes(req, options)).toString('utf8');
 }
 
@@ -119,7 +124,10 @@ export function isCrossSite(req: IncomingMessage): boolean {
   if (origin === undefined) return false;
   const url = tryParseUrl(origin);
   // The socket's own scheme, never a forwarded one: a page served over http must not drive an https listener.
-  return url?.protocol !== (req.socket instanceof TLSSocket ? 'https:' : 'http:') || url.host !== req.headers.host;
+  return (
+    url?.protocol !== (req.socket instanceof TLSSocket ? 'https:' : 'http:') ||
+    url.host !== req.headers.host
+  );
 }
 
 /** Per-request values a connector webhook receiver reads; ServeOptions and the /v1 RouteRequest both satisfy it. */

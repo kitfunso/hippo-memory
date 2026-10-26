@@ -1,7 +1,11 @@
 // Read-side tool handlers: hippo_recall, hippo_assemble, hippo_drill and hippo_context.
 
 import * as path from 'node:path';
-import { drillDown as apiDrillDown, assemble as apiAssemble, contextGet as apiGetContext } from '../../api/index.js';
+import {
+  drillDown as apiDrillDown,
+  assemble as apiAssemble,
+  contextGet as apiGetContext,
+} from '../../api/index.js';
 import { autoDetectContext } from '../../api/context-auto.js';
 import { processGit } from '../../infra/git-runner.js';
 import { sharedStoreOf } from '../../api/types.js';
@@ -55,7 +59,8 @@ export async function runAssembleTool({ args, ctx }: ToolCall): Promise<string> 
   const explicitScope = stringArg(args, 'scope', MAX_ID_LEN) || undefined;
   const assembleExtra: AssembleExtraOptions = {};
   if (budget !== undefined && budget > 0) assembleExtra.budget = budget;
-  if (freshTailCount !== undefined && freshTailCount >= 0) assembleExtra.freshTailCount = freshTailCount;
+  if (freshTailCount !== undefined && freshTailCount >= 0)
+    assembleExtra.freshTailCount = freshTailCount;
   if (explicitScope !== undefined) assembleExtra.scope = explicitScope;
   const r = await apiAssemble(mcpApiContext(ctx), sessionId, {
     summarizeOlder,

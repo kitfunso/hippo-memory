@@ -1,6 +1,10 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { deriveOriginProject, originFromSource, isGlobalStoreRoot } from '../../host/project-identity.js';
+import {
+  deriveOriginProject,
+  originFromSource,
+  isGlobalStoreRoot,
+} from '../../host/project-identity.js';
 import { raiseMinBinary } from '../meta.js';
 import { tableHasColumn } from '../tables.js';
 import type { Migration } from './types.js';
@@ -36,8 +40,12 @@ export const v39: Migration = {
       }
       // The global root itself is always user-global (''), whatever surrounds it on disk: a HIPPO_HOME inside a
       // dotfiles git repo must not stamp the whole corpus with that repo's name.
-      const storeOrigin = isGlobalStoreRoot(hippoRoot) ? '' : deriveOriginProject(path.dirname(hippoRoot));
-      db.prepare(`UPDATE memories SET origin_project = ? WHERE origin_project IS NULL`).run(storeOrigin);
+      const storeOrigin = isGlobalStoreRoot(hippoRoot)
+        ? ''
+        : deriveOriginProject(path.dirname(hippoRoot));
+      db.prepare(`UPDATE memories SET origin_project = ? WHERE origin_project IS NULL`).run(
+        storeOrigin,
+      );
     }
     // Rollback-safety guard: a pre-isolation binary would ignore origin_project and the secret veto and resume
     // injecting cross-project rows.

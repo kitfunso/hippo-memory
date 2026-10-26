@@ -40,10 +40,18 @@ function toPosition(
 /**
  * The position a `?cursor=` names, or undefined when the param is absent; anything this server did not mint is a 400.
  */
-export function parseCursor(raw: string | null, keyPart: CursorPart, idPart: CursorPart): KeysetPosition | undefined {
+export function parseCursor(
+  raw: string | null,
+  keyPart: CursorPart,
+  idPart: CursorPart,
+): KeysetPosition | undefined {
   if (raw === null) return undefined;
-  const parsed = raw.length <= MAX_CURSOR_CHARS && CURSOR_RE.test(raw) ? decodeJson(raw) : undefined;
+  const parsed =
+    raw.length <= MAX_CURSOR_CHARS && CURSOR_RE.test(raw) ? decodeJson(raw) : undefined;
   const pos = toPosition(parsed, keyPart, idPart);
-  if (!pos) throw new BadRequestError('cursor is malformed; pass next_cursor from the previous page unchanged');
+  if (!pos)
+    throw new BadRequestError(
+      'cursor is malformed; pass next_cursor from the previous page unchanged',
+    );
   return pos;
 }

@@ -6,7 +6,10 @@ import { portError } from './port-errors.js';
 
 // A void method's body returns nothing too: `void` alone would let a value through to callers the port promised none.
 type BodyOf<M> = M extends (...args: infer A) => infer R
-  ? (db: DatabaseSyncLike, ...args: A) => [Awaited<R>] extends [void] ? void | undefined : Awaited<R>
+  ? (
+      db: DatabaseSyncLike,
+      ...args: A
+    ) => [Awaited<R>] extends [void] ? void | undefined : Awaited<R>
   : never;
 
 /** Group `G` as SQL bodies, each taking the handle before its method's own arguments. */

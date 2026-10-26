@@ -44,15 +44,21 @@ describe('automatic rows with a certain defect stay local', () => {
     for (const entry of [captured, typed]) writeEntry(root, entry);
     expect(transferScore(captured)).toBeGreaterThanOrEqual(0.6);
     expect(
-      (await autoShare(...sharingStores(root), { embed: TEST_RUN, tenantId: ALL_TENANTS, dryRun: true })).map(
-        (entry) => entry.id,
-      ),
+      (
+        await autoShare(...sharingStores(root), {
+          embed: TEST_RUN,
+          tenantId: ALL_TENANTS,
+          dryRun: true,
+        })
+      ).map((entry) => entry.id),
     ).toEqual([typed.id]);
   });
 
   it('the DAG pass summarises sound extracted facts and leaves a defective one out', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'test');
-    const source = createMemory('Notes on the uploader and its storage token handling.', { layer: Layer.Episodic });
+    const source = createMemory('Notes on the uploader and its storage token handling.', {
+      layer: Layer.Episodic,
+    });
     writeEntry(root, source);
     const fact = (content: string) => ({
       ...createMemory(content, {
@@ -73,7 +79,9 @@ describe('automatic rows with a certain defect stay local', () => {
     const fetcher = async (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
       prompts.push(String(init?.body ?? ''));
       return new Response(
-        JSON.stringify({ content: [{ text: 'Upload retries cover a storage token that expires mid-transfer.' }] }),
+        JSON.stringify({
+          content: [{ text: 'Upload retries cover a storage token that expires mid-transfer.' }],
+        }),
         { status: 200 },
       );
     };

@@ -29,7 +29,11 @@ async function liveEntry(ctx: api.Context, id: string): Promise<MemoryEntry | nu
 }
 
 /** Sets `pinned`, audited as a pin by the Context's actor. */
-export async function pinMemory(ctx: api.Context, rawId: string, body: ActionBody): Promise<ActionResult> {
+export async function pinMemory(
+  ctx: api.Context,
+  rawId: string,
+  body: ActionBody,
+): Promise<ActionResult> {
   const id = parseMemoryId(rawId);
   const { pinned } = body;
   if (pinned === undefined) throw new ParamError('pinned must be true or false');
@@ -88,7 +92,8 @@ export async function resolveOpenConflict(
     if (err instanceof ConflictError) {
       return { status: 409, body: { error: 'This conflict is already resolved' }, changed: false };
     }
-    if (err instanceof BadRequestError) throw new ParamError('keep must be one of the two memories in the conflict');
+    if (err instanceof BadRequestError)
+      throw new ParamError('keep must be one of the two memories in the conflict');
     throw err;
   }
 }

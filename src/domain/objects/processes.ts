@@ -42,7 +42,9 @@ export function validateProcessSteps(steps: JsonValue): string[] {
     throw new BadRequestError('steps must be an array of strings');
   }
   if (steps.length > MAX_PROCESS_STEPS) {
-    throw new BadRequestError(`steps exceeds the ${MAX_PROCESS_STEPS}-step cap (got ${steps.length})`);
+    throw new BadRequestError(
+      `steps exceeds the ${MAX_PROCESS_STEPS}-step cap (got ${steps.length})`,
+    );
   }
   const out: string[] = [];
   for (let i = 0; i < steps.length; i++) {

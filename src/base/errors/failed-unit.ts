@@ -12,5 +12,7 @@ export function noteFailedUnit(err: Error & FailedUnit, ids: readonly string[]):
 /** The ids noteFailedUnit tagged `err` with, if a flush threw it. */
 export function failedUnitOf(err: (Error & FailedUnit) | null): string[] | undefined {
   const ids = err?.failedUnitIds;
-  return Array.isArray(ids) && ids.every((id): id is string => typeof id === 'string') ? ids : undefined;
+  return Array.isArray(ids) && ids.every((id): id is string => typeof id === 'string')
+    ? ids
+    : undefined;
 }

@@ -30,7 +30,9 @@ function fill(root: string, count: number, label: string, origin: (i: number) =>
   try {
     for (let i = 0; i < count; i++) {
       writeEntryDbOnly(db, {
-        ...createMemory(`${label} note ${i} about the deploy step w${i % 97}`, { tags: [`t${i % 7}`] }),
+        ...createMemory(`${label} note ${i} about the deploy step w${i % 97}`, {
+          tags: [`t${i % 7}`],
+        }),
         originProject: origin(i),
       });
     }
@@ -102,7 +104,11 @@ describe('contextGet with a query reads the FTS candidate window', () => {
   it('ranks at most the window from a local store of many windows', async () => {
     vi.stubEnv('HIPPO_HOME', join(local, 'no-global'));
     const counter = admitCounter();
-    const result = await contextGet(ctxNow(), { q: QUERY, currentProject: '', deliveryObserver: counter.obs });
+    const result = await contextGet(ctxNow(), {
+      q: QUERY,
+      currentProject: '',
+      deliveryObserver: counter.obs,
+    });
 
     expectBudgetFilled(result.entries.length);
     expect(counter.calls()).toBe(DEFAULT_SEARCH_CANDIDATE_LIMIT);
@@ -112,7 +118,11 @@ describe('contextGet with a query reads the FTS candidate window', () => {
   it('ranks at most one window per store when the global store exists', async () => {
     vi.stubEnv('HIPPO_HOME', global);
     const counter = admitCounter();
-    const result = await contextGet(ctxNow(), { q: QUERY, currentProject: '', deliveryObserver: counter.obs });
+    const result = await contextGet(ctxNow(), {
+      q: QUERY,
+      currentProject: '',
+      deliveryObserver: counter.obs,
+    });
 
     // Both stores hold more matches than the window, so each fills it exactly.
     expectBudgetFilled(result.entries.length);
@@ -137,7 +147,8 @@ describe('contextGet with a query reads the FTS candidate window', () => {
 });
 
 describe('contextGet with a query labels each result local or global', () => {
-  const INDEX_READ = 'SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories';
+  const INDEX_READ =
+    'SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories';
 
   it('reads no index of the local store to do it', async () => {
     vi.stubEnv('HIPPO_HOME', global);

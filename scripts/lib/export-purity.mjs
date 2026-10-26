@@ -24,7 +24,8 @@ function declareImport(decls, st) {
   if (!clause) return;
   const spec = st.moduleSpecifier.text;
   const typeOnly = !!clause.isTypeOnly;
-  if (clause.name) decls.set(clause.name.text, { kind: 'import', spec, imported: 'default', typeOnly });
+  if (clause.name)
+    decls.set(clause.name.text, { kind: 'import', spec, imported: 'default', typeOnly });
   const bound = clause.namedBindings;
   if (bound && ts.isNamespaceImport(bound)) {
     decls.set(bound.name.text, { kind: 'import', spec, imported: '*', typeOnly });
@@ -46,7 +47,12 @@ function declareReExport(mod, st) {
   if (!clause) {
     mod.stars.push(spec);
   } else if (ts.isNamespaceExport(clause)) {
-    mod.decls.set(clause.name.text, { kind: 'import', spec, imported: '*', typeOnly: !!st.isTypeOnly });
+    mod.decls.set(clause.name.text, {
+      kind: 'import',
+      spec,
+      imported: '*',
+      typeOnly: !!st.isTypeOnly,
+    });
   } else {
     for (const el of clause.elements) {
       if (!mod.decls.has(el.name.text)) {
@@ -149,7 +155,9 @@ function isEmptyContainer(d) {
   if (!init) return false;
   if (ts.isNewExpression(init)) {
     return (
-      ts.isIdentifier(init.expression) && CONTAINERS.test(init.expression.text) && (init.arguments?.length ?? 0) === 0
+      ts.isIdentifier(init.expression) &&
+      CONTAINERS.test(init.expression.text) &&
+      (init.arguments?.length ?? 0) === 0
     );
   }
   return (
@@ -178,7 +186,8 @@ function importReason(mods, layerOf, file, d, follow) {
     return PURE_BUILTIN.test(d.spec) ? null : `imports ${d.spec}, which is outside src/`;
   }
   if (layerOf(target) === 'db') return `db layer: ${target}`;
-  if (d.imported === '*' || d.imported === 'default') return d.typeOnly ? null : `whole-module import of ${target}`;
+  if (d.imported === '*' || d.imported === 'default')
+    return d.typeOnly ? null : `whole-module import of ${target}`;
   return follow(target, d.imported);
 }
 
@@ -251,7 +260,13 @@ export function createPurityRule(root, srcFiles) {
       return { exempt: false, why: 'no caller in its own module' };
     }
     const reason = impure(file, name);
-    return reason ? { exempt: false, why: reason } : { exempt: true, why: 'pure, and its own module calls it' };
+    return reason
+      ? { exempt: false, why: reason }
+      : { exempt: true, why: 'pure, and its own module calls it' };
   };
-  return { has: (file) => mods.has(file), resolveExport: (file, name) => resolveExport(mods, file, name), verdict };
+  return {
+    has: (file) => mods.has(file),
+    resolveExport: (file, name) => resolveExport(mods, file, name),
+    verdict,
+  };
 }

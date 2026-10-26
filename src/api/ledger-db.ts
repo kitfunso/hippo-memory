@@ -21,11 +21,16 @@ export interface LedgerReach {
 
 function homeOf(store: HippoStore, config: HippoConfig): LedgerHome | undefined {
   const { ledger, folderFiles } = store;
-  return ledger === undefined || folderFiles === undefined ? undefined : { ledger, folderFiles, config };
+  return ledger === undefined || folderFiles === undefined
+    ? undefined
+    : { ledger, folderFiles, config };
 }
 
 /** Only a store that keeps a ledger has one, and a local one needs a reach that says the caller has a store. */
-export function ledgerReachOf(ctx: Pick<Context, 'reach' | 'store' | 'config'>, shared?: boolean): LedgerReach {
+export function ledgerReachOf(
+  ctx: Pick<Context, 'reach' | 'store' | 'config'>,
+  shared?: boolean,
+): LedgerReach {
   const local = ctx.reach?.hasLocal === true ? homeOf(ctx.store, ctx.config) : undefined;
   return shared === true ? { local } : { local, global: ctx.reach?.global };
 }
@@ -48,7 +53,10 @@ export async function bookLedgerTurn(turn: LedgerTurn, reach: LedgerReach): Prom
 }
 
 /** bookLedgerTurn where each row is its own attempt: a row that fails is noted and the rest still land. */
-export async function bookLedgerTurnPerRow(turn: Omit<LedgerTurn, 'perRow'>, reach: LedgerReach): Promise<void> {
+export async function bookLedgerTurnPerRow(
+  turn: Omit<LedgerTurn, 'perRow'>,
+  reach: LedgerReach,
+): Promise<void> {
   await ledgerHome(reach)?.ledger.recordTurn({ ...turn, perRow: true });
 }
 

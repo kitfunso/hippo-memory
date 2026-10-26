@@ -3,7 +3,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
+import {
+  embeddingModelRequiresReindex,
+  saveStoredEmbeddingModel,
+} from '../../src/store/sqlite/vector-index.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
@@ -62,13 +65,17 @@ describe('EmbeddingProvider', () => {
   describe('identity', () => {
     it('local provider id is the bare model (back-compat with stored embedding_model)', () => {
       const root = mkRoot({ provider: 'local', model: 'Xenova/all-MiniLM-L6-v2' });
-      expect(resolveEmbeddingProvider(loadConfig(root).embeddings).id).toBe('Xenova/all-MiniLM-L6-v2');
+      expect(resolveEmbeddingProvider(loadConfig(root).embeddings).id).toBe(
+        'Xenova/all-MiniLM-L6-v2',
+      );
       expect(resolveEmbeddingProvider(loadConfig(root).embeddings).kind).toBe('local');
     });
 
     it('api provider id is `${kind}:${model}`', () => {
       const root = mkRoot({ provider: 'openai', model: 'text-embedding-3-large' });
-      expect(resolveEmbeddingProvider(loadConfig(root).embeddings).id).toBe('openai:text-embedding-3-large');
+      expect(resolveEmbeddingProvider(loadConfig(root).embeddings).id).toBe(
+        'openai:text-embedding-3-large',
+      );
     });
 
     it('defaults to the local provider when none is configured', () => {
@@ -118,9 +125,9 @@ describe('EmbeddingProvider', () => {
 
     it('embed() throws a clear, key-naming error when the key is missing', async () => {
       const root = mkRoot({ provider: 'openai', model: 'text-embedding-3-large' });
-      await expect(resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['hi'], 'passage')).rejects.toThrow(
-        /OPENAI_API_KEY/,
-      );
+      await expect(
+        resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['hi'], 'passage'),
+      ).rejects.toThrow(/OPENAI_API_KEY/);
     });
 
     it('is available once the key is present', () => {
@@ -131,7 +138,9 @@ describe('EmbeddingProvider', () => {
 
     it('throws on an unknown provider value (no silent local fallback)', () => {
       const root = mkRoot({ provider: 'opneai', model: 'text-embedding-3-large' });
-      expect(() => resolveEmbeddingProvider(loadConfig(root).embeddings)).toThrow(/Unknown embeddings.provider/);
+      expect(() => resolveEmbeddingProvider(loadConfig(root).embeddings)).toThrow(
+        /Unknown embeddings.provider/,
+      );
     });
 
     it('honors embeddings.enabled=false even when the api key is present (no paid calls)', () => {
@@ -145,12 +154,16 @@ describe('EmbeddingProvider', () => {
     it('posts to /embeddings with bearer auth and a batched body, and L2-normalizes the result', async () => {
       vi.stubEnv('OPENAI_API_KEY', 'sk-secret-123');
       const root = mkRoot({ provider: 'openai', model: 'text-embedding-3-large' });
-      const fetchMock = vi.fn(async (_url: string, _init: { headers: Record<string, string>; body: string }) =>
-        jsonResponse({ data: [{ embedding: [3, 0, 4] }, { embedding: [0, 6, 8] }] }),
+      const fetchMock = vi.fn(
+        async (_url: string, _init: { headers: Record<string, string>; body: string }) =>
+          jsonResponse({ data: [{ embedding: [3, 0, 4] }, { embedding: [0, 6, 8] }] }),
       );
       vi.stubGlobal('fetch', fetchMock);
 
-      const vecs = await resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a', 'b'], 'passage');
+      const vecs = await resolveEmbeddingProvider(loadConfig(root).embeddings).embed(
+        ['a', 'b'],
+        'passage',
+      );
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       // Typing fetchMock's own params above gives `.mock.calls[0]` this exact
@@ -184,7 +197,9 @@ describe('EmbeddingProvider', () => {
       vi.stubEnv('OPENAI_API_KEY', 'sk-test');
       const root = mkRoot({ provider: 'openai', model: 'm', batchSize: 0.5 });
       const fetchMock = vi.fn(async () =>
-        jsonResponse({ data: [{ embedding: [1, 0] }, { embedding: [1, 0] }, { embedding: [1, 0] }] }),
+        jsonResponse({
+          data: [{ embedding: [1, 0] }, { embedding: [1, 0] }, { embedding: [1, 0] }],
+        }),
       );
       vi.stubGlobal('fetch', fetchMock);
 
@@ -276,7 +291,9 @@ describe('EmbeddingProvider', () => {
         'fetch',
         vi.fn(async () => errorResponse(500, 'server error')),
       );
-      await expect(resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['x'])).rejects.toThrow(/500/);
+      await expect(
+        resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['x']),
+      ).rejects.toThrow(/500/);
     });
 
     it('throws when a 200 returns fewer vectors than inputs (contract violation, not silent misses)', async () => {
@@ -287,25 +304,37 @@ describe('EmbeddingProvider', () => {
         'fetch',
         vi.fn(async () => jsonResponse({ data: [{ embedding: [1, 0] }] })),
       );
-      await expect(resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a', 'b'], 'passage')).rejects.toThrow(
-        /vectors for/,
-      );
+      await expect(
+        resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a', 'b'], 'passage'),
+      ).rejects.toThrow(/vectors for/);
     });
   });
 
   describe('apiBaseUrl validation (https only, localhost exempt)', () => {
     it('rejects a plaintext http base url', () => {
-      const root = mkRoot({ provider: 'openai', model: 'm', apiBaseUrl: 'http://evil.example.com/v1' });
+      const root = mkRoot({
+        provider: 'openai',
+        model: 'm',
+        apiBaseUrl: 'http://evil.example.com/v1',
+      });
       expect(() => resolveEmbeddingProvider(loadConfig(root).embeddings)).toThrow(/https/i);
     });
 
     it('accepts an https base url', () => {
-      const root = mkRoot({ provider: 'openai', model: 'm', apiBaseUrl: 'https://proxy.example.com/v1' });
+      const root = mkRoot({
+        provider: 'openai',
+        model: 'm',
+        apiBaseUrl: 'https://proxy.example.com/v1',
+      });
       expect(resolveEmbeddingProvider(loadConfig(root).embeddings).id).toBe('openai:m');
     });
 
     it('allows http for localhost', () => {
-      const root = mkRoot({ provider: 'openai', model: 'm', apiBaseUrl: 'http://localhost:1234/v1' });
+      const root = mkRoot({
+        provider: 'openai',
+        model: 'm',
+        apiBaseUrl: 'http://localhost:1234/v1',
+      });
       expect(resolveEmbeddingProvider(loadConfig(root).embeddings).id).toBe('openai:m');
     });
   });

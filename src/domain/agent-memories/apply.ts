@@ -7,7 +7,12 @@ import { AGENT_MEMORY_SOURCE_PREFIX } from '../../base/memory/agent-memory-tools
 import type { ContainerApply, MirrorFailure } from '../../base/ports/store/agent-import.js';
 import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import { addOutcomes, planSteps } from './container-steps.js';
-import { readContainer, type ContainerView, type ContainerWork, type StoreSession } from './container-view.js';
+import {
+  readContainer,
+  type ContainerView,
+  type ContainerWork,
+  type StoreSession,
+} from './container-view.js';
 import { itemHash } from './keys.js';
 import {
   planContainer,
@@ -36,7 +41,10 @@ interface PlannedContainer {
 }
 
 /** Null when the rows changed under both plans; throws a busy error when another writer held the store too long. */
-export async function syncContainer(s: StoreSession, work: ContainerWork): Promise<ContainerOutcome | null> {
+export async function syncContainer(
+  s: StoreSession,
+  work: ContainerWork,
+): Promise<ContainerOutcome | null> {
   for (let round = 0; round < 2; round++) {
     const planned = await planWrites(s, work);
     const applied = await s.store.agentImport.applyContainer(planned.apply);
@@ -52,7 +60,10 @@ async function planWrites(s: StoreSession, w: ContainerWork): Promise<PlannedCon
   const view = await readContainer(s, w);
   const refusals = await refusalsOf(s, w.container.items);
   const live = view.live.map((row): LiveRow => liveRow(row, w));
-  const dormant = await dormantSnapshots(s, w, view, { liveKeys: new Set(live.map((r) => r.key)), refusals });
+  const dormant = await dormantSnapshots(s, w, view, {
+    liveKeys: new Set(live.map((r) => r.key)),
+    refusals,
+  });
   const plan = await planWithDuplicates(s, w, {
     textKeyed: w.container.textKeyed,
     items: w.container.items.map((item) => ({
@@ -102,7 +113,10 @@ function liveRow(row: MemoryEntry, w: ContainerWork): LiveRow {
 }
 
 // The rejection lookup reads the capped text, as the write would store it, so a rejected note writes no audit row.
-async function refusalsOf(s: StoreSession, items: readonly MemoryItem[]): Promise<Map<string, Refusal>> {
+async function refusalsOf(
+  s: StoreSession,
+  items: readonly MemoryItem[],
+): Promise<Map<string, Refusal>> {
   const out = new Map<string, Refusal>();
   const asked: MemoryItem[] = [];
   for (const item of items) {
@@ -113,7 +127,11 @@ async function refusalsOf(s: StoreSession, items: readonly MemoryItem[]): Promis
   }
   if (asked.length === 0) return out;
   // A new row's id: no stored row holds the empty id, so the tombstone alone decides.
-  const checks = asked.map((item) => ({ tenantId: s.tenantId, entryId: '', content: storedText(item.text) }));
+  const checks = asked.map((item) => ({
+    tenantId: s.tenantId,
+    entryId: '',
+    content: storedText(item.text),
+  }));
   const rejected = await s.store.rejections.refusedAmong(checks);
   asked.forEach((item, i) => {
     if (rejected[i]) out.set(item.key, 'rejected');
@@ -126,11 +144,19 @@ async function dormantSnapshots(
   s: StoreSession,
   w: ContainerWork,
   view: ContainerView,
-  { liveKeys, refusals }: { readonly liveKeys: ReadonlySet<string>; readonly refusals: ReadonlyMap<string, Refusal> },
+  {
+    liveKeys,
+    refusals,
+  }: { readonly liveKeys: ReadonlySet<string>; readonly refusals: ReadonlyMap<string, Refusal> },
 ): Promise<DormantSnapshot[]> {
-  const needed = w.container.items.some((item) => !refusals.has(item.key) && !liveKeys.has(item.key));
+  const needed = w.container.items.some(
+    (item) => !refusals.has(item.key) && !liveKeys.has(item.key),
+  );
   if (!needed) return [];
-  const under = await s.store.projectTags.dormantWhere({ tenantId: s.tenantId, sourcePrefix: w.prefix });
+  const under = await s.store.projectTags.dormantWhere({
+    tenantId: s.tenantId,
+    sourcePrefix: w.prefix,
+  });
   return [...under, ...view.movedDormant].filter((snap) => !snap.entry.supersededBy);
 }
 
@@ -160,7 +186,10 @@ async function planWithDuplicates(
 async function duplicatesAmong(s: StoreSession, texts: readonly string[]): Promise<boolean[]> {
   if (texts.length === 0) return [];
   const origins = s.visible === null ? undefined : ['', ...s.visible];
-  const rows = await s.store.sharing.textKeysHolding({ tenantId: s.tenantId, live: true, origins }, texts);
+  const rows = await s.store.sharing.textKeysHolding(
+    { tenantId: s.tenantId, live: true, origins },
+    texts,
+  );
   const keys = new Set(
     rows
       .filter((r) => !r.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX) && !s.adopted.has(r.id))

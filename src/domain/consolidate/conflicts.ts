@@ -1,5 +1,9 @@
 import { MemoryEntry, EXTRACTED_TAG, Layer } from '../../base/memory/entry.js';
-import { calculateStrength, type DecayBasis, type StrengthModel } from '../../base/memory/strength.js';
+import {
+  calculateStrength,
+  type DecayBasis,
+  type StrengthModel,
+} from '../../base/memory/strength.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
 import { isPersonalScope } from '../../base/scope/recall-scope.js';
@@ -22,7 +26,9 @@ const CONFLICT_MIN_RARE_SHARED = 2;
 const POLARITY_WINDOW_WORDS = 40;
 
 /** Reads back the rows for `ids`, a page at a time; an id gone since is skipped. */
-type PagesOf = (ids: readonly string[]) => Iterable<readonly MemoryEntry[]> | AsyncIterable<readonly MemoryEntry[]>;
+type PagesOf = (
+  ids: readonly string[],
+) => Iterable<readonly MemoryEntry[]> | AsyncIterable<readonly MemoryEntry[]>;
 
 export interface DetectConflictsOptions {
   strength: StrengthModel;
@@ -49,7 +55,8 @@ export async function detectConflicts(
       entry.layer !== Layer.Semantic &&
       // An unreviewed quarantined row must not taint a visible memory as conflicted.
       !isQuarantineScope(entry.scope ?? null) &&
-      (rescuedIds.has(entry.id) || calculateStrength(entry, now, strength, decayOpts) >= DECAY_THRESHOLD);
+      (rescuedIds.has(entry.id) ||
+        calculateStrength(entry, now, strength, decayOpts) >= DECAY_THRESHOLD);
     if (!live) continue;
     const places = byTenant.get(entry.tenantId);
     if (places) places.push(ids.length);
@@ -59,7 +66,9 @@ export async function detectConflicts(
   }
   const found: Array<readonly [number, number, DetectedConflict]> = [];
   for (const places of byTenant.values()) {
-    const rows = pagesOf ? await readPlaces(places, ids, pagesOf) : places.map((p) => conflictRow(p, held[p]));
+    const rows = pagesOf
+      ? await readPlaces(places, ids, pagesOf)
+      : places.map((p) => conflictRow(p, held[p]));
     found.push(...tenantConflicts(rows));
   }
   return found.sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([, , conflict]) => conflict);
@@ -93,7 +102,11 @@ function conflictRow(place: number, e: MemoryEntry): ConflictRow {
   };
 }
 
-async function readPlaces(places: readonly number[], ids: readonly string[], pagesOf: PagesOf): Promise<ConflictRow[]> {
+async function readPlaces(
+  places: readonly number[],
+  ids: readonly string[],
+  pagesOf: PagesOf,
+): Promise<ConflictRow[]> {
   const placeOf = new Map(places.map((p) => [ids[p], p]));
   const rows: ConflictRow[] = [];
   for await (const page of pagesOf(places.map((p) => ids[p]))) {
@@ -103,7 +116,9 @@ async function readPlaces(places: readonly number[], ids: readonly string[], pag
 }
 
 /** One tenant's conflicts, each with the survivor places of its two sides. */
-function tenantConflicts(rows: readonly ConflictRow[]): Array<readonly [number, number, DetectedConflict]> {
+function tenantConflicts(
+  rows: readonly ConflictRow[],
+): Array<readonly [number, number, DetectedConflict]> {
   const partnersOf = overlapPartners(
     rows.map((r) => r.profile.distinct),
     jaccardMinShared(CONFLICT_OVERLAP_THRESHOLD, CONFLICT_MIN_RARE_SHARED),
@@ -114,7 +129,14 @@ function tenantConflicts(rows: readonly ConflictRow[]): Array<readonly [number, 
       const b = rows[j];
       // Traces are variants of each other, not contradictions: two strategies for the same task can both be valid, and
       // conflict detection is for stated-rule disagreement, not strategy diversity.
-      if ((a.trace && b.trace) || a.superseded || b.superseded || !recalledTogether(a, b) || a.restated || b.restated) {
+      if (
+        (a.trace && b.trace) ||
+        a.superseded ||
+        b.superseded ||
+        !recalledTogether(a, b) ||
+        a.restated ||
+        b.restated
+      ) {
         continue;
       }
       const reasonAndScore = describeConflict(a.profile, b.profile);
@@ -158,7 +180,10 @@ function conflictProfile(text: string): ConflictProfile {
   };
 }
 
-function describeConflict(a: ConflictProfile, b: ConflictProfile): { reason: string; score: number } | null {
+function describeConflict(
+  a: ConflictProfile,
+  b: ConflictProfile,
+): { reason: string; score: number } | null {
   // Jaccard on stopword-stripped tokens. Defer the threshold check until we know whether an explicit polarity pair is
   // present (lower bar for those).
   const overlapScore = jaccardSets(a.distinct, b.distinct);
@@ -280,10 +305,18 @@ export interface LoserChoice {
 
 /** The loser's fate, every number in it: a store applies it as given. A rejection is a tenant-wide tombstone, so it
  * may not carry a personal row's value, and its sweep stays within `ownScope`, what the caller may touch. */
-export function conflictLoserFate(choice: LoserChoice, loser: ConflictSide, ownScope: string | null): LoserFate {
+export function conflictLoserFate(
+  choice: LoserChoice,
+  loser: ConflictSide,
+  ownScope: string | null,
+): LoserFate {
   if (choice.rejectLoser !== true) {
     if (choice.forget === true) return { kind: 'remove' };
-    return { kind: 'weaken', halfLifeFactor: WEAKEN_HALF_LIFE_FACTOR, minHalfLifeDays: WEAKEN_MIN_HALF_LIFE_DAYS };
+    return {
+      kind: 'weaken',
+      halfLifeFactor: WEAKEN_HALF_LIFE_FACTOR,
+      minHalfLifeDays: WEAKEN_MIN_HALF_LIFE_DAYS,
+    };
   }
   if (isPersonalScope(loser.scope)) {
     throw new BadRequestError(

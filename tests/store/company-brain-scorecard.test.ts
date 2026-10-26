@@ -139,7 +139,10 @@ describe('Company Brain continuity scorecard scaffold', () => {
       sessionId,
       summary: 'Measurement plan is ready for review.',
       nextAction: 'Open the PR after verifying the continuity scorecard and build output.',
-      artifacts: ['docs/plans/2026-04-28-company-brain-measurement.md', 'tests/company-brain-scorecard.test.ts'],
+      artifacts: [
+        'docs/plans/2026-04-28-company-brain-measurement.md',
+        'tests/company-brain-scorecard.test.ts',
+      ],
     });
 
     const featureOn = buildResumeScorecard(tmpDir, sessionId);
@@ -355,7 +358,9 @@ describe('Company Brain provenance coverage scorecard', () => {
 
 describe('Company Brain correction-latency scorecard', () => {
   it('returns an empty report when no supersessions exist', async () => {
-    const a = createMemory('belief: pricing tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const a = createMemory('belief: pricing tier is 100', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     const report = buildCorrectionLatency(await correctionLinksOfRows([a]));
     expect(report.count).toBe(0);
     expect(report.manualCount).toBe(0);
@@ -367,9 +372,13 @@ describe('Company Brain correction-latency scorecard', () => {
   });
 
   it('flags direct supersedes as manual with zero measurable latency', async () => {
-    const oldEntry = createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const oldEntry = createMemory('belief: tier is 100', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     oldEntry.created = '2026-04-01T00:00:00.000Z';
-    const newEntry = createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const newEntry = createMemory('belief: tier is 120', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     newEntry.created = '2026-04-02T00:00:00.000Z';
     oldEntry.supersededBy = newEntry.id;
 
@@ -392,7 +401,9 @@ describe('Company Brain correction-latency scorecard', () => {
     });
     rawReceipt.created = '2026-04-01T10:00:00.000Z';
 
-    const oldFact = createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const oldFact = createMemory('belief: tier is 100', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     oldFact.created = '2026-03-15T00:00:00.000Z';
 
     const newFact = createMemory('belief: tier is 120', {
@@ -402,7 +413,9 @@ describe('Company Brain correction-latency scorecard', () => {
     newFact.created = '2026-04-01T10:30:00.000Z';
     oldFact.supersededBy = newFact.id;
 
-    const report = buildCorrectionLatency(await correctionLinksOfRows([rawReceipt, oldFact, newFact]));
+    const report = buildCorrectionLatency(
+      await correctionLinksOfRows([rawReceipt, oldFact, newFact]),
+    );
 
     expect(report.count).toBe(1);
     expect(report.extractionCount).toBe(1);
@@ -414,9 +427,13 @@ describe('Company Brain correction-latency scorecard', () => {
   });
 
   it('skips pairs with malformed timestamps so NaN never reaches percentiles', async () => {
-    const oldEntry = createMemory('belief: tier is 100', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const oldEntry = createMemory('belief: tier is 100', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     oldEntry.created = '2026-04-01T00:00:00.000Z';
-    const newEntry = createMemory('belief: tier is 120', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const newEntry = createMemory('belief: tier is 120', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     newEntry.created = 'not-a-date';
     oldEntry.supersededBy = newEntry.id;
 
@@ -426,7 +443,9 @@ describe('Company Brain correction-latency scorecard', () => {
   });
 
   it('handles dangling superseded_by pointers without throwing', async () => {
-    const oldEntry = createMemory('belief points at a missing successor', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const oldEntry = createMemory('belief points at a missing successor', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     oldEntry.supersededBy = 'mem-does-not-exist';
 
     const report = buildCorrectionLatency(await correctionLinksOfRows([oldEntry]));

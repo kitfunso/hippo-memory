@@ -49,7 +49,10 @@ export async function autoSleepAfterWrite(
   try {
     due = (await autoSleepDue(store, tenantId, config.autoSleep, ctx.infra.clock())).due;
   } catch (err) {
-    log.warn(`auto-sleep: counting new memories failed, so no sleep started: ${errorMessage(err)}`, errorFields(err));
+    log.warn(
+      `auto-sleep: counting new memories failed, so no sleep started: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   } finally {
     if (!due) host.latch.held = false;
   }
@@ -58,7 +61,10 @@ export async function autoSleepAfterWrite(
   host
     .run()
     .catch((err) => {
-      log.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${errorMessage(err)}`, errorFields(err));
+      log.error(
+        `auto-sleep consolidate failed (tenant ${tenantId}): ${errorMessage(err)}`,
+        errorFields(err),
+      );
     })
     .finally(() => {
       host.latch.held = false;

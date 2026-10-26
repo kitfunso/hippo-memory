@@ -7,8 +7,16 @@
 
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { PRODUCTION_STRENGTH, type StrengthModel, calculateStrength } from '../../base/memory/strength.js';
-import { compareEntryIdentity, compareScoresDesc, type EntryIdentity } from '../../base/rank/compare.js';
+import {
+  PRODUCTION_STRENGTH,
+  type StrengthModel,
+  calculateStrength,
+} from '../../base/memory/strength.js';
+import {
+  compareEntryIdentity,
+  compareScoresDesc,
+  type EntryIdentity,
+} from '../../base/rank/compare.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
 import { DAY_MS } from '../../base/util/time.js';
 
@@ -266,16 +274,22 @@ function tieGroups(
   const groups: TieGroup[] = [];
   for (const [tenantId, group] of byTenant) {
     const scores = scoreFeatures(group, weights);
-    const ids = group.map(([id]) => id).sort((a, b) => compareScoresDesc(scores.get(a)!, scores.get(b)!));
+    const ids = group
+      .map(([id]) => id)
+      .sort((a, b) => compareScoresDesc(scores.get(a)!, scores.get(b)!));
     // Tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0); see that constant's doc comment.
-    const keepN = ids.length < MIN_RESCUE_GROUP ? 0 : Math.min(ids.length, Math.ceil(RESCUE_BUDGET * ids.length));
+    const keepN =
+      ids.length < MIN_RESCUE_GROUP
+        ? 0
+        : Math.min(ids.length, Math.ceil(RESCUE_BUDGET * ids.length));
     for (let start = 0, end = 0; start < ids.length; start = end) {
       const score = scores.get(ids[start])!;
       while (end < ids.length && scores.get(ids[end]) === score) end++;
       // A non-finite row is always wanted: the caller names every one in a warning, in rank order.
       const want = (id: string): boolean => wanted(id) || score === -Infinity;
       const tied = ids.slice(start, end);
-      if (tied.some(want)) groups.push({ tenantId, score, start, tied, total: ids.length, keepN, want });
+      if (tied.some(want))
+        groups.push({ tenantId, score, start, tied, total: ids.length, keepN, want });
     }
   }
   return groups;
@@ -350,7 +364,12 @@ export function rescueSet(
   now: Date,
   options: RescueSetOptions = {},
 ): Set<string> {
-  const { weights = MEMORY_VALUE_WEIGHTS, digest = SOURCE_ARTIFACT_SHA256, precomputedRanks, strength } = options;
+  const {
+    weights = MEMORY_VALUE_WEIGHTS,
+    digest = SOURCE_ARTIFACT_SHA256,
+    precomputedRanks,
+    strength,
+  } = options;
   validateWeights(weights, digest); // fail loud before any rescue computation
   const ranked = precomputedRanks ?? rankNonPinnedByTenant(entries, now, weights, digest, strength);
   const rescued = new Set<string>();

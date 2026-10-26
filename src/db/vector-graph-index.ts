@@ -52,17 +52,26 @@ interface Ready {
   catchingUpFrom: number | undefined;
 }
 
-type Slot = Ready | { readonly kind: 'building' } | { readonly kind: 'failed'; readonly at: number };
+type Slot =
+  | Ready
+  | { readonly kind: 'building' }
+  | { readonly kind: 'failed'; readonly at: number };
 
 function dataVersion(db: DatabaseSyncLike): number {
   // SAFETY: PRAGMA data_version always answers one row.
-  return (cachedStatement(db, 'PRAGMA data_version').get() as { data_version: number }).data_version;
+  return (cachedStatement(db, 'PRAGMA data_version').get() as { data_version: number })
+    .data_version;
 }
 
 // max(rowid) is one lookup and bounds the row count from above, so a store far under the threshold is never counted.
 function storedCount(db: DatabaseSyncLike, threshold: number): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const top = (cachedStatement(db, 'SELECT max(rowid) AS n FROM memory_vectors').get() as { n: number | null }).n ?? 0;
+  const top =
+    (
+      cachedStatement(db, 'SELECT max(rowid) AS n FROM memory_vectors').get() as {
+        n: number | null;
+      }
+    ).n ?? 0;
   if (top < threshold) return top;
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   return (cachedStatement(db, 'SELECT count(*) AS n FROM memory_vectors').get() as { n: number }).n;
@@ -177,7 +186,9 @@ export class VectorGraphs implements VectorIndex {
       slot.dataVersion = version;
       if (++slot.refreshes % RECOUNT_EVERY === 0) {
         // SAFETY: an aggregate with no GROUP BY always answers one row.
-        slot.rows.live = (cachedStatement(db, 'SELECT count(*) AS n FROM memory_vectors').get() as { n: number }).n;
+        slot.rows.live = (
+          cachedStatement(db, 'SELECT count(*) AS n FROM memory_vectors').get() as { n: number }
+        ).n;
       }
       const fresh = staleNodes(slot.rows) <= STALE_SHARE * slot.rows.ids.length;
       if (this.#underCap(slot.rows.live) && fresh) return slot.rows.lastRowid;
@@ -229,10 +240,13 @@ export class VectorGraphs implements VectorIndex {
   }
 
   #ready(rows: GraphRows, started: number): void {
-    log.info(`the vector graph of ${rows.ids.length} vectors of length ${rows.graph.dim} is ready`, {
-      hippoRoot: this.#hippoRoot,
-      buildMs: Date.now() - started,
-    });
+    log.info(
+      `the vector graph of ${rows.ids.length} vectors of length ${rows.graph.dim} is ready`,
+      {
+        hippoRoot: this.#hippoRoot,
+        buildMs: Date.now() - started,
+      },
+    );
   }
 
   // Outside the request scope of the read that started it, so its log lines carry no request's id.
@@ -241,10 +255,13 @@ export class VectorGraphs implements VectorIndex {
       .exit(task)
       .catch(<E>(err: E) => {
         this.#slots.set(dim, { kind: 'failed', at: Date.now() });
-        log.warn(`the vector graph of length ${dim} could not be built, so nearest-row reads scan`, {
-          hippoRoot: this.#hippoRoot,
-          ...errorFields(err),
-        });
+        log.warn(
+          `the vector graph of length ${dim} could not be built, so nearest-row reads scan`,
+          {
+            hippoRoot: this.#hippoRoot,
+            ...errorFields(err),
+          },
+        );
       })
       .finally(() => {
         this.#work.delete(done);
@@ -253,7 +270,11 @@ export class VectorGraphs implements VectorIndex {
   }
 
   // Undefined when the threads close first or the vectors now come from another model, so the next read starts over.
-  async #grow(dim: number, base: GraphRows | undefined, afterRowid: number): Promise<GraphRows | undefined> {
+  async #grow(
+    dim: number,
+    base: GraphRows | undefined,
+    afterRowid: number,
+  ): Promise<GraphRows | undefined> {
     await nextTurn();
     const read = await this.#readRows(dim, afterRowid);
     if (read === undefined || (base !== undefined && read.model !== base.model)) return undefined;
@@ -273,14 +294,19 @@ export class VectorGraphs implements VectorIndex {
 
   // A connection of the build's own: its cursor stays open across turns, and jobs on the thread's connection must never
   // read through that snapshot.
-  async #readRows(dim: number, afterRowid: number): Promise<{ model: string; staged: StagedRows } | undefined> {
+  async #readRows(
+    dim: number,
+    afterRowid: number,
+  ): Promise<{ model: string; staged: StagedRows } | undefined> {
     const db = openHippoDbReadOnly(this.#hippoRoot);
     try {
       // Before the rows: a model change between the two reads then shows as a mismatch at the next query.
       const model = storedModel(db);
       const staged = new StagedRows(dim);
       let slice = performance.now();
-      for (const row of db.prepare(ROWS_ABOVE_SQL).iterate(afterRowid, dim) as Iterable<StoredRow>) {
+      for (const row of db
+        .prepare(ROWS_ABOVE_SQL)
+        .iterate(afterRowid, dim) as Iterable<StoredRow>) {
         staged.add(row);
         if (performance.now() - slice < SLICE_MS) continue;
         if (!(await this.#turn())) return undefined;

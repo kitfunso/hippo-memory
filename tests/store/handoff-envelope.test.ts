@@ -36,12 +36,16 @@ function columns(db: DatabaseSyncLike, table: string): ColumnInfo[] {
 
 function indexNames(db: DatabaseSyncLike, table: string): string[] {
   // SAFETY: PRAGMA index_list always yields rows with a `name` column.
-  return (db.prepare(`PRAGMA index_list(${table})`).all() as Array<{ name: string }>).map((r) => r.name);
+  return (db.prepare(`PRAGMA index_list(${table})`).all() as Array<{ name: string }>).map(
+    (r) => r.name,
+  );
 }
 
 function getMeta(db: DatabaseSyncLike, key: string): string | undefined {
   // SAFETY: row shape matches the single `value` column selected below.
-  return (db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined)?.value;
+  return (
+    db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined
+  )?.value;
 }
 
 function setMeta(db: DatabaseSyncLike, key: string, value: string): void {
@@ -76,7 +80,13 @@ describe('fresh store, single open', () => {
     try {
       const cols = columns(db, 'session_handoffs').map((c) => c.name);
       expect(cols).toEqual(
-        expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']),
+        expect.arrayContaining([
+          'constraints_json',
+          'evidence_json',
+          'outcome',
+          'target_runtime',
+          'card_id',
+        ]),
       );
       expect(indexNames(db, 'session_handoffs')).toContain('idx_session_handoffs_tenant_outcome');
       expect(getMeta(db, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
@@ -111,7 +121,13 @@ describe('v41 store upgrades to v42', () => {
       expect(getMeta(db2, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
       const cols = columns(db2, 'session_handoffs').map((c) => c.name);
       expect(cols).toEqual(
-        expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']),
+        expect.arrayContaining([
+          'constraints_json',
+          'evidence_json',
+          'outcome',
+          'target_runtime',
+          'card_id',
+        ]),
       );
     } finally {
       closeHippoDb(db2);
@@ -139,7 +155,13 @@ describe('v41 store upgrades to v42', () => {
       expect(getMeta(db2, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
       const cols = columns(db2, 'session_handoffs').map((c) => c.name);
       expect(cols).toEqual(
-        expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']),
+        expect.arrayContaining([
+          'constraints_json',
+          'evidence_json',
+          'outcome',
+          'target_runtime',
+          'card_id',
+        ]),
       );
     } finally {
       closeHippoDb(db2);
@@ -210,7 +232,11 @@ describe('round trip of new fields', () => {
         `UPDATE session_handoffs SET artifacts_json = '{private-artifact', constraints_json = '[private-constraint', evidence_json = '{"gitRef":42,"note":"private-evidence"}' WHERE session_id = 'sess-damaged'`,
       ).run();
       // SAFETY: the row was saved above, so the id column is there.
-      id = (db.prepare(`SELECT id FROM session_handoffs WHERE session_id = 'sess-damaged'`).get() as { id: number }).id;
+      id = (
+        db.prepare(`SELECT id FROM session_handoffs WHERE session_id = 'sess-damaged'`).get() as {
+          id: number;
+        }
+      ).id;
     } finally {
       closeHippoDb(db);
     }
@@ -233,7 +259,9 @@ describe('round trip of new fields', () => {
       ),
     );
     expect(logged).toMatch(
-      new RegExp(`session_handoffs\\.constraints_json is not valid JSON.* id=${id} column=constraints_json`),
+      new RegExp(
+        `session_handoffs\\.constraints_json is not valid JSON.* id=${id} column=constraints_json`,
+      ),
     );
     expect(logged).toMatch(
       new RegExp(`session_handoffs\\.evidence_json is wrong shape.* id=${id} column=evidence_json`),
@@ -286,11 +314,18 @@ describe('loadLatestHandoff opts', () => {
     expect(unfinished!.summary).toBe('third partial');
 
     // Isolated session: only row is old, so maxAgeMs has nothing else to fall back to.
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-age', summary: 'stale', artifacts: [] });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-age',
+      summary: 'stale',
+      artifacts: [],
+    });
     const db2 = openHippoDb(root);
     try {
       db2
-        .prepare(`UPDATE session_handoffs SET created_at = '2000-01-01T00:00:00.000Z' WHERE session_id = 'sess-age'`)
+        .prepare(
+          `UPDATE session_handoffs SET created_at = '2000-01-01T00:00:00.000Z' WHERE session_id = 'sess-age'`,
+        )
         .run();
     } finally {
       closeHippoDb(db2);
@@ -303,8 +338,18 @@ describe('loadLatestHandoff opts', () => {
 describe('stampHandoffOutcome', () => {
   it('stamps only the newest null-outcome row for the session; returns 0 when none qualify', () => {
     initTestStore(root);
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-stamp', summary: 'older', artifacts: [] });
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-stamp', summary: 'newer', artifacts: [] });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-stamp',
+      summary: 'older',
+      artifacts: [],
+    });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-stamp',
+      summary: 'newer',
+      artifacts: [],
+    });
 
     const changed = stampHandoffOutcome(root, 'default', 'sess-stamp', 'success');
     expect(changed).toBe(1);
@@ -351,12 +396,16 @@ describe('writeSessionEndHandoff', () => {
       sessionId: 'sess-a',
     });
 
-    expect(writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-b', evidence: null })).toBeNull();
+    expect(
+      writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-b', evidence: null }),
+    ).toBeNull();
   });
 
   it('6c: returns null when no active snapshot exists', () => {
     initTestStore(root);
-    expect(writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-none', evidence: null })).toBeNull();
+    expect(
+      writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-none', evidence: null }),
+    ).toBeNull();
   });
 
   it('6d: returns null when a handoff strictly newer than the snapshot exists', () => {
@@ -376,7 +425,9 @@ describe('writeSessionEndHandoff', () => {
 
     const db = openHippoDb(root);
     try {
-      db.prepare(`UPDATE task_snapshots SET updated_at = '2026-01-01T00:00:00.000Z' WHERE session_id = 'sess-d'`).run();
+      db.prepare(
+        `UPDATE task_snapshots SET updated_at = '2026-01-01T00:00:00.000Z' WHERE session_id = 'sess-d'`,
+      ).run();
       db.prepare(
         `UPDATE session_handoffs SET created_at = '2026-01-01T00:00:00.001Z' WHERE session_id = 'sess-d'`,
       ).run();
@@ -384,7 +435,9 @@ describe('writeSessionEndHandoff', () => {
       closeHippoDb(db);
     }
 
-    expect(writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-d', evidence: null })).toBeNull();
+    expect(
+      writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-d', evidence: null }),
+    ).toBeNull();
   });
 
   it('6e: a handoff whose created_at equals snapshot.updated_at to the millisecond does NOT suppress the write', () => {
@@ -395,7 +448,12 @@ describe('writeSessionEndHandoff', () => {
       nextStep: 'next',
       sessionId: 'sess-e',
     });
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-e', summary: 'tie handoff', artifacts: [] });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-e',
+      summary: 'tie handoff',
+      artifacts: [],
+    });
 
     const tie = '2026-02-02T00:00:00.000Z';
     const db = openHippoDb(root);
@@ -404,21 +462,29 @@ describe('writeSessionEndHandoff', () => {
       db.prepare(`UPDATE session_handoffs SET created_at = ? WHERE session_id = 'sess-e'`).run(tie);
       // SAFETY: row's shape matches the single `c` column selected below.
       const before = (
-        db.prepare(`SELECT COUNT(*) as c FROM session_handoffs WHERE session_id = 'sess-e'`).get() as { c: number }
+        db
+          .prepare(`SELECT COUNT(*) as c FROM session_handoffs WHERE session_id = 'sess-e'`)
+          .get() as { c: number }
       ).c;
       expect(before).toBe(1);
     } finally {
       closeHippoDb(db);
     }
 
-    const written = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-e', evidence: null });
+    const written = writeSessionEndHandoff(root, {
+      tenantId: 'default',
+      sessionId: 'sess-e',
+      evidence: null,
+    });
     expect(written).not.toBeNull();
 
     const db2 = openHippoDb(root);
     try {
       // SAFETY: row's shape matches the single `c` column selected below.
       const after = (
-        db2.prepare(`SELECT COUNT(*) as c FROM session_handoffs WHERE session_id = 'sess-e'`).get() as { c: number }
+        db2
+          .prepare(`SELECT COUNT(*) as c FROM session_handoffs WHERE session_id = 'sess-e'`)
+          .get() as { c: number }
       ).c;
       expect(after).toBe(2);
     } finally {
@@ -439,7 +505,11 @@ describe('writeSessionEndHandoff', () => {
       eventType: 'session_complete',
       content: 'success',
     });
-    const withOutcome = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-f1', evidence: null });
+    const withOutcome = writeSessionEndHandoff(root, {
+      tenantId: 'default',
+      sessionId: 'sess-f1',
+      evidence: null,
+    });
     expect(withOutcome!.outcome).toBe('success');
 
     saveActiveTaskSnapshot(root, 'default', {
@@ -453,7 +523,11 @@ describe('writeSessionEndHandoff', () => {
       eventType: 'session_complete',
       content: 'not-a-real-outcome',
     });
-    const withoutOutcome = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-f2', evidence: null });
+    const withoutOutcome = writeSessionEndHandoff(root, {
+      tenantId: 'default',
+      sessionId: 'sess-f2',
+      evidence: null,
+    });
     expect(withoutOutcome!.outcome).toBeNull();
   });
 });

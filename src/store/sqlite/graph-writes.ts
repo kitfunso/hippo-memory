@@ -57,7 +57,13 @@ export function resolveConsolidatedSource(
   sourceObject: SourceObjectRef | null,
   label: string,
 ): ResolvedGraphSource {
-  const { memKind, effectiveMemoryId } = checkSourceMemory(db, tenantId, memoryId, sourceObject, label);
+  const { memKind, effectiveMemoryId } = checkSourceMemory(
+    db,
+    tenantId,
+    memoryId,
+    sourceObject,
+    label,
+  );
   assertSourceObjectUsable(db, tenantId, sourceObject, label);
 
   // source_kind is the memory's kind when a memory is present, else 'distilled' for an object-only row (objects are
@@ -82,9 +88,9 @@ function checkSourceMemory(
   let memKind: SourceKind | null = null;
   let effectiveMemoryId: string | null = memoryId;
   if (memoryId != null) {
-    const row = cachedStatement(db, `SELECT kind, tenant_id FROM memories WHERE id = ?`).get(memoryId) as
-      | { kind: string; tenant_id: string }
-      | undefined;
+    const row = cachedStatement(db, `SELECT kind, tenant_id FROM memories WHERE id = ?`).get(
+      memoryId,
+    ) as { kind: string; tenant_id: string } | undefined;
     if (!row) {
       // Stale/forgotten mirror: tolerate it IFF a valid source object gives provenance, so a mirror pruned mid
       // graph-extract does not roll back the tenant rebuild; anchor to the object and drop the dead memory pointer.
@@ -95,7 +101,9 @@ function checkSourceMemory(
     } else if (row.tenant_id !== tenantId) {
       throw new Error(`${label}: source memory ${memoryId} belongs to another tenant`);
     } else if (row.kind === 'raw') {
-      throw new Error(`${label}: source memory ${memoryId} is raw; the graph indexes consolidated state only`);
+      throw new Error(
+        `${label}: source memory ${memoryId} is raw; the graph indexes consolidated state only`,
+      );
     } else if (row.kind !== 'distilled' && row.kind !== 'superseded') {
       throw new Error(`${label}: source memory ${memoryId} has unsupported kind '${row.kind}'`);
     } else {
@@ -120,12 +128,14 @@ function assertSourceObjectUsable(
     }
     // `table` is a fixed SOURCE_OBJECT_TABLE value (never user-supplied), so interpolation is safe; `id`/`tenant_id`
     // stay parametrized.
-    const row = cachedStatement(db, `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(
-      sourceObject.id,
-      tenantId,
-    ) as { status: string } | undefined;
+    const row = cachedStatement(
+      db,
+      `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`,
+    ).get(sourceObject.id, tenantId) as { status: string } | undefined;
     if (!row) {
-      throw new Error(`${label}: source ${sourceObject.type} ${sourceObject.id} not found for tenant ${tenantId}`);
+      throw new Error(
+        `${label}: source ${sourceObject.type} ${sourceObject.id} not found for tenant ${tenantId}`,
+      );
     }
     if (row.status !== 'active' && row.status !== 'superseded') {
       throw new Error(
@@ -138,7 +148,11 @@ function assertSourceObjectUsable(
 
 /** Insert a graph entity on the caller's handle; throws if the source memory is missing / cross-tenant / raw (the DB
  * trigger is the backstop). */
-export function insertEntityRow(db: DatabaseSyncLike, tenantId: string, opts: InsertEntityOptions): Entity {
+export function insertEntityRow(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  opts: InsertEntityOptions,
+): Entity {
   assertTenantId('insertEntity', tenantId);
   if (!GRAPH_ENTITY_TYPES.has(opts.entityType)) {
     throw new Error(
@@ -174,7 +188,9 @@ export function insertEntityRow(db: DatabaseSyncLike, tenantId: string, opts: In
     now,
   );
   const id = Number(result.lastInsertRowid ?? 0);
-  const row = cachedStatement(db, `SELECT ${ENTITY_COLS} FROM entities WHERE id = ?`).get(id) as EntityRow | undefined;
+  const row = cachedStatement(db, `SELECT ${ENTITY_COLS} FROM entities WHERE id = ?`).get(id) as
+    | EntityRow
+    | undefined;
   if (!row) throw new Error('insertEntity: failed to reload inserted entity');
   return rowToEntity(row);
 }
@@ -198,17 +214,23 @@ export function updateEntityRow(
 ): Entity | null {
   assertTenantId('updateEntity', tenantId);
   const name = checkedName('updateEntity', opts.name);
-  const row = cachedStatement(db, `SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`).get(
-    id,
-    tenantId,
-  ) as EntityRow | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`,
+  ).get(id, tenantId) as EntityRow | undefined;
   if (!row) return null;
   const entity = rowToEntity(row);
   const sourceObject =
     entity.sourceObjectType === undefined || entity.sourceObjectId === undefined
       ? null
       : { type: entity.sourceObjectType, id: entity.sourceObjectId };
-  const resolved = resolveConsolidatedSource(db, tenantId, opts.memoryId ?? null, sourceObject, 'updateEntity');
+  const resolved = resolveConsolidatedSource(
+    db,
+    tenantId,
+    opts.memoryId ?? null,
+    sourceObject,
+    'updateEntity',
+  );
   cachedStatement(
     db,
     `UPDATE entities SET name = ?, memory_id = ?, source_kind = ? WHERE id = ? AND tenant_id = ?`,
@@ -216,7 +238,11 @@ export function updateEntityRow(
   return { ...entity, name, memoryId: resolved.memoryId, sourceKind: resolved.sourceKind };
 }
 
-function assertEndpointsInTenant(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOptions): void {
+function assertEndpointsInTenant(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  opts: InsertRelationOptions,
+): void {
   for (const [eid, role] of [
     [opts.fromEntityId, 'from'],
     [opts.toEntityId, 'to'],
@@ -226,14 +252,20 @@ function assertEndpointsInTenant(db: DatabaseSyncLike, tenantId: string, opts: I
       | undefined;
     if (!ent) throw new Error(`insertRelation: ${role}_entity ${eid} not found`);
     if (ent.tenant_id !== tenantId) {
-      throw new Error(`insertRelation: ${role}_entity ${eid} belongs to another tenant (no cross-tenant edges)`);
+      throw new Error(
+        `insertRelation: ${role}_entity ${eid} belongs to another tenant (no cross-tenant edges)`,
+      );
     }
   }
 }
 
 /** Insert a graph relation between two same-tenant entities on the caller's handle, sourced from a consolidated memory.
  * The schema trigger checks each endpoint once; only a refused insert reads them, to say which one failed. */
-export function insertRelationRow(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOptions): Relation {
+export function insertRelationRow(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  opts: InsertRelationOptions,
+): Relation {
   assertTenantId('insertRelation', tenantId);
   if (!GRAPH_RELATION_TYPES.has(opts.relType)) {
     throw new Error(
@@ -294,7 +326,11 @@ function relationSource(
 /**
  * The source object still holds the loader's rule (active or superseded); a closed or gone one gets no new graph row.
  */
-export function objectInForce(db: DatabaseSyncLike, tenantId: string, ref: SourceObjectRef): boolean {
+export function objectInForce(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  ref: SourceObjectRef,
+): boolean {
   // `table` comes from the fixed SOURCE_OBJECT_TABLE map, never from input.
   const table = SOURCE_OBJECT_TABLE[ref.type];
   const row = cachedStatement(db, `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(

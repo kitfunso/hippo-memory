@@ -2,7 +2,12 @@
 
 import { isJsonObject, isJsonString } from '../base/util/json.js';
 import type { LegacyStats } from '../base/ports/store/reports.js';
-import type { CorrectionLink, RawProvenance, ReportPage, StatusCounts } from '../base/ports/store/reports.js';
+import type {
+  CorrectionLink,
+  RawProvenance,
+  ReportPage,
+  StatusCounts,
+} from '../base/ports/store/reports.js';
 import { READ_PAGE_ROWS } from '../base/util/pages.js';
 import type { Reports } from '../base/ports/store/reports.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
@@ -17,7 +22,11 @@ export interface StoreStatus {
 }
 
 /** Lifetime stats and row counts for the whole store. Every tenant, so the host admin only. */
-export async function storeStatus(ctx: Context, now: Date, atRiskBelow: number): Promise<StoreStatus> {
+export async function storeStatus(
+  ctx: Context,
+  now: Date,
+  atRiskBelow: number,
+): Promise<StoreStatus> {
   requireHostAdmin(ctx, 'Reading every tenant');
   const { reports } = ctx.store;
   return { stats: await reports.stats(), counts: await reports.statusCounts(now, atRiskBelow) };
@@ -33,7 +42,9 @@ export async function lastSleepAt(ctx: Context): Promise<string | undefined> {
 }
 
 /** Ids and dimension of the stored vectors. Every tenant, so the host admin only. */
-export async function vectorSummary(ctx: ContextWith<'embeddingIndex'>): Promise<StoredVectorSummary> {
+export async function vectorSummary(
+  ctx: ContextWith<'embeddingIndex'>,
+): Promise<StoredVectorSummary> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return indexStep(ctx.store.embeddingIndex, { kind: 'summary' });
 }
@@ -41,7 +52,10 @@ export async function vectorSummary(ctx: ContextWith<'embeddingIndex'>): Promise
 /**
  * Whether the stored vectors were built by a different model than `providerId`. Every tenant, so the host admin only.
  */
-export async function embeddingReindexNeeded(ctx: ContextWith<'embeddingIndex'>, providerId: string): Promise<boolean> {
+export async function embeddingReindexNeeded(
+  ctx: ContextWith<'embeddingIndex'>,
+  providerId: string,
+): Promise<boolean> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return indexStep(ctx.store.embeddingIndex, { kind: 'reindex', providerId });
 }

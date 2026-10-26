@@ -15,7 +15,13 @@ import { assertCrossTenantAdmin, recheckContextWithAuth } from '../auth.js';
 import { parseCursor } from '../../../api/cursor.js';
 import { pageOf, setNextCursorHeader } from '../cursor.js';
 import type { AuthedRouteRequest, RouteParams } from '../types.js';
-import { getString, isSetMember, parseJsonObjectText, parseLimitParam, validateIdSegment } from '../validation.js';
+import {
+  getString,
+  isSetMember,
+  parseJsonObjectText,
+  parseLimitParam,
+  validateIdSegment,
+} from '../validation.js';
 import { isJsonBoolean, isJsonNumber } from '../../../base/util/json.js';
 import { AUDIT_OPS } from '../../../base/records/audit-ops.js';
 import type { AuditOp } from '../../../base/records/audit-ops.js';
@@ -103,7 +109,10 @@ export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest
 // DELETE /v1/auth/keys/:keyId revokes: missing or cross-tenant keys are 404 (no leak); a member is 403 on any key but
 // its own or, via the resolver, those it minted. Returns 200 with the body rather than 204 so the caller sees
 // revokedAt.
-export async function handleRevokeAuthKey({ res, ctx }: AuthedRouteRequest, { keyId }: RouteParams): Promise<void> {
+export async function handleRevokeAuthKey(
+  { res, ctx }: AuthedRouteRequest,
+  { keyId }: RouteParams,
+): Promise<void> {
   validateIdSegment(keyId, 'key id');
   const result = await authRevoke(ctx, keyId);
   sendJson(res, 200, result);
@@ -116,23 +125,35 @@ export async function handleListQuarantine({ res, ctx, query }: AuthedRouteReque
   const statusRaw = query.get('status');
   let status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending';
   if (statusRaw !== null) {
-    if (statusRaw !== 'pending' && statusRaw !== 'approved' && statusRaw !== 'rejected' && statusRaw !== 'all') {
+    if (
+      statusRaw !== 'pending' &&
+      statusRaw !== 'approved' &&
+      statusRaw !== 'rejected' &&
+      statusRaw !== 'all'
+    ) {
       throw new HttpError(400, 'status must be one of: pending | approved | rejected | all');
     }
     status = statusRaw;
   }
   const limit = parseLimitParam(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'string');
-  const page = pageOf(await quarantineList(ctx, { status, limit: limit + 1, after }), limit, (q) => ({
-    key: q.quarantinedAt,
-    id: q.id,
-  }));
+  const page = pageOf(
+    await quarantineList(ctx, { status, limit: limit + 1, after }),
+    limit,
+    (q) => ({
+      key: q.quarantinedAt,
+      id: q.id,
+    }),
+  );
   sendJson(res, 200, { quarantine: page.items, next_cursor: page.nextCursor });
   return;
 }
 
 // POST /v1/quarantine/:id/approve: admin only; ForbiddenError falls through to mapApiError's 403.
-export async function handleApproveQuarantine({ res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+export async function handleApproveQuarantine(
+  { res, ctx }: AuthedRouteRequest,
+  { id }: RouteParams,
+): Promise<void> {
   validateIdSegment(id, 'memory id');
   await quarantineApprove(ctx, id);
   sendJson(res, 200, { approved: id });
@@ -140,7 +161,10 @@ export async function handleApproveQuarantine({ res, ctx }: AuthedRouteRequest, 
 }
 
 // POST /v1/quarantine/:id/reject: admin only; ForbiddenError falls through to mapApiError's 403.
-export async function handleRejectQuarantine({ res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+export async function handleRejectQuarantine(
+  { res, ctx }: AuthedRouteRequest,
+  { id }: RouteParams,
+): Promise<void> {
   validateIdSegment(id, 'memory id');
   await quarantineReject(ctx, id);
   sendJson(res, 200, { rejected: id });
@@ -171,7 +195,12 @@ export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest): 
   let limit = DEFAULT_LIST_LIMIT;
   if (limitRaw !== null) {
     const parsed = Number(limitRaw);
-    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1 || parsed > MAX_AUDIT_LIMIT) {
+    if (
+      !Number.isFinite(parsed) ||
+      !Number.isInteger(parsed) ||
+      parsed < 1 ||
+      parsed > MAX_AUDIT_LIMIT
+    ) {
       throw new HttpError(400, `limit must be an integer between 1 and ${MAX_AUDIT_LIMIT}`);
     }
     limit = parsed;
@@ -180,13 +209,18 @@ export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest): 
   // ?tenant=<t> reads another tenant (e.g. '__host__' for consolidate rows); admin only.
   const tenantOverride = query.get('tenant');
   if (tenantOverride !== null && tenantOverride !== '') validateIdSegment(tenantOverride, 'tenant');
-  const crossTenant = tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
+  const crossTenant =
+    tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
   if (crossTenant) assertCrossTenantAdmin(ctx, '/v1/audit?tenant= for another tenant');
   const effectiveCtx = crossTenant ? { ...ctx, tenantId: tenantOverride } : ctx;
-  const page = pageOf(await auditList(effectiveCtx, { op, since, limit: limit + 1, after }), limit, (e) => ({
-    key: e.ts,
-    id: e.id,
-  }));
+  const page = pageOf(
+    await auditList(effectiveCtx, { op, since, limit: limit + 1, after }),
+    limit,
+    (e) => ({
+      key: e.ts,
+      id: e.id,
+    }),
+  );
   setNextCursorHeader(res, page.nextCursor);
   sendJson(res, 200, page.items);
   return;

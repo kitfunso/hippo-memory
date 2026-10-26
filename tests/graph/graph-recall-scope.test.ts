@@ -38,7 +38,12 @@ function safeRmSync(p: string): void {
 }
 /** Write a distilled memory (createMemory's default kind — the only kind graph writers
  *  accept per the E3.3 consolidated-source guard) and return the full entry. */
-function mem(home: string, tenant: string, text: string, opts: { scope?: string | null } = {}): MemoryEntry {
+function mem(
+  home: string,
+  tenant: string,
+  text: string,
+  opts: { scope?: string | null } = {},
+): MemoryEntry {
   const content = text.length < 3 ? text.repeat(3) : text;
   const m = createMemory(content, {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -88,7 +93,12 @@ describe('graph-recall scope parity', () => {
     const ePriv = ent(home, T, priv, 'PRIV');
     // priv is the `from` endpoint (reached direction 'from'), so it is not treated as a
     // superseded endpoint and would surface by default absent the scope fix.
-    insertRelationAt(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
+    insertRelationAt(home, T, {
+      fromEntityId: ePriv,
+      toEntityId: eSeed,
+      relType: 'supersedes',
+      memoryId: priv.id,
+    });
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
@@ -106,7 +116,12 @@ describe('graph-recall scope parity', () => {
     });
     const eSeed = ent(home, T, seed, 'SEED');
     const ePriv = ent(home, T, priv, 'PRIV');
-    insertRelationAt(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
+    insertRelationAt(home, T, {
+      fromEntityId: ePriv,
+      toEntityId: eSeed,
+      relType: 'supersedes',
+      memoryId: priv.id,
+    });
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
@@ -154,10 +169,17 @@ describe('graph-recall scope parity', () => {
 
   it('quarantine deny: a reached row scoped unknown:legacy is dropped by default', async () => {
     const seed = mem(home, T, 'decision alpha about cache invalidation strategy');
-    const legacy = mem(home, T, 'wholly unrelated legacy wording xyzzy plugh quux', { scope: 'unknown:legacy' });
+    const legacy = mem(home, T, 'wholly unrelated legacy wording xyzzy plugh quux', {
+      scope: 'unknown:legacy',
+    });
     const eSeed = ent(home, T, seed, 'SEED');
     const eLegacy = ent(home, T, legacy, 'LEGACY');
-    insertRelationAt(home, T, { fromEntityId: eLegacy, toEntityId: eSeed, relType: 'supersedes', memoryId: legacy.id });
+    insertRelationAt(home, T, {
+      fromEntityId: eLegacy,
+      toEntityId: eSeed,
+      relType: 'supersedes',
+      memoryId: legacy.id,
+    });
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
@@ -173,10 +195,17 @@ describe('graph-recall scope parity', () => {
     try {
       // Seed + graph live entirely in the GLOBAL store; `home` (local) has no entities.
       const seed = mem(glob, T, 'globally-stored seed decision about cache invalidation');
-      const priv = mem(glob, T, 'globally-stored private linked wording xyzzy plugh', { scope: 'slack:private:dm1' });
+      const priv = mem(glob, T, 'globally-stored private linked wording xyzzy plugh', {
+        scope: 'slack:private:dm1',
+      });
       const eSeed = ent(glob, T, seed, 'SEED');
       const ePriv = ent(glob, T, priv, 'PRIV');
-      insertRelationAt(glob, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
+      insertRelationAt(glob, T, {
+        fromEntityId: ePriv,
+        toEntityId: eSeed,
+        relType: 'supersedes',
+        memoryId: priv.id,
+      });
 
       const out = await graphExpandRecall([sr(seed, 1.0)], {
         hops: 1,
@@ -194,7 +223,9 @@ describe('graph-recall scope parity', () => {
   it('unlock composition: dm1 additive unlock surfaces the NULL-scope + dm1 neighbours but a second private scope (dm2) stays denied', async () => {
     const seed = mem(home, T, 'decision alpha about cache invalidation strategy');
     const nullNeighbor = mem(home, T, 'wholly unrelated public wording xyzzy plugh');
-    const dm1 = mem(home, T, 'wholly unrelated dm1 private wording frobnicate zapzap', { scope: 'slack:private:dm1' });
+    const dm1 = mem(home, T, 'wholly unrelated dm1 private wording frobnicate zapzap', {
+      scope: 'slack:private:dm1',
+    });
     const dm2 = mem(home, T, 'wholly unrelated dm2 private wording quuxquux blorpblorp', {
       scope: 'slack:private:dm2',
     });
@@ -208,8 +239,18 @@ describe('graph-recall scope parity', () => {
       relType: 'supersedes',
       memoryId: nullNeighbor.id,
     });
-    insertRelationAt(home, T, { fromEntityId: eDm1, toEntityId: eSeed, relType: 'supersedes', memoryId: dm1.id });
-    insertRelationAt(home, T, { fromEntityId: eDm2, toEntityId: eSeed, relType: 'supersedes', memoryId: dm2.id });
+    insertRelationAt(home, T, {
+      fromEntityId: eDm1,
+      toEntityId: eSeed,
+      relType: 'supersedes',
+      memoryId: dm1.id,
+    });
+    insertRelationAt(home, T, {
+      fromEntityId: eDm2,
+      toEntityId: eSeed,
+      relType: 'supersedes',
+      memoryId: dm2.id,
+    });
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
       hops: 1,
@@ -243,10 +284,17 @@ describe('graph-recall scope parity: CLI e2e', () => {
     const hippoDir = join(cliHome, '.hippo');
     const T = 'default';
     const seed = mem(hippoDir, T, 'decision alpha about cache invalidation graphhopscope');
-    const priv = mem(hippoDir, T, 'wholly unrelated private wording frobnicate zapzap', { scope: 'slack:private:dm1' });
+    const priv = mem(hippoDir, T, 'wholly unrelated private wording frobnicate zapzap', {
+      scope: 'slack:private:dm1',
+    });
     const eSeed = ent(hippoDir, T, seed, 'SEED');
     const ePriv = ent(hippoDir, T, priv, 'PRIV');
-    insertRelationAt(hippoDir, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
+    insertRelationAt(hippoDir, T, {
+      fromEntityId: ePriv,
+      toEntityId: eSeed,
+      relType: 'supersedes',
+      memoryId: priv.id,
+    });
 
     const denied = await hippo(cliHome, 'recall', 'graphhopscope', '--hops', '1', '--limit', '10');
     expect(denied).toContain('decision alpha');

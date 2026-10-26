@@ -80,7 +80,16 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       const id = create.out.match(/Created card (\S+)/)?.[1];
       expect(id).toMatch(/^card_[0-9a-f]+$/);
 
-      const handoff = runCliSpawned(home, env, 'handoff', 'create', '--summary', 's', '--card-id', id!);
+      const handoff = runCliSpawned(
+        home,
+        env,
+        'handoff',
+        'create',
+        '--summary',
+        's',
+        '--card-id',
+        id!,
+      );
       expect(handoff.status, handoff.out).toBe(0);
 
       const show = runCliSpawned(home, env, 'card', 'show', id!, '--json');
@@ -204,7 +213,15 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
   it('card claim on an unknown id exits 1 with the unknown-id message', async () => {
     const { home, env } = await setupCliHome();
     try {
-      const claim = await runCli(home, env, 'card', 'claim', 'card_000000000000', '--runtime', 'r1');
+      const claim = await runCli(
+        home,
+        env,
+        'card',
+        'claim',
+        'card_000000000000',
+        '--runtime',
+        'r1',
+      );
       expect(claim.status).toBe(1);
       expect(claim.out).toContain('unknown card id: card_000000000000');
     } finally {
@@ -230,7 +247,15 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     const { home, env } = await setupCliHome();
     try {
       // --depends-on=nope is a real flag now, so it fails on the parent lookup instead of on parsing.
-      const equalsForm = await runCli(home, env, 'card', 'create', '--title', 't', '--depends-on=nope');
+      const equalsForm = await runCli(
+        home,
+        env,
+        'card',
+        'create',
+        '--title',
+        't',
+        '--depends-on=nope',
+      );
       expect(equalsForm.status).toBe(1);
       expect(equalsForm.out).toContain('unknown parent card id: nope');
 
@@ -285,10 +310,30 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       const listed = JSON.parse(list.out);
       expect(listed.cards.some((c: { id: string }) => c.id === childId)).toBe(true);
 
-      const claim = await runCli(home, env, 'card', 'claim', parentId, '--runtime', 'r1', '--session', 's1');
+      const claim = await runCli(
+        home,
+        env,
+        'card',
+        'claim',
+        parentId,
+        '--runtime',
+        'r1',
+        '--session',
+        's1',
+      );
       expect(claim.status, claim.out).toBe(0);
 
-      const comment = await runCli(home, env, 'card', 'comment', parentId, '--body', 'note', '--author', 'me');
+      const comment = await runCli(
+        home,
+        env,
+        'card',
+        'comment',
+        parentId,
+        '--body',
+        'note',
+        '--author',
+        'me',
+      );
       expect(comment.status, comment.out).toBe(0);
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -314,10 +359,14 @@ describe('the card verb is wired through the flag parser and the command table',
       b.id,
     ]);
 
-    const run = await runInProcess(() => COMMANDS.card.run({ hippoRoot: root, tenantId: 'default', args, flags }));
+    const run = await runInProcess(() =>
+      COMMANDS.card.run({ hippoRoot: root, tenantId: 'default', args, flags }),
+    );
 
     expect(run.status, run.stderr).toBe(0);
     const child = /Created card (\S+)/.exec(run.stdout)?.[1] ?? '';
-    expect((await cardDetailOf(root, 'default', child))?.deps.parents.sort()).toEqual([a.id, b.id].sort());
+    expect((await cardDetailOf(root, 'default', child))?.deps.parents.sort()).toEqual(
+      [a.id, b.id].sort(),
+    );
   });
 });

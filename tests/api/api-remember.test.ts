@@ -69,7 +69,9 @@ describe("api.remember stamps the caller's project", () => {
 
   it('a shared store with no project stamps NULL', async () => {
     const ctx = storeCtx(true);
-    expect(originOf(ctx, (await remember(ctx, { content: 'release notes go out on tuesdays' })).id)).toBeNull();
+    expect(
+      originOf(ctx, (await remember(ctx, { content: 'release notes go out on tuesdays' })).id),
+    ).toBeNull();
   });
 
   it("a shared store stamps the project's name, never its aliases", async () => {
@@ -86,14 +88,21 @@ describe("api.remember stamps the caller's project", () => {
     expect(
       originOf(
         ctx,
-        (await remember(ctx, { content: 'release notes go out on tuesdays', project: { name: 'acme/app' } })).id,
+        (
+          await remember(ctx, {
+            content: 'release notes go out on tuesdays',
+            project: { name: 'acme/app' },
+          })
+        ).id,
       ),
     ).toBe('acme/app');
   });
 
   it('a store that is not shared, with no project, keeps the folder stamp', async () => {
     const ctx = storeCtx(false);
-    expect(originOf(ctx, (await remember(ctx, { content: 'release notes go out on tuesdays' })).id)).toBe('proj');
+    expect(
+      originOf(ctx, (await remember(ctx, { content: 'release notes go out on tuesdays' })).id),
+    ).toBe('proj');
   });
 
   it('refuses a blank name, eleven aliases and an overlong name, and writes nothing', async () => {
@@ -105,9 +114,9 @@ describe("api.remember stamps the caller's project", () => {
       { name: 'acme/app', aliases: eleven },
       { name: 'x'.repeat(257) },
     ]) {
-      await expect(remember(ctx, { content: 'release notes go out on tuesdays', project })).rejects.toThrow(
-        BadRequestError,
-      );
+      await expect(
+        remember(ctx, { content: 'release notes go out on tuesdays', project }),
+      ).rejects.toThrow(BadRequestError);
     }
     expect(loadAllEntries(ctx.hippoRoot, 'default')).toHaveLength(0);
   });

@@ -78,7 +78,9 @@ describe('audit log', () => {
         })),
       );
 
-      expect(failed.map((f) => [f.event.targetId, String(f.error)])).toEqual([['m2', 'Error: audit row refused']]);
+      expect(failed.map((f) => [f.event.targetId, String(f.error)])).toEqual([
+        ['m2', 'Error: audit row refused'],
+      ]);
       expect(
         listAuditEvents(db, { tenantId: 'default' })
           .map((e) => e.targetId)
@@ -91,7 +93,13 @@ describe('audit log', () => {
 
   it('appendAuditEvents writes in one statement the rows it writes one call per row', () => {
     const events: AppendAuditOptions[] = [
-      { tenantId: 'default', actor: 'cli', op: 'remember', targetId: 'm1', metadata: { n: 1, s: '2', nested: [true] } },
+      {
+        tenantId: 'default',
+        actor: 'cli',
+        op: 'remember',
+        targetId: 'm1',
+        metadata: { n: 1, s: '2', nested: [true] },
+      },
       { tenantId: 'other', actor: 'api_key:hk_1', op: 'recall' },
       { tenantId: 'default', actor: 'cli', op: 'forget', metadata: {} },
     ];
@@ -124,10 +132,13 @@ describe('audit log', () => {
     const db = openHippoDb(makeRoot('audit'));
     const prepare = vi.spyOn(db, 'prepare');
     try {
-      for (let i = 0; i < 3; i++) appendAuditEvents(db, [{ tenantId: 'default', actor: 'cli', op: 'remember' }]);
+      for (let i = 0; i < 3; i++)
+        appendAuditEvents(db, [{ tenantId: 'default', actor: 'cli', op: 'remember' }]);
       const recall = { tenantId: 'default', actor: 'cli', op: 'recall' } as const;
       for (let i = 0; i < 2; i++) appendAuditEvents(db, [recall, recall]);
-      expect(prepare.mock.calls.filter(([sql]) => sql.includes('INSERT INTO audit_log'))).toHaveLength(2);
+      expect(
+        prepare.mock.calls.filter(([sql]) => sql.includes('INSERT INTO audit_log')),
+      ).toHaveLength(2);
       expect(listAuditEvents(db, { tenantId: 'default' })).toHaveLength(7);
     } finally {
       prepare.mockRestore();

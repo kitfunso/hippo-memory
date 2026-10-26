@@ -2,7 +2,13 @@
 
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { ConnectorEventRecord } from '../../../base/ports/store.js';
-import { eventMemory, eventRecord, eventSeen, markEventSeen, type EventLogSpec } from './event-log.js';
+import {
+  eventMemory,
+  eventRecord,
+  eventSeen,
+  markEventSeen,
+  type EventLogSpec,
+} from './event-log.js';
 import { dlqAccess } from './dlq.js';
 import type {
   TenantRoute,
@@ -46,7 +52,10 @@ export function markGitHubEventSeen(db: DatabaseSyncLike, entry: GitHubEventLogE
   );
 }
 
-export function githubEventRecord(db: DatabaseSyncLike, idempotencyKey: string): ConnectorEventRecord {
+export function githubEventRecord(
+  db: DatabaseSyncLike,
+  idempotencyKey: string,
+): ConnectorEventRecord {
   return eventRecord(db, GITHUB_LOG, idempotencyKey);
 }
 
@@ -70,13 +79,19 @@ export const GITHUB_DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
  * a repository two tenants registered, how many rows it could have come from. */
 export function githubRoute(
   db: DatabaseSyncLike,
-  { installationId, repoFullName }: { installationId?: string | null; repoFullName?: string | null },
+  {
+    installationId,
+    repoFullName,
+  }: { installationId?: string | null; repoFullName?: string | null },
 ): TenantRoute {
   if (installationId) {
-    const row = cachedStatement(db, `SELECT tenant_id FROM github_installations WHERE installation_id = ?`).get(
-      installationId,
-    ) as { tenant_id?: string } | undefined;
-    return row?.tenant_id ? { tenantId: row.tenant_id } : { tenantId: null, routes: rowCount(db, 'installations') };
+    const row = cachedStatement(
+      db,
+      `SELECT tenant_id FROM github_installations WHERE installation_id = ?`,
+    ).get(installationId) as { tenant_id?: string } | undefined;
+    return row?.tenant_id
+      ? { tenantId: row.tenant_id }
+      : { tenantId: null, routes: rowCount(db, 'installations') };
   }
   const tenants = repoFullName ? repoTenants(db, repoFullName) : [];
   if (tenants.length === 1) return { tenantId: tenants[0]! };
@@ -100,7 +115,9 @@ function repoTenants(db: DatabaseSyncLike, repoFullName: string): string[] {
 
 function rowCount(db: DatabaseSyncLike, table: 'installations' | 'repositories'): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const row = cachedStatement(db, `SELECT COUNT(*) AS c FROM github_${table}`).get() as { c: number | bigint };
+  const row = cachedStatement(db, `SELECT COUNT(*) AS c FROM github_${table}`).get() as {
+    c: number | bigint;
+  };
   return Number(row.c);
 }
 
@@ -132,7 +149,9 @@ export function saveGitHubCursor(
   keepSaved: boolean,
 ): void {
   const column = HWM_COLUMN[stream];
-  const kept = keepSaved ? `COALESCE(github_cursors.${column}, excluded.${column})` : `excluded.${column}`;
+  const kept = keepSaved
+    ? `COALESCE(github_cursors.${column}, excluded.${column})`
+    : `excluded.${column}`;
   cachedStatement(
     db,
     `INSERT INTO github_cursors (tenant_id, repo_full_name, ${column}, updated_at)

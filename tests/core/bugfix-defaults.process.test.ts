@@ -23,7 +23,11 @@ describe('physics scoring default', () => {
     expect(DEFAULT_PHYSICS_CONFIG.enabled).toBe(false);
     const home = makeRoot('physics-default');
     expect(loadConfig(home).physics.enabled).toBe(false);
-    writeFileSync(join(home, 'config.json'), JSON.stringify({ physics: { enabled: 'auto' } }), 'utf8');
+    writeFileSync(
+      join(home, 'config.json'),
+      JSON.stringify({ physics: { enabled: 'auto' } }),
+      'utf8',
+    );
     expect(loadConfig(home).physics.enabled).toBe('auto');
   });
 });
@@ -42,7 +46,12 @@ describe('hippo learn --git honours config.gitLearnPatterns', () => {
     git('config', 'commit.gpgsign', 'false');
     writeFileSync(join(repo, 'a.txt'), 'x', 'utf8');
     git('add', '.');
-    git('commit', '-q', '-m', 'oops: parser dropped the trailing newline on windows paths during export');
+    git(
+      'commit',
+      '-q',
+      '-m',
+      'oops: parser dropped the trailing newline on windows paths during export',
+    );
     initTestStore(join(repo, '.hippo'));
   });
 
@@ -50,7 +59,8 @@ describe('hippo learn --git honours config.gitLearnPatterns', () => {
     const env = { ...process.env, HIPPO_HOME: join(repo, 'global') };
     hippoOut(['learn', '--git', '--days', '30'], { cwd: repo, env });
   }
-  const learned = (): string[] => loadAllEntries(join(repo, '.hippo'), 'default').map((e) => e.content);
+  const learned = (): string[] =>
+    loadAllEntries(join(repo, '.hippo'), 'default').map((e) => e.content);
 
   it('uses the built-in patterns by default', () => {
     learn();
@@ -58,7 +68,11 @@ describe('hippo learn --git honours config.gitLearnPatterns', () => {
   });
 
   it('uses a custom pattern list from config.json', () => {
-    writeFileSync(join(repo, '.hippo', 'config.json'), JSON.stringify({ gitLearnPatterns: ['oops'] }), 'utf8');
+    writeFileSync(
+      join(repo, '.hippo', 'config.json'),
+      JSON.stringify({ gitLearnPatterns: ['oops'] }),
+      'utf8',
+    );
     learn();
     expect(learned().some((c) => c.includes('trailing newline'))).toBe(true);
   });

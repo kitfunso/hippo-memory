@@ -45,7 +45,9 @@ function watched(inner: AuthResolver) {
 }
 
 function slowRecall(handle: ServerHandle): Promise<Response> {
-  return fetch(`${handle.url}/v1/memories?q=anything`, { headers: { authorization: 'Bearer slow-idp-token' } });
+  return fetch(`${handle.url}/v1/memories?q=anything`, {
+    headers: { authorization: 'Bearer slow-idp-token' },
+  });
 }
 
 afterEach(() => {
@@ -57,7 +59,12 @@ describe('serve() graceful stop', () => {
   it('lets a request already running finish instead of cutting its socket', async () => {
     const gate = gatedResolver();
     const { resolver, asked } = watched(gate.resolver);
-    const handle = await serve({ hippoRoot: trackedRoot(), port: 0, authResolver: resolver, shutdownDrainMs: 5000 });
+    const handle = await serve({
+      hippoRoot: trackedRoot(),
+      port: 0,
+      authResolver: resolver,
+      shutdownDrainMs: 5000,
+    });
     const pending = slowRecall(handle);
     await asked;
     const stopped = handle.stop();
@@ -105,7 +112,9 @@ describe('serve() graceful stop', () => {
         "process.emit('SIGTERM');",
       ].join('\n'),
     );
-    const child = spawn(process.execPath, [script], { env: { ...process.env, HIPPO_HOME: join(home, '.global') } });
+    const child = spawn(process.execPath, [script], {
+      env: { ...process.env, HIPPO_HOME: join(home, '.global') },
+    });
     let stderr = '';
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString('utf8');
@@ -132,7 +141,9 @@ describe('serve() graceful stop', () => {
         'console.log(handle.url);',
       ].join('\n'),
     );
-    const child = spawn(process.execPath, [script], { env: { ...process.env, HIPPO_HOME: join(home, '.global') } });
+    const child = spawn(process.execPath, [script], {
+      env: { ...process.env, HIPPO_HOME: join(home, '.global') },
+    });
     let stderr = '';
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString('utf8');

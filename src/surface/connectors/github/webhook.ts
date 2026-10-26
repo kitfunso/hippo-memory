@@ -17,7 +17,10 @@ import {
   isGitHubPullRequestReviewCommentEvent,
   type GitHubWebhookEnvelope,
 } from './types.js';
-import { ingestEvent as ingestGitHubEvent, type IngestEvent as GitHubIngestEvent } from './ingest.js';
+import {
+  ingestEvent as ingestGitHubEvent,
+  type IngestEvent as GitHubIngestEvent,
+} from './ingest.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
@@ -47,14 +50,29 @@ export function githubPreviousSecret(): string | undefined {
 }
 
 export function warnGitHubPreviousSecretOpen(): void {
-  warnIfOpenEnded(GITHUB_PREVIOUS, envGitHubWebhookSecretPrevious(), envGitHubWebhookSecretPreviousUntil());
+  warnIfOpenEnded(
+    GITHUB_PREVIOUS,
+    envGitHubWebhookSecretPrevious(),
+    envGitHubWebhookSecretPreviousUntil(),
+  );
 }
 
 /** Reads the raw body and refuses it unless the signature matches the current or the previous secret. */
-async function readSignedBody(request: WebhookRequest, secret: string, sigStr: string): Promise<string> {
+async function readSignedBody(
+  request: WebhookRequest,
+  secret: string,
+  sigStr: string,
+): Promise<string> {
   const rawBytes = await readWebhookBody(request);
   const previousSecret = githubPreviousSecret();
-  if (!verifyGitHubSignature({ rawBody: rawBytes, signature: sigStr, webhookSecret: secret, previousSecret })) {
+  if (
+    !verifyGitHubSignature({
+      rawBody: rawBytes,
+      signature: sigStr,
+      webhookSecret: secret,
+      previousSecret,
+    })
+  ) {
     throw new HttpError(401, 'invalid GitHub signature');
   }
   return rawBytes.toString('utf8');
@@ -63,7 +81,10 @@ async function readSignedBody(request: WebhookRequest, secret: string, sigStr: s
 /** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by
  *  installation.id then repository.full_name. ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature; 409
  *  on a replayed delivery id; 404 if GITHUB_WEBHOOK_SECRET is unset. No Bearer: route auth is webhook-signature. */
-export async function handleGitHubEventsWebhook(request: WebhookRequest, ports: WebhookPorts): Promise<void> {
+export async function handleGitHubEventsWebhook(
+  request: WebhookRequest,
+  ports: WebhookPorts,
+): Promise<void> {
   const { req, res, opts } = request;
   // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
   const secret = envGitHubWebhookSecret();
@@ -113,12 +134,16 @@ const REPLAY_HOLD_MS = 36_500 * DAY_MS;
 
 async function claimOrRefuse(store: WebhookPorts['store'], key: string): Promise<void> {
   const claim = { connector: 'github', key, nowMs: Date.now(), ttlMs: REPLAY_HOLD_MS } as const;
-  if (!(await store.connectorEvents.claimDelivery(claim))) throw new HttpError(409, 'duplicate X-GitHub-Delivery');
+  if (!(await store.connectorEvents.claimDelivery(claim)))
+    throw new HttpError(409, 'duplicate X-GitHub-Delivery');
 }
 
 async function freeHold(store: WebhookPorts['store'], key: string): Promise<void> {
   await store.connectorEvents.releaseDelivery('github', key).catch((err) => {
-    log.warn('github webhook: could not free the replay hold of a failed delivery', errorFields(err));
+    log.warn(
+      'github webhook: could not free the replay hold of a failed delivery',
+      errorFields(err),
+    );
   });
 }
 
@@ -312,7 +337,12 @@ function deliveryAction(eventName: string | null, body: SignedEnvelope): Deliver
     if (body.action === 'deleted') {
       const repo = body.repository?.full_name ?? '';
       const artifactRef = `github://${repo}/issue/${body.issue.number}/comment/${body.comment.id}`;
-      return { kind: 'archive-comment', eventName, artifactRef, updatedAt: body.comment.updated_at ?? null };
+      return {
+        kind: 'archive-comment',
+        eventName,
+        artifactRef,
+        updatedAt: body.comment.updated_at ?? null,
+      };
     }
     return { kind: 'ingest', event: { eventName: 'issue_comment', payload: body } };
   }
@@ -329,7 +359,12 @@ function deliveryAction(eventName: string | null, body: SignedEnvelope): Deliver
       const repo = body.repository?.full_name ?? '';
       const artifactRef = `github://${repo}/pull/${body.pull_request.number}/review_comment/${body.comment.id}`;
       // Same "deleted:" key namespace as the issue_comment branch above.
-      return { kind: 'archive-comment', eventName, artifactRef, updatedAt: body.comment.updated_at ?? null };
+      return {
+        kind: 'archive-comment',
+        eventName,
+        artifactRef,
+        updatedAt: body.comment.updated_at ?? null,
+      };
     }
     return { kind: 'ingest', event: { eventName: 'pull_request_review_comment', payload: body } };
   }

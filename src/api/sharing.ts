@@ -18,9 +18,13 @@ export interface SharePeer {
 }
 
 // A root's reach sets it for a store kept in a folder, so only a context built without a reach lacks it.
-function requireGlobalTarget(ctx: Context, action: string): NonNullable<ReturnType<typeof globalTargetOf>> {
+function requireGlobalTarget(
+  ctx: Context,
+  action: string,
+): NonNullable<ReturnType<typeof globalTargetOf>> {
   const target = globalTargetOf(ctx);
-  if (target === undefined) throw new Error(`${action} needs ctx.reach.globalTarget, the global store`);
+  if (target === undefined)
+    throw new Error(`${action} needs ctx.reach.globalTarget, the global store`);
   return target;
 }
 
@@ -40,13 +44,23 @@ export async function autoShareToGlobal(
   ctx: ContextWith<'sharing' | 'folderFiles'>,
   opts: { readonly minScore: number; readonly dryRun: boolean },
 ): Promise<MemoryEntry[]> {
-  return autoShare(ctx, requireGlobalTarget(ctx, 'auto-share'), { ...opts, tenantId: ctx.tenantId, embed: ctx.infra });
+  return autoShare(ctx, requireGlobalTarget(ctx, 'auto-share'), {
+    ...opts,
+    tenantId: ctx.tenantId,
+    embed: ctx.infra,
+  });
 }
 
 /** The projects that shared into the global store: the caller's tenant, or every tenant for the host's operator. */
-export async function sharePeers(ctx: Context, opts: { readonly allTenants?: boolean } = {}): Promise<SharePeer[]> {
+export async function sharePeers(
+  ctx: Context,
+  opts: { readonly allTenants?: boolean } = {},
+): Promise<SharePeer[]> {
   if (opts.allTenants === true) requireHostAdmin(ctx, "Listing every tenant's peers");
-  return listPeers(requireGlobalTarget(ctx, 'peers'), opts.allTenants === true ? ALL_TENANTS : ctx.tenantId);
+  return listPeers(
+    requireGlobalTarget(ctx, 'peers'),
+    opts.allTenants === true ? ALL_TENANTS : ctx.tenantId,
+  );
 }
 
 /** Copies the global rows the caller's store lacks into it; other projects' rows only with `includeCrossProject`. */

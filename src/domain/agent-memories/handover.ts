@@ -3,7 +3,11 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { projectNames } from '../../base/scope/project-identity.js';
-import type { ContainerApply, ImportStep, MirrorFailure } from '../../base/ports/store/agent-import.js';
+import type {
+  ContainerApply,
+  ImportStep,
+  MirrorFailure,
+} from '../../base/ports/store/agent-import.js';
 import { liveUnder, type ContainerWork } from './container-view.js';
 import { namesFoldedInto } from './project-folds.js';
 import { toolReport, type ImportReport } from '../../base/memory/agent-memory-report.js';
@@ -41,7 +45,8 @@ export async function handOver(
 
 /** One project's mirror purges that failed after a commit, as warnings. */
 export function warnUnpurged(unpurged: readonly MirrorFailure[], report: ImportReport): void {
-  for (const { id, message } of unpurged) report.warnings.push(`mirror of ${id} not removed: ${message}`);
+  for (const { id, message } of unpurged)
+    report.warnings.push(`mirror of ${id} not removed: ${message}`);
 }
 
 interface HandOverContainerOptions {
@@ -52,12 +57,21 @@ interface HandOverContainerOptions {
 }
 
 /** The container's tagged global rows set aside in one transaction, planned once more if they changed meanwhile. */
-async function handOverContainer(store: ImportStore, work: ContainerWork, at: HandOverContainerOptions): Promise<void> {
+async function handOverContainer(
+  store: ImportStore,
+  work: ContainerWork,
+  at: HandOverContainerOptions,
+): Promise<void> {
   const prefixes = at.origins.map((origin) =>
-    containerPrefix(work.tool.id, containerId(work.container.path, work.container.scope, at.machine, origin)),
+    containerPrefix(
+      work.tool.id,
+      containerId(work.container.path, work.container.scope, at.machine, origin),
+    ),
   );
   for (let round = 0; round < 2; round++) {
-    const applied = await store.agentImport.applyContainer(await handOverPlan(store, work, at.tenantId, prefixes));
+    const applied = await store.agentImport.applyContainer(
+      await handOverPlan(store, work, at.tenantId, prefixes),
+    );
     if (applied.kind === 'changed') continue;
     toolReport(at.report, work.tool.id).tally.handedOver += applied.outcomes.length;
     warnUnpurged(applied.unpurged, at.report);
@@ -87,6 +101,10 @@ async function handOverPlan(
       }
     }
   }
-  const planned = rows.map((row) => ({ id: row.id, source: row.source, tagged: row.tags.includes(tag) }));
+  const planned = rows.map((row) => ({
+    id: row.id,
+    source: row.source,
+    tagged: row.tags.includes(tag),
+  }));
   return { tenantId, dryRun: false, tag, prefixes, rows: planned, steps };
 }

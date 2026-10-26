@@ -60,7 +60,9 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
         return {
           names: info.map((c) => c.name),
           version: version.user_version,
-          row: db.prepare('SELECT summary_dirty, rebuild_count FROM memories WHERE id = ?').get(summary.id),
+          row: db
+            .prepare('SELECT summary_dirty, rebuild_count FROM memories WHERE id = ?')
+            .get(summary.id),
         };
       } finally {
         closeHippoDb(db);
@@ -68,7 +70,9 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     };
     const first = inspect();
     const db = openHippoDb(hippoRoot);
-    db.prepare('UPDATE memories SET summary_dirty = 1, rebuild_count = 7 WHERE id = ?').run(summary.id);
+    db.prepare('UPDATE memories SET summary_dirty = 1, rebuild_count = 7 WHERE id = ?').run(
+      summary.id,
+    );
     closeHippoDb(db);
     const second = inspect();
     for (const column of columns) expect(second.names.filter((n) => n === column)).toHaveLength(1);
@@ -88,7 +92,9 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     // SAFETY: the SELECT list above names exactly these four columns, so
     // every returned row has this shape.
     const row = db
-      .prepare(`SELECT summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at FROM memories WHERE id = ?`)
+      .prepare(
+        `SELECT summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at FROM memories WHERE id = ?`,
+      )
       .get(summary.id) as {
       summary_dirty: number;
       last_rebuilt_at: string | null;

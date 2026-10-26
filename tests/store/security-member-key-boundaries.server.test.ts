@@ -48,8 +48,14 @@ function keyCount(home: string): number {
 }
 
 function seedScopedMemories(home: string): void {
-  writeEntry(home, { ...createMemory(PRIVATE_TEXT, { layer: Layer.Episodic }), scope: PRIVATE_SCOPE });
-  writeEntry(home, { ...createMemory(PUBLIC_TEXT, { layer: Layer.Episodic }), scope: PUBLIC_SCOPE });
+  writeEntry(home, {
+    ...createMemory(PRIVATE_TEXT, { layer: Layer.Episodic }),
+    scope: PRIVATE_SCOPE,
+  });
+  writeEntry(home, {
+    ...createMemory(PUBLIC_TEXT, { layer: Layer.Episodic }),
+    scope: PUBLIC_SCOPE,
+  });
 }
 
 describe('member-key boundaries over HTTP', () => {
@@ -83,7 +89,10 @@ describe('member-key boundaries over HTTP', () => {
     for (const role of ['admin', 'member']) {
       const res = await fetch(`${handle.url}/v1/auth/keys`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${member.plaintext}` },
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${member.plaintext}`,
+        },
         body: JSON.stringify({ label: 'escalate', role }),
       });
       expect(res.status).toBe(403);
@@ -112,7 +121,10 @@ describe('member-key boundaries over HTTP', () => {
   it('a member key cannot unlock a private or quarantined scope by naming it', async () => {
     const member = mintKey(home, 'member');
     for (const scope of [PRIVATE_SCOPE, 'unknown:legacy']) {
-      const res = await get(`/v1/memories?q=zanzibar&scope=${encodeURIComponent(scope)}`, member.plaintext);
+      const res = await get(
+        `/v1/memories?q=zanzibar&scope=${encodeURIComponent(scope)}`,
+        member.plaintext,
+      );
       expect(res.status).toBe(403);
       expect(await res.text()).not.toContain('payroll');
     }
@@ -125,7 +137,10 @@ describe('member-key boundaries over HTTP', () => {
 
   it('a member key still recalls public scopes and default results, never the private row', async () => {
     const member = mintKey(home, 'member');
-    const scoped = await get(`/v1/memories?q=zanzibar&scope=${encodeURIComponent(PUBLIC_SCOPE)}`, member.plaintext);
+    const scoped = await get(
+      `/v1/memories?q=zanzibar&scope=${encodeURIComponent(PUBLIC_SCOPE)}`,
+      member.plaintext,
+    );
     expect(scoped.status).toBe(200);
     expect(await scoped.text()).toContain('release notes');
 
@@ -138,7 +153,10 @@ describe('member-key boundaries over HTTP', () => {
 
   it('an admin key can still read a private scope it names', async () => {
     const admin = mintKey(home, 'admin');
-    const res = await get(`/v1/memories?q=zanzibar&scope=${encodeURIComponent(PRIVATE_SCOPE)}`, admin.plaintext);
+    const res = await get(
+      `/v1/memories?q=zanzibar&scope=${encodeURIComponent(PRIVATE_SCOPE)}`,
+      admin.plaintext,
+    );
     expect(res.status).toBe(200);
     expect(await res.text()).toContain('payroll');
   });
@@ -154,18 +172,29 @@ describe('member-key boundaries over HTTP', () => {
       const res = await fetch(`${handle.url}/mcp`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name, arguments: args },
+        }),
       });
       return { status: res.status, text: await res.text() };
     }
 
     for (const tool of ['hippo_recall', 'hippo_context']) {
-      const denied = await callTool(member.plaintext, tool, { query: 'zanzibar', scope: PRIVATE_SCOPE });
+      const denied = await callTool(member.plaintext, tool, {
+        query: 'zanzibar',
+        scope: PRIVATE_SCOPE,
+      });
       expect(denied.text).not.toContain('payroll');
       expect(denied.status === 403 || denied.text.includes('requires admin role')).toBe(true);
     }
 
-    const allowed = await callTool(admin.plaintext, 'hippo_recall', { query: 'zanzibar', scope: PRIVATE_SCOPE });
+    const allowed = await callTool(admin.plaintext, 'hippo_recall', {
+      query: 'zanzibar',
+      scope: PRIVATE_SCOPE,
+    });
     expect(allowed.status).toBe(200);
     expect(allowed.text).toContain('payroll');
   });
@@ -183,32 +212,37 @@ describe('member-key boundaries in the api layer (every surface goes through it)
     rmSync(home, { recursive: true, force: true });
   });
 
-  const memberCtx = (): FullContext => apiCtx(home, 'default', { subject: 'api_key:m', role: 'member' });
+  const memberCtx = (): FullContext =>
+    apiCtx(home, 'default', { subject: 'api_key:m', role: 'member' });
   const adminCtx = (): FullContext => apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
   it('key management refuses a member actor', async () => {
-    await expect(api.authCreate(memberCtx(), { role: 'admin' })).rejects.toThrow(api.ForbiddenError);
+    await expect(api.authCreate(memberCtx(), { role: 'admin' })).rejects.toThrow(
+      api.ForbiddenError,
+    );
     await expect(api.authRevoke(memberCtx(), 'k_missing')).rejects.toThrow(api.ForbiddenError);
     expect((await api.authCreate(adminCtx(), { role: 'member' })).role).toBe('member');
   });
 
   it('recall and assemble refuse a restricted scope for a member, and allow it for an admin', async () => {
-    await expect(api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: PRIVATE_SCOPE } })).rejects.toThrow(
-      api.ScopeForbiddenError,
-    );
-    await expect(api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: 'unknown:legacy' } })).rejects.toThrow(
-      api.ScopeForbiddenError,
-    );
+    await expect(
+      api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: PRIVATE_SCOPE } }),
+    ).rejects.toThrow(api.ScopeForbiddenError);
+    await expect(
+      api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: 'unknown:legacy' } }),
+    ).rejects.toThrow(api.ScopeForbiddenError);
     await expect(api.assemble(memberCtx(), 'sess_1', { scope: PRIVATE_SCOPE })).rejects.toThrow(
       api.ScopeForbiddenError,
     );
 
     // The public row is the only one seeded in that scope.
-    const publicResults = (await api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: PUBLIC_SCOPE } }))
-      .results;
+    const publicResults = (
+      await api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: PUBLIC_SCOPE } })
+    ).results;
     expect(publicResults.map((r) => r.content)).toEqual([PUBLIC_TEXT]);
-    const adminResults = (await api.retrieve(adminCtx(), { query: 'zanzibar', filter: { scope: PRIVATE_SCOPE } }))
-      .results;
+    const adminResults = (
+      await api.retrieve(adminCtx(), { query: 'zanzibar', filter: { scope: PRIVATE_SCOPE } })
+    ).results;
     expect(adminResults.map((r) => r.content).join(' ')).toContain('payroll');
   });
 });

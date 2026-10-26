@@ -48,7 +48,8 @@ describe('merge pass partitions by tenant before clustering', () => {
     // tenant's own 2 entries cluster on their own into a
     // "[Consolidated from 2 related memories]" row in that tenant.
     const shortText = 'rotate the staging tls certificates before expiry';
-    const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
+    const longText =
+      'rotate the staging tls certificates before expiry and notify the on-call channel';
 
     const aShort = createMemory(shortText, {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -99,8 +100,12 @@ describe('merge pass partitions by tenant before clustering', () => {
 
     // Sources demoted (not deleted) under their OWN tenant — cross-check
     // no source crossed into the other tenant's row.
-    const aSources = allAfter.filter((e) => e.tenantId === 'tenant-a' && e.layer === Layer.Episodic);
-    const bSources = allAfter.filter((e) => e.tenantId === 'tenant-b' && e.layer === Layer.Episodic);
+    const aSources = allAfter.filter(
+      (e) => e.tenantId === 'tenant-a' && e.layer === Layer.Episodic,
+    );
+    const bSources = allAfter.filter(
+      (e) => e.tenantId === 'tenant-b' && e.layer === Layer.Episodic,
+    );
     expect(aSources).toHaveLength(2);
     expect(bSources).toHaveLength(2);
   });
@@ -162,7 +167,13 @@ describe('extract.ts storeExtractedFacts has the same defect, folded in', () => 
     const facts: ExtractedFact[] = [
       { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
     ];
-    const stored = await storeExtractedFacts(sqliteStore(home), source, facts, DEFAULT_HALF_LIFE_DAYS, evalNow());
+    const stored = await storeExtractedFacts(
+      sqliteStore(home),
+      source,
+      facts,
+      DEFAULT_HALF_LIFE_DAYS,
+      evalNow(),
+    );
 
     expect(stored).toHaveLength(1);
     expect(stored[0]!.tenantId).toBe('tenant-extract');

@@ -3,7 +3,11 @@
 import { estimateTokens } from '../base/util/token-text.js';
 import { READ_PAGE_ROWS, readAll } from '../base/util/pages.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall-scope.js';
+import {
+  passesScopeFilterForRecall,
+  assertScopeRequestAllowed,
+  personalScopeOf,
+} from '../base/scope/recall-scope.js';
 import { projectNames } from '../base/scope/project-identity.js';
 import { eligibleSummaryParents } from './summary-parents.js';
 import type { CallerProject } from './prompt-hook.js';
@@ -68,7 +72,11 @@ export interface AssembleResult {
 /** Chronological context window for a session; over budget, evicts the lowest-strength non-fresh-tail item first (fresh
  *  tail is never evicted).
  *  Returns `items: []` for an empty sessionId, no raws, or when every row fails the scope/tenant filter. */
-export async function assemble(ctx: Context, sessionId: string, opts: AssembleOptions = {}): Promise<AssembleResult> {
+export async function assemble(
+  ctx: Context,
+  sessionId: string,
+  opts: AssembleOptions = {},
+): Promise<AssembleResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   const budget = opts.budget ?? DEFAULT_ASSEMBLE_BUDGET;
   const freshTailCount = opts.freshTailCount ?? DEFAULT_FRESH_TAIL_COUNT;
@@ -76,7 +84,15 @@ export async function assemble(ctx: Context, sessionId: string, opts: AssembleOp
   const own = personalScopeOf(ctx.actor) ?? undefined;
 
   if (!sessionId) {
-    return { sessionId, items: [], tokens: 0, totalRaw: 0, summarized: 0, evicted: 0, truncated: false };
+    return {
+      sessionId,
+      items: [],
+      tokens: 0,
+      totalRaw: 0,
+      summarized: 0,
+      evicted: 0,
+      truncated: false,
+    };
   }
 
   const { scoped, totalRaw, truncated } = await loadScopedRaws(ctx, sessionId, opts, own);
@@ -162,8 +178,11 @@ async function sessionRawRows(
     origins: origins === undefined ? undefined : ['', ...origins],
   } as const;
   const reports = ctx.store.reports;
-  if (cap > 0) return (await reports.entriesWhere(raws, { limit: cap, newest: true })).entries.reverse();
-  return readAll((after?: EntryCursor) => reports.entriesWhere(raws, { limit: READ_PAGE_ROWS, after }));
+  if (cap > 0)
+    return (await reports.entriesWhere(raws, { limit: cap, newest: true })).entries.reverse();
+  return readAll((after?: EntryCursor) =>
+    reports.entriesWhere(raws, { limit: READ_PAGE_ROWS, after }),
+  );
 }
 
 function rawItem(r: MemoryEntry): AssembledContextItem {
@@ -212,7 +231,12 @@ async function substituteSummaries(
   );
   const parents =
     eligibleParentIds.length > 0
-      ? eligibleSummaryParents(await ctx.store.entriesByIds(eligibleParentIds, ctx.tenantId), scope, own, project)
+      ? eligibleSummaryParents(
+          await ctx.store.entriesByIds(eligibleParentIds, ctx.tenantId),
+          scope,
+          own,
+          project,
+        )
       : [];
   const claimedRawIds = new Set<string>();
   for (const parent of parents) {

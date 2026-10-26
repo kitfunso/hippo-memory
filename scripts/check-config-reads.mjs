@@ -36,7 +36,9 @@ function findReads(map) {
     const text = readFileSync(file, 'utf8');
     // A loadConfig call cannot exist without its text, so other files skip the parse.
     const n = text.includes('loadConfig')
-      ? readFacts(text, file, ['calls']).calls.filter((c) => c.callee.split('.').at(-1) === 'loadConfig').length
+      ? readFacts(text, file, ['calls']).calls.filter(
+          (c) => c.callee.split('.').at(-1) === 'loadConfig',
+        ).length
       : 0;
     if (n > 0) counts[file] = n;
   }
@@ -61,7 +63,9 @@ const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8'
 const rose = Object.entries(current).filter(([file, n]) => n > (baseline[file] ?? 0));
 const fell = Object.entries(baseline).filter(([file, n]) => (current[file] ?? 0) < n);
 if (rose.length > 0) {
-  console.error('Code outside the surface layer reads config.json (loadConfig) more than the baseline allows:');
+  console.error(
+    'Code outside the surface layer reads config.json (loadConfig) more than the baseline allows:',
+  );
   for (const [file, n] of rose) console.error(`  ${file}: ${baseline[file] ?? 'new'} -> ${n}`);
   console.error('Take the config as a parameter from the caller (src/api code: ctx.config).');
   process.exit(1);
@@ -71,4 +75,6 @@ if (fell.length > 0) {
     `${fell.length} files dropped config reads; run \`node scripts/check-config-reads.mjs --update\` to lock that in.`,
   );
 }
-console.log(`Config-read ratchet OK: ${total} reads outside the surface layer, none above ${BASELINE}.`);
+console.log(
+  `Config-read ratchet OK: ${total} reads outside the surface layer, none above ${BASELINE}.`,
+);

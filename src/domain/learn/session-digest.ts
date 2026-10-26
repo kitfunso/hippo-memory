@@ -16,7 +16,10 @@ const MAX_DIGEST_CHARS = 1200;
 
 const ABSOLUTE_PATH = /(?<![\w.~/\\:-])(?:\\\\\?\\)?(?:[A-Za-z]:[\\/]|\/)[^\s`'"<>|*?()[\]{},;]+/g;
 
-function rewriteRepoPaths(sentence: string, relativePath: (absolute: string) => string | null): string {
+function rewriteRepoPaths(
+  sentence: string,
+  relativePath: (absolute: string) => string | null,
+): string {
   return sentence.replace(ABSOLUTE_PATH, (token) => {
     const trail = /[.:!]+$/.exec(token)?.[0] ?? '';
     const rel = relativePath(token.slice(0, token.length - trail.length));
@@ -115,7 +118,8 @@ function echoWindows(texts: readonly string[]): Set<string> {
   const windows = new Set<string>();
   for (const text of texts) {
     const tokens = echoTokens(text);
-    for (let i = 0; i + ECHO_WINDOW <= tokens.length; i++) windows.add(tokens.slice(i, i + ECHO_WINDOW).join(' '));
+    for (let i = 0; i + ECHO_WINDOW <= tokens.length; i++)
+      windows.add(tokens.slice(i, i + ECHO_WINDOW).join(' '));
   }
   return windows;
 }
@@ -167,7 +171,9 @@ function changedLine(files: readonly string[]): string {
   for (let shown = Math.min(files.length, MAX_FILES); shown > 0; shown--) {
     const more = files.length - shown;
     const line = maskEmails(
-      redactSecretsStrict(`Changed: ${files.slice(0, shown).join(', ')}${more > 0 ? ` (+${more} more)` : ''}`),
+      redactSecretsStrict(
+        `Changed: ${files.slice(0, shown).join(', ')}${more > 0 ? ` (+${more} more)` : ''}`,
+      ),
     );
     if (line.length <= MAX_DIGEST_CHARS) return line;
   }
@@ -192,7 +198,11 @@ export interface DigestDraft {
 
 /** The digest text, or null when nothing survives the filters. Sentences print in reply order. */
 export function buildSessionDigest(sources: DigestSources): DigestDraft | null {
-  const ranked = rankedSentences(sources.finalText, echoWindows(sources.echoTexts), sources.relativePath);
+  const ranked = rankedSentences(
+    sources.finalText,
+    echoWindows(sources.echoTexts),
+    sources.relativePath,
+  );
   const changed = changedLine(sources.files);
   // The cap drops whole sentences, lowest-ranked first, and keeps the Changed line.
   for (let kept = ranked.slice(0, MAX_SENTENCES); ; kept = kept.slice(0, -1)) {

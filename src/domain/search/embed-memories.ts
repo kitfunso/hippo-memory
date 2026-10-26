@@ -48,7 +48,10 @@ async function* entryPages(rows: IndexRows, ids: readonly string[]): AsyncGenera
 }
 
 /** Each of `entries` the provider embedded, with its vector; an empty row is named and left for the next run. */
-function embeddedRows(entries: readonly MemoryEntry[], vectors: readonly number[][]): Array<[string, number[]]> {
+function embeddedRows(
+  entries: readonly MemoryEntry[],
+  vectors: readonly number[][],
+): Array<[string, number[]]> {
   const rows: Array<[string, number[]]> = [];
   entries.forEach((entry, i) => {
     const vec = vectors[i];
@@ -60,7 +63,10 @@ function embeddedRows(entries: readonly MemoryEntry[], vectors: readonly number[
 
 /** Embeds every memory onto the turn's rebuild, a page of ids and then a page of rows at a time; answers how many it
  * staged. */
-async function stageEmbeddingIndex({ rows, step }: IndexTurn, provider: EmbeddingProvider): Promise<number> {
+async function stageEmbeddingIndex(
+  { rows, step }: IndexTurn,
+  provider: EmbeddingProvider,
+): Promise<number> {
   let staged = 0;
   let afterId: string | undefined;
   do {
@@ -106,7 +112,8 @@ async function acquireIndexLock({ step }: IndexTurn): Promise<void> {
   for (let wait = EMBED_LOCK_FIRST_POLL_MS; ; wait = Math.min(wait * 2, EMBED_LOCK_MAX_POLL_MS)) {
     if (await step({ kind: 'lock' })) return;
     const left = deadline - Date.now();
-    if (left <= 0) throw new Error('the embedding index is busy: another hippo process holds its lock');
+    if (left <= 0)
+      throw new Error('the embedding index is busy: another hippo process holds its lock');
     // The last poll lands on the deadline, so the wait never runs past the budget.
     await new Promise((r) => setTimeout(r, Math.min(wait, left)));
   }
@@ -173,7 +180,9 @@ function warnEmbedFailureOnce(source: string, rawMessage: string, cause?: unknow
   embedFailureSeen.set(key, { lastNoticeAt: now, suppressed: 0 });
   // Strict scrub: this line can land in a hook log file, and an API may echo the key back in its error body.
   const message = withoutTrailingDots(redactSecretsStrict(rawMessage).replace(/\s+/g, ' '));
-  log.warn(`embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);
+  log.warn(
+    `embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`,
+  );
 }
 
 /** Writes one page's vectors, one writeVectors per tenant, and stops at the first refused write; `particles`, when
@@ -207,7 +216,8 @@ async function writeVectorPage(
   return { written, modelMismatch: false };
 }
 
-const OTHER_MODEL_INDEX = "the vector index was built by another embedding model; run 'hippo embed' to rebuild it";
+const OTHER_MODEL_INDEX =
+  "the vector index was built by another embedding model; run 'hippo embed' to rebuild it";
 
 /** Embeds every memory with no vector under `model`, page by page, so a provider failure keeps the pages written; a
  * rebuild reseeds the particles it drops. */
@@ -221,7 +231,12 @@ async function backfillInStore(
   let count = 0;
   let afterId: string | undefined;
   for (;;) {
-    const page = await writes.entriesWithoutVector({ model, afterId, limit: STORE_PAGE, tenantId: ALL_TENANTS });
+    const page = await writes.entriesWithoutVector({
+      model,
+      afterId,
+      limit: STORE_PAGE,
+      tenantId: ALL_TENANTS,
+    });
     if (page.length === 0) return count;
     afterId = page[page.length - 1].id;
     const vectors = await provider.embed(
@@ -349,13 +364,23 @@ export function folderEmbedTarget(
     const rows: IndexRows = { entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
     return { embeddingIndex, rows, embeddings, embedderFor };
   }
-  return { store, embeddings, embedderFor, strength: rankStrength({ switches, runtime: config.runtime }), clock };
+  return {
+    store,
+    embeddings,
+    embedderFor,
+    strength: rankStrength({ switches, runtime: config.runtime }),
+    clock,
+  };
 }
 
 /** Embed a single memory entry and cache the result in the embedding index; with a store, through its vectorWrites.
  * Resolves whatever fails, so a caller that fires and forgets stays safe; the outcome says whether the memory reached
  * the index. */
-export async function embedMemoryInto(on: EmbedTarget, entry: MemoryEntry, model?: string): Promise<EmbedOutcome> {
+export async function embedMemoryInto(
+  on: EmbedTarget,
+  entry: MemoryEntry,
+  model?: string,
+): Promise<EmbedOutcome> {
   let provider: EmbeddingProvider;
   let available: boolean;
   try {
@@ -368,16 +393,23 @@ export async function embedMemoryInto(on: EmbedTarget, entry: MemoryEntry, model
   }
   if (!available) return 'off';
   if ('store' in on) return embedMemoryInStore(on, provider, entry);
-  return withEmbedLock(on, (turn) => embedMemoryLocked(turn, provider, entry)).catch((err): EmbedOutcome => {
-    log.warn(`skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`, errorFields(err));
-    return 'failed';
-  });
+  return withEmbedLock(on, (turn) => embedMemoryLocked(turn, provider, entry)).catch(
+    (err): EmbedOutcome => {
+      log.warn(
+        `skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`,
+        errorFields(err),
+      );
+      return 'failed';
+    },
+  );
 }
 
 /** embedMemory for a write that does not wait on its vector. A rejection outside embedMemory's own handling is logged
  * here, since nothing else holds it and an unhandled one ends the process. */
 export function embedMemoryDetached(on: EmbedTarget, entry: MemoryEntry): void {
-  embedMemoryInto(on, entry).catch((err) => log.warn(`embedding ${entry.id} failed unexpectedly`, errorFields(err)));
+  embedMemoryInto(on, entry).catch((err) =>
+    log.warn(`embedding ${entry.id} failed unexpectedly`, errorFields(err)),
+  );
 }
 
 /** Best-effort: an embedding failure (API down, bad key, 5xx) must not reject the caller's write; the existing index is
@@ -405,7 +437,11 @@ async function embedMemoryLocked(
     const [vector] = await provider.embed([embeddingInputText(entry)], 'passage');
     if (!vector || vector.length === 0) return 'failed';
 
-    await step({ kind: 'save', rows: [[entry.id, vector]], model: embeddingIndexIdentity(identity) });
+    await step({
+      kind: 'save',
+      rows: [[entry.id, vector]],
+      model: embeddingIndexIdentity(identity),
+    });
     await step({ kind: 'saveModel', providerId: identity });
     await initializePhysicsIfMissing(on, entry, vector);
     return 'indexed';
@@ -418,7 +454,10 @@ async function embedMemoryLocked(
 
 // Pages stage apart from the live index, then one transaction swaps vectors and identity in; a failure before it
 // leaves the old pair, the session's close drops the staging, and the next run rebuilds from the start.
-async function rebuildIndexForProvider(on: IndexTurn, provider: EmbeddingProvider): Promise<number> {
+async function rebuildIndexForProvider(
+  on: IndexTurn,
+  provider: EmbeddingProvider,
+): Promise<number> {
   // Host-wide rebuild: one embedding index per hippoRoot, keyed by tenant-scoped entry.id; per-tenant indices would be
   // a larger architecture change.
   await on.step({ kind: 'begin' });
@@ -428,7 +467,11 @@ async function rebuildIndexForProvider(on: IndexTurn, provider: EmbeddingProvide
   return staged;
 }
 
-async function initializePhysicsIfMissing({ step }: IndexTurn, entry: MemoryEntry, vector: number[]): Promise<void> {
+async function initializePhysicsIfMissing(
+  { step }: IndexTurn,
+  entry: MemoryEntry,
+  vector: number[],
+): Promise<void> {
   try {
     await step({ kind: 'seed', entry, vector });
   } catch (err) {
@@ -459,7 +502,9 @@ function throwIfProviderKeyMissing(cfg: EmbeddingsConfig, provider: EmbeddingPro
   // An enabled API provider is unavailable only when its own read finds no key: a misconfiguration, surfaced so callers
   // of the exported embedAll() learn nothing was written. Local-not-installed and enabled=false stay silent no-ops.
   if (provider.kind !== 'local' && cfg.enabled !== false && provider.keyEnv !== undefined) {
-    throw new Error(`Embedding provider '${provider.kind}' is configured but ${provider.keyEnv} is not set.`);
+    throw new Error(
+      `Embedding provider '${provider.kind}' is configured but ${provider.keyEnv} is not set.`,
+    );
   }
 }
 
@@ -515,7 +560,11 @@ async function backfillAllPending(
 /** Embeds every entry with no cached vector, prunes vectors of deleted memories, and returns how many it embedded;
  * `provider` defaults to the one the target's embedder builds. With a store, every tenant's memories with no vector
  * for the provider's model go through its `vectorWrites`. */
-export async function embedAll(on: EmbedTarget, model?: string, givenProvider?: EmbeddingProvider): Promise<number> {
+export async function embedAll(
+  on: EmbedTarget,
+  model?: string,
+  givenProvider?: EmbeddingProvider,
+): Promise<number> {
   const cfg = on.embeddings;
   const provider = givenProvider ?? on.embedderFor(cfg, { model });
   if (!provider.isAvailable()) {
@@ -525,12 +574,17 @@ export async function embedAll(on: EmbedTarget, model?: string, givenProvider?: 
   if ('store' in on) return embedTurns.run(on.store, () => embedAllInStore(on.store, provider, on));
   return withEmbedLock(on, async (turn) => {
     const identity = provider.id;
-    if (await turn.step({ kind: 'reindex', providerId: identity })) return rebuildIndexForProvider(turn, provider);
+    if (await turn.step({ kind: 'reindex', providerId: identity }))
+      return rebuildIndexForProvider(turn, provider);
 
     // Host-wide by design: embedAll backfills all tenants' entries into the per-host index; per-tenant filtering would
     // produce partial indices and break recall.
     await turn.step({ kind: 'prune' });
-    const { count, backfillError } = await backfillAllPending(turn, provider, embeddingIndexIdentity(identity));
+    const { count, backfillError } = await backfillAllPending(
+      turn,
+      provider,
+      embeddingIndexIdentity(identity),
+    );
 
     await turn.step({ kind: 'saveModel', providerId: identity });
 

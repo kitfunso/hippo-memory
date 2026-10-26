@@ -9,7 +9,10 @@ import { join } from 'node:path';
 import { request } from 'node:http';
 import { printDashboardBanner } from '../../src/surface/cli/dashboard-banner.js';
 import { serve } from '../../src/server.js';
-import { serveDashboard, type DashboardHandle } from '../../src/surface/server/dashboard-listener.js';
+import {
+  serveDashboard,
+  type DashboardHandle,
+} from '../../src/surface/server/dashboard-listener.js';
 import { sessionCookie } from '../_helpers/dashboard-fixture.js';
 import { makeStore } from '../_helpers/make-root.js';
 
@@ -23,7 +26,9 @@ describe('dashboard local access token', () => {
   /** A fresh one-time ticket from the running dashboard. */
   const ticket = (): string => server!.ticket();
   const urlFile = (): string =>
-    process.platform === 'win32' ? join(home, '.hippo-global', 'dashboard.url') : join(hippoRoot, 'dashboard.url');
+    process.platform === 'win32'
+      ? join(home, '.hippo-global', 'dashboard.url')
+      : join(hippoRoot, 'dashboard.url');
 
   beforeEach(async () => {
     ({ base: home, root: hippoRoot } = makeStore('dash-token'));
@@ -43,7 +48,9 @@ describe('dashboard local access token', () => {
     expect((await fetch(`http://127.0.0.1:${port}/api/overview`)).status).toBe(401);
     expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(401);
     expect((await fetch(`http://127.0.0.1:${port}/api/overview?token=wrong`)).status).toBe(401);
-    expect((await fetch(`http://127.0.0.1:${port}/?token=${TOKEN}`, { redirect: 'manual' })).status).toBe(401);
+    expect(
+      (await fetch(`http://127.0.0.1:${port}/?token=${TOKEN}`, { redirect: 'manual' })).status,
+    ).toBe(401);
   });
 
   it('accepts a ticket in the query and sets an HttpOnly SameSite=Strict cookie', async () => {
@@ -57,7 +64,9 @@ describe('dashboard local access token', () => {
     const issuedAt = Number(pair.slice(pair.indexOf('=') + 1).split('.')[0]);
     expect(pair).toBe(sessionCookie(port, TOKEN, issuedAt));
 
-    const again = await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: pair } });
+    const again = await fetch(`http://127.0.0.1:${port}/api/overview`, {
+      headers: { cookie: pair },
+    });
     expect(again.status).toBe(200);
   });
 
@@ -67,7 +76,9 @@ describe('dashboard local access token', () => {
     const cookie = res.headers.get('set-cookie') ?? '';
     expect(cookie).not.toContain(TOKEN);
     expect(cookie).not.toContain(once);
-    expect(cookie.split(';')[0]).toMatch(new RegExp(`^hippo_dashboard_${port}=\\d+\\.[0-9a-f]{64}$`));
+    expect(cookie.split(';')[0]).toMatch(
+      new RegExp(`^hippo_dashboard_${port}=\\d+\\.[0-9a-f]{64}$`),
+    );
 
     const raw = await fetch(`http://127.0.0.1:${port}/api/overview`, {
       headers: { cookie: `hippo_dashboard_${port}=${TOKEN}` },
@@ -93,13 +104,23 @@ describe('dashboard local access token', () => {
   });
 
   it('answers a page load that carries a ticket with the cookie and a 303 to the same address without it, never to another host', async () => {
-    const first = await fetch(`http://127.0.0.1:${port}/memory/abc?tab=links&token=${ticket()}&q=a%26b`, {
+    const first = await fetch(
+      `http://127.0.0.1:${port}/memory/abc?tab=links&token=${ticket()}&q=a%26b`,
+      {
+        redirect: 'manual',
+      },
+    );
+    expect([first.status, first.headers.get('location')]).toEqual([
+      303,
+      '/memory/abc?tab=links&q=a%26b',
+    ]);
+    const pair = (first.headers.get('set-cookie') ?? '').split(';')[0]!;
+    expect(
+      (await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: pair } })).status,
+    ).toBe(200);
+    const offHost = await fetch(`http://127.0.0.1:${port}//evil.example/x?token=${ticket()}`, {
       redirect: 'manual',
     });
-    expect([first.status, first.headers.get('location')]).toEqual([303, '/memory/abc?tab=links&q=a%26b']);
-    const pair = (first.headers.get('set-cookie') ?? '').split(';')[0]!;
-    expect((await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie: pair } })).status).toBe(200);
-    const offHost = await fetch(`http://127.0.0.1:${port}//evil.example/x?token=${ticket()}`, { redirect: 'manual' });
     expect([offHost.status, offHost.headers.get('location')]).toEqual([303, '/x']);
   });
 
@@ -123,13 +144,17 @@ describe('dashboard local access token', () => {
     } finally {
       stderr.mockRestore();
     }
-    expect((await fetch(`http://127.0.0.1:${port}/?token=${once}`, { redirect: 'manual' })).status).toBe(303);
+    expect(
+      (await fetch(`http://127.0.0.1:${port}/?token=${once}`, { redirect: 'manual' })).status,
+    ).toBe(303);
   });
 
   it('sends the four security headers on every kind of reply, with a policy that loads code from this server only and that its own page fits', async () => {
     const base = `http://127.0.0.1:${port}`;
     const redirect = await fetch(`${base}/?token=${ticket()}`, { redirect: 'manual' });
-    const signedIn = { headers: { cookie: (redirect.headers.get('set-cookie') ?? '').split(';')[0]! } };
+    const signedIn = {
+      headers: { cookie: (redirect.headers.get('set-cookie') ?? '').split(';')[0]! },
+    };
     const page = await fetch(`${base}/`, signedIn);
     const others = [
       redirect,
@@ -141,15 +166,22 @@ describe('dashboard local access token', () => {
     const policy = page.headers.get('content-security-policy') ?? '';
     for (const reply of [page, ...others]) {
       expect(
-        ['x-content-type-options', 'referrer-policy', 'x-frame-options', 'content-security-policy'].map((name) =>
-          reply.headers.get(name),
-        ),
+        [
+          'x-content-type-options',
+          'referrer-policy',
+          'x-frame-options',
+          'content-security-policy',
+        ].map((name) => reply.headers.get(name)),
       ).toEqual(['nosniff', 'no-referrer', 'DENY', policy]);
     }
-    const directives = new Map(policy.split('; ').map((d) => [d.split(' ')[0]!, d.split(' ').slice(1)]));
-    expect(['default-src', 'script-src', 'connect-src', 'frame-ancestors'].map((name) => directives.get(name))).toEqual(
-      [["'none'"], ["'self'"], ["'self'"], ["'none'"]],
+    const directives = new Map(
+      policy.split('; ').map((d) => [d.split(' ')[0]!, d.split(' ').slice(1)]),
     );
+    expect(
+      ['default-src', 'script-src', 'connect-src', 'frame-ancestors'].map((name) =>
+        directives.get(name),
+      ),
+    ).toEqual([["'none'"], ["'self'"], ["'self'"], ["'none'"]]);
     expect(policy).not.toMatch(/unsafe-inline|unsafe-eval|\*/);
     // A page that breaks its own policy renders blank: every script comes from a file, every style block is named by hash.
     const html = await page.text();
@@ -157,14 +189,18 @@ describe('dashboard local access token', () => {
       expect([/\ssrc=/.test(script[1]!), script[2]!.trim()]).toEqual([true, '']);
     }
     for (const style of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
-      expect(policy).toContain(`'sha256-${createHash('sha256').update(style[1]!).digest('base64')}'`);
+      expect(policy).toContain(
+        `'sha256-${createHash('sha256').update(style[1]!).digest('base64')}'`,
+      );
     }
   });
 
   it('mounts no /v1 API, and its session authenticates nothing on the /v1 server', async () => {
     const minted = await fetch(`http://127.0.0.1:${port}/api/overview?token=${ticket()}`);
     const pair = (minted.headers.get('set-cookie') ?? '').split(';')[0]!;
-    const onDashboard = await fetch(`http://127.0.0.1:${port}/v1/memories?q=x`, { headers: { cookie: pair } });
+    const onDashboard = await fetch(`http://127.0.0.1:${port}/v1/memories?q=x`, {
+      headers: { cookie: pair },
+    });
     expect(onDashboard.headers.get('content-type')).toBe('text/html; charset=utf-8');
 
     const v1 = await serve({ hippoRoot, port: 0 });
@@ -180,7 +216,12 @@ describe('dashboard local access token', () => {
   it('keeps the Host-header check ahead of the ticket', async () => {
     const status = await new Promise<number | undefined>((resolve, reject) => {
       const req = request(
-        { host: '127.0.0.1', port, path: `/api/overview?token=${ticket()}`, headers: { host: 'evil.example' } },
+        {
+          host: '127.0.0.1',
+          port,
+          path: `/api/overview?token=${ticket()}`,
+          headers: { host: 'evil.example' },
+        },
         (res) => {
           res.resume();
           resolve(res.statusCode);
@@ -219,7 +260,9 @@ describe('dashboard local access token', () => {
         'Press Ctrl+C to stop.',
       ]);
       expect(existsSync(urlFile())).toBe(true);
-      expect(readFileSync(urlFile(), 'utf8')).toBe('http://localhost:4567/?token=a-ticket-abcdef\n');
+      expect(readFileSync(urlFile(), 'utf8')).toBe(
+        'http://localhost:4567/?token=a-ticket-abcdef\n',
+      );
       if (process.platform !== 'win32') expect(statSync(urlFile()).mode & 0o777).toBe(0o600);
     },
   );
@@ -238,7 +281,9 @@ describe('dashboard local access token', () => {
     expect(first.status).toBe(303);
     expect((await fetch(url, { redirect: 'manual' })).status).toBe(401);
     const cookie = (first.headers.get('set-cookie') ?? '').split(';')[0]!;
-    expect((await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie } })).status).toBe(200);
+    expect(
+      (await fetch(`http://127.0.0.1:${port}/api/overview`, { headers: { cookie } })).status,
+    ).toBe(200);
   });
 
   it('keeps the file in the store folder off Windows and in the profile-private global folder on Windows', () => {

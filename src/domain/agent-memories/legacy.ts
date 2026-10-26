@@ -61,7 +61,9 @@ export async function legacyWork(
   const rows =
     containers.length === 0
       ? []
-      : (await liveUnder(store, tenantId, LEGACY_SOURCE_PREFIX)).filter((r) => r.tags.includes(LEGACY_TAG));
+      : (await liveUnder(store, tenantId, LEGACY_SOURCE_PREFIX)).filter((r) =>
+          r.tags.includes(LEGACY_TAG),
+        );
   const byContainer = new Map<string, ContainerLegacy>();
   if (rows.length === 0) return { byContainer, adopted: new Set() };
 

@@ -205,10 +205,14 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
     // A serve() still binding leaves an empty or port-0 claim: nothing answers yet, but a live claimant keeps the file.
     if (startingClaim(path)) return null;
     const parsed = JSON.parse(readFileSync(path, 'utf8'));
-    if (!isServerInfo(parsed)) throw new TypeError('it is not a JSON object with a pid, port, url and started_at');
+    if (!isServerInfo(parsed))
+      throw new TypeError('it is not a JSON object with a pid, port, url and started_at');
     info = parsed;
   } catch (err) {
-    log.warn(`server pidfile ${path} is unreadable (${errorMessage(err)}); removing it`, errorFields(err));
+    log.warn(
+      `server pidfile ${path} is unreadable (${errorMessage(err)}); removing it`,
+      errorFields(err),
+    );
     removePidfile(hippoRoot);
     return null;
   }
@@ -234,7 +238,13 @@ function tryCreateClaim(path: string, startedAt: string): boolean {
     throw err;
   }
   try {
-    const claim: ServerInfo = { schema: 1, pid: process.pid, port: 0, url: '', started_at: startedAt };
+    const claim: ServerInfo = {
+      schema: 1,
+      pid: process.pid,
+      port: 0,
+      url: '',
+      started_at: startedAt,
+    };
     writeSync(fd, JSON.stringify(claim));
   } finally {
     closeSync(fd);
@@ -282,7 +292,10 @@ export async function claimPidfile(hippoRoot: string, startedAt: string): Promis
  * Atomically writes the pidfile (process-scoped temp file, then rename; atomic on POSIX and NTFS). `startedAt` comes
  * from the caller (`serve()`) so the pidfile and GET /health carry the same timestamp, which detectServer's liveness
  * probe compares. */
-export function writePidfile(hippoRoot: string, opts: { port: number; url: string; startedAt: string }): void {
+export function writePidfile(
+  hippoRoot: string,
+  opts: { port: number; url: string; startedAt: string },
+): void {
   const path = join(hippoRoot, PIDFILE);
   const tmp = `${path}.tmp.${process.pid}`;
   const info: ServerInfo = {
@@ -305,7 +318,10 @@ function removePidfile(hippoRoot: string): void {
     unlinkSync(path);
   } catch (err) {
     if (errorCode(err) === 'ENOENT') return;
-    log.warn(`server pidfile ${path} could not be removed (${errorCode(err) || errorMessage(err)})`, errorFields(err));
+    log.warn(
+      `server pidfile ${path} could not be removed (${errorCode(err) || errorMessage(err)})`,
+      errorFields(err),
+    );
   }
 }
 
@@ -315,17 +331,22 @@ function removePidfile(hippoRoot: string): void {
  * Anything unreadable or malformed is "not provably mine" and left alone (detectServer unlinks it). Returns true iff
  * removed.
  */
-export function removePidfileIfOwned(hippoRoot: string, owner: { pid: number; startedAt: string }): boolean {
+export function removePidfileIfOwned(
+  hippoRoot: string,
+  owner: { pid: number; startedAt: string },
+): boolean {
   const path = join(hippoRoot, PIDFILE);
   const info = tryReadJsonFile(path);
   // A missing, unreadable, malformed or non-object pidfile, or one another server now owns, is not provably mine.
-  if (!isJsonObject(info) || info.pid !== owner.pid || info.started_at !== owner.startedAt) return false;
+  if (!isJsonObject(info) || info.pid !== owner.pid || info.started_at !== owner.startedAt)
+    return false;
   try {
     unlinkSync(path);
     return true;
   } catch (err) {
     // Gone since the read means another process removed it; any other failure leaves a file the caller should hear of.
-    if (errorCode(err) !== 'ENOENT') log.warn(`could not remove the server pidfile ${path}`, errorFields(err));
+    if (errorCode(err) !== 'ENOENT')
+      log.warn(`could not remove the server pidfile ${path}`, errorFields(err));
     return false;
   }
 }

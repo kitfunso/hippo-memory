@@ -23,9 +23,13 @@ afterEach(() => {
 
 describe('api admin reads', () => {
   it('counts memories and open conflicts, hides a personal pair from another person, and refuses their personal row', async () => {
-    const personal = (await remember(ctxFor(actorA), { content: 'deploy with --dry-run first', personal: true })).id;
+    const personal = (
+      await remember(ctxFor(actorA), { content: 'deploy with --dry-run first', personal: true })
+    ).id;
     const team = (await remember(ctxFor(actorB), { content: 'deploy without --dry-run' })).id;
-    replaceDetectedConflicts(root, [{ memory_a_id: personal, memory_b_id: team, reason: 'contradiction', score: 0.9 }]);
+    replaceDetectedConflicts(root, [
+      { memory_a_id: personal, memory_b_id: team, reason: 'contradiction', score: 0.9 },
+    ]);
 
     const ctxA = ctxFor(actorA);
     const status = await ctxA.store.reports.memoryStatus(ctxA.tenantId, new Date(), 0.1);
@@ -33,7 +37,9 @@ describe('api admin reads', () => {
     expect(status.openConflicts).toBe(1);
     expect((await conflictListOpen(ctxFor(actorA))).conflicts).toHaveLength(1);
     expect((await conflictListOpen(ctxFor(actorB))).conflicts).toHaveLength(0);
-    await expect(memoryGetTouchable(ctxFor(actorB), personal)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(memoryGetTouchable(ctxFor(actorB), personal)).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
     expect((await memoryGetTouchable(ctxFor(actorA), personal))?.id).toBe(personal);
   });
 });

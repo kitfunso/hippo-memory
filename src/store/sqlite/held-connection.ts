@@ -73,7 +73,9 @@ function holdSqliteConnection(hippoRoot: string): StoreHolder {
 /** The holder for the store a server serves: hippo.db's held connection, else a fence that keeps hippo.db shut. */
 export function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
   if (isHippoDbStore(store)) return holdSqliteConnection(hippoRoot);
-  log.info(`serve: the '${store.kind}' store serves ${hippoRoot}, so no hippo.db connection is held`);
+  log.info(
+    `serve: the '${store.kind}' store serves ${hippoRoot}, so no hippo.db connection is held`,
+  );
   // A missed port under another store would otherwise create and write a hippo.db that store never reads.
   return {
     hold: () => {},

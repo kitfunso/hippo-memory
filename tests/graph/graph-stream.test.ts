@@ -13,7 +13,11 @@ import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { selectGraphSeeds, graphRankStream, type GraphSeed } from '../../src/domain/graph/stream.js';
+import {
+  selectGraphSeeds,
+  graphRankStream,
+  type GraphSeed,
+} from '../../src/domain/graph/stream.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
@@ -96,10 +100,18 @@ describe('graphRankStream (real SQLite)', () => {
     const ea = ent(home, T, a, 'A');
     const eb = ent(home, T, b, 'B');
     ent(home, T, x, 'X');
-    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, {
+      fromEntityId: ea,
+      toEntityId: eb,
+      relType: 'supersedes',
+      memoryId: a.id,
+    });
 
     const entries = [a, b, x];
-    const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T });
+    const out = await graphRankStream(entries, [seed(0)], {
+      store: sqliteStore(home),
+      tenantId: T,
+    });
     expect(out).toEqual([1]); // only b; seed(0) and x(2) excluded
   });
 
@@ -110,14 +122,30 @@ describe('graphRankStream (real SQLite)', () => {
     const ea = ent(home, T, a, 'A');
     const eb = ent(home, T, b, 'B');
     const ec = ent(home, T, c, 'C');
-    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
-    insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ec, relType: 'supersedes', memoryId: b.id });
+    insertRelationAt(home, T, {
+      fromEntityId: ea,
+      toEntityId: eb,
+      relType: 'supersedes',
+      memoryId: a.id,
+    });
+    insertRelationAt(home, T, {
+      fromEntityId: eb,
+      toEntityId: ec,
+      relType: 'supersedes',
+      memoryId: b.id,
+    });
 
     const entries = [a, b, c];
-    const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T, hops: 2 });
+    const out = await graphRankStream(entries, [seed(0)], {
+      store: sqliteStore(home),
+      tenantId: T,
+      hops: 2,
+    });
     expect(out).toEqual([1, 2]); // b (1-hop) before c (2-hop)
     // hops:1 reaches only b
-    expect(await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T, hops: 1 })).toEqual([1]);
+    expect(
+      await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T, hops: 1 }),
+    ).toEqual([1]);
   });
 
   it('enforces the per-hop fanout cap', async () => {
@@ -126,10 +154,19 @@ describe('graphRankStream (real SQLite)', () => {
     const ea = ent(home, T, a, 'A');
     for (const n of ns) {
       const en = ent(home, T, n, `N${n.id}`);
-      insertRelationAt(home, T, { fromEntityId: ea, toEntityId: en, relType: 'supersedes', memoryId: a.id });
+      insertRelationAt(home, T, {
+        fromEntityId: ea,
+        toEntityId: en,
+        relType: 'supersedes',
+        memoryId: a.id,
+      });
     }
     const entries = [a, ...ns];
-    const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T, maxNeighbors: 2 });
+    const out = await graphRankStream(entries, [seed(0)], {
+      store: sqliteStore(home),
+      tenantId: T,
+      maxNeighbors: 2,
+    });
     expect(out.length).toBe(2); // capped at 2 of the 3 neighbors
   });
 
@@ -140,9 +177,22 @@ describe('graphRankStream (real SQLite)', () => {
     const ea = ent(home, T, a, 'A');
     const eb = ent(home, T, b, 'B');
     const ec = ent(home, T, c, 'C');
-    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
-    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ec, relType: 'supersedes', memoryId: a.id });
-    const out = await graphRankStream([a, b, c], [seed(0)], { store: sqliteStore(home), tenantId: T });
+    insertRelationAt(home, T, {
+      fromEntityId: ea,
+      toEntityId: eb,
+      relType: 'supersedes',
+      memoryId: a.id,
+    });
+    insertRelationAt(home, T, {
+      fromEntityId: ea,
+      toEntityId: ec,
+      relType: 'supersedes',
+      memoryId: a.id,
+    });
+    const out = await graphRankStream([a, b, c], [seed(0)], {
+      store: sqliteStore(home),
+      tenantId: T,
+    });
     expect(out).toEqual([1, 2]); // b and c both 1-hop from a -> index asc
   });
 
@@ -150,7 +200,9 @@ describe('graphRankStream (real SQLite)', () => {
     const a = mem(home, T, 'aaa');
     const b = mem(home, T, 'bbb');
     // no entities, no relations
-    expect(await graphRankStream([a, b], [seed(0)], { store: sqliteStore(home), tenantId: T })).toEqual([]);
+    expect(
+      await graphRankStream([a, b], [seed(0)], { store: sqliteStore(home), tenantId: T }),
+    ).toEqual([]);
   });
 
   it('a reached neighbour NOT in the candidate pool is ignored', async () => {
@@ -158,10 +210,17 @@ describe('graphRankStream (real SQLite)', () => {
     const b = mem(home, T, 'bbb');
     const ea = ent(home, T, a, 'A');
     const eb = ent(home, T, b, 'B');
-    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, {
+      fromEntityId: ea,
+      toEntityId: eb,
+      relType: 'supersedes',
+      memoryId: a.id,
+    });
     // pool excludes b
     const entries = [a, mem(home, T, 'other in pool but no path')];
-    expect(await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T })).toEqual([]);
+    expect(
+      await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T }),
+    ).toEqual([]);
   });
 
   it('a graph-reachable OUT-of-pool private-scoped memory never appears in the stream output (pool-only pin)', async () => {
@@ -175,16 +234,34 @@ describe('graphRankStream (real SQLite)', () => {
     // private row, absent from the pool, must not appear.
     const a = mem(home, T, 'alpha cache invalidation decision');
     const pub = mem(home, T, 'public in-pool neighbour of alpha');
-    const priv = scopedMem(home, T, 'private out-of-pool neighbour wording xyzzy', 'slack:private:dm1');
+    const priv = scopedMem(
+      home,
+      T,
+      'private out-of-pool neighbour wording xyzzy',
+      'slack:private:dm1',
+    );
     const ea = ent(home, T, a, 'A');
     const ePub = ent(home, T, pub, 'PUB');
     const ePriv = ent(home, T, priv, 'PRIV');
-    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ePub, relType: 'supersedes', memoryId: a.id });
-    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ePriv, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, {
+      fromEntityId: ea,
+      toEntityId: ePub,
+      relType: 'supersedes',
+      memoryId: a.id,
+    });
+    insertRelationAt(home, T, {
+      fromEntityId: ea,
+      toEntityId: ePriv,
+      relType: 'supersedes',
+      memoryId: a.id,
+    });
 
     // pool excludes priv (simulating the caller's own scope-filtered candidate pool).
     const entries = [a, pub];
-    const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T });
+    const out = await graphRankStream(entries, [seed(0)], {
+      store: sqliteStore(home),
+      tenantId: T,
+    });
     expect(out).toEqual([1]); // pub ranked — the pin is exercised, not vacuous...
     expect(out.map((i) => entries[i].id)).not.toContain(priv.id); // ...and priv never appears
   });
@@ -196,9 +273,22 @@ describe('graphRankStream (real SQLite)', () => {
     const ea = ent(home, T, a, 'A');
     const eb = ent(home, T, b, 'B');
     const ec = ent(home, T, c, 'C');
-    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id }); // a-b (both seeds)
-    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ec, relType: 'supersedes', memoryId: a.id }); // a-c (c not a seed)
-    const out = await graphRankStream([a, b, c], [seed(0), seed(1, 0.5)], { store: sqliteStore(home), tenantId: T });
+    insertRelationAt(home, T, {
+      fromEntityId: ea,
+      toEntityId: eb,
+      relType: 'supersedes',
+      memoryId: a.id,
+    }); // a-b (both seeds)
+    insertRelationAt(home, T, {
+      fromEntityId: ea,
+      toEntityId: ec,
+      relType: 'supersedes',
+      memoryId: a.id,
+    }); // a-c (c not a seed)
+    const out = await graphRankStream([a, b, c], [seed(0), seed(1, 0.5)], {
+      store: sqliteStore(home),
+      tenantId: T,
+    });
     expect(out).toEqual([2]); // only c; seeds 0 and 1 excluded
   });
 
@@ -239,7 +329,10 @@ describe('graphRankStream (real SQLite)', () => {
     });
 
     const entries = [seedStrong, seedWeak, nWeakOnly, filler, nShared];
-    const out = await graphRankStream(entries, [seed(0, 1.0), seed(1, 0.3)], { store: sqliteStore(home), tenantId: T });
+    const out = await graphRankStream(entries, [seed(0, 1.0), seed(1, 0.3)], {
+      store: sqliteStore(home),
+      tenantId: T,
+    });
     expect(out).toEqual([4, 2]); // nShared (strong, index 4) ranks ABOVE nWeakOnly (weak, index 2)
   });
 
@@ -250,7 +343,12 @@ describe('graphRankStream (real SQLite)', () => {
       const gn = mem(glob, T, 'global neighbour');
       const eg = ent(glob, T, g, 'G');
       const egn = ent(glob, T, gn, 'GN');
-      insertRelationAt(glob, T, { fromEntityId: eg, toEntityId: egn, relType: 'supersedes', memoryId: g.id });
+      insertRelationAt(glob, T, {
+        fromEntityId: eg,
+        toEntityId: egn,
+        relType: 'supersedes',
+        memoryId: g.id,
+      });
       const entries = [g, gn]; // pool = the two global memories
       const out = await graphRankStream(entries, [seed(0)], {
         store: sqliteStore(home),

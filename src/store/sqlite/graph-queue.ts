@@ -10,12 +10,22 @@ import { handleStamp } from './handle-clock.js';
 
 /** Enqueue a consolidated memory for later graph extraction; rejects a raw / missing / cross-tenant memory (the DB
  * trigger is the backstop). */
-function enqueueExtraction(db: DatabaseSyncLike, tenantId: string, memoryId: string): GraphQueueItem {
+function enqueueExtraction(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  memoryId: string,
+): GraphQueueItem {
   assertTenantId('enqueueExtraction', tenantId);
   const now = handleStamp(db);
   // enqueue is memory-keyed (no source object), so a missing memory still throws (correct - you cannot enqueue a
   // forgotten mirror); memoryId is non-null here by construction.
-  const { sourceKind } = resolveConsolidatedSource(db, tenantId, memoryId, null, 'enqueueExtraction');
+  const { sourceKind } = resolveConsolidatedSource(
+    db,
+    tenantId,
+    memoryId,
+    null,
+    'enqueueExtraction',
+  );
   const result = cachedStatement(
     db,
     `
@@ -24,9 +34,10 @@ function enqueueExtraction(db: DatabaseSyncLike, tenantId: string, memoryId: str
   `,
   ).run(tenantId, memoryId, sourceKind, now);
   const id = Number(result.lastInsertRowid ?? 0);
-  const row = cachedStatement(db, `SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ?`).get(id) as
-    | QueueRow
-    | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ?`,
+  ).get(id) as QueueRow | undefined;
   if (!row) throw new Error('enqueueExtraction: failed to reload queue item');
   return rowToQueueItem(row);
 }
@@ -34,7 +45,11 @@ function enqueueExtraction(db: DatabaseSyncLike, tenantId: string, memoryId: str
 /** Fail-soft producer hook: mark a tenant dirty for graph re-extraction by enqueuing its consolidated mirror memory.
  * NEVER throws: a failed dirty signal must not abort an object write. Call POST-COMMIT from the graph-source save/close
  * mutations; a null memoryId (forgotten mirror) is a no-op. */
-export function markGraphDirty(db: DatabaseSyncLike, tenantId: string, memoryId: string | null): void {
+export function markGraphDirty(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  memoryId: string | null,
+): void {
   if (!memoryId) return;
   try {
     enqueueExtraction(db, tenantId, memoryId);
@@ -51,7 +66,11 @@ export function markGraphDirty(db: DatabaseSyncLike, tenantId: string, memoryId:
 /** Mark every pending item for a tenant with `id <= maxId` processed in one UPDATE (status/processed_at only, so the
  * source guard trigger is not involved). The watermark excludes items enqueued after the drain snapshot. Returns the
  * count marked. */
-export function markPendingProcessedUpTo(db: DatabaseSyncLike, tenantId: string, maxId: number): number {
+export function markPendingProcessedUpTo(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  maxId: number,
+): number {
   assertTenantId('markPendingProcessedUpTo', tenantId);
   const now = handleStamp(db);
   const res = cachedStatement(
@@ -68,7 +87,9 @@ export function markPendingProcessedUpTo(db: DatabaseSyncLike, tenantId: string,
 /** Dirty tenants awaiting graph re-extraction, each with the MAX pending queue id at read time (a watermark);
  * host-wide, as sleep is cross-tenant. The drain marks only items at or below it processed, so items enqueued DURING
  * the rebuild stay pending (no lost update). */
-export function listPendingExtractionTenants(db: DatabaseSyncLike): { tenantId: string; maxPendingId: number }[] {
+export function listPendingExtractionTenants(
+  db: DatabaseSyncLike,
+): { tenantId: string; maxPendingId: number }[] {
   const rows = cachedStatement(
     db,
     `

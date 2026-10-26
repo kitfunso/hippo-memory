@@ -200,7 +200,9 @@ const CURSOR_RULE_FILE = /\.mdc?$/i;
 /** Import `.cursorrules`, one rule file, or a `.cursor/rules` tree of `.mdc` and `.md` rules. */
 export function importCursorInto(sourcePath: string, options: TargetedImport): ImportResult {
   const files = fs.statSync(sourcePath).isDirectory()
-    ? collectMarkdownFiles(sourcePath, options.hippoRoot, CURSOR_RULE_FILE).map((rel) => path.join(sourcePath, rel))
+    ? collectMarkdownFiles(sourcePath, options.hippoRoot, CURSOR_RULE_FILE).map((rel) =>
+        path.join(sourcePath, rel),
+      )
     : [sourcePath];
   const chunks = files.flatMap((file) => {
     const raw = fs.readFileSync(file, 'utf8');

@@ -8,13 +8,22 @@ import { closeHippoDb, openHippoDb, setMeta, type DatabaseSyncLike } from '../..
 import { saveVectorGraphFile } from '../../src/db/vector-graph-build.js';
 import { VectorGraphs } from '../../src/db/vector-graph-index.js';
 import { GraphFileIndex } from '../../src/db/vector-graph-reader.js';
-import { EMBEDDING_MODEL_META_KEY, upsertVectors, type VectorIndex } from '../../src/db/vector-store.js';
+import {
+  EMBEDDING_MODEL_META_KEY,
+  upsertVectors,
+  type VectorIndex,
+} from '../../src/db/vector-store.js';
 import type { VectorCandidateSpec } from '../../src/base/ports/store/vectors.js';
 import { listVectorCandidateEntries } from '../../src/store/sqlite/search-rows.js';
 import { log } from '../../src/base/util/log.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { clusteredVectors, near, seedVectorRows, type VectorRowSeed } from '../_helpers/vector-rows.js';
+import {
+  clusteredVectors,
+  near,
+  seedVectorRows,
+  type VectorRowSeed,
+} from '../_helpers/vector-rows.js';
 
 // Each case builds a graph of 1,500 nodes, which can pass the unit budget on a busy runner.
 vi.setConfig({ testTimeout: 30_000 });
@@ -57,7 +66,13 @@ function mixedRows(n: number, seed: number): VectorRowSeed[] {
 }
 
 function spec(tenantId: TenantId, extra: Partial<VectorCandidateSpec> = {}): VectorCandidateSpec {
-  return { tenantId, scope: { mode: 'default-deny' }, includeSuperseded: false, limit: 10, ...extra };
+  return {
+    tenantId,
+    scope: { mode: 'default-deny' },
+    includeSuperseded: false,
+    limit: 10,
+    ...extra,
+  };
 }
 
 function onStore(root: string): Fixture {
@@ -92,16 +107,30 @@ function elsewhere<T>(root: string, write: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-async function nearest(f: Fixture, q: readonly number[], s: VectorCandidateSpec, index = f.index): Promise<string[]> {
+async function nearest(
+  f: Fixture,
+  q: readonly number[],
+  s: VectorCandidateSpec,
+  index = f.index,
+): Promise<string[]> {
   return (await listVectorCandidateEntries(f.db, q, s, index)).map((e) => e.id);
 }
 
-async function scanned(f: Fixture, q: readonly number[], s: VectorCandidateSpec): Promise<string[]> {
+async function scanned(
+  f: Fixture,
+  q: readonly number[],
+  s: VectorCandidateSpec,
+): Promise<string[]> {
   return (await listVectorCandidateEntries(f.db, q, s)).map((e) => e.id);
 }
 
 /** recall@10 against the scan over 20 queries near stored rows. */
-async function recall(f: Fixture, rows: readonly VectorRowSeed[], s: VectorCandidateSpec, index = f.index) {
+async function recall(
+  f: Fixture,
+  rows: readonly VectorRowSeed[],
+  s: VectorCandidateSpec,
+  index = f.index,
+) {
   let hits = 0;
   let wanted = 0;
   for (let n = 0; n < 20; n++) {
@@ -115,8 +144,11 @@ async function recall(f: Fixture, rows: readonly VectorRowSeed[], s: VectorCandi
 
 function rowidOf(db: DatabaseSyncLike, id: string): number {
   // SAFETY: the read names the one column it is cast to, and the caller names a stored row.
-  return (db.prepare('SELECT rowid AS rowid FROM memory_vectors WHERE memory_id = ?').get(id) as { rowid: number })
-    .rowid;
+  return (
+    db.prepare('SELECT rowid AS rowid FROM memory_vectors WHERE memory_id = ?').get(id) as {
+      rowid: number;
+    }
+  ).rowid;
 }
 
 describe('a saved graph file', () => {
@@ -131,7 +163,9 @@ describe('a saved graph file', () => {
         ['one tenant', spec('t1')],
         ['one scope', team],
       ] as const) {
-        expect(await recall(f, rows, s), `seed ${seed}, ${label}`).toBeGreaterThanOrEqual(RECALL_FLOOR);
+        expect(await recall(f, rows, s), `seed ${seed}, ${label}`).toBeGreaterThanOrEqual(
+          RECALL_FLOOR,
+        );
       }
       expect(f.covered.every((rowid) => rowid === ROWS)).toBe(true);
     }
@@ -175,7 +209,9 @@ describe('a saved graph file', () => {
       elsewhere(f.root, (db) => db.prepare("DELETE FROM memories WHERE id = 'new-99'").run());
       seedVectorRows(f.root, [{ id: 'reused', tenantId: 't1', vector: q }], MODEL);
       // A re-embed deletes the row and writes a new one above every other, so no node is updated in place.
-      const moved = rows.slice(30, 40).map((r, i): [string, readonly number[]] => [r.id, near(q, 1000 + i)]);
+      const moved = rows
+        .slice(30, 40)
+        .map((r, i): [string, readonly number[]] => [r.id, near(q, 1000 + i)]);
       const before = moved.map(([id]) => rowidOf(f.db, id));
       elsewhere(f.root, (db) => upsertVectors(db, moved, MODEL));
       const after = moved.map(([id]) => rowidOf(f.db, id));
@@ -188,7 +224,9 @@ describe('a saved graph file', () => {
         expect(answer.slice(0, 2)).toEqual(['new-0', 'reused']);
       }
       expect(await nearest(f, q, spec(ALL_TENANTS))).toEqual(expect.arrayContaining([moved[0][0]]));
-      expect(await recall(f, rows, spec('t2')), `seed ${seed}`).toBeGreaterThanOrEqual(RECALL_FLOOR);
+      expect(await recall(f, rows, spec('t2')), `seed ${seed}`).toBeGreaterThanOrEqual(
+        RECALL_FLOOR,
+      );
       expect(f.covered.every((rowid) => rowid === ROWS)).toBe(true);
     }
   });
@@ -286,8 +324,12 @@ describe('a value out of bounds deep in the file', () => {
     const bytes = fs.readFileSync(graphFile(f.root));
     const { nodes, entry, recordsAt, recordBytes } = layoutOf(bytes);
     const last = rows[rows.length - 1];
-    expect(bytes[recordsAt + entry * recordBytes + 12], 'the entry sits above layer 0').toBeGreaterThan(0);
-    if (where.startsWith('a layer-0')) bytes.writeUInt32LE(nodes + 7, recordsAt + (nodes - 1) * recordBytes + 20);
+    expect(
+      bytes[recordsAt + entry * recordBytes + 12],
+      'the entry sits above layer 0',
+    ).toBeGreaterThan(0);
+    if (where.startsWith('a layer-0'))
+      bytes.writeUInt32LE(nodes + 7, recordsAt + (nodes - 1) * recordBytes + 20);
     else bytes.writeUInt32LE(0xfffffff0, recordsAt + entry * recordBytes + 16);
     fs.writeFileSync(graphFile(f.root), bytes);
     const reads = recordReads();
@@ -366,10 +408,9 @@ describe('saving the file', () => {
       elsewhere(root, (db) => {
         db.exec('PRAGMA busy_timeout = 0');
         db.exec('BEGIN IMMEDIATE');
-        db.prepare('INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(
-          'graph-test',
-          String(writes),
-        );
+        db.prepare(
+          'INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+        ).run('graph-test', String(writes));
         db.exec('COMMIT');
       });
       writes++;
@@ -394,6 +435,8 @@ describe('saving the file', () => {
   it.skipIf(process.platform === 'win32')('gives the file the mode bits of hippo.db', async () => {
     const f = await savedStore(mixedRows(ROWS, 11));
 
-    expect(fs.statSync(graphFile(f.root)).mode & 0o777).toBe(fs.statSync(join(f.root, 'hippo.db')).mode & 0o777);
+    expect(fs.statSync(graphFile(f.root)).mode & 0o777).toBe(
+      fs.statSync(join(f.root, 'hippo.db')).mode & 0o777,
+    );
   });
 });

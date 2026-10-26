@@ -73,7 +73,11 @@ function bandOf(pinned: boolean, strength: number, strength30d: number): number 
 /** The band of `entry` at `nowMs`, as memoryFacts judges it. */
 export function bandAt(entry: StrengthInputs, nowMs: number, model: StrengthModel): number {
   const strength = calculateStrength(entry, new Date(nowMs), model);
-  return bandOf(entry.pinned, strength, calculateStrength(entry, new Date(nowMs + AHEAD_30D_MS), model));
+  return bandOf(
+    entry.pinned,
+    strength,
+    calculateStrength(entry, new Date(nowMs + AHEAD_30D_MS), model),
+  );
 }
 
 /** A list shows this many UTF-16 units of content; the store reads one character more, so the cut shows. */

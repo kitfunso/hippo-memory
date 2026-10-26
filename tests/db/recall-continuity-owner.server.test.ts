@@ -36,19 +36,33 @@ describe('continuity on a shared store', () => {
   });
 
   it('A and B recall with a project each see only their own continuity', async () => {
-    const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), { owner: 'alice', project: ['p'] });
+    const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), {
+      owner: 'alice',
+      project: ['p'],
+    });
     saveSessionHandoff(
       home,
       'default',
       { version: 1, sessionId: 'sa', summary: 'alice handoff' },
       { owner: 'alice', project: ['p'] },
     );
-    const b = saveActiveTaskSnapshot(home, 'default', snap('bob task', 'sb'), { owner: 'bob', project: ['p'] });
+    const b = saveActiveTaskSnapshot(home, 'default', snap('bob task', 'sb'), {
+      owner: 'bob',
+      project: ['p'],
+    });
     const forA = (
-      await retrieve(ctx('alice'), { query: 'anything', window: { includeContinuity: true }, filter: { project: P } })
+      await retrieve(ctx('alice'), {
+        query: 'anything',
+        window: { includeContinuity: true },
+        filter: { project: P },
+      })
     ).continuity;
     const forB = (
-      await retrieve(ctx('bob'), { query: 'anything', window: { includeContinuity: true }, filter: { project: P } })
+      await retrieve(ctx('bob'), {
+        query: 'anything',
+        window: { includeContinuity: true },
+        filter: { project: P },
+      })
     ).continuity;
     expect(forA?.activeSnapshot?.id).toBe(a.id);
     expect(forA?.sessionHandoff?.summary).toBe('alice handoff');
@@ -70,15 +84,24 @@ describe('continuity on a shared store', () => {
     } finally {
       closeHippoDb(seed);
     }
-    const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), { owner: 'alice', project: ['p'] });
+    const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), {
+      owner: 'alice',
+      project: ['p'],
+    });
     writeEntry(home, createMemory('the deploy script lives in ops/deploy.sh'));
     expect(
-      (await retrieve(ctx('alice'), { query: 'deploy', window: { includeContinuity: true }, filter: { project: P } }))
-        .continuity?.activeSnapshot?.id,
+      (
+        await retrieve(ctx('alice'), {
+          query: 'deploy',
+          window: { includeContinuity: true },
+          filter: { project: P },
+        })
+      ).continuity?.activeSnapshot?.id,
     ).toBe(a.id);
-    expect((await retrieve(ctx('alice'), { query: 'deploy', window: { includeContinuity: true } })).continuity).toEqual(
-      EMPTY,
-    );
+    expect(
+      (await retrieve(ctx('alice'), { query: 'deploy', window: { includeContinuity: true } }))
+        .continuity,
+    ).toEqual(EMPTY);
 
     const db = openHippoDb(home);
     const key = (() => {
@@ -90,7 +113,9 @@ describe('continuity on a shared store', () => {
     })();
     handle = await serve({ hippoRoot: home, host: '127.0.0.1', port: 0 });
     const auth = { authorization: `Bearer ${key.plaintext}` };
-    const rest = await fetch(`${handle.url}/v1/memories?q=deploy&include_continuity=1`, { headers: auth });
+    const rest = await fetch(`${handle.url}/v1/memories?q=deploy&include_continuity=1`, {
+      headers: auth,
+    });
     expect(rest.status).toBe(200);
     // SAFETY: the route sends the whole RecallResult; only continuity is read.
     expect(((await rest.json()) as { continuity: unknown }).continuity).toEqual(EMPTY);
@@ -129,7 +154,9 @@ describe('continuity on a local store', () => {
     saveActiveTaskSnapshot(home, 'default', snap('older task', 's0'));
     const newest = saveActiveTaskSnapshot(home, 'default', snap('local task', 's1'));
     saveSessionHandoff(home, 'default', { version: 1, sessionId: 's1', summary: 'local handoff' });
-    const block = (await retrieve(ctx('alice'), { query: 'anything', window: { includeContinuity: true } })).continuity;
+    const block = (
+      await retrieve(ctx('alice'), { query: 'anything', window: { includeContinuity: true } })
+    ).continuity;
     expect(block?.activeSnapshot?.id).toBe(newest.id);
     expect(block?.sessionHandoff?.summary).toBe('local handoff');
   });

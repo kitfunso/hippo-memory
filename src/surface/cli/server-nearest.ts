@@ -21,12 +21,20 @@ export function serverNearestAsk(hippoRoot: string): NearestIdsAsk {
     try {
       const info = await detectServer(hippoRoot);
       if (info === null) return undefined;
-      return await nearestIds(info.url, callerKey(hippoRoot), { vector: queryVector, spec: wire }, NEAREST_TIMEOUT_MS);
+      return await nearestIds(
+        info.url,
+        callerKey(hippoRoot),
+        { vector: queryVector, spec: wire },
+        NEAREST_TIMEOUT_MS,
+      );
     } catch (err) {
-      log.warn('the hippo server did not answer the nearest-vector read, so this process scans its own store', {
-        hippoRoot,
-        ...errorFields(err),
-      });
+      log.warn(
+        'the hippo server did not answer the nearest-vector read, so this process scans its own store',
+        {
+          hippoRoot,
+          ...errorFields(err),
+        },
+      );
       return undefined;
     }
   };

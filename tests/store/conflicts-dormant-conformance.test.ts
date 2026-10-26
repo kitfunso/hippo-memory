@@ -6,7 +6,11 @@ import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memo
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import type { ConflictResolution, ConflictRowPage, ConflictSide } from '../../src/base/ports/store/conflicts.js';
+import type {
+  ConflictResolution,
+  ConflictRowPage,
+  ConflictSide,
+} from '../../src/base/ports/store/conflicts.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
@@ -18,7 +22,11 @@ import {
   type TwoTenantFixture,
   valueAt,
 } from '../_helpers/store-conformance.js';
-import { listMemoryConflicts, replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
+import {
+  listMemoryConflicts,
+  replaceDetectedConflicts,
+  writeEntry,
+} from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -35,7 +43,11 @@ let fixture: TwoTenantFixture;
 const rows: Record<string, MemoryEntry> = {};
 const conflictIds: Record<string, number> = {};
 
-function seedRow(name: string, content: string, over: Parameters<typeof createMemory>[1] = {}): MemoryEntry {
+function seedRow(
+  name: string,
+  content: string,
+  over: Parameters<typeof createMemory>[1] = {},
+): MemoryEntry {
   const row = createMemory(content, { tenantId: TENANT_A, ...over });
   writeEntry(fixture.dir, { ...row, originProject: 'proj' }, { actor: 'cli' });
   rows[name] = row;
@@ -53,8 +65,16 @@ async function seedConflicts(): Promise<void> {
   seedRow('rabbit', 'the queue is rabbit', { scope: 'team:ops' });
   seedRow('b1', 'tenant b says yes', { tenantId: TENANT_B });
   seedRow('b2', 'tenant b says no', { tenantId: TENANT_B });
-  const pairs = { weaken: ['keep', 'lose'], reject: ['redis', 'memcached'], remove: ['keep', 'raw'] } as const;
-  const more = { scoped: ['kafka', 'rabbit'], tenantB: ['b1', 'b2'], crossTenant: ['keep', 'b1'] } as const;
+  const pairs = {
+    weaken: ['keep', 'lose'],
+    reject: ['redis', 'memcached'],
+    remove: ['keep', 'raw'],
+  } as const;
+  const more = {
+    scoped: ['kafka', 'rabbit'],
+    tenantB: ['b1', 'b2'],
+    crossTenant: ['keep', 'b1'],
+  } as const;
   const named = Object.entries({ ...pairs, ...more });
   const detected = named.map(([, [a, b]]) => ({
     memory_a_id: rows[a]!.id,
@@ -69,23 +89,42 @@ async function seedConflicts(): Promise<void> {
     const name = named.find(([, [a, b]]) => pairOf(rows[a]!.id, rows[b]!.id) === stored);
     if (name) conflictIds[name[0]] = conflict.id;
   }
-  expect(Object.keys(conflictIds).sort()).toEqual(['reject', 'remove', 'scoped', 'tenantB', 'weaken']);
+  expect(Object.keys(conflictIds).sort()).toEqual([
+    'reject',
+    'remove',
+    'scoped',
+    'tenantB',
+    'weaken',
+  ]);
 }
 
 function seedDormant(): void {
   const db = openHippoDb(fixture.dir);
   try {
-    const dormant = (name: string, content: string, at: string, over: Partial<MemoryEntry> = {}) => {
+    const dormant = (
+      name: string,
+      content: string,
+      at: string,
+      over: Partial<MemoryEntry> = {},
+    ) => {
       // An origin named, so the row does not take the folder's project.
-      const entry = { ...createMemory(content, { tenantId: TENANT_A }), originProject: 'proj', ...over };
+      const entry = {
+        ...createMemory(content, { tenantId: TENANT_A }),
+        originProject: 'proj',
+        ...over,
+      };
       insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: at });
       rows[name] = entry;
     };
     dormant('d1', 'the staging host was build-07', '2026-02-01T00:00:00.000Z');
     dormant('d2', 'the Staging host moved to build-09', '2026-02-02T00:00:00.000Z');
-    dormant('mine', 'my staging desk is by the window', '2026-02-03T00:00:00.000Z', { scope: ALICE });
+    dormant('mine', 'my staging desk is by the window', '2026-02-03T00:00:00.000Z', {
+      scope: ALICE,
+    });
     dormant('dB', 'tenant b staging host', '2026-02-01T00:00:00.000Z', { tenantId: TENANT_B });
-    dormant('live', 'an older copy of a live row', '2026-02-04T00:00:00.000Z', { id: rows.keep!.id });
+    dormant('live', 'an older copy of a live row', '2026-02-04T00:00:00.000Z', {
+      id: rows.keep!.id,
+    });
   } finally {
     closeHippoDb(db);
   }
@@ -105,11 +144,16 @@ afterEach(() => vi.useRealTimers());
 
 // The store stamps a write's memory rows with its own clock in SQL's datetime form, so that value is named by format.
 function stamped<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value).replace(/"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d"/g, '"stamped"'));
+  return JSON.parse(
+    JSON.stringify(value).replace(/"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d"/g, '"stamped"'),
+  );
 }
 
 /** Each call one second after the one before. */
-async function conforms<G extends 'conflicts' | 'dormant'>(group: G, calls: readonly GroupCall<G, unknown>[]) {
+async function conforms<G extends 'conflicts' | 'dormant'>(
+  group: G,
+  calls: readonly GroupCall<G, unknown>[],
+) {
   const timed = calls.map((call, i): GroupCall<G, unknown> => async (methods, store) => {
     vi.setSystemTime(START + i * 1000);
     return stamped((await call(methods, store)) ?? null);
@@ -118,9 +162,17 @@ async function conforms<G extends 'conflicts' | 'dormant'>(group: G, calls: read
   return sqlite.outcomes;
 }
 
-const side = (name: string): ConflictSide => ({ id: rows[name]!.id, scope: rows[name]!.scope ?? null });
+const side = (name: string): ConflictSide => ({
+  id: rows[name]!.id,
+  scope: rows[name]!.scope ?? null,
+});
 
-function resolution(conflict: string, keep: string, loser: string, fate: ConflictResolution['fate']) {
+function resolution(
+  conflict: string,
+  keep: string,
+  loser: string,
+  fate: ConflictResolution['fate'],
+) {
   return {
     conflictId: conflictIds[conflict]!,
     keep: side(keep),
@@ -134,12 +186,18 @@ function resolution(conflict: string, keep: string, loser: string, fate: Conflic
 
 describe('Conflicts', () => {
   it('pages conflicts newest change first, resolves each fate once, and leaves another tenant and a moved side alone', async () => {
-    const ids = (page: { rows: readonly { conflict: { id: number } }[] }) => page.rows.map((r) => r.conflict.id);
+    const ids = (page: { rows: readonly { conflict: { id: number } }[] }) =>
+      page.rows.map((r) => r.conflict.id);
     const outcomes = await conforms('conflicts', [
       (g) => g.list({ tenantId: TENANT_A, status: 'open', limit: 10 }),
       async (g) => {
         const first = await g.list({ tenantId: ALL_TENANTS, status: '*', limit: 2 });
-        const second = await g.list({ tenantId: ALL_TENANTS, status: '*', limit: 10, after: first.next ?? undefined });
+        const second = await g.list({
+          tenantId: ALL_TENANTS,
+          status: '*',
+          limit: 10,
+          after: first.next ?? undefined,
+        });
         return [first, second];
       },
       (g) => g.list({ tenantId: TENANT_B, status: 'open', limit: 10 }),
@@ -156,7 +214,11 @@ describe('Conflicts', () => {
         }),
       (g) => g.resolve(TENANT_A, resolution('weaken', 'keep', 'lose', WEAKEN)),
       (g) => g.resolve(TENANT_A, resolution('weaken', 'keep', 'lose', WEAKEN)),
-      (g) => g.resolve(TENANT_A, resolution('reject', 'redis', 'memcached', { kind: 'reject', ownScope: null })),
+      (g) =>
+        g.resolve(
+          TENANT_A,
+          resolution('reject', 'redis', 'memcached', { kind: 'reject', ownScope: null }),
+        ),
       (g) => g.resolve(TENANT_A, resolution('remove', 'keep', 'raw', { kind: 'remove' })),
       (g) => g.list({ tenantId: TENANT_A, status: 'resolved', limit: 10 }).then(ids),
       (g) => g.list({ tenantId: ALL_TENANTS, status: 'resolved', limit: 10 }),
@@ -169,7 +231,11 @@ describe('Conflicts', () => {
             TENANT_A,
           )
           .then((found) =>
-            found.map((e) => ({ content: e.content, halfLifeDays: e.halfLifeDays, conflictsWith: e.conflictsWith })),
+            found.map((e) => ({
+              content: e.content,
+              halfLifeDays: e.halfLifeDays,
+              conflictsWith: e.conflictsWith,
+            })),
           ),
       (_g, s) => s.rejections.list(TENANT_A),
     ]);
@@ -186,13 +252,20 @@ describe('Conflicts', () => {
     // A tenant's read drops a conflict whose loser is gone; the every-tenant read keeps it with that member null.
     expect(outcomes[14]).toEqual({ value: [conflictIds.weaken] });
     type Member = { kind: string } | null;
-    const everyTenant = valueAt<{ rows: { conflict: { id: number }; a: Member; b: Member }[] }>(outcomes, 15);
-    expect(everyTenant.rows.map((r) => [r.conflict.id, [r.a, r.b].filter((m) => m === null).length])).toEqual([
+    const everyTenant = valueAt<{ rows: { conflict: { id: number }; a: Member; b: Member }[] }>(
+      outcomes,
+      15,
+    );
+    expect(
+      everyTenant.rows.map((r) => [r.conflict.id, [r.a, r.b].filter((m) => m === null).length]),
+    ).toEqual([
       [conflictIds.remove, 1],
       [conflictIds.reject, 1],
       [conflictIds.weaken, 0],
     ]);
-    expect(outcomes[17]).toMatchObject({ value: { conflict: { status: 'resolved', updatedAt: RESOLVED_AT } } });
+    expect(outcomes[17]).toMatchObject({
+      value: { conflict: { status: 'resolved', updatedAt: RESOLVED_AT } },
+    });
   });
 });
 
@@ -227,11 +300,19 @@ describe('Dormant', () => {
       (_g, s) => s.reports.stats().then((stats) => stats.total_forgotten),
     ]);
     const listed = (o: (typeof outcomes)[number]) =>
-      'value' in o && Array.isArray(o.value) ? o.value.map((m: { content: string }) => m.content) : o;
-    expect(listed(outcomes[1]!)).toEqual(['the Staging host moved to build-09', 'the staging host was build-07']);
-    const found = (o: (typeof outcomes)[number]) => ('value' in o && Array.isArray(o.value) ? o.value.length : o);
+      'value' in o && Array.isArray(o.value)
+        ? o.value.map((m: { content: string }) => m.content)
+        : o;
+    expect(listed(outcomes[1]!)).toEqual([
+      'the Staging host moved to build-09',
+      'the staging host was build-07',
+    ]);
+    const found = (o: (typeof outcomes)[number]) =>
+      'value' in o && Array.isArray(o.value) ? o.value.length : o;
     expect(outcomes.slice(7, 10).map(found)).toEqual([0, 1, 0]);
-    expect(outcomes[10]).toMatchObject({ value: { status: 'restored', entry: { id: rows.d1!.id } } });
+    expect(outcomes[10]).toMatchObject({
+      value: { status: 'restored', entry: { id: rows.d1!.id } },
+    });
     expect(outcomes.slice(11, 14)).toEqual([
       { value: { status: 'missing' } },
       { value: { status: 'active' } },

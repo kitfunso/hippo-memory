@@ -40,10 +40,15 @@ export function anthropicLlm(connection: AnthropicConnection): Llm {
  */
 async function errorSnippet(res: Response): Promise<string> {
   // The status is the failure reported; a body that cannot be read only costs its snippet.
-  const body = await readCappedText(res, ERROR_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch((err: Error) => {
-    log.warn(`anthropic: could not read the error body of a ${res.status} reply`, errorFields(err));
-    return '';
-  });
+  const body = await readCappedText(res, ERROR_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch(
+    (err: Error) => {
+      log.warn(
+        `anthropic: could not read the error body of a ${res.status} reply`,
+        errorFields(err),
+      );
+      return '';
+    },
+  );
   // Masked before the cut, so a key that straddles the cut is never left half shown.
   return redactSecretsStrict(body.replace(/\s+/g, ' ').trim()).slice(0, ERROR_SNIPPET_CHARS);
 }
@@ -80,12 +85,19 @@ async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Pr
   } catch (err) {
     return { ok: false, failure: { kind: 'request', message: errorMessage(err), cause: err } };
   }
-  if (!res.ok) return { ok: false, failure: { kind: 'http', status: res.status, detail: await errorSnippet(res) } };
+  if (!res.ok)
+    return {
+      ok: false,
+      failure: { kind: 'http', status: res.status, detail: await errorSnippet(res) },
+    };
 
   try {
     const data = await readCappedJson(res, MAX_REPLY_BYTES);
     if (!isJsonObject(data)) {
-      return { ok: false, failure: { kind: 'unreadable', message: 'the reply is not a JSON object' } };
+      return {
+        ok: false,
+        failure: { kind: 'unreadable', message: 'the reply is not a JSON object' },
+      };
     }
     const text = firstText(data);
     return text === '' ? { ok: false, failure: { kind: 'empty' } } : { ok: true, text };

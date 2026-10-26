@@ -24,7 +24,10 @@ const READERS = new Map<string, (fixture: Fixture) => CaptureReceipt>([
   ['claude-code/post-compact', (f) => readClaudeCodePostCompact(f.stdin ?? undefined, f.timedOut)],
   ['claude-code/session-end', (f) => readSessionEnd(f.stdin ?? undefined, f.timedOut)],
   // Normalized first, as the hook command does, so the fixture holds what the host sends.
-  ['copilot/session-end', (f) => readSessionEnd(normalizeHookPayload(f.stdin ?? undefined), f.timedOut, 'copilot')],
+  [
+    'copilot/session-end',
+    (f) => readSessionEnd(normalizeHookPayload(f.stdin ?? undefined), f.timedOut, 'copilot'),
+  ],
 ]);
 
 // Pinned so a deleted fixture fails here instead of quietly shrinking what each reader is checked against.

@@ -256,7 +256,9 @@ describe('tenant scoping', () => {
       }
     });
 
-    expect((await wmRead(tmpDir, { tenantId: 'acme' })).map((i) => i.content)).toEqual(['acme note']);
+    expect((await wmRead(tmpDir, { tenantId: 'acme' })).map((i) => i.content)).toEqual([
+      'acme note',
+    ]);
     expect(await wmRead(tmpDir, { tenantId: 'globex', limit: 100 })).toHaveLength(WM_MAX_ENTRIES);
     expect(await wmClear(tmpDir, { tenantId: 'globex' })).toBe(WM_MAX_ENTRIES);
     expect(await wmRead(tmpDir, { tenantId: 'globex', limit: 100 })).toEqual([]);

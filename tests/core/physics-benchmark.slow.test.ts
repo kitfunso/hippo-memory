@@ -13,7 +13,11 @@ import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
-import { loadAllPhysicsState, resetAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
+import {
+  loadAllPhysicsState,
+  resetAllPhysicsState,
+  savePhysicsState,
+} from '../../src/db/physics-state.js';
 import { computeSystemEnergy, simulate, type ForceContext } from '../../src/base/rank/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -387,7 +391,11 @@ const STANDARD_QUERIES: QueryCase[] = [
     queryEmbedding: PRODUCTION_CENTROID,
     expectedLabels: ['build_before_deploy', 'version_files', 'never_overwrite'],
   },
-  { query: 'python print crashes on windows', queryEmbedding: PLATFORM_CENTROID, expectedLabels: ['no_emoji_python'] },
+  {
+    query: 'python print crashes on windows',
+    queryEmbedding: PLATFORM_CENTROID,
+    expectedLabels: ['no_emoji_python'],
+  },
   {
     query: 'sub-agent output review',
     queryEmbedding: SUBAGENT_CENTROID,
@@ -476,7 +484,11 @@ interface QueryScore {
 }
 
 function metrics(topIds: string[], expectedIds: string[]): Metrics {
-  return { p3: precision3(topIds, expectedIds), r3: recallK(topIds, expectedIds), mrr: mrr(topIds, expectedIds) };
+  return {
+    p3: precision3(topIds, expectedIds),
+    r3: recallK(topIds, expectedIds),
+    mrr: mrr(topIds, expectedIds),
+  };
 }
 
 async function scoreQueries(cases: readonly QueryCase[]): Promise<QueryScore[]> {
@@ -495,7 +507,11 @@ async function scoreQueries(cases: readonly QueryCase[]): Promise<QueryScore[]> 
   return scores;
 }
 
-function mean(scores: readonly QueryScore[], side: 'classic' | 'physics', key: keyof Metrics): number {
+function mean(
+  scores: readonly QueryScore[],
+  side: 'classic' | 'physics',
+  key: keyof Metrics,
+): number {
   return scores.reduce((sum, s) => sum + s[side][key], 0) / scores.length;
 }
 

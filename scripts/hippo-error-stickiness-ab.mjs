@@ -12,7 +12,9 @@ import { loadAllEntriesWire as loadAllEntries } from '../dist/entry/testing.js';
 
 const BOOTSTRAP_DRAWS = 2000;
 const LENGTH_TOLERANCE = 0.25;
-const PLACEBO_REPLAYS = Number(process.argv.find((a) => a.startsWith('--placebo='))?.split('=')[1] ?? 0);
+const PLACEBO_REPLAYS = Number(
+  process.argv.find((a) => a.startsWith('--placebo='))?.split('=')[1] ?? 0,
+);
 
 const hippoRoot = join(homedir(), '.hippo');
 const NOW = new Date();
@@ -52,8 +54,10 @@ console.error(
 /** Tags are NOT touched, so one corpus serves every arm. Lane 6/7 rebuilt it
  *  per arm and shifted idf('error') and avgLen for every document (5.7 C10). */
 const corpus = buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
-const halve = (ids) => entries.map((e) => (ids.has(e.id) ? { ...e, half_life_days: e.half_life_days / 2 } : e));
-const double = (base, ids) => base.map((e) => (ids.has(e.id) ? { ...e, half_life_days: e.half_life_days * 2 } : e));
+const halve = (ids) =>
+  entries.map((e) => (ids.has(e.id) ? { ...e, half_life_days: e.half_life_days / 2 } : e));
+const double = (base, ids) =>
+  base.map((e) => (ids.has(e.id) ? { ...e, half_life_days: e.half_life_days * 2 } : e));
 
 const errorIds = new Set(errorRows.map((e) => e.id));
 const armOn = entries;
@@ -62,7 +66,12 @@ const armOff = halve(errorIds);
 async function ranksFor(arm) {
   const out = [];
   for (const c of cases) {
-    const res = await hybridSearch(c.query, arm, { hippoRoot, preparedCorpus: corpus, mmr: true, now: NOW });
+    const res = await hybridSearch(c.query, arm, {
+      hippoRoot,
+      preparedCorpus: corpus,
+      mmr: true,
+      now: NOW,
+    });
     const i = res.findIndex((r) => r.entry.id === c.id);
     out.push({ rank: i < 0 ? Infinity : i + 1, returned: res.length });
   }
@@ -100,7 +109,10 @@ function report(rows, label, seed, alpha = 0.05) {
       off = fn(rows.map((o) => o.off));
     const ds = idx.map((row) => fn(row.map((k) => rows[k].on)) - fn(row.map((k) => rows[k].off)));
     ds.sort((a, b) => a - b);
-    const ci = { lo: ds[Math.floor(ds.length * (alpha / 2))], hi: ds[Math.floor(ds.length * (1 - alpha / 2))] };
+    const ci = {
+      lo: ds[Math.floor(ds.length * (alpha / 2))],
+      hi: ds[Math.floor(ds.length * (1 - alpha / 2))],
+    };
     table[name] = { on, off, delta: on - off };
     cis[name] = ci;
     intervalCount++;
@@ -112,7 +124,9 @@ function report(rows, label, seed, alpha = 0.05) {
   const changed = rows.filter((o) => o.on !== o.off).length;
   const retOn = med(rows.map((o) => o.retOn)),
     retOff = med(rows.map((o) => o.retOff));
-  console.log(`\ndiscordant pairs: ${changed}/${rows.length}   median memories returned: ON ${retOn}, OFF ${retOff}`);
+  console.log(
+    `\ndiscordant pairs: ${changed}/${rows.length}   median memories returned: ON ${retOn}, OFF ${retOff}`,
+  );
   return { n: rows.length, metrics: table, ci: cis, changed, returned: { on: retOn, off: retOff } };
 }
 
@@ -134,8 +148,18 @@ const rows = cases.map((c, i) => ({
 const rowsE = rows.filter((r) => r.stratum === 'E'),
   rowsN = rows.filter((r) => r.stratum === 'N');
 const primary = report(rows, 'Lane 8 PRIMARY — hippo error-stickiness, all queries', 90218);
-const E = report(rowsE, 'Stratum E — target IS error-tagged (confirmatory, Bonferroni alpha 0.025)', 90218, 0.025);
-const N = report(rowsN, 'Stratum N — target is NOT error-tagged (confirmatory, Bonferroni alpha 0.025)', 90218, 0.025);
+const E = report(
+  rowsE,
+  'Stratum E — target IS error-tagged (confirmatory, Bonferroni alpha 0.025)',
+  90218,
+  0.025,
+);
+const N = report(
+  rowsN,
+  'Stratum N — target is NOT error-tagged (confirmatory, Bonferroni alpha 0.025)',
+  90218,
+  0.025,
+);
 report(rowsE, 'Stratum E at nominal 95% (diagnostic, for comparison only)', 90218);
 report(rowsN, 'Stratum N at nominal 95% (diagnostic, for comparison only)', 90218);
 
@@ -160,8 +184,11 @@ if (gain > 0 && cost < 0) {
 
 const lo = primary.ci[PRIMARY].lo,
   hi = primary.ci[PRIMARY].hi;
-const verdict = hi < 0 ? 'KILL' : lo > 0 ? 'KEEP (measured gain)' : 'KEEP (tie, incumbent by parsimony)';
-console.log(`\nVERDICT: ${verdict}   pooled ${PRIMARY} ${f(primary.metrics[PRIMARY].delta)} [${f(lo)}, ${f(hi)}]`);
+const verdict =
+  hi < 0 ? 'KILL' : lo > 0 ? 'KEEP (measured gain)' : 'KEEP (tie, incumbent by parsimony)';
+console.log(
+  `\nVERDICT: ${verdict}   pooled ${PRIMARY} ${f(primary.metrics[PRIMARY].delta)} [${f(lo)}, ${f(hi)}]`,
+);
 if (N.ci[PRIMARY].hi < 0) {
   console.log('STRATUM N LOSS CONFIRMED -> FIX branch: the boost is charged to other memories.');
 }
@@ -172,13 +199,17 @@ if (PLACEBO_REPLAYS > 0) {
    *  boost-other arm promotes 140 of the 173 stratum-N targets it is scored
    *  on, and beats the error arm by self-promotion alone. */
   const targetIds = new Set(cases.map((c) => c.id));
-  const pool = otherRows.filter((e) => !targetIds.has(e.id)).sort((a, b) => tokens(a.content) - tokens(b.content));
+  const pool = otherRows
+    .filter((e) => !targetIds.has(e.id))
+    .sort((a, b) => tokens(a.content) - tokens(b.content));
   const used = new Set();
   const pairs = [];
   console.error(
     `placebo pools exclude all ${targetIds.size} query targets: ${pool.length} non-error candidates available`,
   );
-  for (const t of errorRows.filter((e) => !targetIds.has(e.id)).sort((a, b) => tokens(a.content) - tokens(b.content))) {
+  for (const t of errorRows
+    .filter((e) => !targetIds.has(e.id))
+    .sort((a, b) => tokens(a.content) - tokens(b.content))) {
     const tl = tokens(t.content);
     let best = null,
       bestGap = Infinity;

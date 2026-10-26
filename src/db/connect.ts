@@ -4,7 +4,12 @@ import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 import { errorCode, errorFields, errorMessage, log } from '../base/util/log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { DEFAULT_BUSY_WAIT_MS, execWithBusyRetry } from './busy.js';
-import { type OpenFacts, importLegacyVectors, runMigrations, settledStoreFacts } from './migrate.js';
+import {
+  type OpenFacts,
+  importLegacyVectors,
+  runMigrations,
+  settledStoreFacts,
+} from './migrate.js';
 import { autoCheckpointPages } from './wal-checkpointer.js';
 import { currentStoreRuntime, storeKey } from './store-runtime.js';
 import { PRIVATE_DIR } from '../host/private-dir.js';
@@ -58,7 +63,11 @@ function warnWideModes(hippoRoot: string): void {
 
 // The probe read whether an archived row's mirror waits for cleanup, so a clean archive costs no scan; a failed
 // unlink leaves its row uncleaned, and the next open retries it.
-function sweepArchivedMirrorsIfDue(hippoRoot: string, db: DatabaseSyncLike, pending: boolean | undefined): void {
+function sweepArchivedMirrorsIfDue(
+  hippoRoot: string,
+  db: DatabaseSyncLike,
+  pending: boolean | undefined,
+): void {
   if (pending !== false) cleanupArchivedMirrors(hippoRoot, db);
 }
 
@@ -72,7 +81,11 @@ export function reproveStoreSchema(hippoRoot: string): void {
 
 // Once the runtime has proven a store's schema, a new connection re-reads only the two version stamps and the binary
 // floor: a migration by another process moves a stamp and sends the open down the full path.
-function settleSchema(db: DatabaseSyncLike, hippoRoot: string, busyWaitMs: number): OpenFacts | null {
+function settleSchema(
+  db: DatabaseSyncLike,
+  hippoRoot: string,
+  busyWaitMs: number,
+): OpenFacts | null {
   if (currentStoreRuntime()?.hasRun(storeKey(hippoRoot), SCHEMA_STEP)) {
     const settled = settledStoreFacts(db);
     if (settled) {
@@ -103,7 +116,10 @@ export interface OpenedDb {
  * Outside any request scope (CLI start-up, timers) this is the only handle there is; openHippoDb reuses the scope's
  * when one exists.
  */
-export function connectWithFacts(hippoRoot: string, busyWaitMs: number = DEFAULT_BUSY_WAIT_MS): OpenedDb {
+export function connectWithFacts(
+  hippoRoot: string,
+  busyWaitMs: number = DEFAULT_BUSY_WAIT_MS,
+): OpenedDb {
   createStoreFilesOwnerOnly(hippoRoot);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
   try {

@@ -21,7 +21,11 @@ async function scoreHead(
   pipe: CrossEncoderFn,
   query: string,
   head: readonly SearchResult[],
-): Promise<{ readonly results: RerankResult[]; readonly succeeded: number; readonly firstError: Error | null }> {
+): Promise<{
+  readonly results: RerankResult[];
+  readonly succeeded: number;
+  readonly firstError: Error | null;
+}> {
   let succeeded = 0;
   let firstError: Error | null = null;
   const scored = await Promise.all(
@@ -34,7 +38,10 @@ async function scoreHead(
         firstError ??= err instanceof Error ? err : new Error(errorMessage(err));
         // One bad inference must not sink the whole pass; a pass where every call fails is warned about by the outage
         // tracker below.
-        log.debug(`cross-encoder inference failed, keeping the base score: ${errorMessage(err)}`, errorFields(err));
+        log.debug(
+          `cross-encoder inference failed, keeping the base score: ${errorMessage(err)}`,
+          errorFields(err),
+        );
         ceScore = r.score;
       }
       return {

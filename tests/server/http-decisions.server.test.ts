@@ -51,15 +51,21 @@ async function createDecision(
 describe('HTTP /v1/decisions (decision first-class object)', () => {
   it('GET /v1/decisions lists and filters by status', async () => {
     await createDecision('active one');
-    const toClose = (await jsonAs<{ decision: Decision }>(await createDecision('to close'))).decision;
-    await fetch(`${handle.url}/v1/decisions/${toClose.id}/close`, { method: 'POST', headers: authHeaders(apiKey) });
+    const toClose = (await jsonAs<{ decision: Decision }>(await createDecision('to close')))
+      .decision;
+    await fetch(`${handle.url}/v1/decisions/${toClose.id}/close`, {
+      method: 'POST',
+      headers: authHeaders(apiKey),
+    });
 
     const allRes = await fetch(`${handle.url}/v1/decisions`, { headers: authHeaders(apiKey) });
     expect(allRes.status).toBe(200);
     const all = await jsonAs<{ decisions: Decision[] }>(allRes);
     expect(all.decisions.length).toBe(2);
 
-    const activeRes = await fetch(`${handle.url}/v1/decisions?status=active`, { headers: authHeaders(apiKey) });
+    const activeRes = await fetch(`${handle.url}/v1/decisions?status=active`, {
+      headers: authHeaders(apiKey),
+    });
     const active = await jsonAs<{ decisions: Decision[] }>(activeRes);
     expect(active.decisions.length).toBe(1);
     expect(active.decisions[0].status).toBe('active');

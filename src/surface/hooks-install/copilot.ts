@@ -32,7 +32,12 @@ import {
 import { copilotHomeDir } from './rules/shared.js';
 import { processHomes } from '../../host/agent-homes.js';
 import { vscodeUserDirs } from './detect.js';
-import { installJsonHooks, resolveJsonHookPaths, uninstallJsonHooks, writeSettingsFile } from './json-hooks.js';
+import {
+  installJsonHooks,
+  resolveJsonHookPaths,
+  uninstallJsonHooks,
+  writeSettingsFile,
+} from './json-hooks.js';
 
 // The MCP hosts the installer merges into, and the snippet and failure test its caller prints from.
 export { COPILOT_CLI_MCP, VSCODE_MCP, copilotMcpSnippet, isMcpFailure } from './rules/copilot.js';

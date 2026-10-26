@@ -6,7 +6,11 @@ import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from '../rank/physics-conf
 import { DEFAULT_HALF_LIFE_DAYS } from '../memory/strength.js';
 import { SALIENCE_DEFAULTS } from '../memory/salience.js';
 import type { PromptRecallMetric } from '../rank/prompt-recall.js';
-import { DEFAULT_LOCAL_BUMP, DEFAULT_MMR_LAMBDA, DEFAULT_RECALL_BUDGET } from '../rank/search-types.js';
+import {
+  DEFAULT_LOCAL_BUMP,
+  DEFAULT_MMR_LAMBDA,
+  DEFAULT_RECALL_BUDGET,
+} from '../rank/search-types.js';
 import type { JsonValue } from '../util/json.js';
 import {
   basisPoints,
@@ -368,7 +372,10 @@ function pinnedInjectFields(read: FieldReader): HippoConfig['pinnedInject'] {
     refreshTurns: read('refreshTurns', count(P.refreshTurns)),
     // The hook turns prompt recall on only for `true`, so a malformed value reads as off, not as the default.
     promptRecall: read('promptRecall', flag(false, P.promptRecall)),
-    promptRecallMetric: read('promptRecallMetric', choice(P.promptRecallMetric, 'jaccard', 'cosine')),
+    promptRecallMetric: read(
+      'promptRecallMetric',
+      choice(P.promptRecallMetric, 'jaccard', 'cosine'),
+    ),
     promptRecallThreshold: read('promptRecallThreshold', fraction(P.promptRecallThreshold)),
     promptRecallMinShared: read('promptRecallMinShared', count(P.promptRecallMinShared)),
     promptRecallMaxItems: read('promptRecallMaxItems', count(P.promptRecallMaxItems)),
@@ -422,7 +429,9 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
   ),
   configKey(
     'replay',
-    block('an object like {"count": 5}', D.replay, (read) => ({ count: read('count', count(D.replay.count)) })),
+    block('an object like {"count": 5}', D.replay, (read) => ({
+      count: read('count', count(D.replay.count)),
+    })),
   ),
   configKey('autoTraceCapture', flag(D.autoTraceCapture)),
   configKey('autoTraceWindowDays', count(D.autoTraceWindowDays)),

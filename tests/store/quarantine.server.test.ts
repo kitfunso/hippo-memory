@@ -19,7 +19,12 @@ import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
-import { copyToGlobal, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
+import {
+  copyToGlobal,
+  listMemoryConflicts,
+  writeEntry,
+  readEntry,
+} from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
@@ -49,7 +54,12 @@ function githubCommentEvent(body: string, isPrivateRepo = false, commentId = 501
     eventName: 'issue_comment',
     payload: {
       action: 'created',
-      repository: { full_name: 'acme/demo', private: isPrivateRepo, owner: { login: 'acme' }, name: 'demo' },
+      repository: {
+        full_name: 'acme/demo',
+        private: isPrivateRepo,
+        owner: { login: 'acme' },
+        name: 'demo',
+      },
       issue: { number: 1 },
       comment: { id: commentId, body, user: { login: 'mallory', id: 9 } },
     },
@@ -77,7 +87,11 @@ describe('GitHub ingest quarantines a flagged comment', () => {
 
   it('injection body lands under quarantine:private:github:public:acme/demo, pending, with a quarantine audit row', async () => {
     const ctx = adminCtx(home);
-    const result = await ingestEvent(ctx, { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
+    const result = await ingestEvent(ctx, {
+      event: githubCommentEvent(INJECTION),
+      rawBody: 'x',
+      deliveryId: 'd1',
+    });
     expect(result.status).toBe('ingested');
 
     const entry = readEntry(home, result.memoryId!, 'default');
@@ -94,7 +108,11 @@ describe('GitHub ingest quarantines a flagged comment', () => {
 
   it('a clean comment is not quarantined', async () => {
     const ctx = adminCtx(home);
-    const result = await ingestEvent(ctx, { event: githubCommentEvent(CLEAN), rawBody: 'y', deliveryId: 'd2' });
+    const result = await ingestEvent(ctx, {
+      event: githubCommentEvent(CLEAN),
+      rawBody: 'y',
+      deliveryId: 'd2',
+    });
     const entry = readEntry(home, result.memoryId!, 'default');
     expect(entry?.scope).toBe('github:public:acme/demo');
     expect(quarantineRow(home, result.memoryId!)).toBeUndefined();
@@ -102,7 +120,10 @@ describe('GitHub ingest quarantines a flagged comment', () => {
 
   it('a plain local remember of the same injection text is not quarantined (untrusted defaults off)', async () => {
     const ctx = adminCtx(home);
-    const result = await api.remember(ctx, { content: INJECTION, scope: 'github:public:acme/demo' });
+    const result = await api.remember(ctx, {
+      content: INJECTION,
+      scope: 'github:public:acme/demo',
+    });
     expect(result.quarantined).toBeUndefined();
     expect(readEntry(home, result.id, 'default')?.scope).toBe('github:public:acme/demo');
   });
@@ -127,7 +148,11 @@ describe('a disguised instruction from a connector is held like the plain one', 
       'pattern:bidi-control',
     ],
   ])('%s', async (_how, content, reason) => {
-    const result = await api.remember(adminCtx(home), { content, untrusted: true, scope: 'github:public:acme/demo' });
+    const result = await api.remember(adminCtx(home), {
+      content,
+      untrusted: true,
+      scope: 'github:public:acme/demo',
+    });
     expect(result.quarantined).toEqual({ reason });
     // The row keeps the bytes that arrived: the screening form is for matching only.
     expect(readEntry(home, result.id, 'default')).toMatchObject({
@@ -158,21 +183,29 @@ describe('recall visibility and the approve/reject lifecycle', () => {
 
   it('default recall does not return it; approve restores the scope and recall then returns it', async () => {
     const ctx = adminCtx(home);
-    expect((await api.retrieve(ctx, { query: 'wipe.sh' })).results.some((r) => r.id === id)).toBe(false);
+    expect((await api.retrieve(ctx, { query: 'wipe.sh' })).results.some((r) => r.id === id)).toBe(
+      false,
+    );
 
     await api.quarantineApprove(ctx, id);
     expect(readEntry(home, id, 'default')?.scope).toBe('github:public:acme/demo');
     const audit = await api.auditList(ctx, { op: 'quarantine_approve' });
     expect(audit.some((e) => e.targetId === id)).toBe(true);
-    expect((await api.retrieve(ctx, { query: 'wipe.sh' })).results.some((r) => r.id === id)).toBe(true);
+    expect((await api.retrieve(ctx, { query: 'wipe.sh' })).results.some((r) => r.id === id)).toBe(
+      true,
+    );
   });
 
   it('reject keeps it hidden and marks the row rejected', async () => {
     const ctx = adminCtx(home);
     await api.quarantineReject(ctx, id);
-    expect(readEntry(home, id, 'default')?.scope).toBe('quarantine:private:github:public:acme/demo');
+    expect(readEntry(home, id, 'default')?.scope).toBe(
+      'quarantine:private:github:public:acme/demo',
+    );
     expect(quarantineRow(home, id)?.status).toBe('rejected');
-    expect((await api.retrieve(ctx, { query: 'wipe.sh' })).results.some((r) => r.id === id)).toBe(false);
+    expect((await api.retrieve(ctx, { query: 'wipe.sh' })).results.some((r) => r.id === id)).toBe(
+      false,
+    );
     const audit = await api.auditList(ctx, { op: 'quarantine_reject' });
     expect(audit.some((e) => e.targetId === id)).toBe(true);
   });
@@ -183,7 +216,11 @@ describe('recall visibility and the approve/reject lifecycle', () => {
     await expect(api.quarantineApprove(ctx, id)).rejects.toThrow(/already approved/);
 
     const other = (
-      await ingestEvent(ctx, { event: githubCommentEvent(INJECTION, false, 502), rawBody: 'z', deliveryId: 'd3' })
+      await ingestEvent(ctx, {
+        event: githubCommentEvent(INJECTION, false, 502),
+        rawBody: 'z',
+        deliveryId: 'd3',
+      })
     ).memoryId!;
     await api.quarantineReject(ctx, other);
     await expect(api.quarantineApprove(ctx, other)).rejects.toThrow(/already rejected/);
@@ -218,7 +255,11 @@ describe('recall visibility and the approve/reject lifecycle', () => {
 
   it('shareMemory refuses a quarantined row even with force', async () => {
     await expect(
-      shareMemory(...sharingStores(home), id, { embed: TEST_RUN, tenantId: 'default', force: true }),
+      shareMemory(...sharingStores(home), id, {
+        embed: TEST_RUN,
+        tenantId: 'default',
+        force: true,
+      }),
     ).rejects.toThrow(/quarantine/i);
   });
 
@@ -230,7 +271,9 @@ describe('recall visibility and the approve/reject lifecycle', () => {
     const ctx = adminCtx(home);
     expect((await api.quarantineList(ctx, { status: 'pending' })).map((r) => r.id)).toContain(id);
     await api.rawArchive(ctx, id, 'slack message_deleted');
-    expect((await api.quarantineList(ctx, { status: 'pending' })).map((r) => r.id)).not.toContain(id);
+    expect((await api.quarantineList(ctx, { status: 'pending' })).map((r) => r.id)).not.toContain(
+      id,
+    );
     expect(quarantineRow(home, id)?.status).toBe('pending');
   });
 
@@ -239,7 +282,12 @@ describe('recall visibility and the approve/reject lifecycle', () => {
     vi.stubEnv('HIPPO_HOME', globalHome);
     expect(
       (
-        await autoShare(...sharingStores(home), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0, dryRun: true })
+        await autoShare(...sharingStores(home), {
+          embed: TEST_RUN,
+          tenantId: ALL_TENANTS,
+          minScore: 0,
+          dryRun: true,
+        })
       ).map((e) => e.id),
     ).not.toContain(id);
     await expect(
@@ -280,7 +328,9 @@ describe('atomicity: a connector event log write that throws leaves no memory an
         // SAFETY: COUNT(*) AS n always returns exactly one row shaped { n }.
         const memRow = db.prepare(`SELECT COUNT(*) AS n FROM memories`).get() as { n: number };
         // SAFETY: COUNT(*) AS n always returns exactly one row shaped { n }.
-        const qRow = db.prepare(`SELECT COUNT(*) AS n FROM memory_quarantine`).get() as { n: number };
+        const qRow = db.prepare(`SELECT COUNT(*) AS n FROM memory_quarantine`).get() as {
+          n: number;
+        };
         expect(memRow.n).toBe(0);
         expect(qRow.n).toBe(0);
       } finally {
@@ -304,7 +354,9 @@ describe('Slack ingest quarantines too', () => {
         eventId: 'Ev1',
       });
       expect(result.status).toBe('ingested');
-      expect(readEntry(home, result.memoryId!, 'default')?.scope).toBe('quarantine:private:slack:public:C1');
+      expect(readEntry(home, result.memoryId!, 'default')?.scope).toBe(
+        'quarantine:private:slack:public:C1',
+      );
       expect(quarantineRow(home, result.memoryId!)?.status).toBe('pending');
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -344,7 +396,9 @@ describe('fresh store schema', () => {
       expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
       const db = openHippoDb(home);
       try {
-        const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='memory_quarantine'`).get();
+        const row = db
+          .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='memory_quarantine'`)
+          .get();
         expect(row).toEqual({ name: 'memory_quarantine' });
       } finally {
         closeHippoDb(db);
@@ -390,7 +444,10 @@ describe('quarantine over HTTP and MCP', () => {
   }
 
   function post(path: string, key: string) {
-    return fetch(`${handle.url}${path}`, { method: 'POST', headers: { authorization: `Bearer ${key}` } });
+    return fetch(`${handle.url}${path}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${key}` },
+    });
   }
 
   async function recallTool(key: string, args: Record<string, string>) {
@@ -411,8 +468,12 @@ describe('quarantine over HTTP and MCP', () => {
     const member = mintKey('member');
     const admin = mintKey('admin');
 
-    expect(await (await get('/v1/memories?q=wipe.sh', member.plaintext)).text()).not.toContain('wipe.sh');
-    expect(await (await get('/v1/memories?q=wipe.sh', admin.plaintext)).text()).not.toContain('wipe.sh');
+    expect(await (await get('/v1/memories?q=wipe.sh', member.plaintext)).text()).not.toContain(
+      'wipe.sh',
+    );
+    expect(await (await get('/v1/memories?q=wipe.sh', admin.plaintext)).text()).not.toContain(
+      'wipe.sh',
+    );
     expect(await recallTool(member.plaintext, { query: 'wipe.sh' })).not.toContain('wipe.sh');
   });
 
@@ -427,7 +488,10 @@ describe('quarantine over HTTP and MCP', () => {
 
     const member = mintKey('member');
     await api.authGrant(adminCtx(home), member.keyId, 'github:private:acme/demo');
-    const grantedButEmpty = await get('/v1/memories?q=wipe.sh&scope=github:private:acme/demo', member.plaintext);
+    const grantedButEmpty = await get(
+      '/v1/memories?q=wipe.sh&scope=github:private:acme/demo',
+      member.plaintext,
+    );
     expect(grantedButEmpty.status).toBe(200);
     expect(await grantedButEmpty.text()).not.toContain('wipe.sh');
 
@@ -454,14 +518,20 @@ describe('quarantine over HTTP and MCP', () => {
     const approveRes = await post(`/v1/quarantine/${id}/approve`, admin.plaintext);
     expect(approveRes.status).toBe(200);
 
-    expect(await (await get('/v1/memories?q=wipe.sh', admin.plaintext)).text()).toContain('wipe.sh');
+    expect(await (await get('/v1/memories?q=wipe.sh', admin.plaintext)).text()).toContain(
+      'wipe.sh',
+    );
   });
 });
 
 describe('CLI drive via the built binary', () => {
   it('hippo quarantine --json lists the pending id, and approve succeeds', async () => {
     const cliHome = makeRoot('quarantine-cli', { init: false });
-    const env = { ...process.env, HIPPO_HOME: join(cliHome, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
+    const env = {
+      ...process.env,
+      HIPPO_HOME: join(cliHome, 'global-hippo'),
+      HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+    };
     // In process, so coverage sees the quarantine verb; a non-zero exit fails as execFileSync's throw did.
     const hippo = async (...args: string[]): Promise<string> => {
       const r = await runCliAs(args, { cwd: cliHome, env });
@@ -472,7 +542,11 @@ describe('CLI drive via the built binary', () => {
     const hippoDir = join(cliHome, '.hippo');
 
     const ctx: FullContext = apiCtx(hippoDir, 'default', api.adminActor('cli'));
-    const result = await ingestEvent(ctx, { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
+    const result = await ingestEvent(ctx, {
+      event: githubCommentEvent(INJECTION),
+      rawBody: 'x',
+      deliveryId: 'd1',
+    });
 
     const listOut = await hippo('quarantine', 'list', '--json');
     // SAFETY: handleQuarantine's --json output is always { quarantine: [...] }.

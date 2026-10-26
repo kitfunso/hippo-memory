@@ -1,7 +1,10 @@
 // Ambient context injection: the admission policy and contextGet.
 
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../base/rank/search-types.js';
-import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../base/session/session-snapshot.js';
+import {
+  freshActiveSnapshot,
+  SNAPSHOT_AMBIENT_MAX_AGE_MS,
+} from '../base/session/session-snapshot.js';
 import type { SessionEvent, TaskSnapshot } from '../base/ports/store/sessions.js';
 import type { SessionHandoff } from '../base/session/handoff.js';
 import { estimateTokens, tokenPurse } from '../base/util/token-text.js';
@@ -13,7 +16,11 @@ import { errorMessage, log, errorFields } from '../base/util/log.js';
 import { classifyOriginProject, projectId, projectNames } from '../base/scope/project-identity.js';
 import { DEFAULT_CONFIG } from '../base/config/config.js';
 import { promptTokens } from '../base/rank/prompt-recall.js';
-import { ambientAdmits, ambientEnvelopeAdmits, type AmbientAdmission } from '../base/scope/read-admission.js';
+import {
+  ambientAdmits,
+  ambientEnvelopeAdmits,
+  type AmbientAdmission,
+} from '../base/scope/read-admission.js';
 import {
   addAmbientTallies,
   ambientStateFromTallies,
@@ -21,7 +28,11 @@ import {
   type AmbientTallies,
 } from '../base/memory/ambient.js';
 import type { HippoStore } from '../base/ports/store.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall-scope.js';
+import {
+  passesScopeFilterForRecall,
+  assertScopeRequestAllowed,
+  personalScopeOf,
+} from '../base/scope/recall-scope.js';
 import { finiteOr } from '../domain/context/select-policy.js';
 import {
   globalStoreInReach,
@@ -68,7 +79,10 @@ const CONTEXT_PAGE_MIN = 200;
 /** Rows per store a no-query context reads: the strongest by decay, enough to fill the budget and the limit. */
 function contextCandidatePage(left: number, limit: number): number {
   const returnable = Math.min(Math.ceil(Math.max(0, left) / CONTEXT_PAGE_ROW_TOKENS), limit);
-  return Math.min(CONTEXT_CANDIDATE_CAP, Math.max(CONTEXT_PAGE_MIN, Math.ceil(returnable * CONTEXT_PAGE_SLACK)));
+  return Math.min(
+    CONTEXT_CANDIDATE_CAP,
+    Math.max(CONTEXT_PAGE_MIN, Math.ceil(returnable * CONTEXT_PAGE_SLACK)),
+  );
 }
 
 /** A query reads recall's FTS window from each store; the search's vector arm adds the nearest rows. */
@@ -174,8 +188,15 @@ export async function assembleContext(ctx: Context, opts: ContextOptions): Promi
   const plan = planContext(ctx, opts, sourceOf(ctx.store));
   const sections = await loadTaskSections(ctx, opts, plan, openBlockBudget(plan, opts, budget));
   const admission = ambientAdmission(opts, plan, sections.shownHandoff);
-  const pools = await loadPools(ctx, plan, admission, promptRecallRequest(opts, plan), sections.left);
-  const noSections = !sections.shownSnapshot && !sections.shownHandoff && sections.shownEvents.length === 0;
+  const pools = await loadPools(
+    ctx,
+    plan,
+    admission,
+    promptRecallRequest(opts, plan),
+    sections.left,
+  );
+  const noSections =
+    !sections.shownSnapshot && !sections.shownHandoff && sections.shownEvents.length === 0;
   if (nothingToInject(plan, pools, noSections)) {
     return { entries: [], tokens: 0 };
   }
@@ -216,7 +237,10 @@ type AmbientPools = Awaited<ReturnType<typeof loadPools>>;
 
 function nothingToInject(plan: ContextPlan, pools: AmbientPools, noSections: boolean): boolean {
   return (
-    !plan.promptRecallPending && pools.local.entries.length === 0 && pools.global.entries.length === 0 && noSections
+    !plan.promptRecallPending &&
+    pools.local.entries.length === 0 &&
+    pools.global.entries.length === 0 &&
+    noSections
   );
 }
 
@@ -228,13 +252,19 @@ const isolationWarned = new WeakSet<HippoStore>();
 function warnIsolationIgnored(store: HippoStore): void {
   if (isolationWarned.has(store)) return;
   isolationWarned.add(store);
-  log.warn('"contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.');
+  log.warn(
+    '"contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.',
+  );
 }
 
 /** Which stores this read can draw on, and what kind the primary one is. */
 function storesInReach(ctx: Context, opts: ContextOptions) {
   // No reach means an integrator's own store: one project, no global store beside it.
-  const reach: ContextReach = ctx.reach ?? { hasLocal: true, isGlobal: false, shared: ctx.config.sharedStore };
+  const reach: ContextReach = ctx.reach ?? {
+    hasLocal: true,
+    isGlobal: false,
+    shared: ctx.config.sharedStore,
+  };
   // The store's own flag counts too, so no surface can read a shared store as its owner.
   const sharedStore = opts.sharedStore === true || reach.shared;
   // A store serving many people is not its operator's, so the operator's own global store stays out; the root sets
@@ -273,7 +303,10 @@ function entryPricer(
 
 function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): ContextPlan {
   const pinnedOnly = opts.pinnedOnly === true;
-  const { hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal } = storesInReach(ctx, opts);
+  const { hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal } = storesInReach(
+    ctx,
+    opts,
+  );
   const query = (opts.q ?? '').trim() || NO_QUERY;
 
   // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories are excluded unless
@@ -289,7 +322,8 @@ function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): 
   const includeCrossProject = opts.crossProject === true || (!isolationEnabled && !sharedStore);
 
   // Decided before the ambient loads so the pinned-only FTS candidate query can share their connection.
-  const promptRecallPending = pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
+  const promptRecallPending =
+    pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
 
   const cost = opts.cost;
   const price = entryPricer(cost, currentProject);
@@ -311,7 +345,10 @@ function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): 
     config,
     currentProject,
     includeCrossProject,
-    originProject: includeCrossProject || projectId(currentProject) === '' ? undefined : projectNames(currentProject),
+    originProject:
+      includeCrossProject || projectId(currentProject) === ''
+        ? undefined
+        : projectNames(currentProject),
     promptRecallPending,
     cost,
     price,
@@ -322,15 +359,24 @@ function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): 
 }
 
 /** The prompt-recall candidate request the ambient loads carry, when the prompt has any terms. */
-function promptRecallRequest(opts: ContextOptions, plan: ContextPlan): AmbientRecallRequest | undefined {
+function promptRecallRequest(
+  opts: ContextOptions,
+  plan: ContextPlan,
+): AmbientRecallRequest | undefined {
   const { pinnedInject } = plan.config;
   const promptRecallTerms =
-    plan.promptRecallPending && pinnedInject.enabled ? Array.from(promptTokens(opts.prompt ?? '')) : [];
+    plan.promptRecallPending && pinnedInject.enabled
+      ? Array.from(promptTokens(opts.prompt ?? ''))
+      : [];
   return promptRecallTerms.length > 0
     ? {
         terms: promptRecallTerms,
         limit: Math.floor(
-          finiteOr(pinnedInject.promptRecallCandidates, DEFAULT_CONFIG.pinnedInject.promptRecallCandidates, 1),
+          finiteOr(
+            pinnedInject.promptRecallCandidates,
+            DEFAULT_CONFIG.pinnedInject.promptRecallCandidates,
+            1,
+          ),
         ),
         ownScope: plan.ownScope,
       }
@@ -370,7 +416,11 @@ interface RawTaskState {
 const NO_TASK_STATE: RawTaskState = { snapshot: null, handoff: null, events: [] };
 
 // Keyed on the RAW snapshot: a scope-hidden active session must not fall through to another session's ambient handoff.
-async function loadRawTaskState(ctx: Context, opts: ContextOptions, plan: ContextPlan): Promise<RawTaskState> {
+async function loadRawTaskState(
+  ctx: Context,
+  opts: ContextOptions,
+  plan: ContextPlan,
+): Promise<RawTaskState> {
   if (!plan.hasLocalTaskState) return NO_TASK_STATE;
   const { store } = plan.local;
   // On a shared store task state is one person's, keyed by owner and project so it follows them into their next
@@ -382,7 +432,8 @@ async function loadRawTaskState(ctx: Context, opts: ContextOptions, plan: Contex
   // Bounded read: an orphaned snapshot ages out of this ambient surface; the owner session's read stays unbounded.
   const snapshot = freshActiveSnapshot(block.activeSnapshot, { sessionId: opts.currentSessionId });
   // The block's handoff and events are the raw snapshot's session's, so they stand only while that snapshot is fresh.
-  if (snapshot?.sessionId) return { snapshot, handoff: block.sessionHandoff, events: block.recentSessionEvents };
+  if (snapshot?.sessionId)
+    return { snapshot, handoff: block.sessionHandoff, events: block.recentSessionEvents };
   // An unfinished handoff's scope is admitted in the read, so a newer denied row can't hide an older eligible one.
   const unfinished = {
     sessionId: null,
@@ -390,7 +441,11 @@ async function loadRawTaskState(ctx: Context, opts: ContextOptions, plan: Contex
     maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
     scopeFilter: 'default-deny',
   } as const;
-  return { snapshot, handoff: await store.sessions.read(ctx.tenantId, 'handoff', unfinished, key), events: [] };
+  return {
+    snapshot,
+    handoff: await store.sessions.read(ctx.tenantId, 'handoff', unfinished, key),
+    events: [],
+  };
 }
 
 // Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry
@@ -403,18 +458,29 @@ async function loadTaskSections(
 ): Promise<TaskSections> {
   const { exactScope, ownScope, cost } = plan;
   const { pays, left } = tokenPurse(startLeft);
-  const rowScope = (r: { scope?: string | null } | null | undefined): string | null => r?.scope ?? null;
+  const rowScope = (r: { scope?: string | null } | null | undefined): string | null =>
+    r?.scope ?? null;
   const raw = await loadRawTaskState(ctx, opts, plan);
   // The same envelope rule ambientAdmitEntry applies to memory rows.
   const activeSnapshot =
-    raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope, ownScope) ? raw.snapshot : null;
+    raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope, ownScope)
+      ? raw.snapshot
+      : null;
   const sessionHandoff =
-    raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope) ? raw.handoff : null;
-  const recentSessionEvents = raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
-  const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
-  const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
+    raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope)
+      ? raw.handoff
+      : null;
+  const recentSessionEvents = raw.events.filter((e) =>
+    passesScopeFilterForRecall(rowScope(e), exactScope, ownScope),
+  );
+  const shownSnapshot =
+    activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
+  const shownHandoff =
+    sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
   const shownEvents =
-    recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
+    recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents)))
+      ? recentSessionEvents
+      : [];
   plan.obs?.sections(
     Number(shownSnapshot !== null) + Number(shownHandoff !== null) + Number(shownEvents.length > 0),
     Number(activeSnapshot !== shownSnapshot) +
@@ -436,11 +502,13 @@ function ambientAdmission(
     ownScope: plan.ownScope,
     // Inside admit, not after the load, so the loader's window widens past a session's own items.
     ownSessionId: opts.currentSessionId || undefined,
-    handoffSessionId: shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : undefined,
+    handoffSessionId:
+      shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : undefined,
   };
   const admit = (e: MemoryEntry): boolean => ambientAdmits(e, rule);
   // The two-store search has always ranked a session's own compaction items; only the local search drops them.
-  const bothStoresAdmit = (e: MemoryEntry): boolean => !e.supersededBy && ambientEnvelopeAdmits(e, rule);
+  const bothStoresAdmit = (e: MemoryEntry): boolean =>
+    !e.supersededBy && ambientEnvelopeAdmits(e, rule);
   return { rule, admit, bothStoresAdmit };
 }
 
@@ -448,7 +516,8 @@ function ambientAdmission(
  * Origins the recent backfill may read past its first window; on a shared store, only the caller's own project rows.
  */
 function recentOrigins(plan: ContextPlan): RecentOrigins | undefined {
-  if (plan.sharedStore) return { names: projectNames(plan.currentProject).filter((n) => n !== ''), userGlobal: false };
+  if (plan.sharedStore)
+    return { names: projectNames(plan.currentProject).filter((n) => n !== ''), userGlobal: false };
   return plan.originProject && { names: plan.originProject, userGlobal: true };
 }
 
@@ -494,11 +563,17 @@ async function loadPools(
     recall: recallRequest,
   };
   const local: AmbientLoadResult = plan.hasLocal
-    ? await loadAmbientEntries(plan.local, ctx.tenantId, { ...read, onRefused: refusedBy(primaryIsGlobal) })
+    ? await loadAmbientEntries(plan.local, ctx.tenantId, {
+        ...read,
+        onRefused: refusedBy(primaryIsGlobal),
+      })
     : { entries: [] };
   const global: AmbientLoadResult =
     hasGlobal && !primaryIsGlobal
-      ? await loadAmbientEntries(globalSource(ctx), ctx.tenantId, { ...read, onRefused: refusedBy(true) })
+      ? await loadAmbientEntries(globalSource(ctx), ctx.tenantId, {
+          ...read,
+          onRefused: refusedBy(true),
+        })
       : { entries: [] };
   return { local, global };
 }
@@ -559,7 +634,11 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
 }
 
 // Never touches the index, so it cannot desync last_retrieval_ids from last_trace_id.
-async function traceEmptyContext(ctx: Context, opts: ContextOptions, plan: ContextPlan): Promise<void> {
+async function traceEmptyContext(
+  ctx: Context,
+  opts: ContextOptions,
+  plan: ContextPlan,
+): Promise<void> {
   // No snapshot in this branch, so the caller's own id is the only session to stamp.
   const trace: RecallTraceInput = {
     tenantId: ctx.tenantId,
@@ -622,10 +701,16 @@ async function recordRetrieval(
   }));
 
   // Read after strengthenRetrieved commits, so the rows just retrieved count at their new strength.
-  return { items, ambientState: plan.config.ambient.enabled ? await readAmbientState(ctx, plan) : undefined };
+  return {
+    items,
+    ambientState: plan.config.ambient.enabled ? await readAmbientState(ctx, plan) : undefined,
+  };
 }
 
-async function readAmbientState(ctx: Context, plan: ContextPlan): Promise<AmbientState | undefined> {
+async function readAmbientState(
+  ctx: Context,
+  plan: ContextPlan,
+): Promise<AmbientState | undefined> {
   const filter = {
     exactScope: plan.exactScope,
     ownScope: plan.ownScope,

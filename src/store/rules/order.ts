@@ -4,7 +4,8 @@ import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 
 /** Byte order, as hippo.db compares text; JavaScript's own string order differs above the basic plane. */
-export const byBytes = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));
+export const byBytes = (a: string, b: string): number =>
+  Buffer.compare(Buffer.from(a), Buffer.from(b));
 
 /** One sort key: the hippo.db column and how two read rows compare on it, ascending. */
 export interface OrderKey<R> {
@@ -45,7 +46,11 @@ export const STORE_ORDER: readonly OrderKey<Cursor>[] = [CREATED, ID];
 /** A by-id read: created, content, then id, since ids are random. */
 export const BY_ID_ORDER: readonly OrderKey<Keyed>[] = [CREATED, CONTENT, ID];
 /** The fresh raw tail: newest first, content then id breaking a tie, since ids are random. */
-export const FRESH_RAW_ORDER: readonly OrderKey<Keyed>[] = [{ ...CREATED, desc: true }, CONTENT, ID];
+export const FRESH_RAW_ORDER: readonly OrderKey<Keyed>[] = [
+  { ...CREATED, desc: true },
+  CONTENT,
+  ID,
+];
 
 export const oldestFirst = comparing(STORE_ORDER);
 export const byIdOrder = comparing(BY_ID_ORDER);
@@ -55,10 +60,16 @@ export const freshRawOrder = comparing(FRESH_RAW_ORDER);
 export const DORMANT_ORDER: readonly OrderKey<{
   readonly dormantAt: string;
   readonly entry: { readonly id: string };
-}>[] = [{ ...textKey('dormant_at', (s) => s.dormantAt), desc: true }, textKey('id', (s) => s.entry.id)];
+}>[] = [
+  { ...textKey('dormant_at', (s) => s.dormantAt), desc: true },
+  textKey('id', (s) => s.entry.id),
+];
 
 /** The rejections list: newest tombstone first, the digest breaking a tie. */
-export const REJECTED_ORDER: readonly OrderKey<{ readonly rejectedAt: string; readonly digest: string }>[] = [
+export const REJECTED_ORDER: readonly OrderKey<{
+  readonly rejectedAt: string;
+  readonly digest: string;
+}>[] = [
   { ...textKey('rejected_at', (r) => r.rejectedAt), desc: true },
   textKey('digest', (r) => r.digest),
 ];

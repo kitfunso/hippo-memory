@@ -41,7 +41,9 @@ describe('nearestMemoryIds', () => {
 
   it('refuses a spec for another tenant', async () => {
     const ctx = apiCtx(seeded(), 't1');
-    await expect(nearestMemoryIds(ctx, [1, 0, 0], spec({ tenantId: 't2' }))).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(nearestMemoryIds(ctx, [1, 0, 0], spec({ tenantId: 't2' }))).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
   });
 
   it('refuses a scope the caller may not read, and answers one it may', async () => {
@@ -50,15 +52,23 @@ describe('nearestMemoryIds', () => {
     const granted = apiCtx(root, 't1', { subject: 'api_key:k2', role: 'member', scopes: [TEAM_B] });
     const teamB = spec({ scope: { mode: 'exact', value: TEAM_B } });
 
-    await expect(nearestMemoryIds(member, [1, 0, 0], teamB)).rejects.toBeInstanceOf(ScopeForbiddenError);
+    await expect(nearestMemoryIds(member, [1, 0, 0], teamB)).rejects.toBeInstanceOf(
+      ScopeForbiddenError,
+    );
     await expect(
-      nearestMemoryIds(member, [1, 0, 0], spec({ scope: { mode: 'default-deny', ownScope: TEAM_B } })),
+      nearestMemoryIds(
+        member,
+        [1, 0, 0],
+        spec({ scope: { mode: 'default-deny', ownScope: TEAM_B } }),
+      ),
     ).rejects.toBeInstanceOf(ScopeForbiddenError);
     expect(await nearestMemoryIds(granted, [1, 0, 0], teamB)).toEqual(['team-b']);
   });
 
   it('refuses a read on a shared store that names no project', async () => {
     const shared = apiCtx(seeded({ sharedStore: true }), 't1');
-    await expect(nearestMemoryIds(shared, [1, 0, 0], spec())).rejects.toBeInstanceOf(BadRequestError);
+    await expect(nearestMemoryIds(shared, [1, 0, 0], spec())).rejects.toBeInstanceOf(
+      BadRequestError,
+    );
   });
 });

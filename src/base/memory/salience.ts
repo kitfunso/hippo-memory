@@ -77,7 +77,11 @@ export function computeSalience(
           score: REPEAT_ERROR_SCORE,
         };
       }
-      return { decision: 'store', reason: 'error_despite_overlap', score: ERROR_DESPITE_OVERLAP_SCORE };
+      return {
+        decision: 'store',
+        reason: 'error_despite_overlap',
+        score: ERROR_DESPITE_OVERLAP_SCORE,
+      };
     }
     return judgeOverlappingNonError(trimmed, window, duplicateMatch);
   }
@@ -104,7 +108,11 @@ function judgeOverlappingNonError(
       score: NEAR_DUPLICATE_SCORE,
     };
   }
-  return { decision: 'skip', reason: `duplicate (same text as ${same.id})`, score: DUPLICATE_SCORE };
+  return {
+    decision: 'skip',
+    reason: `duplicate (same text as ${same.id})`,
+    score: DUPLICATE_SCORE,
+  };
 }
 
 function scoreNovel(trimmed: string, tags: string[]): SalienceResult {
@@ -134,5 +142,7 @@ function findBestOverlap(content: string, memories: MemoryEntry[]) {
 }
 
 function countRecentErrors(memories: MemoryEntry[]): number {
-  return memories.filter((m) => m.emotionalValence === 'negative' || m.emotionalValence === 'critical').length;
+  return memories.filter(
+    (m) => m.emotionalValence === 'negative' || m.emotionalValence === 'critical',
+  ).length;
 }

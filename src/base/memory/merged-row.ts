@@ -19,7 +19,9 @@ export function mergedSuccessor(
   if (kept.length === texts.length) return undefined;
   if (kept.length === 0) return null;
   const count = `${kept.length} related ${kept.length === 1 ? 'memory' : 'memories'}`;
-  const header = row.content.slice(0, row.content.indexOf('\n\n')).replace(/\d+ related memor(?:y|ies)/, count);
+  const header = row.content
+    .slice(0, row.content.indexOf('\n\n'))
+    .replace(/\d+ related memor(?:y|ies)/, count);
   // A new id, as a fresh merge would get; age and half-life carry over so the rewrite buys the row no extra life.
   return {
     ...row,
@@ -41,9 +43,15 @@ export function successorAfterRetirement(
 ): MemoryEntry | null | undefined {
   if (row.source !== 'consolidation' || row.supersededBy) return undefined;
   const sources = row.parents.flatMap((id) => byId.get(id) ?? []);
-  const retiredIds = new Set(sources.filter((s) => Boolean(s.supersededBy) || rejected(s.content)).map((s) => s.id));
-  const live = new Set(sources.filter((s) => !retiredIds.has(s.id)).map((s) => duplicateKey(s.content)));
-  const gone = new Set(sources.filter((s) => retiredIds.has(s.id)).map((s) => duplicateKey(s.content)));
+  const retiredIds = new Set(
+    sources.filter((s) => Boolean(s.supersededBy) || rejected(s.content)).map((s) => s.id),
+  );
+  const live = new Set(
+    sources.filter((s) => !retiredIds.has(s.id)).map((s) => duplicateKey(s.content)),
+  );
+  const gone = new Set(
+    sources.filter((s) => retiredIds.has(s.id)).map((s) => duplicateKey(s.content)),
+  );
   const retired = (text: string): boolean =>
     (gone.has(duplicateKey(text)) && !live.has(duplicateKey(text))) || rejected(text);
   return mergedSuccessor(row, retired, retiredIds);

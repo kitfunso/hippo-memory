@@ -52,7 +52,9 @@ export function handleLastSleep(
   if (!fs.existsSync(logPath)) return;
 
   // Removed or locked since the exists check: there is nothing to show this session.
-  const content = ignoringCodes([...PATH_UNREADABLE, 'EBUSY'], () => fs.readFileSync(logPath, 'utf8'));
+  const content = ignoringCodes([...PATH_UNREADABLE, 'EBUSY'], () =>
+    fs.readFileSync(logPath, 'utf8'),
+  );
   if (content === undefined) return;
 
   if (content.trim().length > 0) {
@@ -63,14 +65,18 @@ export function handleLastSleep(
   }
 
   const problems = sleepProblems(content, badSpoolFiles(hippoRoot));
-  if (problems !== null && out === 'hook') process.stdout.write(`${JSON.stringify({ systemMessage: problems })}\n`);
+  if (problems !== null && out === 'hook')
+    process.stdout.write(`${JSON.stringify({ systemMessage: problems })}\n`);
   if (problems !== null && out === 'terminal') printError(problems);
 
   if (!boolFlag(flags, 'keep')) {
     try {
       fs.unlinkSync(logPath);
     } catch (err) {
-      log.debug(`last-sleep log not removed, it shows again next session: ${errorMessage(err)}`, errorFields(err));
+      log.debug(
+        `last-sleep log not removed, it shows again next session: ${errorMessage(err)}`,
+        errorFields(err),
+      );
     }
   }
 }

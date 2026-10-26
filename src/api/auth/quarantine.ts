@@ -52,7 +52,12 @@ export async function quarantineApprove(ctx: Context, id: string): Promise<void>
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can approve a quarantined memory');
   }
-  const result = await ctx.store.quarantine.decideQuarantined(ctx.tenantId, id, 'approve', ctx.actor.subject);
+  const result = await ctx.store.quarantine.decideQuarantined(
+    ctx.tenantId,
+    id,
+    'approve',
+    ctx.actor.subject,
+  );
   if (result.outcome === 'approved') return;
   if (result.outcome === 'scope_moved') {
     throw new ConflictError(`memory ${id} scope changed since quarantine; refusing to approve`);
@@ -65,6 +70,11 @@ export async function quarantineReject(ctx: Context, id: string): Promise<void> 
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can reject a quarantined memory');
   }
-  const result = await ctx.store.quarantine.decideQuarantined(ctx.tenantId, id, 'reject', ctx.actor.subject);
+  const result = await ctx.store.quarantine.decideQuarantined(
+    ctx.tenantId,
+    id,
+    'reject',
+    ctx.actor.subject,
+  );
   if (result.outcome !== 'rejected') throw refusalError(id, result);
 }

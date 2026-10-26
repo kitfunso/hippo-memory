@@ -128,9 +128,30 @@ const BRIEF_MISSING = '/v1/project-briefs/99999/supersede';
 // so a row pins which check answers first as well as the reply text.
 export const BRIEF_REPLIES: readonly Reply[] = [
   ['list: an unknown status', 'GET', `${BRIEF}?status=retired`, undefined, 400, BAD_STATUS],
-  ['create: blank repo', 'POST', BRIEF, { repo: '  ', summary: 7 }, 400, 'repo is required (non-empty string)'],
-  ['create: repo over the cap', 'POST', BRIEF, { repo: over(256), summary: 7 }, 400, 'repo exceeds 256-character cap'],
-  ['create: blank summary', 'POST', BRIEF, { repo: 'r', summary: '  ' }, 400, 'summary is required (non-empty string)'],
+  [
+    'create: blank repo',
+    'POST',
+    BRIEF,
+    { repo: '  ', summary: 7 },
+    400,
+    'repo is required (non-empty string)',
+  ],
+  [
+    'create: repo over the cap',
+    'POST',
+    BRIEF,
+    { repo: over(256), summary: 7 },
+    400,
+    'repo exceeds 256-character cap',
+  ],
+  [
+    'create: blank summary',
+    'POST',
+    BRIEF,
+    { repo: 'r', summary: '  ' },
+    400,
+    'summary is required (non-empty string)',
+  ],
   [
     'create: summary over the cap',
     'POST',

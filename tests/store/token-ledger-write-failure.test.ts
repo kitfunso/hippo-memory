@@ -27,15 +27,23 @@ let stderrSpy: MockInstance<typeof process.stderr.write>;
 const PROJECT = { name: 'p', legacyName: 'p' };
 
 function skippedLines(): string[] {
-  return stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('token ledger row skipped'));
+  return stderrSpy.mock.calls
+    .map((c) => String(c[0]))
+    .filter((l) => l.includes('token ledger row skipped'));
 }
 
 function pinNote(store: string): void {
-  writeEntry(store, { ...createMemory('the deploy window opens on Tuesdays'), pinned: true, originProject: 'p' });
+  writeEntry(store, {
+    ...createMemory('the deploy window opens on Tuesdays'),
+    pinned: true,
+    originProject: 'p',
+  });
 }
 
 function ledgerLines(): string[] {
-  return stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('token ledger write failed'));
+  return stderrSpy.mock.calls
+    .map((c) => String(c[0]))
+    .filter((l) => l.includes('token ledger write failed'));
 }
 
 beforeEach(() => {
@@ -55,7 +63,9 @@ afterEach(() => {
 describe('token ledger write failures', () => {
   it('api.recordTokens warns once and does not throw', async () => {
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    await expect(recordTokens(ctx, 'http_recall', { items: 1, tokens: 10 })).resolves.toBeUndefined();
+    await expect(
+      recordTokens(ctx, 'http_recall', { items: 1, tokens: 10 }),
+    ).resolves.toBeUndefined();
     await recordTokens(ctx, 'http_recall', { items: 1, tokens: 10 });
     const lines = ledgerLines();
     expect(lines).toHaveLength(1);
@@ -113,7 +123,10 @@ describe('token ledger write failures', () => {
   it('a store with no ledger table is an expected skip: nothing at the default level, one debug line with no stack, and the hook prints its block', async () => {
     pinNote(root);
     const hook = (sessionId: string) =>
-      buildPromptHookContext(apiCtx(root, 'default', adminActor('test')), { sessionId, project: PROJECT });
+      buildPromptHookContext(apiCtx(root, 'default', adminActor('test')), {
+        sessionId,
+        project: PROJECT,
+      });
     expect((await hook('s-dropped-1')).stdout).toContain('the deploy window opens on Tuesdays');
     expect(skippedLines()).toEqual([]);
 
@@ -123,7 +136,9 @@ describe('token ledger write failures', () => {
     const lines = skippedLines();
     expect(lines).toHaveLength(1);
     for (const line of lines) {
-      expect(line).toMatch(/^\[hippo\] debug: token ledger row skipped: no such table: token_ledger ts=\S+\n$/);
+      expect(line).toMatch(
+        /^\[hippo\] debug: token ledger row skipped: no such table: token_ledger ts=\S+\n$/,
+      );
     }
   });
 
@@ -136,14 +151,20 @@ describe('token ledger write failures', () => {
       );
     };
     initTestStore(store);
-    fs.writeFileSync(path.join(store, 'hippo.db'), 'not a valid sqlite database file, just garbage bytes 0000000');
-    for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(store, `hippo.db${suffix}`), { force: true });
+    fs.writeFileSync(
+      path.join(store, 'hippo.db'),
+      'not a valid sqlite database file, just garbage bytes 0000000',
+    );
+    for (const suffix of ['-wal', '-shm'])
+      fs.rmSync(path.join(store, `hippo.db${suffix}`), { force: true });
     await write();
     expect(stderrSpy.mock.calls).toEqual([]);
 
     vi.stubEnv('HIPPO_LOG', 'debug');
     await write();
     expect(skippedLines()).toHaveLength(1);
-    expect(skippedLines()[0]).toMatch(/^\[hippo\] debug: token ledger row skipped: file is not a database ts=\S+\n$/);
+    expect(skippedLines()[0]).toMatch(
+      /^\[hippo\] debug: token ledger row skipped: file is not a database ts=\S+\n$/,
+    );
   });
 });

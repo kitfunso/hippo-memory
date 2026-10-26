@@ -1,6 +1,10 @@
 // One page of a project's memories and the cross-project search, each one bounded store read at the stamp's instant.
 import { round1 } from '../../base/util/format.js';
-import type { DashboardReads, DashboardSortKey, ListedRow } from '../../base/ports/store/dashboard-reads.js';
+import type {
+  DashboardReads,
+  DashboardSortKey,
+  ListedRow,
+} from '../../base/ports/store/dashboard-reads.js';
 import { BANDS, LAYERS, originOfKey, projectIdentity, round3, type Chip } from './live.js';
 import type { Stamp } from './snapshot-clock.js';
 import type { MemoryPage, MemoryRow, SearchResult } from './types.js';
@@ -109,7 +113,10 @@ export async function buildSearch(
   text: string,
 ): Promise<SearchResult> {
   const needle = text.toLowerCase();
-  const projects = (await reads.search(stamp.tenantId, needle)).map((t) => ({ ...t, ...projectIdentity(t.origin) }));
+  const projects = (await reads.search(stamp.tenantId, needle)).map((t) => ({
+    ...t,
+    ...projectIdentity(t.origin),
+  }));
   const hits: Record<string, number> = {};
   for (const p of projects) if (p.hits > 0) hits[p.key] = p.hits;
   const nameMatches = projects

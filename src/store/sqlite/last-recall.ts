@@ -21,7 +21,11 @@ interface RecallFinish {
 }
 
 /** sqliteStore's finishRecall, for the synchronous recall that cannot await the port. */
-export function finishRecall(db: DatabaseSyncLike, rules: StoreModel, writes: RecallWrites): RecallFinish {
+export function finishRecall(
+  db: DatabaseSyncLike,
+  rules: StoreModel,
+  writes: RecallWrites,
+): RecallFinish {
   const traceAndStrengthen = (): RecallFinish => ({
     traceId: writes.trace ? writeRecallTrace(db, writes.trace) : null,
     strengthened: writes.strengthen
@@ -40,10 +44,20 @@ export function finishRecall(db: DatabaseSyncLike, rules: StoreModel, writes: Re
 }
 
 /** The outcome for the last recall's ids, linked to its trace; `[]` when no recall has run. */
-function applyOutcomeToLast(db: DatabaseSyncLike, files: StoreFiles, target: EntryTarget, good: boolean): string[] {
+function applyOutcomeToLast(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  target: EntryTarget,
+  good: boolean,
+): string[] {
   const { last_retrieval_ids: ids, last_trace_id: trace } = readLastRecall(db);
   if (ids.length === 0) return [];
-  return writeOutcome(db, files, { ...target, ids, good }, trace === null ? undefined : Number(trace));
+  return writeOutcome(
+    db,
+    files,
+    { ...target, ids, good },
+    trace === null ? undefined : Number(trace),
+  );
 }
 
 export function sqliteLastRecall({ on, files }: Handles): LastRecall {
@@ -66,7 +80,10 @@ export function sqliteLastRecall({ on, files }: Handles): LastRecall {
           );
         }
         // One write for both keys, so an outcome never pairs these ids with an older trace; a lost trace saves null.
-        const index = { last_retrieval_ids: [...ids], last_trace_id: traceId === null ? null : String(traceId) };
+        const index = {
+          last_retrieval_ids: [...ids],
+          last_trace_id: traceId === null ? null : String(traceId),
+        };
         on((db) => saveIndex(db, index), openStore);
         return traceId;
       }),

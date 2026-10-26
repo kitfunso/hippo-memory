@@ -36,7 +36,12 @@ async function callTool(
   const res = await fetch(`${handle.url}/mcp`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name, arguments: args } }),
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name, arguments: args },
+    }),
   });
   // SAFETY: /mcp always answers a tools/call with a JSON-RPC object; the assertions below check the fields.
   return { status: res.status, body: (await res.json()) as RpcReply };
@@ -75,7 +80,9 @@ describe('POST /mcp error replies', () => {
         /\[hippo\] error: mcp request \(tools\/call [^)]*\) failed: .*memory_conflicts.* requestId=req-redact-1/,
       );
       // The class and stack say where it was thrown, as the HTTP failure line does.
-      expect(stderrText()).toMatch(/mcp request \(.*\) failed: .* errorClass=\w*Error stack=.*\s+at /);
+      expect(stderrText()).toMatch(
+        /mcp request \(.*\) failed: .* errorClass=\w*Error stack=.*\s+at /,
+      );
     },
   );
 
@@ -97,6 +104,10 @@ describe('mcpErrorResponse (the stdio transport reply)', () => {
 
   it('keeps a typed error message', () => {
     const reply = mcpErrorResponse('a', new NotFoundError('Memory not found: x'));
-    expect(reply).toEqual({ jsonrpc: '2.0', id: 'a', error: { code: -32603, message: 'Memory not found: x' } });
+    expect(reply).toEqual({
+      jsonrpc: '2.0',
+      id: 'a',
+      error: { code: -32603, message: 'Memory not found: x' },
+    });
   });
 });

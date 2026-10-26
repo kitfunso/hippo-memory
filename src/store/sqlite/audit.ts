@@ -31,7 +31,10 @@ const INSERT_AUDIT_ROWS_SQL =
   `json_extract(value, '$[3]'), json_extract(value, '$[4]') FROM json_each(?) ORDER BY key`;
 
 /** Writes `events` in one statement, ids in their order; a failure writes none of them. */
-export function appendAuditEvents(db: DatabaseSyncLike, events: readonly AppendAuditOptions[]): void {
+export function appendAuditEvents(
+  db: DatabaseSyncLike,
+  events: readonly AppendAuditOptions[],
+): void {
   const [only] = events;
   if (only === undefined) return;
   // The plain INSERT for the common single row skips json_each.
@@ -39,7 +42,10 @@ export function appendAuditEvents(db: DatabaseSyncLike, events: readonly AppendA
     cachedStatement(db, INSERT_AUDIT_ROW_SQL).run(handleStamp(db), ...auditRowValues(only));
     return;
   }
-  cachedStatement(db, INSERT_AUDIT_ROWS_SQL).run(handleStamp(db), JSON.stringify(events.map(auditRowValues)));
+  cachedStatement(db, INSERT_AUDIT_ROWS_SQL).run(
+    handleStamp(db),
+    JSON.stringify(events.map(auditRowValues)),
+  );
 }
 
 function auditRowValues(opts: AppendAuditOptions): [string, string, string, string | null, string] {
@@ -76,22 +82,29 @@ export function listAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions): 
 /** How many of a tenant's audit rows are older than `cutoff`. */
 function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
-  const row = cachedStatement(db, `SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`).get(
-    tenantId,
-    cutoff,
-  ) as { c: number | bigint };
+  const row = cachedStatement(
+    db,
+    `SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`,
+  ).get(tenantId, cutoff) as { c: number | bigint };
   return Number(row.c);
 }
 
 /** Deletes a tenant's audit rows older than `cutoff`; returns how many went. */
 function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
-  const result = cachedStatement(db, `DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`).run(tenantId, cutoff);
+  const result = cachedStatement(db, `DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`).run(
+    tenantId,
+    cutoff,
+  );
   return Number(result.changes ?? 0);
 }
 
 /** Latest time each target got a good outcome at or after `since`, from the audit rows; unlike listAuditEvents it has
  * no row cap, and the ts range rides the (tenant_id, ts) index so older rows are never read. */
-export function confirmedOutcomeTimes(db: DatabaseSyncLike, tenantId: string, since: string): Map<string, string> {
+export function confirmedOutcomeTimes(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  since: string,
+): Map<string, string> {
   const rows = cachedStatement(
     db,
     `SELECT target_id, MAX(ts) AS ts FROM audit_log

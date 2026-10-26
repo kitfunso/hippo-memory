@@ -15,7 +15,11 @@ import type { ObjectListQuery, Objects } from '../../base/ports/store.js';
 
 export type { BriefStatus, ProjectBrief } from '../../base/records/object-types.js';
 
-export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>(['active', 'superseded', 'closed']);
+export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>([
+  'active',
+  'superseded',
+  'closed',
+]);
 
 /** Field caps (untrusted at the HTTP/SDK boundary). summary is a body, so a larger cap than the 4096 short-field
  *  convention. */
@@ -132,7 +136,11 @@ function fitReceiptLines(receipts: readonly BriefReceipt[]): string[] {
   return receiptLines;
 }
 
-function renderBriefDigest(normalizedRepo: string, receiptCount: number, receiptLines: string[]): string {
+function renderBriefDigest(
+  normalizedRepo: string,
+  receiptCount: number,
+  receiptLines: string[],
+): string {
   const omitted = receiptCount - receiptLines.length;
   const lines: string[] = [];
   lines.push(`# Project Brief: ${normalizedRepo}`);
@@ -165,9 +173,17 @@ function renderBriefDigest(normalizedRepo: string, receiptCount: number, receipt
 /** Assemble the repo's recent receipts into a deterministic markdown digest and return it with the receipt count; never
  *  empty (summary is NOT NULL). The brief's own mirror (source='project_brief') is excluded; the quotes in the
  *  JSON-array LIKE are load-bearing (`hip` must not match `path:hippo`). */
-export async function briefFromReceipts(objects: Objects, tenantId: string, repo: string): Promise<BriefDigest> {
+export async function briefFromReceipts(
+  objects: Objects,
+  tenantId: string,
+  repo: string,
+): Promise<BriefDigest> {
   const normalizedRepo = requiredRepo('briefFromReceipts', tenantId, repo);
-  const receipts = await objects.briefReceipts(tenantId, receiptTag(normalizedRepo), MAX_BRIEF_RECEIPTS);
+  const receipts = await objects.briefReceipts(
+    tenantId,
+    receiptTag(normalizedRepo),
+    MAX_BRIEF_RECEIPTS,
+  );
   return briefDigest(normalizedRepo, receipts);
 }
 
@@ -208,9 +224,17 @@ function refreshWrite(
 
 /** Saves a new version of the repo's brief from its receipts. The receipts are read before the save's transaction, so a
  * receipt written in between shows in the next refresh. */
-export async function refreshedBrief(objects: Objects, site: ObjectSaveSite, repo: string): Promise<ProjectBrief> {
+export async function refreshedBrief(
+  objects: Objects,
+  site: ObjectSaveSite,
+  repo: string,
+): Promise<ProjectBrief> {
   const normalizedRepo = requiredRepo('refreshedBrief', site.tenantId, repo);
   const digest = await briefFromReceipts(objects, site.tenantId, normalizedRepo);
-  const [active = null] = await objects.listObjects(site.tenantId, 'project_brief', newestActive(normalizedRepo));
+  const [active = null] = await objects.listObjects(
+    site.tenantId,
+    'project_brief',
+    newestActive(normalizedRepo),
+  );
   return saveObject(objects, PROJECT_BRIEF, site, refreshWrite(normalizedRepo, digest, active));
 }

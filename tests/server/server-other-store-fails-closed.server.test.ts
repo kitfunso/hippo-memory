@@ -95,7 +95,11 @@ describe('serve() under a store that is not hippo.db', () => {
             return {};
           },
         },
-        { path: '/v1/x-addon-base', storeReady: 'base', handler: async ({ ctx }) => ({ tenant: ctx.tenantId }) },
+        {
+          path: '/v1/x-addon-base',
+          storeReady: 'base',
+          handler: async ({ ctx }) => ({ tenant: ctx.tenantId }),
+        },
         {
           path: '/v1/x-addon-keywrites',
           storeReady: 'keyWrites',
@@ -134,7 +138,9 @@ describe('serve() under a store that is not hippo.db', () => {
   it('runs every other /v1 route, and each refuses the call or answers 501 at the fenced hippo.db', async () => {
     const gated = new Set(localFileRoutes());
     const replies = new Map<string, number>();
-    for (const route of V1_ROWS.map(({ key }) => requestLine(key)).filter((line) => !gated.has(line))) {
+    for (const route of V1_ROWS.map(({ key }) => requestLine(key)).filter(
+      (line) => !gated.has(line),
+    )) {
       const [method, path] = route.split(' ');
       const res = await fetch(`${handle.url}${path}`, {
         method,
@@ -144,7 +150,9 @@ describe('serve() under a store that is not hippo.db', () => {
       replies.set(route, res.status);
     }
     expect(replies.size).toBe(V1_ROWS.length - gated.size);
-    expect([...replies].filter(([, status]) => ![400, 401, 403, 404, 501].includes(status))).toEqual([]);
+    expect(
+      [...replies].filter(([, status]) => ![400, 401, 403, 404, 501].includes(status)),
+    ).toEqual([]);
   });
 
   it('answers 501 on an add-on route that names no group, and never runs its handler; a bad key is still a 401', async () => {
@@ -231,15 +239,23 @@ describe('serve() under a store that is not hippo.db', () => {
   it('POST /mcp lists every tool but the two that need local files, and a call reaching hippo.db answers store_not_ported', async () => {
     const postMcp = async (body: string): Promise<{ status: number; body: unknown }> => {
       // Another store is shared, and a shared store refuses hippo_recall from a caller that names no project.
-      const headers = { ...bearer(valid), 'content-type': 'application/json', 'x-hippo-project': 'p' };
+      const headers = {
+        ...bearer(valid),
+        'content-type': 'application/json',
+        'x-hippo-project': 'p',
+      };
       const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers, body });
       return { status: res.status, body: await res.json() };
     };
     const list = await postMcp(rpc('tools/list'));
     expect(list.status).toBe(200);
-    const listed = TOOLS.map((t) => t.name).filter((name) => name !== 'hippo_share' && name !== 'hippo_peers');
+    const listed = TOOLS.map((t) => t.name).filter(
+      (name) => name !== 'hippo_share' && name !== 'hippo_peers',
+    );
     // SAFETY: a tools/list result carries a tools array of named definitions.
-    expect((list.body as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name)).toEqual(listed);
+    expect(
+      (list.body as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name),
+    ).toEqual(listed);
     const notPorted = {
       status: 200,
       body: { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } },
@@ -317,7 +333,8 @@ describe('serve() under another store reads its folder as shared, though no conf
     throw new Error('this recall reads nothing else');
   };
   const base: Partial<HippoStore> = {
-    findApiKey: async (keyId) => (keyId === alice.keyId ? { ...alice.record, ownerSubject: 'alice' } : null),
+    findApiKey: async (keyId) =>
+      keyId === alice.keyId ? { ...alice.record, ownerSubject: 'alice' } : null,
     searchRecallEntries: async () => [],
     entriesByIds: notRead,
     activeGoals: notRead,
@@ -326,7 +343,11 @@ describe('serve() under another store reads its folder as shared, though no conf
     continuity: async (_tenantId, _eventLimit, key) => {
       keys.push(key);
       const matches = key === null || (key.owner !== '' && key.project.length > 0);
-      return { activeSnapshot: matches ? snapshot : null, sessionHandoff: null, recentSessionEvents: [] };
+      return {
+        activeSnapshot: matches ? snapshot : null,
+        sessionHandoff: null,
+        recentSessionEvents: [],
+      };
     },
     planningFallacyEvidence: notRead,
     appendAuditEvents: async () => {},
@@ -349,15 +370,24 @@ describe('serve() under another store reads its folder as shared, though no conf
   });
 
   it("keys an MCP recall's continuity to the caller's owner and project", async () => {
-    const headers = { ...bearer(alice), 'content-type': 'application/json', 'x-hippo-project': 'p' };
-    const body = rpc('tools/call', { name: 'hippo_recall', arguments: { query: 'deploy', include_continuity: true } });
+    const headers = {
+      ...bearer(alice),
+      'content-type': 'application/json',
+      'x-hippo-project': 'p',
+    };
+    const body = rpc('tools/call', {
+      name: 'hippo_recall',
+      arguments: { query: 'deploy', include_continuity: true },
+    });
     const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers, body });
     expect(JSON.stringify(await res.json())).toContain('ship the eu cluster');
     expect(keys.at(-1)).toEqual({ owner: 'alice', project: ['p'] });
   });
 
   it('hands a REST recall, which names no project, a key that matches nothing, so its block is empty', async () => {
-    const res = await fetch(`${handle.url}/v1/memories?q=deploy&include_continuity=true`, { headers: bearer(alice) });
+    const res = await fetch(`${handle.url}/v1/memories?q=deploy&include_continuity=true`, {
+      headers: bearer(alice),
+    });
     expect(res.status).toBe(200);
     expect(keys.at(-1)).toEqual({ owner: 'alice', project: [] });
     expect(await res.json()).toMatchObject({
@@ -386,7 +416,10 @@ describe('a StoreBusyError on the hippo.db path', () => {
   });
 
   it('is a 503 with Retry-After on a /v1 route and on POST /mcp', async () => {
-    const headers = { authorization: `Bearer ${newKey().plaintext}`, 'content-type': 'application/json' };
+    const headers = {
+      authorization: `Bearer ${newKey().plaintext}`,
+      'content-type': 'application/json',
+    };
     const rpc = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
     for (const [method, path, body] of [
       ['GET', '/v1/memories?q=x', undefined],

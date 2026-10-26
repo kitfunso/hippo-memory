@@ -15,7 +15,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { compareSemver } from '../../src/base/util/version.js';
-import { computeIdempotencyKey, computeDeletionKey } from '../../src/surface/connectors/github/signature.js';
+import {
+  computeIdempotencyKey,
+  computeDeletionKey,
+} from '../../src/surface/connectors/github/signature.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -54,11 +57,15 @@ describe('deletion key namespace separates ingest from deletion', () => {
   it('two retries of the same deletion delivery produce the same deletion key (dedupe still works)', () => {
     const artifactRef = 'github://acme/demo/issue/42/comment/123';
     const updatedAt = '2026-05-04T10:00:00Z';
-    expect(computeDeletionKey(artifactRef, updatedAt)).toBe(computeDeletionKey(artifactRef, updatedAt));
+    expect(computeDeletionKey(artifactRef, updatedAt)).toBe(
+      computeDeletionKey(artifactRef, updatedAt),
+    );
   });
 
   it('deletion of different artifacts produces different deletion keys', () => {
-    expect(computeDeletionKey('github://acme/demo/issue/42/comment/123', '2026-05-04T10:00:00Z')).not.toBe(
+    expect(
+      computeDeletionKey('github://acme/demo/issue/42/comment/123', '2026-05-04T10:00:00Z'),
+    ).not.toBe(
       computeDeletionKey('github://acme/demo/issue/43/comment/124', '2026-05-04T10:00:00Z'),
     );
   });

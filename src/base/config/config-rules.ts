@@ -1,5 +1,11 @@
 // Leaf module: how one config.json value is checked and how a bad one is reported, in one wording.
-import { isJsonBoolean, isJsonNumber, isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
+import {
+  isJsonBoolean,
+  isJsonNumber,
+  isJsonObject,
+  isJsonString,
+  type JsonValue,
+} from '../util/json.js';
 import { log } from '../util/log.js';
 
 type Guard<T extends JsonValue | undefined> = (value: JsonValue | undefined) => value is T;
@@ -11,7 +17,9 @@ export type Reader<T> = (raw: JsonValue | undefined, path: string) => T;
 export type FieldReader = <F>(field: string, reader: Reader<F>) => F;
 
 function reject(path: string, expect: string, got: JsonValue, using: string): void {
-  log.warn(`config.json's "${path}" must be ${expect} (got ${JSON.stringify(got)}) - using ${using}.`);
+  log.warn(
+    `config.json's "${path}" must be ${expect} (got ${JSON.stringify(got)}) - using ${using}.`,
+  );
 }
 
 /** `absent` is what a missing value reads as, when that differs from the fallback a bad one gets. */
@@ -31,7 +39,11 @@ export function check<T extends JsonValue | undefined>(
 
 /** A block of named fields over `fallback`: fields the block does not read pass through as written, and a file key
  * read into a field of another name does not. */
-export function block<T extends object>(expect: string, fallback: T, fields: (read: FieldReader) => T): Reader<T> {
+export function block<T extends object>(
+  expect: string,
+  fallback: T,
+  fields: (read: FieldReader) => T,
+): Reader<T> {
   return (raw, path) => {
     if (raw === undefined) return { ...fallback };
     if (!isJsonObject(raw)) {
@@ -49,13 +61,16 @@ export function block<T extends object>(expect: string, fallback: T, fields: (re
   };
 }
 
-const isNumber: Guard<number> = (value): value is number => isJsonNumber(value) && Number.isFinite(value);
+const isNumber: Guard<number> = (value): value is number =>
+  isJsonNumber(value) && Number.isFinite(value);
 const isCount: Guard<number> = (value): value is number => isNumber(value) && value >= 0;
 const isPositive: Guard<number> = (value): value is number => isNumber(value) && value > 0;
-const isFraction: Guard<number> = (value): value is number => isNumber(value) && value >= 0 && value <= 1;
+const isFraction: Guard<number> = (value): value is number =>
+  isNumber(value) && value >= 0 && value <= 1;
 const isBasisPoints: Guard<number> = (value): value is number =>
   isJsonNumber(value) && Number.isInteger(value) && value >= 0 && value <= 10000;
-const isTextList: Guard<string[]> = (value): value is string[] => Array.isArray(value) && value.every(isJsonString);
+const isTextList: Guard<string[]> = (value): value is string[] =>
+  Array.isArray(value) && value.every(isJsonString);
 
 function oneOf<T extends string>(...allowed: readonly T[]): Guard<T> {
   return (value): value is T => isJsonString(value) && allowed.some((option) => option === value);
@@ -70,10 +85,14 @@ function either<A extends JsonValue | undefined, B extends JsonValue | undefined
 
 export const flag = (fallback: boolean, absent: boolean = fallback): Reader<boolean> =>
   check('true or false', isJsonBoolean, fallback, absent);
-export const count = (fallback: number): Reader<number> => check('a number, 0 or more', isCount, fallback);
-export const fraction = (fallback: number): Reader<number> => check('a number from 0 to 1', isFraction, fallback);
-export const finite = (fallback: number): Reader<number> => check('a finite number', isNumber, fallback);
-export const textList = (fallback: string[]): Reader<string[]> => check('a list of strings', isTextList, fallback);
+export const count = (fallback: number): Reader<number> =>
+  check('a number, 0 or more', isCount, fallback);
+export const fraction = (fallback: number): Reader<number> =>
+  check('a number from 0 to 1', isFraction, fallback);
+export const finite = (fallback: number): Reader<number> =>
+  check('a finite number', isNumber, fallback);
+export const textList = (fallback: string[]): Reader<string[]> =>
+  check('a list of strings', isTextList, fallback);
 export const basisPoints = (fallback: number): Reader<number> =>
   check('an integer from 0 to 10000', isBasisPoints, fallback);
 
@@ -83,7 +102,12 @@ export function flagOrAuto(fallback: boolean | 'auto'): Reader<boolean | 'auto'>
 
 /** A missing value reads as null, which means every one; a malformed one reads as the empty list. */
 export function textListOrAll(expect: string): Reader<string[] | null> {
-  return check(expect, (value): value is string[] | null => value === null || isTextList(value), [], null);
+  return check(
+    expect,
+    (value): value is string[] | null => value === null || isTextList(value),
+    [],
+    null,
+  );
 }
 
 /** `fallback` may be undefined for a setting that has no default. */

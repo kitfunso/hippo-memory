@@ -5,7 +5,10 @@ import { vi, type MockInstance } from 'vitest';
 export type Listener = Parameters<typeof process.on>[1];
 
 /** Records what `on` and `once` register on `target`, by event name, instead of attaching it. */
-export function recordListeners(target: EventEmitter, ...methods: Array<'on' | 'once'>): Map<string, Listener[]> {
+export function recordListeners(
+  target: EventEmitter,
+  ...methods: Array<'on' | 'once'>
+): Map<string, Listener[]> {
   const listeners = new Map<string, Listener[]>();
   for (const method of methods) {
     vi.spyOn(target, method).mockImplementation((event: string | symbol, listener: Listener) => {
@@ -17,7 +20,11 @@ export function recordListeners(target: EventEmitter, ...methods: Array<'on' | '
 }
 
 /** Calls every listener recorded for `event` with `args`. */
-export function fire(listeners: Map<string, Listener[]>, event: string, ...args: Parameters<Listener>): void {
+export function fire(
+  listeners: Map<string, Listener[]>,
+  event: string,
+  ...args: Parameters<Listener>
+): void {
   for (const listener of listeners.get(event) ?? []) listener(...args);
 }
 
@@ -31,7 +38,10 @@ export function stubExit(): MockInstance {
 export function captureWrites(stream: NodeJS.WriteStream): string[] {
   const written: string[] = [];
   vi.spyOn(stream, 'write').mockImplementation(
-    (chunk: string | Uint8Array, ...rest: Array<BufferEncoding | ((err?: Error | null) => void) | undefined>) => {
+    (
+      chunk: string | Uint8Array,
+      ...rest: Array<BufferEncoding | ((err?: Error | null) => void) | undefined>
+    ) => {
       if (chunk.length > 0) written.push(String(chunk));
       const done = rest.at(-1);
       if (done instanceof Function) done();

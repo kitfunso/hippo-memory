@@ -8,7 +8,11 @@ import type { ClefSettings } from '../config/config.js';
  * MUST be deterministic for a given (query, results) unless documented stochastic (LLM track, hosted jev): paired A/B
  * and the validity gate need it.
  */
-export type RerankerFn = (query: string, results: SearchResult[], options?: RerankerOptions) => Promise<RerankResult[]>;
+export type RerankerFn = (
+  query: string,
+  results: SearchResult[],
+  options?: RerankerOptions,
+) => Promise<RerankResult[]>;
 
 /** A named reranker, or null for no name; an unknown name throws with the names there are. */
 export type RerankerLookup = (name: string | null | undefined) => RerankerFn | null;

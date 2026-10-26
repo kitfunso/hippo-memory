@@ -30,7 +30,10 @@ describe('hippo-memory/project-identity entry types', () => {
   });
 
   it('ResolveProjectIdentityOptions holds two optional directories', () => {
-    expectTypeOf<ResolveProjectIdentityOptions>().toEqualTypeOf<{ homeDir?: string; stopDir?: string }>();
+    expectTypeOf<ResolveProjectIdentityOptions>().toEqualTypeOf<{
+      homeDir?: string;
+      stopDir?: string;
+    }>();
   });
 
   it('the constants keep their literal types', () => {

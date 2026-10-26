@@ -1,11 +1,17 @@
 import type { DatabaseSyncLike } from './index.js';
 
 const STATEMENT_CACHE_MAX = 512;
-const statementCache = new WeakMap<DatabaseSyncLike, Map<string, ReturnType<DatabaseSyncLike['prepare']>>>();
+const statementCache = new WeakMap<
+  DatabaseSyncLike,
+  Map<string, ReturnType<DatabaseSyncLike['prepare']>>
+>();
 
 /** Statements run per request or per row, prepared once per handle; keyed by handle, so a closed handle takes its
  * statements along. The SQL text must be the same on every call, so bind lists through json_each(?). */
-export function cachedStatement(db: DatabaseSyncLike, sql: string): ReturnType<DatabaseSyncLike['prepare']> {
+export function cachedStatement(
+  db: DatabaseSyncLike,
+  sql: string,
+): ReturnType<DatabaseSyncLike['prepare']> {
   let byText = statementCache.get(db);
   if (!byText) statementCache.set(db, (byText = new Map()));
   let stmt = byText.get(sql);

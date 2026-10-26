@@ -70,5 +70,7 @@ function unscoped<T extends object>(obj: T): T {
 }
 
 function isPlainObject<V>(value: V): value is V & object {
-  return typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype;
+  return (
+    typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype
+  );
 }

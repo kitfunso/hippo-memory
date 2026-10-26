@@ -23,7 +23,8 @@ function handoffLines(h: SessionHandoff): string[] {
   if (h.outcome) lines.push(`- Outcome: ${h.outcome}`);
   if (h.targetRuntime) lines.push(`- Target runtime: ${h.targetRuntime}`);
   if (h.cardId) lines.push(`- Card: ${h.cardId}`);
-  if ((h.constraints ?? []).length > 0) lines.push(`- Constraints: ${(h.constraints ?? []).join(', ')}`);
+  if ((h.constraints ?? []).length > 0)
+    lines.push(`- Constraints: ${(h.constraints ?? []).join(', ')}`);
   if (h.evidence) lines.push(`- Evidence: ${formatHandoffEvidenceLine(h.evidence)}`);
   return lines;
 }
@@ -73,7 +74,10 @@ function formatMemory(r: Pick<SearchResult, 'entry'>, now: Date): string {
   return `[${conf}]${tags} (strength=${r.entry.strength.toFixed(2)})\n${r.entry.content}\n`;
 }
 
-export function formatMemories(results: ReadonlyArray<Pick<SearchResult, 'entry'>>, now: Date): string {
+export function formatMemories(
+  results: ReadonlyArray<Pick<SearchResult, 'entry'>>,
+  now: Date,
+): string {
   if (results.length === 0) return NO_MEMORIES;
   return [memoriesHeading(results.length), ...results.map((r) => formatMemory(r, now))].join('\n');
 }

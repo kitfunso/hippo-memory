@@ -46,7 +46,11 @@ export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): 
 
 /** The ambient envelope contextGet's pools and the two-store search share: handoff digest, secret, scope, origin. */
 export function ambientEnvelopeAdmits(e: MemoryEntry, a: AmbientAdmission): boolean {
-  if (a.handoffSessionId !== undefined && e.sourceSessionId === a.handoffSessionId && isSessionDigestRow(e)) {
+  if (
+    a.handoffSessionId !== undefined &&
+    e.sourceSessionId === a.handoffSessionId &&
+    isSessionDigestRow(e)
+  ) {
     return false;
   }
   if (!ambientSecretAdmit(e, a.currentProject)) return false;
@@ -66,7 +70,10 @@ export function ambientRefusal(e: MemoryEntry, a: AmbientAdmission): AmbientRefu
   return e.pinned || isWorthSurfacing(e) ? null : 'quality';
 }
 
-export function descendantAdmits(row: Pick<MemoryEntry, 'scope' | 'originProject'>, a: DescendantAdmission): boolean {
+export function descendantAdmits(
+  row: Pick<MemoryEntry, 'scope' | 'originProject'>,
+  a: DescendantAdmission,
+): boolean {
   return (
     passesScopeFilterForRecall(row.scope ?? null, undefined, a.ownScope) &&
     (!a.project || classifyOriginProject(row.originProject, a.project) !== 'cross-project')
@@ -74,5 +81,7 @@ export function descendantAdmits(row: Pick<MemoryEntry, 'scope' | 'originProject
 }
 
 function isOwnCompactionItem(e: MemoryEntry, ownSessionId: string | undefined): boolean {
-  return !!ownSessionId && e.sourceSessionId === ownSessionId && e.tags.includes(COMPACTION_MEMORY_TAG);
+  return (
+    !!ownSessionId && e.sourceSessionId === ownSessionId && e.tags.includes(COMPACTION_MEMORY_TAG)
+  );
 }

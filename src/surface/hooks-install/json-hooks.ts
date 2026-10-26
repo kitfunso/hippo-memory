@@ -52,8 +52,16 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const plan =
     target === 'copilot'
-      ? planCopilotHooks(paths.settings, fs.existsSync(paths.settings) ? fs.readFileSync(paths.settings, 'utf8') : null)
-      : planJsonHooks(target, paths, readSettings(paths.settings), defaultPreCompactLogPath(processHomes()));
+      ? planCopilotHooks(
+          paths.settings,
+          fs.existsSync(paths.settings) ? fs.readFileSync(paths.settings, 'utf8') : null,
+        )
+      : planJsonHooks(
+          target,
+          paths,
+          readSettings(paths.settings),
+          defaultPreCompactLogPath(processHomes()),
+        );
   if (plan.write !== null) writeSettingsFile(paths.settings, plan.write);
   return plan.result;
 }
@@ -100,7 +108,9 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
 
 /** Whether uninstall can edit settings.json; `invalidJson` marks a file that exists but is not JSON hippo can edit,
  * which `uninstallJsonHooks` reports only as false. */
-export function checkUninstallable(target: JsonHookTarget): Pick<InstallResult, 'settingsPath' | 'invalidJson'> {
+export function checkUninstallable(
+  target: JsonHookTarget,
+): Pick<InstallResult, 'settingsPath' | 'invalidJson'> {
   const { settings: settingsPath } = resolveJsonHookPaths(target);
   if (!fs.existsSync(settingsPath)) return { settingsPath, invalidJson: false };
   return { settingsPath, invalidJson: !canEditHooks(tryReadJsonFile(settingsPath)) };

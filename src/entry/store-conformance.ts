@@ -33,7 +33,10 @@ function newKey(tenantId: string) {
   };
 }
 
-async function withStore(open: () => Promise<HippoStore> | HippoStore, run: (store: HippoStore) => Promise<void>) {
+async function withStore(
+  open: () => Promise<HippoStore> | HippoStore,
+  run: (store: HippoStore) => Promise<void>,
+) {
   const store = await open();
   try {
     await run(store);
@@ -52,7 +55,10 @@ async function failureOf<R>(run: () => Promise<R>): Promise<string | undefined> 
 }
 
 /** Registers the checks every store must pass on its required groups; `open` gives a fresh, empty store for each. */
-export function runStoreConformance(runner: ConformanceRunner, open: () => Promise<HippoStore> | HippoStore): void {
+export function runStoreConformance(
+  runner: ConformanceRunner,
+  open: () => Promise<HippoStore> | HippoStore,
+): void {
   const { describe, it, expect } = runner;
   const revoke = (store: HippoStore, tenantId: string, keyId: string, at: string) =>
     store.keyWrites.changeApiKey('revoke', { tenantId, keyId, actor: 'conformance', at });

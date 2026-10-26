@@ -4,7 +4,12 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, writeEntriesTogether, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
+import {
+  writeEntry,
+  writeEntriesTogether,
+  strengthenRetrieved,
+  readEntry,
+} from '../_helpers/root-forms.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { calculateStrength } from '../../src/entry/memory.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
@@ -69,7 +74,9 @@ describe('strengthenRetrieved', () => {
       ),
     );
 
-    const writes = runs.flatMap((r) => r.statements.filter((sql) => /UPDATE memories SET retrieval_count/.test(sql)));
+    const writes = runs.flatMap((r) =>
+      r.statements.filter((sql) => /UPDATE memories SET retrieval_count/.test(sql)),
+    );
     expect(writes).toHaveLength(2);
     expect(new Set(writes).size).toBe(1);
     expect(runs[1]!.result.size).toBe(150);
@@ -127,6 +134,8 @@ describe('strengthenRetrieved', () => {
       ).size,
     ).toBe(0);
     expect(errors).toHaveBeenCalledTimes(1);
-    expect(String(errors.mock.calls[0]![0])).toMatch(/^\[hippo\] warn: retrieval stats not saved \(/);
+    expect(String(errors.mock.calls[0]![0])).toMatch(
+      /^\[hippo\] warn: retrieval stats not saved \(/,
+    );
   });
 });

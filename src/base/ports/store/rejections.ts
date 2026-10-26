@@ -73,7 +73,11 @@ export interface FailureLog {
   /** Appends one row and answers its id. */
   record(event: FailureEvent): Promise<number>;
   /** The outcome logged under the request id, or null; an id another session logged rejects with ConflictError. */
-  requestOutcome(tenantId: string, requestId: string, sessionId: string): Promise<FailureOutcome | null>;
+  requestOutcome(
+    tenantId: string,
+    requestId: string,
+    sessionId: string,
+  ): Promise<FailureOutcome | null>;
   settleOutcome(tenantId: string, requestId: string, outcome: FailureOutcome): Promise<void>;
 }
 
@@ -103,7 +107,12 @@ export interface FailureEvent {
 export type FailureOutcome = CaptureErrorOutcome | 'store-failed';
 
 /** Why a failure was not stored, or `stored`. */
-export type CaptureErrorOutcome = 'stored' | 'duplicate' | 'skipped-interrupt' | 'skipped-routine' | 'skipped-invalid';
+export type CaptureErrorOutcome =
+  | 'stored'
+  | 'duplicate'
+  | 'skipped-interrupt'
+  | 'skipped-routine'
+  | 'skipped-invalid';
 
 /** Which routine check skipped a failure; the log keeps it so declines can be told apart from empty searches. */
 export type RoutineRule = 'declined' | 'os-permission' | 'no-match' | 'search-tool' | 'quiet-exit';

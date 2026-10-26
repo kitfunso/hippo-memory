@@ -45,7 +45,9 @@ const order = (out: readonly SearchResult[]): string[] => out.map((r) => r.entry
 
 let stderr: MockInstance<typeof process.stderr.write>;
 const warnings = (): string[] =>
-  stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('cross-encoder reranker unavailable'));
+  stderr.mock.calls
+    .map((c) => String(c[0]))
+    .filter((l) => l.includes('cross-encoder reranker unavailable'));
 
 beforeEach(() => {
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -65,7 +67,9 @@ describe('the cross-encoder model load', () => {
     await vi.advanceTimersByTimeAsync(MODEL_LOAD_POLICY.timeoutMs);
 
     expect(order(await out)).toEqual(['alpha', 'beta']);
-    expect(warnings()).toEqual([expect.stringMatching(/did not load within 120 s\).*errorClass=Error/)]);
+    expect(warnings()).toEqual([
+      expect.stringMatching(/did not load within 120 s\).*errorClass=Error/),
+    ]);
   });
 
   it('loads once per backoff window after a failure, not once per recall, and warns with the real error', async () => {
@@ -76,7 +80,9 @@ describe('the cross-encoder model load', () => {
 
     for (let i = 0; i < 3; i++) await rerank('q', INPUTS);
     expect(fetch).toHaveBeenCalledTimes(2); // tokenizer and model, one attempt
-    expect(warnings()).toEqual([expect.stringMatching(/\(fetch failed: connect ECONNREFUSED\).*errorClass=TypeError/)]);
+    expect(warnings()).toEqual([
+      expect.stringMatching(/\(fetch failed: connect ECONNREFUSED\).*errorClass=TypeError/),
+    ]);
 
     await vi.advanceTimersByTimeAsync(MODEL_LOAD_POLICY.backoffMs);
     await rerank('q', INPUTS);
@@ -99,7 +105,9 @@ describe('the cross-encoder model load', () => {
       transformersCrossEncoder(async () => ({
         name: '@huggingface/transformers',
         mod: {
-          AutoTokenizer: { from_pretrained: async () => async () => ({ input_ids: {}, attention_mask: {} }) },
+          AutoTokenizer: {
+            from_pretrained: async () => async () => ({ input_ids: {}, attention_mask: {} }),
+          },
           AutoModelForSequenceClassification: {
             from_pretrained: async () => async () => {
               throw new Error('onnx runtime crashed');

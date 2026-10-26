@@ -4,7 +4,12 @@ const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string
   activeGoalsWithPolicies(root, opts).goals;
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { activeGoalsWithPolicies, pushGoal, resumeGoal, suspendGoal } from '../_helpers/root-forms.js';
+import {
+  activeGoalsWithPolicies,
+  pushGoal,
+  resumeGoal,
+  suspendGoal,
+} from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -38,7 +43,9 @@ describe('goal stack depth cap', () => {
     try {
       // SAFETY: literal SELECT of the status column for the goal_stack row
       // this test's pushGoal calls above just wrote.
-      const row = db.prepare(`SELECT status FROM goal_stack WHERE id = ?`).get(g1.id) as { status: string };
+      const row = db.prepare(`SELECT status FROM goal_stack WHERE id = ?`).get(g1.id) as {
+        status: string;
+      };
       expect(row.status).toBe('suspended');
     } finally {
       closeHippoDb(db);
@@ -77,7 +84,8 @@ describe('goal stack depth cap', () => {
 
   it('suspends the oldest active goal when a resume would pass the cap', async () => {
     const goals = [];
-    for (const goalName of ['g0', 'g1', 'g2']) goals.push(await pushGoal(root, { ...ctx, goalName }));
+    for (const goalName of ['g0', 'g1', 'g2'])
+      goals.push(await pushGoal(root, { ...ctx, goalName }));
     await suspendGoal(root, goals[2]!.id);
     expect(activeGoalsOf(root, ctx)).toHaveLength(2);
     await pushGoal(root, { ...ctx, goalName: 'g3' });

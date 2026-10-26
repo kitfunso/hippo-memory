@@ -163,7 +163,8 @@ function sessionIdParam(params: RequestParams): string | undefined {
 /** Checks in a fixed order, so the first bad input is the one reported. */
 export function parseRecallRequest(params: RequestParams): ParsedRecallRequest {
   const query = params.get(params.queryName);
-  if (!isJsonString(query) || query.length === 0) throw new RecallRequestError(`${params.queryName} is required`);
+  if (!isJsonString(query) || query.length === 0)
+    throw new RecallRequestError(`${params.queryName} is required`);
   const limit = limitParam(params);
   const mode = modeParam(params);
   const scope = stringParam(params, 'scope');
@@ -177,7 +178,13 @@ export function parseRecallRequest(params: RequestParams): ParsedRecallRequest {
   return {
     opts: {
       query,
-      window: { includeContinuity, freshTailCount, freshTailSessionId, summarizeOverflow, scorerWindow },
+      window: {
+        includeContinuity,
+        freshTailCount,
+        freshTailSessionId,
+        summarizeOverflow,
+        scorerWindow,
+      },
       filter: { scope },
       boost: { sessionId },
     },
@@ -191,7 +198,9 @@ export function parseContextRequest(params: RequestParams): ParsedContextRequest
   const qValue = params.get(params.queryName);
   const q = isJsonString(qValue) ? qValue : undefined;
   if (q !== undefined && q.length > MAX_CONTEXT_QUERY_LEN) {
-    throw new RecallRequestError(`${params.queryName} exceeds ${MAX_CONTEXT_QUERY_LEN}-character cap`);
+    throw new RecallRequestError(
+      `${params.queryName} exceeds ${MAX_CONTEXT_QUERY_LEN}-character cap`,
+    );
   }
   const budget = nonNegativeParam(params, 'budget');
   const limit = numberParam(params, 'limit');
@@ -213,7 +222,8 @@ export async function retrieveWithCliCore(
 ): Promise<RecallResult> {
   // A CliCoreQuery carries no scope, so the scope preflight of the other rankers has nothing to check here.
   // This ranker applies the operator's scope rule and may search a second store, so no bearer client may reach it.
-  if (!ctx.actor.hostAdmin) throw new ForbiddenError('The CLI ranking core serves the host admin only');
+  if (!ctx.actor.hostAdmin)
+    throw new ForbiddenError('The CLI ranking core serves the host admin only');
   const store = ctx.store;
   const ranking = await rankRecall(
     { ...rankCtxOf(ctx), global: rankGlobal(ctx, core.sources), note: core.note },
@@ -233,7 +243,11 @@ export async function retrieveWithCliCore(
   return result;
 }
 
-async function planningFor(ctx: Context, store: HippoStore, query: string): Promise<PlanningFallacyDecision | null> {
+async function planningFor(
+  ctx: Context,
+  store: HippoStore,
+  query: string,
+): Promise<PlanningFallacyDecision | null> {
   const claim = detectPlanningClaim(query, { mode: autodebiasMode(ctx.config.runtime) });
   if (!claim) return null;
   return decidePlanningFallacy(
@@ -276,7 +290,12 @@ async function recordShown(
 ): Promise<void> {
   const { ranking, shown, planningAudit } = done;
   const ids = shown.results.map((r) => r.entry.id);
-  const recallRow = recallAuditRow(callerOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, ids.length));
+  const recallRow = recallAuditRow(
+    callerOf(ctx),
+    'recall',
+    undefined,
+    recallAuditMetadata(opts.query, ids.length),
+  );
   const second = secondStore(ctx, core);
   const heldElsewhere = second !== undefined ? await idsNotHeld(store, ids, ctx.tenantId) : [];
   const writes = {
@@ -285,12 +304,18 @@ async function recordShown(
     strengthen: strengthenOf(ctx, ids),
     trace: traceOf(ctx, opts, core, shown.results),
   };
-  const audited = await finishOrReport(() => finishShown(store, core.lastRecall, writes, ids.length > 0));
+  const audited = await finishOrReport(() =>
+    finishShown(store, core.lastRecall, writes, ids.length > 0),
+  );
   if (audited) {
     // The second store logs that it was searched, and strengthens only the rows the first does not hold.
     if (second !== undefined) {
       await finishOrReport(() =>
-        second.finishRecall({ goalLog: [], audit: [recallRow], strengthen: strengthenOf(ctx, heldElsewhere) }),
+        second.finishRecall({
+          goalLog: [],
+          audit: [recallRow],
+          strengthen: strengthenOf(ctx, heldElsewhere),
+        }),
       );
     }
   }
@@ -310,7 +335,8 @@ async function recordShown(
 /** The second store ranked, as the caller's own store when that is the global one, so its graph walks once. */
 function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource | undefined {
   if (sources === undefined) return undefined;
-  if (ctx.reach?.isGlobal === true) return { store: ctx.store, config: ctx.config, onHippoDb: true };
+  if (ctx.reach?.isGlobal === true)
+    return { store: ctx.store, config: ctx.config, onHippoDb: true };
   return { store: sources.store, config: sources.config, onHippoDb: true };
 }
 
@@ -331,7 +357,11 @@ async function finishOrReport(finish: () => Promise<number | null | void>): Prom
   }
 }
 
-async function idsNotHeld(store: HippoStore, ids: readonly string[], tenantId: string): Promise<string[]> {
+async function idsNotHeld(
+  store: HippoStore,
+  ids: readonly string[],
+  tenantId: string,
+): Promise<string[]> {
   const held = await heldIds(store, ids, tenantId);
   return ids.filter((id) => !held.has(id));
 }
@@ -349,7 +379,11 @@ function traceOf(
     pipeline: 'cli',
     query: opts.query,
     explainMode: core.rank.why === true,
-    results: shown.map((r) => ({ memoryId: r.entry.id, score: r.score, rerankSteps: r.rerankTrace })),
+    results: shown.map((r) => ({
+      memoryId: r.entry.id,
+      score: r.score,
+      rerankSteps: r.rerankTrace,
+    })),
   };
 }
 

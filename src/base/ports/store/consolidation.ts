@@ -22,7 +22,10 @@ export interface Consolidation {
    * dryRun), then the full-text re-sync (only counted under dryRun); then the reads its passes start from. */
   begin(to: number, opts: SleepBegin): Promise<SleepStart>;
   /** Up to `page.limit` memory ids of every tenant, by created then id, after `page.after`. */
-  entryIdsPage(page: { readonly limit: number; readonly after?: EntryCursor }): Promise<EntryIdPage>;
+  entryIdsPage(page: {
+    readonly limit: number;
+    readonly after?: EntryCursor;
+  }): Promise<EntryIdPage>;
   /** The tenant's tombstones among `digests`, in their order, in one read however many are asked. */
   rejected(tenantId: string, digests: readonly string[]): Promise<RejectedValueRow[]>;
   /** The memory id of every stored physics particle, in load order. */
@@ -33,7 +36,10 @@ export interface Consolidation {
    * were waiting. */
   dirtySummaries(limit: number): Promise<DirtySummaries>;
   /** Up to `page.limit` of the L2 topic summaries with no L3 profile above them, oldest first, after `page.after`. */
-  unprofiledTopicSummaries(page: { readonly limit: number; readonly after?: EntryCursor }): Promise<EntryPage>;
+  unprofiledTopicSummaries(page: {
+    readonly limit: number;
+    readonly after?: EntryCursor;
+  }): Promise<EntryPage>;
   /** Lands `settle` on a summary that is still dirty, with its audit rows, in one transaction. New content a tombstone
    * names is kept out, with a refusal row, and the rest still lands. */
   settleSummary(settle: SummarySettle): Promise<SummarySettled>;
@@ -88,7 +94,10 @@ export interface EntryIdPage {
 }
 
 export interface DirtySummaries {
-  readonly summaries: ReadonlyArray<{ readonly summary: MemoryEntry; readonly children: MemoryEntry[] }>;
+  readonly summaries: ReadonlyArray<{
+    readonly summary: MemoryEntry;
+    readonly children: MemoryEntry[];
+  }>;
   readonly more: boolean;
 }
 
@@ -145,7 +154,12 @@ export interface SleepRecord {
   readonly removed: number;
 }
 
-export type DetectedConflict = { memory_a_id: string; memory_b_id: string; reason: string; score: number };
+export type DetectedConflict = {
+  memory_a_id: string;
+  memory_b_id: string;
+  reason: string;
+  score: number;
+};
 
 /** Ops that must commit in one transaction, so a flush split across several never lands part of one. */
 export interface FlushComponent {

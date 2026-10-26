@@ -19,7 +19,9 @@ import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
-const entry = createMemory('deploy pipeline notes for the api', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+const entry = createMemory('deploy pipeline notes for the api', {
+  baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+});
 
 const ranked = (results: readonly unknown[]): string => `ranked ${results.length}`;
 
@@ -31,10 +33,14 @@ const ROWS: readonly Row[] = [
     'api/tokens.ts recordTokens',
     /recordTokens/,
     async (root) => {
-      await recordTokens(apiCtx(root, 'default', { subject: 'test', role: 'admin' }), 'http_recall', {
-        items: 1,
-        tokens: 1,
-      });
+      await recordTokens(
+        apiCtx(root, 'default', { subject: 'test', role: 'admin' }),
+        'http_recall',
+        {
+          items: 1,
+          tokens: 1,
+        },
+      );
       return 'returned';
     },
     'returned',
@@ -81,7 +87,10 @@ const ROWS: readonly Row[] = [
   [
     'domain/search/physics-search.ts loadCandidateParticles',
     /loadCandidateParticles/,
-    async (root) => ranked(await physicsSearch('deploy', [entry], { hippoRoot: root, queryEmbedding: [1, 0, 0] })),
+    async (root) =>
+      ranked(
+        await physicsSearch('deploy', [entry], { hippoRoot: root, queryEmbedding: [1, 0, 0] }),
+      ),
     'ranked 1',
   ],
 ];

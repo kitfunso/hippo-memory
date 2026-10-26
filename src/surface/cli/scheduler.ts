@@ -99,7 +99,9 @@ export function saveWorkspaceRegistry(globalRoot: string, registry: WorkspaceReg
 
 export function registerWorkspace(globalRoot: string, projectDir: string): WorkspaceRegistry {
   const registry = loadWorkspaceRegistry(globalRoot);
-  registry.workspaces = [...new Set([...registry.workspaces, normalizeWorkspace(projectDir)])].sort();
+  registry.workspaces = [
+    ...new Set([...registry.workspaces, normalizeWorkspace(projectDir)]),
+  ].sort();
   saveWorkspaceRegistry(globalRoot, registry);
   return registry;
 }
@@ -113,10 +115,15 @@ const UNSAFE_RUNNER_PATH_CHARS = /["`$%\n\r]/;
 
 /** True when a runner path holds a character that would break the quoted command or split the crontab line. */
 export function hasUnsafeRunnerPathChars(runnerDir: string, platform: NodeJS.Platform): boolean {
-  return UNSAFE_RUNNER_PATH_CHARS.test(runnerDir) || (platform !== 'win32' && runnerDir.includes('\\'));
+  return (
+    UNSAFE_RUNNER_PATH_CHARS.test(runnerDir) || (platform !== 'win32' && runnerDir.includes('\\'))
+  );
 }
 
-export function buildDailyRunnerCommand(projectDir: string, platform: NodeJS.Platform = process.platform): string {
+export function buildDailyRunnerCommand(
+  projectDir: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
   if (platform === 'win32') {
     const resolved = path.win32.resolve(projectDir).replace(/\\/g, '/');
     return `cd /d "${resolved}" && hippo daily-runner`;
@@ -140,7 +147,18 @@ export function quoteInsideWindowsArg(text: string): string {
 
 /** Argv for `schtasks`, passed without a shell: through cmd.exe the `&&` in /tr split the command. */
 export function buildSchtasksCreateArgs(taskName: string, cmd: string): string[] {
-  return ['/create', '/tn', taskName, '/tr', buildWindowsTaskRun(cmd), '/sc', 'daily', '/st', '06:15', '/f'];
+  return [
+    '/create',
+    '/tn',
+    taskName,
+    '/tr',
+    buildWindowsTaskRun(cmd),
+    '/sc',
+    'daily',
+    '/st',
+    '06:15',
+    '/f',
+  ];
 }
 
 function realpathOrSelf(p: string): string {

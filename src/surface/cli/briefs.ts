@@ -28,7 +28,9 @@ async function refreshBrief(ctx: Context, args: string[], flags: CliFlags): Prom
       return;
     }
     const created = await briefRefresh(ctx, repoRaw);
-    console.log(`Project brief #${created.id} recorded (v${created.version}) for repo "${created.repo}".`);
+    console.log(
+      `Project brief #${created.id} recorded (v${created.version}) for repo "${created.repo}".`,
+    );
     if (created.changeSummary) console.log(`  change: ${created.changeSummary}`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
@@ -52,7 +54,12 @@ const briefKind: VersionedKind<'project_brief', string> = {
   bodyRequired: '--summary "<text>"',
   body: (flags) => requiredText(flags, 'summary'),
   keyOf: (b) => b.repo,
-  write: (repo, summary, from) => ({ repo, summary, changeSummary: from?.changeSummary, supersedesBriefId: from?.id }),
+  write: (repo, summary, from) => ({
+    repo,
+    summary,
+    changeSummary: from?.changeSummary,
+    supersedesBriefId: from?.id,
+  }),
   recorded: (b) => `Project brief recorded: #${b.id} (v${b.version}) for repo "${b.repo}"`,
   filterFlag: 'repo',
   printRow: printBriefRow,

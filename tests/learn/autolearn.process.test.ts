@@ -3,11 +3,19 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execSync, execFileSync } from 'node:child_process';
-import { captureError, extractLessons, partitionLessons, fetchGitLog } from '../../src/domain/learn/autolearn.js';
+import {
+  captureError,
+  extractLessons,
+  partitionLessons,
+  fetchGitLog,
+} from '../../src/domain/learn/autolearn.js';
 import { isGitRepo } from '../../src/base/ports/git.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { extractInvalidationTarget, invalidateMatching } from '../../src/domain/learn/invalidation.js';
+import {
+  extractInvalidationTarget,
+  invalidateMatching,
+} from '../../src/domain/learn/invalidation.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -23,7 +31,13 @@ import { evalNow } from '../../src/infra/eval-switches.js';
 
 describe('captureError', () => {
   it('creates a memory entry with error tags', () => {
-    const entry = captureError(1, 'TypeError: Cannot read property x', 'npm test', undefined, evalNow());
+    const entry = captureError(
+      1,
+      'TypeError: Cannot read property x',
+      'npm test',
+      undefined,
+      evalNow(),
+    );
     expect(entry.tags).toContain('error');
     expect(entry.tags).toContain('autolearn');
     expect(entry.content).toContain('npm test');
@@ -86,16 +100,21 @@ describe('extractLessons', () => {
   });
 
   it('extracts lessons from bug/bugfix commits', () => {
-    const log = ['abc1234 bugfix: race condition in scheduler', 'def5678 bug in auth token refresh'].join('\n');
+    const log = [
+      'abc1234 bugfix: race condition in scheduler',
+      'def5678 bug in auth token refresh',
+    ].join('\n');
 
     const lessons = extractLessons(log);
     expect(lessons.length).toBe(2);
   });
 
   it('ignores non-matching commits', () => {
-    const log = ['abc1234 feat: add dark mode', 'ghi9012 docs: readme update', 'jkl3456 ci: update pipeline'].join(
-      '\n',
-    );
+    const log = [
+      'abc1234 feat: add dark mode',
+      'ghi9012 docs: readme update',
+      'jkl3456 ci: update pipeline',
+    ].join('\n');
 
     const lessons = extractLessons(log);
     expect(lessons.length).toBe(0);
@@ -107,7 +126,10 @@ describe('extractLessons', () => {
 
   it('extracts lessons from multi-repo combined output', () => {
     // Simulate concatenated git logs from multiple repos
-    const repoALog = ['aaa1111 fix: broken auth flow in login page', 'bbb2222 feat: add search bar'].join('\n');
+    const repoALog = [
+      'aaa1111 fix: broken auth flow in login page',
+      'bbb2222 feat: add search bar',
+    ].join('\n');
 
     const repoBLog = [
       'ccc3333 hotfix: database connection pool exhaustion',
@@ -338,9 +360,10 @@ describe('a gated lesson still invalidates', () => {
       updated!.tags,
       'a gated lesson does not invalidate - documented limitation, see the comment above',
     ).not.toContain('invalidated');
-    expect(updated!.halfLifeDays, 'and its decay must be untouched, so rescans cannot compound').toBe(
-      stale.halfLifeDays,
-    );
+    expect(
+      updated!.halfLifeDays,
+      'and its decay must be untouched, so rescans cannot compound',
+    ).toBe(stale.halfLifeDays);
 
     // ...and the thin subject itself is still not stored.
     const contents = loadAllEntries(repoRoot, 'default').map((e) => e.content);
@@ -354,7 +377,10 @@ describe('write-path gate: MCP hippo_learn tool', () => {
   let originalCwd: string;
 
   beforeEach(() => {
-    repoDir = initGitRepoWithCommits(['fixed signals', 'fix --include-recent flag handling in hippo context']);
+    repoDir = initGitRepoWithCommits([
+      'fixed signals',
+      'fix --include-recent flag handling in hippo context',
+    ]);
     hippoRoot = makeRoot('df4-mcp');
     originalCwd = process.cwd();
     process.chdir(repoDir);
@@ -386,7 +412,8 @@ describe('write-path gate: MCP hippo_learn tool', () => {
     );
 
     // SAFETY: a tools/call reply wraps tool output as result.content[{type:'text',text}] (src/surface/mcp/request.ts:173).
-    const text = (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? '';
+    const text =
+      (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? '';
     expect(text).toMatch(/low-information subjects dropped/);
 
     const entries = loadAllEntries(hippoRoot, 'default');

@@ -27,7 +27,12 @@ export async function traceRecord(ctx: Context, input: TraceInput): Promise<{ id
   const { id } = await remember(ctx, {
     content: renderTraceContent({ task, steps, outcome }),
     tags: input.tags,
-    local: { layer: Layer.Trace, source: input.source, traceOutcome: outcome, sourceSessionId: input.sessionId },
+    local: {
+      layer: Layer.Trace,
+      source: input.source,
+      traceOutcome: outcome,
+      sourceSessionId: input.sessionId,
+    },
   });
   return { id };
 }
@@ -51,5 +56,15 @@ export function traceStats(entry: MemoryEntry, ctx: Pick<Context, 'infra' | 'con
   // Projected strength: same decay curve, just push `now` out.
   const projectedAt = (days: number): number =>
     calculateStrength(entry, new Date(now.getTime() + days * DAY_MS), model);
-  return { strength, halfLife, rewardFactor, effHalfLife, ageDays, sinceLast, facets, conf, projectedAt };
+  return {
+    strength,
+    halfLife,
+    rewardFactor,
+    effHalfLife,
+    ageDays,
+    sinceLast,
+    facets,
+    conf,
+    projectedAt,
+  };
 }

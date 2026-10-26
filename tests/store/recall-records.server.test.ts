@@ -26,7 +26,11 @@ import {
 } from '../_helpers/recall-golden-seed.js';
 import type { CliFlags } from '../../src/surface/cli/flag-values.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { appendSessionEvent, saveActiveTaskSnapshot, saveSessionHandoff } from '../_helpers/root-forms.js';
+import {
+  appendSessionEvent,
+  saveActiveTaskSnapshot,
+  saveSessionHandoff,
+} from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { recallAuditOps, recallWrites } from '../_helpers/recall-rows.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
@@ -108,7 +112,8 @@ async function recallOn(
   calls: readonly RecallCall[],
   between?: (done: number) => void,
 ): Promise<Reply[]> {
-  const handle = surface === 'http' ? await serveKeyed({ hippoRoot: s.root, port: 0 }, serve) : null;
+  const handle =
+    surface === 'http' ? await serveKeyed({ hippoRoot: s.root, port: 0 }, serve) : null;
   try {
     const out: Reply[] = [];
     for (const c of calls) {
@@ -130,7 +135,8 @@ function recorded(s: Store) {
 function summarised(s: Store) {
   const mirror = statsMirror(s.root);
   // SAFETY: stats.json is the object writeStatsMirror serialises, total_recalled among its keys.
-  const mirrored = mirror === null ? null : (JSON.parse(mirror) as { total_recalled: number }).total_recalled;
+  const mirrored =
+    mirror === null ? null : (JSON.parse(mirror) as { total_recalled: number }).total_recalled;
   return { audit: recallAuditOps(s.root), ...recallWrites(s.root), mirrored };
 }
 
@@ -203,7 +209,11 @@ async function seedContinuity(root: string): Promise<void> {
     summary: 'handoff after the canary',
     nextAction: 'promote it',
   });
-  await appendSessionEvent(root, TENANT, { sessionId: SESSION, eventType: 'note', content: 'canary passed' });
+  await appendSessionEvent(root, TENANT, {
+    sessionId: SESSION,
+    eventType: 'note',
+    content: 'canary passed',
+  });
 }
 
 /** A store with no memory in it and no global store beside it. */
@@ -226,7 +236,8 @@ async function onStore<T>(s: Store, fn: (s: Store) => Promise<T>): Promise<T> {
   }
 }
 
-const onSeeded = <T>(fn: (s: Store) => Promise<T>): Promise<T> => onStore(freshStore(templates, 'local'), fn);
+const onSeeded = <T>(fn: (s: Store) => Promise<T>): Promise<T> =>
+  onStore(freshStore(templates, 'local'), fn);
 
 beforeAll(async () => {
   launchFolder = process.cwd();
@@ -290,62 +301,75 @@ describe('what a recall records, HTTP and CLI', () => {
     );
   });
 
-  it.each(SURFACES)('%s: two recalls in one session, the second carries the hint the first fed', async (surface) => {
-    const got = await onSeeded(async (s) => {
-      const call: RecallCall = { query: 'deploy', session: SESSION };
-      const replies = await recallOn(surface, s, [call, call]);
-      return { replies, rows: summarised(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
-    });
-    expect(got.replies.map((r) => r.hint === null)).toEqual([true, false]);
-    expect(got.ledger).toHaveLength(2);
-    // HTTP books the recall's session; the CLI books the host agent's, and none is set here.
-    expect(got.ledger.map((row) => row.session_id)).toEqual(surface === 'http' ? [SESSION, SESSION] : [null, null]);
-    expect(got.recalled).toBe(got.ledger[0]!.items + got.ledger[1]!.items);
-    const { ranked, ...rows } = got.rows;
-    if (surface === 'http') {
-      expect(got.replies[1]!.hint).toBe('mem_p_pinned');
-      expect(ranked).toEqual([...HTTP_SHOWN, ...HTTP_SHOWN]);
+  it.each(SURFACES)(
+    '%s: two recalls in one session, the second carries the hint the first fed',
+    async (surface) => {
+      const got = await onSeeded(async (s) => {
+        const call: RecallCall = { query: 'deploy', session: SESSION };
+        const replies = await recallOn(surface, s, [call, call]);
+        return { replies, rows: summarised(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
+      });
+      expect(got.replies.map((r) => r.hint === null)).toEqual([true, false]);
+      expect(got.ledger).toHaveLength(2);
+      // HTTP books the recall's session; the CLI books the host agent's, and none is set here.
+      expect(got.ledger.map((row) => row.session_id)).toEqual(
+        surface === 'http' ? [SESSION, SESSION] : [null, null],
+      );
+      expect(got.recalled).toBe(got.ledger[0]!.items + got.ledger[1]!.items);
+      const { ranked, ...rows } = got.rows;
+      if (surface === 'http') {
+        expect(got.replies[1]!.hint).toBe('mem_p_pinned');
+        expect(ranked).toEqual([...HTTP_SHOWN, ...HTTP_SHOWN]);
+        expect(rows).toEqual({
+          audit: [
+            'localhost:cli recall 10',
+            'localhost:cli recall 10',
+            'localhost:cli recall_anchor_detected_query_repeat mem_p_pinned',
+          ],
+          recalled: '20',
+          traces: [`api 10 ${SESSION}`, `api 10 ${SESSION}`],
+          ledger: [`http_recall 10 ${SESSION}`, `http_recall 10 ${SESSION}`],
+          bumped: bumped(HTTP_SHOWN, 2, 3),
+          goalLog: [],
+          mirrored: 20,
+        });
+        return;
+      }
+      expect(String(got.replies[1]!.body)).toMatch(
+        /^\[anchored_on: mem_p_global\] Same query phrasing as a recent recall returned the same top result \(mem_p_global\); you may be re-asking the same question\.\n\nFound 13 memories/,
+      );
+      // The goal row leads the local rows once the session's goal boosts it, on both recalls.
+      expect([ranked.slice(0, 2), ranked.slice(13, 15)]).toEqual([
+        ['mem_p_global', 'mem_p_goal'],
+        ['mem_p_global', 'mem_p_goal'],
+      ]);
+      expect(new Set(ranked)).toEqual(new Set(['mem_p_global', 'mem_p_goal', ...CLI_LOCAL]));
       expect(rows).toEqual({
         audit: [
-          'localhost:cli recall 10',
-          'localhost:cli recall 10',
-          'localhost:cli recall_anchor_detected_query_repeat mem_p_pinned',
+          'cli recall 13',
+          'cli recall_anchor_detected_query_repeat mem_p_global',
+          'cli recall 13',
         ],
-        recalled: '20',
-        traces: [`api 10 ${SESSION}`, `api 10 ${SESSION}`],
-        ledger: [`http_recall 10 ${SESSION}`, `http_recall 10 ${SESSION}`],
-        bumped: bumped(HTTP_SHOWN, 2, 3),
-        goalLog: [],
-        mirrored: 20,
+        recalled: '26',
+        traces: [`cli 13 ${SESSION}`, `cli 13 ${SESSION}`],
+        ledger: ['recall 13 -', 'recall 13 -'],
+        bumped: bumped(CLI_LOCAL, 2, 5),
+        goalLog: [`mem_p_goal ${SESSION}`],
+        mirrored: 26,
       });
-      return;
-    }
-    expect(String(got.replies[1]!.body)).toMatch(
-      /^\[anchored_on: mem_p_global\] Same query phrasing as a recent recall returned the same top result \(mem_p_global\); you may be re-asking the same question\.\n\nFound 13 memories/,
-    );
-    // The goal row leads the local rows once the session's goal boosts it, on both recalls.
-    expect([ranked.slice(0, 2), ranked.slice(13, 15)]).toEqual([
-      ['mem_p_global', 'mem_p_goal'],
-      ['mem_p_global', 'mem_p_goal'],
-    ]);
-    expect(new Set(ranked)).toEqual(new Set(['mem_p_global', 'mem_p_goal', ...CLI_LOCAL]));
-    expect(rows).toEqual({
-      audit: ['cli recall 13', 'cli recall_anchor_detected_query_repeat mem_p_global', 'cli recall 13'],
-      recalled: '26',
-      traces: [`cli 13 ${SESSION}`, `cli 13 ${SESSION}`],
-      ledger: ['recall 13 -', 'recall 13 -'],
-      bumped: bumped(CLI_LOCAL, 2, 5),
-      goalLog: [`mem_p_goal ${SESSION}`],
-      mirrored: 26,
-    });
-  });
+    },
+  );
 
   it('cli: the ledger row names the host agent session while the ring follows --session-id', async () => {
     vi.stubEnv('CLAUDE_CODE_SESSION_ID', HOST_SESSION);
     const got = await onSeeded(async (s) => {
       const call: RecallCall = { query: 'deploy', session: SESSION };
       const replies = await recallOn('cli', s, [call, call]);
-      return { hints: replies.map((r) => r.hint), ledger: ledgerOf(s), traces: rowsOf(s.root).traces };
+      return {
+        hints: replies.map((r) => r.hint),
+        ledger: ledgerOf(s),
+        traces: rowsOf(s.root).traces,
+      };
     });
     expect(got.hints[0]).toBeNull();
     expect(got.hints[1]).not.toBeNull();
@@ -367,8 +391,15 @@ describe('what a recall records, HTTP and CLI', () => {
         { query: 'deploy', http: { include_continuity: 'true' }, cli: { continuity: true } },
       ]);
       // Priced before the times in the printed block are normalized; console.log adds the one newline the estimate leaves out.
-      const printed = surface === 'cli' ? estimateTokens(String(reply!.body).replace(/\n$/, '')) : null;
-      return { reply, printed, rows: summarised(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
+      const printed =
+        surface === 'cli' ? estimateTokens(String(reply!.body).replace(/\n$/, '')) : null;
+      return {
+        reply,
+        printed,
+        rows: summarised(s),
+        ledger: ledgerOf(s),
+        recalled: totalRecalled(s),
+      };
     });
     expect(got.ledger).toHaveLength(1);
     // Continuity changes what is printed, never which rows a recall writes.
@@ -384,8 +415,13 @@ describe('what a recall records, HTTP and CLI', () => {
         items: body.results.length,
         tokens: body.tokens + (body.continuityTokens ?? 0),
       });
-      expect(body.continuity?.activeSnapshot).toMatchObject({ task: 'ship the eu cluster', status: 'active' });
-      expect(body.continuity?.sessionHandoff).toMatchObject({ summary: 'handoff after the canary' });
+      expect(body.continuity?.activeSnapshot).toMatchObject({
+        task: 'ship the eu cluster',
+        status: 'active',
+      });
+      expect(body.continuity?.sessionHandoff).toMatchObject({
+        summary: 'handoff after the canary',
+      });
       expect(body.continuity?.recentSessionEvents.map((e) => e.content)).toEqual(['canary passed']);
       expect({ audit, recalled, traces, ranked, mirrored }).toEqual({
         audit: ['localhost:cli recall_anchor_skipped_no_session', 'localhost:cli recall 10'],
@@ -399,7 +435,9 @@ describe('what a recall records, HTTP and CLI', () => {
     // The CLI books the block it printed.
     expect(got.ledger[0]).toMatchObject({ surface: 'recall', tokens: got.printed });
     const printed = String(got.reply!.body);
-    expect(printed).toMatch(/^## Active Task Snapshot\n\n- Task: ship the eu cluster\n- Status: active\n/);
+    expect(printed).toMatch(
+      /^## Active Task Snapshot\n\n- Task: ship the eu cluster\n- Status: active\n/,
+    );
     for (const block of [
       '### Summary\ncutover planned\n\n### Next step\nrun the canary\n\n## Session Handoff\n',
       '### Summary\nhandoff after the canary\n\n### Next action\npromote it\n\n## Recent Session Trail\n',
@@ -416,34 +454,40 @@ describe('what a recall records, HTTP and CLI', () => {
     });
   });
 
-  it.each(SURFACES)('%s: a recall that fails validation records nothing and feeds no ring', async (surface) => {
-    const bad: RecallCall = {
-      query: 'deploy',
-      session: SESSION,
-      http: { limit: '-5' },
-      cli: { layer: 'no-such-layer' },
-    };
-    const good: RecallCall = { query: 'deploy', session: SESSION };
-    const got = await onSeeded(async (s) => {
-      const before = recorded(s);
-      const [failed] = await recallOn(surface, s, [bad]);
-      const after = recorded(s);
-      const later = await recallOn(surface, s, [good, good]);
-      return { failed, before, after, laterHints: later.map((r) => r.hint) };
-    });
-    expect(got.failed!.status).toBe(surface === 'http' ? 400 : 1);
-    // The CLI's ranking stages ran before the bad flag stopped it, so the goal log rows they earned stay; HTTP wrote nothing at all.
-    if (surface === 'http') expect(got.after).toEqual(got.before);
-    expect({ ...got.after, goalRecallLog: [] }).toEqual({ ...got.before, goalRecallLog: [] });
-    // Had the failed call reached the ring, the first good recall would read as a repeat.
-    expect(got.laterHints[0]).toBeNull();
-    expect(got.laterHints[1]).toBe(surface === 'http' ? 'mem_p_pinned' : 'mem_p_global');
-    expect([got.failed!.body, got.failed!.stderr]).toEqual(
-      surface === 'http'
-        ? [{ error: 'limit must be a positive integer <= 1000' }, '']
-        : ['', 'Invalid --layer: "no-such-layer". Must be one of: buffer, episodic, semantic, trace.\n'],
-    );
-  });
+  it.each(SURFACES)(
+    '%s: a recall that fails validation records nothing and feeds no ring',
+    async (surface) => {
+      const bad: RecallCall = {
+        query: 'deploy',
+        session: SESSION,
+        http: { limit: '-5' },
+        cli: { layer: 'no-such-layer' },
+      };
+      const good: RecallCall = { query: 'deploy', session: SESSION };
+      const got = await onSeeded(async (s) => {
+        const before = recorded(s);
+        const [failed] = await recallOn(surface, s, [bad]);
+        const after = recorded(s);
+        const later = await recallOn(surface, s, [good, good]);
+        return { failed, before, after, laterHints: later.map((r) => r.hint) };
+      });
+      expect(got.failed!.status).toBe(surface === 'http' ? 400 : 1);
+      // The CLI's ranking stages ran before the bad flag stopped it, so the goal log rows they earned stay; HTTP wrote nothing at all.
+      if (surface === 'http') expect(got.after).toEqual(got.before);
+      expect({ ...got.after, goalRecallLog: [] }).toEqual({ ...got.before, goalRecallLog: [] });
+      // Had the failed call reached the ring, the first good recall would read as a repeat.
+      expect(got.laterHints[0]).toBeNull();
+      expect(got.laterHints[1]).toBe(surface === 'http' ? 'mem_p_pinned' : 'mem_p_global');
+      expect([got.failed!.body, got.failed!.stderr]).toEqual(
+        surface === 'http'
+          ? [{ error: 'limit must be a positive integer <= 1000' }, '']
+          : [
+              '',
+              'Invalid --layer: "no-such-layer". Must be one of: buffer, episodic, semantic, trace.\n',
+            ],
+      );
+    },
+  );
 
   it('http: a recall the store refuses to audit answers 500, records nothing and feeds no ring', async () => {
     const call: RecallCall = { query: 'deploy', session: SESSION };
@@ -456,7 +500,12 @@ describe('what a recall records, HTTP and CLI', () => {
         after = recorded(s);
         refuseRecallAudit(s.root, false);
       });
-      return { statuses: replies.map((r) => r.status), hints: replies.map((r) => r.hint), before, after };
+      return {
+        statuses: replies.map((r) => r.status),
+        hints: replies.map((r) => r.hint),
+        before,
+        after,
+      };
     });
     expect(got.statuses).toEqual([500, 200, 200]);
     expect(got.after).toEqual(got.before);
@@ -508,7 +557,10 @@ describe('what a recall records, HTTP and CLI', () => {
     // HTTP sends an empty count to the stats write, which rewrites the mirror; the CLI skips the write for an empty list.
     expect(got.rows.mirrored).toBe(surface === 'cli' ? null : 0);
     const actor = surface === 'http' ? 'localhost:cli' : 'cli';
-    expect(got.rows.audit).toEqual([`${actor} recall_anchor_skipped_no_session`, `${actor} recall 0`]);
+    expect(got.rows.audit).toEqual([
+      `${actor} recall_anchor_skipped_no_session`,
+      `${actor} recall 0`,
+    ]);
     expect(got.rows.traces).toEqual([surface === 'http' ? 'api 0 -' : 'cli 0 -']);
     expect([got.rows.ranked, got.rows.bumped]).toEqual([[], {}]);
     if (surface === 'cli') expect(got.reply!.body).toBe('No memories found for: deploy\n');

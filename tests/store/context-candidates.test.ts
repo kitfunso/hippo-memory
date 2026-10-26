@@ -8,7 +8,12 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { loadContextCandidates, tallySources, loadTextsHolding, writeEntry } from '../_helpers/root-forms.js';
+import {
+  loadContextCandidates,
+  tallySources,
+  loadTextsHolding,
+  writeEntry,
+} from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 
@@ -63,7 +68,13 @@ describe('loadContextCandidates over the cap', () => {
   it('keeps pins, then the rows decay has worn least, and returns them oldest first', () => {
     const got = loadContextCandidates(root, 'default', { project: ['proj'], cap: 5, now: NOW });
     // Past the pin: k-team, b-fresh, h-global, then d-rewarded, whose reward outlasts e-mid's shorter age.
-    expect(got.map((e) => e.id)).toEqual(['a-old-pin', 'd-rewarded', 'h-global', 'b-fresh', 'k-team']);
+    expect(got.map((e) => e.id)).toEqual([
+      'a-old-pin',
+      'd-rewarded',
+      'h-global',
+      'b-fresh',
+      'k-team',
+    ]);
     const strengths = got.filter((e) => !e.pinned).map((e) => calculateStrength(e, NOW));
     expect(Math.min(...strengths)).toBeGreaterThan(calculateStrength(row('e-mid', 20), NOW));
   });
@@ -85,15 +96,17 @@ describe('loadContextCandidates over the cap', () => {
     expect(all({ cap: 100, now: NOW })).toContain('g-other');
     expect(all({ exactScope: 'team:x', cap: 100, now: NOW })).toEqual(['k-team']);
     expect(all({ project: ['proj'], cap: 100, now: NOW })).not.toContain('f-private');
-    expect(all({ exactScope: 'slack:private:c1', project: ['proj'], cap: 100, now: NOW })).toEqual(['f-private']);
+    expect(all({ exactScope: 'slack:private:c1', project: ['proj'], cap: 100, now: NOW })).toEqual([
+      'f-private',
+    ]);
   });
 
   it('tallies sources and finds the rows holding a text', () => {
     expect(tallySources(root, 'default').map((t) => [t.source, t.count])).toEqual([['cli', 10]]);
     expect(tallySources(root).reduce((n, t) => n + t.count, 0)).toBe(11);
-    expect(loadTextsHolding(root, 'default', ['row e-mid body', 'nothing']).map((r) => r.content)).toEqual([
-      'row e-mid body',
-    ]);
+    expect(
+      loadTextsHolding(root, 'default', ['row e-mid body', 'nothing']).map((r) => r.content),
+    ).toEqual(['row e-mid body']);
     const texts = ['e-mid', 'g-other', 'h-global', 'j-acme'].map((id) => `row ${id} body`);
     const scoped = loadTextsHolding(root, 'default', texts, ['proj']);
     expect(scoped.map((r) => [r.content, r.originProject]).sort()).toEqual([
@@ -105,7 +118,13 @@ describe('loadContextCandidates over the cap', () => {
   it('finds a row whose text falls on either side of a chunk boundary and in the last chunk', () => {
     const filler = (n: number): string[] => Array.from({ length: n }, (_, i) => `absent-${i}`);
     const held = (id: string): string => `row ${id} body`;
-    const texts = [...filler(ID_CHUNK - 1), held('e-mid'), held('g-other'), ...filler(ID_CHUNK), held('h-global')];
+    const texts = [
+      ...filler(ID_CHUNK - 1),
+      held('e-mid'),
+      held('g-other'),
+      ...filler(ID_CHUNK),
+      held('h-global'),
+    ];
     expect(texts.length).toBeGreaterThan(2 * ID_CHUNK);
     expect(
       loadTextsHolding(root, 'default', texts)
@@ -133,7 +152,9 @@ describe('loadContextCandidates reward factor', () => {
     });
     const got = loadContextCandidates(root, 'default', { cap: 1, now: NOW });
     const model = evalSwitches().strength;
-    const strongest = [...rows].sort((a, b) => strengthUnder(b, NOW, model) - strengthUnder(a, NOW, model))[0].id;
+    const strongest = [...rows].sort(
+      (a, b) => strengthUnder(b, NOW, model) - strengthUnder(a, NOW, model),
+    )[0].id;
     return { id: got[0].id, strongest };
   }
 

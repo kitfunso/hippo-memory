@@ -139,7 +139,10 @@ function seedSubagentGotchas(hippoRoot: string): void {
     hippoRoot,
     'subagent_fabrication',
     `Verify sub-agent model metrics before accepting. Natgas V3 claimed Min Sharpe 0.99->1.60; actual CV=-0.73. Manifest was falsified. Always run the backtest script to verify.`,
-    { tags: ['sub-agent', 'verification', 'metrics', 'error', 'critical'], emotional_valence: 'critical' },
+    {
+      tags: ['sub-agent', 'verification', 'metrics', 'error', 'critical'],
+      emotional_valence: 'critical',
+    },
   );
 
   seedMemory(
@@ -169,7 +172,10 @@ function seedQuantLessons(hippoRoot: string): void {
     hippoRoot,
     'data_mining_honesty',
     `Data mining: selected features on ALL data, reported as OOS. Fix: economic theory features only, or select on train set, freeze, test on held-out data. Honest Sharpe: 0.87 not 1.74.`,
-    { tags: ['quant', 'data-mining', 'feature-selection', 'backtest', 'error'], emotional_valence: 'negative' },
+    {
+      tags: ['quant', 'data-mining', 'feature-selection', 'backtest', 'error'],
+      emotional_valence: 'negative',
+    },
   );
 
   seedMemory(
@@ -255,7 +261,10 @@ const TEST_CASES: QueryCase[] = [
     query: 'why is gold model broken',
     expectedLabels: ['fred_cache_drop', 'cache_column_mismatch', 'fred_column_alias'],
   },
-  { query: 'deploying to production', expectedLabels: ['build_before_deploy', 'version_files', 'never_overwrite'] },
+  {
+    query: 'deploying to production',
+    expectedLabels: ['build_before_deploy', 'version_files', 'never_overwrite'],
+  },
   { query: 'python print crashes on windows', expectedLabels: ['no_emoji_python'] },
   {
     query: 'sub-agent output review',
@@ -269,8 +278,14 @@ const TEST_CASES: QueryCase[] = [
     query: 'backtest results seem too good',
     expectedLabels: ['walk_forward_overestimates', 'data_mining_honesty', 'cpcv_deflation'],
   },
-  { query: 'modifying production model file', expectedLabels: ['never_overwrite', 'version_files'] },
-  { query: 'natgas model performance history', expectedLabels: ['natgas_gfc_period', 'natgas_v4_details'] },
+  {
+    query: 'modifying production model file',
+    expectedLabels: ['never_overwrite', 'version_files'],
+  },
+  {
+    query: 'natgas model performance history',
+    expectedLabels: ['natgas_gfc_period', 'natgas_v4_details'],
+  },
   {
     query: 'frontend deploy process build',
     expectedLabels: ['build_before_deploy', 'constants_must_sync', 'powershell_semicolons'],
@@ -280,20 +295,32 @@ const TEST_CASES: QueryCase[] = [
     query: 'cache column missing broken',
     expectedLabels: ['cache_column_mismatch', 'fred_column_alias', 'wb_column_names'],
   },
-  { query: 'what is OOS split holdout', expectedLabels: ['oos_split_distinction', 'walk_forward_overestimates'] },
-  { query: 'FRED data stale or missing', expectedLabels: ['fred_cache_drop', 'fred_fallback', 'staleness_hides_ok'] },
+  {
+    query: 'what is OOS split holdout',
+    expectedLabels: ['oos_split_distinction', 'walk_forward_overestimates'],
+  },
+  {
+    query: 'FRED data stale or missing',
+    expectedLabels: ['fred_cache_drop', 'fred_fallback', 'staleness_hides_ok'],
+  },
   { query: 'emoji in output crashes', expectedLabels: ['no_emoji_python'] },
   {
     query: 'model metrics look wrong fabricated',
     expectedLabels: ['subagent_fabrication', 'walk_forward_overestimates'],
   },
-  { query: 'equal weight versus portfolio optimization', expectedLabels: ['equal_weight_beats_optimization'] },
+  {
+    query: 'equal weight versus portfolio optimization',
+    expectedLabels: ['equal_weight_beats_optimization'],
+  },
   {
     query: 'new data source ideas for commodities',
     expectedLabels: ['subagent_novel_data', 'alternative_data_sources'],
   },
   { query: 'EIA API broken path', expectedLabels: ['eia_path_change', 'staleness_hides_ok'] },
-  { query: 'feature selection method avoiding data mining', expectedLabels: ['data_mining_honesty'] },
+  {
+    query: 'feature selection method avoiding data mining',
+    expectedLabels: ['data_mining_honesty'],
+  },
   { query: 'scheduling cron jobs timeout size', expectedLabels: ['cron_timeout_sizing'] },
 ];
 
@@ -340,7 +367,9 @@ function main(): void {
     const col4 = 6;
     const divider = '─'.repeat(col1 + col2 + col3 + col4 + 10);
 
-    console.log(`${'Query'.padEnd(col1)} ${'P@3'.padEnd(col2)} ${'Recall@3'.padEnd(col3)} ${'MRR'.padEnd(col4)}`);
+    console.log(
+      `${'Query'.padEnd(col1)} ${'P@3'.padEnd(col2)} ${'Recall@3'.padEnd(col3)} ${'MRR'.padEnd(col4)}`,
+    );
     console.log(divider);
 
     let totalP3 = 0,
@@ -361,9 +390,12 @@ function main(): void {
       totalMRR += m;
 
       const mrrStr = m === 0 ? '0.00 ❌' : m.toFixed(2) + (m >= 0.5 ? ' ✓' : ' ~');
-      const truncQuery = tc.query.length > col1 - 1 ? tc.query.slice(0, col1 - 4) + '...' : tc.query;
+      const truncQuery =
+        tc.query.length > col1 - 1 ? tc.query.slice(0, col1 - 4) + '...' : tc.query;
 
-      console.log(`${truncQuery.padEnd(col1)} ${p3.toFixed(2).padEnd(col2)} ${r3.toFixed(2).padEnd(col3)} ${mrrStr}`);
+      console.log(
+        `${truncQuery.padEnd(col1)} ${p3.toFixed(2).padEnd(col2)} ${r3.toFixed(2).padEnd(col3)} ${mrrStr}`,
+      );
     }
 
     const n = TEST_CASES.length;
@@ -380,7 +412,9 @@ function main(): void {
     console.log(`   Avg Precision@3: ${avgP3.toFixed(3)} (${(avgP3 * 100).toFixed(1)}%)`);
     console.log(`   Avg Recall@3:    ${avgR3.toFixed(3)} (${(avgR3 * 100).toFixed(1)}%)`);
     console.log(`   Avg MRR:         ${avgMRR.toFixed(3)}`);
-    console.log(`   Overall grade:   ${avgMRR >= 0.7 ? '🟢 GOOD' : avgMRR >= 0.5 ? '🟡 OK' : '🔴 POOR'}\n`);
+    console.log(
+      `   Overall grade:   ${avgMRR >= 0.7 ? '🟢 GOOD' : avgMRR >= 0.5 ? '🟡 OK' : '🔴 POOR'}\n`,
+    );
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }

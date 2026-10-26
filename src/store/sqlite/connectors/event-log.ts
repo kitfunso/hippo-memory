@@ -17,9 +17,10 @@ export function eventSeen(db: DatabaseSyncLike, log: EventLogSpec, key: string):
 }
 
 export function eventMemory(db: DatabaseSyncLike, log: EventLogSpec, key: string): string | null {
-  const row = cachedStatement(db, `SELECT memory_id FROM ${log.table} WHERE ${log.keyColumn} = ?`).get(key) as
-    | { memory_id: string | null }
-    | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT memory_id FROM ${log.table} WHERE ${log.keyColumn} = ?`,
+  ).get(key) as { memory_id: string | null } | undefined;
   return row?.memory_id ?? null;
 }
 
@@ -41,6 +42,12 @@ export function markEventSeen(
   return Number(inserted.changes ?? 0) !== 0;
 }
 
-export function eventRecord(db: DatabaseSyncLike, log: EventLogSpec, key: string): ConnectorEventRecord {
-  return eventSeen(db, log, key) ? { seen: true, memoryId: eventMemory(db, log, key) } : { seen: false };
+export function eventRecord(
+  db: DatabaseSyncLike,
+  log: EventLogSpec,
+  key: string,
+): ConnectorEventRecord {
+  return eventSeen(db, log, key)
+    ? { seen: true, memoryId: eventMemory(db, log, key) }
+    : { seen: false };
 }

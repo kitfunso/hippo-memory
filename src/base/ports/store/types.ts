@@ -72,7 +72,8 @@ export interface ContinuityStamp {
 /** The columns a keyed write stamps; a partial key throws, since a row it wrote would match no reader. */
 export function continuityStamp(key: ContinuityKey): ContinuityStamp {
   const origin = key.project.find((n) => n !== '');
-  if (key.owner === '' || origin === undefined) throw new Error('continuity key needs an owner and a project');
+  if (key.owner === '' || origin === undefined)
+    throw new Error('continuity key needs an owner and a project');
   return { owner: key.owner, origin };
 }
 

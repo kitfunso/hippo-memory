@@ -61,11 +61,26 @@ describe('listPeers tenant scoping', () => {
   beforeEach(() => {
     globalRoot = makeRoot('listpeers-tenant');
     // Seed entries from 3 projects across 2 tenants.
-    writeEntry(globalRoot, makeSharedEntry({ id: 'mem_a1', project: 'projectA', tenantId: 'acme' }));
-    writeEntry(globalRoot, makeSharedEntry({ id: 'mem_a2', project: 'projectA', tenantId: 'acme' }));
-    writeEntry(globalRoot, makeSharedEntry({ id: 'mem_b1', project: 'projectB', tenantId: 'acme' }));
-    writeEntry(globalRoot, makeSharedEntry({ id: 'mem_c1', project: 'projectC', tenantId: 'globex' }));
-    writeEntry(globalRoot, makeSharedEntry({ id: 'mem_c2', project: 'projectC', tenantId: 'globex' }));
+    writeEntry(
+      globalRoot,
+      makeSharedEntry({ id: 'mem_a1', project: 'projectA', tenantId: 'acme' }),
+    );
+    writeEntry(
+      globalRoot,
+      makeSharedEntry({ id: 'mem_a2', project: 'projectA', tenantId: 'acme' }),
+    );
+    writeEntry(
+      globalRoot,
+      makeSharedEntry({ id: 'mem_b1', project: 'projectB', tenantId: 'acme' }),
+    );
+    writeEntry(
+      globalRoot,
+      makeSharedEntry({ id: 'mem_c1', project: 'projectC', tenantId: 'globex' }),
+    );
+    writeEntry(
+      globalRoot,
+      makeSharedEntry({ id: 'mem_c2', project: 'projectC', tenantId: 'globex' }),
+    );
   });
 
   it('ALL_TENANTS: returns host-wide peers', async () => {

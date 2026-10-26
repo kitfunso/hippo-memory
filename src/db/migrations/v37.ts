@@ -196,7 +196,9 @@ export const v37: Migration = {
       db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_memory ON relations(memory_id)`);
       db.exec(GRAPH_EXTRACTION_QUEUE_TABLE);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_graph_queue_status ON graph_extraction_queue(tenant_id, status)`);
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_graph_queue_status ON graph_extraction_queue(tenant_id, status)`,
+      );
 
       db.exec(TRG_ENTITIES_CONSOLIDATED_ONLY_INSERT);
       db.exec(TRG_ENTITIES_CONSOLIDATED_ONLY_UPDATE);

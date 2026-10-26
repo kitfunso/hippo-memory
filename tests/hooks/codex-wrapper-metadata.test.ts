@@ -81,7 +81,12 @@ describe('codex wrapper metadata hippo never wrote', () => {
     const original = path.join(bin, 'notes.txt');
     const backup = path.join(bin, 'notes.hippo-real.txt');
     fs.writeFileSync(backup, 'some other file');
-    writeMetadata({ originalCodexPath: original, realCodexPath: backup, commandPath: original, backupPath: backup });
+    writeMetadata({
+      originalCodexPath: original,
+      realCodexPath: backup,
+      commandPath: original,
+      backupPath: backup,
+    });
 
     expect(ensureCodexWrapperInstalled().status).toBe('foreign-metadata');
     expect(fs.existsSync(original)).toBe(false);

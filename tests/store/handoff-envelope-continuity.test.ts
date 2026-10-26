@@ -43,17 +43,26 @@ describe('IC-SMDP fixture, ambient handoff pop-off', () => {
       await closeTaskSnapshotsForSession(root, 'default', sessionId);
     }
 
-    const fresh = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh-session' });
+    const fresh = await contextGet(ctx, {
+      currentProject: cwdProject(),
+      currentSessionId: 'fresh-session',
+    });
     expect(fresh.sessionHandoff?.taskId).toBe('T_10');
 
     expect(stampHandoffOutcome(root, 'default', 'sess-10', 'success')).toBe(1);
-    const afterOne = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh-session' });
+    const afterOne = await contextGet(ctx, {
+      currentProject: cwdProject(),
+      currentSessionId: 'fresh-session',
+    });
     expect(afterOne.sessionHandoff?.taskId).toBe('T_9');
 
     for (let i = 1; i <= 9; i++) {
       stampHandoffOutcome(root, 'default', `sess-${i}`, 'success');
     }
-    const afterAll = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh-session' });
+    const afterAll = await contextGet(ctx, {
+      currentProject: cwdProject(),
+      currentSessionId: 'fresh-session',
+    });
     expect(afterAll.sessionHandoff).toBeUndefined();
   });
 });
@@ -69,7 +78,10 @@ describe('scope filtering on the continuity read paths', () => {
       scope: 'slack:private:C1',
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh' });
+    const result = await contextGet(ctx, {
+      currentProject: cwdProject(),
+      currentSessionId: 'fresh',
+    });
     expect(result.sessionHandoff).toBeUndefined();
   });
 
@@ -83,7 +95,10 @@ describe('scope filtering on the continuity read paths', () => {
       scope: 'unknown:legacy',
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh' });
+    const result = await contextGet(ctx, {
+      currentProject: cwdProject(),
+      currentSessionId: 'fresh',
+    });
     expect(result.sessionHandoff).toBeUndefined();
   });
 
@@ -97,7 +112,10 @@ describe('scope filtering on the continuity read paths', () => {
       scope: null,
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'fresh' });
+    const result = await contextGet(ctx, {
+      currentProject: cwdProject(),
+      currentSessionId: 'fresh',
+    });
     expect(result.sessionHandoff?.sessionId).toBe('sess-pub');
   });
 
@@ -118,7 +136,10 @@ describe('scope filtering on the continuity read paths', () => {
       scope: 'slack:private:C1',
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-priv-active' });
+    const result = await contextGet(ctx, {
+      currentProject: cwdProject(),
+      currentSessionId: 'sess-priv-active',
+    });
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.sessionHandoff).toBeUndefined();
   });
@@ -139,7 +160,10 @@ describe('scope filtering on the continuity read paths', () => {
       artifacts: [],
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-a' });
+    const result = await contextGet(ctx, {
+      currentProject: cwdProject(),
+      currentSessionId: 'sess-a',
+    });
     // pre-fix: activeSnapshot (scope-filtered) was null, so keying on activeSnapshot?.session_id fell through to the ambient unfinishedOnly lookup and surfaced sess-b's handoff.
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.sessionHandoff).toBeUndefined();
@@ -166,7 +190,10 @@ describe('scope filtering on the continuity read paths', () => {
       scope: 'proj:private:x',
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
-    const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-mix' });
+    const result = await contextGet(ctx, {
+      currentProject: cwdProject(),
+      currentSessionId: 'sess-mix',
+    });
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.recentEvents).toHaveLength(1);
     expect(result.recentEvents?.[0].content).toBe('public event');
@@ -176,15 +203,30 @@ describe('scope filtering on the continuity read paths', () => {
 describe('fix 1: unfinishedOnly selects the newest revision per session', () => {
   it('does not resurrect an older null-outcome revision after the newest is stamped', () => {
     initTestStore(root);
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-s', summary: 'older', artifacts: [] });
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-s', summary: 'newer', artifacts: [] });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-s',
+      summary: 'older',
+      artifacts: [],
+    });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-s',
+      summary: 'newer',
+      artifacts: [],
+    });
     expect(stampHandoffOutcome(root, 'default', 'sess-s', 'success')).toBe(1);
 
     // Session S is fully done: ambient unfinishedOnly must not fall back to its older null row.
     expect(loadLatestHandoff(root, 'default', undefined, { unfinishedOnly: true })).toBeNull();
 
     // A genuinely unfinished session still surfaces.
-    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-t', summary: 'still open', artifacts: [] });
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-t',
+      summary: 'still open',
+      artifacts: [],
+    });
     const unfinished = loadLatestHandoff(root, 'default', undefined, { unfinishedOnly: true });
     expect(unfinished!.sessionId).toBe('sess-t');
   });
@@ -260,7 +302,11 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
       nextStep: 'next',
       sessionId: 'sess-carry',
     });
-    const refreshed = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-carry', evidence: null });
+    const refreshed = writeSessionEndHandoff(root, {
+      tenantId: 'default',
+      sessionId: 'sess-carry',
+      evidence: null,
+    });
     expect(refreshed!.constraints).toEqual(['no schema break']);
     expect(refreshed!.cardId).toBe('card-9');
     expect(refreshed!.targetRuntime).toBe('codex');
@@ -285,7 +331,11 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
       nextStep: 'next',
       sessionId: 'sess-diff',
     });
-    const notCarried = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-diff', evidence: null });
+    const notCarried = writeSessionEndHandoff(root, {
+      tenantId: 'default',
+      sessionId: 'sess-diff',
+      evidence: null,
+    });
     expect(notCarried!.constraints).toEqual([]);
     expect(notCarried!.cardId).toBeNull();
     expect(notCarried!.targetRuntime).toBeNull();

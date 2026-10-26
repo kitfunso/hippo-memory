@@ -112,7 +112,11 @@ export interface Reports {
   tokenUse(tenantId: string, sinceIso: string): Promise<TokenSummary>;
   failures(tenantId: string, sinceIso: string): Promise<FailureSummary>;
   /** Strength tallies and the open-conflict count, read on one snapshot. */
-  memoryStatus(tenantId: string, now: Date, atRiskBelow: number): Promise<StrengthTallies & { openConflicts: number }>;
+  memoryStatus(
+    tenantId: string,
+    now: Date,
+    atRiskBelow: number,
+  ): Promise<StrengthTallies & { openConflicts: number }>;
   /** A page of the rows `filter` keeps, by created then id; ALL_TENANTS pages every tenant (host admin, the api
    * checks). One read for each walk of a filtered set of rows, so no group keeps a read per caller. */
   entriesWhere(filter: EntryFilter, page: PageRequest): Promise<EntryPage>;

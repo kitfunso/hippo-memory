@@ -6,7 +6,10 @@ import { join, resolve } from 'node:path';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 
 // Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
-const REFUSE_SCHEDULER = resolve(__dirname, '..', '_helpers', 'refuse-scheduler.cjs').replaceAll('\\', '/');
+const REFUSE_SCHEDULER = resolve(__dirname, '..', '_helpers', 'refuse-scheduler.cjs').replaceAll(
+  '\\',
+  '/',
+);
 const SKIP_LINE = 'HIPPO_SKIP_SCHEDULE=1, so the machine-level daily runner was not scheduled.';
 
 /** `hippo init` with no flags, under a preload that logs and refuses every scheduler call. */
@@ -18,7 +21,9 @@ function initWithNoFlags(dir: string, extraEnv: Record<string, string>) {
   writeFileSync(join(project, 'CLAUDE.md'), '# project\n');
   const calls = join(dir, 'scheduler-calls.log');
   // An empty PATH as well, so a preload that missed a call still finds no schtasks or crontab to run.
-  const inherited = Object.fromEntries(Object.entries(process.env).filter(([k]) => k.toUpperCase() !== 'PATH'));
+  const inherited = Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => k.toUpperCase() !== 'PATH'),
+  );
   const env = {
     ...inherited,
     ...extraEnv,
@@ -61,7 +66,9 @@ describe('the suite never reaches the real scheduler', () => {
       expect(r.stdout).toMatch(/schtasks \/create|To schedule the machine-level daily runner/);
       expect(r.calls[0]).toBe('preload');
       expect(r.calls.length).toBeGreaterThan(1);
-      expect(r.calls.slice(1).every((c) => /^(execSync|execFileSync) (schtasks|crontab)\b/.test(c))).toBe(true);
+      expect(
+        r.calls.slice(1).every((c) => /^(execSync|execFileSync) (schtasks|crontab)\b/.test(c)),
+      ).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

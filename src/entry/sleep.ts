@@ -2,7 +2,11 @@
 // caller's Context or options leave out.
 import { defaultStore, withSharedStoreHandles } from '../surface/open-store.js';
 import type { SleepStore } from '../base/ports/store.js';
-import { runConsolidation, type ConsolidateOptions, type SleepRules } from '../domain/consolidate/sleep.js';
+import {
+  runConsolidation,
+  type ConsolidateOptions,
+  type SleepRules,
+} from '../domain/consolidate/sleep.js';
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
 import { strengthModelFor } from '../base/memory/eval-switches.js';
 import type { HippoConfig } from '../base/config/config.js';

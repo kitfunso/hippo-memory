@@ -35,7 +35,8 @@ export function isLevelEnabled(level: LogLevel): boolean {
 const oneLine = (value: string): string => value.replace(/[\r\n]+/g, ' ');
 
 // A value with a space, quote or `=` is quoted, so a reader of the line can tell where it ends and the next key starts.
-const fieldValue = (value: string): string => (/[\s"=]/.test(value) ? JSON.stringify(value) : value);
+const fieldValue = (value: string): string =>
+  /[\s"=]/.test(value) ? JSON.stringify(value) : value;
 
 /** Same `[hippo] ` prefix the existing stderr lines use, so default-level output reads as before. */
 export function formatLogLine(level: LogLevel, message: string, fields: LogFields = {}): string {
@@ -55,7 +56,11 @@ export function formatLogJson(level: LogLevel, message: string, fields: LogField
 function write(level: LogLevel, message: string, fields?: LogFields): void {
   if (!isLevelEnabled(level)) return;
   // The request id is ambient, so a line logged deep in a library call still names the request it ran for.
-  const stamped: LogFields = { ts: new Date().toISOString(), requestId: currentRequestId(), ...fields };
+  const stamped: LogFields = {
+    ts: new Date().toISOString(),
+    requestId: currentRequestId(),
+    ...fields,
+  };
   const format = envLogJson() ? formatLogJson : formatLogLine;
   process.stderr.write(`${format(level, message, stamped)}\n`);
 }
@@ -83,7 +88,10 @@ function sightOnceKey(key: string): 'new' | 'seen' {
     }
     if (!onceCapReported) {
       onceCapReported = true;
-      write('warn', `log: ${ONCE_KEY_CAP} once-only warnings were written; the least recently seen are now forgotten`);
+      write(
+        'warn',
+        `log: ${ONCE_KEY_CAP} once-only warnings were written; the least recently seen are now forgotten`,
+      );
     }
   }
   onceKeys.add(key);
@@ -114,7 +122,8 @@ function warnThenSample(key: string, message: string, fields?: LogFields): void 
   // Counts only keys sightOnceKey recorded, and it drops a count with its key, so the map is bounded by ONCE_KEY_CAP.
   const seen = (repeatCounts.get(key) ?? 0) + 1;
   repeatCounts.set(key, seen);
-  if (seen % SAMPLE_EVERY === 0) write('warn', `${message} (${seen} more since the first warning)`, fields);
+  if (seen % SAMPLE_EVERY === 0)
+    write('warn', `${message} (${seen} more since the first warning)`, fields);
   else write('debug', message, fields);
 }
 
@@ -127,7 +136,11 @@ function causeChain(err: Error): string | undefined {
   let next: unknown = err.cause;
   while (next !== undefined && links.length < CAUSE_DEPTH && !seen.has(next)) {
     seen.add(next);
-    links.push(next instanceof Error ? `${next.constructor.name}: ${next.message}` : `NonError: ${String(next)}`);
+    links.push(
+      next instanceof Error
+        ? `${next.constructor.name}: ${next.message}`
+        : `NonError: ${String(next)}`,
+    );
     next = next instanceof Error ? next.cause : undefined;
   }
   return links.length > 0 ? links.join(' <- ') : undefined;
@@ -135,7 +148,10 @@ function causeChain(err: Error): string | undefined {
 
 /** The class name, stack and cause chain of a thrown value, as log fields; a non-Error throw has no stack. Both texts
  * repeat the message, so `scrub` runs over them where the message is redacted. */
-export function errorFields<E>(err: E, scrub: (text: string) => string = (text) => text): LogFields {
+export function errorFields<E>(
+  err: E,
+  scrub: (text: string) => string = (text) => text,
+): LogFields {
   if (!(err instanceof Error)) return { errorClass: 'NonError' };
   const cause = causeChain(err);
   return {
@@ -149,7 +165,9 @@ export function errorFields<E>(err: E, scrub: (text: string) => string = (text) 
 export function errorClassFields<E>(err: E): LogFields {
   if (!(err instanceof Error)) return { errorClass: 'NonError' };
   const code = errorCode(err);
-  return code === '' ? { errorClass: err.constructor.name } : { errorClass: err.constructor.name, errno: code };
+  return code === ''
+    ? { errorClass: err.constructor.name }
+    : { errorClass: err.constructor.name, errno: code };
 }
 
 export const log = {

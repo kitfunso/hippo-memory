@@ -11,7 +11,12 @@ import {
   type EntryContext as Context,
 } from './api/index.js';
 import { withEntryInfra } from './surface/entry-infra.js';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './base/errors/api-errors.js';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from './base/errors/api-errors.js';
 
 /** Mints a key stamped by the caller's clock, else the host's. */
 export function authCreate(ctx: Context, opts: AuthCreateOptions): Promise<AuthCreateResult> {
@@ -19,7 +24,10 @@ export function authCreate(ctx: Context, opts: AuthCreateOptions): Promise<AuthC
 }
 
 /** Mints the signed-in caller's own key, stamped by the caller's clock, else the host's. */
-export function authCreateSelf(ctx: Context, opts: AuthCreateSelfOptions): Promise<AuthCreateSelfResult> {
+export function authCreateSelf(
+  ctx: Context,
+  opts: AuthCreateSelfOptions,
+): Promise<AuthCreateSelfResult> {
   return authCreateSelfIn(withEntryInfra(ctx), opts);
 }
 
@@ -83,7 +91,10 @@ export {
   type CallerHookOutput,
   type CallerPreCompactRequest,
 } from './surface/capture/pre-compact-caller.js';
-export { compactResumeForCaller, type CallerCompactResumeRequest } from './surface/capture/compact-resume-caller.js';
+export {
+  compactResumeForCaller,
+  type CallerCompactResumeRequest,
+} from './surface/capture/compact-resume-caller.js';
 export {
   saveCompactionItemsForCaller,
   type CallerItemsRequest,

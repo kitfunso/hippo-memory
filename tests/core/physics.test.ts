@@ -101,7 +101,9 @@ describe('Vector math', () => {
 describe('Property derivation', () => {
   describe('computeMass', () => {
     it('increases with strength', () => {
-      expect(computeMass(0.8, 0, PRODUCTION_STRENGTH)).toBeGreaterThan(computeMass(0.2, 0, PRODUCTION_STRENGTH));
+      expect(computeMass(0.8, 0, PRODUCTION_STRENGTH)).toBeGreaterThan(
+        computeMass(0.2, 0, PRODUCTION_STRENGTH),
+      );
     });
 
     it('increases logarithmically with retrieval count', () => {
@@ -404,7 +406,11 @@ describe('Scoring', () => {
 
     it('velocity alignment contributes to score', () => {
       const still = makeParticle({ memoryId: 'still', position: [1, 0, 0], velocity: [0, 0, 0] });
-      const moving = makeParticle({ memoryId: 'moving', position: [1, 0, 0], velocity: [0.1, 0, 0] });
+      const moving = makeParticle({
+        memoryId: 'moving',
+        position: [1, 0, 0],
+        velocity: [0.1, 0, 0],
+      });
       const query = [1, 0, 0];
       const config = { ...DEFAULT_PHYSICS_CONFIG, momentumWeight: 0.5 };
       const results = physicsScore([still, moving], query, config);
@@ -496,8 +502,16 @@ describe('Simulation', () => {
     });
 
     it('velocity stays clamped to maxVelocity', () => {
-      const p1 = makeParticle({ memoryId: 'a', position: vecNormalize([1, 0.1, 0]), velocity: [0.05, 0.05, 0] });
-      const p2 = makeParticle({ memoryId: 'b', position: vecNormalize([0.9, 0.4, 0]), velocity: [-0.05, 0.05, 0] });
+      const p1 = makeParticle({
+        memoryId: 'a',
+        position: vecNormalize([1, 0.1, 0]),
+        velocity: [0.05, 0.05, 0],
+      });
+      const p2 = makeParticle({
+        memoryId: 'b',
+        position: vecNormalize([0.9, 0.4, 0]),
+        velocity: [-0.05, 0.05, 0],
+      });
 
       const ctx = makeCtx({
         config: { ...DEFAULT_PHYSICS_CONFIG, substeps: 50, maxVelocity: 0.1 },
@@ -524,8 +538,16 @@ describe('Simulation', () => {
 
     it('energy does not increase over many steps (drag removes energy)', () => {
       const particles = [
-        makeParticle({ memoryId: 'a', position: vecNormalize([1, 0.1, 0]), velocity: [0.05, 0, 0] }),
-        makeParticle({ memoryId: 'b', position: vecNormalize([0.8, 0.6, 0]), velocity: [0, 0.05, 0] }),
+        makeParticle({
+          memoryId: 'a',
+          position: vecNormalize([1, 0.1, 0]),
+          velocity: [0.05, 0, 0],
+        }),
+        makeParticle({
+          memoryId: 'b',
+          position: vecNormalize([0.8, 0.6, 0]),
+          velocity: [0, 0.05, 0],
+        }),
       ];
 
       const config = { ...DEFAULT_PHYSICS_CONFIG, substeps: 5, drag: 0.5 };
@@ -595,8 +617,18 @@ describe('Simulation', () => {
     });
 
     it('total = kinetic + potential', () => {
-      const p1 = makeParticle({ memoryId: 'a', position: vecNormalize([1, 0.1, 0]), mass: 2, velocity: [1, 0, 0] });
-      const p2 = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.2, 0]), mass: 1, velocity: [0, 1, 0] });
+      const p1 = makeParticle({
+        memoryId: 'a',
+        position: vecNormalize([1, 0.1, 0]),
+        mass: 2,
+        velocity: [1, 0, 0],
+      });
+      const p2 = makeParticle({
+        memoryId: 'b',
+        position: vecNormalize([1, 0.2, 0]),
+        mass: 1,
+        velocity: [0, 1, 0],
+      });
       const energy = computeSystemEnergy([p1, p2], 0.5);
       expect(energy.total).toBeCloseTo(energy.kinetic + energy.potential, 10);
     });

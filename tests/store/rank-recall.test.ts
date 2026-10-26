@@ -7,7 +7,11 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
+import {
+  rankRecall,
+  type RankRecallCtx,
+  type RankRecallOptions,
+} from '../../src/api/recall/pipeline.js';
 import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import type { RerankerFn } from '../../src/base/ports/reranker.js';
 import { makeStore } from '../_helpers/make-root.js';
@@ -77,13 +81,23 @@ describe('rankRecall', () => {
     writeEntry(hippoRoot, seeded('deploy pipeline uses blue green rollout', 'mem_rank_plain'));
     writeEntry(
       hippoRoot,
-      seeded('private deploy token rotation', 'mem_rank_private', {}, { scope: 'slack:private:C1' }),
+      seeded(
+        'private deploy token rotation',
+        'mem_rank_private',
+        {},
+        { scope: 'slack:private:C1' },
+      ),
     );
     writeEntry(
       hippoRoot,
-      seeded('deploy target was the old cluster', 'mem_rank_old', { supersededBy: 'mem_rank_plain' }),
+      seeded('deploy target was the old cluster', 'mem_rank_old', {
+        supersededBy: 'mem_rank_plain',
+      }),
     );
-    writeEntry(hippoRoot, seeded('deploy goal work on the runner', 'mem_rank_goal', {}, { tags: ['goal-alpha'] }));
+    writeEntry(
+      hippoRoot,
+      seeded('deploy goal work on the runner', 'mem_rank_goal', {}, { tags: ['goal-alpha'] }),
+    );
     writeEntry(
       hippoRoot,
       seeded(
@@ -104,7 +118,11 @@ describe('rankRecall', () => {
   });
 
   it('an explicit scope unlocks that private scope on top of the default set', async () => {
-    const rank = await rankRecall(ctx(), opts({ explicitScope: 'slack:private:C1' }), BUDGET_RANKED);
+    const rank = await rankRecall(
+      ctx(),
+      opts({ explicitScope: 'slack:private:C1' }),
+      BUDGET_RANKED,
+    );
     expect(ids(rank.results)).toContain('mem_rank_private');
     expect(ids(rank.results)).toContain('mem_rank_plain');
   });
@@ -127,23 +145,32 @@ describe('rankRecall re-rank stages', () => {
   const put = (id: string, content: string, extra: Partial<MemoryEntry> = {}): void => {
     writeEntry(hippoRoot, { ...createMemory(content), id, strength: 1, ...extra });
   };
-  const rank = (extra: Partial<RankRecallOptions> = {}) => rankRecall(ctx(), opts(extra), BUDGET_RANKED);
+  const rank = (extra: Partial<RankRecallOptions> = {}) =>
+    rankRecall(ctx(), opts(extra), BUDGET_RANKED);
 
   beforeEach(() => {
     ({ root: hippoRoot } = makeStore('rank-rerank'));
   });
 
   it('evcAdaptive puts the newest of several near-duplicate hits first', async () => {
-    put('mem_old', 'deploy target is the cluster in region east zone one', { created: '2024-01-01T00:00:00.000Z' });
-    put('mem_mid', 'deploy target is the cluster in region east zone two', { created: '2025-01-01T00:00:00.000Z' });
-    put('mem_new', 'deploy target is the cluster in region east zone three', { created: '2026-01-01T00:00:00.000Z' });
+    put('mem_old', 'deploy target is the cluster in region east zone one', {
+      created: '2024-01-01T00:00:00.000Z',
+    });
+    put('mem_mid', 'deploy target is the cluster in region east zone two', {
+      created: '2025-01-01T00:00:00.000Z',
+    });
+    put('mem_new', 'deploy target is the cluster in region east zone three', {
+      created: '2026-01-01T00:00:00.000Z',
+    });
 
     const r = await rank({ evcAdaptive: true });
     expect(ids(r.results)).toEqual(['mem_new', 'mem_mid', 'mem_old']);
   });
 
   it('evcAdaptive leaves the order alone when the top hits are about different things', async () => {
-    put('mem_a', 'deploy rollback needs the previous image tag', { created: '2024-01-01T00:00:00.000Z' });
+    put('mem_a', 'deploy rollback needs the previous image tag', {
+      created: '2024-01-01T00:00:00.000Z',
+    });
     put('mem_b', 'deploy windows close friday afternoon for the release train', {
       created: '2026-01-01T00:00:00.000Z',
     });
@@ -161,7 +188,12 @@ describe('rankRecall re-rank stages', () => {
     const reverse: RerankerFn = async (_q, results) =>
       [...results]
         .reverse()
-        .map((r, i) => ({ ...r, rerankScore: 10 - i, preRerankRank: r.preRerankRank ?? 0, postRerankRank: 0 }));
+        .map((r, i) => ({
+          ...r,
+          rerankScore: 10 - i,
+          preRerankRank: r.preRerankRank ?? 0,
+          postRerankRank: 0,
+        }));
     const r = await rank({ reranker: { fn: reverse, topK: 2 }, why: true });
 
     expect(ids(r.results)).toEqual([base[1], base[0], base[2]]);
@@ -175,7 +207,9 @@ describe('rankRecall re-rank stages', () => {
   });
 
   it('filterConflicts drops superseded rows and down-ranks a row whose recorded conflict is also present', async () => {
-    put('mem_strong', 'deploy deploy deploy uses the blue cluster', { conflictsWith: ['mem_weak'] });
+    put('mem_strong', 'deploy deploy deploy uses the blue cluster', {
+      conflictsWith: ['mem_weak'],
+    });
     put('mem_weak', 'deploy uses the green cluster', { conflictsWith: ['mem_strong'] });
     put('mem_free', 'deploy checklist lives in the wiki');
 
@@ -230,7 +264,10 @@ describe('rankRecall re-rank stages', () => {
   });
 
   it('asOf returns the row that was true at that date, before or after its successor took over', async () => {
-    put('mem_v1', 'deploy region was us-east', { validFrom: '2024-01-01T00:00:00.000Z', supersededBy: 'mem_v2' });
+    put('mem_v1', 'deploy region was us-east', {
+      validFrom: '2024-01-01T00:00:00.000Z',
+      supersededBy: 'mem_v2',
+    });
     put('mem_v2', 'deploy region is eu-west', { validFrom: '2025-06-01T00:00:00.000Z' });
 
     expect(ids((await rank({ asOf: '2025-01-01T00:00:00.000Z' })).results)).toEqual(['mem_v1']);

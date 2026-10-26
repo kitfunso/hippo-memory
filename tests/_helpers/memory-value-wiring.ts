@@ -46,7 +46,12 @@ export function enableMemoryValue(hippoRoot: string, extra: Partial<HippoConfig>
     configPath,
     // dormant off: these gates were pre-registered on the delete path.
     JSON.stringify(
-      { memoryValue: { enabled: true }, physics: { enabled: false }, dormant: { enabled: false }, ...extra },
+      {
+        memoryValue: { enabled: true },
+        physics: { enabled: false },
+        dormant: { enabled: false },
+        ...extra,
+      },
       null,
       2,
     ),
@@ -61,7 +66,12 @@ export function enableMemoryValue(hippoRoot: string, extra: Partial<HippoConfig>
  *  describe('(e) rescue semantics'). */
 export function condemnedEntry(
   content: string,
-  opts: { layer?: Layer; tenantId?: string; tags?: string[]; confidence?: MemoryEntry['confidence'] } = {},
+  opts: {
+    layer?: Layer;
+    tenantId?: string;
+    tags?: string[];
+    confidence?: MemoryEntry['confidence'];
+  } = {},
 ): MemoryEntry {
   const created = ancientDate(3650);
   const base = createMemory7(content, {

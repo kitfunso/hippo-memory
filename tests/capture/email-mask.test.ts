@@ -36,7 +36,11 @@ function transcript(): string {
   const file = path.join(tmp, 's1.jsonl');
   const records = [
     { type: 'user', cwd: repo, message: { role: 'user', content: PROMPT } },
-    { type: 'assistant', cwd: repo, message: { role: 'assistant', content: [{ type: 'text', text: REPLY }] } },
+    {
+      type: 'assistant',
+      cwd: repo,
+      message: { role: 'assistant', content: [{ type: 'text', text: REPLY }] },
+    },
   ];
   fs.writeFileSync(file, records.map((r) => JSON.stringify(r)).join('\n') + '\n');
   return file;
@@ -44,8 +48,12 @@ function transcript(): string {
 
 describe('maskEmails', () => {
   it('masks addresses and leaves asset names, version pins and scopes alone', () => {
-    expect(maskEmails(`mail ${EMAIL} or bob.smith+ci@mail.example.co.uk`)).toBe('mail [email] or [email]');
-    expect(maskEmails('logo@2x.png react@18.2.0 @scope/pkg')).toBe('logo@2x.png react@18.2.0 @scope/pkg');
+    expect(maskEmails(`mail ${EMAIL} or bob.smith+ci@mail.example.co.uk`)).toBe(
+      'mail [email] or [email]',
+    );
+    expect(maskEmails('logo@2x.png react@18.2.0 @scope/pkg')).toBe(
+      'logo@2x.png react@18.2.0 @scope/pkg',
+    );
   });
 });
 

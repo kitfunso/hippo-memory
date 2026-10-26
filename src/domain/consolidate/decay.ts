@@ -21,7 +21,9 @@ export const DECAY_THRESHOLD = 0.05;
 export function sessionDecayContext({
   sleepCount,
   recentRuns,
-}: Pick<SleepStart, 'sleepCount' | 'recentRuns'>): Required<Pick<DecayBasis, 'sleepCount' | 'avgSessionIntervalDays'>> {
+}: Pick<SleepStart, 'sleepCount' | 'recentRuns'>): Required<
+  Pick<DecayBasis, 'sleepCount' | 'avgSessionIntervalDays'>
+> {
   const count = sleepCount || recentRuns.length;
   if (recentRuns.length < 2) return { sleepCount: count, avgSessionIntervalDays: 0 };
   const timestamps = recentRuns.map((at) => new Date(at).getTime()).reverse();
@@ -63,9 +65,14 @@ function retireFaded(run: SleepRun, entry: MemoryEntry, strength: number): void 
 }
 
 /** Keeps an entry with its live strength cached; only strength is a cached computation, confidence stays as stored. */
-function keepSurvivor(run: SleepRun, entry: Pick<MemoryEntry, 'id' | 'strength'>, strength: number): void {
+function keepSurvivor(
+  run: SleepRun,
+  entry: Pick<MemoryEntry, 'id' | 'strength'>,
+  strength: number,
+): void {
   run.survivors.keep(entry.id, strength);
-  if (!run.dryRun && strength !== entry.strength) run.pendingRefreshes.push({ id: entry.id, strength });
+  if (!run.dryRun && strength !== entry.strength)
+    run.pendingRefreshes.push({ id: entry.id, strength });
   run.result.decayed++;
 }
 
@@ -95,8 +102,13 @@ export async function decayPass(run: SleepRun): Promise<DecayOutcome> {
 
 // A non-finite feature (e.g. a malformed `created`) scores -Infinity and can never be rescued, so name those entries in
 // one warning rather than leave it a silent NaN detail.
-function reportNonFiniteScores(result: ConsolidationResult, rankById: Map<string, MvRankInfo>): void {
-  const nonFiniteIds = [...rankById.entries()].filter(([, info]) => !Number.isFinite(info.score)).map(([id]) => id);
+function reportNonFiniteScores(
+  result: ConsolidationResult,
+  rankById: Map<string, MvRankInfo>,
+): void {
+  const nonFiniteIds = [...rankById.entries()]
+    .filter(([, info]) => !Number.isFinite(info.score))
+    .map(([id]) => id);
   if (nonFiniteIds.length > 0) {
     result.events.push({ kind: 'nonFiniteScores', ids: nonFiniteIds });
   }
@@ -121,14 +133,25 @@ async function classifyByStrength(run: SleepRun) {
     for (const entry of page) {
       const live = liveStrength(run, entry);
       const condemned = run.retirable(entry) && live < DECAY_THRESHOLD;
-      verdicts.push({ id: entry.id, tenant_id: entry.tenantId, strength: entry.strength, live, condemned });
+      verdicts.push({
+        id: entry.id,
+        tenant_id: entry.tenantId,
+        strength: entry.strength,
+        live,
+        condemned,
+      });
       if (!entry.pinned) candidates.push(mvCandidate(entry, run.now, mvRules));
     }
   }
   return { verdicts, candidates };
 }
 
-function reportRescue(result: ConsolidationResult, id: string, strength: number, rank: MvRankInfo | undefined): void {
+function reportRescue(
+  result: ConsolidationResult,
+  id: string,
+  strength: number,
+  rank: MvRankInfo | undefined,
+): void {
   result.events.push({ kind: 'rescued', id, strength, threshold: DECAY_THRESHOLD, rank });
 }
 
@@ -153,7 +176,11 @@ async function decayWithMemoryValue(run: SleepRun): Promise<DecayOutcome> {
     rescuedIds = rescueSet([], condemnedIds, run.now, { precomputedRanks: rankById });
     reportNonFiniteScores(run.result, rankById);
   }
-  return { rescuedIds, rescuedEntries: await commitVerdicts(run, verdicts, rescuedIds, rankById), rankById };
+  return {
+    rescuedIds,
+    rescuedEntries: await commitVerdicts(run, verdicts, rescuedIds, rankById),
+    rankById,
+  };
 }
 
 // --- Phase 2b: commit in run order ---

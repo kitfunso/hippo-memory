@@ -4,7 +4,11 @@ import * as path from 'node:path';
 import { transcriptNotesProject } from '../agent-memories/claude-code.js';
 import { containerId, containerPrefix } from '../agent-memories/source.js';
 import { foldEdges, foldedInto, projectAudit } from '../agent-memories/project-folds.js';
-import { AGENT_MEMORY_SOURCE_PREFIX, toolSourcePrefix, toolTag } from '../../base/memory/agent-memory-tools.js';
+import {
+  AGENT_MEMORY_SOURCE_PREFIX,
+  toolSourcePrefix,
+  toolTag,
+} from '../../base/memory/agent-memory-tools.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { READ_PAGE_ROWS, readPages } from '../../base/util/pages.js';
@@ -87,7 +91,8 @@ interface Reader {
 /** Every row of the tenant `narrowing` keeps, one page per call, so no one call holds a whole tenant. */
 async function* rowsOf(r: Reader, narrowing: EntryNarrowing): AsyncGenerator<MemoryEntry> {
   const filter = { ...narrowing, tenantId: r.tenantId };
-  const read = (after?: EntryCursor) => r.store.reports.entriesWhere(filter, { limit: READ_PAGE_ROWS, after });
+  const read = (after?: EntryCursor) =>
+    r.store.reports.entriesWhere(filter, { limit: READ_PAGE_ROWS, after });
   for await (const page of readPages(read)) yield* page;
 }
 
@@ -96,7 +101,9 @@ function liveRows(r: Reader, prefix: string): AsyncGenerator<MemoryEntry> {
 }
 
 /** Per project name, how many of its imports hold a text that another name's import also holds. */
-async function copiesByOrigin(imports: AsyncIterable<MemoryEntry>): Promise<Map<string | null, number>> {
+async function copiesByOrigin(
+  imports: AsyncIterable<MemoryEntry>,
+): Promise<Map<string | null, number>> {
   const holders = new Map<string, Map<string | null, number>>();
   for await (const e of imports) {
     const key = duplicateKey(e.content);
@@ -113,7 +120,10 @@ async function copiesByOrigin(imports: AsyncIterable<MemoryEntry>): Promise<Map<
 }
 
 /** Live rows per project name, newest write first, with how many of its imported notes are copies held elsewhere. */
-export async function listProjects(store: ProjectTagReads, tenantId: string): Promise<ProjectSummary[]> {
+export async function listProjects(
+  store: ProjectTagReads,
+  tenantId: string,
+): Promise<ProjectSummary[]> {
   const copies = await copiesByOrigin(liveRows({ store, tenantId }, AGENT_MEMORY_SOURCE_PREFIX));
   return (await store.projectTags.originTallies(tenantId, AGENT_MEMORY_SOURCE_PREFIX))
     .map(({ origin, live, prefixed, newest }) => ({
@@ -164,7 +174,9 @@ async function importCopies(r: Reader): Promise<MemoryEntry[]> {
 }
 
 /** Each transcript the tenant's compactions recorded with its working folder, once. */
-async function transcriptsOf(r: Reader): Promise<Array<{ transcript: string; cwd: string | null }>> {
+async function transcriptsOf(
+  r: Reader,
+): Promise<Array<{ transcript: string; cwd: string | null }>> {
   const seen = new Map<string, { transcript: string; cwd: string | null }>();
   for (const { transcript, cwd } of await r.store.projectTags.compactionOrigins(r.tenantId)) {
     if (transcript !== null) seen.set(JSON.stringify([transcript, cwd]), { transcript, cwd });
@@ -173,14 +185,22 @@ async function transcriptsOf(r: Reader): Promise<Array<{ transcript: string; cwd
 }
 
 /** Each Claude session folder a compaction recorded, with the names of each project it resolves to. */
-async function sessionOwners(r: Reader, machine: SessionMachine): Promise<Map<string, Map<string, string[]>>> {
+async function sessionOwners(
+  r: Reader,
+  machine: SessionMachine,
+): Promise<Map<string, Map<string, string[]>>> {
   const owners = new Map<string, Map<string, string[]>>();
   for (const { transcript, cwd } of await transcriptsOf(r)) {
     const project = transcriptNotesProject(transcript, cwd, machine);
     const dir = path.join(path.dirname(transcript), 'memory');
     if (project === null) continue;
     const ids = owners.get(dir) ?? new Map<string, string[]>();
-    owners.set(dir, ids.set(project.name, [...new Set([...(ids.get(project.name) ?? []), ...projectNames(project)])]));
+    owners.set(
+      dir,
+      ids.set(project.name, [
+        ...new Set([...(ids.get(project.name) ?? []), ...projectNames(project)]),
+      ]),
+    );
   }
   return owners;
 }
@@ -230,12 +250,18 @@ async function planFolds(
     (await projectAudit(r.store.auditLog, r.tenantId, 'project_merge')).map((e) => e.metadata.into),
   );
   if (!folder.isGlobal) {
-    return { folds: (await ownLegacyFold(r, folder)).filter((f) => !chosen.has(f.from)), collisions: [] };
+    return {
+      folds: (await ownLegacyFold(r, folder)).filter((f) => !chosen.has(f.from)),
+      collisions: [],
+    };
   }
   const today = new Map<string, Set<string>>();
   for (const { origin, cwd } of await r.store.projectTags.compactionOrigins(r.tenantId)) {
     if (origin !== '' && cwd !== null && folder.machine.files.exists(cwd)) {
-      today.set(origin, (today.get(origin) ?? new Set<string>()).add(folder.machine.projectIdentity(cwd).name));
+      today.set(
+        origin,
+        (today.get(origin) ?? new Set<string>()).add(folder.machine.projectIdentity(cwd).name),
+      );
     }
   }
   const folds: ProjectFold[] = [];
@@ -253,7 +279,10 @@ async function planFolds(
 
 /** A project store's rows, dormant snapshots and compaction records written before its id existed carry its folder
  * name. */
-async function ownLegacyFold(r: Reader, folder: Extract<StoreFolder, { isGlobal: false }>): Promise<ProjectFold[]> {
+async function ownLegacyFold(
+  r: Reader,
+  folder: Extract<StoreFolder, { isGlobal: false }>,
+): Promise<ProjectFold[]> {
   // A shared store's rows carry their callers' names, so one matching its folder's is a member's project, not a legacy
   // tag.
   if (folder.shared) return [];
@@ -262,7 +291,9 @@ async function ownLegacyFold(r: Reader, folder: Extract<StoreFolder, { isGlobal:
   const legacy = { tenantId: r.tenantId, origins: [legacyName] };
   const held =
     (await r.store.reports.entriesWhere(legacy, { limit: 1 })).entries.length > 0 ||
-    (await r.store.projectTags.compactionOrigins(r.tenantId)).some((c) => c.origin === legacyName) ||
+    (await r.store.projectTags.compactionOrigins(r.tenantId)).some(
+      (c) => c.origin === legacyName,
+    ) ||
     (await r.store.projectTags.dormantWhere(legacy)).length > 0;
   return held ? [{ from: legacyName, into: name }] : [];
 }
@@ -272,7 +303,11 @@ interface RepairPlanRows extends Omit<RepairResult, 'copies' | 'backup'> {
   readonly stray: readonly MemoryEntry[];
 }
 
-async function planRepair(r: Reader, folder: StoreFolder, globalFolds: boolean): Promise<RepairPlanRows> {
+async function planRepair(
+  r: Reader,
+  folder: StoreFolder,
+  globalFolds: boolean,
+): Promise<RepairPlanRows> {
   const { folds, collisions } = await planFolds(r, folder, globalFolds);
   const stray = await strayImports(r, folder);
   return { stray, folds, collisions, ...(await planUserGlobalRepair(r, folds)) };
@@ -304,7 +339,9 @@ async function planUserGlobalRepair(
   const untraced: string[] = [];
   for await (const row of mergeRows()) {
     if (row.source !== 'consolidation') continue;
-    const parents = new Set(row.parents.filter((id) => origins.has(id)).map((id) => origins.get(id) ?? null));
+    const parents = new Set(
+      row.parents.filter((id) => origins.has(id)).map((id) => origins.get(id) ?? null),
+    );
     const [only] = parents;
     if (parents.size === 1 && only === '') continue;
     if (parents.size === 1 && only) toProject.push({ id: row.id, origin: only });
@@ -321,7 +358,8 @@ async function parentOrigins(
   folds: readonly ProjectFold[],
 ): Promise<Map<string, string | null>> {
   const renamed = new Map(folds.map((f) => [f.from, f.into]));
-  const after = (origin: string | null | undefined) => (origin ? (renamed.get(origin) ?? origin) : (origin ?? null));
+  const after = (origin: string | null | undefined) =>
+    origin ? (renamed.get(origin) ?? origin) : (origin ?? null);
   const parents = new Set<string>();
   for await (const row of merges) for (const id of row.parents) parents.add(id);
   const parentIds = [...parents];
@@ -330,7 +368,9 @@ async function parentOrigins(
   // A live row outranks a snapshot under its id, so only the parents with no live row are looked up dormant.
   const gone = parentIds.filter((id) => !live.has(id));
   const dormant = await r.store.projectTags.dormantWhere({ tenantId: r.tenantId, ids: gone });
-  const origins = new Map<string, string | null>(dormant.map((s) => [s.entry.id, after(s.entry.originProject)]));
+  const origins = new Map<string, string | null>(
+    dormant.map((s) => [s.entry.id, after(s.entry.originProject)]),
+  );
   for (const [id, e] of live) origins.set(id, after(e.originProject));
   return origins;
 }
@@ -358,7 +398,9 @@ export async function repairProjects(
   opts: { dryRun: boolean },
 ): Promise<RepairResult> {
   const plan = await planRepair({ store, tenantId: scope.tenantId }, folder, true);
-  return opts.dryRun ? { ...publicPlan(plan), backup: null } : applyRepair(store.projectTags, scope, plan);
+  return opts.dryRun
+    ? { ...publicPlan(plan), backup: null }
+    : applyRepair(store.projectTags, scope, plan);
 }
 
 /** True when a repair would change nothing. */

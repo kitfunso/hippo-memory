@@ -74,7 +74,8 @@ function permutationsOf3(): number[][] {
 // Duplicate probe pair: the same sentence, B with a double space before "this".
 // Dedup removes only text that matches apart from spacing; a swapped word is a
 // changed value and both copies stay (tests/core/sleep-keeps-both-versions.process.test.ts).
-const CONTENT_A = 'The quarterly finance report shows revenue grew steadily across all four regions this year';
+const CONTENT_A =
+  'The quarterly finance report shows revenue grew steadily across all four regions this year';
 const CONTENT_B = CONTENT_A.replace(' this year', '  this year');
 
 // Three mutual duplicates for the permutation test: one base sentence (B), with an
@@ -243,7 +244,10 @@ describe('dedupe survivor determinism', () => {
       const home = makeRoot('dedupe-det-7');
       for (const content of order) {
         writeEntry(home, {
-          ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic }),
+          ...createMemory(content, {
+            baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+            layer: Layer.Episodic,
+          }),
           created: now.toISOString(),
         });
       }
@@ -253,7 +257,8 @@ describe('dedupe survivor determinism', () => {
 
       const semantics = loadAllEntries(home, 'default').filter(
         (e) =>
-          e.layer === Layer.Semantic && e.content.startsWith('[Consolidated from 2 related memories, newest first]'),
+          e.layer === Layer.Semantic &&
+          e.content.startsWith('[Consolidated from 2 related memories, newest first]'),
       );
       expect(semantics.length).toBe(1);
       // Content shape: '[Consolidated from 2 related memories, newest first]\n\n- <base>\n- <other>'.
@@ -329,8 +334,14 @@ describe('dedupe survivor determinism', () => {
   });
 
   it('11. episodic/semantic twins keep the semantic copy in both ingest orders (was the episodic one via the mem_/sem_ id prefix)', async () => {
-    const episodic = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
-    const semantic = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic });
+    const episodic = createMemory(TWIN_TEXT, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+    });
+    const semantic = createMemory(TWIN_TEXT, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+    });
     for (const order of [
       [episodic, semantic],
       [semantic, episodic],
@@ -351,7 +362,10 @@ describe('dedupe survivor determinism', () => {
       layer: Layer.Episodic,
       kind: 'raw',
     });
-    const semantic = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic });
+    const semantic = createMemory(TWIN_TEXT, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic,
+    });
     for (const order of [
       [raw, semantic],
       [semantic, raw],
@@ -375,11 +389,17 @@ describe('dedupe survivor determinism', () => {
       layer: Layer.Semantic,
     });
     const stale = {
-      ...createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic }),
+      ...createMemory(TWIN_TEXT, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Semantic,
+      }),
       supersededBy: successor.id,
       kind: 'superseded' as const,
     };
-    const current = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
+    const current = createMemory(TWIN_TEXT, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+    });
     for (const entry of [successor, stale, current]) writeEntry(home, entry);
     const result = await deduplicateStore(sqliteStore(home));
     expect(result.removed).toBe(0);
@@ -405,7 +425,9 @@ describe('dedupe survivor determinism', () => {
       { content: textB, tags: ['t-b'] },
       { content: textC, tags: ['t-c'] },
     ];
-    const expectedOrder = [...variants].sort((a, b) => (a.content < b.content ? -1 : a.content > b.content ? 1 : 0));
+    const expectedOrder = [...variants].sort((a, b) =>
+      a.content < b.content ? -1 : a.content > b.content ? 1 : 0,
+    );
     const expectedBlock = expectedOrder.map((v) => `- ${v.content}`).join('\n');
 
     for (const perm of permutationsOf3()) {

@@ -33,7 +33,10 @@ import { particleStats } from '../../../src/store/sqlite/vector-index.js';
 import * as vectorIndexSql from '../../../src/store/sqlite/vector-index.js';
 import { applyRebuild, type RebuildPatch } from '../../../src/domain/consolidate/summary-settle.js';
 import { loadEveryTenantEntries } from './entries.js';
-import type { VectorCandidateSpec, StoredVectorSummary } from '../../../src/base/ports/store/vectors.js';
+import type {
+  VectorCandidateSpec,
+  StoredVectorSummary,
+} from '../../../src/base/ports/store/vectors.js';
 import { evalNow, evalSwitches } from '../../../src/infra/eval-switches.js';
 
 /** The tenant's newest entities, `entityType` only when named. */
@@ -47,7 +50,9 @@ export function loadEntities(
     `SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ?${type.length ? ' AND entity_type = ?' : ''} ` +
     `ORDER BY created_at DESC, id DESC LIMIT ?`;
   return onHandle(hippoRoot, (db) =>
-    (db.prepare(sql).all(tenantId, ...type, opts.limit ?? DEFAULT_LIST_LIMIT) as EntityRow[]).map(rowToEntity),
+    (db.prepare(sql).all(tenantId, ...type, opts.limit ?? DEFAULT_LIST_LIMIT) as EntityRow[]).map(
+      rowToEntity,
+    ),
   );
 }
 
@@ -62,15 +67,23 @@ export function loadRelations(
     `SELECT ${RELATION_COLS} FROM relations WHERE tenant_id = ?${from.length ? ' AND from_entity_id = ?' : ''} ` +
     `ORDER BY created_at DESC, id DESC LIMIT ?`;
   return onHandle(hippoRoot, (db) =>
-    (db.prepare(sql).all(tenantId, ...from, opts.limit ?? DEFAULT_LIST_LIMIT) as RelationRow[]).map(rowToRelation),
+    (db.prepare(sql).all(tenantId, ...from, opts.limit ?? DEFAULT_LIST_LIMIT) as RelationRow[]).map(
+      rowToRelation,
+    ),
   );
 }
 
-export function markPendingProcessedUpTo(hippoRoot: string, tenantId: string, maxId: number): number {
+export function markPendingProcessedUpTo(
+  hippoRoot: string,
+  tenantId: string,
+  maxId: number,
+): number {
   return onHandle(hippoRoot, (db) => graphQueueSql.markPendingProcessedUpTo(db, tenantId, maxId));
 }
 
-export function loadPendingExtractionTenants(hippoRoot: string): { tenantId: string; maxPendingId: number }[] {
+export function loadPendingExtractionTenants(
+  hippoRoot: string,
+): { tenantId: string; maxPendingId: number }[] {
   return onHandle(hippoRoot, (db) => graphQueueSql.listPendingExtractionTenants(db));
 }
 
@@ -79,7 +92,9 @@ export async function loadEntitiesByMemoryId(
   tenantId: string,
   memoryIds: readonly string[],
 ): Promise<Entity[]> {
-  return (await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, { by: 'memory', ids: memoryIds })).entities;
+  return (
+    await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, { by: 'memory', ids: memoryIds })
+  ).entities;
 }
 
 export async function loadAllL2Summaries(hippoRoot: string): Promise<MemoryEntry[]> {
@@ -94,8 +109,13 @@ export async function loadAllL2Summaries(hippoRoot: string): Promise<MemoryEntry
   return out;
 }
 
-export async function loadAllDirtySummaries(hippoRoot: string, limit?: number): Promise<MemoryEntry[]> {
-  const dirty = await sqliteStore(hippoRoot).consolidation.dirtySummaries(limit ?? Number.MAX_SAFE_INTEGER);
+export async function loadAllDirtySummaries(
+  hippoRoot: string,
+  limit?: number,
+): Promise<MemoryEntry[]> {
+  const dirty = await sqliteStore(hippoRoot).consolidation.dirtySummaries(
+    limit ?? Number.MAX_SAFE_INTEGER,
+  );
   return dirty.summaries.map((s) => s.summary);
 }
 
@@ -106,11 +126,21 @@ export async function loadChildrenOfSummary(
   tenantId: string,
 ): Promise<MemoryEntry[]> {
   return loadEveryTenantEntries(hippoRoot)
-    .filter((e) => e.dagParentId === summaryId && e.tenantId === tenantId && e.kind !== 'archived' && !e.supersededBy)
+    .filter(
+      (e) =>
+        e.dagParentId === summaryId &&
+        e.tenantId === tenantId &&
+        e.kind !== 'archived' &&
+        !e.supersededBy,
+    )
     .sort((a, b) => a.created.localeCompare(b.created) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-export async function applyRebuildResult(hippoRoot: string, summary: MemoryEntry, patch: RebuildPatch) {
+export async function applyRebuildResult(
+  hippoRoot: string,
+  summary: MemoryEntry,
+  patch: RebuildPatch,
+) {
   return await applyRebuild(sqliteStore(hippoRoot), summary, patch);
 }
 
@@ -127,7 +157,11 @@ export function storedVectorSummary(hippoRoot: string): StoredVectorSummary {
   return onHandle(hippoRoot, (db) => vectorIndexSql.storedVectorSummary(db));
 }
 
-export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, number[]>, model?: string): void {
+export function saveEmbeddingIndex(
+  hippoRoot: string,
+  index: Record<string, number[]>,
+  model?: string,
+): void {
   return onHandle(hippoRoot, (db) => {
     openVectorStaging(db);
     stageVectors(db, Object.entries(index));
@@ -155,7 +189,12 @@ export function resetStoredParticles(hippoRoot: string): number {
 
 export function seedStoredParticle(hippoRoot: string, entry: MemoryEntry, vector: number[]): void {
   return onHandle(hippoRoot, (db) =>
-    vectorIndexSql.seedStoredParticle(db, { strength: evalSwitches().strength, clock: evalNow }, entry, vector),
+    vectorIndexSql.seedStoredParticle(
+      db,
+      { strength: evalSwitches().strength, clock: evalNow },
+      entry,
+      vector,
+    ),
   );
 }
 
@@ -168,7 +207,8 @@ export async function loadEntitiesByIds(
   tenantId: string,
   ids: readonly number[],
 ): Promise<Entity[]> {
-  return (await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, { by: 'entity', ids })).entities;
+  return (await sqliteStore(hippoRoot).graphReads.graphRows(tenantId, { by: 'entity', ids }))
+    .entities;
 }
 
 export async function loadNeighborRelations(
@@ -192,6 +232,9 @@ export function loadVectorCandidateEntries(
   );
 }
 
-export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Map<string, number[]> {
+export function loadStoredVectors(
+  hippoRoot: string,
+  ids: readonly string[],
+): Map<string, number[]> {
   return ids.length === 0 ? new Map() : onHandle(hippoRoot, (db) => loadVectors(db, ids));
 }

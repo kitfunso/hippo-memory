@@ -14,7 +14,11 @@ export interface KeysetPage<T, C> {
 }
 
 /** The first `limit` of `rows`, which a read fetched one row past `limit` only to say whether another page follows. */
-export function keysetPage<T, C>(rows: readonly T[], limit: number, cursorOf: (row: T) => C): KeysetPage<T, C> {
+export function keysetPage<T, C>(
+  rows: readonly T[],
+  limit: number,
+  cursorOf: (row: T) => C,
+): KeysetPage<T, C> {
   const kept = rows.slice(0, limit);
   const last = kept[kept.length - 1];
   return { rows: kept, next: rows.length > limit && last !== undefined ? cursorOf(last) : null };

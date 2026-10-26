@@ -100,7 +100,11 @@ describe('serve() under a store that has the objects group', () => {
       body?: RouteBody,
     ): Promise<{ status: number; body: unknown }> => {
       const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
-      const res = await fetch(`${handle.url}${path}`, { method, headers, body: body && JSON.stringify(body) });
+      const res = await fetch(`${handle.url}${path}`, {
+        method,
+        headers,
+        body: body && JSON.stringify(body),
+      });
       if (token === memberA && res.status < 300) {
         answered.add(`${method} ${path.replace(/\?.*$/, '').replace(/\/\d+/g, '/1')}`);
       }
@@ -115,7 +119,10 @@ describe('serve() under a store that has the objects group', () => {
         status: 200,
         body: { [k.many]: [{ id: 1 }], next_cursor: null },
       });
-      expect(await call(memberA, 'GET', `${k.path}/1`)).toMatchObject({ status: 200, body: { [k.one]: { id: 1 } } });
+      expect(await call(memberA, 'GET', `${k.path}/1`)).toMatchObject({
+        status: 200,
+        body: { [k.one]: { id: 1 } },
+      });
       expect(await call(memberA, 'POST', `${k.path}/1/supersede`, k.revise)).toMatchObject({
         status: k.revised,
         body: { [k.one]: { id: 2, status: 'active' } },
@@ -128,7 +135,10 @@ describe('serve() under a store that has the objects group', () => {
         status: 200,
         body: { [k.one]: { id: 2, status: 'closed' } },
       });
-      expect(await call(memberB, 'GET', k.path)).toEqual({ status: 200, body: { [k.many]: [], next_cursor: null } });
+      expect(await call(memberB, 'GET', k.path)).toEqual({
+        status: 200,
+        body: { [k.many]: [], next_cursor: null },
+      });
       expect((await call(memberB, 'GET', `${k.path}/1`)).status).toBe(404);
       expect((await call(memberB, 'POST', `${k.path}/1/supersede`, k.revise)).status).toBe(404);
     }
@@ -152,22 +162,34 @@ describe('serve() under a store that has the objects group', () => {
       body: { policies: [] },
     });
     expect(
-      await call(memberA, 'POST', '/v1/skills', { skillName: 'deploy', instructions: 'tag then publish' }),
+      await call(memberA, 'POST', '/v1/skills', {
+        skillName: 'deploy',
+        instructions: 'tag then publish',
+      }),
     ).toMatchObject({ status: 201, body: { skill: { id: 3 } } });
     expect(await call(memberA, 'GET', '/v1/skills/export')).toEqual({
       status: 200,
       body: { markdown: '## deploy\n\ntag then publish' },
     });
-    expect(await call(memberB, 'GET', '/v1/skills/export')).toEqual({ status: 200, body: { markdown: '' } });
-    expect(await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo', dryRun: true })).toMatchObject({
+    expect(await call(memberB, 'GET', '/v1/skills/export')).toEqual({
+      status: 200,
+      body: { markdown: '' },
+    });
+    expect(
+      await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo', dryRun: true }),
+    ).toMatchObject({
       status: 200,
       body: { receiptCount: 0 },
     });
-    expect(await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo' })).toMatchObject({
+    expect(
+      await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo' }),
+    ).toMatchObject({
       status: 200,
       body: { brief: { id: 3, repo: 'hippo', version: 1, status: 'active' } },
     });
-    expect(await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo' })).toMatchObject({
+    expect(
+      await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo' }),
+    ).toMatchObject({
       status: 200,
       body: {
         brief: {
@@ -183,12 +205,17 @@ describe('serve() under a store that has the objects group', () => {
       body: { briefs: [{ id: 3, supersededBy: 4 }, { id: 1 }] },
     });
 
-    expect(await call(memberA, 'POST', '/v1/incidents', { text: 'checkout latency' })).toMatchObject({
+    expect(
+      await call(memberA, 'POST', '/v1/incidents', { text: 'checkout latency' }),
+    ).toMatchObject({
       status: 201,
       body: { incident: { id: 1, tenantId: TENANT_A, status: 'open' } },
     });
     expect(
-      await call(memberA, 'POST', '/v1/incidents', { text: 'no evidence', linkedMemoryIds: ['mem_never_written'] }),
+      await call(memberA, 'POST', '/v1/incidents', {
+        text: 'no evidence',
+        linkedMemoryIds: ['mem_never_written'],
+      }),
     ).toEqual({
       status: 409,
       body: { error: `linked memory mem_never_written not found for tenant ${TENANT_A}` },
@@ -201,21 +228,28 @@ describe('serve() under a store that has the objects group', () => {
       status: 200,
       body: { incident: { id: 1, incidentText: 'checkout latency' } },
     });
-    expect((await call(memberB, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'not ours' })).status).toBe(404);
-    expect(await call(memberA, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'scaled the pool' })).toMatchObject(
-      {
-        status: 200,
-        body: { incident: { id: 1, status: 'resolved', resolutionText: 'scaled the pool' } },
-      },
-    );
-    expect((await call(memberA, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'again' })).status).toBe(409);
+    expect(
+      (await call(memberB, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'not ours' }))
+        .status,
+    ).toBe(404);
+    expect(
+      await call(memberA, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'scaled the pool' }),
+    ).toMatchObject({
+      status: 200,
+      body: { incident: { id: 1, status: 'resolved', resolutionText: 'scaled the pool' } },
+    });
+    expect(
+      (await call(memberA, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'again' })).status,
+    ).toBe(409);
     expect((await call(memberB, 'POST', '/v1/incidents/1/close', {})).status).toBe(404);
     expect(await call(memberA, 'POST', '/v1/incidents/1/close', {})).toMatchObject({
       status: 200,
       body: { incident: { id: 1, status: 'closed' } },
     });
 
-    const ported = V1_ROWS.filter(({ key }) => OBJECT_ROW.test(key)).map(({ key }) => requestLine(key));
+    const ported = V1_ROWS.filter(({ key }) => OBJECT_ROW.test(key)).map(({ key }) =>
+      requestLine(key),
+    );
     expect(ported).toHaveLength(38);
     expect([...answered].sort()).toEqual([...ported].sort());
     const actor = `api_key:${fixture.keys.memberA}`;

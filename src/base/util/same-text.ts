@@ -35,7 +35,8 @@ export function heldTexts(entry: Text): string[] {
   const cut = entry.content.indexOf('\n\n');
   if (entry.source !== 'consolidation' || cut < 0) return [];
   const body = entry.content.slice(cut + 2);
-  if (/^\[Consolidated from \d+ related memories\]$/.test(entry.content.slice(0, cut))) return [body];
+  if (/^\[Consolidated from \d+ related memories\]$/.test(entry.content.slice(0, cut)))
+    return [body];
   return `\n${body}`
     .split('\n- ')
     .slice(1)

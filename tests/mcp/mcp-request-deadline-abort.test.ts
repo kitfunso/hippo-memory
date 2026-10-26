@@ -43,7 +43,12 @@ describe('a tool call at its request deadline', () => {
 
   it('runs the same call to completion while the signal stays quiet', async () => {
     const abort = new AbortController();
-    const reply = await runWithRequestId('req-ok', () => handleMcpRequest(REMEMBER, ctx), undefined, abort.signal);
+    const reply = await runWithRequestId(
+      'req-ok',
+      () => handleMcpRequest(REMEMBER, ctx),
+      undefined,
+      abort.signal,
+    );
     expect(reply?.error).toBeUndefined();
     expect(loadAllEntries(root, 'default')).toHaveLength(1);
   });

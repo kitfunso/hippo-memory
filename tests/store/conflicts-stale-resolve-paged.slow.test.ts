@@ -35,7 +35,9 @@ describe('resolving stale open conflicts', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: an aggregate with no GROUP BY always answers one row.
-      const open = db.prepare(`SELECT COUNT(*) AS n FROM memory_conflicts WHERE status = 'open'`).get() as {
+      const open = db
+        .prepare(`SELECT COUNT(*) AS n FROM memory_conflicts WHERE status = 'open'`)
+        .get() as {
         n: number;
       };
       expect(open.n).toBe(0);

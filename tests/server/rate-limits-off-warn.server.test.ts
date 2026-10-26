@@ -8,7 +8,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function warnsFor(env: Record<string, string>, rateLimits?: Parameters<typeof bootLimiters>[0]): string[] {
+function warnsFor(
+  env: Record<string, string>,
+  rateLimits?: Parameters<typeof bootLimiters>[0],
+): string[] {
   vi.stubEnv('HIPPO_V1_RPS', undefined);
   vi.stubEnv('HIPPO_CALLER_RPS', undefined);
   for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
@@ -19,11 +22,15 @@ function warnsFor(env: Record<string, string>, rateLimits?: Parameters<typeof bo
 
 describe('bootLimiters', () => {
   it('warns once when HIPPO_V1_RPS=0 turns the per-address limit off', () => {
-    expect(warnsFor({ HIPPO_V1_RPS: '0' })).toEqual(['HIPPO_V1_RPS=0: the per-address rate limit is off']);
+    expect(warnsFor({ HIPPO_V1_RPS: '0' })).toEqual([
+      'HIPPO_V1_RPS=0: the per-address rate limit is off',
+    ]);
   });
 
   it('warns once when HIPPO_CALLER_RPS=0 turns the per-caller limit off', () => {
-    expect(warnsFor({ HIPPO_CALLER_RPS: '0' })).toEqual(['HIPPO_CALLER_RPS=0: the per-caller rate limit is off']);
+    expect(warnsFor({ HIPPO_CALLER_RPS: '0' })).toEqual([
+      'HIPPO_CALLER_RPS=0: the per-caller rate limit is off',
+    ]);
   });
 
   it('says nothing with the defaults, or when serve() options switch a limit off', () => {

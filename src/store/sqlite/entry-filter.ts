@@ -25,7 +25,10 @@ export type FilterColumn =
 type ColumnOf = (column: FilterColumn) => string;
 // An alias, not `keyof` inline: a mapped type over it lets TERMS[key] read as Term<K> for a generic key.
 type Field = keyof EntryNarrowing;
-type Term<K extends Field> = (value: NonNullable<EntryNarrowing[K]>, column: ColumnOf) => SqlFragment;
+type Term<K extends Field> = (
+  value: NonNullable<EntryNarrowing[K]>,
+  column: ColumnOf,
+) => SqlFragment;
 
 /** The least string above every string that starts with `prefix` in byte order, or null when none is. */
 export function prefixUpperBound(prefix: string): string | null {
@@ -72,7 +75,10 @@ const TERMS: Terms = {
   }),
   kinds: (kinds, column) => inList(`COALESCE(${column('kind')}, 'distilled')`, kinds),
   live: (_live, column) => ({ sql: `COALESCE(${column('superseded_by')}, '') = ''`, params: [] }),
-  sessionId: (sessionId, column) => ({ sql: `${column('source_session_id')} = ?`, params: [sessionId] }),
+  sessionId: (sessionId, column) => ({
+    sql: `${column('source_session_id')} = ?`,
+    params: [sessionId],
+  }),
 };
 
 function term<K extends Field>(narrowing: EntryNarrowing, key: K, column: ColumnOf): SqlFragment[] {
@@ -82,21 +88,32 @@ function term<K extends Field>(narrowing: EntryNarrowing, key: K, column: Column
 
 /** The terms the fields of `narrowing` compile to, each ` AND ...`, empty when it sets none; `column` names each
  * field's column. */
-export function narrowingAnd(narrowing: EntryNarrowing, column: ColumnOf = (name) => name): SqlFragment {
+export function narrowingAnd(
+  narrowing: EntryNarrowing,
+  column: ColumnOf = (name) => name,
+): SqlFragment {
   // SAFETY: Object.keys lists TERMS' own keys, which are the keys of EntryNarrowing.
   const terms = (Object.keys(TERMS) as Field[]).flatMap((key) => term(narrowing, key, column));
-  return { sql: terms.map((t) => ` AND ${t.sql}`).join(''), params: terms.flatMap((t) => t.params) };
+  return {
+    sql: terms.map((t) => ` AND ${t.sql}`).join(''),
+    params: terms.flatMap((t) => t.params),
+  };
 }
 
 /** A page of the rows `filter` keeps, in loadAllEntries' order or, with `page.newest`, newest first. */
-export function listEntriesWhere(db: DatabaseSyncLike, filter: EntryFilter, page: EntryPageRequest): EntryPage {
+export function listEntriesWhere(
+  db: DatabaseSyncLike,
+  filter: EntryFilter,
+  page: EntryPageRequest,
+): EntryPage {
   const { tenantId, ...narrowing } = filter;
   const where = narrowingAnd(narrowing);
   if (narrowing.ids !== undefined) return idsPage(db, filter, where, page);
   // Without the hint the planner takes the tenant index for its created order and filters every row of the tenant;
   // the all-tenant read already pins its own index inside its subquery.
   const seeksSource = narrowing.sourcePrefix !== undefined && narrowing.origins === undefined;
-  const index = seeksSource && tenantId !== ALL_TENANTS ? ' INDEXED BY idx_memories_source_tenant_created' : '';
+  const index =
+    seeksSource && tenantId !== ALL_TENANTS ? ' INDEXED BY idx_memories_source_tenant_created' : '';
   const { rows, next } = entryPage(
     tenantId,
     page,
@@ -110,7 +127,12 @@ export function listEntriesWhere(db: DatabaseSyncLike, filter: EntryFilter, page
 }
 
 // An id list reads off the primary key: the plus keeps SQLite off the tenant index, and no tenant is walked.
-function idsPage(db: DatabaseSyncLike, filter: EntryFilter, where: SqlFragment, page: EntryPageRequest): EntryPage {
+function idsPage(
+  db: DatabaseSyncLike,
+  filter: EntryFilter,
+  where: SqlFragment,
+  page: EntryPageRequest,
+): EntryPage {
   const tenant = tenantAnd(filter.tenantId, TENANT_IS);
   const range = entryRange(page.after, page.newest);
   const rows = cachedStatement(
@@ -118,6 +140,9 @@ function idsPage(db: DatabaseSyncLike, filter: EntryFilter, where: SqlFragment, 
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE 1${where.sql}${tenant.sql}${range.sql} ` +
       entryPageOrder(page.newest),
   ).all(...where.params, ...tenant.params, ...range.params, page.limit + 1) as MemoryRow[];
-  const kept = keysetPage(rows, page.limit, (row): EntryCursor => ({ created: row.created, id: row.id }));
+  const kept = keysetPage(rows, page.limit, (row): EntryCursor => ({
+    created: row.created,
+    id: row.id,
+  }));
   return { entries: kept.rows.map(rowToEntry), next: kept.next };
 }

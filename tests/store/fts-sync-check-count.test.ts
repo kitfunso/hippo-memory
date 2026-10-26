@@ -29,11 +29,17 @@ function indexScansPerRow(db: DatabaseSyncLike, sql: string): string[] {
   // SAFETY: EXPLAIN QUERY PLAN answers one row per step: its id, its parent's id and its text.
   const plan = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as PlanStep[];
   const correlated = (step: PlanStep | undefined): boolean =>
-    step !== undefined && (step.detail.startsWith('CORRELATED') || correlated(plan.find((p) => p.id === step.parent)));
+    step !== undefined &&
+    (step.detail.startsWith('CORRELATED') || correlated(plan.find((p) => p.id === step.parent)));
   const innerLoop = (step: PlanStep): boolean =>
-    plan.some((other) => other.parent === step.parent && other.id < step.id && /^(SCAN|SEARCH) /.test(other.detail));
+    plan.some(
+      (other) =>
+        other.parent === step.parent && other.id < step.id && /^(SCAN|SEARCH) /.test(other.detail),
+    );
   return plan
-    .filter((step) => step.detail.includes('VIRTUAL TABLE') && (correlated(step) || innerLoop(step)))
+    .filter(
+      (step) => step.detail.includes('VIRTUAL TABLE') && (correlated(step) || innerLoop(step)),
+    )
     .map((step) => step.detail);
 }
 
@@ -88,7 +94,9 @@ describe('FTS drift repair', () => {
     try {
       // SAFETY: pragma_table_info yields one row per column with its name.
       const columns = (
-        db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as Array<{ name: string }>
+        db
+          .prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`)
+          .all() as Array<{ name: string }>
       ).map((c) => c.name);
       db.exec(`
         WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 9999)

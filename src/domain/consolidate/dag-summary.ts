@@ -32,7 +32,10 @@ export async function generateDagSummary(
   opts: DagSummaryOptions,
 ): Promise<string | null> {
   const factsBlock = factContents.map((f, i) => `${i + 1}. ${redactSecretsStrict(f)}`).join('\n');
-  const prompt = DAG_SUMMARY_PROMPT.replace('{label}', redactSecretsStrict(label)).replace('{facts}', factsBlock);
+  const prompt = DAG_SUMMARY_PROMPT.replace('{label}', redactSecretsStrict(label)).replace(
+    '{facts}',
+    factsBlock,
+  );
 
   const reply = await opts.llm.send({
     model: opts.model,

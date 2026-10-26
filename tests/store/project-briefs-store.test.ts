@@ -42,7 +42,10 @@ const MAX_RECEIPT_HEADLINE_LEN = 200;
 
 /** The repo's newest active brief, read the way refreshBrief reads it. */
 async function activeBrief(home: string, tenantId: string, repo: string) {
-  return (await loadProjectBriefs(objectsAt(home), tenantId, { status: 'active', repo, limit: 1 }))[0] ?? null;
+  return (
+    (await loadProjectBriefs(objectsAt(home), tenantId, { status: 'active', repo, limit: 1 }))[0] ??
+    null
+  );
 }
 function countRows(home: string, table: string): number {
   const db = openHippoDb(home);
@@ -55,7 +58,13 @@ function countRows(home: string, table: string): number {
   }
 }
 /** Write a non-brief memory tagged path:<repo> so it counts as a receipt. */
-function addReceipt(home: string, tenant: string, repo: string, content: string, source = 'manual'): string {
+function addReceipt(
+  home: string,
+  tenant: string,
+  repo: string,
+  content: string,
+  source = 'manual',
+): string {
   const mem = createMemory(content, {
     tags: [`path:${repo.toLowerCase()}`, 'note'],
     layer: Layer.Semantic,
@@ -84,10 +93,15 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
   afterEach(() => removeAfterRequest(home));
 
   it('saveProjectBrief creates memory + row + project_brief_create audit; v1', async () => {
-    const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
-      repo: 'hippo',
-      summary: 'agent-memory lib',
-    });
+    const b = await saveProjectBrief(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      'default',
+      {
+        repo: 'hippo',
+        summary: 'agent-memory lib',
+      },
+    );
     // The first row in a fresh store's AUTOINCREMENT table.
     expect(b.id).toBe(1);
     expect(b.memoryId).not.toBeNull();
@@ -100,7 +114,9 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     try {
       // SAFETY: the query selects content/source/tags_json from memories, whose
       // schema types those columns TEXT/TEXT/TEXT (tags_json JSON-encoded).
-      const memRow = db.prepare(`SELECT content, source, tags_json FROM memories WHERE id = ?`).get(b.memoryId!) as {
+      const memRow = db
+        .prepare(`SELECT content, source, tags_json FROM memories WHERE id = ?`)
+        .get(b.memoryId!) as {
         content: string;
         source: string;
         tags_json: string;
@@ -113,7 +129,9 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
       expect(JSON.parse(memRow.tags_json) as string[]).toContain('project_brief');
       // SAFETY: the query selects only metadata_json (TEXT) from audit_log.
       const rows = db
-        .prepare(`SELECT metadata_json FROM audit_log WHERE op='project_brief_create' AND target_id=?`)
+        .prepare(
+          `SELECT metadata_json FROM audit_log WHERE op='project_brief_create' AND target_id=?`,
+        )
         .all(String(b.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
       // SAFETY: project_brief_create audit metadata is always the flat object built
@@ -127,40 +145,67 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
   });
 
   it('status + repo filters; loadActiveBriefForRepo', async () => {
-    const a = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
-      repo: 'alpha',
-      summary: 'x',
-    });
-    const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
-      repo: 'beta',
-      summary: 'x',
-    });
-    const c = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
-      repo: 'gamma',
-      summary: 'x',
-    });
+    const a = await saveProjectBrief(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      'default',
+      {
+        repo: 'alpha',
+        summary: 'x',
+      },
+    );
+    const b = await saveProjectBrief(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      'default',
+      {
+        repo: 'beta',
+        summary: 'x',
+      },
+    );
+    const c = await saveProjectBrief(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      'default',
+      {
+        repo: 'gamma',
+        summary: 'x',
+      },
+    );
     await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       repo: 'beta',
       summary: 'x2',
       supersedesBriefId: b.id,
     });
-    await closeObject(objectsAt(home), PROJECT_BRIEF, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), PROJECT_BRIEF, 'default', c.id, {
+      actor: CLI_ACTOR,
+      now: evalNow(),
+    });
     expect((await activeBrief(home, 'default', 'alpha'))!.id).toBe(a.id);
     expect(await activeBrief(home, 'default', 'gamma')).toBeNull(); // closed
-    expect((await loadProjectBriefs(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([
-      c.id,
-    ]);
+    expect(
+      (await loadProjectBriefs(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id),
+    ).toEqual([c.id]);
     expect((await loadProjectBriefs(objectsAt(home), 'default', { repo: 'beta' })).length).toBe(2); // v1 superseded + v2 active
-    expect((await loadProjectBriefs(objectsAt(home), 'default', { repo: 'beta', status: 'active' })).length).toBe(1);
+    expect(
+      (await loadProjectBriefs(objectsAt(home), 'default', { repo: 'beta', status: 'active' }))
+        .length,
+    ).toBe(1);
     expect((await loadProjectBriefs(objectsAt(home), 'default')).length).toBe(4);
   });
 
   it('validation: missing repo/summary; single-line repo; caps', async () => {
     await expect(
-      saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: '   ', summary: 'x' }),
+      saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        repo: '   ',
+        summary: 'x',
+      }),
     ).rejects.toThrow(/repo must not be blank/);
     await expect(
-      saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'r', summary: '  ' }),
+      saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        repo: 'r',
+        summary: '  ',
+      }),
     ).rejects.toThrow(/summary must not be blank/);
     await expect(
       saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
@@ -196,11 +241,16 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     addReceipt(home, 'tenant-b', 'hippo', 'cross-tenant receipt');
     // the brief's OWN mirror (source='project_brief') must be excluded even though
     // it carries the repo path tag
-    const brief = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
-      repo: 'hippo',
-      summary: 'the brief body',
-      extraTags: ['path:hippo'],
-    });
+    const brief = await saveProjectBrief(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      'default',
+      {
+        repo: 'hippo',
+        summary: 'the brief body',
+        extraTags: ['path:hippo'],
+      },
+    );
     void brief;
 
     const { markdown, receiptCount } = await briefFromReceipts(objectsAt(home), 'default', 'hippo');
@@ -213,7 +263,9 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     expect(markdown).not.toContain('cross-tenant receipt');
     expect(markdown).not.toContain('the brief body');
     // created DESC: r2 (May 2) before r1 (May 1)
-    expect(markdown.indexOf('second receipt headline')).toBeLessThan(markdown.indexOf('first receipt headline'));
+    expect(markdown.indexOf('second receipt headline')).toBeLessThan(
+      markdown.indexOf('first receipt headline'),
+    );
 
     // headline truncation
     addReceipt(home, 'default', 'trunc', 'z'.repeat(MAX_RECEIPT_HEADLINE_LEN + 50));
@@ -261,7 +313,12 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     // first refresh creates v1
     const v1 = await refreshedBrief(
       objectsAt(home),
-      { now: evalNow(), baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
+      {
+        now: evalNow(),
+        baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays,
+        tenantId: 'default',
+        actor: 'cli',
+      },
       'hippo',
     );
     expect(v1.version).toBe(1);
@@ -275,7 +332,9 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
       // SAFETY: the query selects only tags_json (TEXT, JSON-encoded array) from
       // memories for a single row by primary key.
       const tagsJson = (
-        dbTag.prepare(`SELECT tags_json FROM memories WHERE id = ?`).get(v1.memoryId!) as { tags_json: string }
+        dbTag.prepare(`SELECT tags_json FROM memories WHERE id = ?`).get(v1.memoryId!) as {
+          tags_json: string;
+        }
       ).tags_json;
       // SAFETY: memories.tags_json is always a JSON-encoded string array, written by
       // writeEntry/refreshBrief in this codebase.
@@ -294,7 +353,9 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
       const meta = JSON.parse(
         (
           db
-            .prepare(`SELECT metadata_json FROM audit_log WHERE op='project_brief_create' AND target_id=?`)
+            .prepare(
+              `SELECT metadata_json FROM audit_log WHERE op='project_brief_create' AND target_id=?`,
+            )
             .get(String(v1.id)) as { metadata_json: string }
         ).metadata_json,
       ) as { refreshed: boolean; receipt_count: number };
@@ -308,12 +369,19 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     addReceipt(home, 'default', 'hippo', 'receipt two');
     const v2 = await refreshedBrief(
       objectsAt(home),
-      { now: evalNow(), baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
+      {
+        now: evalNow(),
+        baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays,
+        tenantId: 'default',
+        actor: 'cli',
+      },
       'hippo',
     );
     expect(v2.version).toBe(2);
     expect(v2.changeSummary).toBe('auto-refresh from 2 receipt(s)');
-    expect((await objectById(objectsAt(home), PROJECT_BRIEF, 'default', v1.id))!.status).toBe('superseded');
+    expect((await objectById(objectsAt(home), PROJECT_BRIEF, 'default', v1.id))!.status).toBe(
+      'superseded',
+    );
     expect((await activeBrief(home, 'default', 'hippo'))!.id).toBe(v2.id);
     const db2 = openHippoDb(home);
     try {
@@ -322,7 +390,9 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
       const meta = JSON.parse(
         (
           db2
-            .prepare(`SELECT metadata_json FROM audit_log WHERE op='project_brief_supersede' AND target_id=?`)
+            .prepare(
+              `SELECT metadata_json FROM audit_log WHERE op='project_brief_supersede' AND target_id=?`,
+            )
             .get(String(v1.id)) as { metadata_json: string }
         ).metadata_json,
       ) as { refreshed: boolean; receipt_count: number };
@@ -349,17 +419,24 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     expect(assembled.markdown).toContain('omitted (summary cap)');
     const kept = assembled.markdown.split('\n').filter((l) => l.startsWith('- ')).length;
     expect(assembled.markdown).toContain(`_Auto-assembled from ${kept} of 50 receipt(s)._`);
-    expect(assembled.markdown).toContain(`_... ${50 - kept} more receipt(s) omitted (summary cap)._`);
+    expect(assembled.markdown).toContain(
+      `_... ${50 - kept} more receipt(s) omitted (summary cap)._`,
+    );
     // refresh must SUCCEED (not throw) and store a valid brief under the cap
     const b = await refreshedBrief(
       objectsAt(home),
-      { now: evalNow(), baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
+      {
+        now: evalNow(),
+        baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays,
+        tenantId: 'default',
+        actor: 'cli',
+      },
       'big',
     );
     expect(b.version).toBe(1);
     expect(b.summary.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);
-    expect((await objectById(objectsAt(home), PROJECT_BRIEF, 'default', b.id))!.summary.length).toBeLessThanOrEqual(
-      MAX_BRIEF_SUMMARY_LEN,
-    );
+    expect(
+      (await objectById(objectsAt(home), PROJECT_BRIEF, 'default', b.id))!.summary.length,
+    ).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);
   });
 });

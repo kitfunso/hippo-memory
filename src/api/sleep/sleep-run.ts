@@ -5,7 +5,11 @@ import { AUTO_SHARE_MIN_SCORE, autoShare } from '../../domain/sharing/share.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { deduplicateStore } from '../../domain/consolidate/dedupe.js';
 import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
-import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../base/memory/ambient.js';
+import {
+  ambientStateFromTallies,
+  foldAmbientRows,
+  tallyAmbientEntries,
+} from '../../base/memory/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { strengthOf, type Context, type SleepContext } from '../types.js';
@@ -27,8 +31,13 @@ export interface SleepPhases {
   auditMemories: typeof auditMemories;
   autoShare: typeof autoShare;
   computeAmbientState: typeof ambientStateFromTallies;
-  loadPendingExtractionTenants: (store: StoreWith<'consolidation'>) => Promise<DirtyTenantSnapshot['dirtyTenants']>;
-  extractGraph: (store: StoreWith<'graphRebuild'>, tenantId: string) => ExtractResult | Promise<ExtractResult>;
+  loadPendingExtractionTenants: (
+    store: StoreWith<'consolidation'>,
+  ) => Promise<DirtyTenantSnapshot['dirtyTenants']>;
+  extractGraph: (
+    store: StoreWith<'graphRebuild'>,
+    tenantId: string,
+  ) => ExtractResult | Promise<ExtractResult>;
   pageSize: number;
 }
 
@@ -185,7 +194,10 @@ function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['dedup
 }
 
 /** Every row of every tenant in load order, `limit` per read. */
-async function* entryPages(store: StoreWith<'consolidation'>, limit: number): AsyncGenerator<MemoryEntry[]> {
+async function* entryPages(
+  store: StoreWith<'consolidation'>,
+  limit: number,
+): AsyncGenerator<MemoryEntry[]> {
   let after: EntryCursor | undefined;
   do {
     const page = await store.reports.entriesWhere({ tenantId: ALL_TENANTS }, { limit, after });
@@ -204,10 +216,16 @@ interface QualityAuditOptions {
 
 /** Counts audit errors deleted (or that would be under dryRun); each row is judged alone, so pages need no shared state
  * beyond the issues found. */
-async function runQualityAudit(ctx: SleepContext, phases: SleepPhases, options: QualityAuditOptions): Promise<number> {
+async function runQualityAudit(
+  ctx: SleepContext,
+  phases: SleepPhases,
+  options: QualityAuditOptions,
+): Promise<number> {
   const { dryRun, consolidateResult, dedupResult, result, pages } = options;
   // The pages follow consolidation and dedup, so only a dry run still holds the rows they would remove.
-  const wouldGo = dryRun ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)] : [];
+  const wouldGo = dryRun
+    ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)]
+    : [];
   const planned = new Set(wouldGo);
   const issues: AuditIssue[] = [];
   for await (const page of pages()) {
@@ -218,7 +236,9 @@ async function runQualityAudit(ctx: SleepContext, phases: SleepPhases, options: 
   if (issues.length === 0) return 0;
   const errors = issues.filter((i) => i.severity === 'error');
   const warnings = issues.filter((i) => i.severity === 'warning');
-  const gone = dryRun ? errors.map((issue) => issue.memoryId) : await auditRemoveErrors(ctx, 'sleep-audit', errors);
+  const gone = dryRun
+    ? errors.map((issue) => issue.memoryId)
+    : await auditRemoveErrors(ctx, 'sleep-audit', errors);
   if (gone.length > 0 || warnings.length > 0) {
     result.audit = {
       errorsRemoved: gone.length,
@@ -228,11 +248,20 @@ async function runQualityAudit(ctx: SleepContext, phases: SleepPhases, options: 
   return gone.length;
 }
 
-async function shareOnSleep(ctx: SleepContext, phases: SleepPhases, result: SleepResult): Promise<void> {
+async function shareOnSleep(
+  ctx: SleepContext,
+  phases: SleepPhases,
+  result: SleepResult,
+): Promise<void> {
   // No global target means a store with no operator's global store beside it, as context reads it.
   const target = globalTargetOf(ctx);
   const { sharing, folderFiles, reports } = ctx.store;
-  if (!ctx.config.autoShareOnSleep || target === undefined || sharing === undefined || folderFiles === undefined) {
+  if (
+    !ctx.config.autoShareOnSleep ||
+    target === undefined ||
+    sharing === undefined ||
+    folderFiles === undefined
+  ) {
     return;
   }
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable, not silent.
@@ -290,7 +319,10 @@ async function drainGraphQueue(
   try {
     if (snapshot.error) {
       // Core sleep already succeeded; surface the skipped graph refresh as an event.
-      result.events = [...(result.events ?? []), { kind: 'graphSnapshotFailed', message: snapshot.error }];
+      result.events = [
+        ...(result.events ?? []),
+        { kind: 'graphSnapshotFailed', message: snapshot.error },
+      ];
     }
     const rebuilt: GraphTotals = { tenants: 0, entities: 0, relations: 0 };
     // dirtyTenants was snapshotted before the memory-deleting phases above.
@@ -302,7 +334,10 @@ async function drainGraphQueue(
     }
   } catch (graphErr) {
     log.warn(`sleep: graph drain phase failed: ${errorMessage(graphErr)}`, errorFields(graphErr));
-    result.events = [...(result.events ?? []), { kind: 'graphDrainFailed', message: errorMessage(graphErr) }];
+    result.events = [
+      ...(result.events ?? []),
+      { kind: 'graphDrainFailed', message: errorMessage(graphErr) },
+    ];
   }
 }
 
@@ -324,7 +359,10 @@ async function rebuildDirtyTenant(
     rebuilt.entities += ext.entities;
     rebuilt.relations += ext.relations;
     if (ext.skipped) {
-      result.events = [...(result.events ?? []), { kind: 'graphStaleOpsSkipped', count: ext.skipped }];
+      result.events = [
+        ...(result.events ?? []),
+        { kind: 'graphStaleOpsSkipped', count: ext.skipped },
+      ];
     }
     // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals stay pending.
     // Marked only after the last chunk, so a run stopped between chunks leaves the tenant for the next one.
@@ -334,7 +372,10 @@ async function rebuildDirtyTenant(
       `sleep: graph extract failed for tenant ${dirty.tenantId}, left pending: ${errorMessage(tenantErr)}`,
       errorFields(tenantErr),
     );
-    result.events = [...(result.events ?? []), { kind: 'graphExtractFailed', message: errorMessage(tenantErr) }];
+    result.events = [
+      ...(result.events ?? []),
+      { kind: 'graphExtractFailed', message: errorMessage(tenantErr) },
+    ];
   }
 }
 
@@ -375,7 +416,9 @@ async function emitSleepAudit(
     if (phaseError) sleepAuditMetadata.errorMessage = errorMessage(phaseError.thrown);
     // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can
     // be found.
-    const nextUnitIds = failedUnitOf(phaseError?.thrown instanceof Error ? phaseError.thrown : null);
+    const nextUnitIds = failedUnitOf(
+      phaseError?.thrown instanceof Error ? phaseError.thrown : null,
+    );
     if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
     await ctx.store.appendAuditEvents([
       {

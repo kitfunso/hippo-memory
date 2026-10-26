@@ -38,7 +38,14 @@ import {
   useDashboardFunctions,
 } from './dashboard-functions.js';
 import { MemoryLists } from './dashboard-lists.js';
-import { IN_PROJECT, kindIn, LIVE, OPEN_PAIRS, quarantinedIn, supersededIn } from './dashboard-sql.js';
+import {
+  IN_PROJECT,
+  kindIn,
+  LIVE,
+  OPEN_PAIRS,
+  quarantinedIn,
+  supersededIn,
+} from './dashboard-sql.js';
 import { handlesOf, openStore } from './handles.js';
 import { answered, bound } from './bound.js';
 
@@ -110,14 +117,22 @@ function totals(db: DatabaseSyncLike, tenantId: string, nowMs: number): Dashboar
       n: number;
     };
     return {
-      projects: rows.map((row) => projectTally(row.origin, row.tally, conflictsOf.get(row.origin) ?? 0)),
+      projects: rows.map((row) =>
+        projectTally(row.origin, row.tally, conflictsOf.get(row.origin) ?? 0),
+      ),
       excluded: excluded(db, tenantId),
       openConflicts: Number(all.n),
     };
   });
 }
 
-function scatter(db: DatabaseSyncLike, tenantId: string, origin: Origin, nowMs: number, tally: ProjectTally) {
+function scatter(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  origin: Origin,
+  nowMs: number,
+  tally: ProjectTally,
+) {
   const maxAgeDays = Math.max(1, Math.ceil(tally.maxAgeDays));
   if (tally.live <= SCATTER_POINTS_MAX) {
     // SAFETY: each column is named in the SELECT; layer holds a Layer value.
@@ -157,7 +172,9 @@ function scatter(db: DatabaseSyncLike, tenantId: string, origin: Origin, nowMs: 
     span: Math.log10(maxAgeDays + 1),
   }) as { cells: SqlValue };
   const t = tallyOf(row.cells);
-  const cells = LAYER_ORDER.map((_, l) => Array.from(t.subarray(l * GRID_CELLS, (l + 1) * GRID_CELLS)));
+  const cells = LAYER_ORDER.map((_, l) =>
+    Array.from(t.subarray(l * GRID_CELLS, (l + 1) * GRID_CELLS)),
+  );
   return { mode: 'grid', maxAgeDays, cells } satisfies ScatterRows;
 }
 
@@ -213,7 +230,9 @@ function search(db: DatabaseSyncLike, tenantId: string, needle: string): SearchT
  * statement is prepared once. */
 function hasVector(db: DatabaseSyncLike, id: string): boolean {
   if (!tableExists(db, 'memory_vectors')) return false;
-  return cachedStatement(db, 'SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
+  return (
+    cachedStatement(db, 'SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined
+  );
 }
 
 /** Opens the store writable with the dashboard's functions scored by `rules`. */
@@ -237,7 +256,8 @@ function heldReader(hippoRoot: string, rules: StoreModel, migrate: () => void): 
   let lists: MemoryLists | null = null;
   return {
     reader: () => {
-      if (held === null && fs.existsSync(getHippoDbPath(hippoRoot))) held = openHippoDbReadOnly(hippoRoot);
+      if (held === null && fs.existsSync(getHippoDbPath(hippoRoot)))
+        held = openHippoDbReadOnly(hippoRoot);
       return held;
     },
     // The first list runs the open the other reads run, so a pending migration lands before it sorts.
@@ -263,7 +283,11 @@ export function sqliteDashboardReads(hippoRoot: string, rules: StoreRules = {}):
   const { on, files } = handlesOf(hippoRoot, rules);
   const open = dashboardOpener(files);
   type Scans = Pick<DashboardReads, 'totals' | 'project' | 'search' | 'openConflictsOf'>;
-  const scans = bound<Scans>(on, { totals, project, search, openConflictsOf: openConflictsNaming }, open);
+  const scans = bound<Scans>(
+    on,
+    { totals, project, search, openConflictsOf: openConflictsNaming },
+    open,
+  );
   const stored = (): boolean => fs.existsSync(getHippoDbPath(hippoRoot));
   const { reader, listsOn, close } = heldReader(hippoRoot, files, () => on(() => undefined, open));
   return {
@@ -276,7 +300,8 @@ export function sqliteDashboardReads(hippoRoot: string, rules: StoreRules = {}):
       stored()
         ? scans.totals(tenantId, nowMs)
         : Promise.resolve({ projects: [], excluded: noneExcluded(), openConflicts: 0 }),
-    project: (tenantId, origin, nowMs) => (stored() ? scans.project(tenantId, origin, nowMs) : Promise.resolve(null)),
+    project: (tenantId, origin, nowMs) =>
+      stored() ? scans.project(tenantId, origin, nowMs) : Promise.resolve(null),
     memoryPage: (tenantId, query, nowMs) =>
       answered(() => {
         const db = reader();

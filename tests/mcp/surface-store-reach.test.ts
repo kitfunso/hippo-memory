@@ -27,6 +27,8 @@ describe('surface reach into the store', () => {
   });
 
   it('the memory routes import nothing from src/store and decide no store capability', () => {
-    expect(linesMatching(['surface/server/routes/memories.ts'], /['"](\.\.\/)+store\/|\bhasGroup\b/)).toEqual([]);
+    expect(
+      linesMatching(['surface/server/routes/memories.ts'], /['"](\.\.\/)+store\/|\bhasGroup\b/),
+    ).toEqual([]);
   });
 });

@@ -49,7 +49,9 @@ function seed(): MemoryEntry[] {
     row('Shared lesson zero about release tags', 0),
     row('Shared lesson one about caching', 1),
     row('Shared lesson two about retries', 2, { tenantId: 'acme' }),
-    row('Shared lesson three imported from a note', 3, { source: 'agent-memory:claude-code:p-1/three.md#a' }),
+    row('Shared lesson three imported from a note', 3, {
+      source: 'agent-memory:claude-code:p-1/three.md#a',
+    }),
     row('Shared lesson four about backups', 4),
     row('Shared lesson four about backups', 5),
     row('aws creds AKIAIOSFODNN7EXAMPLE for the deploy user', 6),
@@ -63,9 +65,16 @@ function seed(): MemoryEntry[] {
     row('Shared lesson one about caching', 1),
     row('Shared lesson two about retries', 2),
     row('Shared lesson eight about spacing', 8),
-    row(mergedText('[Consolidated from 2 related memories, newest first]', [g[9].content, 'another text']), 9, {
-      source: 'consolidation',
-    }),
+    row(
+      mergedText('[Consolidated from 2 related memories, newest first]', [
+        g[9].content,
+        'another text',
+      ]),
+      9,
+      {
+        source: 'consolidation',
+      },
+    ),
   ]);
   return g;
 }
@@ -86,13 +95,20 @@ describe('sync down from the global store', () => {
       const g = seed();
       localFtsInSync(inSync);
 
-      expect(await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN })).toBe(4);
+      expect(
+        await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN }),
+      ).toBe(4);
 
       const local = new Map(
-        [...loadAllEntries(localRoot, 'default'), ...loadAllEntries(localRoot, 'acme')].map((e) => [e.id, e]),
+        [...loadAllEntries(localRoot, 'default'), ...loadAllEntries(localRoot, 'acme')].map((e) => [
+          e.id,
+          e,
+        ]),
       );
-      for (const copied of [g[2], g[4], g[8], g[9]]) expect(local.get(copied.id)?.content).toBe(copied.content);
-      for (const skipped of [g[1], g[3], g[5], g[6], g[7]]) expect(local.has(skipped.id)).toBe(false);
+      for (const copied of [g[2], g[4], g[8], g[9]])
+        expect(local.get(copied.id)?.content).toBe(copied.content);
+      for (const skipped of [g[1], g[3], g[5], g[6], g[7]])
+        expect(local.has(skipped.id)).toBe(false);
       expect(local.get(g[0].id)?.content).toBe('A local edit of lesson zero');
     },
   );

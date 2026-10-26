@@ -37,7 +37,11 @@ function rowToRejectedValue(row: RawRejectedValueRow): RejectedValueRow {
 
 /** Look up a tombstone by tenant + digest: one indexed point query, the guard's common-case cost; a miss ends the
  * guard. */
-export function readRejectedValue(db: DatabaseSyncLike, tenantId: string, digest: string): RejectedValueRow | null {
+export function readRejectedValue(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  digest: string,
+): RejectedValueRow | null {
   const row = cachedStatement(
     db,
     `SELECT ${REJECTED_VALUE_COLUMNS}
@@ -101,11 +105,15 @@ export function insertRejectedValue(
 }
 
 /** Delete a tombstone by tenant + exact digest: the `unreject` verb, the only escape hatch. */
-export function deleteRejectedValue(db: DatabaseSyncLike, tenantId: string, digest: string): boolean {
-  const result = cachedStatement(db, `DELETE FROM rejected_values WHERE tenant_id = ? AND digest = ?`).run(
-    tenantId,
-    digest,
-  );
+export function deleteRejectedValue(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  digest: string,
+): boolean {
+  const result = cachedStatement(
+    db,
+    `DELETE FROM rejected_values WHERE tenant_id = ? AND digest = ?`,
+  ).run(tenantId, digest);
   return (result.changes ?? 0) > 0;
 }
 
@@ -122,16 +130,21 @@ export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): Reje
 /** Write-path guard check: fires when the digest matches a tombstone AND the write introduces that content (a new row,
  * or a same-id UPSERT changing it). Unchanged same-id re-persists (recall boost, decay, star toggle) are exempt. A miss
  * costs ONE indexed point query; only a hit SELECTs the stored row. */
-export function checkRejectionGuard(db: DatabaseSyncLike, tenantId: string, entryId: string, content: string): void {
+export function checkRejectionGuard(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  entryId: string,
+  content: string,
+): void {
   const incomingDigest = rejectionDigest(content);
   const tombstone = readRejectedValue(db, tenantId, incomingDigest);
   if (!tombstone) return; // miss ends the guard — the overwhelmingly common case
 
   // Id-only on purpose (ids are global ULIDs; the tombstone lookup is tenant-scoped); tenant_id is read as a
   // tenantId-only upsert introduces content there.
-  const storedRow = cachedStatement(db, `SELECT content, tenant_id FROM memories WHERE id = ?`).get(entryId) as
-    | StoredContentRow
-    | undefined;
+  const storedRow = cachedStatement(db, `SELECT content, tenant_id FROM memories WHERE id = ?`).get(
+    entryId,
+  ) as StoredContentRow | undefined;
   // An unchanged same-id re-persist (recall boost, decay, star toggle) is exempt.
   if (!introducesContent(storedRow, tenantId, incomingDigest)) return;
   throw rejectedValueError(tombstone, entryId);
@@ -146,8 +159,16 @@ interface StoredContentRow {
 
 /** True when writing content of `digest` under `tenantId` over `stored`, the row the id holds now, introduces it: a new
  * row, a move to the tenant, or changed content. The guard refuses only these. */
-export function introducesContent(stored: StoredContentRow | undefined, tenantId: string, digest: string): boolean {
-  return stored === undefined || stored.tenant_id !== tenantId || rejectionDigest(stored.content) !== digest;
+export function introducesContent(
+  stored: StoredContentRow | undefined,
+  tenantId: string,
+  digest: string,
+): boolean {
+  return (
+    stored === undefined ||
+    stored.tenant_id !== tenantId ||
+    rejectionDigest(stored.content) !== digest
+  );
 }
 
 /** The refusal of a write to `entryId` that `tombstone` matched. */

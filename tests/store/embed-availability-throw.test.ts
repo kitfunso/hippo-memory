@@ -23,7 +23,9 @@ describe('embedMemory when the provider availability probe throws', () => {
       throw new Error('availability probe blew up');
     });
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const entry = createMemory('a memory whose provider probe throws', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const entry = createMemory('a memory whose provider probe throws', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(root, entry);
     await expect(embedMemoryInto(localIndex(root), entry)).resolves.toBe('failed');
   });

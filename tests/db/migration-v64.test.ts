@@ -69,14 +69,24 @@ describe('migration v64', () => {
       toV63(db);
       v64.up(db);
       v64.up(db);
-      expect(matches(db, 'wort')).toEqual(['a  quillwort\tledger moved', 'the quillwort ledger moved']);
+      expect(matches(db, 'wort')).toEqual([
+        'a  quillwort\tledger moved',
+        'the quillwort ledger moved',
+      ]);
       // SAFETY: the SELECT names one TEXT column, name.
-      const names = (db.prepare(`SELECT name FROM sqlite_master`).all() as Array<{ name: string }>).map((r) => r.name);
+      const names = (
+        db.prepare(`SELECT name FROM sqlite_master`).all() as Array<{ name: string }>
+      ).map((r) => r.name);
       expect(names).toEqual(expect.arrayContaining([...V64_INDEXES, ...TRIGRAM_OBJECTS]));
 
-      db.exec(`UPDATE memories SET content = 'nothing alike, now a quillwort' WHERE content = 'nothing alike'`);
+      db.exec(
+        `UPDATE memories SET content = 'nothing alike, now a quillwort' WHERE content = 'nothing alike'`,
+      );
       db.exec(`DELETE FROM memories WHERE content = 'the quillwort ledger moved'`);
-      expect(matches(db, 'wort')).toEqual(['a  quillwort\tledger moved', 'nothing alike, now a quillwort']);
+      expect(matches(db, 'wort')).toEqual([
+        'a  quillwort\tledger moved',
+        'nothing alike, now a quillwort',
+      ]);
     });
   });
 
@@ -98,19 +108,29 @@ describe('migration v64', () => {
 
   it('hashes the rows v63 held, and finds a row an older binary wrote or edited without its hash', () => {
     const root = makeRoot('migration-v64-old-writes');
-    writeEntriesTogether(root, [createMemory('a  b c'), createMemory('kept apart'), createMemory('x y')]);
+    writeEntriesTogether(root, [
+      createMemory('a  b c'),
+      createMemory('kept apart'),
+      createMemory('x y'),
+    ]);
     withDb(root, (db) => {
       toV63(db);
       v64.up(db);
       // SAFETY: the SELECT names one INTEGER column, n.
       const unhashed = () =>
-        (db.prepare('SELECT COUNT(*) AS n FROM memories WHERE duplicate_hash IS NULL').get() as { n: number }).n;
+        (
+          db.prepare('SELECT COUNT(*) AS n FROM memories WHERE duplicate_hash IS NULL').get() as {
+            n: number;
+          }
+        ).n;
       expect(unhashed()).toBe(0);
 
       db.exec(`UPDATE memories SET content = 'ab c' WHERE content = 'kept apart'`);
       // An older binary's insert leaves the column it does not know empty.
       db.exec(`CREATE TEMP TABLE copied AS SELECT * FROM memories WHERE content = 'x y'`);
-      db.exec(`UPDATE copied SET id = 'old_binary', content = 'x' || char(9) || 'y', duplicate_hash = NULL`);
+      db.exec(
+        `UPDATE copied SET id = 'old_binary', content = 'x' || char(9) || 'y', duplicate_hash = NULL`,
+      );
       db.exec(`INSERT INTO memories SELECT * FROM copied`);
       expect(unhashed()).toBe(2);
       const contents = listDuplicateCandidates(db).rows.map((row) => row.content);

@@ -41,7 +41,10 @@ export function hostReach(text, file, srcRoot) {
   if (!text.includes('host/')) return [];
   const host = join(resolve(srcRoot), 'host') + sep;
   return readFacts(text, 'file.ts', ['imports', 'dynamic'])
-    .imports.filter((i) => !i.typeOnly && i.spec.startsWith('.') && resolve(dirname(file), i.spec).startsWith(host))
+    .imports.filter(
+      (i) =>
+        !i.typeOnly && i.spec.startsWith('.') && resolve(dirname(file), i.spec).startsWith(host),
+    )
     .map((i) => ({ line: i.line, spec: i.spec }));
 }
 
@@ -56,11 +59,18 @@ export function hostReach(text, file, srcRoot) {
 export function adapterReach(text, file, srcRoot) {
   const infra = join(resolve(srcRoot), 'infra') + sep;
   const facts = readFacts(text, 'file.ts', ['imports', 'dynamic', 'calls']);
-  const intoInfra = (spec) => spec.startsWith('.') && resolve(dirname(file), spec).startsWith(infra);
+  const intoInfra = (spec) =>
+    spec.startsWith('.') && resolve(dirname(file), spec).startsWith(infra);
   const hits = facts.imports
-    .filter((i) => intoInfra(i.spec) || ADAPTER_MODULE.test(i.spec) || i.names.some((n) => ADAPTER_NAMES.has(n)))
+    .filter(
+      (i) =>
+        intoInfra(i.spec) ||
+        ADAPTER_MODULE.test(i.spec) ||
+        i.names.some((n) => ADAPTER_NAMES.has(n)),
+    )
     .map((i) => ({ line: i.line, spec: i.spec }));
-  for (const c of facts.calls) if (FETCH_CALLS.has(c.callee)) hits.push({ line: c.line, spec: `${c.callee}()` });
+  for (const c of facts.calls)
+    if (FETCH_CALLS.has(c.callee)) hits.push({ line: c.line, spec: `${c.callee}()` });
   return hits.sort((a, b) => a.line - b.line);
 }
 
@@ -90,8 +100,10 @@ export function findDomainIo(srcDir) {
       const file = relative(root, p).replace(/\\/g, '/');
       const text = readFileSync(p, 'utf8');
       hits.push(...ioImports(text).map((f) => ({ file, ...f })));
-      if (HOST_BANNED_LAYERS.has(layer)) hits.push(...hostReach(text, p, root).map((f) => ({ file, ...f })));
-      if (layer === PORT_LAYER) hits.push(...adapterReach(text, p, root).map((f) => ({ file, ...f })));
+      if (HOST_BANNED_LAYERS.has(layer))
+        hits.push(...hostReach(text, p, root).map((f) => ({ file, ...f })));
+      if (layer === PORT_LAYER)
+        hits.push(...adapterReach(text, p, root).map((f) => ({ file, ...f })));
     }
   }
   return hits.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
@@ -108,5 +120,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     );
     process.exit(1);
   }
-  console.log(`No fs, os or child_process in ${srcDir}/base, domain or api; no run-time host in domain or api. OK.`);
+  console.log(
+    `No fs, os or child_process in ${srcDir}/base, domain or api; no run-time host in domain or api. OK.`,
+  );
 }

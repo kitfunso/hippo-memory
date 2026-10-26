@@ -11,7 +11,11 @@ import {
 import { FALLBACK_HALF_LIFE_DAYS } from '../../base/memory/strength.js';
 import { log } from '../../base/util/log.js';
 import { type JsonValue, tryParseJson } from '../../base/util/json.js';
-import { parseStoredObject, warnDamagedColumn, type StoredJsonSite } from '../../base/util/stored-json.js';
+import {
+  parseStoredObject,
+  warnDamagedColumn,
+  type StoredJsonSite,
+} from '../../base/util/stored-json.js';
 import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
 import type { MemoryConflict } from '../../base/ports/store/conflicts.js';
 
@@ -75,7 +79,8 @@ function retrievalFields(c: StoredColumns) {
     emotionalValence: c.emotionalValence ?? 'neutral',
     schemaFit: Number(c.schemaFit ?? DEFAULT_SCHEMA_FIT),
     source: c.source ?? 'cli',
-    outcomeScore: c.outcomeScore === null || c.outcomeScore === undefined ? null : Number(c.outcomeScore),
+    outcomeScore:
+      c.outcomeScore === null || c.outcomeScore === undefined ? null : Number(c.outcomeScore),
     outcomePositive: Number(c.outcomePositive ?? 0),
     outcomeNegative: Number(c.outcomeNegative ?? 0),
     conflictsWith: c.conflictsWith,
@@ -219,7 +224,8 @@ export interface MemoryConflictRow {
   detected_at: string;
   updated_at: string;
 }
-export const MEMORY_CONFLICT_COLUMNS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
+export const MEMORY_CONFLICT_COLUMNS =
+  'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
 
 // SAFETY: every read cast to this row selects SESSION_EVENT_COLUMNS; scripts/check-row-casts.mjs proves it.
 export interface SessionEventRow {
@@ -278,7 +284,12 @@ export const MEMORY_ROW_COLUMNS = [
   'dag_level_3_built_at',
 ] as const;
 // Rebuild-queue columns the DAG summary rebuild writes (store/sqlite/consolidation.ts); a row write never sets them.
-const MEMORY_COLUMN_NAMES = [...MEMORY_ROW_COLUMNS, 'summary_dirty', 'last_rebuilt_at', 'rebuild_count'] as const;
+const MEMORY_COLUMN_NAMES = [
+  ...MEMORY_ROW_COLUMNS,
+  'summary_dirty',
+  'last_rebuilt_at',
+  'rebuild_count',
+] as const;
 
 // FTS-join columns for listSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified reads working.
 export const MEMORY_SELECT_COLUMNS = MEMORY_COLUMN_NAMES.join(', ');
@@ -359,7 +370,10 @@ export function parseLastTraceId(raw: string | null | undefined): string | null 
   return trimmed;
 }
 
-function parseJsonObject(raw: string | null | undefined, site: StoredJsonSite): Record<string, JsonValue> {
+function parseJsonObject(
+  raw: string | null | undefined,
+  site: StoredJsonSite,
+): Record<string, JsonValue> {
   if (!raw) return {};
   return parseStoredObject(site, raw) ?? {};
 }
@@ -401,7 +415,11 @@ export function rowToSessionEvent(row: SessionEventRow): SessionEvent {
     content: row.content,
     source: row.source,
     scope: row.scope ?? null,
-    metadata: parseJsonObject(row.metadata_json, { table: 'session_events', id: row.id, column: 'metadata_json' }),
+    metadata: parseJsonObject(row.metadata_json, {
+      table: 'session_events',
+      id: row.id,
+      column: 'metadata_json',
+    }),
     createdAt: row.created_at,
   };
 }

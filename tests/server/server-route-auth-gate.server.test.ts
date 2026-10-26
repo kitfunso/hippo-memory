@@ -8,7 +8,12 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { V1_ROWS } from '../_helpers/v1-route-rows.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
-const KNOWN_AUTH: ReadonlySet<string> = new Set(['caller', 'admin', 'host-admin-local', 'webhook-signature']);
+const KNOWN_AUTH: ReadonlySet<string> = new Set([
+  'caller',
+  'admin',
+  'host-admin-local',
+  'webhook-signature',
+]);
 const WEBHOOKS = ['POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events'];
 
 // What a request with no credential gets today, route by route; a new route fails the coverage check until it is listed.
@@ -93,11 +98,15 @@ const QUERY: ReadonlyMap<string, string> = new Map(
 describe('the /v1 route table declares every auth need', () => {
   it('gives every row a known auth declaration', () => {
     expect(V1_ROWS.length).toBe(V1_ROUTES.length);
-    expect(V1_ROWS.filter(({ route }) => !KNOWN_AUTH.has(route.auth)).map(({ key }) => key)).toEqual([]);
+    expect(
+      V1_ROWS.filter(({ route }) => !KNOWN_AUTH.has(route.auth)).map(({ key }) => key),
+    ).toEqual([]);
   });
 
   it('lets only the signed webhooks skip the key check', () => {
-    const signed = V1_ROWS.filter(({ route }) => route.auth === 'webhook-signature').map(({ key }) => key);
+    const signed = V1_ROWS.filter(({ route }) => route.auth === 'webhook-signature').map(
+      ({ key }) => key,
+    );
     expect(signed.sort()).toEqual([...WEBHOOKS].sort());
   });
 });
@@ -130,11 +139,14 @@ describe('a request with no credential', () => {
     const seen: Record<string, number> = {};
     for (const key of routes) {
       const [method = '', label = ''] = key.split(' ');
-      const res = await fetch(`${handle.url}${label.replace(/:\w+/g, '1')}${QUERY.get(key) ?? ''}`, {
-        method,
-        headers: { 'content-type': 'application/json' },
-        body: method === 'GET' ? undefined : '{}',
-      });
+      const res = await fetch(
+        `${handle.url}${label.replace(/:\w+/g, '1')}${QUERY.get(key) ?? ''}`,
+        {
+          method,
+          headers: { 'content-type': 'application/json' },
+          body: method === 'GET' ? undefined : '{}',
+        },
+      );
       await res.arrayBuffer();
       seen[key] = res.status;
     }
@@ -142,7 +154,12 @@ describe('a request with no credential', () => {
   });
 
   it('is refused before the handler reads its query, so a bad parameter tells an unknown caller nothing', async () => {
-    for (const path of ['/v1/graph?limit=0', '/v1/memories', '/v1/audit?op=nope', '/v1/decisions?limit=0']) {
+    for (const path of [
+      '/v1/graph?limit=0',
+      '/v1/memories',
+      '/v1/audit?op=nope',
+      '/v1/decisions?limit=0',
+    ]) {
       const res = await fetch(`${handle.url}${path}`);
       expect({ path, status: res.status }).toEqual({ path, status: 401 });
     }

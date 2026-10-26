@@ -49,7 +49,11 @@ export function cosineOf(a: ArrayLike<number>, b: ArrayLike<number>): number {
 
 /** Cosine of `v` to a query of length `queryNorm`, summed in float64 so the vector index and a full scan of the rows
  * rank alike; null for a `v` with no direction. */
-export function cosineToQuery(query: ArrayLike<number>, queryNorm: number, v: ArrayLike<number>): number | null {
+export function cosineToQuery(
+  query: ArrayLike<number>,
+  queryNorm: number,
+  v: ArrayLike<number>,
+): number | null {
   let products = 0;
   let squares = 0;
   for (let i = 0; i < v.length; i++) {

@@ -28,7 +28,9 @@ export function captureError(
   const truncated = clean.slice(0, AUTOLEARN_TEXT_CHARS).trim();
   const suffix = wasTruncated ? ' [truncated]' : '';
   // Strip leading env var assignments (KEY=val or key=val) before the actual command name
-  const safeCmd = redactSecretsStrict(command.replace(/^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+/, '').trim()) || '(redacted)';
+  const safeCmd =
+    redactSecretsStrict(command.replace(/^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+/, '').trim()) ||
+    '(redacted)';
   const content = `Command '${safeCmd}' failed (exit ${exitCode}): ${truncated}${suffix}`;
 
   // Derive a sanitized tag from the command name (first word, strip path)
@@ -57,7 +59,8 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
   const lines = gitLog.split('\n');
 
   const prefixes =
-    customPatterns?.join('|') ?? 'fix|revert|bug|error|hotfix|bugfix|refactor|perf|chore|breaking|deprecate';
+    customPatterns?.join('|') ??
+    'fix|revert|bug|error|hotfix|bugfix|refactor|perf|chore|breaking|deprecate';
   const patterns = [
     new RegExp(`^[a-f0-9]+\\s+(${prefixes})(\\(.+?\\))?:?\\s+(.+)`, 'i'),
     new RegExp(`^(${prefixes})(\\(.+?\\))?:?\\s+(.+)`, 'i'),
@@ -67,7 +70,12 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('commit ') || trimmed.startsWith('Author:') || trimmed.startsWith('Date:')) {
+    if (
+      !trimmed ||
+      trimmed.startsWith('commit ') ||
+      trimmed.startsWith('Author:') ||
+      trimmed.startsWith('Date:')
+    ) {
       continue;
     }
 

@@ -90,7 +90,9 @@ describe('the other-store marker', () => {
     try {
       mkdirSync(marker);
       refusal(() => openHippoDb(root));
-      const told = stderr.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('is unreadable'));
+      const told = stderr.mock.calls
+        .map((call) => String(call[0]))
+        .filter((line) => line.includes('is unreadable'));
       expect(told).toHaveLength(1);
       expect(told[0]).toContain('[hippo] warn: ');
       expect(told[0]).toContain('errorClass=Error');
@@ -131,16 +133,23 @@ describe('the other-store marker', () => {
     initStore(root);
     writeFileSync(marker, 'postgres');
     const repair = { tenantId: 'default', apply: true, protect: repairProtection };
-    await expect(repairAutomaticMemories(storeFilesOf(root), repair)).rejects.toThrow(OtherStoreFolderError);
+    await expect(repairAutomaticMemories(storeFilesOf(root), repair)).rejects.toThrow(
+      OtherStoreFolderError,
+    );
     expect(existsSync(join(root, 'backups'))).toBe(false);
   });
 
   it('hippo auth create on the marked folder exits 1 with the message and mints into no hippo.db', async () => {
     writeFileSync(marker, 'postgres\n');
     const cwd = makeRoot('marker-cwd', { init: false });
-    const run = await runCliAs(['auth', 'create', '--global'], { cwd, env: { ...process.env, HIPPO_HOME: root } });
+    const run = await runCliAs(['auth', 'create', '--global'], {
+      cwd,
+      env: { ...process.env, HIPPO_HOME: root },
+    });
     expect(run.status).toBe(1);
-    expect(run.stderr).toContain(`This folder's memories live in the 'postgres' store, so hippo.db is not used here`);
+    expect(run.stderr).toContain(
+      `This folder's memories live in the 'postgres' store, so hippo.db is not used here`,
+    );
     expect(run.stdout).not.toContain('plaintext');
     expect(dbFiles()).toEqual([]);
   });

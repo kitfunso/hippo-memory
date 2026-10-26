@@ -8,7 +8,8 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
+const ctx = (root: string): FullContext =>
+  apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 
 describe('slack permission mirroring', () => {
   let root: string;
@@ -30,7 +31,10 @@ describe('slack permission mirroring', () => {
       eventId: 'EvPriv',
     });
 
-    const pubResults = await retrieve(ctx(root), { query: 'secret', filter: { scope: 'slack:public:CPUB' } });
+    const pubResults = await retrieve(ctx(root), {
+      query: 'secret',
+      filter: { scope: 'slack:public:CPUB' },
+    });
     expect(pubResults.results.some((r) => r.content.includes('private secret'))).toBe(false);
     expect(pubResults.results.some((r) => r.content.includes('public secret'))).toBe(true);
   });
@@ -64,7 +68,10 @@ describe('slack permission mirroring', () => {
       message: { type: 'message', channel: 'CPUB', user: 'U1', text: 'beta', ts: '1.1' },
       eventId: 'EvPubB',
     });
-    const r = await retrieve(ctx(root), { query: 'beta', filter: { scope: 'slack:public:CDOES_NOT_EXIST' } });
+    const r = await retrieve(ctx(root), {
+      query: 'beta',
+      filter: { scope: 'slack:public:CDOES_NOT_EXIST' },
+    });
     expect(r.results).toHaveLength(0);
   });
 
@@ -72,15 +79,26 @@ describe('slack permission mirroring', () => {
   // with scope='slack:private:CSHARED'. Tenant A queries the same scope string
   // and must get nothing — recall is tenant-scoped before scope-scoped.
   it('tenant-mismatched scope does not leak across tenants', async () => {
-    const ctxA = (r: string): FullContext => apiCtx(r, 'tenantA', { subject: 'cli', role: 'admin' });
-    const ctxB = (r: string): FullContext => apiCtx(r, 'tenantB', { subject: 'cli', role: 'admin' });
+    const ctxA = (r: string): FullContext =>
+      apiCtx(r, 'tenantA', { subject: 'cli', role: 'admin' });
+    const ctxB = (r: string): FullContext =>
+      apiCtx(r, 'tenantB', { subject: 'cli', role: 'admin' });
     await ingestMessage(ctxB(root), {
       teamId: 'T1',
       channel: { id: 'CSHARED', is_private: true },
-      message: { type: 'message', channel: 'CSHARED', user: 'U1', text: 'tenantB secret', ts: '3.3' },
+      message: {
+        type: 'message',
+        channel: 'CSHARED',
+        user: 'U1',
+        text: 'tenantB secret',
+        ts: '3.3',
+      },
       eventId: 'EvShared',
     });
-    const r = await retrieve(ctxA(root), { query: 'secret', filter: { scope: 'slack:private:CSHARED' } });
+    const r = await retrieve(ctxA(root), {
+      query: 'secret',
+      filter: { scope: 'slack:private:CSHARED' },
+    });
     expect(r.results).toHaveLength(0);
   });
 });

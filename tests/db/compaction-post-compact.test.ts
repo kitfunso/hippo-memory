@@ -75,7 +75,11 @@ describe('hippo post-compact on real PostCompact payloads', () => {
   it('writes each item as a kept-shape row: distilled, episodic, observed, tagged, sourced to the session', async () => {
     initTestStore(s.hippoRoot);
     expect(
-      (await postCompact(fixturePayload(0, { cwd: s.proj, transcript_path: path.join(s.proj, 't.jsonl') }))).status,
+      (
+        await postCompact(
+          fixturePayload(0, { cwd: s.proj, transcript_path: path.join(s.proj, 't.jsonl') }),
+        )
+      ).status,
     ).toBe(0);
     const rows = compactionMemories(s.hippoRoot);
     expect(rows).toHaveLength(4);
@@ -125,7 +129,9 @@ describe('hippo post-compact on real PostCompact payloads', () => {
     const result = await postCompact(
       postCompactPayload('s1', s.proj, '<summary>\n1. Primary Request: nothing else.\n</summary>'),
     );
-    expect(oneLine(result.stdout)).toBe("Hippo kept this compaction's summary; it listed no new memories.");
+    expect(oneLine(result.stdout)).toBe(
+      "Hippo kept this compaction's summary; it listed no new memories.",
+    );
     expect(log()).toContain('no memories section');
     expect(compactionRows(s.hippoRoot)).toMatchObject([{ status: 'done', items_written: 0 }]);
   });
@@ -135,9 +141,12 @@ describe('hippo post-compact on real PostCompact payloads', () => {
     const long = `The billing service ${'keeps a very long story about its deploy process '.repeat(12)}so it stays in the record only.`;
     const many = Array.from(
       { length: 11 },
-      (_, i) => `Memory number ${i + 1} says the search service needs its cache flushed after deploy ${i + 1}.`,
+      (_, i) =>
+        `Memory number ${i + 1} says the search service needs its cache flushed after deploy ${i + 1}.`,
     );
-    const result = await postCompact(postCompactPayload('s1', s.proj, summaryWith([long, ...many])));
+    const result = await postCompact(
+      postCompactPayload('s1', s.proj, summaryWith([long, ...many])),
+    );
     expect(oneLine(result.stdout)).toBe('Hippo saved 10 memories from this compaction.');
     expect(log()).toContain('item too long: 1');
     expect(log()).toContain('capped: 1');
@@ -166,7 +175,11 @@ describe('hippo post-compact on real PostCompact payloads', () => {
     initTestStore(s.hippoRoot);
     run(s.hippoRoot, 'DROP TABLE compactions');
     const result = await postCompact(
-      postCompactPayload('s1', s.proj, summaryWith(['The search service cache must be flushed after every deploy.'])),
+      postCompactPayload(
+        's1',
+        s.proj,
+        summaryWith(['The search service cache must be flushed after every deploy.']),
+      ),
     );
     expect(result.status).toBe(0);
     expect(result.stderr).toContain('record step failed');
@@ -180,7 +193,9 @@ function retrievalCount(content: string): number {
   try {
     // SAFETY: row's shape matches the single retrieval_count column named in the SELECT.
     return (
-      db.prepare(`SELECT retrieval_count FROM memories WHERE content = ?`).get(content) as { retrieval_count: number }
+      db.prepare(`SELECT retrieval_count FROM memories WHERE content = ?`).get(content) as {
+        retrieval_count: number;
+      }
     ).retrieval_count;
   } finally {
     closeHippoDb(db);
@@ -193,7 +208,9 @@ describe('repeated items across compactions', () => {
 
   it('skips an item an earlier compaction of the same session saved, and does not count it as a recall', async () => {
     initTestStore(s.hippoRoot);
-    expect((await postCompact(postCompactPayload('s1', s.proj, summaryWith([first])))).status).toBe(0);
+    expect((await postCompact(postCompactPayload('s1', s.proj, summaryWith([first])))).status).toBe(
+      0,
+    );
     const second = await postCompact(
       postCompactPayload(
         's1',
@@ -210,15 +227,19 @@ describe('repeated items across compactions', () => {
 
   it('counts spacing, case and punctuation changes as a repeat', async () => {
     initTestStore(s.hippoRoot);
-    expect((await postCompact(postCompactPayload('s1', s.proj, summaryWith([first])))).status).toBe(0);
+    expect((await postCompact(postCompactPayload('s1', s.proj, summaryWith([first])))).status).toBe(
+      0,
+    );
     for (const [session, text] of [
       ['s2', first.replace('pnpm, so', 'pnpm,   so')],
       ['s3', first.replace('billing', 'Billing')],
       ['s4', first.replace(', so', '; so')],
     ]) {
-      expect(oneLine((await postCompact(postCompactPayload(session, s.proj, summaryWith([text])))).stdout)).toBe(
-        NOTHING_NEW,
-      );
+      expect(
+        oneLine(
+          (await postCompact(postCompactPayload(session, s.proj, summaryWith([text])))).stdout,
+        ),
+      ).toBe(NOTHING_NEW);
     }
     expect(compactionMemories(s.hippoRoot)).toHaveLength(1);
     expect(retrievalCount(first)).toBe(3);
@@ -230,19 +251,25 @@ describe('repeated items across compactions', () => {
       'Recurring Windows scheduled tasks that run console programs are wrapped as `conhost.exe --headless <cmd>`; this was verified against a window watcher.',
       'A Windows child process of a detached Node process needs `windowsHide: true`, or it opens a visible terminal. `tests/child-process-window-hide.test.ts` guards this.',
     ];
-    expect((await postCompact(postCompactPayload('s1', s.proj, summaryWith(saved)))).status).toBe(0);
+    expect((await postCompact(postCompactPayload('s1', s.proj, summaryWith(saved)))).status).toBe(
+      0,
+    );
     const reworded = [
       'Recurring Windows scheduled tasks that run console programs are wrapped as `conhost.exe --headless <cmd>`, verified against a window watcher.',
       'A Windows child process of a detached Node process needs `windowsHide: true`, or it opens a visible terminal.',
     ];
-    expect(oneLine((await postCompact(postCompactPayload('s1', s.proj, summaryWith(reworded)))).stdout)).toBe(
-      NOTHING_NEW,
-    );
+    expect(
+      oneLine((await postCompact(postCompactPayload('s1', s.proj, summaryWith(reworded)))).stdout),
+    ).toBe(NOTHING_NEW);
     expect(compactionMemories(s.hippoRoot).map((r) => r.content)).toEqual([...saved].sort());
   });
 
   it.each([
-    ['a changed number', 'The staging API listens on port 8080.', 'The staging API listens on port 9090.'],
+    [
+      'a changed number',
+      'The staging API listens on port 8080.',
+      'The staging API listens on port 9090.',
+    ],
     [
       'a changed one-digit number',
       'The deploy job retries 3 times before paging.',
@@ -278,13 +305,21 @@ describe('repeated items across compactions', () => {
       'The billing service uses pnpm; the search service uses npm.',
       'The search service uses pnpm.',
     ],
-    ['two swapped words', 'Use pnpm, not npm, in the billing service.', 'Use npm, not pnpm, in the billing service.'],
+    [
+      'two swapped words',
+      'Use pnpm, not npm, in the billing service.',
+      'Use npm, not pnpm, in the billing service.',
+    ],
     [
       'two swapped numbers',
       'Staging listens on port 8080 and prod on 9090.',
       'Staging listens on port 9090 and prod on 8080.',
     ],
-    ['a dropped contraction', "Don't deploy the billing service on Fridays.", 'Deploy the billing service on Fridays.'],
+    [
+      'a dropped contraction',
+      "Don't deploy the billing service on Fridays.",
+      'Deploy the billing service on Fridays.',
+    ],
     [
       'a dropped "only"',
       'Only run the migrations after the nightly backup finishes.',
@@ -292,10 +327,12 @@ describe('repeated items across compactions', () => {
     ],
   ])('saves %s as a new memory', async (_label, earlier, later) => {
     initTestStore(s.hippoRoot);
-    expect((await postCompact(postCompactPayload('s1', s.proj, summaryWith([earlier])))).status).toBe(0);
-    expect(oneLine((await postCompact(postCompactPayload('s2', s.proj, summaryWith([later])))).stdout)).toBe(
-      'Hippo saved 1 memory from this compaction.',
-    );
+    expect(
+      (await postCompact(postCompactPayload('s1', s.proj, summaryWith([earlier])))).status,
+    ).toBe(0);
+    expect(
+      oneLine((await postCompact(postCompactPayload('s2', s.proj, summaryWith([later])))).stdout),
+    ).toBe('Hippo saved 1 memory from this compaction.');
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
   });
 
@@ -304,7 +341,11 @@ describe('repeated items across compactions', () => {
     expect((await runCliAs(['remember', first], { cwd: s.proj, env: s.env })).status).toBe(0);
     expect(
       oneLine(
-        (await postCompact(postCompactPayload('s1', s.proj, summaryWith([first.replace(', so', '; so')])))).stdout,
+        (
+          await postCompact(
+            postCompactPayload('s1', s.proj, summaryWith([first.replace(', so', '; so')])),
+          )
+        ).stdout,
       ),
     ).toBe(NOTHING_NEW);
     expect(compactionMemories(s.hippoRoot)).toEqual([]);
@@ -320,9 +361,9 @@ describe('repeated items across compactions', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(oneLine((await postCompact(postCompactPayload('s1', s.proj, summaryWith([first])))).stdout)).toBe(
-      'Hippo saved 1 memory from this compaction.',
-    );
+    expect(
+      oneLine((await postCompact(postCompactPayload('s1', s.proj, summaryWith([first])))).stdout),
+    ).toBe('Hippo saved 1 memory from this compaction.');
     expect(compactionMemories(s.hippoRoot)).toHaveLength(1);
   });
 
@@ -330,8 +371,15 @@ describe('repeated items across compactions', () => {
     initTestStore(s.hippoRoot);
     expect(
       oneLine(
-        (await postCompact(postCompactPayload('s1', s.proj, summaryWith([first, first.replace('billing', 'Billing')]))))
-          .stdout,
+        (
+          await postCompact(
+            postCompactPayload(
+              's1',
+              s.proj,
+              summaryWith([first, first.replace('billing', 'Billing')]),
+            ),
+          )
+        ).stdout,
       ),
     ).toBe('Hippo saved 1 memory from this compaction.');
     expect(compactionMemories(s.hippoRoot)).toHaveLength(1);
@@ -343,13 +391,15 @@ describe('the global store fallback', () => {
     await initGlobal(s);
     const other = path.join(s.dir, 'other');
     fs.mkdirSync(path.join(other, '.git'), { recursive: true });
-    const summary = summaryWith(['The billing service uses pnpm, so npm install is never run there.']);
+    const summary = summaryWith([
+      'The billing service uses pnpm, so npm install is never run there.',
+    ]);
     expect(oneLine((await postCompact(postCompactPayload('s1', s.proj, summary))).stdout)).toBe(
       'Hippo saved 1 memory from this compaction.',
     );
-    expect(oneLine((await postCompact(postCompactPayload('s2', other, summary), other)).stdout)).toBe(
-      'Hippo saved 1 memory from this compaction.',
-    );
+    expect(
+      oneLine((await postCompact(postCompactPayload('s2', other, summary), other)).stdout),
+    ).toBe('Hippo saved 1 memory from this compaction.');
     expect(oneLine((await postCompact(postCompactPayload('s3', s.proj, summary))).stdout)).toBe(
       "Hippo kept this compaction's summary; it listed no new memories.",
     );
@@ -360,7 +410,11 @@ describe('the global store fallback', () => {
         .map((r) => r.origin_project)
         .sort(),
     ).toEqual(['other', 'proj']);
-    expect(compactionRows(s.globalRoot).map((r) => r.origin_project)).toEqual(['proj', 'other', 'proj']);
+    expect(compactionRows(s.globalRoot).map((r) => r.origin_project)).toEqual([
+      'proj',
+      'other',
+      'proj',
+    ]);
   });
 
   it('items are cross-project elsewhere and are not copied down into another project', async () => {
@@ -384,7 +438,9 @@ describe('the global store fallback', () => {
     fs.mkdirSync(path.join(other, '.git'), { recursive: true });
     const otherRoot = path.join(other, '.hippo');
     initTestStore(otherRoot);
-    expect(await syncGlobalToLocal(...sharingStores(otherRoot, s.globalRoot), { embed: TEST_RUN })).toBe(0);
+    expect(
+      await syncGlobalToLocal(...sharingStores(otherRoot, s.globalRoot), { embed: TEST_RUN }),
+    ).toBe(0);
   });
 
   it('a folder with no project marker gives user-global rows', async () => {

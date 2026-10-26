@@ -49,9 +49,24 @@ afterAll(async () => {
 });
 
 const cases: Array<[string, string, Body, RegExp]> = [
-  ['memory kind', '/v1/memories', { content: 'c', kind: over(256) }, /kind exceeds 256-character cap/],
-  ['memory scope', '/v1/memories', { content: 'c', scope: over(256) }, /scope exceeds 256-character cap/],
-  ['memory owner', '/v1/memories', { content: 'c', owner: over(256) }, /owner exceeds 256-character cap/],
+  [
+    'memory kind',
+    '/v1/memories',
+    { content: 'c', kind: over(256) },
+    /kind exceeds 256-character cap/,
+  ],
+  [
+    'memory scope',
+    '/v1/memories',
+    { content: 'c', scope: over(256) },
+    /scope exceeds 256-character cap/,
+  ],
+  [
+    'memory owner',
+    '/v1/memories',
+    { content: 'c', owner: over(256) },
+    /owner exceeds 256-character cap/,
+  ],
   [
     'memory artifactRef',
     '/v1/memories',
@@ -76,10 +91,25 @@ const cases: Array<[string, string, Body, RegExp]> = [
     { content: 'c', project: { name: over(256) } },
     /project.name exceeds 256-character cap/,
   ],
-  ['archive reason', '/v1/memories/mem_1/archive', { reason: over(4096) }, /reason exceeds 4096-character cap/],
-  ['outcome id', '/v1/outcome', { good: true, ids: [over(256)] }, /each ids entry exceeds 256-character cap/],
+  [
+    'archive reason',
+    '/v1/memories/mem_1/archive',
+    { reason: over(4096) },
+    /reason exceeds 4096-character cap/,
+  ],
+  [
+    'outcome id',
+    '/v1/outcome',
+    { good: true, ids: [over(256)] },
+    /each ids entry exceeds 256-character cap/,
+  ],
   ['key label', '/v1/auth/keys', { label: over(256) }, /label exceeds 256-character cap/],
-  ['prediction classTag', '/v1/predictions', { claim: 'c', classTag: over(256) }, /classTag exceeds 256-character cap/],
+  [
+    'prediction classTag',
+    '/v1/predictions',
+    { claim: 'c', classTag: over(256) },
+    /classTag exceeds 256-character cap/,
+  ],
   [
     'prediction unit',
     '/v1/predictions',
@@ -95,15 +125,22 @@ const cases: Array<[string, string, Body, RegExp]> = [
 ];
 
 describe('body field caps', () => {
-  it.each(cases)('%s over its cap is a 400 that names the field and the cap', async (_name, path, body, message) => {
-    const r = await post(path, body);
-    expect(r.status).toBe(400);
-    expect(r.error).toMatch(message);
-    expect(r.error).not.toContain('xxxx');
-  });
+  it.each(cases)(
+    '%s over its cap is a 400 that names the field and the cap',
+    async (_name, path, body, message) => {
+      const r = await post(path, body);
+      expect(r.status).toBe(400);
+      expect(r.error).toMatch(message);
+      expect(r.error).not.toContain('xxxx');
+    },
+  );
 
   it('a value at its cap is accepted', async () => {
-    const r = await post('/v1/memories', { content: 'cap check', scope: 'x'.repeat(256), tags: ['t'.repeat(256)] });
+    const r = await post('/v1/memories', {
+      content: 'cap check',
+      scope: 'x'.repeat(256),
+      tags: ['t'.repeat(256)],
+    });
     expect(r.status).toBe(200);
   });
 });

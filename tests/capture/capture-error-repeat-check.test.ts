@@ -58,13 +58,18 @@ describe('capture-error repeat check does not read every memory', () => {
   });
 
   it('a tag that merely contains the substring "auto-captured" is not treated as auto-captured', async () => {
-    const entry = createMemory('a memory whose tag looks like the auto-captured marker but is not', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tags: ['x"auto-captured'],
-      tenantId: 'default',
-    });
+    const entry = createMemory(
+      'a memory whose tag looks like the auto-captured marker but is not',
+      {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tags: ['x"auto-captured'],
+        tenantId: 'default',
+      },
+    );
     writeEntry(root, entry);
 
-    expect(await sqliteStore(root).lessonWrites.contentsWithTag('default', 'auto-captured')).toEqual([]);
+    expect(
+      await sqliteStore(root).lessonWrites.contentsWithTag('default', 'auto-captured'),
+    ).toEqual([]);
   });
 });

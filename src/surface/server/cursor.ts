@@ -14,7 +14,11 @@ export interface Page<T> {
 /**
  * Drops the one-row lookahead the query fetched past `limit` and names the next page's cursor, null on the last page.
  */
-export function pageOf<T>(rows: readonly T[], limit: number, positionOf: (row: T) => KeysetPosition): Page<T> {
+export function pageOf<T>(
+  rows: readonly T[],
+  limit: number,
+  positionOf: (row: T) => KeysetPosition,
+): Page<T> {
   const page = keysetPage(rows, limit, positionOf);
   return { items: page.rows, nextCursor: page.next === null ? null : encodeCursor(page.next) };
 }

@@ -73,7 +73,11 @@ const slackHeaders = (): string =>
 
 const WEBHOOKS = [
   ['/v1/connectors/slack/events', 'SLACK_SIGNING_SECRET', slackHeaders],
-  ['/v1/connectors/github/events', 'GITHUB_WEBHOOK_SECRET', () => `X-Hub-Signature-256: sha256=${'0'.repeat(64)}\r\n`],
+  [
+    '/v1/connectors/github/events',
+    'GITHUB_WEBHOOK_SECRET',
+    () => `X-Hub-Signature-256: sha256=${'0'.repeat(64)}\r\n`,
+  ],
 ] as const;
 
 describe('no route reads an unauthenticated body beyond a stated cap and deadline', () => {
@@ -103,14 +107,17 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
   });
 
   // Past the admin gate the key mint still reads under its own 4 KB cap and short deadline.
-  it.skipIf(needsHippoDb('db'))('POST /v1/auth/keys answers 413 for a body over its 4 KB cap', async () => {
-    const res = await fetch(`${handle.url}/v1/auth/keys`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${adminKey(root)}` },
-      body: JSON.stringify({ label: 'x'.repeat(5000) }),
-    });
-    expect(res.status).toBe(413);
-  });
+  it.skipIf(needsHippoDb('db'))(
+    'POST /v1/auth/keys answers 413 for a body over its 4 KB cap',
+    async () => {
+      const res = await fetch(`${handle.url}/v1/auth/keys`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${adminKey(root)}` },
+        body: JSON.stringify({ label: 'x'.repeat(5000) }),
+      });
+      expect(res.status).toBe(413);
+    },
+  );
 
   it.skipIf(needsHippoDb('db'))(
     'POST /v1/auth/keys answers 408 and drops the socket when an accepted caller never sends the promised body',
@@ -129,7 +136,9 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     vi.stubEnv('HIPPO_BODY_TIMEOUT_MS', '50');
     try {
       const credential = `Authorization: Bearer ${handle.key}\r\n`;
-      expect(await statusUntilServerCloses(handle.port, '/mcp', credential)).toBe('HTTP/1.1 408 Request Timeout');
+      expect(await statusUntilServerCloses(handle.port, '/mcp', credential)).toBe(
+        'HTTP/1.1 408 Request Timeout',
+      );
     } finally {
       vi.stubEnv('HIPPO_BODY_TIMEOUT_MS', undefined);
     }
@@ -142,11 +151,17 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
       await handle.stop();
       handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
       vi.stubEnv(secretEnv, undefined);
-      expect(await statusUntilServerCloses(handle.port, path, signatureHeaders())).toBe('HTTP/1.1 404 Not Found');
+      expect(await statusUntilServerCloses(handle.port, path, signatureHeaders())).toBe(
+        'HTTP/1.1 404 Not Found',
+      );
       // Test-only signing material, not a real secret.
       vi.stubEnv(secretEnv, 'test-only-webhook-signing-material');
-      expect(await statusUntilServerCloses(handle.port, path, '')).toBe('HTTP/1.1 401 Unauthorized');
-      expect(await statusUntilServerCloses(handle.port, path, signatureHeaders())).toBe('HTTP/1.1 408 Request Timeout');
+      expect(await statusUntilServerCloses(handle.port, path, '')).toBe(
+        'HTTP/1.1 401 Unauthorized',
+      );
+      expect(await statusUntilServerCloses(handle.port, path, signatureHeaders())).toBe(
+        'HTTP/1.1 408 Request Timeout',
+      );
     },
   );
 
@@ -166,9 +181,10 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
       `X-Slack-Signature: v0=${'g'.repeat(64)}\r\nX-Slack-Request-Timestamp: ${now}\r\n`,
     ];
     for (const headers of refused) {
-      expect(await statusUntilServerCloses(handle.port, '/v1/connectors/slack/events', headers), headers).toBe(
-        'HTTP/1.1 401 Unauthorized',
-      );
+      expect(
+        await statusUntilServerCloses(handle.port, '/v1/connectors/slack/events', headers),
+        headers,
+      ).toBe('HTTP/1.1 401 Unauthorized');
     }
   });
 

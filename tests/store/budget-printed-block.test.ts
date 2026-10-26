@@ -49,7 +49,10 @@ function noteText(i: number): string {
 }
 
 function seed(content: string, extra: Partial<MemoryEntry> = {}): string {
-  const e = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: TAGS }), ...extra };
+  const e = {
+    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: TAGS }),
+    ...extra,
+  };
   writeEntry(hippoDir, e);
   return e.id;
 }
@@ -59,7 +62,9 @@ function seedNotes(extra: Partial<MemoryEntry> = {}): void {
 }
 
 async function hippo(args: string[], input?: string): Promise<string> {
-  const res = await withHookStdin(input, () => runInProcess(() => runCli(['node', 'hippo', ...args])));
+  const res = await withHookStdin(input, () =>
+    runInProcess(() => runCli(['node', 'hippo', ...args])),
+  );
   expect(res.status, res.stderr).toBe(0);
   return res.stdout;
 }
@@ -98,8 +103,11 @@ function retrievalCount(id: string): number {
   const db = openHippoDb(hippoDir);
   try {
     // SAFETY: the SELECT names exactly this one column.
-    return (db.prepare('SELECT retrieval_count FROM memories WHERE id = ?').get(id) as { retrieval_count: number })
-      .retrieval_count;
+    return (
+      db.prepare('SELECT retrieval_count FROM memories WHERE id = ?').get(id) as {
+        retrieval_count: number;
+      }
+    ).retrieval_count;
   } finally {
     closeHippoDb(db);
   }
@@ -120,7 +128,9 @@ async function mcpText(name: string, args: McpArgs): Promise<string> {
     },
   );
   // SAFETY: tools/call answers carry one MCP text content block.
-  return (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? '';
+  return (
+    (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? ''
+  );
 }
 
 // Every note matches and costs the same, so the count shown is the budget's fit; min < max only where a hint varies.
@@ -136,7 +146,8 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_HOME', path.join(root, 'global'));
   vi.stubEnv('HOME', root);
   vi.stubEnv('USERPROFILE', root);
-  for (const k of ['ANTHROPIC_API_KEY', 'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID']) vi.stubEnv(k, undefined);
+  for (const k of ['ANTHROPIC_API_KEY', 'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID'])
+    vi.stubEnv(k, undefined);
   process.chdir(root);
 });
 
@@ -149,15 +160,20 @@ describe('hippo context', () => {
   it.each([
     ['a query', ['context', 'postgres', 'rollback', '--budget', '400']],
     ['no query', ['context', '--budget', '400']],
-  ])('markdown with %s prints within the budget; the header and the ledger count the block', async (_label, args) => {
-    seedNotes();
-    const text = block(await hippo(args));
-    expect(estimateTokens(text)).toBeLessThanOrEqual(400);
-    expect(headerTokens(text, /## Project Memory \(\d+ entries, (\d+) tokens\)/)).toBe(estimateTokens(text));
-    // The heading and ambient footer reserve 12 + 56 tokens, and each note line prices at 88, so 332 fits 3.
-    expectBudgetBinds(text, 3);
-    expect(ledger().at(-1)).toEqual({ surface: 'context', tokens: estimateTokens(text) });
-  });
+  ])(
+    'markdown with %s prints within the budget; the header and the ledger count the block',
+    async (_label, args) => {
+      seedNotes();
+      const text = block(await hippo(args));
+      expect(estimateTokens(text)).toBeLessThanOrEqual(400);
+      expect(headerTokens(text, /## Project Memory \(\d+ entries, (\d+) tokens\)/)).toBe(
+        estimateTokens(text),
+      );
+      // The heading and ambient footer reserve 12 + 56 tokens, and each note line prices at 88, so 332 fits 3.
+      expectBudgetBinds(text, 3);
+      expect(ledger().at(-1)).toEqual({ surface: 'context', tokens: estimateTokens(text) });
+    },
+  );
 
   it('the per-prompt hook fits the budget, and each block header and ledger row counts its own block', async () => {
     fs.writeFileSync(
@@ -167,15 +183,22 @@ describe('hippo context', () => {
       }),
     );
     seedNotes();
-    seed('Pinned rule one: always run the postgres migration dry run before a deploy', { pinned: true });
-    seed('Pinned rule two: never drop a column in the same release that stops reading it', { pinned: true });
+    seed('Pinned rule one: always run the postgres migration dry run before a deploy', {
+      pinned: true,
+    });
+    seed('Pinned rule two: never drop a column in the same release that stops reading it', {
+      pinned: true,
+    });
     const out = await hippo(
       ['context', '--pinned-only', '--format', 'additional-context', '--budget', '600'],
-      JSON.stringify({ session_id: 'sess-budget', prompt: 'postgres migration rollback plan dry run' }),
+      JSON.stringify({
+        session_id: 'sess-budget',
+        prompt: 'postgres migration rollback plan dry run',
+      }),
     );
     // SAFETY: the hook prints one hookSpecificOutput JSON object.
-    const ac = (JSON.parse(out) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput
-      .additionalContext;
+    const ac = (JSON.parse(out) as { hookSpecificOutput: { additionalContext: string } })
+      .hookSpecificOutput.additionalContext;
     expect(estimateTokens(ac)).toBeLessThanOrEqual(600);
     const cut = ac.indexOf('## Prompt-Relevant Memory');
     // The static block is a 42-char heading and the two pin lines (326 and 330 chars), then a blank line.
@@ -185,9 +208,9 @@ describe('hippo context', () => {
     expect(headerTokens(staticBlock, /## Project Memory \(\d+ entries, (\d+) tokens\)/)).toBe(
       estimateTokens(staticBlock),
     );
-    expect(headerTokens(recallBlock, /## Prompt-Relevant Memory \(\d+ entries, (\d+) tokens\)/)).toBe(
-      estimateTokens(recallBlock),
-    );
+    expect(
+      headerTokens(recallBlock, /## Prompt-Relevant Memory \(\d+ entries, (\d+) tokens\)/),
+    ).toBe(estimateTokens(recallBlock));
     // Headings take 12 + 14 and the pins 82 + 83 of 600, so 409 holds 4 of the 5 gated 87-token notes.
     expectBudgetBinds(recallBlock, 4);
     expect(ledger()).toEqual([
@@ -213,7 +236,9 @@ describe('hippo context', () => {
     expect(all).not.toContain('Zanzibar');
     // The oversize entry is skipped, and an old note still prices at 88 (strength priced at 100%), so 3 fit.
     expectBudgetBinds(all, 3);
-    expect(await hippo(['context', 'zanzibar', 'ferry', '--budget', '400'])).not.toContain('Zanzibar');
+    expect(await hippo(['context', 'zanzibar', 'ferry', '--budget', '400'])).not.toContain(
+      'Zanzibar',
+    );
     expect(retrievalCount(big)).toBe(0);
   });
 });
@@ -230,7 +255,9 @@ describe('hippo recall', () => {
 
     const json = block(await hippo(['recall', 'postgres rollback', '--budget', '400', '--json']));
     // SAFETY: recall --json prints { results: [{ content }] }.
-    const picked = (JSON.parse(json) as { results: Array<{ content: string }> }).results.map((r) => r.content);
+    const picked = (JSON.parse(json) as { results: Array<{ content: string }> }).results.map(
+      (r) => r.content,
+    );
     expect(picked.sort()).toEqual(shownNotes(text).sort());
     expect(ledger().at(-1)).toEqual({ surface: 'recall', tokens: estimateTokens(json) });
   });
@@ -251,7 +278,9 @@ describe('hippo recall', () => {
     expect(kept).toContain('Zanzibar ferry timetable');
     expect(headerTokens(kept, /Found \d+ memories \((\d+) tokens\)/)).toBe(estimateTokens(kept));
     expect(estimateTokens(kept)).toBeGreaterThan(400);
-    const floorless = block(await hippo(['recall', 'zanzibar ferry', '--budget', '400', '--min-results', '0']));
+    const floorless = block(
+      await hippo(['recall', 'zanzibar ferry', '--budget', '400', '--min-results', '0']),
+    );
     expect(floorless).not.toContain('Zanzibar ferry timetable');
     expect(estimateTokens(floorless)).toBeLessThanOrEqual(400);
   });
@@ -262,14 +291,18 @@ describe('MCP recall and context', () => {
   it.each([
     ['hippo_recall', 'mcp_recall', { query: 'postgres rollback', budget: 400 }, 3, 4],
     ['hippo_context', 'mcp_context', { budget: 400 }, 4, 4],
-  ])('%s returns text within the budget and books that text', async (tool, surface, args, min, max) => {
-    seedNotes();
-    const text = await mcpText(tool, args);
-    expect(estimateTokens(text)).toBeLessThanOrEqual(400);
-    expectBudgetBinds(text, min, max);
-    for (const [content, id] of ids) expect(retrievalCount(id)).toBe(text.includes(content) ? 1 : 0);
-    expect(ledger().at(-1)).toEqual({ surface, tokens: estimateTokens(text) });
-  });
+  ])(
+    '%s returns text within the budget and books that text',
+    async (tool, surface, args, min, max) => {
+      seedNotes();
+      const text = await mcpText(tool, args);
+      expect(estimateTokens(text)).toBeLessThanOrEqual(400);
+      expectBudgetBinds(text, min, max);
+      for (const [content, id] of ids)
+        expect(retrievalCount(id)).toBe(text.includes(content) ? 1 : 0);
+      expect(ledger().at(-1)).toEqual({ surface, tokens: estimateTokens(text) });
+    },
+  );
 });
 
 describe('assemble and drill', () => {
@@ -279,7 +312,8 @@ describe('assemble and drill', () => {
     infra: testInfra(),
   };
   const sid = 'sess-budget-window';
-  const line = (i: number): string => `Session message m${i}: ${'the rollback runbook step and its owner '.repeat(5)}`;
+  const line = (i: number): string =>
+    `Session message m${i}: ${'the rollback runbook step and its owner '.repeat(5)}`;
 
   function seedSession(n: number): string[] {
     return Array.from({ length: n }, (_, i) => {
@@ -320,7 +354,11 @@ describe('assemble and drill', () => {
 
   it('the window prints within the budget in MCP and CLI, and its header counts the block', async () => {
     seedSession(8);
-    const mcp = await mcpText('hippo_assemble', { session_id: sid, budget: 250, fresh_tail_count: 1 });
+    const mcp = await mcpText('hippo_assemble', {
+      session_id: sid,
+      budget: 250,
+      fresh_tail_count: 1,
+    });
     const cli = block(await hippo(['assemble', sid, '--budget', '250', '--fresh-tail', '1']));
     for (const text of [mcp, cli]) {
       expect(estimateTokens(text)).toBeLessThanOrEqual(250);
@@ -332,11 +370,15 @@ describe('assemble and drill', () => {
 
   it('never evicts the fresh tail, even when the tail alone exceeds the budget', async () => {
     const rows = seedSession(5);
-    const r = await assemble({ ...ctx, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) }, sid, {
-      budget: 20,
-      freshTailCount: 2,
-      cost: assembleCost(sid),
-    });
+    const r = await assemble(
+      { ...ctx, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) },
+      sid,
+      {
+        budget: 20,
+        freshTailCount: 2,
+        cost: assembleCost(sid),
+      },
+    );
     expect(r.items.map((it) => it.id)).toEqual(rows.slice(3));
     expect(r.evicted).toBe(3);
   });
@@ -354,10 +396,14 @@ describe('assemble and drill', () => {
 
   it('drill keeps the first child when it alone exceeds the budget', async () => {
     const id = seedSummary(3);
-    const r = await drillDown({ ...ctx, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) }, id, {
-      budget: 5,
-      cost: drillCost,
-    });
+    const r = await drillDown(
+      { ...ctx, store: sqliteStore(hippoDir), config: loadConfig(hippoDir) },
+      id,
+      {
+        budget: 5,
+        cost: drillCost,
+      },
+    );
     expect('children' in r && r.children.map((c) => c.content)).toEqual([line(0)]);
   });
 });

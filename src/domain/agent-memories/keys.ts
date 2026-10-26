@@ -12,7 +12,9 @@ export function itemHash(text: string): string {
 }
 
 /** Keys for a single-file store's items: `<heading slug>/<12 hex of the text>`, `~2`, `~3` on repeats. */
-export function textItemKeys(items: readonly { readonly headingSlug: string; readonly text: string }[]): string[] {
+export function textItemKeys(
+  items: readonly { readonly headingSlug: string; readonly text: string }[],
+): string[] {
   const seen = new Map<string, number>();
   return items.map(({ headingSlug, text }) => {
     const base = `${headingSlug}/${sha256Hex(text).slice(0, ID_SUFFIX_CHARS)}`;

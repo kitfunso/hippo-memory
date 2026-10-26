@@ -8,10 +8,16 @@ import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 export type SharingStore = StoreWith<'sharing' | 'folderFiles'>;
 
 /** The text keys of `tenantId`, a page at a time, oldest first. */
-export async function* textKeyPages(sharing: Sharing, tenantId: TenantId): AsyncGenerator<EntryTextKey[]> {
+export async function* textKeyPages(
+  sharing: Sharing,
+  tenantId: TenantId,
+): AsyncGenerator<EntryTextKey[]> {
   let after: EntryCursor | null = null;
   do {
-    const page = await sharing.textKeysPage(tenantId, { limit: READ_PAGE_ROWS, after: after ?? undefined });
+    const page = await sharing.textKeysPage(tenantId, {
+      limit: READ_PAGE_ROWS,
+      after: after ?? undefined,
+    });
     yield page.keys;
     after = page.next;
   } while (after !== null);

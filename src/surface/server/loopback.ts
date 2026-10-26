@@ -14,13 +14,19 @@ async function localhostIsLoopback(lookup: LookupAll): Promise<boolean> {
     const found = await lookup('localhost');
     return found.length > 0 && found.every(({ address }) => isLoopbackAddress(address));
   } catch (err) {
-    log.warn("serve: could not resolve 'localhost', so it is not treated as loopback", errorFields(err));
+    log.warn(
+      "serve: could not resolve 'localhost', so it is not treated as loopback",
+      errorFields(err),
+    );
     return false;
   }
 }
 
 /** The hosts `serve` treats as loopback for a bind to `host`; the resolver is asked only when `host` is 'localhost'. */
-export async function loopbackBindHosts(host: string, lookup: LookupAll = resolveAll): Promise<ReadonlySet<string>> {
+export async function loopbackBindHosts(
+  host: string,
+  lookup: LookupAll = resolveAll,
+): Promise<ReadonlySet<string>> {
   const hosts = new Set(['127.0.0.1', '::1']);
   if (host === 'localhost' && (await localhostIsLoopback(lookup))) hosts.add('localhost');
   return hosts;

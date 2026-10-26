@@ -89,7 +89,9 @@ describe('consolidate auto-promote: session -> trace', () => {
     const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(result.promotedTraces).toBe(0);
-    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Trace)).toHaveLength(0);
+    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Trace)).toHaveLength(
+      0,
+    );
   });
 
   it('does NOT create duplicate traces across repeated sleep runs', async () => {
@@ -125,7 +127,8 @@ describe('consolidate auto-promote: session -> trace', () => {
     // polarity heuristic (distinctive shared tokens + opposing polarity).
     // Without the trace-vs-trace skip, detectConflicts would flag the pair.
     // With the skip, traces are treated as variants, not contradictions.
-    const sharedTokens = 'refactor auth module rotation strategy overlapping distinctive tokens here';
+    const sharedTokens =
+      'refactor auth module rotation strategy overlapping distinctive tokens here';
 
     await appendSessionEvent(tmpDir, 'default', {
       sessionId: 'sess-1',
@@ -149,7 +152,9 @@ describe('consolidate auto-promote: session -> trace', () => {
     expect(traceIds.size).toBe(2);
 
     const conflicts = await listMemoryConflicts(tmpDir);
-    const traceVsTrace = conflicts.filter((c) => traceIds.has(c.memoryAId) && traceIds.has(c.memoryBId));
+    const traceVsTrace = conflicts.filter(
+      (c) => traceIds.has(c.memoryAId) && traceIds.has(c.memoryBId),
+    );
     expect(traceVsTrace).toHaveLength(0);
   });
 

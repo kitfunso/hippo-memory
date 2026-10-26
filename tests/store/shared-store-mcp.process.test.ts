@@ -22,7 +22,9 @@ afterEach(() => {
 
 type ToolReply = { result?: { content: Array<{ text: string }>; isError?: boolean } };
 const OFF = ['hippo_learn', 'hippo_share', 'hippo_resolve', 'hippo_peers'];
-const OPEN = new Map<string, Record<string, JsonValue>>([['hippo_predict_baserate', { class_tag: 'gate-check' }]]);
+const OPEN = new Map<string, Record<string, JsonValue>>([
+  ['hippo_predict_baserate', { class_tag: 'gate-check' }],
+]);
 
 let tmp: string;
 let handle: ServerHandle | null = null;
@@ -111,7 +113,12 @@ describe('MCP writes on a shared store', () => {
   it('learn with the MCP profile stores NULL rows', async () => {
     const store = flaggedStore();
     const ctx = apiCtx(store, 'default', adminActor('shared-store-mcp-test'));
-    const result = await learn(ctx, { repoPath: repoWithOneFix(), days: 7, profile: MCP_LEARN, git: processGit });
+    const result = await learn(ctx, {
+      repoPath: repoWithOneFix(),
+      days: 7,
+      profile: MCP_LEARN,
+      git: processGit,
+    });
     expect(result.added).toBe(1);
     const rows = loadAllEntries(store, 'default');
     expect(rows).toHaveLength(1);
@@ -120,12 +127,17 @@ describe('MCP writes on a shared store', () => {
 
   it('hippo_remember takes exactly text, error, pin, tag and personal', async () => {
     handle = await serveKeyed({ hippoRoot: flaggedStore(), port: 0 }, serve);
-    const body = await mcp<{ result?: { tools: Array<{ name: string; inputSchema: { properties: object } }> } }>(
-      handle,
-      'tools/list',
-    );
+    const body = await mcp<{
+      result?: { tools: Array<{ name: string; inputSchema: { properties: object } }> };
+    }>(handle, 'tools/list');
     const tool = body.result?.tools.find((t) => t.name === 'hippo_remember');
-    expect(Object.keys(tool?.inputSchema.properties ?? {}).sort()).toEqual(['error', 'personal', 'pin', 'tag', 'text']);
+    expect(Object.keys(tool?.inputSchema.properties ?? {}).sort()).toEqual([
+      'error',
+      'personal',
+      'pin',
+      'tag',
+      'text',
+    ]);
   });
 });
 
@@ -137,8 +149,14 @@ describe('the MCP tool gate on a shared store', () => {
     for (const { name } of TOOLS) {
       for (const headers of headerSets) {
         const label = `${name} ${'x-hippo-project' in headers ? 'with' : 'without'} a project`;
-        const reply = (await mcp<ToolReply>(handle, 'tools/call', { name, arguments: OPEN.get(name) ?? {} }, headers))
-          .result;
+        const reply = (
+          await mcp<ToolReply>(
+            handle,
+            'tools/call',
+            { name, arguments: OPEN.get(name) ?? {} },
+            headers,
+          )
+        ).result;
         const text = reply?.content[0]?.text ?? '';
         if (OFF.includes(name)) {
           expect(reply?.isError, label).toBe(true);

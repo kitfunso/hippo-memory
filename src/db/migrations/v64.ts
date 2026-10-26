@@ -1,4 +1,9 @@
-import { CURRENT_DISTILLED, TEXT_OUTSIDE_TRIGRAMS, ensureTrigramIndex, isFtsMissing } from '../continuity.js';
+import {
+  CURRENT_DISTILLED,
+  TEXT_OUTSIDE_TRIGRAMS,
+  ensureTrigramIndex,
+  isFtsMissing,
+} from '../continuity.js';
 import { tableHasColumn } from '../tables.js';
 import { duplicateHash } from '../../base/util/same-text.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -25,7 +30,9 @@ function backfillDuplicateHashes(db: Parameters<Migration['up']>[0]): void {
     db.exec('ALTER TABLE memories ADD COLUMN duplicate_hash INTEGER');
   }
   // content is NOT NULL TEXT, so String() hands the hash the text as stored.
-  db.function('hippo_duplicate_hash', { deterministic: true }, (content) => duplicateHash(String(content)));
+  db.function('hippo_duplicate_hash', { deterministic: true }, (content) =>
+    duplicateHash(String(content)),
+  );
   db.exec(
     `UPDATE memories SET duplicate_hash = hippo_duplicate_hash(content) ` +
       `WHERE duplicate_hash IS NULL AND ${CURRENT_DISTILLED}`,

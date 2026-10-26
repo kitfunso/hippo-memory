@@ -28,7 +28,11 @@ export interface ConnectorEvents {
     which: DeadLetterQuery,
   ): Promise<DeadLetterRows[C][]>;
   /** Adds one to the tenant's row retry count and stamps its retry time; another tenant's row is left alone. */
-  markDeadLetterRetried(connector: DeadLetterConnector, tenantId: string, id: number): Promise<void>;
+  markDeadLetterRetried(
+    connector: DeadLetterConnector,
+    tenantId: string,
+    id: number,
+  ): Promise<void>;
   /** The backfill position saved under the key, or null before the first save. */
   cursor(key: CursorKey): Promise<string | null>;
   /** With `keepSaved`, a position already saved stays, so a first run's `--since` seeds only what no run saved. */
@@ -95,7 +99,9 @@ export type RouteQuery =
 
 /** `routes` counts the rows a match could have come from: Slack's workspaces, GitHub's installations when one is
  * named, else its installations and repositories. None is a single-tenant install. */
-export type TenantRoute = { readonly tenantId: string } | { readonly tenantId: null; readonly routes: number };
+export type TenantRoute =
+  | { readonly tenantId: string }
+  | { readonly tenantId: null; readonly routes: number };
 
 /** One payload a webhook could not use, already redacted, for the dead-letter queue of its connector. */
 export type ConnectorDeadLetter =
@@ -181,7 +187,12 @@ export type GitHubStream = 'issues' | 'issueComments' | 'prReviewComments';
 /** Where a backfill resumes: a Slack channel's newest timestamp, or one GitHub stream's high-water mark. */
 export type CursorKey =
   | { readonly connector: 'slack'; readonly tenantId: string; readonly channelId: string }
-  | { readonly connector: 'github'; readonly tenantId: string; readonly repo: string; readonly stream: GitHubStream };
+  | {
+      readonly connector: 'github';
+      readonly tenantId: string;
+      readonly repo: string;
+      readonly stream: GitHubStream;
+    };
 
 export interface SlackWorkspace {
   teamId: string;

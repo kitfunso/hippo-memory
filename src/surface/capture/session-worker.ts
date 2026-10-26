@@ -5,7 +5,11 @@ import * as path from 'node:path';
 import { homeDir } from '../../host/agent-homes.js';
 import { holderAlive } from '../../host/pid-alive.js';
 import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
-import { isObjectLike, isStringValue, type ProgressCursor } from '../../base/session/capture-contract.js';
+import {
+  isObjectLike,
+  isStringValue,
+  type ProgressCursor,
+} from '../../base/session/capture-contract.js';
 import { SESSION_ID_RE } from './copilot-transcript.js';
 import type { SessionTurn } from './transcript.js';
 import { blockHash } from '../../base/util/token-text.js';
@@ -92,7 +96,8 @@ function warnUnusableLockOnce(lock: string): void {
   if (warnedLocks.has(lock)) return;
   warnedLocks.add(lock);
   const cause = unusableCause.get(lock);
-  const why = cause === undefined ? '' : ` (${errorCode(cause) || 'no errno'}: ${errorMessage(cause)})`;
+  const why =
+    cause === undefined ? '' : ` (${errorCode(cause) || 'no errno'}: ${errorMessage(cause)})`;
   logger.warn(
     `session worker: lock ${lock} cannot be created or cleared${why}, so the work runs without it`,
     cause === undefined ? undefined : errorFields(cause),
@@ -145,7 +150,10 @@ function takeQueued(queued: string): WorkerMode | null {
   } catch (err) {
     // ENOENT means nothing is queued; any other refusal leaves the request queued for the next round, but is told.
     if (errorCode(err) !== 'ENOENT') {
-      logger.warn(`session worker: cannot take the queued request ${queued}: ${errorMessage(err)}`, errorFields(err));
+      logger.warn(
+        `session worker: cannot take the queued request ${queued}: ${errorMessage(err)}`,
+        errorFields(err),
+      );
     }
     return null;
   }
@@ -166,7 +174,11 @@ export async function runSessionWorker(
   const files = sessionStateFiles(sessionId);
   if (files === null) return work(mode);
   if (!queueRun(files, mode)) return;
-  for (let take = takeSessionLock(files.lock); take !== 'held'; take = takeSessionLock(files.lock)) {
+  for (
+    let take = takeSessionLock(files.lock);
+    take !== 'held';
+    take = takeSessionLock(files.lock)
+  ) {
     if (take === 'unusable') {
       warnUnusableLockOnce(files.lock);
       return work(mode);
@@ -195,7 +207,10 @@ export function turnPosition(turns: readonly SessionTurn[]): string {
 }
 
 /** The turns after `position`; all of them when it is null or its last turn is no longer in view. */
-export function turnsAfter(turns: readonly SessionTurn[], position: string | null): readonly SessionTurn[] {
+export function turnsAfter(
+  turns: readonly SessionTurn[],
+  position: string | null,
+): readonly SessionTurn[] {
   if (position === null) return turns;
   const [countText, key] = position.split(':');
   const count = Number(countText);
@@ -216,12 +231,16 @@ export function loadTurnPosition(sessionId: string, transcriptPath: string): str
   if (!file || !fs.existsSync(file)) return null;
   try {
     const cursor: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (!isObjectLike(cursor) || !('source' in cursor) || cursor.source !== transcriptPath) return null;
+    if (!isObjectLike(cursor) || !('source' in cursor) || cursor.source !== transcriptPath)
+      return null;
     return 'position' in cursor && isStringValue(cursor.position) ? cursor.position : null;
   } catch (err) {
     // A torn cursor means the next capture reads every turn, which the dedupe keys absorb.
     if (err instanceof SyntaxError) return null;
-    logger.warn(`session worker: cannot read the cursor ${file}: ${errorMessage(err)}`, errorFields(err));
+    logger.warn(
+      `session worker: cannot read the cursor ${file}: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return null;
   }
 }

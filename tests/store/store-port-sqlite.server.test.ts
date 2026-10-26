@@ -31,9 +31,17 @@ import { readLatestHandoff } from '../../src/store/sqlite/handoffs.js';
 import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
 import { listSessionEvents } from '../../src/store/sqlite/sessions.js';
 import { readActiveTaskSnapshot } from '../../src/store/sqlite/task-snapshots.js';
-import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../../src/db/vector-store.js';
+import {
+  EMBEDDING_MODEL_META_KEY,
+  hasStoredVectors,
+  upsertVectors,
+} from '../../src/db/vector-store.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from '../_helpers/count-statements.js';
-import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
+import {
+  hashedVector,
+  startHashedEmbeddings,
+  type HashedEmbeddings,
+} from '../_helpers/hashed-embedding-server.js';
 import {
   CLEARED_ENV,
   FAKE_NOW,
@@ -99,7 +107,11 @@ async function onCopy<T>(kind: Kind, fn: (s: Store) => T | Promise<T>): Promise<
   const s = freshStore(templates, kind);
   try {
     const { result, statements } = await recordStatementsAsync(async () => fn(s));
-    const rows = { ...rowsOf(s.root), auditOps: auditOps(s.root), statsMirror: statsMirror(s.root) };
+    const rows = {
+      ...rowsOf(s.root),
+      auditOps: auditOps(s.root),
+      statsMirror: statsMirror(s.root),
+    };
     return normalize({ value: result, rows, opens: countMatching(statements, STORE_OPEN) }, s);
   } finally {
     rmSync(s.home, { recursive: true, force: true });
@@ -132,7 +144,13 @@ const VECTOR_IDENTITY = embeddingIndexIdentity('openai:hashed-16');
 
 /** Vectors and particles for a current, a newer, a private and a superseded row, an 8-dim row, and a vector whose row is gone. */
 function seedVectors(root: string): void {
-  const entries = loadEntriesByIds(root, ['mem_p_plain', 'mem_p_new', 'mem_p_private', 'mem_p_old', 'mem_p_noise']);
+  const entries = loadEntriesByIds(root, [
+    'mem_p_plain',
+    'mem_p_new',
+    'mem_p_private',
+    'mem_p_old',
+    'mem_p_noise',
+  ]);
   const index = Object.fromEntries(
     entries.map((e): [string, number[]] => [
       e.id,
@@ -141,7 +159,11 @@ function seedVectors(root: string): void {
   );
   const db = openHippoDb(root);
   try {
-    upsertVectors(db, [...Object.entries(index), ['mem_x_orphan', hashedVector('deploy')]], VECTOR_IDENTITY);
+    upsertVectors(
+      db,
+      [...Object.entries(index), ['mem_x_orphan', hashedVector('deploy')]],
+      VECTOR_IDENTITY,
+    );
     setMeta(db, EMBEDDING_MODEL_META_KEY, VECTOR_IDENTITY);
     resetAllPhysicsState(db, entries, index, new Date(FAKE_NOW));
   } finally {
@@ -158,9 +180,15 @@ async function seedTeam(root: string): Promise<void> {
   const team = (content: string, id: string, created: string, extra: Partial<MemoryEntry>) =>
     seeded(content, id, created, { tenantId: TEAM, ...extra });
   const rows = [
-    team('lighthouse runbook for project a', 'mem_t_a', '2026-01-20T00:00:00.000Z', { originProject: 'proj-a' }),
-    team('lighthouse runbook for project b', 'mem_t_b', '2026-01-20T00:00:00.000Z', { originProject: 'proj-b' }),
-    team('lighthouse notes for every project', 'mem_t_global', '2026-01-20T00:00:00.000Z', { originProject: '' }),
+    team('lighthouse runbook for project a', 'mem_t_a', '2026-01-20T00:00:00.000Z', {
+      originProject: 'proj-a',
+    }),
+    team('lighthouse runbook for project b', 'mem_t_b', '2026-01-20T00:00:00.000Z', {
+      originProject: 'proj-b',
+    }),
+    team('lighthouse notes for every project', 'mem_t_global', '2026-01-20T00:00:00.000Z', {
+      originProject: '',
+    }),
     team('lighthouse notes alice keeps to herself', 'mem_t_mine', '2026-01-20T00:00:00.000Z', {
       originProject: 'proj-a',
       scope: ALICE_SCOPE,
@@ -193,7 +221,12 @@ async function seedTeam(root: string): Promise<void> {
     saveActiveTaskSnapshot(
       root,
       TEAM,
-      { task: `${owner} ships ${project}`, summary: 'in progress', nextStep: 'review', sessionId: sessionId },
+      {
+        task: `${owner} ships ${project}`,
+        summary: 'in progress',
+        nextStep: 'review',
+        sessionId: sessionId,
+      },
       key,
     );
     saveSessionHandoff(
@@ -212,7 +245,12 @@ async function seedTeam(root: string): Promise<void> {
   saveSessionHandoff(
     root,
     TEAM,
-    { version: 1, sessionId: 'alice-proj-a', summary: 'bob hands off on her session', nextAction: 'merge' },
+    {
+      version: 1,
+      sessionId: 'alice-proj-a',
+      summary: 'bob hands off on her session',
+      nextAction: 'merge',
+    },
     { owner: 'bob', project: ['proj-a'] },
   );
 }
@@ -257,26 +295,33 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     ownScope: undefined,
     ...extra,
   });
-  const SEARCHES: readonly [string, string, RecallSearchArgs, Kind, (ids: string[]) => boolean][] = [
-    ['the FTS path', 'deploy', search(200), 'local', (ids) => ids.includes('mem_p_plain')],
-    ['the LIKE path', 'caf', search(200), 'local', (ids) => ids.includes('mem_x_cafe')],
-    ['a query with no terms', '!!', search(200), 'local', (ids) => ids.includes('mem_p_noise')],
+  const SEARCHES: readonly [string, string, RecallSearchArgs, Kind, (ids: string[]) => boolean][] =
     [
-      'scope team-alpha, superseded rows kept',
-      'deploy',
-      search(200, { requestedScope: 'team-alpha', includeSuperseded: true }),
-      'local',
-      (ids) => ids.join() === 'mem_p_scoped',
-    ],
-    ['a 50-row window on the wide store', 'deploy', search(50), 'wide', (ids) => ids.length === 50],
-    [
-      "one project and its user-global rows, with the caller's own personal row",
-      'lighthouse',
-      search(200, { tenantId: TEAM, originProjects: ['proj-a'], ownScope: ALICE_SCOPE }),
-      'local',
-      (ids) => [...ids].sort().join() === 'mem_t_a,mem_t_global,mem_t_mine',
-    ],
-  ];
+      ['the FTS path', 'deploy', search(200), 'local', (ids) => ids.includes('mem_p_plain')],
+      ['the LIKE path', 'caf', search(200), 'local', (ids) => ids.includes('mem_x_cafe')],
+      ['a query with no terms', '!!', search(200), 'local', (ids) => ids.includes('mem_p_noise')],
+      [
+        'scope team-alpha, superseded rows kept',
+        'deploy',
+        search(200, { requestedScope: 'team-alpha', includeSuperseded: true }),
+        'local',
+        (ids) => ids.join() === 'mem_p_scoped',
+      ],
+      [
+        'a 50-row window on the wide store',
+        'deploy',
+        search(50),
+        'wide',
+        (ids) => ids.length === 50,
+      ],
+      [
+        "one project and its user-global rows, with the caller's own personal row",
+        'lighthouse',
+        search(200, { tenantId: TEAM, originProjects: ['proj-a'], ownScope: ALICE_SCOPE }),
+        'local',
+        (ids) => [...ids].sort().join() === 'mem_t_a,mem_t_global,mem_t_mine',
+      ],
+    ];
 
   it.each(SEARCHES)('searchRecallEntries: %s', async (_name, query, args, kind, reached) => {
     const { direct, port } = await parity(
@@ -319,7 +364,14 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     ['a session', 2, TENANT, SESSION, null, ['mem_x_raw']],
     ['the whole tenant', 5, TENANT, undefined, null, ['mem_x_raw']],
     ['a count of 0', 0, TENANT, SESSION, null, []],
-    ['one project and its user-global rows', 5, TEAM, undefined, ['proj-a'], ['mem_t_raw_global', 'mem_t_raw_a']],
+    [
+      'one project and its user-global rows',
+      5,
+      TEAM,
+      undefined,
+      ['proj-a'],
+      ['mem_t_raw_global', 'mem_t_raw_a'],
+    ],
   ] as const)('freshRawEntries for %s', async (_name, count, tenantId, sessionId, origins, ids) => {
     const { direct, port } = await parity(
       (s) => loadFreshRawMemories(s.root, count, tenantId, sessionId, origins ?? undefined),
@@ -368,8 +420,12 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
           const sessionId = activeSnapshot?.sessionId ?? undefined;
           return {
             activeSnapshot,
-            sessionHandoff: sessionId ? readLatestHandoff(db, tenantId, sessionId, {}, key ?? undefined) : null,
-            recentSessionEvents: sessionId ? listSessionEvents(db, tenantId, { session_id: sessionId, limit: 5 }) : [],
+            sessionHandoff: sessionId
+              ? readLatestHandoff(db, tenantId, sessionId, {}, key ?? undefined)
+              : null,
+            recentSessionEvents: sessionId
+              ? listSessionEvents(db, tenantId, { session_id: sessionId, limit: 5 })
+              : [],
           };
         }, openStore),
       (store) => store.continuity(tenantId, 5, key),
@@ -384,45 +440,56 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     ['a forward claim naming one class', claim?.classQueryTokens ?? [], 'deploy-duration'],
     ['tokens naming no class', ['lunch'], null],
     ['no tokens', [], null],
-  ] as const)('planningFallacyEvidence for %s, with no audit row', async (_name, tokens, classTag) => {
-    // The planning-fallacy reads of a recall; its audit rows stay with the caller.
-    const { direct, port } = await parity(
-      (s) => onHandle(s.root, (db) => planningFallacyEvidence(db, TENANT, tokens), openStore),
-      (store) => store.planningFallacyEvidence(TENANT, tokens),
-    );
-    expect(direct.value).toMatchObject({ classTag, tiebreak: false, baserate: classTag ? { nClosed: 1 } : null });
-    expect(port.opens).toBe(direct.opens);
-  });
+  ] as const)(
+    'planningFallacyEvidence for %s, with no audit row',
+    async (_name, tokens, classTag) => {
+      // The planning-fallacy reads of a recall; its audit rows stay with the caller.
+      const { direct, port } = await parity(
+        (s) => onHandle(s.root, (db) => planningFallacyEvidence(db, TENANT, tokens), openStore),
+        (store) => store.planningFallacyEvidence(TENANT, tokens),
+      );
+      expect(direct.value).toMatchObject({
+        classTag,
+        tiebreak: false,
+        baserate: classTag ? { nClosed: 1 } : null,
+      });
+      expect(port.opens).toBe(direct.opens);
+    },
+  );
 
   it.each([
     ['vectors under a stored model', 'local', { storedModel: VECTOR_IDENTITY, hasVectors: true }],
     ['no vectors', 'wide', { storedModel: null, hasVectors: false }],
-  ] as const)('embeddingIndexState with %s: the meta row and the EXISTS on one handle', async (_name, kind, state) => {
-    // Before the port the vector arm read these on two handles.
-    const { direct, port } = await parity(
-      (s) => {
-        const db = openHippoDb(s.root);
-        try {
-          return {
-            storedModel: getMeta(db, EMBEDDING_MODEL_META_KEY, '').trim() || null,
-            hasVectors: hasStoredVectors(db),
-          };
-        } finally {
-          closeHippoDb(db);
-        }
-      },
-      (store) => store.vectors.embeddingIndexState(),
-      kind,
-    );
-    expect(direct.value).toEqual(state);
-    expect([direct.opens, port.opens]).toEqual([1, 1]);
-  });
+  ] as const)(
+    'embeddingIndexState with %s: the meta row and the EXISTS on one handle',
+    async (_name, kind, state) => {
+      // Before the port the vector arm read these on two handles.
+      const { direct, port } = await parity(
+        (s) => {
+          const db = openHippoDb(s.root);
+          try {
+            return {
+              storedModel: getMeta(db, EMBEDDING_MODEL_META_KEY, '').trim() || null,
+              hasVectors: hasStoredVectors(db),
+            };
+          } finally {
+            closeHippoDb(db);
+          }
+        },
+        (store) => store.vectors.embeddingIndexState(),
+        kind,
+      );
+      expect(direct.value).toEqual(state);
+      expect([direct.opens, port.opens]).toEqual([1, 1]);
+    },
+  );
 
   it('stored vectors are what loadStoredVectors reads, an 8-dim row and a vector without a row included', async () => {
     const ids = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
     const { direct, port } = await parity(
       (s) => entriesOf(loadStoredVectors(s.root, ids)),
-      async (store) => entriesOf(await store.vectors.stored('vectors', ids)).map(([id, v]) => [id, Array.from(v)]),
+      async (store) =>
+        entriesOf(await store.vectors.stored('vectors', ids)).map(([id, v]) => [id, Array.from(v)]),
     );
     expect(direct.value.map(([id, v]) => [id, v.length])).toEqual([
       ['mem_p_noise', 8],
@@ -446,7 +513,11 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     ],
     [
       'a private scope asked for exactly',
-      { tenantId: TENANT, scope: { mode: 'exact', value: 'slack:private:C1' }, includeSuperseded: false },
+      {
+        tenantId: TENANT,
+        scope: { mode: 'exact', value: 'slack:private:C1' },
+        includeSuperseded: false,
+      },
       ['mem_p_private'],
     ],
     ['another tenant', { tenantId: 'other', includeSuperseded: true }, []],
@@ -477,13 +548,19 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     );
     expect(direct.value.map(([id]) => id)).toEqual(['mem_p_noise', 'mem_p_plain']);
     expect(port.opens).toBe(direct.opens);
-    const none = await onCopy('local', async (s) => (await sqliteStore(s.root).vectors.stored('particles', [])).size);
+    const none = await onCopy(
+      'local',
+      async (s) => (await sqliteStore(s.root).vectors.stored('particles', [])).size,
+    );
     expect([none.value, none.opens]).toEqual([0, 0]);
   });
 });
 
 describe('sqliteStore writes leave the rows the hippo.db functions leave, each on one handle', () => {
-  const recallAudit = (op: AppendAuditOptions['op'], metadata: AppendAuditOptions['metadata']): AppendAuditOptions => ({
+  const recallAudit = (
+    op: AppendAuditOptions['op'],
+    metadata: AppendAuditOptions['metadata'],
+  ): AppendAuditOptions => ({
     tenantId: TENANT,
     actor: 'api_key:hk_test',
     op,
@@ -491,7 +568,11 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
   });
   const events: readonly AppendAuditOptions[] = [
     recallAudit('recall', { query_length: 6, results: 3 }),
-    recallAudit('recall_availability_detected', { recent_fraction: 1, older_passed_over: 2, returned_count: 3 }),
+    recallAudit('recall_availability_detected', {
+      recent_fraction: 1,
+      older_passed_over: 2,
+      returned_count: 3,
+    }),
   ];
 
   it('appendAuditEvents writes the rows in order on one handle, where each recall audit opened its own before the port', async () => {
@@ -518,11 +599,13 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
     const s = freshStore(templates, 'local');
     try {
       const before = auditOps(s.root);
-      await expect(sqliteStore(s.root).appendAuditEvents([events[0]!, recallAudit('recall', loop)])).rejects.toThrow(
-        TypeError,
-      );
+      await expect(
+        sqliteStore(s.root).appendAuditEvents([events[0]!, recallAudit('recall', loop)]),
+      ).rejects.toThrow(TypeError);
       expect(auditOps(s.root)).toEqual(before);
-      const { statements } = await recordStatementsAsync(() => sqliteStore(s.root).appendAuditEvents([]));
+      const { statements } = await recordStatementsAsync(() =>
+        sqliteStore(s.root).appendAuditEvents([]),
+      );
       expect(countMatching(statements, STORE_OPEN)).toBe(0);
     } finally {
       rmSync(s.home, { recursive: true, force: true });
@@ -610,7 +693,10 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
     try {
       const before = rowsOf(s.root);
       await expect(
-        sqliteStore(s.root).finishRecall({ ...finishWrites(), audit: [events[0]!, recallAudit('recall', loop)] }),
+        sqliteStore(s.root).finishRecall({
+          ...finishWrites(),
+          audit: [events[0]!, recallAudit('recall', loop)],
+        }),
       ).rejects.toThrow(TypeError);
       expect(rowsOf(s.root)).toEqual(before);
     } finally {
@@ -622,8 +708,13 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
     const s = freshStore(templates, 'local');
     try {
       const store = sqliteStore(s.root);
-      const kept = [{ goal_id: templates.goalId, memory_id: 'mem_p_goal', session_id: SESSION, score: 1.6 }];
-      await store.finishRecall({ goalLog: [logRow('mem_p_goal', 1.6), logRow('mem_p_goal', 0.4)], audit: [] });
+      const kept = [
+        { goal_id: templates.goalId, memory_id: 'mem_p_goal', session_id: SESSION, score: 1.6 },
+      ];
+      await store.finishRecall({
+        goalLog: [logRow('mem_p_goal', 1.6), logRow('mem_p_goal', 0.4)],
+        audit: [],
+      });
       expect(rowsOf(s.root).goalRecallLog).toEqual(kept);
       await store.finishRecall({ goalLog: [logRow('mem_p_goal', 2.2)], audit: [] });
       expect(rowsOf(s.root).goalRecallLog).toEqual(kept);
@@ -669,7 +760,13 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
   it('recordTokens throws where the API helper logs and returns, so the caller decides', async () => {
     const root = makeRoot('store-port', { init: false });
     mkdirSync(join(root, 'hippo.db'));
-    const use = { tenantId: TENANT, surface: 'http_recall', event: 'inject', items: 1, tokens: 1 } as const;
+    const use = {
+      tenantId: TENANT,
+      surface: 'http_recall',
+      event: 'inject',
+      items: 1,
+      tokens: 1,
+    } as const;
     await expect(sqliteStore(root).recordTokens(use)).rejects.toThrow();
     await expect(
       recordTokens(apiCtx(root, TENANT, { subject: 'test', role: 'admin' }), 'http_recall', use),
@@ -677,7 +774,9 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
   });
 });
 
-type Recall = { via: 'http'; params: Record<string, string> } | { via: 'mcp'; args: Record<string, string> };
+type Recall =
+  | { via: 'http'; params: Record<string, string> }
+  | { via: 'mcp'; args: Record<string, string> };
 
 async function recallOver(url: string, call: Recall): Promise<void> {
   if (call.via === 'http') {
@@ -686,7 +785,12 @@ async function recallOver(url: string, call: Recall): Promise<void> {
     await res.json();
     return;
   }
-  const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: call.args } };
+  const rpc = {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: { name: 'hippo_recall', arguments: call.args },
+  };
   const res = await fetch(`${url}/mcp`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -699,16 +803,34 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
   // Exact, so a second open fails here: the request scope hands every port call the one handle.
   const OPENS: readonly [string, number, Recall, boolean?][] = [
     ['http, no session', 1, { via: 'http', params: { q: 'deploy' } }],
-    ['http, a session with active goals', 1, { via: 'http', params: { q: 'deploy', session_id: SESSION } }],
+    [
+      'http, a session with active goals',
+      1,
+      { via: 'http', params: { q: 'deploy', session_id: SESSION } },
+    ],
     [
       'http, continuity and a forward claim',
       1,
       { via: 'http', params: { q: 'the deploy will take 3 days', include_continuity: 'true' } },
     ],
     ['mcp, no session', 1, { via: 'mcp', args: { query: 'deploy' } }],
-    ['mcp, a session with active goals', 1, { via: 'mcp', args: { query: 'deploy', session_id: SESSION } }],
-    ['http hybrid, the vector arm on', 1, { via: 'http', params: { q: 'deploy', mode: 'hybrid' } }, true],
-    ['http physics, the vector arm on', 1, { via: 'http', params: { q: 'deploy', mode: 'physics' } }, true],
+    [
+      'mcp, a session with active goals',
+      1,
+      { via: 'mcp', args: { query: 'deploy', session_id: SESSION } },
+    ],
+    [
+      'http hybrid, the vector arm on',
+      1,
+      { via: 'http', params: { q: 'deploy', mode: 'hybrid' } },
+      true,
+    ],
+    [
+      'http physics, the vector arm on',
+      1,
+      { via: 'http', params: { q: 'deploy', mode: 'physics' } },
+      true,
+    ],
   ];
   let embeddings: HashedEmbeddings;
 
@@ -725,14 +847,21 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
     try {
       if (vectorArm) {
         vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
-        const embeddingsConfig = { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url };
+        const embeddingsConfig = {
+          provider: 'openai',
+          model: 'hashed-16',
+          apiBaseUrl: embeddings.url,
+        };
         writeFileSync(
           join(s.root, 'config.json'),
           JSON.stringify({ embeddings: embeddingsConfig, physics: { enabled: true } }),
         );
       }
       const before = embeddings.requests();
-      const handle = await serveKeyed({ hippoRoot: s.root, port: 0, store: sqliteStore(s.root) }, serve);
+      const handle = await serveKeyed(
+        { hippoRoot: s.root, port: 0, store: sqliteStore(s.root) },
+        serve,
+      );
       try {
         const { statements } = await recordStatementsAsync(() => recallOver(handle.url, call));
         expect(countMatching(statements, STORE_OPEN)).toBe(opens);
@@ -762,11 +891,20 @@ describe('a recall whose store read fails mid-way', () => {
           return Promise.reject(new Error('continuity read failed'));
         },
       };
-      const before = { ...rowsOf(s.root), auditOps: auditOps(s.root), statsMirror: statsMirror(s.root) };
+      const before = {
+        ...rowsOf(s.root),
+        auditOps: auditOps(s.root),
+        statsMirror: statsMirror(s.root),
+      };
       const handle = await serveKeyed({ hippoRoot: s.root, port: 0, store }, serve);
       try {
         const args = { query: 'deploy', session_id: SESSION, include_continuity: true };
-        const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } };
+        const rpc = {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'hippo_recall', arguments: args },
+        };
         const res =
           via === 'http'
             ? await fetch(`${handle.url}${path}`)
@@ -786,7 +924,11 @@ describe('a recall whose store read fails mid-way', () => {
         await handle.stop();
       }
       expect(reads).toBe(1);
-      expect({ ...rowsOf(s.root), auditOps: auditOps(s.root), statsMirror: statsMirror(s.root) }).toEqual(before);
+      expect({
+        ...rowsOf(s.root),
+        auditOps: auditOps(s.root),
+        statsMirror: statsMirror(s.root),
+      }).toEqual(before);
     } finally {
       rmSync(s.home, { recursive: true, force: true });
     }

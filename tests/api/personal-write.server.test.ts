@@ -72,10 +72,15 @@ describe('remember with personal', () => {
     ['no owner', { subject: 'localhost:cli', role: 'admin' }],
     ['an empty owner', { subject: 'api_key:hk_e', role: 'member', owner: '' }],
     ['a 240-character owner', { subject: 'api_key:hk_l', role: 'member', owner: 'x'.repeat(240) }],
-    ['a control character in the owner', { subject: 'api_key:hk_c', role: 'member', owner: 'a\u0007b' }],
+    [
+      'a control character in the owner',
+      { subject: 'api_key:hk_c', role: 'member', owner: 'a\u0007b' },
+    ],
   ];
   it.each(ownerless)('%s gets a 400 and stores nothing', async (_label, actor) => {
-    expect(await refusal(() => remember(ctxFor(actor), { content: 'note for later', personal: true }))).toEqual({
+    expect(
+      await refusal(() => remember(ctxFor(actor), { content: 'note for later', personal: true })),
+    ).toEqual({
       status: 400,
       message: NO_OWNER_TEXT,
     });
@@ -92,7 +97,11 @@ describe('remember with personal', () => {
   });
 
   it('personal with a scope is a 400', async () => {
-    expect(await refusal(() => remember(ctxFor(ownerA), { content: 'note', personal: true, scope: 'team' }))).toEqual({
+    expect(
+      await refusal(() =>
+        remember(ctxFor(ownerA), { content: 'note', personal: true, scope: 'team' }),
+      ),
+    ).toEqual({
       status: 400,
       message: 'send personal or scope, not both',
     });
@@ -111,7 +120,9 @@ describe('remember with personal', () => {
 
 describe('client scopes', () => {
   it.each(['personal:private:b', 'Personal:x'])('remember refuses %s with a 400', async (scope) => {
-    expect((await refusal(() => remember(ctxFor(ownerA), { content: 'note', scope }))).status).toBe(400);
+    expect((await refusal(() => remember(ctxFor(ownerA), { content: 'note', scope }))).status).toBe(
+      400,
+    );
     expect(loadEveryTenantEntries(root)).toHaveLength(0);
   });
 
@@ -128,13 +139,28 @@ describe('client scopes', () => {
     try {
       writeFileSync(join(vault, 'note.md'), '# note\nsome vault text\n');
       await expect(
-        importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'personal:private:b' }),
+        importVault(vault, {
+          hippoRoot: root,
+          tenantId: 'default',
+          name: 'v',
+          scope: 'personal:private:b',
+        }),
       ).rejects.toThrow(BadRequestError);
       await expect(
-        importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'PERSONAL:x' }),
+        importVault(vault, {
+          hippoRoot: root,
+          tenantId: 'default',
+          name: 'v',
+          scope: 'PERSONAL:x',
+        }),
       ).rejects.toThrow(BadRequestError);
       expect(loadEveryTenantEntries(root)).toHaveLength(0);
-      await importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'vault:private:v' });
+      await importVault(vault, {
+        hippoRoot: root,
+        tenantId: 'default',
+        name: 'v',
+        scope: 'vault:private:v',
+      });
       expect(loadEveryTenantEntries(root).map((e) => e.scope)).toEqual(['vault:private:v']);
     } finally {
       rmSync(vault, { recursive: true, force: true });
@@ -173,7 +199,11 @@ describe('POST /v1/memories personal field', () => {
   beforeEach(async () => {
     const db = openHippoDb(root);
     try {
-      ownedKey = createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'oid-a' }).plaintext;
+      ownedKey = createApiKey(db, {
+        tenantId: 'default',
+        role: 'member',
+        ownerSubject: 'oid-a',
+      }).plaintext;
     } finally {
       closeHippoDb(db);
     }
@@ -200,7 +230,11 @@ describe('POST /v1/memories personal field', () => {
   });
 
   it("personal: true stores the key owner's scope and drops a well-formed project", async () => {
-    const res = await post({ content: 'my own terminal theme', personal: true, project: { name: 'alpha' } });
+    const res = await post({
+      content: 'my own terminal theme',
+      personal: true,
+      project: { name: 'alpha' },
+    });
     expect(res.status).toBe(200);
     // SAFETY: a 200 from POST /v1/memories is a RememberResult, which carries the new row's id.
     const { id } = (await res.json()) as { id: string };

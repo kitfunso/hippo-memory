@@ -36,13 +36,15 @@ const ROWS = [
   'GET /v1/predictions/stats',
   'GET /v1/predictions/:id',
   'POST /v1/predictions/:id/close',
-  ...['decisions', 'processes', 'policies', 'skills', 'project-briefs', 'customer-notes'].flatMap((kind) => [
-    `POST /v1/${kind}`,
-    `GET /v1/${kind}`,
-    `POST /v1/${kind}/:id/supersede`,
-    `POST /v1/${kind}/:id/close`,
-    `GET /v1/${kind}/:id`,
-  ]),
+  ...['decisions', 'processes', 'policies', 'skills', 'project-briefs', 'customer-notes'].flatMap(
+    (kind) => [
+      `POST /v1/${kind}`,
+      `GET /v1/${kind}`,
+      `POST /v1/${kind}/:id/supersede`,
+      `POST /v1/${kind}/:id/close`,
+      `GET /v1/${kind}/:id`,
+    ],
+  ),
   'POST /v1/incidents',
   'GET /v1/incidents',
   'POST /v1/incidents/:id/resolve',
@@ -66,7 +68,10 @@ function pathsOf(template: string): string[] {
 }
 
 async function replyLine(base: string, method: string, path: string): Promise<string> {
-  const res = await fetch(`${base}${path}`, { method, headers: { 'content-type': 'application/json' } });
+  const res = await fetch(`${base}${path}`, {
+    method,
+    headers: { 'content-type': 'application/json' },
+  });
   const text = await res.text();
   // Every /v1 reply is a JSON object, so a parse failure here is itself a moved reply.
   const body: { error?: string } = text.length === 0 ? {} : JSON.parse(text);
@@ -107,6 +112,8 @@ describe('every /v1 route shape under every method', () => {
     for (const path of pathsOf(template)) {
       for (const method of METHODS) lines.push(await replyLine(handle.url, method, path));
     }
-    await expect(`${lines.join('\n')}\n`).toMatchFileSnapshot(`./__snapshots__/route-shapes/${fileStem(template)}.txt`);
+    await expect(`${lines.join('\n')}\n`).toMatchFileSnapshot(
+      `./__snapshots__/route-shapes/${fileStem(template)}.txt`,
+    );
   });
 });

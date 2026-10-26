@@ -44,15 +44,24 @@ interface TestPair {
 /** A throwaway self-signed pair for 127.0.0.1, built per run so no key is committed; node:crypto signs but cannot build X.509, hence the DER by hand. */
 function selfSignedPair(): TestPair {
   const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
-  const name = sequence(der(0x31, sequence(oid('550403'), der(0x0c, Buffer.from('hippo test only', 'utf8')))));
+  const name = sequence(
+    der(0x31, sequence(oid('550403'), der(0x0c, Buffer.from('hippo test only', 'utf8')))),
+  );
   // DER wants the shortest positive form: top bit clear and a first byte that is never zero.
   const serialBytes = randomBytes(8);
   serialBytes.writeUInt8((serialBytes.readUInt8(0) & 0x3f) | 0x40, 0);
-  const altNames = sequence(der(0x82, Buffer.from('localhost', 'ascii')), der(0x87, Buffer.from([127, 0, 0, 1])));
+  const altNames = sequence(
+    der(0x82, Buffer.from('localhost', 'ascii')),
+    der(0x87, Buffer.from([127, 0, 0, 1])),
+  );
   const extensions = sequence(
     sequence(oid('551d11'), der(0x04, altNames)),
     // CA:TRUE, so the client can trust this one certificate as its own issuer.
-    sequence(oid('551d13'), der(0x01, Buffer.from([0xff])), der(0x04, sequence(der(0x01, Buffer.from([0xff]))))),
+    sequence(
+      oid('551d13'),
+      der(0x01, Buffer.from([0xff])),
+      der(0x04, sequence(der(0x01, Buffer.from([0xff])))),
+    ),
   );
   const tbs = sequence(
     der(0xa0, der(0x02, Buffer.from([2]))),
@@ -64,7 +73,11 @@ function selfSignedPair(): TestPair {
     publicKey.export({ type: 'spki', format: 'der' }),
     der(0xa3, extensions),
   );
-  const certificate = sequence(tbs, ECDSA_WITH_SHA256, der(0x03, Buffer.from([0]), sign('sha256', tbs, privateKey)));
+  const certificate = sequence(
+    tbs,
+    ECDSA_WITH_SHA256,
+    der(0x03, Buffer.from([0]), sign('sha256', tbs, privateKey)),
+  );
   const lines = certificate.toString('base64').match(/.{1,64}/g) ?? [];
   return {
     cert: `-----BEGIN CERTIFICATE-----\n${lines.join('\n')}\n-----END CERTIFICATE-----\n`,
@@ -75,10 +88,13 @@ function selfSignedPair(): TestPair {
 /** GET /health over TLS, trusting only the test certificate, so a server holding any other certificate fails the handshake. */
 function healthOverTls(port: number, ca: string): Promise<number> {
   return new Promise<number>((resolve, reject) => {
-    const req = httpsRequest({ host: '127.0.0.1', port, path: '/health', ca, agent: false }, (res) => {
-      res.resume();
-      resolve(res.statusCode ?? 0);
-    });
+    const req = httpsRequest(
+      { host: '127.0.0.1', port, path: '/health', ca, agent: false },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode ?? 0);
+      },
+    );
     req.on('error', reject);
     req.end();
   });
@@ -165,7 +181,9 @@ describe('hippo serve over TLS', () => {
     expect(handle.url).toBe(`https://0.0.0.0:${handle.port}`);
     expect(await healthOverTls(handle.port, pair.cert)).toBe(200);
     await expect(healthInCleartext(handle.port)).rejects.toThrow();
-    expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('cleartext'))).toEqual([]);
+    expect(
+      warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('cleartext')),
+    ).toEqual([]);
   });
 
   it('sends HSTS when it terminates TLS, and none in cleartext, where a proxy in front decides', async () => {
@@ -177,9 +195,9 @@ describe('hippo serve over TLS', () => {
   });
 
   it('refuses to start on certificate text that is not a certificate, naming TLS as the cause', async () => {
-    await expect(serveKeyed({ hippoRoot, port: 0, tls: { cert: 'not a certificate', key: pair.key } })).rejects.toThrow(
-      /TLS certificate or key was refused/,
-    );
+    await expect(
+      serveKeyed({ hippoRoot, port: 0, tls: { cert: 'not a certificate', key: pair.key } }),
+    ).rejects.toThrow(/TLS certificate or key was refused/);
   });
 
   /** Starts the real command and resolves with what it printed once its start lines are complete. */
@@ -206,7 +224,9 @@ describe('hippo serve over TLS', () => {
         if (stdout.includes('press Ctrl+C to stop')) resolve(stdout);
       });
       child.on('exit', (code) => {
-        reject(new Error(`hippo serve exited early (code=${code}). stdout=${stdout} stderr=${stderr}`));
+        reject(
+          new Error(`hippo serve exited early (code=${code}). stdout=${stdout} stderr=${stderr}`),
+        );
       });
     });
   }
@@ -218,17 +238,23 @@ describe('hippo serve over TLS', () => {
     ],
     [
       'HIPPO_TLS_CERT and HIPPO_TLS_KEY',
-      (cert: string, key: string) => ({ args: [], env: { HIPPO_TLS_CERT: cert, HIPPO_TLS_KEY: key } }),
+      (cert: string, key: string) => ({
+        args: [],
+        env: { HIPPO_TLS_CERT: cert, HIPPO_TLS_KEY: key },
+      }),
     ],
-  ])('the command serves HTTPS from %s, and says at start where the local key is', async (_source, given) => {
-    const { args, env } = given(certPath, keyPath);
-    const stdout = await startServe(args, env);
-    const port = Number(/listening on https:\/\/127\.0\.0\.1:(\d+) /.exec(stdout)?.[1]);
-    expect(await healthOverTls(port, pair.cert)).toBe(200);
-    expect(stdout).toContain(
-      'every request needs an API key: the hippo CLI here sends HIPPO_API_KEY, else the member key in ',
-    );
-  });
+  ])(
+    'the command serves HTTPS from %s, and says at start where the local key is',
+    async (_source, given) => {
+      const { args, env } = given(certPath, keyPath);
+      const stdout = await startServe(args, env);
+      const port = Number(/listening on https:\/\/127\.0\.0\.1:(\d+) /.exec(stdout)?.[1]);
+      expect(await healthOverTls(port, pair.cert)).toBe(200);
+      expect(stdout).toContain(
+        'every request needs an API key: the hippo CLI here sends HIPPO_API_KEY, else the member key in ',
+      );
+    },
+  );
 
   it.each([
     ['only a certificate', ['--tls-cert', 'cert.pem'], /needs both a certificate and a key/],

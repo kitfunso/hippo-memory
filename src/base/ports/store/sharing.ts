@@ -6,7 +6,11 @@ import type { EntryCursor, EntryPage, OriginFilter } from './types.js';
 
 export interface Sharing {
   /** A page of the memories of `tenantId` that may carry any of `signals`, in store order. */
-  entriesWithSignals(signals: EntrySignals, tenantId: TenantId, page: PageRequest): Promise<EntryPage>;
+  entriesWithSignals(
+    signals: EntrySignals,
+    tenantId: TenantId,
+    page: PageRequest,
+  ): Promise<EntryPage>;
   /** A page of the id, tenant, source and text of the memories of `tenantId`, in store order. */
   textKeysPage(tenantId: TenantId, page: PageRequest): Promise<EntryTextKeyPage>;
   /** The id, tenant, source and text of the memories `filter` keeps that may hold one of `texts` word for word, spacing
@@ -17,7 +21,11 @@ export interface Sharing {
   /** How many memories of `tenantId` each source holds. */
   sourceTallies(tenantId: TenantId): Promise<SourceTally[]>;
   /** The lexical candidates of `tenantId` for `query`, with no scope rule. */
-  searchEntries(query: string, limit: number | undefined, tenantId: TenantId): Promise<MemoryEntry[]>;
+  searchEntries(
+    query: string,
+    limit: number | undefined,
+    tenantId: TenantId,
+  ): Promise<MemoryEntry[]>;
   /** The lexical candidates for `query` under recall's scope rules. */
   recallEntries(query: string, options: RecallSearchEntriesOptions): Promise<MemoryEntry[]>;
 }

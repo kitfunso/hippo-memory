@@ -16,7 +16,10 @@ import * as path from 'node:path';
 import { withFakeHome } from '../_helpers/with-fake-home.js';
 import { HIPPO_OPENCODE_PLUGIN_MARKER } from '../../src/surface/hooks-install/rules/opencode.js';
 import { resolveOpencodePluginPath } from '../../src/surface/hooks-install/opencode.js';
-import { installOpencodePlugin, uninstallOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';
+import {
+  installOpencodePlugin,
+  uninstallOpencodePlugin,
+} from '../../src/surface/hooks-install/opencode.js';
 import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
 
 afterEach(() => {
@@ -88,7 +91,9 @@ describe('installOpencodePlugin (real-FS)', () => {
     expect(result.migratedLegacyHooks).toBe(false);
     expect(result.jsonRepairFailed).toBe(false);
     expect(fs.existsSync(resolveOpencodePluginPath())).toBe(true);
-    expect(fs.readFileSync(resolveOpencodePluginPath(), 'utf8')).toContain(HIPPO_OPENCODE_PLUGIN_MARKER);
+    expect(fs.readFileSync(resolveOpencodePluginPath(), 'utf8')).toContain(
+      HIPPO_OPENCODE_PLUGIN_MARKER,
+    );
   });
 
   it('is idempotent when content matches', () => {
@@ -100,7 +105,10 @@ describe('installOpencodePlugin (real-FS)', () => {
   it('overwrites when marker matches but content differs (future-proof for V1-revision)', () => {
     const fresh = installedSource();
     const pluginPath = resolveOpencodePluginPath();
-    fs.writeFileSync(pluginPath, `// ${HIPPO_OPENCODE_PLUGIN_MARKER}\n// stale content from an earlier 1.11.x\n`);
+    fs.writeFileSync(
+      pluginPath,
+      `// ${HIPPO_OPENCODE_PLUGIN_MARKER}\n// stale content from an earlier 1.11.x\n`,
+    );
     const result = installOpencodePlugin();
     expect(result.installed).toBe(true);
     expect(fs.readFileSync(pluginPath, 'utf8')).toBe(fresh);
@@ -116,10 +124,16 @@ describe('installOpencodePlugin (real-FS)', () => {
           theme: 'dark',
           hooks: {
             SessionEnd: [
-              { hooks: [{ type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 }] },
+              {
+                hooks: [
+                  { type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 },
+                ],
+              },
               { hooks: [{ type: 'command', command: 'echo my own hook', timeout: 5 }] },
             ],
-            SessionStart: [{ hooks: [{ type: 'command', command: 'hippo last-sleep --path bar', timeout: 5 }] }],
+            SessionStart: [
+              { hooks: [{ type: 'command', command: 'hippo last-sleep --path bar', timeout: 5 }] },
+            ],
           },
         },
         null,
@@ -147,7 +161,9 @@ describe('installOpencodePlugin (real-FS)', () => {
       JSON.stringify(
         {
           hooks: {
-            SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file x' }] }],
+            SessionEnd: [
+              { hooks: [{ type: 'command', command: 'hippo session-end --log-file x' }] },
+            ],
           },
         },
         null,
@@ -185,7 +201,11 @@ describe('installOpencodePlugin (real-FS)', () => {
       JSON.stringify(
         {
           hooks: {
-            SessionEnd: [{ hooks: [{ type: 'command', command: 'echo "remember to hippo sleep your laptop"' }] }],
+            SessionEnd: [
+              {
+                hooks: [{ type: 'command', command: 'echo "remember to hippo sleep your laptop"' }],
+              },
+            ],
           },
         },
         null,
@@ -267,7 +287,12 @@ describe('installOpencodePlugin (real-FS)', () => {
         {
           hooks: {
             SessionEnd: [
-              { hooks: [{ type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 }, mine] },
+              {
+                hooks: [
+                  { type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 },
+                  mine,
+                ],
+              },
             ],
             Stop: [{ hooks: [{ type: 'command', command: 'hippo capture-notes' }] }],
           },
@@ -344,7 +369,11 @@ describe('uninstallOpencodePlugin (real-FS)', () => {
       opencodeJsonPath,
       JSON.stringify(
         {
-          hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file x' }] }] },
+          hooks: {
+            SessionEnd: [
+              { hooks: [{ type: 'command', command: 'hippo session-end --log-file x' }] },
+            ],
+          },
         },
         null,
         2,

@@ -333,7 +333,9 @@ describe('strengthSql parity', () => {
       try {
         const strength = strengthSql(now, PRODUCTION_STRENGTH);
         // SAFETY: the SELECT names exactly the columns id and s.
-        const rows = db.prepare(`SELECT id, ${strength.sql} AS s FROM memories`).all(...strength.params) as Array<{
+        const rows = db
+          .prepare(`SELECT id, ${strength.sql} AS s FROM memories`)
+          .all(...strength.params) as Array<{
           id: string;
           s: number;
         }>;

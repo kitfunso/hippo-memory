@@ -14,7 +14,14 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { copyTree } from '../_helpers/copy-tree.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
-const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
+const HOOK_ARGS = [
+  'context',
+  '--pinned-only',
+  '--include-recent',
+  '5',
+  '--format',
+  'additional-context',
+];
 const START_ARGS = ['context', '--auto', '--budget', '1500'];
 
 const BASE_ENV: NodeJS.ProcessEnv = { ...process.env };
@@ -65,7 +72,11 @@ async function run(
   extra: NodeJS.ProcessEnv = {},
   spawned = false,
 ): Promise<{ status: number | null; stdout: string; stderr: string }> {
-  const opts = { cwd: dir, env: env(extra), input: payload === null ? '' : JSON.stringify(payload) };
+  const opts = {
+    cwd: dir,
+    env: env(extra),
+    input: payload === null ? '' : JSON.stringify(payload),
+  };
   return spawned ? hippoRun(args, opts) : runCliAs(args, opts);
 }
 
@@ -112,7 +123,10 @@ beforeEach(() => {
   proj = path.join(tmp, 'proj');
   fs.mkdirSync(store(proj), { recursive: true });
   initTestStore(store(proj));
-  writeEntry(store(proj), { ...createMemory('PINNED: always check the rollback plan before deploy'), pinned: true });
+  writeEntry(store(proj), {
+    ...createMemory('PINNED: always check the rollback plan before deploy'),
+    pinned: true,
+  });
   setRate(10000);
 });
 
@@ -136,7 +150,11 @@ describe('the per-prompt hook', () => {
   });
 
   it('SessionStart payload on `hippo context --auto --budget 1500` books the arm without --pinned-only', async () => {
-    const r = await run(START_ARGS, { session_id: 'ss1', hook_event_name: 'SessionStart', source: 'startup' });
+    const r = await run(START_ARGS, {
+      session_id: 'ss1',
+      hook_event_name: 'SessionStart',
+      source: 'startup',
+    });
     expect(r.stdout).toBe('');
     expect(arms().map((a) => [a.session_id, a.block_hash])).toEqual([['ss1', 'holdout']]);
   });
@@ -204,7 +222,9 @@ describe('the per-prompt hook', () => {
     const r = await run(['context', '--auto'], null, proj, { CLAUDE_CODE_SESSION_ID: 'envs' });
     expect(r.stdout).toBe('');
     expect(arms()).toHaveLength(1);
-    const unknown = await run(['context', '--auto'], null, proj, { CLAUDE_CODE_SESSION_ID: 'never-seen' });
+    const unknown = await run(['context', '--auto'], null, proj, {
+      CLAUDE_CODE_SESSION_ID: 'never-seen',
+    });
     expect(unknown.stdout).toBe('');
     expect(arms()).toHaveLength(1);
   });
@@ -226,7 +246,9 @@ describe('the per-prompt hook', () => {
     expect(arms().map((a) => a.block_hash)).toEqual(['holdout']);
     setRate(1);
     expect((await run(HOOK_ARGS, prompt(id))).stdout).toBe('');
-    expect((await run(['context', '--auto'], null, proj, { CLAUDE_CODE_SESSION_ID: id })).stdout).toBe('');
+    expect(
+      (await run(['context', '--auto'], null, proj, { CLAUDE_CODE_SESSION_ID: id })).stdout,
+    ).toBe('');
     expect((await run(HOOK_ARGS, prompt(id, { agent_id: 'a1' }))).stdout).toBe('');
     expect((await run(['compact-resume'], { session_id: id, source: 'compact' })).stdout).toBe('');
     expect(arms()).toHaveLength(1);
@@ -234,12 +256,14 @@ describe('the per-prompt hook', () => {
 
   it('a blank payload session id skips the pilot gate but keeps the cross-session restore guard', async () => {
     snapshotFor('other-session');
-    expect((await run(['compact-resume'], { session_id: '  ', source: 'compact' })).stdout).toBe('');
+    expect((await run(['compact-resume'], { session_id: '  ', source: 'compact' })).stdout).toBe(
+      '',
+    );
     snapshotFor('  ');
     // At rate 10000 any hashed id is holdout, so printing proves the blank id never reached the gate.
-    expect((await run(['compact-resume'], { session_id: '  ', source: 'compact' })).stdout).toContain(
-      'Restored after compaction',
-    );
+    expect(
+      (await run(['compact-resume'], { session_id: '  ', source: 'compact' })).stdout,
+    ).toContain('Restored after compaction');
     expect((await run(HOOK_ARGS, prompt('  '))).stdout).toContain('rollback plan');
     expect(arms()).toHaveLength(0);
   });
@@ -278,7 +302,9 @@ describe('the per-prompt hook', () => {
     });
     await run(HOOK_ARGS, prompt('gs1'), bare);
     expect(arms(globalRoot).map((a) => a.block_hash)).toEqual(['holdout']);
-    expect((await run(['compact-resume'], { session_id: 'gs1', source: 'compact' }, bare)).stdout).toBe('');
+    expect(
+      (await run(['compact-resume'], { session_id: 'gs1', source: 'compact' }, bare)).stdout,
+    ).toBe('');
   });
 });
 
@@ -313,8 +339,8 @@ describe('compact-resume', () => {
   it('prints as before at rate 0', async () => {
     setRate(0);
     snapshot('cr0');
-    expect((await run(['compact-resume'], { session_id: 'cr0', source: 'compact' })).stdout).toContain(
-      'Restored after compaction',
-    );
+    expect(
+      (await run(['compact-resume'], { session_id: 'cr0', source: 'compact' })).stdout,
+    ).toContain('Restored after compaction');
   });
 });

@@ -27,7 +27,10 @@ function netForce(i: number, particles: PhysicsParticle[], ctx: ForceContext): n
       net = vecAdd(net, repulsionForce(pi, particles[j], ctx.config.kRepulsion));
     }
   }
-  return vecAdd(net, dragForce(pi, ctx.config.drag, ctx.halfLives.get(pi.memoryId) ?? FALLBACK_HALF_LIFE_DAYS));
+  return vecAdd(
+    net,
+    dragForce(pi, ctx.config.drag, ctx.halfLives.get(pi.memoryId) ?? FALLBACK_HALF_LIFE_DAYS),
+  );
 }
 
 const accelOf = (i: number, ps: PhysicsParticle[], ctx: ForceContext): number[] =>
@@ -39,7 +42,10 @@ function simulateAllocating(particles: PhysicsParticle[], ctx: ForceContext): vo
   for (let step = 0; step < ctx.config.substeps; step++) {
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
-      p.position = vecAdd(vecAdd(p.position, vecScale(p.velocity, dt)), vecScale(accelerations[i], 0.5 * dt * dt));
+      p.position = vecAdd(
+        vecAdd(p.position, vecScale(p.velocity, dt)),
+        vecScale(accelerations[i], 0.5 * dt * dt),
+      );
     }
     const next = particles.map((_, i) => accelOf(i, particles, ctx));
     for (let i = 0; i < particles.length; i++) {

@@ -27,7 +27,8 @@ function verifyOne(rawBody: string | Uint8Array, signature: string, secret: stri
 
 export function verifyGitHubSignature(opts: VerifyOptions): boolean {
   if (verifyOne(opts.rawBody, opts.signature, opts.webhookSecret)) return true;
-  if (opts.previousSecret && verifyOne(opts.rawBody, opts.signature, opts.previousSecret)) return true;
+  if (opts.previousSecret && verifyOne(opts.rawBody, opts.signature, opts.previousSecret))
+    return true;
   return false;
 }
 
@@ -37,7 +38,10 @@ export function verifyGitHubSignature(opts: VerifyOptions): boolean {
  * An edit gets a new key (a new revision); both inputs come from the parsed event, not the unsigned delivery header, so
  * replays cannot bypass dedupe.
  */
-export function computeIdempotencyKey(artifactRef: string, updatedAt: string | null | undefined): string {
+export function computeIdempotencyKey(
+  artifactRef: string,
+  updatedAt: string | null | undefined,
+): string {
   return createHash('sha256')
     .update(`${artifactRef}:${updatedAt ?? ''}`)
     .digest('hex');
@@ -47,7 +51,10 @@ export function computeIdempotencyKey(artifactRef: string, updatedAt: string | n
  * A separate namespace so an ingest's event-log row cannot make a deletion return 'duplicate'; retries of the same
  * deletion still dedupe.
  */
-export function computeDeletionKey(artifactRef: string, updatedAt: string | null | undefined): string {
+export function computeDeletionKey(
+  artifactRef: string,
+  updatedAt: string | null | undefined,
+): string {
   return createHash('sha256')
     .update(`deleted:${artifactRef}:${updatedAt ?? ''}`)
     .digest('hex');

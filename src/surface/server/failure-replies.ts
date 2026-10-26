@@ -7,14 +7,32 @@ import {
   DeadlineExceededError,
   HttpError,
 } from '../../base/errors/http-errors.js';
-import { errorCode, errorClassFields, errorFields, errorMessage, log } from '../../base/util/log.js';
+import {
+  errorCode,
+  errorClassFields,
+  errorFields,
+  errorMessage,
+  log,
+} from '../../base/util/log.js';
 import { runWithRequestId } from '../../base/util/request-scope.js';
 import { answerAtDeadline, isAbandoned, requestDeadlineFor } from './deadline.js';
 import { closeAfterReply, sendJson } from '../http/http-util.js';
-import { accessRouteOf, endReply, logRequestFailure, openRequest, replyFor, sendError } from './request.js';
+import {
+  accessRouteOf,
+  endReply,
+  logRequestFailure,
+  openRequest,
+  replyFor,
+  sendError,
+} from './request.js';
 import type { ServerCounts } from './types.js';
 
-function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
+function replyWithFailure<E>(
+  req: IncomingMessage,
+  res: ServerResponse,
+  err: E,
+  requestId: string,
+): void {
   const mapped = replyFor(err);
   logRequestFailure(req, err, mapped.status);
   if (res.headersSent) {
@@ -84,12 +102,20 @@ function logLateFinish(req: IncomingMessage, requestId: string): void {
   });
 }
 
-function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
+function replyOrClose<E>(
+  req: IncomingMessage,
+  res: ServerResponse,
+  err: E,
+  requestId: string,
+): void {
   try {
     replyWithFailure(req, res, err, requestId);
   } catch (replyErr) {
     // A throw here would be an unhandled rejection, which stops the daemon for every caller.
-    log.error(`serve: failure reply not sent, socket closed: ${errorMessage(replyErr)}`, errorFields(replyErr));
+    log.error(
+      `serve: failure reply not sent, socket closed: ${errorMessage(replyErr)}`,
+      errorFields(replyErr),
+    );
     res.destroy();
   }
 }
@@ -102,7 +128,10 @@ export function answerRequest(
   req: IncomingMessage,
   res: ServerResponse,
   handle: () => Promise<void>,
-  { slowWarnMs, counts }: { slowWarnMs: number | undefined; counts: Pick<ServerCounts, 'handlerDeadlines'> },
+  {
+    slowWarnMs,
+    counts,
+  }: { slowWarnMs: number | undefined; counts: Pick<ServerCounts, 'handlerDeadlines'> },
 ): void {
   const requestId = openRequest(req, res, slowWarnMs);
   const deadline = requestDeadlineFor(req);

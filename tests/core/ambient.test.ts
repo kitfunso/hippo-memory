@@ -2,7 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry, type EmotionalValence } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { computeAmbientState, renderAmbientSummary, formatAmbientVector } from '../../src/base/memory/ambient.js';
+import {
+  computeAmbientState,
+  renderAmbientSummary,
+  formatAmbientVector,
+} from '../../src/base/memory/ambient.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
@@ -97,7 +101,11 @@ describe('computeAmbientState', () => {
   });
 
   it('computes dagDepth from max dag_level', () => {
-    const entries = [mem('Root', { dagLevel: 0 }), mem('Mid', { dagLevel: 1 }), mem('Deep', { dagLevel: 3 })];
+    const entries = [
+      mem('Root', { dagLevel: 0 }),
+      mem('Mid', { dagLevel: 1 }),
+      mem('Deep', { dagLevel: 3 }),
+    ];
     const state = computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH);
     expect(state.dagDepth).toBe(3);
   });
@@ -137,7 +145,9 @@ describe('renderAmbientSummary', () => {
       mem('Fact B', { tags: ['error'], layer: Layer.Episodic, emotionalValence: 'negative' }),
       mem('Fact C', { tags: ['topic:deploy'], layer: Layer.Episodic }),
     ];
-    const summary = renderAmbientSummary(computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH));
+    const summary = renderAmbientSummary(
+      computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH),
+    );
     expect(summary).toContain('Memory state:');
     expect(summary).toContain('3 memories');
   });
@@ -146,7 +156,9 @@ describe('renderAmbientSummary', () => {
 describe('formatAmbientVector', () => {
   it('renders all 11 dimensions', () => {
     const entries = [mem('Test', { tags: ['a'] })];
-    const output = formatAmbientVector(computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH));
+    const output = formatAmbientVector(
+      computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH),
+    );
     expect(output).toContain('tag_entropy');
     expect(output).toContain('avg_strength');
     expect(output).toContain('total_memories');

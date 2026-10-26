@@ -41,7 +41,11 @@ interface ProcessCreateExtra {
   description?: string;
 }
 
-async function createProcess(processName: string, extra: ProcessCreateExtra = {}, key: CreateApiKeyResult = apiKey) {
+async function createProcess(
+  processName: string,
+  extra: ProcessCreateExtra = {},
+  key: CreateApiKeyResult = apiKey,
+) {
   return fetch(`${handle.url}/v1/processes`, {
     method: 'POST',
     headers: authHeaders(key),
@@ -51,7 +55,8 @@ async function createProcess(processName: string, extra: ProcessCreateExtra = {}
 
 describe('HTTP /v1/processes (process first-class object)', () => {
   it('GET /v1/processes lists and filters by status', async () => {
-    const v1 = (await jsonAs<{ process: Process }>(await createProcess('Deploy', { steps: ['a'] }))).process;
+    const v1 = (await jsonAs<{ process: Process }>(await createProcess('Deploy', { steps: ['a'] })))
+      .process;
     await fetch(`${handle.url}/v1/processes/${v1.id}/supersede`, {
       method: 'POST',
       headers: authHeaders(apiKey),
@@ -63,7 +68,9 @@ describe('HTTP /v1/processes (process first-class object)', () => {
     const all = await jsonAs<{ processes: Process[] }>(allRes);
     expect(all.processes.length).toBe(2);
 
-    const activeRes = await fetch(`${handle.url}/v1/processes?status=active`, { headers: authHeaders(apiKey) });
+    const activeRes = await fetch(`${handle.url}/v1/processes?status=active`, {
+      headers: authHeaders(apiKey),
+    });
     const active = await jsonAs<{ processes: Process[] }>(activeRes);
     expect(active.processes.length).toBe(1);
     expect(active.processes[0].version).toBe(2);

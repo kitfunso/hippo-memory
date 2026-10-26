@@ -1,7 +1,10 @@
 import type { RuntimeSettings } from '../../base/config/config.js';
 import { detectForwardClaim, type ForwardClaimMatch } from '../learn/forward-claim-detector.js';
 import type { AppendAuditOptions, PlanningFallacyEvidence } from '../../base/ports/store/types.js';
-import type { PlanningFallacyOutput, PlanningFallacyWatching } from '../../base/records/planning-fallacy.js';
+import type {
+  PlanningFallacyOutput,
+  PlanningFallacyWatching,
+} from '../../base/records/planning-fallacy.js';
 
 const TARGET_ID_CHARS = 100;
 
@@ -103,7 +106,10 @@ function watchingWithAudit(
     audit: {
       tenantId,
       actor,
-      op: reason === 'tiebreak' ? 'recall_autodebias_hint_tiebreak' : 'recall_autodebias_hint_no_class_match',
+      op:
+        reason === 'tiebreak'
+          ? 'recall_autodebias_hint_tiebreak'
+          : 'recall_autodebias_hint_no_class_match',
       targetId: match.phrase.slice(0, TARGET_ID_CHARS),
       metadata: { detected_phrase: match.phrase, token_count: match.classQueryTokens.length },
     },

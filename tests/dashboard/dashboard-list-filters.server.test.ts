@@ -15,7 +15,24 @@ import { evalNow } from '../../src/infra/eval-switches.js';
 const ROWS = 320;
 // Pieces that sit on an edge: the two letters JavaScript lower-cases into ASCII, case past ASCII, JSON's escapes and
 // String()'s ways with numbers, objects and nested lists.
-const PIECES = ['ka', 'KA', 'k', '\u212a', 'i', 'I', '\u0130', '\u0307', 'é', 'É', 'Σ', 'σ', '日', ' ', '"', '\\'];
+const PIECES = [
+  'ka',
+  'KA',
+  'k',
+  '\u212a',
+  'i',
+  'I',
+  '\u0130',
+  '\u0307',
+  'é',
+  'É',
+  'Σ',
+  'σ',
+  '日',
+  ' ',
+  '"',
+  '\\',
+];
 const MORE = ['\n', '\u0000', '1', '0', '.', '{', '[', ']', ',', 'a', 'b', 'object', '1e2', '100'];
 const ALL_PIECES = [...PIECES, ...MORE];
 const NEEDLES = [
@@ -77,7 +94,8 @@ function rng(seed: number): () => number {
   };
 }
 
-const pick = <T>(rand: () => number, list: readonly T[]): T => list[Math.floor(rand() * list.length)];
+const pick = <T>(rand: () => number, list: readonly T[]): T =>
+  list[Math.floor(rand() * list.length)];
 const textOf = (rand: () => number, most: number): string =>
   Array.from({ length: Math.floor(rand() * most) }, () => pick(rand, ALL_PIECES)).join('');
 
@@ -101,7 +119,12 @@ function tagsJsonOf(rand: () => number, i: number): string {
 
 // Plain instants on and off whole days, and created text toISOString never writes.
 function createdOf(rand: () => number, i: number): string {
-  const odd = ['2026-02-30T00:00:00.000Z', '2026-09-30T24:00:00.000Z', '2026-09-01T00:00:00Z', '2026-09-01 10:00:00'];
+  const odd = [
+    '2026-02-30T00:00:00.000Z',
+    '2026-09-30T24:00:00.000Z',
+    '2026-09-01T00:00:00Z',
+    '2026-09-01 10:00:00',
+  ];
   const more = ['not a date', '', '+012026-01-01T00:00:00.000Z', '2026-09-24T12:00:00.000+00:00'];
   if (i % 16 === 0) return [...odd, ...more][(i / 16) % 8];
   const days = i % 3 === 0 ? Math.round(rand() * 400) - 5 : rand() * 400 - 5;
@@ -122,8 +145,11 @@ beforeAll(() => {
   rows = ids.map((id, i) => ({ id, created: createdOf(rand, i) }));
   const db = openHippoDb(store.hippoRoot);
   try {
-    const update = db.prepare('UPDATE memories SET content = ?, tags_json = ?, created = ? WHERE id = ?');
-    for (const [i, row] of rows.entries()) update.run(textOf(rand, 12), tagsJsonOf(rand, i), row.created, row.id);
+    const update = db.prepare(
+      'UPDATE memories SET content = ?, tags_json = ?, created = ? WHERE id = ?',
+    );
+    for (const [i, row] of rows.entries())
+      update.run(textOf(rand, 12), tagsJsonOf(rand, i), row.created, row.id);
   } finally {
     closeHippoDb(db);
   }
@@ -148,7 +174,11 @@ describe('dashboard list filters', () => {
       // Each letter becomes a memory row inside a transaction rolled back after, so the trigram index holds it too.
       db.exec('BEGIN');
       // SAFETY: pragma_table_info answers one TEXT `name` per column.
-      const rest = (db.prepare(`SELECT name FROM pragma_table_info('memories')`).all() as Array<{ name: string }>)
+      const rest = (
+        db.prepare(`SELECT name FROM pragma_table_info('memories')`).all() as Array<{
+          name: string;
+        }>
+      )
         .map((r) => r.name)
         .filter((name) => !['id', 'content', 'tags_json'].includes(name))
         .join(', ');
@@ -167,7 +197,9 @@ describe('dashboard list filters', () => {
       const count = (sql: string, binds: Record<string, SqlValue>): number =>
         (
           db
-            .prepare(`SELECT COUNT(*) AS n FROM memories WHERE tenant_id = :tenant AND id LIKE 'letter-%' AND ${sql}`)
+            .prepare(
+              `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = :tenant AND id LIKE 'letter-%' AND ${sql}`,
+            )
             .get({ tenant: template.tenant_id, ...binds }) as { n: number }
         ).n;
       for (const letter of letters) {
@@ -190,7 +222,9 @@ describe('dashboard list filters', () => {
       useDashboardFunctions(db, { strength: PRODUCTION_STRENGTH, clock: evalNow });
       // SAFETY: COUNT(DISTINCT) and MIN answer one row.
       const { tenants, tenant } = db
-        .prepare('SELECT COUNT(DISTINCT tenant_id) AS tenants, MIN(tenant_id) AS tenant FROM memories')
+        .prepare(
+          'SELECT COUNT(DISTINCT tenant_id) AS tenants, MIN(tenant_id) AS tenant FROM memories',
+        )
         .get() as { tenants: number; tenant: string };
       expect(tenants).toBe(1);
       const ids = (sql: string, binds: Record<string, SqlValue>): string[] =>
@@ -251,9 +285,15 @@ describe('dashboard list filters', () => {
     try {
       const stamp = await clock.at('default');
       const onEdges = rows.slice(1, 6).map((r) => daysBetween(r.created, NOW));
-      const brushes: Array<[number, number]> = [...BRUSHES, ...onEdges.map((d): [number, number] => [d, d])];
+      const brushes: Array<[number, number]> = [
+        ...BRUSHES,
+        ...onEdges.map((d): [number, number] => [d, d]),
+      ];
       for (const [amin, amax] of brushes) {
-        const page = await buildMemoryPage(reads, stamp, 'p:alpha', { ...BASE, brush: { ...BASE.brush, amin, amax } });
+        const page = await buildMemoryPage(reads, stamp, 'p:alpha', {
+          ...BASE,
+          brush: { ...BASE.brush, amin, amax },
+        });
         const want = rows.filter((r) => {
           const age = daysBetween(r.created, NOW);
           return age >= amin && age <= amax;

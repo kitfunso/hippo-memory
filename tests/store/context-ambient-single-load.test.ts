@@ -124,7 +124,9 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     // Half-life 7 days, aged ~8 months before the call below: pre-retrieval
     // strength decays to near zero.
     const aged = {
-      ...createMemory('AGED-ROW decayed far past its half-life', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      ...createMemory('AGED-ROW decayed far past its half-life', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
       originProject: 'proj-a',
     };
     writeEntry(projA, aged);

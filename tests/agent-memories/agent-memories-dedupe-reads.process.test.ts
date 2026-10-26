@@ -59,9 +59,15 @@ function write(rows: readonly MemoryEntry[]): void {
 function seed(): void {
   write([
     row('  Run the   schema check\nbefore this service deploys.  '),
-    row(mergedText('[Consolidated from 2 related memories, newest first]', [MERGED, 'Tag every release.']), {
-      source: 'consolidation',
-    }),
+    row(
+      mergedText('[Consolidated from 2 related memories, newest first]', [
+        MERGED,
+        'Tag every release.',
+      ]),
+      {
+        source: 'consolidation',
+      },
+    ),
     row(OTHER_TENANT, { tenantId: 'acme' }),
     row(SUPERSEDED, { supersededBy: 'mem_newer' }),
   ]);
@@ -78,16 +84,19 @@ const sync = (dryRun: boolean): Promise<ImportReport> =>
   });
 
 describe('agent memory sync duplicate check', () => {
-  it.each([true, false])('skips exactly the texts another path holds, index in sync: %s', async (inSync) => {
-    seed();
-    withDb(w.local, (db) => setFtsInSync(db, inSync));
+  it.each([true, false])(
+    'skips exactly the texts another path holds, index in sync: %s',
+    async (inSync) => {
+      seed();
+      withDb(w.local, (db) => setFtsInSync(db, inSync));
 
-    const { result, statements } = await recordStatementsAsync(() => sync(false));
+      const { result, statements } = await recordStatementsAsync(() => sync(false));
 
-    expect(countMatching(statements, 'memories_fts MATCH') > 0).toBe(inSync);
-    expect(toolTally(result, 'claude-code')).toMatchObject({ imported: 3, duplicate: 2 });
-    expect(liveTexts(w.local)).toEqual([NEW, OTHER_TENANT, SUPERSEDED].sort());
-  });
+      expect(countMatching(statements, 'memories_fts MATCH') > 0).toBe(inSync);
+      expect(toolTally(result, 'claude-code')).toMatchObject({ imported: 3, duplicate: 2 });
+      expect(liveTexts(w.local)).toEqual([NEW, OTHER_TENANT, SUPERSEDED].sort());
+    },
+  );
 
   it('reads no more rows with 500 stored rows that hold none of the notes', async () => {
     const rowsRead = async (inSync: boolean): Promise<number> => {

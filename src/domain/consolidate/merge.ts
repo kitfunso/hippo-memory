@@ -31,12 +31,15 @@ export async function retireHeldTexts(run: SleepRun): Promise<void> {
   // Only a merged row can hold a retired text, so only those are kept, by place, while the rest page past.
   const held: Array<readonly [number, string]> = [];
   for await (const [index, row] of survivors.indexed()) {
-    if (row.source === 'consolidation' && !row.supersededBy && run.retirable(row)) held.push([index, row.id]);
+    if (row.source === 'consolidation' && !row.supersededBy && run.retirable(row))
+      held.push([index, row.id]);
   }
   // From the last place back, so dropping a survivor never moves one still to come.
   for (let end = held.length; end > 0; end -= run.rows.pageRows) {
     const page = held.slice(Math.max(0, end - run.rows.pageRows), end);
-    const rows = new Map((await survivors.get(page.map(([, id]) => id))).map((row) => [row.id, row]));
+    const rows = new Map(
+      (await survivors.get(page.map(([, id]) => id))).map((row) => [row.id, row]),
+    );
     // Sources come from the store, as the loaded rows did, never from a pass's pending changes.
     const parentIds = [...new Set([...rows.values()].flatMap((r) => r.parents))];
     const sources = new Map((await run.rows.read(parentIds)).map((s) => [s.id, s]));
@@ -56,9 +59,17 @@ function retireHeldText(
   rejected: ReadonlyMap<string, ReadonlySet<string>>,
 ): void {
   const digests = rejected.get(row.tenantId);
-  const successor = successorAfterRetirement(row, sources, (text) => digests?.has(rejectionDigest(text)) === true);
+  const successor = successorAfterRetirement(
+    row,
+    sources,
+    (text) => digests?.has(rejectionDigest(text)) === true,
+  );
   if (successor === undefined) return;
-  run.result.events.push({ kind: 'retiredText', id: row.id, successorId: successor ? successor.id : null });
+  run.result.events.push({
+    kind: 'retiredText',
+    id: row.id,
+    successorId: successor ? successor.id : null,
+  });
   if (run.dryRun) return;
   run.pendingDeletes.push(row.id);
   run.units.push(successor ? [row.id, successor.id] : [row.id]);
@@ -132,7 +143,11 @@ async function partitionMergeCandidates(run: SleepRun): Promise<Map<string, Merg
     const key = derivationPartitionKey(e.tenantId, e.scope, e.originProject);
     let bucket = buckets.get(key);
     if (!bucket) {
-      const partition = { tenantId: e.tenantId, scope: derivationScope(e.scope), origin: e.originProject };
+      const partition = {
+        tenantId: e.tenantId,
+        scope: derivationScope(e.scope),
+        origin: e.originProject,
+      };
       buckets.set(key, (bucket = { partition, ids: [], lengths: [], sets: [] }));
     }
     bucket.ids.push(e.id);
@@ -158,7 +173,8 @@ export async function mergePass(run: SleepRun): Promise<number> {
       const cluster: number[] = [];
       let clusterChars = 0;
       for (const k of related) {
-        if (cluster.length === MERGE_MAX_SOURCES || clusterChars + lengths[k] > MERGE_MAX_CHARS) continue;
+        if (cluster.length === MERGE_MAX_SOURCES || clusterChars + lengths[k] > MERGE_MAX_CHARS)
+          continue;
         cluster.push(k);
         clusterChars += lengths[k];
       }
@@ -167,7 +183,8 @@ export async function mergePass(run: SleepRun): Promise<number> {
       const relatedRows = await run.survivors.get(related.map((k) => ids[k]));
       const clusterIds = new Set(cluster.map((k) => ids[k]));
       const clusterRows = relatedRows.filter((e) => clusterIds.has(e.id));
-      if (!(await mergeCluster(run, bucket.partition, clusterRows, relatedRows, used))) mergesSkippedRejected++;
+      if (!(await mergeCluster(run, bucket.partition, clusterRows, relatedRows, used)))
+        mergesSkippedRejected++;
     }
   }
   return mergesSkippedRejected;
@@ -243,7 +260,10 @@ function semanticSummary(
 /** The later conflict check reads the survivors, so it sees the post-demotion half-life. */
 async function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): Promise<void> {
   const demoted = cluster.map((e) => {
-    const row = { ...e, halfLifeDays: Math.max(1, Math.floor(e.halfLifeDays * MERGE_SOURCE_HALF_LIFE_FACTOR)) };
+    const row = {
+      ...e,
+      halfLifeDays: Math.max(1, Math.floor(e.halfLifeDays * MERGE_SOURCE_HALF_LIFE_FACTOR)),
+    };
     return { ...row, strength: calculateStrength(row, run.now, run.strength, run.decayOpts) };
   });
   await run.survivors.set(demoted);
@@ -307,9 +327,14 @@ function mergeContents(entries: MemoryEntry[]): string {
 
 function legacyMergeContents(entries: MemoryEntry[]): string {
   // The old format dropped text, so it is only ever digested to match rejections recorded against it, never written.
-  const sorted = [...entries].sort((a, b) => b.content.length - a.content.length || compareEntryIdentity(a, b));
-  if (entries.length === 2) return `[Consolidated from ${entries.length} related memories]\n\n${sorted[0].content}`;
-  const bullets = sorted.map((e) => `- ${e.content.split('\n')[0].slice(0, LEGACY_BULLET_CHARS)}`).join('\n');
+  const sorted = [...entries].sort(
+    (a, b) => b.content.length - a.content.length || compareEntryIdentity(a, b),
+  );
+  if (entries.length === 2)
+    return `[Consolidated from ${entries.length} related memories]\n\n${sorted[0].content}`;
+  const bullets = sorted
+    .map((e) => `- ${e.content.split('\n')[0].slice(0, LEGACY_BULLET_CHARS)}`)
+    .join('\n');
   return `[Consolidated pattern from ${entries.length} related memories]\n\n${bullets}`;
 }
 
@@ -325,5 +350,6 @@ function pickStrongestValence(entries: MemoryEntry[]): MemoryEntry['emotionalVal
  * token. */
 export function mergePartners(sets: readonly Set<string>[]): (i: number) => number[] {
   const candidatesOf = overlapPartners(sets, jaccardMinShared(MERGE_OVERLAP_THRESHOLD));
-  return (i) => candidatesOf(i).filter((j) => jaccardSets(sets[i], sets[j]) >= MERGE_OVERLAP_THRESHOLD);
+  return (i) =>
+    candidatesOf(i).filter((j) => jaccardSets(sets[i], sets[j]) >= MERGE_OVERLAP_THRESHOLD);
 }

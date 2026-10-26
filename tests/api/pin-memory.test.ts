@@ -68,7 +68,9 @@ describe('api.memoryPin', () => {
     expect((await memoryGet(apiCtx(root, 'acme'), elsewhere.id))?.pinned).toBe(false);
     expect((await memoryGet(ctx, personal.id))?.pinned).toBe(false);
     expect(await ctx.store.auditLog.listAuditEvents({ tenantId: 'acme', op: 'pin' })).toEqual([]);
-    expect(await ctx.store.auditLog.listAuditEvents({ tenantId: 'default', op: 'pin' })).toEqual([]);
+    expect(await ctx.store.auditLog.listAuditEvents({ tenantId: 'default', op: 'pin' })).toEqual(
+      [],
+    );
   });
 
   it("pins the caller's own personal row", async () => {

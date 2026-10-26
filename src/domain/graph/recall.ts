@@ -7,12 +7,19 @@
  * permits it outside graph.ts.
  */
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../../base/rank/search-types.js';
+import {
+  DEFAULT_RECALL_BUDGET,
+  type ResultCost,
+  type SearchResult,
+} from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import type { Entity } from '../../base/ports/store/graph.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
-import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
+import {
+  passesCliRecallScopeFilter,
+  passesScopeFilterForRecall,
+} from '../../base/scope/recall-scope.js';
 
 /** Hard cap on `--hops` (a higher value just walks more of a finite graph; this bounds worst-case work and keeps the
  *  flag honest). */
@@ -59,7 +66,9 @@ export interface GraphExpandOptions {
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
-type HitOptions = Required<Pick<GraphExpandOptions, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
+type HitOptions = Required<
+  Pick<GraphExpandOptions, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>
+> & {
   asOfDate: Date | null;
   recallScope: { requested?: string; additive?: boolean; ownScope?: string };
   /** True when the store being walked is the global one. */
@@ -92,7 +101,11 @@ async function walkRelations(
   for (let depth = 1; depth <= hops && frontier.length > 0; depth++) {
     const frontierSet = new Set(frontier);
     const limit = Math.max(maxNeighbors, maxNeighbors * frontier.length);
-    const { relations: rels } = await store.graphReads.graphRows(tenantId, { by: 'neighbor', ids: frontier, limit });
+    const { relations: rels } = await store.graphReads.graphRows(tenantId, {
+      by: 'neighbor',
+      ids: frontier,
+      limit,
+    });
     const nextFrontier: number[] = [];
     for (const rel of rels) {
       const fromIn = frontierSet.has(rel.fromEntityId);
@@ -175,7 +188,13 @@ async function produceHitsForStore(
   });
   if (seedEntities.length === 0) return;
 
-  const { reached, originMemByEntityId } = await walkRelations(store, tenantId, seedEntities, hops, maxNeighbors);
+  const { reached, originMemByEntityId } = await walkRelations(
+    store,
+    tenantId,
+    seedEntities,
+    hops,
+    maxNeighbors,
+  );
   if (reached.size === 0) return;
 
   const { entities: reachedEntities } = await store.graphReads.graphRows(tenantId, {
@@ -203,7 +222,12 @@ async function produceHitsForStore(
   }
 }
 
-function buildGraphHit(mem: MemoryEntry, via: GraphVia, originScore: number, isGlobal: boolean): GraphHit {
+function buildGraphHit(
+  mem: MemoryEntry,
+  via: GraphVia,
+  originScore: number,
+  isGlobal: boolean,
+): GraphHit {
   return {
     entry: mem,
     score: originScore * (1 - HOP_DISCOUNT * via.hops),
@@ -225,7 +249,9 @@ async function loadReachedMemories(
 ): Promise<Map<string, MemoryEntry>> {
   const needLoad = [
     ...new Set(
-      reachedEntities.map((e) => e.memoryId).filter((id): id is string => id !== null && !seenMemoryIds.has(id)),
+      reachedEntities
+        .map((e) => e.memoryId)
+        .filter((id): id is string => id !== null && !seenMemoryIds.has(id)),
     ),
   ];
   return new Map((await store.entriesByIds(needLoad, tenantId)).map((m) => [m.id, m]));
@@ -240,7 +266,11 @@ async function loadSuccessorValidFrom(
   asOfDate: Date | null,
 ): Promise<Map<string, string>> {
   if (!asOfDate) return new Map<string, string>();
-  const succIds = [...new Set([...loadedById.values()].map((m) => m.supersededBy).filter((id): id is string => !!id))];
+  const succIds = [
+    ...new Set(
+      [...loadedById.values()].map((m) => m.supersededBy).filter((id): id is string => !!id),
+    ),
+  ];
   return new Map((await store.entriesByIds(succIds, tenantId)).map((m) => [m.id, m.validFrom]));
 }
 

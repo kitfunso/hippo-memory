@@ -23,7 +23,10 @@ export interface ScoringRequest {
 /**
  * POST a scoring request. A dropped connection, 429 or 5xx is retried, since scoring changes nothing on the far side.
  */
-export async function postScoring(http: Http, { url, token, body, budgetMs }: ScoringRequest): Promise<Response> {
+export async function postScoring(
+  http: Http,
+  { url, token, body, budgetMs }: ScoringRequest,
+): Promise<Response> {
   const headers = new Headers({ 'content-type': 'application/json' });
   if (token) headers.set('authorization', `Bearer ${token}`);
   const budget = AbortSignal.timeout(budgetMs);

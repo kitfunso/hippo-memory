@@ -2,12 +2,21 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { initProject, removeScratch, runHippo, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
+import {
+  initProject,
+  removeScratch,
+  runHippo,
+  scratch,
+  type Scratch,
+} from '../_helpers/compaction-hooks.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { transcriptWorkingState } from '../../src/surface/capture/working-state.js';
 import { preCompactForCaller, type Context } from '../../src/server.js';
 import type { TaskSnapshot } from '../../src/base/ports/store/sessions.js';
-import { COMPACT_RESUME_EVENT_CONTENT_CAP, compactResumeText } from '../../src/api/context-render.js';
+import {
+  COMPACT_RESUME_EVENT_CONTENT_CAP,
+  compactResumeText,
+} from '../../src/api/context-render.js';
 import { truncateCodePointSafe } from '../../src/base/util/code-point-cut.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
@@ -74,7 +83,18 @@ describe('compactResumeText', () => {
       '--session',
       's1',
     );
-    await hippo('session', 'log', '--id', 's1', '--content', 'ran the suite', '--type', 'note', '--task', 'login');
+    await hippo(
+      'session',
+      'log',
+      '--id',
+      's1',
+      '--content',
+      'ran the suite',
+      '--type',
+      'note',
+      '--task',
+      'login',
+    );
     await hippo(
       'session',
       'log',
@@ -118,11 +138,17 @@ describe('preCompactForCaller', () => {
     const turns = [
       {
         type: 'user',
-        message: { role: 'user', content: `Fix the flaky login test and mail ${email} once it passes.` },
+        message: {
+          role: 'user',
+          content: `Fix the flaky login test and mail ${email} once it passes.`,
+        },
       },
       {
         type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Adding a lock around the session refresh.' }] },
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Adding a lock around the session refresh.' }],
+        },
       },
     ];
     fs.writeFileSync(transcript, turns.map((t) => JSON.stringify(t)).join('\n') + '\n');

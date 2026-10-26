@@ -58,8 +58,11 @@ function linkOf(root: string, table: string, objectId: number): string | null {
   const db = openHippoDb(root);
   try {
     // SAFETY: row's shape matches the single memory_id column named in the SELECT.
-    return (db.prepare(`SELECT memory_id FROM ${table} WHERE id = ?`).get(objectId) as { memory_id: string | null })
-      .memory_id;
+    return (
+      db.prepare(`SELECT memory_id FROM ${table} WHERE id = ?`).get(objectId) as {
+        memory_id: string | null;
+      }
+    ).memory_id;
   } finally {
     closeHippoDb(db);
   }
@@ -116,7 +119,11 @@ describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
       entries.map((e) => e.id),
     );
     expect(auditMemories(entries, backingSet).issues).toMatchObject([
-      { memoryId: object.memoryId, severity: 'warning', reason: expect.stringContaining('backs an object') },
+      {
+        memoryId: object.memoryId,
+        severity: 'warning',
+        reason: expect.stringContaining('backs an object'),
+      },
     ]);
     const result = await sleepWholeStore(ctxFor(root), { noShare: true });
 
@@ -140,7 +147,12 @@ describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
     const plain = createMemory('the staging cluster restarts on sundays');
     writeEntry(root, plain);
     const backing = readEntry(root, object.memoryId!)!;
-    const move = { entry: backing, strength: 0.01, reason: 'decay' as const, dormantAt: new Date().toISOString() };
+    const move = {
+      entry: backing,
+      strength: 0.01,
+      reason: 'decay' as const,
+      dormantAt: new Date().toISOString(),
+    };
 
     expect(batchWriteAndDeleteInFolder(root, [], [backing.id, plain.id])).toEqual([plain.id]);
     expect(batchWriteAndDeleteInFolder(root, [], [], { dormant: [move] })).toEqual([]);

@@ -18,7 +18,11 @@ const LAYOUT_ARGS = [
 
 /** Null outside a repository or when git fails; a missing folder name then only means fewer containers listed. */
 export function gitLayout(git: GitRunner, projectRoot: string): GitLayout | null {
-  const run = git.run(LAYOUT_ARGS, { cwd: projectRoot, timeoutMs: GIT_CALL_TIMEOUT_MS, stderr: 'keep' });
+  const run = git.run(LAYOUT_ARGS, {
+    cwd: projectRoot,
+    timeoutMs: GIT_CALL_TIMEOUT_MS,
+    stderr: 'keep',
+  });
   if (!run.ok) return null;
   const [top, gitDir, common] = run.stdout.trim().split(/\r?\n/);
   return top && gitDir && common ? { top, gitDir, common } : null;

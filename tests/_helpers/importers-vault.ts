@@ -12,7 +12,12 @@ import { removeAfterRequest } from './one-request-per-test.js';
 export let tmpDir: string; // hippo root (the store)
 export let vaultDir: string; // a scratch vault folder we mutate per-test
 
-export const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'vault-imports');
+export const FIXTURES = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'fixtures',
+  'vault-imports',
+);
 
 export function useVaultImport() {
   beforeEach(() => {
@@ -41,7 +46,9 @@ export function archivedRows(): Array<{ memory_id: string; reason: string }> {
   try {
     // SAFETY: query selects only the memory_id and reason text columns from
     // raw_archive, so every row in the result has exactly this shape.
-    return db.prepare(`SELECT memory_id, reason FROM raw_archive ORDER BY archived_at ASC`).all() as Array<{
+    return db
+      .prepare(`SELECT memory_id, reason FROM raw_archive ORDER BY archived_at ASC`)
+      .all() as Array<{
       memory_id: string;
       reason: string;
     }>;

@@ -30,7 +30,8 @@ describe('Windows daily task', () => {
     async () => {
       const dir = mkdtempSync(join(tmpdir(), 'hippo sched '));
       const name = `hippo-test-headless-${process.pid}`;
-      const schtasks = (...args: string[]) => execFileSync('schtasks', args, { encoding: 'utf-8', windowsHide: true });
+      const schtasks = (...args: string[]) =>
+        execFileSync('schtasks', args, { encoding: 'utf-8', windowsHide: true });
       let created = false;
       try {
         schtasks(...buildSchtasksCreateArgs(name, `cd /d "${dir}" && echo ran> out.txt`));
@@ -38,7 +39,11 @@ describe('Windows daily task', () => {
         expect(schtasks('/query', '/tn', name, '/xml')).toContain('<Command>conhost.exe</Command>');
         schtasks('/run', '/tn', name);
         const out = join(dir, 'out.txt');
-        await waitFor(() => existsSync(out), { timeoutMs: 10_000, intervalMs: 200, what: 'the scheduled task output' });
+        await waitFor(() => existsSync(out), {
+          timeoutMs: 10_000,
+          intervalMs: 200,
+          what: 'the scheduled task output',
+        });
         expect(readFileSync(out, 'utf8').trim()).toBe('ran');
       } finally {
         if (created) schtasks('/delete', '/tn', name, '/f');

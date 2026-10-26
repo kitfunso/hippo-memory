@@ -4,7 +4,11 @@ import { join } from 'node:path';
 import { runCapture } from '../../src/surface/capture/command.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
-import { sessionTail, summarizeSessionTurns, type SessionTurn } from '../../src/surface/capture/transcript.js';
+import {
+  sessionTail,
+  summarizeSessionTurns,
+  type SessionTurn,
+} from '../../src/surface/capture/transcript.js';
 import { extractLessons, partitionLessons } from '../../src/domain/learn/autolearn.js';
 import { contextGet } from '../../src/api/index.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -46,7 +50,9 @@ describe('capture retains complete supported assertions', () => {
     ];
     for (const statement of statements) {
       const [item] = extractFromTexts([statement]);
-      expect(item?.content, statement).toBe(statement.replace(/^Decision: /, '').replace(/\.$/, ''));
+      expect(item?.content, statement).toBe(
+        statement.replace(/^Decision: /, '').replace(/\.$/, ''),
+      );
     }
   });
 
@@ -55,7 +61,9 @@ describe('capture retains complete supported assertions', () => {
     expect(supported.length).toBeGreaterThan(200);
     expect(supported.length).toBeLessThan(500);
     expect(extractFromTexts([supported])[0]?.content).toBe(supported.slice(0, -1));
-    expect(extractFromTexts([`Always preserve ${'the original data '.repeat(35)}before changing it.`])).toEqual([]);
+    expect(
+      extractFromTexts([`Always preserve ${'the original data '.repeat(35)}before changing it.`]),
+    ).toEqual([]);
   });
 
   it('excludes fenced and quoted output while retaining inline code', () => {
@@ -137,7 +145,9 @@ describe('capture retains complete supported assertions', () => {
       { role: 'user', text: 'Never push from the VM to main.' },
       { role: 'assistant', text: 'Never push from the VM to main.' },
     ];
-    expect(captureTurns(turns).map((item) => item.content)).toEqual(['Never push from the VM to main']);
+    expect(captureTurns(turns).map((item) => item.content)).toEqual([
+      'Never push from the VM to main',
+    ]);
   });
 
   it('splits one statement per capitalised line and drops non-statements', () => {
@@ -193,7 +203,10 @@ describe('automatic quality does not govern manual or trusted import storage', (
       tags: ['agent-memory'],
       layer: Layer.Episodic,
     });
-    const pin = { ...createMemory('Use tabs', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), pinned: true };
+    const pin = {
+      ...createMemory('Use tabs', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      pinned: true,
+    };
     const noise = createMemory('Found local migration files to be', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       source: 'capture',
@@ -207,7 +220,11 @@ describe('automatic quality does not govern manual or trusted import storage', (
     } finally {
       closeHippoDb(db);
     }
-    const recent = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project' });
+    const recent = await contextGet(ctx, {
+      pinnedOnly: true,
+      includeRecent: 5,
+      currentProject: 'project',
+    });
     const ids = recent.entries.map(({ entry }) => entry.id);
     expect(ids).toContain(manual.id);
     expect(ids).toContain(imported.id);
@@ -223,10 +240,18 @@ describe('automatic quality does not govern manual or trusted import storage', (
       'To deploy the site run npm run deploy in website/',
     ];
     const manual = texts.map((text) =>
-      createMemory(text, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source: 'cli', layer: Layer.Episodic }),
+      createMemory(text, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        source: 'cli',
+        layer: Layer.Episodic,
+      }),
     );
     for (const entry of manual) writeEntry(root, entry);
-    const recent = await contextGet(ctx, { pinnedOnly: true, includeRecent: 10, currentProject: 'project' });
+    const recent = await contextGet(ctx, {
+      pinnedOnly: true,
+      includeRecent: 10,
+      currentProject: 'project',
+    });
     expect(recent.entries.map(({ entry }) => entry.content).sort()).toEqual([...texts].sort());
   });
 

@@ -28,7 +28,9 @@ interface Whoami {
   key: string;
 }
 
-async function start(opts: { authResolver?: AuthResolver; store?: HippoStore } = {}): Promise<ServerHandle> {
+async function start(
+  opts: { authResolver?: AuthResolver; store?: HippoStore } = {},
+): Promise<ServerHandle> {
   handle = await serve({
     hippoRoot: home,
     host: '127.0.0.1',
@@ -62,7 +64,12 @@ async function whoami(token: string): Promise<Whoami> {
 function mint(ownerSubject?: string): CreateApiKeyResult {
   const db = openHippoDb(home);
   try {
-    return createApiKey(db, { tenantId: 'default', label: 'owner-test', role: 'member', ownerSubject });
+    return createApiKey(db, {
+      tenantId: 'default',
+      label: 'owner-test',
+      role: 'member',
+      ownerSubject,
+    });
   } finally {
     closeHippoDb(db);
   }
@@ -101,7 +108,8 @@ describe('Actor.owner', () => {
 
   it('resolver path owner is the subject', async () => {
     await start({
-      authResolver: (t) => (t === 'tok.bob' ? { tenantId: 'ext', subject: 'bob@corp.example', role: 'member' } : null),
+      authResolver: (t) =>
+        t === 'tok.bob' ? { tenantId: 'ext', subject: 'bob@corp.example', role: 'member' } : null,
     });
     expect(await whoami('tok.bob')).toEqual({
       subject: 'bob@corp.example',
@@ -129,9 +137,13 @@ describe('Actor.owner', () => {
   it('cache hit keeps owner', async () => {
     const key = mint('alice@corp.example');
     const store = sqliteStore(home);
-    expect((await verifyApiKeyCached(key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
+    expect((await verifyApiKeyCached(key.plaintext, store))?.ownerSubject).toBe(
+      'alice@corp.example',
+    );
     const before = scryptRuns();
-    expect((await verifyApiKeyCached(key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
+    expect((await verifyApiKeyCached(key.plaintext, store))?.ownerSubject).toBe(
+      'alice@corp.example',
+    );
     expect(scryptRuns()).toBe(before);
   });
 
@@ -159,6 +171,8 @@ describe('Actor.owner', () => {
   it('ownerOrSubject is published on the server subpath', () => {
     const actor: Actor = { subject: 'api_key:hk_x', role: 'member', owner: 'carol' };
     expect(exportedOwnerOrSubject(actor)).toBe('carol');
-    expect(exportedOwnerOrSubject({ subject: 'api_key:hk_x', role: 'member' })).toBe('api_key:hk_x');
+    expect(exportedOwnerOrSubject({ subject: 'api_key:hk_x', role: 'member' })).toBe(
+      'api_key:hk_x',
+    );
   });
 });

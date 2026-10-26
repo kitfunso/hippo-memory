@@ -2,7 +2,12 @@
 
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import type { ConnectorEvent, StoreHome } from '../../base/ports/store.js';
-import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import {
+  createSuccessor,
+  generateId,
+  type Layer,
+  type MemoryEntry,
+} from '../../base/memory/entry.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';
 import { globalTargetOf } from '../infra.js';
@@ -25,15 +30,22 @@ export interface PromoteResult {
 export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Promise<PromoteResult> {
   // Another tenant's row and a row out of the caller's reach read alike, so the reply says nothing of either.
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
-  if (!entry || !canReadScope(ctx.actor, entry.scope ?? null)) throw new NotFoundError(`memory not found: ${id}`);
+  if (!entry || !canReadScope(ctx.actor, entry.scope ?? null))
+    throw new NotFoundError(`memory not found: ${id}`);
   // A root's reach sets it for a store kept in a folder, so only a context built without a reach lacks it.
   const target = globalTargetOf(ctx);
-  if (target === undefined) throw new Error('promote needs ctx.reach.globalTarget, the global store to copy into');
+  if (target === undefined)
+    throw new Error('promote needs ctx.reach.globalTarget, the global store to copy into');
   assertPromotable(id, entry);
 
   // The 'promote' row commits with the global copy, so no write follows the commit and a busy store fails the whole
   // promote.
-  const globalEntry = globalCopyOf(await ctx.store.folderFiles.home(), entry, sharedStoreOf(ctx), ctx.infra.clock());
+  const globalEntry = globalCopyOf(
+    await ctx.store.folderFiles.home(),
+    entry,
+    sharedStoreOf(ctx),
+    ctx.infra.clock(),
+  );
   await target.store.promotion.writeCopy(globalEntry, {
     actor: ctx.actor.subject,
     sourceId: id,
@@ -46,7 +58,12 @@ export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Prom
 
 /** The copy of a local memory, with a new `g_` id so it cannot collide. A project store's NULL row gets its folder
  * back; a shared store's folder is no caller's project, so NULL stays and the label names no path. */
-function globalCopyOf(local: StoreHome, entry: MemoryEntry, shared: boolean, now: Date): MemoryEntry {
+function globalCopyOf(
+  local: StoreHome,
+  entry: MemoryEntry,
+  shared: boolean,
+  now: Date,
+): MemoryEntry {
   return {
     ...entry,
     id: generateId('g'),

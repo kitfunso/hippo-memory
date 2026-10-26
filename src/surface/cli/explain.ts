@@ -49,7 +49,12 @@ interface InspectedSlot {
   rank?: RankRecallResult;
 }
 
-async function explainQuery(hippoRoot: string, tenantId: string, query: string, flags: CliFlags): Promise<void> {
+async function explainQuery(
+  hippoRoot: string,
+  tenantId: string,
+  query: string,
+  flags: CliFlags,
+): Promise<void> {
   requireInit(hippoRoot);
 
   const budget = parseBudgetFlag(flags, DEFAULT_RECALL_BUDGET);
@@ -65,13 +70,19 @@ async function explainQuery(hippoRoot: string, tenantId: string, query: string, 
   // Unlike recall, explain reads the global store whenever it exists, even when it is the local root.
   const origin = recallRowOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
   const explainGlobalOn = origin.globalOn;
-  await noteScopeHidden(ctx, explainGlobalOn ? cliStore(globalRoot) : undefined, query, explicitScope || undefined);
+  await noteScopeHidden(
+    ctx,
+    explainGlobalOn ? cliStore(globalRoot) : undefined,
+    query,
+    explicitScope || undefined,
+  );
 
   const config = cliConfig(hippoRoot);
   const engine = engineFlags(flags, config);
   // Priced as recall prints each result, so explain returns what recall's engines would.
   const now = ctx.infra.clock();
-  const cost = (r: SearchResult): number => printedTokens(recallEntryText(r, query, false, origin.isGlobal(r), now));
+  const cost = (r: SearchResult): number =>
+    printedTokens(recallEntryText(r, query, false, origin.isGlobal(r), now));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
   const slot: InspectedSlot = {};
@@ -160,12 +171,19 @@ function printExplainJson(
   );
 }
 
-function printExplainTable(results: SearchResult[], query: string, modeUsed: string, candidates: number): void {
+function printExplainTable(
+  results: SearchResult[],
+  query: string,
+  modeUsed: string,
+  candidates: number,
+): void {
   console.log(`Query: "${query}"`);
   console.log(`Mode:  ${modeUsed}   candidates: ${candidates}   returned: ${results.length}`);
   console.log();
   console.log('Rank  Score   Strength  Age    Layer      ID                Preview');
-  console.log('----- ------- --------- ------ ---------- ----------------- ---------------------------------');
+  console.log(
+    '----- ------- --------- ------ ---------- ----------------- ---------------------------------',
+  );
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     const b = r.breakdown;
@@ -203,14 +221,21 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
     console.log(
       `    base:      ${fmt(b.bm25Weight, 2)}*${fmt(b.normBm25, 3)} + ${fmt(b.embeddingWeight, 2)}*${fmt(b.cosine, 3)} = ${fmt(b.base, 4)}`,
     );
-    console.log(`    strength:  x${fmt(b.strengthMultiplier, 3)}  (strength=${fmt(r.entry.strength, 3)})`);
+    console.log(
+      `    strength:  x${fmt(b.strengthMultiplier, 3)}  (strength=${fmt(r.entry.strength, 3)})`,
+    );
     console.log(`    recency:   x${fmt(b.recencyMultiplier, 3)}  (age=${b.ageDays}d)`);
-    if (b.decisionBoost !== 1) console.log(`    decision:  x${fmt(b.decisionBoost, 2)}  (tagged 'decision')`);
+    if (b.decisionBoost !== 1)
+      console.log(`    decision:  x${fmt(b.decisionBoost, 2)}  (tagged 'decision')`);
     if (b.scopeBoost !== 1) {
-      console.log(`    scope:     x${fmt(b.scopeBoost, 2)}  (scope tag ${b.scopeBoost > 1 ? 'match' : 'mismatch'})`);
+      console.log(
+        `    scope:     x${fmt(b.scopeBoost, 2)}  (scope tag ${b.scopeBoost > 1 ? 'match' : 'mismatch'})`,
+      );
     }
-    if (b.pathBoost !== 1) console.log(`    path:      x${fmt(b.pathBoost, 3)}  (cwd path tag overlap)`);
-    if (b.sourceBump !== 1) console.log(`    source:    x${fmt(b.sourceBump, 2)}  (local priority bump over global)`);
+    if (b.pathBoost !== 1)
+      console.log(`    path:      x${fmt(b.pathBoost, 3)}  (cwd path tag overlap)`);
+    if (b.sourceBump !== 1)
+      console.log(`    source:    x${fmt(b.sourceBump, 2)}  (local priority bump over global)`);
     if (b.outcomeBoost !== 1) {
       console.log(
         `    outcome:   x${fmt(b.outcomeBoost, 3)}  ` +
@@ -220,7 +245,11 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
     if (b.churnStaleMultiplier !== 1) {
       console.log(`    churn:     x${fmt(b.churnStaleMultiplier, 2)}  (tagged 'churn-stale')`);
     }
-    if (b.preMmrRank !== undefined && b.postMmrRank !== undefined && b.preMmrRank !== b.postMmrRank) {
+    if (
+      b.preMmrRank !== undefined &&
+      b.postMmrRank !== undefined &&
+      b.preMmrRank !== b.postMmrRank
+    ) {
       const arrow = b.postMmrRank < b.preMmrRank ? 'up' : 'down';
       console.log(`    mmr:       rank ${b.preMmrRank} -> ${b.postMmrRank}  (diversity ${arrow})`);
     }
@@ -229,7 +258,12 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
   console.log();
 }
 
-export async function handleExplain({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleExplain({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const query = args.join(' ').trim();
   if (!query) {
     fail('Please provide a search query.');

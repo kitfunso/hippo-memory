@@ -30,13 +30,20 @@ import { type JsonValue, isJsonObject, tryParseJson } from '../../../base/util/j
 import type { WebhookPorts } from '../ingest.js';
 
 export function warnSlackPreviousSecretOpen(): void {
-  warnIfOpenEnded(SLACK_PREVIOUS, envSlackSigningSecretPrevious(), envSlackSigningSecretPreviousUntil());
+  warnIfOpenEnded(
+    SLACK_PREVIOUS,
+    envSlackSigningSecretPrevious(),
+    envSlackSigningSecretPreviousUntil(),
+  );
 }
 
 /** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its route row declares
  * webhook-signature); malformed payloads go to slack_dlq, ACK 200. 404 (not 503) when the secret is unset, so a probe
  * cannot tell a gated-off route from a missing one. */
-export async function handleSlackEventsWebhook(request: WebhookRequest, ports: WebhookPorts): Promise<void> {
+export async function handleSlackEventsWebhook(
+  request: WebhookRequest,
+  ports: WebhookPorts,
+): Promise<void> {
   const { req, res, opts } = request;
   // Secret and well-formed headers before the body, so a caller with neither cannot make the server buffer one.
   const secret = envSlackSigningSecret();
@@ -103,7 +110,10 @@ async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
   } catch (err) {
     // A request that failed left nothing stored, so Slack's retry must get through.
     await events.releaseDelivery('slack', d.signature).catch((releaseErr) => {
-      log.warn('slack webhook: could not free the replay hold of a failed delivery', errorFields(releaseErr));
+      log.warn(
+        'slack webhook: could not free the replay hold of a failed delivery',
+        errorFields(releaseErr),
+      );
     });
     throw err;
   }
@@ -169,7 +179,11 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   // slack_dlq (bucket='unroutable') and still ACKs 200 so Slack stops retrying; never call ingest.
   let resolvedTenant: string | null = null;
   if (isSlackEventEnvelope(body)) {
-    resolvedTenant = await resolveTenant(d.store, { connector: 'slack', teamId: body.team_id }, hostFallback());
+    resolvedTenant = await resolveTenant(
+      d.store,
+      { connector: 'slack', teamId: body.team_id },
+      hostFallback(),
+    );
     if (resolvedTenant === null) {
       await parkAndAck(d, {
         tenantId: null, // unroutable - stored as '__unroutable__'

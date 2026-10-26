@@ -11,8 +11,18 @@ export interface OutcomeResult {
   appliedIds: string[];
 }
 /** Explicit ids may follow no recall at all, so no trace is linked; outcomeForLastRecall links the last one. */
-export async function outcome(ctx: EntryContext, ids: ReadonlyArray<string>, good: boolean): Promise<OutcomeResult> {
-  const write = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ...scopeReaderOf(ctx.actor), ids, good };
+export async function outcome(
+  ctx: EntryContext,
+  ids: ReadonlyArray<string>,
+  good: boolean,
+): Promise<OutcomeResult> {
+  const write = {
+    tenantId: ctx.tenantId,
+    actor: ctx.actor.subject,
+    ...scopeReaderOf(ctx.actor),
+    ids,
+    good,
+  };
   const appliedIds = await ctx.store.entryWrites.applyOutcome(write);
   return { applied: appliedIds.length, appliedIds };
 }

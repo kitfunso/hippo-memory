@@ -79,7 +79,9 @@ function transcriptItem<T>(value: T): TranscriptItem | null {
 }
 
 function itemsOf<T>(content: T): TranscriptItem[] {
-  return Array.isArray(content) ? content.map(transcriptItem).filter((b): b is TranscriptItem => b !== null) : [];
+  return Array.isArray(content)
+    ? content.map(transcriptItem).filter((b): b is TranscriptItem => b !== null)
+    : [];
 }
 
 function messageItems(record: TranscriptRecord): TranscriptItem[] {
@@ -96,7 +98,9 @@ function editTarget(block: TranscriptItem): string | null {
   const input = block.input;
   if (!isObjectLike(input)) return null;
   if (block.name === 'NotebookEdit') {
-    return 'notebook_path' in input && isStringValue(input.notebook_path) ? input.notebook_path : null;
+    return 'notebook_path' in input && isStringValue(input.notebook_path)
+      ? input.notebook_path
+      : null;
   }
   return 'file_path' in input && isStringValue(input.file_path) ? input.file_path : null;
 }
@@ -134,7 +138,11 @@ function isSynthetic(record: TranscriptRecord): boolean {
 
 function readClaudeResults(record: TranscriptRecord, state: ScanState): void {
   for (const block of messageItems(record)) {
-    if (block.type === 'tool_result' && isStringValue(block.tool_use_id) && block.is_error !== true) {
+    if (
+      block.type === 'tool_result' &&
+      isStringValue(block.tool_use_id) &&
+      block.is_error !== true
+    ) {
       state.landed.add(block.tool_use_id);
     }
   }
@@ -181,7 +189,12 @@ function commandOf<T>(value: T): string[] | string | null {
   return Array.isArray(value) && value.every((a) => isStringValue(a)) ? value : null;
 }
 
-function addShellPatch<T>(state: ScanState, callId: string, command: T, workdir: string | null): void {
+function addShellPatch<T>(
+  state: ScanState,
+  callId: string,
+  command: T,
+  workdir: string | null,
+): void {
   const argv = commandOf(command);
   const patch = argv === null ? null : shellPatch(argv);
   if (!patch) return;
@@ -195,7 +208,8 @@ function readCodexFunctionCall(item: TranscriptItem, state: ScanState): void {
   const args: unknown = tryParseJson(item.arguments);
   if (!isObjectLike(args)) return;
   if (item.name === 'apply_patch') {
-    if ('input' in args && isStringValue(args.input)) addPatch(state, item.call_id, args.input, state.cwd);
+    if ('input' in args && isStringValue(args.input))
+      addPatch(state, item.call_id, args.input, state.cwd);
     return;
   }
   const command = 'command' in args ? args.command : 'cmd' in args ? args.cmd : undefined;
@@ -224,7 +238,9 @@ function readCodexItem(item: TranscriptItem, state: ScanState): void {
       const action = item.action;
       if (!isStringValue(item.call_id) || !isObjectLike(action) || !('command' in action)) return;
       const workdir =
-        'working_directory' in action && isStringValue(action.working_directory) ? action.working_directory : null;
+        'working_directory' in action && isStringValue(action.working_directory)
+          ? action.working_directory
+          : null;
       addShellPatch(state, item.call_id, action.command, workdir);
       return;
     }
@@ -281,11 +297,16 @@ export function scanSessionTranscript(jsonl: string): SessionScan {
     finalText: state.claudeFinal || state.codexFinal || state.codexUnphased,
     cwd: state.firstCwd,
     // An unanswered call may never have run, so an edit counts only once its result says it applied.
-    edits: state.pending.filter((e) => state.landed.has(e.callId)).map(({ filePath, base }) => ({ filePath, base })),
+    edits: state.pending
+      .filter((e) => state.landed.has(e.callId))
+      .map(({ filePath, base }) => ({ filePath, base })),
   };
 }
 
-export function readSessionTranscript(transcriptPath: string, log: (message: string) => void): string {
+export function readSessionTranscript(
+  transcriptPath: string,
+  log: (message: string) => void,
+): string {
   const fd = fs.openSync(transcriptPath, 'r');
   try {
     const size = fs.fstatSync(fd).size;
@@ -298,7 +319,10 @@ export function readSessionTranscript(transcriptPath: string, log: (message: str
 }
 
 /** The transcript, read once and scanned, or null with the reason logged. */
-export function readSessionScan(transcriptPath: string, log: (message: string) => void): SessionScan | null {
+export function readSessionScan(
+  transcriptPath: string,
+  log: (message: string) => void,
+): SessionScan | null {
   try {
     return scanSessionTranscript(readSessionTranscript(transcriptPath, log));
   } catch (err) {
@@ -341,7 +365,11 @@ function repoRelative(p: string, repoRoot: string): string | null {
     real = realFsPath(p);
   } catch (err) {
     // An unresolvable path counts as outside the repo: only that path is lost, never the digest.
-    log.warnThenDebug('digest:realpath', 'digest: a changed path could not be resolved', errorFields(err));
+    log.warnThenDebug(
+      'digest:realpath',
+      'digest: a changed path could not be resolved',
+      errorFields(err),
+    );
     return null;
   }
   if (real === null) return null;

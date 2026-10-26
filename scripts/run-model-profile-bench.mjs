@@ -150,7 +150,16 @@ const CLAUDE_BIN = process.platform === 'win32' ? 'claude.cmd' : 'claude';
 // bypasses the shell entirely.
 const HIPPO_JS =
   process.platform === 'win32'
-    ? path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', 'hippo-memory', 'bin', 'hippo.js')
+    ? path.join(
+        os.homedir(),
+        'AppData',
+        'Roaming',
+        'npm',
+        'node_modules',
+        'hippo-memory',
+        'bin',
+        'hippo.js',
+      )
     : null;
 
 function hippoCall(args, env, input, cwd) {
@@ -181,7 +190,12 @@ function setupHippoStore(tmpDir, memories) {
   // both resolve inside tmpDir, preventing leakage from the user's real
   // stores.
   try {
-    hippoCall(['init', '--no-hooks', '--no-schedule', '--no-learn'], { HIPPO_HOME: tmpDir }, undefined, tmpDir);
+    hippoCall(
+      ['init', '--no-hooks', '--no-schedule', '--no-learn'],
+      { HIPPO_HOME: tmpDir },
+      undefined,
+      tmpDir,
+    );
   } catch {
     // Non-fatal: init may warn if already exists.
   }
@@ -297,7 +311,9 @@ function printTable(byCell) {
     return { model, profile, type, rate, n, ...v };
   });
   console.log('model'.padEnd(24), 'profile'.padEnd(10), 'type'.padEnd(25), 'pass%', 'N', 'details');
-  for (const c of cells.sort((a, b) => (a.model + a.profile + a.type).localeCompare(b.model + b.profile + b.type))) {
+  for (const c of cells.sort((a, b) =>
+    (a.model + a.profile + a.type).localeCompare(b.model + b.profile + b.type),
+  )) {
     console.log(
       c.model.padEnd(24),
       c.profile.padEnd(10),

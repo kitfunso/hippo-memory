@@ -73,10 +73,10 @@ function readDlqRow(
   assertTable(table);
   assertColumns(selectColumns.split(',').map((name) => name.trim()));
   // SAFETY: the caller's selectColumns names exactly the fields its rowToItem reads.
-  const row = cachedStatement(db, `SELECT ${selectColumns} FROM ${table} WHERE tenant_id = ? AND id = ?`).get(
-    tenantId,
-    id,
-  ) as DlqRawRow | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT ${selectColumns} FROM ${table} WHERE tenant_id = ? AND id = ?`,
+  ).get(tenantId, id) as DlqRawRow | undefined;
   return row ?? null;
 }
 
@@ -129,7 +129,9 @@ export function dlqAccess<Item, Insert extends object>(
   const insertColumns = columns.filter((c) => c.insert);
   // SAFETY: the column map names every field of Item with the kind that coerces it.
   const toItem = (raw: DlqRawRow): Item =>
-    Object.fromEntries(columns.map((c) => [c.field, coerceDlqValue(c.kind, raw[c.column])])) as Item;
+    Object.fromEntries(
+      columns.map((c) => [c.field, coerceDlqValue(c.kind, raw[c.column])]),
+    ) as Item;
   return {
     insert: (db, row) => {
       // SAFETY: every insert field of the column map is a string, null or absent on Insert.
@@ -137,7 +139,8 @@ export function dlqAccess<Item, Insert extends object>(
       const pairs = insertColumns.map((c) => [c.column, fields[c.field] ?? null] as const);
       return insertDlqRow(db, table, pairs);
     },
-    list: (db, tenantId, limit) => listDlqRows(db, table, selectColumns, tenantId, limit).map(toItem),
+    list: (db, tenantId, limit) =>
+      listDlqRows(db, table, selectColumns, tenantId, limit).map(toItem),
     get: (db, tenantId, id) => {
       const row = readDlqRow(db, table, selectColumns, tenantId, id);
       return row ? toItem(row) : null;

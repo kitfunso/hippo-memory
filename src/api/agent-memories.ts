@@ -2,9 +2,16 @@
 // what it lists. src/domain/agent-memories runs one pass.
 import path from 'node:path';
 import type { Machine } from '../base/util/agent-homes.js';
-import { emptyReport, mergeReports, type ImportReport } from '../base/memory/agent-memory-report.js';
+import {
+  emptyReport,
+  mergeReports,
+  type ImportReport,
+} from '../base/memory/agent-memory-report.js';
 import { projectNames, type ProjectIdentity } from '../base/scope/project-identity.js';
-import { claudeTranscriptListing, transcriptNotesProject } from '../domain/agent-memories/claude-code.js';
+import {
+  claudeTranscriptListing,
+  transcriptNotesProject,
+} from '../domain/agent-memories/claude-code.js';
 import { runPass, type Pass, type SyncOptions } from '../domain/agent-memories/sync.js';
 import type { AdapterContext } from '../domain/agent-memories/types.js';
 
@@ -22,7 +29,10 @@ export async function importForStore(root: string, opts: SyncOptions): Promise<I
 }
 
 /** A local store's project pass with legacy adoption; `init --scan` runs it per repository and the user pass once. */
-export async function importProjectMemories(root: string, opts: SyncOptions): Promise<ImportReport> {
+export async function importProjectMemories(
+  root: string,
+  opts: SyncOptions,
+): Promise<ImportReport> {
   const ctx = context(opts.machine, { projectRoot: path.dirname(root) });
   return runPass(
     {
@@ -40,7 +50,10 @@ export async function importProjectMemories(root: string, opts: SyncOptions): Pr
 }
 
 /** Every tool's user-level memory into the global store, created on demand, with no origin. */
-export async function importUserMemories(invokingRoot: string, opts: SyncOptions): Promise<ImportReport> {
+export async function importUserMemories(
+  invokingRoot: string,
+  opts: SyncOptions,
+): Promise<ImportReport> {
   const ctx = context(opts.machine, {});
   return runPass(
     {
@@ -98,7 +111,8 @@ export async function importSessionFolder(
   // A project store takes its own project's notes; another project's, or home's, go to the global store, which parts
   // them by origin.
   const { machine } = opts;
-  const own = machine.isGlobalRoot(root) || project.name === machine.projectIdentity(path.dirname(root)).name;
+  const own =
+    machine.isGlobalRoot(root) || project.name === machine.projectIdentity(path.dirname(root)).name;
   const target = own ? root : machine.globalRoot();
   const ctx = context(opts.machine, {});
   return runPass(

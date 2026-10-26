@@ -134,15 +134,29 @@ function holdsVersion(header: string | undefined, etag: string): boolean {
 }
 
 /** Sends `asset` gzipped when the client takes gzip, or a 304 when the client already holds those bytes. */
-export function sendAsset(req: http.IncomingMessage, res: http.ServerResponse, asset: StaticAsset): void {
-  const sent = asset.gzip !== null && takesGzip(req.headers['accept-encoding']) ? asset.gzip : asset.plain;
-  const validators = { ETag: sent.etag, 'Cache-Control': asset.cacheControl, Vary: 'Accept-Encoding' };
+export function sendAsset(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  asset: StaticAsset,
+): void {
+  const sent =
+    asset.gzip !== null && takesGzip(req.headers['accept-encoding']) ? asset.gzip : asset.plain;
+  const validators = {
+    ETag: sent.etag,
+    'Cache-Control': asset.cacheControl,
+    Vary: 'Accept-Encoding',
+  };
   if (holdsVersion(req.headers['if-none-match'], sent.etag)) {
     res.writeHead(304, validators);
     res.end();
     return;
   }
   const encoding = sent === asset.gzip ? { 'Content-Encoding': 'gzip' } : {};
-  res.writeHead(200, { ...validators, ...encoding, 'Content-Type': asset.type, 'Content-Length': sent.body.length });
+  res.writeHead(200, {
+    ...validators,
+    ...encoding,
+    'Content-Type': asset.type,
+    'Content-Length': sent.body.length,
+  });
   res.end(sent.body);
 }

@@ -125,8 +125,16 @@ export function passesScopeFilterForRecall(
  * Includes private/quarantine scopes (owner access); a named personal scope never unlocks: the CLI has no caller
  * identity.
  */
-export function passesCliRecallScopeFilter(scope: string | null, requested: string | undefined): boolean {
-  if (requested !== undefined && requested !== '' && !isPersonalScope(requested) && scope === requested) {
+export function passesCliRecallScopeFilter(
+  scope: string | null,
+  requested: string | undefined,
+): boolean {
+  if (
+    requested !== undefined &&
+    requested !== '' &&
+    !isPersonalScope(requested) &&
+    scope === requested
+  ) {
     return true;
   }
   return passesScopeFilterForRecall(scope, undefined);
@@ -214,14 +222,18 @@ export function assertWriteRight(
 ): asserts row is WrittenRow {
   if (!row || !readerReaches(reader, row.scope)) throw new NotFoundError(missing);
   if (readerMayChange(reader, row)) return;
-  const fix = row.owner === null ? 'records no writer: change it with an admin key' : WRITTEN_BY_ANOTHER;
+  const fix =
+    row.owner === null ? 'records no writer: change it with an admin key' : WRITTEN_BY_ANOTHER;
   throw new ForbiddenError(`memory ${id} ${fix}`);
 }
 
-const WRITTEN_BY_ANOTHER = 'was written by someone else: change it with the key that wrote it or an admin key';
+const WRITTEN_BY_ANOTHER =
+  'was written by someone else: change it with the key that wrote it or an admin key';
 
 /** A by-id write's target as a reader: with no role it reads as a member key, so it fails closed on restricted rows. */
-export function targetReader(target: Omit<ScopeReader, 'role'> & { readonly role?: ScopeReader['role'] }): ScopeReader {
+export function targetReader(
+  target: Omit<ScopeReader, 'role'> & { readonly role?: ScopeReader['role'] },
+): ScopeReader {
   return { ...target, role: target.role ?? 'member' };
 }
 

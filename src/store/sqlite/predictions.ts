@@ -26,7 +26,8 @@ import { handleStamp } from './handle-clock.js';
 
 // What the store says when a prediction is saved, closed or summed: audit metadata, refusal texts, baserate.
 
-const present = (value: number | null | undefined): boolean => value !== undefined && value !== null;
+const present = (value: number | null | undefined): boolean =>
+  value !== undefined && value !== null;
 
 /** The predict_create row's metadata: ids and flags, never the claim text. */
 const predictionCreateMetadata = (
@@ -74,13 +75,22 @@ interface ClosedEstimate {
 }
 
 function emptyBaserate(classTag: string): PredictionBaserate {
-  const nulls = { meanEstimate: null, meanActual: null, meanRatio: null, p50Ratio: null, mae: null };
+  const nulls = {
+    meanEstimate: null,
+    meanActual: null,
+    meanRatio: null,
+    p50Ratio: null,
+    mae: null,
+  };
   return { classTag, nClosed: 0, nRatioEligible: 0, summary: '', ...nulls };
 }
 
 /** A class's stats over its closed rows, summed in the order given. Every store computes them here, so no two can
  * disagree on the arithmetic. */
-function predictionBaserateOf(classTag: string, rows: readonly ClosedEstimate[]): PredictionBaserate {
+function predictionBaserateOf(
+  classTag: string,
+  rows: readonly ClosedEstimate[],
+): PredictionBaserate {
   const nClosed = rows.length;
   if (nClosed === 0) return emptyBaserate(classTag);
   const ratios = rows.filter((r) => r.estimate > 0).map((r) => r.actual / r.estimate);
@@ -88,7 +98,9 @@ function predictionBaserateOf(classTag: string, rows: readonly ClosedEstimate[])
   const mae = rows.reduce((s, r) => s + Math.abs(r.actual - r.estimate), 0) / nClosed;
   const meanRatio = nRatioEligible > 0 ? ratios.reduce((s, x) => s + x, 0) / nRatioEligible : null;
   const ratioPart =
-    meanRatio !== null ? `averaged ${meanRatio.toFixed(2)}x actual` : 'no ratio-eligible rows (all estimates were 0)';
+    meanRatio !== null
+      ? `averaged ${meanRatio.toFixed(2)}x actual`
+      : 'no ratio-eligible rows (all estimates were 0)';
   return {
     classTag,
     nClosed,
@@ -256,7 +268,12 @@ function auditPredictionCreate(
 
 /** Close an open prediction. Updates the predictions row only; the memory mirror is not mutated (the predictions table
  * is the source of truth). Accuracy is computed from (estimateValue, actualValue) at query time. */
-export function closePrediction(db: DatabaseSyncLike, tenantId: string, id: number, opts: PredictionClose): Prediction {
+export function closePrediction(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: number,
+  opts: PredictionClose,
+): Prediction {
   assertTenantId('closePrediction', tenantId);
   if (!VALID_CLOSURE_STATES.has(opts.closureState)) {
     throw new BadRequestError(
@@ -328,7 +345,11 @@ function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): nev
   throw closeMissError(tenantId, id, existing?.closure_state ?? null);
 }
 
-export function readPrediction(db: DatabaseSyncLike, tenantId: string, id: number): Prediction | null {
+export function readPrediction(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: number,
+): Prediction | null {
   assertTenantId('readPrediction', tenantId);
   const row = cachedStatement(
     db,

@@ -18,8 +18,17 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
 
 const TENANT = 'default';
 
-function row(content: string, tag: string, originProject: string, emotionalValence: EmotionalValence) {
-  const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT, tags: [tag] });
+function row(
+  content: string,
+  tag: string,
+  originProject: string,
+  emotionalValence: EmotionalValence,
+) {
+  const entry = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    tenantId: TENANT,
+    tags: [tag],
+  });
   return { ...entry, originProject, emotionalValence, source: 'cli' };
 }
 
@@ -54,7 +63,8 @@ function shortThenLong<T>(read: (long: boolean) => T): ShortThenLong<T> {
   }
 }
 
-const contents = (entries: ReadonlyArray<{ content: string }>): string[] => entries.map((e) => e.content).sort();
+const contents = (entries: ReadonlyArray<{ content: string }>): string[] =>
+  entries.map((e) => e.content).sort();
 
 describe('cached list reads', () => {
   it('the signal page reads one statement for one tag and valence and for three', () => {
@@ -64,7 +74,9 @@ describe('cached list reads', () => {
       sourcePrefix: 'zzz',
       minRetrievals: 1_000,
     });
-    const r = shortThenLong((long) => listEntriesWithSignals(db, signals(long), TENANT, { limit: 10 }).entries);
+    const r = shortThenLong(
+      (long) => listEntriesWithSignals(db, signals(long), TENANT, { limit: 10 }).entries,
+    );
     expect(r.prepared).toEqual([]);
     expect(contents(r.short)).toEqual(['beta row', 'gamma row']);
     expect(contents(r.long)).toEqual(['alpha row', 'beta row', 'gamma row', 'global row']);
@@ -80,8 +92,11 @@ describe('cached list reads', () => {
   // One origin binds `=` so the origin index can seek it; from two up the list is one JSON param.
   it('the entry filter reads one statement for a list of two origins and kinds and for three', () => {
     const current = (origins: readonly string[]) =>
-      listEntriesWhere(db, { tenantId: TENANT, origins, live: true, kinds: ['distilled', 'superseded'] }, { limit: 10 })
-        .entries;
+      listEntriesWhere(
+        db,
+        { tenantId: TENANT, origins, live: true, kinds: ['distilled', 'superseded'] },
+        { limit: 10 },
+      ).entries;
     const r = shortThenLong((long) => current(long ? ['p1', 'p2', 'p9'] : ['p1', 'p8']));
     expect(r.prepared).toEqual([]);
     expect(contents(r.short)).toEqual(['alpha row']);

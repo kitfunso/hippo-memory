@@ -4,7 +4,13 @@ import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { MemoryQuery } from '../../api/dashboard/queries.js';
-import type { MemoryDetail, MemoryPage, Overview, ProjectDetail, SearchResult } from '../../api/dashboard/types.js';
+import type {
+  MemoryDetail,
+  MemoryPage,
+  Overview,
+  ProjectDetail,
+  SearchResult,
+} from '../../api/dashboard/types.js';
 import { StoreBusyError } from '../../base/ports/store.js';
 import { errorFields, log } from '../../base/util/log.js';
 
@@ -24,17 +30,32 @@ export interface DashboardReader {
 export type ReaderOp =
   | { readonly op: 'overview'; readonly fresh: boolean }
   | { readonly op: 'project'; readonly key: string; readonly fresh: boolean }
-  | { readonly op: 'memories'; readonly key: string; readonly query: MemoryQuery; readonly fresh: boolean }
+  | {
+      readonly op: 'memories';
+      readonly key: string;
+      readonly query: MemoryQuery;
+      readonly fresh: boolean;
+    }
   | { readonly op: 'search'; readonly text: string; readonly fresh: boolean }
   | { readonly op: 'memory'; readonly memoryId: string; readonly fresh: boolean }
   | { readonly op: 'written'; readonly changed: boolean; readonly entry?: MemoryEntry }
   | { readonly op: 'close' };
 
 /** An op as sent, with its id and the clock readings it runs at. */
-export type ReaderCall = ReaderOp & { readonly id: number; readonly nowMs: number; readonly wallMs: number };
+export type ReaderCall = ReaderOp & {
+  readonly id: number;
+  readonly nowMs: number;
+  readonly wallMs: number;
+};
 
 /** What a call answers: the value of the DashboardReader method that sent it. */
-export type ReaderValue = Overview | ProjectDetail | MemoryPage | SearchResult | MemoryDetail | null;
+export type ReaderValue =
+  | Overview
+  | ProjectDetail
+  | MemoryPage
+  | SearchResult
+  | MemoryDetail
+  | null;
 
 export type ReaderReply =
   | { readonly id: number; readonly ok: true; readonly value: ReaderValue }
@@ -60,7 +81,9 @@ export interface ReaderClocks {
 }
 
 // Resolved from the package root, so a server run from TypeScript source starts the same built file.
-const THREAD_ENTRY = fileURLToPath(new URL('../../../dist/surface/server/dashboard-reader-thread.js', import.meta.url));
+const THREAD_ENTRY = fileURLToPath(
+  new URL('../../../dist/surface/server/dashboard-reader-thread.js', import.meta.url),
+);
 
 const READER_GONE = 'the dashboard reader has stopped';
 
@@ -109,7 +132,11 @@ function settleReplies(worker: Worker, state: ReaderState): Promise<void> {
 export function startDashboardReader(init: ReaderInit, clocks: ReaderClocks): DashboardReader {
   // An explicit execArgv keeps the parent's loaders out of the thread and silences its repeat of Node's
   // experimental-module warning.
-  const worker = new Worker(THREAD_ENTRY, { env: SHARE_ENV, execArgv: ['--no-warnings'], workerData: init });
+  const worker = new Worker(THREAD_ENTRY, {
+    env: SHARE_ENV,
+    execArgv: ['--no-warnings'],
+    workerData: init,
+  });
   // The listener keeps the process alive; the thread alone must not.
   worker.unref();
   const state: ReaderState = { pending: new Map() };
@@ -130,7 +157,8 @@ export function startDashboardReader(init: ReaderInit, clocks: ReaderClocks): Da
     memories: (key, query, fresh) => call({ op: 'memories', key, query, fresh }),
     search: (text, fresh) => call({ op: 'search', text, fresh }),
     memory: (memoryId, fresh) => call({ op: 'memory', memoryId, fresh }),
-    written: (changed, entry) => call({ op: 'written', changed, ...(entry !== undefined && { entry }) }),
+    written: (changed, entry) =>
+      call({ op: 'written', changed, ...(entry !== undefined && { entry }) }),
     close: async () => {
       // The process must not end before the thread has closed its store, as when a failed listen leaves nothing else.
       worker.ref();

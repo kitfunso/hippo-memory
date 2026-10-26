@@ -87,7 +87,9 @@ describe.each([
         git: processGit,
       });
       expect(learned).toMatchObject({ status: 'scanned', added: 1 });
-      expect(loadAllEntries(root, 'default').filter((e) => e.source === CLI_LEARN.source)).toHaveLength(1);
+      expect(
+        loadAllEntries(root, 'default').filter((e) => e.source === CLI_LEARN.source),
+      ).toHaveLength(1);
     } finally {
       await store.close();
     }
@@ -98,15 +100,26 @@ describe.each([
     const store = make(root);
     try {
       const ctx = ctxOn(root, store);
-      const automatic = { source: 'capture', confidence: 'observed', layer: Layer.Episodic } as const;
+      const automatic = {
+        source: 'capture',
+        confidence: 'observed',
+        layer: Layer.Episodic,
+      } as const;
       const bad = createMemory('Found local migration files to be', automatic);
-      const pinned = createMemory('Found local migration files to be', { ...automatic, pinned: true });
+      const pinned = createMemory('Found local migration files to be', {
+        ...automatic,
+        pinned: true,
+      });
       for (const entry of [bad, pinned]) writeEntry(root, entry);
 
       expect((await memoryQualityRepair(ctx, false)).issues).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: bad.id, disposition: 'set-aside' }),
-          expect.objectContaining({ id: pinned.id, disposition: 'protected', protection: 'pinned' }),
+          expect.objectContaining({
+            id: pinned.id,
+            disposition: 'protected',
+            protection: 'pinned',
+          }),
         ]),
       );
       expect((await memoryQualityRepair(ctx, true)).appliedIds).toEqual([bad.id]);
@@ -176,7 +189,10 @@ describe('MCP hippo_remember', () => {
         jsonrpc: '2.0',
         id: 1,
         method: 'tools/call',
-        params: { name: 'hippo_remember', arguments: { text: 'the deploy window opens at nine', tag: 'ops' } },
+        params: {
+          name: 'hippo_remember',
+          arguments: { text: 'the deploy window opens at nine', tag: 'ops' },
+        },
       },
       {
         hippoRoot: root,

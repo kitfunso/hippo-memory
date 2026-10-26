@@ -9,7 +9,12 @@ import { assertBinaryCompatible } from '../../db/migrate.js';
 import { dormantSnapshotsByIds, insertDormantRow } from './dormant-rows.js';
 import { calculateStrength } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { isRepairCandidate, previewDefect, repairDefect, repairKeeps } from '../../base/memory/memory-audit.js';
+import {
+  isRepairCandidate,
+  previewDefect,
+  repairDefect,
+  repairKeeps,
+} from '../../base/memory/memory-audit.js';
 import {
   deleteEntryCore,
   MEMORY_BACKED_TABLES,
@@ -22,7 +27,11 @@ import { ftsRowExists } from './entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
 import type { StoreFiles, Handles, StoreModel } from './open.js';
-import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../../base/ports/store/audit.js';
+import type {
+  QualityRepairResult,
+  QualityRepairIssue,
+  RepairProtection,
+} from '../../base/ports/store/audit.js';
 import { openStore } from './handles.js';
 import { answered, bound, skipEmpty } from './bound.js';
 import type { AuditMaintenance } from '../../base/ports/store.js';
@@ -61,7 +70,15 @@ interface RepairPlan {
 const REQUIRED_COLUMNS = {
   memories: MEMORY_SELECT_COLUMNS.split(',').map((s) => s.trim()),
   meta: ['key', 'value'],
-  dormant_memories: ['tenant_id', 'id', 'content', 'entry_json', 'reason', 'strength', 'dormant_at'],
+  dormant_memories: [
+    'tenant_id',
+    'id',
+    'content',
+    'entry_json',
+    'reason',
+    'strength',
+    'dormant_at',
+  ],
   audit_log: ['ts', 'tenant_id', 'actor', 'op', 'target_id', 'metadata_json'],
   ...Object.fromEntries(MEMORY_BACKED_TABLES.map((table) => [table, ['memory_id']])),
 } satisfies Record<string, readonly string[]>;
@@ -71,9 +88,15 @@ function capabilityBlockers(db: DatabaseSyncLike): string[] {
   for (const [table, required] of Object.entries(REQUIRED_COLUMNS)) {
     const columns = tableColumns(db, table);
     if (columns.size === 0) blockers.push(`missing table: ${table}`);
-    else for (const column of required) if (!columns.has(column)) blockers.push(`missing column: ${table}.${column}`);
+    else
+      for (const column of required)
+        if (!columns.has(column)) blockers.push(`missing column: ${table}.${column}`);
   }
-  if (blockers.some((blocker) => blocker === 'missing table: meta' || blocker.startsWith('missing column: meta.'))) {
+  if (
+    blockers.some(
+      (blocker) => blocker === 'missing table: meta' || blocker.startsWith('missing column: meta.'),
+    )
+  ) {
     return blockers;
   }
   assertBinaryCompatible(db);
@@ -94,11 +117,16 @@ interface RepairRun {
 }
 
 /** Each parent the rows name, read by id: the live row, else its dormant snapshot. */
-function parentsOf(db: DatabaseSyncLike, tenantId: string, entries: readonly MemoryEntry[]): Map<string, MemoryEntry> {
+function parentsOf(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  entries: readonly MemoryEntry[],
+): Map<string, MemoryEntry> {
   const ids = [...new Set(entries.flatMap((entry) => entry.parents))];
   const parents = readEntriesByIds(db, ids, tenantId);
   const gone = ids.filter((id) => !parents.has(id));
-  for (const [id, snapshot] of dormantSnapshotsByIds(db, tenantId, gone)) parents.set(id, snapshot.entry);
+  for (const [id, snapshot] of dormantSnapshotsByIds(db, tenantId, gone))
+    parents.set(id, snapshot.entry);
   return parents;
 }
 
@@ -137,7 +165,11 @@ function planRows(db: DatabaseSyncLike, run: RepairRun): RepairPlan {
 }
 
 function previewIssue(row: PreviewRow): QualityRepairIssue[] {
-  const tags = parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' });
+  const tags = parseJsonArray(row.tags_json, {
+    table: 'memories',
+    id: row.id,
+    column: 'tags_json',
+  });
   const reason = previewDefect({
     content: row.content,
     source: row.source ?? '',
@@ -148,7 +180,14 @@ function previewIssue(row: PreviewRow): QualityRepairIssue[] {
   });
   return reason === null
     ? []
-    : [{ id: row.id, reason, disposition: 'review', protection: 'unsupported schema; no changes permitted' }];
+    : [
+        {
+          id: row.id,
+          reason,
+          disposition: 'review',
+          protection: 'unsupported schema; no changes permitted',
+        },
+      ];
 }
 
 function unsupportedPreview(db: DatabaseSyncLike, tenantId: string): RepairPlan {
@@ -193,10 +232,19 @@ interface RepairMove {
   readonly rules: StoreModel;
 }
 
-function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string, move: RepairMove): boolean {
+function setAsideIssue(
+  db: DatabaseSyncLike,
+  entry: MemoryEntry,
+  reason: string,
+  move: RepairMove,
+): boolean {
   const { now, backup } = move;
   const actor = 'quality-repair';
-  const removed = deleteEntryCore(db, entry.id, entry.tenantId, { actor, automatic: true, suppressForgetAudit: true });
+  const removed = deleteEntryCore(db, entry.id, entry.tenantId, {
+    actor,
+    automatic: true,
+    suppressForgetAudit: true,
+  });
   if (removed === null) return false;
   insertDormantRow(db, {
     entry,
@@ -221,7 +269,9 @@ function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string,
 
 /** The plan's set-aside rows read again and judged as they stand now, by id; a row gone or changed drops out. */
 function rejudgeSetAsides(db: DatabaseSyncLike, run: RepairRun, plan: QualityRepairResult) {
-  const ids = plan.issues.filter((issue) => issue.disposition === 'set-aside').map((issue) => issue.id);
+  const ids = plan.issues
+    .filter((issue) => issue.disposition === 'set-aside')
+    .map((issue) => issue.id);
   const rows = readEntriesByIds(db, ids, run.tenantId);
   const entries = ids.flatMap((id) => rows.get(id) ?? []).filter(isRepairCandidate);
   const backing = memoriesBackingAmong(
@@ -243,10 +293,13 @@ function applyPlan(
 ): QualityRepairResult {
   return withWriteScope(db, 'quality_repair_apply', () => {
     const blockers = capabilityBlockers(db);
-    if (blockers.length > 0) throw new Error(`Quality repair capability changed: ${blockers.join('; ')}`);
+    if (blockers.length > 0)
+      throw new Error(`Quality repair capability changed: ${blockers.join('; ')}`);
     const move: RepairMove = { now: rules.clock(), backup, rules };
     const { ids, rows, issues: current } = rejudgeSetAsides(db, run, plan);
-    const issues = plan.issues.flatMap((issue) => (ids.has(issue.id) ? (current.get(issue.id) ?? []) : [issue]));
+    const issues = plan.issues.flatMap((issue) =>
+      ids.has(issue.id) ? (current.get(issue.id) ?? []) : [issue],
+    );
     const appliedIds: string[] = [];
     const warnings: string[] = [];
     for (const issue of issues) {
@@ -262,15 +315,23 @@ function applyPlan(
 function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): QualityRepairResult {
   const root = files.hippoRoot;
   const initial = withTrialScope(db, 'quality_repair_plan', () => plannedResult(db, root, run));
-  if (!run.apply || !initial.supported || !initial.issues.some((issue) => issue.disposition === 'set-aside')) {
+  if (
+    !run.apply ||
+    !initial.supported ||
+    !initial.issues.some((issue) => issue.disposition === 'set-aside')
+  ) {
     return initial;
   }
   db.exec('PRAGMA foreign_keys = ON');
-  const result = withBackup(db, root, 'before-quality-repair', (backup) => applyPlan(db, run, initial, backup, files));
+  const result = withBackup(db, root, 'before-quality-repair', (backup) =>
+    applyPlan(db, run, initial, backup, files),
+  );
   const warnings = [...result.warnings];
   for (const id of result.appliedIds) {
     if (purgeMirrorBestEffort(root, id, false, 'quality repair')) continue;
-    warnings.push(`Mirror cleanup failed for ${id}; remove its stale mirror before rebuilding the index.`);
+    warnings.push(
+      `Mirror cleanup failed for ${id}; remove its stale mirror before rebuilding the index.`,
+    );
   }
   return { ...result, warnings };
 }
@@ -295,7 +356,12 @@ function repairQualityOnce(
 ): QualityRepairResult | null {
   if (getMeta(db, META_KEY.qualityRepairAuto) === '1') return null;
   // The apply commits the flag with the moves, so a lock taken between them cannot hide what moved.
-  const result = repairOn(db, files, { tenantId, protect, apply: true, doneKey: META_KEY.qualityRepairAuto });
+  const result = repairOn(db, files, {
+    tenantId,
+    protect,
+    apply: true,
+    doneKey: META_KEY.qualityRepairAuto,
+  });
   // An unsupported schema changed nothing, so the next run tries again once a migration has run.
   if (result.supported && result.backup === null) setMeta(db, META_KEY.qualityRepairAuto, '1');
   return result;
@@ -328,6 +394,10 @@ export function sqliteAuditMaintenance({ on, files }: Handles): AuditMaintenance
         ),
       ),
     repairQualityOnce: (tenantId, protect) =>
-      answered(() => withUnmigratedDb(files.hippoRoot, false, (db) => repairQualityOnce(db, files, tenantId, protect))),
+      answered(() =>
+        withUnmigratedDb(files.hippoRoot, false, (db) =>
+          repairQualityOnce(db, files, tenantId, protect),
+        ),
+      ),
   };
 }

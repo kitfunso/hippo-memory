@@ -51,11 +51,20 @@ describe('checkDistImports', () => {
       'dist/mod.d.ts',
       'export declare const a = 1;\nexport declare function b(): void;\nexport interface Shape {}\n',
     );
-    file('scripts/ok.mjs', "import { a, b } from '../dist/mod.js';\nawait import('../dist/mod.js');\n");
+    file(
+      'scripts/ok.mjs',
+      "import { a, b } from '../dist/mod.js';\nawait import('../dist/mod.js');\n",
+    );
     file('scripts/gone.mjs', "import { a, c } from '../dist/mod.js';\n");
     file('benchmarks/moved.mjs', "const { a } = await import('../dist/old.js');\n");
-    file('evals/helper.mjs', "const { b } = await distImport('mod.js');\nawait distImport('none.js');\n");
-    file('tests/types.ts', "import { a, Shape } from '../dist/mod.js';\nimport type { T } from '../dist/old.js';\n");
+    file(
+      'evals/helper.mjs',
+      "const { b } = await distImport('mod.js');\nawait distImport('none.js');\n",
+    );
+    file(
+      'tests/types.ts',
+      "import { a, Shape } from '../dist/mod.js';\nimport type { T } from '../dist/old.js';\n",
+    );
     file('tests/fixtures/pkg/index.mjs', "import { x } from './dist/own.js';\n");
     const { checked, problems } = await checkDistImports(repo);
     expect(checked).toBe(7);

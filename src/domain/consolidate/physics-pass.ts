@@ -7,7 +7,10 @@ import { recordPhaseFailure, type SleepRun } from './run.js';
 // they are recalled.
 const SLEEP_PHYSICS_MAX_PARTICLES = 1000;
 
-export async function physicsPass(run: SleepRun, maxParticles: number = SLEEP_PHYSICS_MAX_PARTICLES): Promise<void> {
+export async function physicsPass(
+  run: SleepRun,
+  maxParticles: number = SLEEP_PHYSICS_MAX_PARTICLES,
+): Promise<void> {
   if (run.dryRun) return;
   const { config, result } = run;
   try {
@@ -30,7 +33,9 @@ async function simulateStoredParticles(run: SleepRun, maxParticles: number): Pro
   const stored = await run.store.vectors.stored('particles', ids);
   const particles = ids.flatMap((id) => stored.get(id) ?? []);
   // Only the simulated particles' rows: the refresh and every force lookup read no other id.
-  const entryMap = new Map((await survivors.get(particles.map((p) => p.memoryId))).map((e) => [e.id, e]));
+  const entryMap = new Map(
+    (await survivors.get(particles.map((p) => p.memoryId))).map((e) => [e.id, e]),
+  );
   refreshParticleProperties(particles, entryMap, run.now, run.strength);
 
   const stats = simulate(particles, survivorForces(run, entryMap));
@@ -49,7 +54,10 @@ async function simulateStoredParticles(run: SleepRun, maxParticles: number): Pro
 }
 
 /** Each survivor's last recall, read only when the cap applies. */
-async function recallTimes(run: SleepRun, capped: boolean): Promise<Map<string, Pick<MemoryEntry, 'lastRetrieved'>>> {
+async function recallTimes(
+  run: SleepRun,
+  capped: boolean,
+): Promise<Map<string, Pick<MemoryEntry, 'lastRetrieved'>>> {
   const times = new Map<string, Pick<MemoryEntry, 'lastRetrieved'>>();
   if (!capped) return times;
   for await (const e of run.survivors.rows()) times.set(e.id, { lastRetrieved: e.lastRetrieved });

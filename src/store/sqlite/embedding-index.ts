@@ -3,7 +3,12 @@
 import { randomUUID } from 'node:crypto';
 import { closeHippoDb } from '../../db/index.js';
 import { listEveryTenantEntryIds } from './entry-reads.js';
-import type { EmbeddingIndex, IndexStep, IndexStepAnswers, IndexStepKind } from '../../base/ports/store/vectors.js';
+import type {
+  EmbeddingIndex,
+  IndexStep,
+  IndexStepAnswers,
+  IndexStepKind,
+} from '../../base/ports/store/vectors.js';
 import {
   type VectorRebuild,
   beginVectorRebuild,
@@ -47,7 +52,9 @@ interface Session {
   rebuild: VectorRebuild | null;
 }
 
-type Steps = { readonly [K in IndexStepKind]: (session: Session, step: IndexStep<K>) => IndexStepAnswers[K] };
+type Steps = {
+  readonly [K in IndexStepKind]: (session: Session, step: IndexStep<K>) => IndexStepAnswers[K];
+};
 
 function rebuildOf(session: Session): VectorRebuild {
   if (session.rebuild === null) throw new Error('no vector rebuild is open on this session');
@@ -72,7 +79,8 @@ function rebuildSteps(
       return session.token !== null;
     },
     begin: (session) => {
-      if (session.rebuild !== null) throw new Error('a vector rebuild is already open on this session');
+      if (session.rebuild !== null)
+        throw new Error('a vector rebuild is already open on this session');
       session.rebuild = beginRebuild(open);
     },
     stage: (session, { rows }) => rebuildOf(session).stage(rows),

@@ -16,11 +16,14 @@ const savedCwd = process.cwd();
 /** `hippo recall <query> --json` in this process, with the empty recall rings a fresh `hippo` starts with. */
 async function runRecall(query: string, sessionId: string): Promise<void> {
   vi.stubEnv('HIPPO_SESSION_ID', sessionId);
-  const res = await runInProcess(() => runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000']));
+  const res = await runInProcess(() =>
+    runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000']),
+  );
   expect(res.status, res.stderr).toBe(0);
 }
 
-const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
+const ctx = (root: string): FullContext =>
+  apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
 
 describe('goal_recall_log captured from CLI recall', () => {
   let env: TestEnv;
@@ -57,7 +60,9 @@ describe('goal_recall_log captured from CLI recall', () => {
     try {
       // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
       // by the `SELECT goal_id, memory_id` projection above.
-      const rows = db.prepare(`SELECT goal_id, memory_id FROM goal_recall_log WHERE goal_id = ?`).all(g.id) as Array<{
+      const rows = db
+        .prepare(`SELECT goal_id, memory_id FROM goal_recall_log WHERE goal_id = ?`)
+        .all(g.id) as Array<{
         goal_id: string;
         memory_id: string;
       }>;

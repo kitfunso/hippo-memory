@@ -9,7 +9,8 @@ const ownerOf = new WeakMap();
 const trace = { busy: [], sleeps: [] };
 
 function noteBusy(db, sql, error) {
-  if (SQLITE_BUSY_CODES.has(error?.errcode)) trace.busy.push({ sql, waitMs: timeoutOf.get(db) ?? 0 });
+  if (SQLITE_BUSY_CODES.has(error?.errcode))
+    trace.busy.push({ sql, waitMs: timeoutOf.get(db) ?? 0 });
 }
 
 const exec = DatabaseSync.prototype.exec;
@@ -54,5 +55,6 @@ Atomics.wait = function tracedWait(array, index, value, ms) {
 process.on('exit', () => {
   const dir = process.env.LOCK_WAIT_TRACE_DIR;
   // A worker that outlives its test finds the scratch folder gone.
-  if (dir && fs.existsSync(dir)) fs.writeFileSync(path.join(dir, `${process.pid}.json`), JSON.stringify(trace));
+  if (dir && fs.existsSync(dir))
+    fs.writeFileSync(path.join(dir, `${process.pid}.json`), JSON.stringify(trace));
 });

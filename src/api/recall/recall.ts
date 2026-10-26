@@ -30,7 +30,13 @@ import {
   type RecallPlan,
   type RecallReads,
 } from './compose.js';
-import { rankCtxOf, rankRecall, withMissing, type RankRecallOptions, type RankRecallResult } from './pipeline.js';
+import {
+  rankCtxOf,
+  rankRecall,
+  withMissing,
+  type RankRecallOptions,
+  type RankRecallResult,
+} from './pipeline.js';
 import { POSITION_BAND, BAND_RANKED } from './profiles.js';
 import type { ActiveGoals, ContinuityKey } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
@@ -47,8 +53,17 @@ export async function retrieve(ctx: Context, opts: RecallOptions): Promise<Recal
   const personalScope = personalScopeOf(ctx.actor) ?? undefined;
   const recordAs = opts.trace?.recordAs;
   if (!recordAs) return recallFromWindow(ctx, opts, windowSize, personalScope);
-  const { recallHistory, leadingAudit } = recallLead(ctx, recordAs, opts.query, opts.boost?.sessionId);
-  const withLead = { ...opts, hints: { ...opts.hints, recallHistory }, trace: { ...opts.trace, leadingAudit } };
+  const { recallHistory, leadingAudit } = recallLead(
+    ctx,
+    recordAs,
+    opts.query,
+    opts.boost?.sessionId,
+  );
+  const withLead = {
+    ...opts,
+    hints: { ...opts.hints, recallHistory },
+    trace: { ...opts.trace, leadingAudit },
+  };
   const result = await recallFromWindow(ctx, withLead, windowSize, personalScope);
   await recordShownRecall(ctx, ctx.store, recordAs, returnedList(opts, result));
   return result;
@@ -57,11 +72,19 @@ export async function retrieve(ctx: Context, opts: RecallOptions): Promise<Recal
 /** Ranks under BAND_RANKED, hands the ranking to `show`, and audits, strengthens and traces the ids `show` returns;
  * `results` stays the top window of that ranking. Under `recordAs`, `show` judges the hints, so only the shown list is
  * recorded. */
-export async function retrieveRanking(ctx: Context, opts: RecallOptions, show: ShowRanking): Promise<RecallResult> {
+export async function retrieveRanking(
+  ctx: Context,
+  opts: RecallOptions,
+  show: ShowRanking,
+): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.filter?.scope);
   const windowSize = recallWindowSize(ctx, opts.window);
   const personalScope = personalScopeOf(ctx.actor) ?? undefined;
-  const ranking = await rankRecall(rankCtxOf(ctx), rankRequestOf(ctx, opts, windowSize, personalScope), BAND_RANKED);
+  const ranking = await rankRecall(
+    rankCtxOf(ctx),
+    rankRequestOf(ctx, opts, windowSize, personalScope),
+    BAND_RANKED,
+  );
   const window = ranking.results.slice(0, windowSize).map((r) => r.entry);
   // The caller traces and audits the rows it shows, so the window writes neither.
   const windowOpts = { ...opts, trace: { ...opts.trace, suppressRecallTrace: true } };
@@ -115,7 +138,11 @@ async function recallFromWindow(
   windowSize: number,
   personalScope: string | undefined,
 ): Promise<RecallResult> {
-  const ranking = await rankRecall(rankCtxOf(ctx), rankRequestOf(ctx, opts, windowSize, personalScope), POSITION_BAND);
+  const ranking = await rankRecall(
+    rankCtxOf(ctx),
+    rankRequestOf(ctx, opts, windowSize, personalScope),
+    POSITION_BAND,
+  );
   const candidates = ranking.results.map((r) => r.entry);
   const plan = planRecall(ctx, opts, candidates, personalScope, POSITION_BAND);
   const reads = await readRecall(ctx, opts, plan, ranking.goals);
@@ -211,9 +238,19 @@ async function finishShownRecall(
   return shown;
 }
 
-function shownAuditAndTrace(ctx: Context, opts: RecallOptions, shownIds: readonly string[], ranked: SearchResult[]) {
+function shownAuditAndTrace(
+  ctx: Context,
+  opts: RecallOptions,
+  shownIds: readonly string[],
+  ranked: SearchResult[],
+) {
   const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));
-  const shownRow = recallAuditRow(callerOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, shownIds.length));
+  const shownRow = recallAuditRow(
+    callerOf(ctx),
+    'recall',
+    undefined,
+    recallAuditMetadata(opts.query, shownIds.length),
+  );
   const trace = opts.trace?.suppressRecallTrace
     ? undefined
     : {
@@ -269,10 +306,19 @@ async function readRecall(
     parents: parentIds ? await store.entriesByIds(parentIds, tenantId) : [],
     freshRaws:
       freshCount > 0
-        ? await store.freshRawEntries(freshCount, tenantId, freshTailSessionId, recallOrigin(opts) ?? null)
+        ? await store.freshRawEntries(
+            freshCount,
+            tenantId,
+            freshTailSessionId,
+            recallOrigin(opts) ?? null,
+          )
         : [],
-    continuity: continuity ? await store.continuity(tenantId, CONTINUITY_EVENT_LIMIT, continuity.key) : undefined,
-    planning: plan.claim ? await store.planningFallacyEvidence(tenantId, plan.claim.classQueryTokens) : null,
+    continuity: continuity
+      ? await store.continuity(tenantId, CONTINUITY_EVENT_LIMIT, continuity.key)
+      : undefined,
+    planning: plan.claim
+      ? await store.planningFallacyEvidence(tenantId, plan.claim.classQueryTokens)
+      : null,
   };
 }
 

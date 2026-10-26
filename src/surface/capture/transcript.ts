@@ -2,7 +2,11 @@ import { claudeConfigDir, claudeHomeIsSet } from '../../base/util/agent-homes.js
 import { processHomes } from '../../host/agent-homes.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { isObjectLike, isStringValue, readSessionEnd } from '../../base/session/capture-contract.js';
+import {
+  isObjectLike,
+  isStringValue,
+  readSessionEnd,
+} from '../../base/session/capture-contract.js';
 import { copilotTurn } from './copilot-transcript.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { tryParseJson } from '../../base/util/json.js';
@@ -15,7 +19,12 @@ const RECENT_ASSISTANT_TURNS = 10;
  * final assistant text chunk, without thinking, tool_use and tool_result noise. Exported for tests. */
 
 /** Leading markers of the command lines Claude Code writes with type 'user'. */
-const CLAUDE_CODE_COMMAND_PREFIXES = ['<local-command-', '<command-name>', '<command-message>', '<command-args>'];
+const CLAUDE_CODE_COMMAND_PREFIXES = [
+  '<local-command-',
+  '<command-name>',
+  '<command-message>',
+  '<command-args>',
+];
 
 /**
  * Transcript-line flags isNonHumanUserLine reads (any may be absent); `promptSource: 'system'` marks Claude Code's own
@@ -63,8 +72,13 @@ export function humanUserText(entry: TranscriptLineFlags, message: TranscriptMes
     const parts: string[] = [];
     for (const block of content) {
       const blockText =
-        isObjectLike(block) && 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
-      if (isStringValue(blockText) && !NON_HUMAN_BLOCK_PREFIXES.some((p) => blockText.trimStart().startsWith(p))) {
+        isObjectLike(block) && 'type' in block && block.type === 'text' && 'text' in block
+          ? block.text
+          : undefined;
+      if (
+        isStringValue(blockText) &&
+        !NON_HUMAN_BLOCK_PREFIXES.some((p) => blockText.trimStart().startsWith(p))
+      ) {
         parts.push(blockText);
       }
     }
@@ -85,7 +99,10 @@ export interface TranscriptRecord extends TranscriptLineFlags {
   cwd?: unknown;
 }
 
-export function collectSessionTurns(jsonl: string, visit?: (record: TranscriptRecord) => void): SessionTurn[] {
+export function collectSessionTurns(
+  jsonl: string,
+  visit?: (record: TranscriptRecord) => void,
+): SessionTurn[] {
   const lines = jsonl.split('\n').filter((l) => l.trim());
   const turns: SessionTurn[] = [];
 
@@ -121,7 +138,8 @@ function claudeCodeTurn(entry: TranscriptRecord): SessionTurn | null {
   const chunks: string[] = [];
   for (const block of content) {
     if (isObjectLike(block)) {
-      const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
+      const blockText =
+        'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
       if (isStringValue(blockText) && blockText.trim()) {
         chunks.push(blockText.trim());
       }
@@ -132,7 +150,8 @@ function claudeCodeTurn(entry: TranscriptRecord): SessionTurn | null {
 
 // Codex stores its own context as user messages: the AGENTS.md text, and one tagged block each for the environment and
 // app state.
-const CODEX_INJECTED_USER_TEXT = /^(?:# AGENTS\.md instructions\b|<([A-Za-z][\w-]*)(?:\s[^>]*)?>[\s\S]*<\/\1>$)/;
+const CODEX_INJECTED_USER_TEXT =
+  /^(?:# AGENTS\.md instructions\b|<([A-Za-z][\w-]*)(?:\s[^>]*)?>[\s\S]*<\/\1>$)/;
 
 // Codex rollout transcript shape: response_item -> payload.message
 function codexTurn(entry: TranscriptRecord): SessionTurn | null {
@@ -157,7 +176,12 @@ function codexTurn(entry: TranscriptRecord): SessionTurn | null {
     ) {
       chunks.push(blockText.trim());
     }
-    if (role === 'assistant' && blockType === 'output_text' && isStringValue(blockText) && blockText.trim()) {
+    if (
+      role === 'assistant' &&
+      blockType === 'output_text' &&
+      isStringValue(blockText) &&
+      blockText.trim()
+    ) {
       chunks.push(blockText.trim());
     }
   }
@@ -235,7 +259,10 @@ export function resolveLastSessionTranscript(
   try {
     entries = fs.readdirSync(projectsDir);
   } catch (err) {
-    log.debug(`transcript scan: cannot list ${projectsDir}: ${errorMessage(err)}`, errorFields(err));
+    log.debug(
+      `transcript scan: cannot list ${projectsDir}: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return null; // an unlistable projects dir means no transcript to find; the caller prints that
   }
   for (const entry of entries) {

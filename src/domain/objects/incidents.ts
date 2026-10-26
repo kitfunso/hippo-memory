@@ -14,7 +14,12 @@ import {
   type IncidentStatus,
   type ObjectRefusal,
 } from '../../base/records/object-types.js';
-import type { IncidentOpen, IncidentOpenRefusal, IncidentResolve, Objects } from '../../base/ports/store.js';
+import type {
+  IncidentOpen,
+  IncidentOpenRefusal,
+  IncidentResolve,
+  Objects,
+} from '../../base/ports/store.js';
 
 export type { Incident, IncidentStatus } from '../../base/records/object-types.js';
 
@@ -56,7 +61,13 @@ function incidentOpen(
   const incidentText = requireText(opts.incidentText, MAX_SHORT_FIELD_LEN, 'incidentText');
   const at = now.toISOString();
   const content = opts.context ? `${incidentText}\n\nContext: ${opts.context}` : incidentText;
-  const mirror = objectMirror(baseHalfLifeDays, tenantId, 'incident', { content, tags: opts.extraTags ?? [] }, now);
+  const mirror = objectMirror(
+    baseHalfLifeDays,
+    tenantId,
+    'incident',
+    { content, tags: opts.extraTags ?? [] },
+    now,
+  );
   const fields = {
     incidentText,
     context: opts.context ?? undefined,
@@ -88,7 +99,12 @@ export async function openIncident(
   return opened(tenantId, await objects.saveObject(tenantId, 'incident', open));
 }
 
-function resolving(tenantId: string, resolutionText: string, actor: string, now: Date): IncidentResolve {
+function resolving(
+  tenantId: string,
+  resolutionText: string,
+  actor: string,
+  now: Date,
+): IncidentResolve {
   assertTenantId('resolveOpenIncident', tenantId);
   const text = requireText(resolutionText, MAX_SHORT_FIELD_LEN, 'resolutionText');
   return { text, actor, at: now.toISOString() };
@@ -99,7 +115,8 @@ function resolved(tenantId: string, id: number, written: Incident | ObjectRefusa
   if (written.refused === 'missing') {
     throw new NotFoundError(`incident ${id} not found for tenant ${tenantId}`);
   }
-  if (written.refused !== 'status') throw new NotFoundError(`incident ${id} not found after UPDATE`);
+  if (written.refused !== 'status')
+    throw new NotFoundError(`incident ${id} not found after UPDATE`);
   throw new ConflictError(
     `incident ${id} is not open (status='${written.status}'); only open incidents can be resolved.`,
   );
@@ -117,6 +134,11 @@ export async function resolveOpenIncident(
   return resolved(
     tenantId,
     id,
-    await objects.closeObject(tenantId, 'incident', id, resolving(tenantId, resolutionText, by.actor, by.now)),
+    await objects.closeObject(
+      tenantId,
+      'incident',
+      id,
+      resolving(tenantId, resolutionText, by.actor, by.now),
+    ),
   );
 }

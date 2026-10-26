@@ -101,7 +101,9 @@ describe('copyToGlobal', () => {
     expect(promoted.content).toBe('tenant-a content');
 
     // Promoting tenant-a's entry as tenant-b throws: promote's tenant pre-check answers not found.
-    await expect(copyToGlobal(localRoot, a.id, { tenantId: 'tenant-b' })).rejects.toThrow(/memory not found/);
+    await expect(copyToGlobal(localRoot, a.id, { tenantId: 'tenant-b' })).rejects.toThrow(
+      /memory not found/,
+    );
   });
 });
 
@@ -128,7 +130,9 @@ describe('syncGlobalToLocal', () => {
     writeEntry(globalRoot, entry1);
     writeEntry(globalRoot, entry2);
 
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), {
+      embed: TEST_RUN,
+    });
     expect(count).toBe(2);
 
     const localEntries = loadAllEntries(localRoot, 'default');
@@ -142,13 +146,17 @@ describe('syncGlobalToLocal', () => {
     writeEntry(globalRoot, entry);
     writeEntry(localRoot, entry); // already exists
 
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), {
+      embed: TEST_RUN,
+    });
     expect(count).toBe(0);
   });
 
   it('returns 0 when global store does not exist', async () => {
     const nonexistent = path.join(os.tmpdir(), 'hippo-no-global-' + Date.now());
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, nonexistent), { embed: TEST_RUN });
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, nonexistent), {
+      embed: TEST_RUN,
+    });
     expect(count).toBe(0);
   });
 });

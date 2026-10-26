@@ -32,7 +32,9 @@ let root: string;
 
 function liveIds(n: number): string[] {
   return Array.from({ length: n }, (_, i) => {
-    const entry = createMemory(`status vector memory ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const entry = createMemory(`status vector memory ${i}`, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     writeEntry(root, entry);
     return entry.id;
   });
@@ -105,7 +107,9 @@ describe('hippo status embedding lines', () => {
       ],
       'm',
     );
-    const lines = (await status()).filter((l) => l.startsWith('Embedded:') || l.includes('model changed'));
+    const lines = (await status()).filter(
+      (l) => l.startsWith('Embedded:') || l.includes('model changed'),
+    );
     expect(lines).toEqual([
       'Embedded:          2/3 memories (4-dim) (1 orphaned, run `hippo embed` to prune)',
       '                   model changed, run `hippo embed` to reindex',
@@ -144,7 +148,10 @@ describe('hippo status embedding lines', () => {
 
 // A provider with no key prints one fixed line, where the local one depends on an optional install.
 function useKeylessProvider(): void {
-  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai' } }));
+  fs.writeFileSync(
+    path.join(root, 'config.json'),
+    JSON.stringify({ embeddings: { provider: 'openai' } }),
+  );
 }
 
 let seq = 0;
@@ -174,7 +181,12 @@ async function seedEveryCaseIn(): Promise<void> {
   row(daysAgo(30), { layer: Layer.Semantic, confidence: 'inferred' });
   row(daysAgo(10), { layer: Layer.Trace, confidence: 'stale', halfLifeDays: 2 });
   row(daysAgo(400), { pinned: true });
-  row(daysAgo(1), { layer: Layer.Semantic, confidence: 'verified', pinned: true, outcomeNegative: 3 });
+  row(daysAgo(1), {
+    layer: Layer.Semantic,
+    confidence: 'verified',
+    pinned: true,
+    outcomeNegative: 3,
+  });
   row('not-a-date', { confidence: 'inferred' });
   // JavaScript reads this date and SQLite's julianday does not, so only a JavaScript tally scores the row.
   row('Wed, 01 Apr 2026 00:00:00 GMT');
@@ -281,7 +293,8 @@ describe('reports.statusCounts', () => {
     await seedEveryCase();
     // Written weakest first and created strongest first: a sum over rows in any other order than loadAllEntries' ends on other last bits.
     withRequestStoresSync(() => {
-      for (let i = 0; i < 40; i++) row(daysAgo(20), { created: daysAgo(900 - i), halfLifeDays: 0.5 * 1.18 ** i });
+      for (let i = 0; i < 40; i++)
+        row(daysAgo(20), { created: daysAgo(900 - i), halfLifeDays: 0.5 * 1.18 ** i });
     });
     const now = new Date(NOW);
     const entries = loadEveryTenantEntries(root);

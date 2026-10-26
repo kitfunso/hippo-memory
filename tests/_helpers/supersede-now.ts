@@ -45,12 +45,18 @@ export async function stageSupersedeWinner(
         `${sqlText(ctx.tenantId)}, ${sqlText(ctx.actor.subject)}, 'supersede', ${sqlText(oldId)}, ${sqlText(audit)})`,
     ],
   );
-  const committed = winner.committed.finally(() => rmSync(scratch, { recursive: true, force: true }));
+  const committed = winner.committed.finally(() =>
+    rmSync(scratch, { recursive: true, force: true }),
+  );
   return { committed, successorId: successor.id };
 }
 
 /** api.supersede's read and write on hippo.db, run to its commit before it returns; answers the successor's id. */
-export async function supersedeNow(ctx: RootedContext, oldId: string, newContent: string): Promise<string> {
+export async function supersedeNow(
+  ctx: RootedContext,
+  oldId: string,
+  newContent: string,
+): Promise<string> {
   const [old] = loadEntriesByIds(ctx.hippoRoot, [oldId], ctx.tenantId);
   if (!old) throw new Error(`no row ${oldId} in tenant ${ctx.tenantId} to supersede`);
   const successor = createSuccessor(

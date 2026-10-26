@@ -117,27 +117,42 @@ const keptCases: readonly PlanCase[] = [
   },
   {
     name: 'collapses two tagged rows with the item hash into the one created later',
-    setup: { items: [note('k', 'new')], live: [tagged('r1', 'k', 'new', DAY2), tagged('r2', 'k', 'new', DAY1)] },
+    setup: {
+      items: [note('k', 'new')],
+      live: [tagged('r1', 'k', 'new', DAY2), tagged('r2', 'k', 'new', DAY1)],
+    },
     want: { collapse: [{ id: 'r2', by: 'r1' }] },
   },
   {
     name: 'breaks a created tie between tagged rows by the larger id',
-    setup: { items: [note('k', 'new')], live: [tagged('r1', 'k', 'new'), tagged('r2', 'k', 'new')] },
+    setup: {
+      items: [note('k', 'new')],
+      live: [tagged('r1', 'k', 'new'), tagged('r2', 'k', 'new')],
+    },
     want: { collapse: [{ id: 'r1', by: 'r2' }] },
   },
   {
     name: 'collapses a newer tagged row with an old hash into the row that matches',
-    setup: { items: [note('k', 'new')], live: [tagged('r1', 'k', 'new', DAY1), tagged('r2', 'k', 'old', DAY3)] },
+    setup: {
+      items: [note('k', 'new')],
+      live: [tagged('r1', 'k', 'new', DAY1), tagged('r2', 'k', 'old', DAY3)],
+    },
     want: { collapse: [{ id: 'r2', by: 'r1' }] },
   },
   {
     name: 'prefers a tagged match over a newer untagged match and leaves the untagged one alone',
-    setup: { items: [note('k', 'new')], live: [tagged('r1', 'k', 'new', DAY1), untagged('r2', 'k', 'new', DAY2)] },
+    setup: {
+      items: [note('k', 'new')],
+      live: [tagged('r1', 'k', 'new', DAY1), untagged('r2', 'k', 'new', DAY2)],
+    },
     want: { unchanged: 1 },
   },
   {
     name: 'leaves a restored untagged row with an old hash alone while the tagged row stays unchanged',
-    setup: { items: [note('k', 'new')], live: [tagged('r1', 'k', 'new'), untagged('r2', 'k', 'old', DAY2)] },
+    setup: {
+      items: [note('k', 'new')],
+      live: [tagged('r1', 'k', 'new'), untagged('r2', 'k', 'old', DAY2)],
+    },
     want: { unchanged: 1 },
   },
   {
@@ -149,7 +164,11 @@ const keptCases: readonly PlanCase[] = [
     name: 'retags the untagged match, collapses tagged rows into it and leaves other untagged rows',
     setup: {
       items: [note('k', 'new')],
-      live: [untagged('r1', 'k', 'new'), tagged('r2', 'k', 'old', DAY2), untagged('r3', 'k', 'older')],
+      live: [
+        untagged('r1', 'k', 'new'),
+        tagged('r2', 'k', 'old', DAY2),
+        untagged('r3', 'k', 'older'),
+      ],
     },
     want: { retag: ['r1'], collapse: [{ id: 'r2', by: 'r1' }] },
   },
@@ -179,13 +198,21 @@ const changedCases: readonly PlanCase[] = [
   },
   {
     name: 'adds the legacy rows of the key to what the new row supersedes',
-    setup: { items: [note('k', 'new')], live: [tagged('r1', 'k', 'old')], legacy: new Map([['k', ['L1']]]) },
+    setup: {
+      items: [note('k', 'new')],
+      live: [tagged('r1', 'k', 'old')],
+      legacy: new Map([['k', ['L1']]]),
+    },
     want: { writes: [{ key: 'k', hash: 'new', supersedes: ['L1', 'r1'] }] },
     asked: ['k'],
   },
   {
     name: 'writes rather than restores while a live row exists, even if a snapshot has the hash',
-    setup: { items: [note('k', 'new')], live: [tagged('r1', 'k', 'old')], dormant: [snapshot('s1', 'k', 'new')] },
+    setup: {
+      items: [note('k', 'new')],
+      live: [tagged('r1', 'k', 'old')],
+      dormant: [snapshot('s1', 'k', 'new')],
+    },
     want: { writes: [{ key: 'k', hash: 'new', supersedes: ['r1'] }] },
     asked: ['k'],
   },
@@ -199,17 +226,26 @@ const freshCases: readonly PlanCase[] = [
   },
   {
     name: 'restores the matching snapshot set aside most recently',
-    setup: { items: [note('k', 'new')], dormant: [snapshot('s1', 'k', 'new', DAY2), snapshot('s2', 'k', 'new', DAY1)] },
+    setup: {
+      items: [note('k', 'new')],
+      dormant: [snapshot('s1', 'k', 'new', DAY2), snapshot('s2', 'k', 'new', DAY1)],
+    },
     want: { restores: [{ key: 'k', dormantId: 's1' }] },
   },
   {
     name: 'breaks a dormant time tie by the larger id',
-    setup: { items: [note('k', 'new')], dormant: [snapshot('s1', 'k', 'new'), snapshot('s2', 'k', 'new')] },
+    setup: {
+      items: [note('k', 'new')],
+      dormant: [snapshot('s1', 'k', 'new'), snapshot('s2', 'k', 'new')],
+    },
     want: { restores: [{ key: 'k', dormantId: 's2' }] },
   },
   {
     name: 'passes over a newer snapshot with another hash to restore the matching one',
-    setup: { items: [note('k', 'new')], dormant: [snapshot('s1', 'k', 'new', DAY1), snapshot('s2', 'k', 'old', DAY3)] },
+    setup: {
+      items: [note('k', 'new')],
+      dormant: [snapshot('s1', 'k', 'new', DAY1), snapshot('s2', 'k', 'old', DAY3)],
+    },
     want: { restores: [{ key: 'k', dormantId: 's1' }] },
   },
   {
@@ -263,7 +299,9 @@ const absentCases: readonly PlanCase[] = [
   },
   {
     name: 'gone: sets aside every tagged row and leaves the untagged ones',
-    setup: { live: [tagged('r1', 'k', 'old'), tagged('r2', 'k', 'new'), untagged('r3', 'k', 'old')] },
+    setup: {
+      live: [tagged('r1', 'k', 'old'), tagged('r2', 'k', 'new'), untagged('r3', 'k', 'old')],
+    },
     want: { setAside: ['r1', 'r2'] },
   },
   {
@@ -275,7 +313,11 @@ const absentCases: readonly PlanCase[] = [
 const duplicateCases: readonly PlanCase[] = [
   {
     name: 'a duplicate with live rows writes nothing, sets aside the tagged rows and is counted',
-    setup: { items: [note('k', 'new')], live: [tagged('r1', 'k', 'old'), untagged('r2', 'k', 'older')], dupes: ['k'] },
+    setup: {
+      items: [note('k', 'new')],
+      live: [tagged('r1', 'k', 'old'), untagged('r2', 'k', 'older')],
+      dupes: ['k'],
+    },
     want: { setAside: ['r1'], duplicates: 1 },
     asked: ['k'],
   },
@@ -340,13 +382,21 @@ const editCases: readonly PlanCase[] = [
   },
   {
     name: 'two gone keys and one new key give set-asides and a plain write',
-    setup: { textKeyed: true, items: [note(NEW, 'hb')], live: [tagged('g1', OLD, 'ha'), tagged('g2', OLD_TOO, 'hc')] },
+    setup: {
+      textKeyed: true,
+      items: [note(NEW, 'hb')],
+      live: [tagged('g1', OLD, 'ha'), tagged('g2', OLD_TOO, 'hc')],
+    },
     want: { setAside: ['g1', 'g2'], writes: [{ key: NEW, hash: 'hb', supersedes: [] }] },
     asked: [NEW],
   },
   {
     name: 'one gone key and two new keys give a set-aside and plain writes',
-    setup: { textKeyed: true, items: [note(NEW, 'hb'), note(NEW_TOO, 'hf')], live: [tagged('g1', OLD, 'ha')] },
+    setup: {
+      textKeyed: true,
+      items: [note(NEW, 'hb'), note(NEW_TOO, 'hf')],
+      live: [tagged('g1', OLD, 'ha')],
+    },
     want: {
       setAside: ['g1'],
       writes: [
@@ -380,7 +430,12 @@ const editCases: readonly PlanCase[] = [
   },
   {
     name: 'a new key whose text is already stored is not an edit',
-    setup: { textKeyed: true, items: [note(NEW, 'hb')], live: [tagged('g1', OLD, 'ha')], dupes: [NEW] },
+    setup: {
+      textKeyed: true,
+      items: [note(NEW, 'hb')],
+      live: [tagged('g1', OLD, 'ha')],
+      dupes: [NEW],
+    },
     want: { setAside: ['g1'], duplicates: 1 },
     asked: [NEW],
   },
@@ -459,7 +514,13 @@ describe('planContainer: whole container', () => {
     check({
       name: 'mixed',
       setup: {
-        items: [note('a', 'a1'), note('b', 'b2'), note('e', 'e1'), refusedNote('f', 'f1'), note('g', 'g1')],
+        items: [
+          note('a', 'a1'),
+          note('b', 'b2'),
+          note('e', 'e1'),
+          refusedNote('f', 'f1'),
+          note('g', 'g1'),
+        ],
         skipped: ['d'],
         live: [
           tagged('a1', 'a', 'a1'),
@@ -491,10 +552,16 @@ describe('planContainer: one key across syncs', () => {
     const first = run({ items: [note('k', 'hA')] });
     expect(first.plan).toEqual({ ...EMPTY, writes: [{ key: 'k', hash: 'hA', supersedes: [] }] });
     const second = run({ items: [note('k', 'hB')], live: [tagged('w1', 'k', 'hA', DAY1)] });
-    expect(second.plan).toEqual({ ...EMPTY, writes: [{ key: 'k', hash: 'hB', supersedes: ['w1'] }] });
+    expect(second.plan).toEqual({
+      ...EMPTY,
+      writes: [{ key: 'k', hash: 'hB', supersedes: ['w1'] }],
+    });
     // w1 was superseded by the second write, so only w2 is live for the third call.
     const third = run({ items: [note('k', 'hA')], live: [tagged('w2', 'k', 'hB', DAY2)] });
-    expect(third.plan).toEqual({ ...EMPTY, writes: [{ key: 'k', hash: 'hA', supersedes: ['w2'] }] });
+    expect(third.plan).toEqual({
+      ...EMPTY,
+      writes: [{ key: 'k', hash: 'hA', supersedes: ['w2'] }],
+    });
     expect([first.asked, second.asked, third.asked]).toEqual([['k'], ['k'], ['k']]);
   });
 
@@ -502,7 +569,10 @@ describe('planContainer: one key across syncs', () => {
     const deleted = run({ live: [tagged('w1', 'k', 'hA')] });
     expect(deleted).toEqual({ plan: { ...EMPTY, setAside: ['w1'] }, asked: [] });
     const back = run({ items: [note('k', 'hA')], dormant: [snapshot('w1', 'k', 'hA', DAY2)] });
-    expect(back).toEqual({ plan: { ...EMPTY, restores: [{ key: 'k', dormantId: 'w1' }] }, asked: [] });
+    expect(back).toEqual({
+      plan: { ...EMPTY, restores: [{ key: 'k', dormantId: 'w1' }] },
+      asked: [],
+    });
   });
 
   it('keeps a restored row unchanged on the next sync', () => {
@@ -512,7 +582,11 @@ describe('planContainer: one key across syncs', () => {
 });
 
 const legacyRow = (id: string, file: string, textKey: string): LegacyRow => ({ id, file, textKey });
-const target = (ref: string, file: string, textKey: string): LegacyTarget => ({ ref, file, textKey });
+const target = (ref: string, file: string, textKey: string): LegacyTarget => ({
+  ref,
+  file,
+  textKey,
+});
 
 interface LegacyCase {
   readonly name: string;
@@ -600,7 +674,8 @@ const legacyCases: readonly LegacyCase[] = [
   },
 ];
 
-const byFirst = (pairs: Iterable<readonly [string, string]>) => [...pairs].sort((a, b) => a[0].localeCompare(b[0]));
+const byFirst = (pairs: Iterable<readonly [string, string]>) =>
+  [...pairs].sort((a, b) => a[0].localeCompare(b[0]));
 
 describe('matchLegacy', () => {
   it.each(legacyCases)('$name', (c) => {

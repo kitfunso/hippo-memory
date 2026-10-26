@@ -8,7 +8,8 @@ import { getHippoDbPath } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const built = (file: string): string => JSON.stringify(pathToFileURL(resolve(REPO_ROOT, 'dist', file)).href);
+const built = (file: string): string =>
+  JSON.stringify(pathToFileURL(resolve(REPO_ROOT, 'dist', file)).href);
 
 describe('process.exit inside the root store runtime', () => {
   it('runs the held mirror write and closes the open request handle', () => {
@@ -31,7 +32,10 @@ describe('process.exit inside the root store runtime', () => {
       encoding: 'utf-8',
       timeout: 30_000,
     });
-    expect(child.stdout.trim(), `run \`npm run build\` first if the import failed:\n${child.stderr}`).toBe('exiting');
+    expect(
+      child.stdout.trim(),
+      `run \`npm run build\` first if the import failed:\n${child.stderr}`,
+    ).toBe('exiting');
     expect(child.status).toBe(0);
     expect(readFileSync(marker, 'utf8')).toBe('flushed');
     // SQLite removes the WAL when the last connection closes cleanly, so its absence shows the handle was closed.

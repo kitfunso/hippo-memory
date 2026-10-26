@@ -35,6 +35,8 @@ export const v23: Migration = {
     if (tableExists(db, 'session_handoffs')) {
       db.exec(`UPDATE session_handoffs SET scope = 'unknown:legacy' WHERE scope IS NULL`);
     }
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_scope ON task_snapshots(tenant_id, scope, status)`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_scope ON task_snapshots(tenant_id, scope, status)`,
+    );
   },
 };

@@ -19,7 +19,10 @@ import { saveActiveTaskSnapshot, saveSessionHandoff } from '../_helpers/root-for
 
 const OWNER_TABLES = ['task_snapshots', 'session_handoffs', 'failure_log'] as const;
 const OWNER_INDEXES = ['idx_task_snapshots_owner', 'idx_session_handoffs_owner'] as const;
-const REQUEST_INDEXES = { compactions: 'idx_compactions_request', failure_log: 'idx_failure_log_request' } as const;
+const REQUEST_INDEXES = {
+  compactions: 'idx_compactions_request',
+  failure_log: 'idx_failure_log_request',
+} as const;
 
 let home: string;
 
@@ -34,7 +37,9 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 
 function meta(db: DatabaseSyncLike, key: string): string | undefined {
   // SAFETY: the meta table's value column is TEXT; one row by primary key.
-  return (db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined)?.value;
+  return (
+    db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined
+  )?.value;
 }
 
 function indexSql(db: DatabaseSyncLike, name: string): string | undefined {
@@ -49,11 +54,14 @@ function indexSql(db: DatabaseSyncLike, name: string): string | undefined {
 /** Puts the store back to its v53 shape, keeping every row, with the floor at `floor`; `alsoRun` changes it further before the close. */
 function rewindToV53(floor: string, alsoRun?: (db: DatabaseSyncLike) => void): void {
   withDb((db) => {
-    for (const idx of [...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]) db.exec(`DROP INDEX IF EXISTS ${idx}`);
+    for (const idx of [...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)])
+      db.exec(`DROP INDEX IF EXISTS ${idx}`);
     for (const t of OWNER_TABLES) {
-      for (const c of ['owner_subject', 'origin_project']) db.exec(`ALTER TABLE ${t} DROP COLUMN ${c}`);
+      for (const c of ['owner_subject', 'origin_project'])
+        db.exec(`ALTER TABLE ${t} DROP COLUMN ${c}`);
     }
-    for (const t of Object.keys(REQUEST_INDEXES)) db.exec(`ALTER TABLE ${t} DROP COLUMN request_id`);
+    for (const t of Object.keys(REQUEST_INDEXES))
+      db.exec(`ALTER TABLE ${t} DROP COLUMN request_id`);
     db.exec('DROP TABLE session_owners');
     db.prepare(`UPDATE meta SET value = '53' WHERE key = 'schema_version'`).run();
     db.prepare(`UPDATE meta SET value = ? WHERE key = 'min_compatible_binary'`).run(floor);
@@ -75,7 +83,9 @@ describe('schema v54', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       for (const t of OWNER_TABLES) {
-        expect([...tableColumns(db, t)]).toEqual(expect.arrayContaining(['owner_subject', 'origin_project']));
+        expect([...tableColumns(db, t)]).toEqual(
+          expect.arrayContaining(['owner_subject', 'origin_project']),
+        );
       }
       expect([...tableColumns(db, 'session_owners')].sort()).toEqual([
         'created_at',
@@ -91,7 +101,9 @@ describe('schema v54', () => {
       );
       for (const [t, idx] of Object.entries(REQUEST_INDEXES)) {
         expect(tableColumns(db, t).has('request_id')).toBe(true);
-        expect(indexSql(db, idx)).toMatch(/UNIQUE INDEX .*\(tenant_id, request_id\) WHERE request_id IS NOT NULL/);
+        expect(indexSql(db, idx)).toMatch(
+          /UNIQUE INDEX .*\(tenant_id, request_id\) WHERE request_id IS NOT NULL/,
+        );
       }
     });
   });
@@ -103,7 +115,12 @@ describe('schema v54', () => {
       nextStep: 'test',
       sessionId: 's1',
     });
-    saveSessionHandoff(home, 'default', { version: 1, sessionId: 's1', summary: 'half done', nextAction: 'finish' });
+    saveSessionHandoff(home, 'default', {
+      version: 1,
+      sessionId: 's1',
+      summary: 'half done',
+      nextAction: 'finish',
+    });
     await sqliteStore(home).failureLog.record({
       tenantId: 'default',
       sessionId: 's1',
@@ -115,13 +132,17 @@ describe('schema v54', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: the SELECT names exactly these four columns.
-      const s = db.prepare(`SELECT id, task, owner_subject, origin_project FROM task_snapshots`).all() as Array<{
+      const s = db
+        .prepare(`SELECT id, task, owner_subject, origin_project FROM task_snapshots`)
+        .all() as Array<{
         id: number;
         task: string;
         owner_subject: string | null;
         origin_project: string | null;
       }>;
-      expect(s).toEqual([{ id: snap.id, task: 'ship v54', owner_subject: null, origin_project: null }]);
+      expect(s).toEqual([
+        { id: snap.id, task: 'ship v54', owner_subject: null, origin_project: null },
+      ]);
       // SAFETY: the SELECT names exactly these four columns.
       const h = db
         .prepare(`SELECT session_id, summary, owner_subject, origin_project FROM session_handoffs`)
@@ -131,7 +152,9 @@ describe('schema v54', () => {
         owner_subject: string | null;
         origin_project: string | null;
       }>;
-      expect(h).toEqual([{ session_id: 's1', summary: 'half done', owner_subject: null, origin_project: null }]);
+      expect(h).toEqual([
+        { session_id: 's1', summary: 'half done', owner_subject: null, origin_project: null },
+      ]);
       // SAFETY: the SELECT names exactly these four columns.
       const f = db
         .prepare(`SELECT sig_hash, owner_subject, origin_project, request_id FROM failure_log`)
@@ -141,9 +164,12 @@ describe('schema v54', () => {
         origin_project: string | null;
         request_id: string | null;
       }>;
-      expect(f).toEqual([{ sig_hash: 'abc', owner_subject: null, origin_project: null, request_id: null }]);
+      expect(f).toEqual([
+        { sig_hash: 'abc', owner_subject: null, origin_project: null, request_id: null },
+      ]);
       expect(tableExists(db, 'session_owners')).toBe(true);
-      for (const idx of [...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]) expect(indexSql(db, idx)).toContain(idx);
+      for (const idx of [...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)])
+        expect(indexSql(db, idx)).toContain(idx);
     });
   });
 
@@ -163,7 +189,8 @@ describe('schema v54', () => {
     try {
       expect(getSchemaVersion(db)).toBe(53);
       for (const t of OWNER_TABLES) expect(tableColumns(db, t).has('owner_subject')).toBe(false);
-      for (const t of Object.keys(REQUEST_INDEXES)) expect(tableColumns(db, t).has('request_id')).toBe(false);
+      for (const t of Object.keys(REQUEST_INDEXES))
+        expect(tableColumns(db, t).has('request_id')).toBe(false);
     } finally {
       closeHippoDb(db);
     }
@@ -178,7 +205,9 @@ describe('schema v54', () => {
       expect(tableColumns(db, 'compactions').has('request_id')).toBe(true);
       expect(indexSql(db, REQUEST_INDEXES.compactions)).toContain(REQUEST_INDEXES.compactions);
       for (const t of ['task_snapshots', 'session_handoffs']) {
-        expect([...tableColumns(db, t)]).toEqual(expect.arrayContaining(['owner_subject', 'origin_project']));
+        expect([...tableColumns(db, t)]).toEqual(
+          expect.arrayContaining(['owner_subject', 'origin_project']),
+        );
       }
       expect(tableExists(db, 'session_owners')).toBe(true);
     });
@@ -206,7 +235,11 @@ describe('schema v54', () => {
 
   it('REQUIRED_SCHEMA_OBJECTS names session_owners, both owner indexes and both request indexes', () => {
     expect(REQUIRED_SCHEMA_OBJECTS).toEqual(
-      expect.arrayContaining(['session_owners', ...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]),
+      expect.arrayContaining([
+        'session_owners',
+        ...OWNER_INDEXES,
+        ...Object.values(REQUEST_INDEXES),
+      ]),
     );
   });
 
@@ -218,7 +251,9 @@ describe('schema v54', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       for (const idx of Object.values(REQUEST_INDEXES)) {
-        expect(indexSql(db, idx)).toMatch(/UNIQUE INDEX .*\(tenant_id, request_id\) WHERE request_id IS NOT NULL/);
+        expect(indexSql(db, idx)).toMatch(
+          /UNIQUE INDEX .*\(tenant_id, request_id\) WHERE request_id IS NOT NULL/,
+        );
       }
     });
   });

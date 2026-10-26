@@ -9,7 +9,11 @@ import { copilotHomeDir } from '../../src/surface/hooks-install/rules/shared.js'
 import { processHomes } from '../../src/host/agent-homes.js';
 import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
 import { VSCODE_MCP, copilotMcpSnippet } from '../../src/surface/hooks-install/rules/copilot.js';
-import { copilotPaths, installCopilot, uninstallCopilot } from '../../src/surface/hooks-install/copilot.js';
+import {
+  copilotPaths,
+  installCopilot,
+  uninstallCopilot,
+} from '../../src/surface/hooks-install/copilot.js';
 import { HOOKS } from '../../src/surface/hooks-install/rules/hook-blocks.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 import type { JsonValue } from '../../src/base/util/json.js';
@@ -21,7 +25,13 @@ afterEach(() => {
 // The committed text installCopilot must write; edit it with the instructions in src/surface/hooks-install/rules/copilot.ts.
 const COPILOT_INSTRUCTIONS = fs
   .readFileSync(
-    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'copilot', 'instructions.md'),
+    path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '..',
+      'fixtures',
+      'copilot',
+      'instructions.md',
+    ),
     'utf8',
   )
   .trim();
@@ -36,7 +46,12 @@ const HIPPO_SERVER = {
   env: {},
   tools: ['*'],
 };
-const USER_SERVER = { type: 'local', command: 'npx', args: ['@playwright/mcp@latest'], tools: ['*'] };
+const USER_SERVER = {
+  type: 'local',
+  command: 'npx',
+  args: ['@playwright/mcp@latest'],
+  tools: ['*'],
+};
 
 interface HookEntry {
   readonly type: string;
@@ -71,7 +86,11 @@ const CONTRACT_HOOKS: HooksFile = {
   },
 };
 const HOOK_LIST = 'sessionStart, postToolUseFailure, preCompact, PreCompact, agentStop, sessionEnd';
-const VSCODE_SERVER = { type: 'stdio', command: process.platform === 'win32' ? 'hippo.cmd' : 'hippo', args: ['mcp'] };
+const VSCODE_SERVER = {
+  type: 'stdio',
+  command: process.platform === 'win32' ? 'hippo.cmd' : 'hippo',
+  args: ['mcp'],
+};
 
 const read = (file: string): string => fs.readFileSync(file, 'utf8');
 const readJson = (file: string): JsonValue => JSON.parse(read(file));
@@ -80,7 +99,8 @@ function writeFile(file: string, text: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
 }
-const copilotBlock = (eol = '\n'): string => `${START}${eol}${COPILOT_INSTRUCTIONS.replace(/\n/g, eol)}${eol}${END}`;
+const copilotBlock = (eol = '\n'): string =>
+  `${START}${eol}${COPILOT_INSTRUCTIONS.replace(/\n/g, eol)}${eol}${END}`;
 
 /** The text hippo 1.67.0 wrote, byte for byte, as it sits in users' copilot-instructions.md. */
 const COPILOT_INSTRUCTIONS_1_67_0 = `## Project Memory (Hippo)
@@ -132,7 +152,11 @@ describe('installCopilot and uninstallCopilot', () => {
   function vscodeUser(edition = 'Code'): VscodeUserFiles {
     const dir = path.join(vscodeData, edition, 'User');
     fs.mkdirSync(dir, { recursive: true });
-    return { dir, mcp: path.join(dir, 'mcp.json'), instructions: path.join(dir, 'prompts', 'hippo.instructions.md') };
+    return {
+      dir,
+      mcp: path.join(dir, 'mcp.json'),
+      instructions: path.join(dir, 'prompts', 'hippo.instructions.md'),
+    };
   }
 
   it('writes the contract hooks file, the hippo MCP server and the instructions block into an empty COPILOT_HOME', () => {
@@ -147,7 +171,11 @@ describe('installCopilot and uninstallCopilot', () => {
   it('changes no byte in any of the three files on a second install', () => {
     installCopilot();
     const once = Object.values(files).map(read);
-    expect(installCopilot()).toMatchObject({ hooks: false, mcp: 'present', instructions: 'present' });
+    expect(installCopilot()).toMatchObject({
+      hooks: false,
+      mcp: 'present',
+      instructions: 'present',
+    });
     expect(Object.values(files).map(read)).toEqual(once);
   });
 
@@ -159,7 +187,10 @@ describe('installCopilot and uninstallCopilot', () => {
         version: 1,
         hooks: {
           ...CONTRACT_HOOKS.hooks,
-          sessionEnd: entry("session-end --runtime copilot --log-file '/home/you/.hippo/logs/copilot-sleep.log'", 30),
+          sessionEnd: entry(
+            "session-end --runtime copilot --log-file '/home/you/.hippo/logs/copilot-sleep.log'",
+            30,
+          ),
         },
       }),
     ],
@@ -182,7 +213,10 @@ describe('installCopilot and uninstallCopilot', () => {
   });
 
   it("keeps the user's other MCP servers and top-level keys", () => {
-    writeFile(files.mcp, JSON.stringify({ theme: 'dark', mcpServers: { playwright: USER_SERVER } }));
+    writeFile(
+      files.mcp,
+      JSON.stringify({ theme: 'dark', mcpServers: { playwright: USER_SERVER } }),
+    );
     expect(installCopilot().mcp).toBe('added');
     expect(readJson(files.mcp)).toEqual({
       theme: 'dark',
@@ -194,7 +228,9 @@ describe('installCopilot and uninstallCopilot', () => {
     writeFile(files.mcp, BOM + JSON.stringify({ mcpServers: { playwright: USER_SERVER } }));
     expect(installCopilot().mcp).toBe('added');
     expect(read(files.mcp).startsWith(BOM)).toBe(false);
-    expect(readJson(files.mcp)).toEqual({ mcpServers: { playwright: USER_SERVER, hippo: HIPPO_SERVER } });
+    expect(readJson(files.mcp)).toEqual({
+      mcpServers: { playwright: USER_SERVER, hippo: HIPPO_SERVER },
+    });
   });
 
   it.each([
@@ -203,14 +239,25 @@ describe('installCopilot and uninstallCopilot', () => {
     ['invalid JSON', '{ "mcpServers": '],
     ['a top-level list', '[]'],
     ['mcpServers that is not an object', '{"mcpServers":[]}'],
-  ])('refuses an mcp-config.json holding %s, leaves it untouched and still installs the rest', (_label, text) => {
-    writeFile(files.mcp, text);
-    expect(installCopilot()).toMatchObject({ hooks: true, mcp: 'unreadable', instructions: 'written' });
-    expect(read(files.mcp)).toBe(text);
-    expect(uninstallCopilot()).toMatchObject({ hooks: true, mcp: 'unreadable', instructions: 'removed' });
-    expect(read(files.mcp)).toBe(text);
-    expect(JSON.parse(`{${copilotMcpSnippet()}}`)).toEqual({ hippo: HIPPO_SERVER });
-  });
+  ])(
+    'refuses an mcp-config.json holding %s, leaves it untouched and still installs the rest',
+    (_label, text) => {
+      writeFile(files.mcp, text);
+      expect(installCopilot()).toMatchObject({
+        hooks: true,
+        mcp: 'unreadable',
+        instructions: 'written',
+      });
+      expect(read(files.mcp)).toBe(text);
+      expect(uninstallCopilot()).toMatchObject({
+        hooks: true,
+        mcp: 'unreadable',
+        instructions: 'removed',
+      });
+      expect(read(files.mcp)).toBe(text);
+      expect(JSON.parse(`{${copilotMcpSnippet()}}`)).toEqual({ hippo: HIPPO_SERVER });
+    },
+  );
 
   it('reports a filesystem error on mcp-config.json with its own message, not as unreadable JSON, and still installs the rest', () => {
     fs.mkdirSync(files.mcp, { recursive: true });
@@ -225,32 +272,45 @@ describe('installCopilot and uninstallCopilot', () => {
     ['other args', { command: 'hippo', args: ['mcp', '--global'], tools: ['*'] }],
     ['an env of its own', { ...HIPPO_SERVER, env: { HIPPO_HOME: '/srv/hippo' } }],
     ['a key setup never writes', { ...HIPPO_SERVER, cwd: '/work' }],
-  ])('never overwrites or removes a "hippo" MCP key with %s, which hippo did not write', (_label, server) => {
-    const text = JSON.stringify({ mcpServers: { hippo: server } });
-    writeFile(files.mcp, text);
-    expect(installCopilot().mcp).toBe('user-owned');
-    expect(uninstallCopilot().mcp).toBe('user-owned');
-    expect(read(files.mcp)).toBe(text);
-  });
+  ])(
+    'never overwrites or removes a "hippo" MCP key with %s, which hippo did not write',
+    (_label, server) => {
+      const text = JSON.stringify({ mcpServers: { hippo: server } });
+      writeFile(files.mcp, text);
+      expect(installCopilot().mcp).toBe('user-owned');
+      expect(uninstallCopilot().mcp).toBe('user-owned');
+      expect(read(files.mcp)).toBe(text);
+    },
+  );
 
   it("uninstall removes only hippo's hooks file, its MCP key and its block, and a second uninstall finds nothing", () => {
     const userHooks = path.join(copilotHome, 'hooks', 'mine.json');
     const userHooksText = JSON.stringify({
       version: 1,
-      hooks: { sessionStart: [{ type: 'command', bash: 'echo hi', powershell: 'echo hi', timeoutSec: 5 }] },
+      hooks: {
+        sessionStart: [{ type: 'command', bash: 'echo hi', powershell: 'echo hi', timeoutSec: 5 }],
+      },
     });
     writeFile(userHooks, userHooksText);
     writeFile(files.mcp, JSON.stringify({ mcpServers: { playwright: USER_SERVER } }));
     writeFile(files.instructions, '# My rules\n\nUse tabs.\n');
     installCopilot();
 
-    expect(uninstallCopilot()).toMatchObject({ hooks: true, mcp: 'removed', instructions: 'removed' });
+    expect(uninstallCopilot()).toMatchObject({
+      hooks: true,
+      mcp: 'removed',
+      instructions: 'removed',
+    });
     expect(fs.existsSync(files.hooks)).toBe(false);
     expect(read(userHooks)).toBe(userHooksText);
     expect(readJson(files.mcp)).toEqual({ mcpServers: { playwright: USER_SERVER } });
     // The blank line install put before the block stays: uninstall takes the block and one line break, and no other byte.
     expect(read(files.instructions)).toBe('# My rules\n\nUse tabs.\n\n');
-    expect(uninstallCopilot()).toMatchObject({ hooks: false, mcp: 'absent', instructions: 'absent' });
+    expect(uninstallCopilot()).toMatchObject({
+      hooks: false,
+      mcp: 'absent',
+      instructions: 'absent',
+    });
   });
 
   it('uninstall deletes an instructions file that held only the block, and drops an emptied mcpServers', () => {
@@ -270,7 +330,9 @@ describe('installCopilot and uninstallCopilot', () => {
     const loose = `${START}\r\n\r\n${COPILOT_INSTRUCTIONS.replace(/\n/g, '\r\n')}\r\n\r\n\r\n${END}`;
     writeFile(files.instructions, `# My rules\r\n\r\n${loose}\r\nAfter.\r\n`);
     expect(installCopilot().instructions).toBe('written');
-    expect(read(files.instructions)).toBe(`# My rules\r\n\r\n${copilotBlock('\r\n')}\r\nAfter.\r\n`);
+    expect(read(files.instructions)).toBe(
+      `# My rules\r\n\r\n${copilotBlock('\r\n')}\r\nAfter.\r\n`,
+    );
   });
 
   it("appends the block after the user's text when the file has none", () => {
@@ -294,7 +356,10 @@ describe('installCopilot and uninstallCopilot', () => {
 
   it.each([
     ['an edited block', `# Mine\r\n\r\n${START}\r\nmy own hippo notes\r\n${END}\r\nAfter.\r\n`],
-    ["another agent's block in a shared file", `# Shared\n\n${START}\n${HOOKS['claude-code'].content}\n${END}\n`],
+    [
+      "another agent's block in a shared file",
+      `# Shared\n\n${START}\n${HOOKS['claude-code'].content}\n${END}\n`,
+    ],
   ])('install and uninstall keep %s byte for byte and add no second block', (_label, text) => {
     writeFile(files.instructions, text);
     expect(installCopilot().instructions).toBe('kept');
@@ -328,7 +393,9 @@ describe('installCopilot and uninstallCopilot', () => {
 
   it('the Copilot folder is $COPILOT_HOME when set, else .copilot under os.homedir() whatever HOME says', () => {
     expect(copilotPaths().hooks).toBe(files.hooks);
-    expect(copilotHomeDir({ home: os.homedir(), env: { COPILOT_HOME: copilotHome } })).toBe(copilotHome);
+    expect(copilotHomeDir({ home: os.homedir(), env: { COPILOT_HOME: copilotHome } })).toBe(
+      copilotHome,
+    );
     vi.stubEnv('COPILOT_HOME', '');
     vi.stubEnv('HOME', path.join(fake.home, 'corporate-home'));
     expect(copilotHomeDir(processHomes())).toBe(path.join(os.homedir(), '.copilot'));
@@ -345,7 +412,10 @@ describe('installCopilot and uninstallCopilot', () => {
     fs.mkdirSync(copilotHome);
     expect(copilot()?.detected).toBe(true);
     vi.stubEnv('COPILOT_HOME', '');
-    expect(copilot()).toMatchObject({ detected: false, configDir: path.join(fake.home, '.copilot') });
+    expect(copilot()).toMatchObject({
+      detected: false,
+      configDir: path.join(fake.home, '.copilot'),
+    });
     fs.mkdirSync(path.join(fake.home, '.copilot'));
     expect(copilot()?.detected).toBe(true);
   });
@@ -365,14 +435,18 @@ describe('installCopilot and uninstallCopilot', () => {
     const stable = vscodeUser();
     const insiders = vscodeUser('Code - Insiders');
     writeFile(stable.mcp, JSON.stringify({ servers: { playwright: USER_SERVER }, inputs: [] }));
-    const statuses = (result: ReturnType<typeof installCopilot> | ReturnType<typeof uninstallCopilot>) =>
-      result.vscode.map((v) => [v.paths.userDir, v.mcp, v.instructions]);
+    const statuses = (
+      result: ReturnType<typeof installCopilot> | ReturnType<typeof uninstallCopilot>,
+    ) => result.vscode.map((v) => [v.paths.userDir, v.mcp, v.instructions]);
 
     expect(statuses(installCopilot())).toEqual([
       [stable.dir, 'added', 'written'],
       [insiders.dir, 'added', 'written'],
     ]);
-    expect(readJson(stable.mcp)).toEqual({ servers: { playwright: USER_SERVER, hippo: VSCODE_SERVER }, inputs: [] });
+    expect(readJson(stable.mcp)).toEqual({
+      servers: { playwright: USER_SERVER, hippo: VSCODE_SERVER },
+      inputs: [],
+    });
     expect(readJson(insiders.mcp)).toEqual({ servers: { hippo: VSCODE_SERVER } });
     expect(read(stable.instructions)).toBe(VSCODE_INSTRUCTIONS);
     expect(statuses(installCopilot())).toEqual([
@@ -397,8 +471,14 @@ describe('installCopilot and uninstallCopilot', () => {
     (_label, text) => {
       const user = vscodeUser();
       writeFile(user.mcp, text);
-      expect(installCopilot().vscode[0]).toMatchObject({ mcp: 'unreadable', instructions: 'written' });
-      expect(uninstallCopilot().vscode[0]).toMatchObject({ mcp: 'unreadable', instructions: 'removed' });
+      expect(installCopilot().vscode[0]).toMatchObject({
+        mcp: 'unreadable',
+        instructions: 'written',
+      });
+      expect(uninstallCopilot().vscode[0]).toMatchObject({
+        mcp: 'unreadable',
+        instructions: 'removed',
+      });
       expect(read(user.mcp)).toBe(text);
       expect(JSON.parse(`{${copilotMcpSnippet(VSCODE_MCP)}}`)).toEqual({ hippo: VSCODE_SERVER });
     },
@@ -416,7 +496,9 @@ describe('installCopilot and uninstallCopilot', () => {
 
   it('leaves a VS Code "hippo" server carrying an env of its own on install and uninstall', () => {
     const user = vscodeUser();
-    const text = JSON.stringify({ servers: { hippo: { ...VSCODE_SERVER, env: { HIPPO_HOME: '/srv/hippo' } } } });
+    const text = JSON.stringify({
+      servers: { hippo: { ...VSCODE_SERVER, env: { HIPPO_HOME: '/srv/hippo' } } },
+    });
     writeFile(user.mcp, text);
     expect(installCopilot().vscode[0].mcp).toBe('user-owned');
     expect(uninstallCopilot().vscode[0].mcp).toBe('user-owned');
@@ -479,7 +561,9 @@ async function hippo(m: Machine, ...args: string[]): Promise<string> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const key of Object.keys(env)) {
     if (
-      /^(path|codex_home|claude_config_dir|hippo_skip_auto_integrations|xdg_config_home|vscode_portable)$/i.test(key)
+      /^(path|codex_home|claude_config_dir|hippo_skip_auto_integrations|xdg_config_home|vscode_portable)$/i.test(
+        key,
+      )
     ) {
       delete env[key];
     }
@@ -513,9 +597,13 @@ describe('hippo setup and hippo hook with Copilot', () => {
     expect(out).toContain('VS Code Copilot runs new hooks in a new chat session.');
     expect(out).not.toContain('chat.useHooks');
     expect(readHooks(path.join(m.copilot, 'hooks', 'hippo.json'))).toEqual(CONTRACT_HOOKS);
-    expect(readJson(path.join(m.copilot, 'mcp-config.json'))).toEqual({ mcpServers: { hippo: HIPPO_SERVER } });
+    expect(readJson(path.join(m.copilot, 'mcp-config.json'))).toEqual({
+      mcpServers: { hippo: HIPPO_SERVER },
+    });
     expect(read(path.join(m.copilot, 'copilot-instructions.md'))).toContain(START);
-    expect(await hippo(m, 'setup', '--no-schedule', '--no-learn')).toContain("hippo's Copilot hooks are already in");
+    expect(await hippo(m, 'setup', '--no-schedule', '--no-learn')).toContain(
+      "hippo's Copilot hooks are already in",
+    );
   });
 
   it('setup --dry-run names the three files and writes none', async () => {

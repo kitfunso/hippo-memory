@@ -62,7 +62,8 @@ const at = (id: string | number | null, seq: string | number | null) => ({
 });
 const ok = (v: Verdict, session: string, memory: string | null, w: Oracle): void =>
   expectVerdict(v, { store: p.hippoRoot, session, memory, ...w });
-const stages = (session: string, memory: string) => cand(session, memory).map((c) => [c.outcome, c.stage]);
+const stages = (session: string, memory: string) =>
+  cand(session, memory).map((c) => [c.outcome, c.stage]);
 const make = (cfg?: Config): void => {
   p = project();
   if (cfg) configure(p, cfg);
@@ -72,7 +73,8 @@ const turnOf = (prompt: string, stdout: string, extra: Partial<TurnSpec> = {}): 
   stdout,
   ...extra,
 });
-const doc = (session: string, specs: TurnSpec[]): string => writeHostTranscript(p, specs, { name: session });
+const doc = (session: string, specs: TurnSpec[]): string =>
+  writeHostTranscript(p, specs, { name: session });
 
 /** One sent turn on the default project: the pin is emitted and its attachment is under the prompt. */
 async function sentTurn(session: string, spec: Partial<TurnSpec> = {}): Promise<string> {
@@ -86,14 +88,22 @@ describe('capture: a lesson the store never held at the turn', () => {
     // Spawned once so the prompt hook is pinned in a real child here; every other turn runs in process.
     fire(p, 'x1', P1);
     expect(events('x1')).toHaveLength(1);
-    const v = verdictOf({ store: p.hippoRoot, session: 'x1', key: 'a sentence nobody wrote', global: p.globalRoot });
+    const v = verdictOf({
+      store: p.hippoRoot,
+      session: 'x1',
+      key: 'a sentence nobody wrote',
+      global: p.globalRoot,
+    });
     ok(v, 'x1', null, { class: 'not-written', reason: 'no-row', turn: null, stage: null });
   });
 
   it("a memory written after the session's only turn is not-written written-after", async () => {
     make();
     await fireIn(p, 'x1b', P1);
-    const late = seed(p.hippoRoot, 'a lesson written after the turn: always tag the release branch');
+    const late = seed(
+      p.hippoRoot,
+      'a lesson written after the turn: always tag the release branch',
+    );
     const [e] = events('x1b');
     expect(cand('x1b', late.id)).toEqual([]);
     expect(
@@ -101,12 +111,20 @@ describe('capture: a lesson the store never held at the turn', () => {
         String(rows(`SELECT ts FROM delivery_events WHERE id = ${e.id}`)[0].ts),
     ).toBe(true);
     const v = read('x1b', late.id);
-    ok(v, 'x1b', late.id, { class: 'not-written', reason: 'written-after', turn: at(e.id, 1), stage: null });
+    ok(v, 'x1b', late.id, {
+      class: 'not-written',
+      reason: 'written-after',
+      turn: at(e.id, 1),
+      stage: null,
+    });
   });
 
   it('a memory forgotten before the first turn, read by id, is not-written forgotten-before', async () => {
     make();
-    const gone = seed(p.hippoRoot, 'a lesson that is forgotten before any prompt: always rotate the keys');
+    const gone = seed(
+      p.hippoRoot,
+      'a lesson that is forgotten before any prompt: always rotate the keys',
+    );
     expect((await hippoIn(p, ['forget', gone.id])).status).toBe(0);
     await fireIn(p, 'x1c', P1);
     expect(rows(`SELECT id FROM memories WHERE id = '${gone.id}'`)).toEqual([]);
@@ -114,29 +132,49 @@ describe('capture: a lesson the store never held at the turn', () => {
     expect(audit).toHaveLength(1);
     expect(String(audit[0].ts) < String(rows('SELECT ts FROM delivery_events')[0].ts)).toBe(true);
     const v = read('x1c', gone.id);
-    ok(v, 'x1c', gone.id, { class: 'not-written', reason: 'forgotten-before', turn: null, stage: null });
+    ok(v, 'x1c', gone.id, {
+      class: 'not-written',
+      reason: 'forgotten-before',
+      turn: null,
+      stage: null,
+    });
   });
 });
 
 describe('budgeted evidence: why a lesson never reached the model', () => {
   it('a memory the loader refuses (another project) is not-retrieved not-loaded', async () => {
     make();
-    for (let i = 0; i < 3; i++) seed(p.hippoRoot, `${NOTE} ${i}`, { created: `2026-06-0${i + 1}T00:00:00.000Z` });
-    const target = seed(p.hippoRoot, 'a lesson from another repo: the staging cluster needs a manual warmup', {
-      originProject: 'some-other-project',
-      created: '2026-07-01T00:00:00.000Z',
-    });
+    for (let i = 0; i < 3; i++)
+      seed(p.hippoRoot, `${NOTE} ${i}`, { created: `2026-06-0${i + 1}T00:00:00.000Z` });
+    const target = seed(
+      p.hippoRoot,
+      'a lesson from another repo: the staging cluster needs a manual warmup',
+      {
+        originProject: 'some-other-project',
+        created: '2026-07-01T00:00:00.000Z',
+      },
+    );
     await fireIn(p, 'x2', P1);
     const [e] = events('x2');
-    expect([cand('x2', target.id), e.rejected_unlisted, Number(e.filtered_count) >= 1]).toEqual([[], 0, true]);
+    expect([cand('x2', target.id), e.rejected_unlisted, Number(e.filtered_count) >= 1]).toEqual([
+      [],
+      0,
+      true,
+    ]);
     const v = read('x2', target.id);
-    ok(v, 'x2', target.id, { class: 'not-retrieved', reason: 'not-loaded', turn: at(e.id, 1), stage: null });
+    ok(v, 'x2', target.id, {
+      class: 'not-retrieved',
+      reason: 'not-loaded',
+      turn: at(e.id, 1),
+      stage: null,
+    });
   });
 
   it('with prompt recall off and a window past five rows, the oldest memory is indeterminate undecided', async () => {
     make();
     const target = seed(p.hippoRoot, `${NOTE} oldest`, { created: '2026-05-01T00:00:00.000Z' });
-    for (let i = 0; i < 6; i++) seed(p.hippoRoot, `${NOTE} ${i}`, { created: `2026-06-0${i + 1}T00:00:00.000Z` });
+    for (let i = 0; i < 6; i++)
+      seed(p.hippoRoot, `${NOTE} ${i}`, { created: `2026-06-0${i + 1}T00:00:00.000Z` });
     await fireIn(p, 'x2b', P1);
     const [e] = events('x2b');
     expect(cand('x2b', target.id)).toEqual([]);
@@ -144,20 +182,33 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     expect(Number(e.rejected_unlisted)).toBe(3);
     expect(Number(e.rejected_count) - Number(e.rejected_unlisted)).toBe(0);
     const v = read('x2b', target.id);
-    ok(v, 'x2b', target.id, { class: 'indeterminate', reason: 'undecided', turn: at(e.id, 1), stage: null });
+    ok(v, 'x2b', target.id, {
+      class: 'indeterminate',
+      reason: 'undecided',
+      turn: at(e.id, 1),
+      stage: null,
+    });
   });
 
   it('a weak prompt-recall match under the gate is rejected at gate gate-below-threshold', async () => {
     make({ promptRecall: true, promptRecallMinShared: 2 });
     seed(p.hippoRoot, 'the postgres migration script needs a rollback plan before deploy');
-    const weak = seed(p.hippoRoot, 'postgres note 0: the reporting cluster pools its connections through pgbouncer');
+    const weak = seed(
+      p.hippoRoot,
+      'postgres note 0: the reporting cluster pools its connections through pgbouncer',
+    );
     await fireIn(p, 'x3', PROMPT);
     const [e] = events('x3');
     expect(cand('x3', weak.id).map((c) => [c.outcome, c.stage, c.reason])).toEqual([
       ['rejected', 'gate', 'gate-below-threshold'],
     ]);
     const v = read('x3', weak.id);
-    ok(v, 'x3', weak.id, { class: 'rejected', reason: 'gate-below-threshold', turn: at(e.id, 1), stage: 'gate' });
+    ok(v, 'x3', weak.id, {
+      class: 'rejected',
+      reason: 'gate-below-threshold',
+      turn: at(e.id, 1),
+      stage: 'gate',
+    });
     expect(v.cand_reason).toBe('gate-below-threshold');
   });
 
@@ -166,9 +217,16 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     const big = seed(p.hippoRoot, BIG, { pinned: true });
     await fireIn(p, 'x4', PROMPT, { args: TIGHT });
     const [e] = events('x4');
-    expect(cand('x4', big.id).map((c) => [c.outcome, c.stage, c.reason])).toEqual([['rejected', 'budget', 'budget']]);
+    expect(cand('x4', big.id).map((c) => [c.outcome, c.stage, c.reason])).toEqual([
+      ['rejected', 'budget', 'budget'],
+    ]);
     const v = read('x4', big.id);
-    ok(v, 'x4', big.id, { class: 'rejected', reason: 'budget', turn: at(e.id, 1), stage: 'budget' });
+    ok(v, 'x4', big.id, {
+      class: 'rejected',
+      reason: 'budget',
+      turn: at(e.id, 1),
+      stage: 'budget',
+    });
     expect(v.cand_reason).toBe('budget');
   });
 
@@ -176,7 +234,10 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     make({ promptRecall: true, promptRecallMinShared: 2 });
     seed(p.hippoRoot, 'the postgres migration script needs a rollback plan before deploy');
     const notes = Array.from({ length: 20 }, (_, i) =>
-      seed(p.hippoRoot, `postgres note ${i}: the reporting cluster pools its connections through pgbouncer`),
+      seed(
+        p.hippoRoot,
+        `postgres note ${i}: the reporting cluster pools its connections through pgbouncer`,
+      ),
     );
     await fireIn(p, 'x5', PROMPT);
     const [e] = events('x5');
@@ -185,10 +246,20 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     const unlisted = notes.filter((n) => cand('x5', n.id).length === 0);
     expect([listed.length, unlisted.length >= 4]).toEqual([16, true]);
     const u = read('x5', unlisted[0].id);
-    ok(u, 'x5', unlisted[0].id, { class: 'indeterminate', reason: 'unlisted', turn: at(e.id, 1), stage: null });
+    ok(u, 'x5', unlisted[0].id, {
+      class: 'indeterminate',
+      reason: 'unlisted',
+      turn: at(e.id, 1),
+      stage: null,
+    });
     expect(stages('x5', listed[0].id)).toEqual([['rejected', 'gate']]);
     const l = read('x5', listed[0].id);
-    ok(l, 'x5', listed[0].id, { class: 'rejected', reason: 'gate-below-threshold', turn: at(e.id, 1), stage: 'gate' });
+    ok(l, 'x5', listed[0].id, {
+      class: 'rejected',
+      reason: 'gate-below-threshold',
+      turn: at(e.id, 1),
+      stage: 'gate',
+    });
     expect(l.cand_reason).toBe('gate-below-threshold');
   });
 
@@ -203,7 +274,12 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     const mem = String(cut[0].memory_id);
     expect(stages('x5b', mem)).toEqual([['rejected', 'gate']]);
     const v = read('x5b', mem);
-    ok(v, 'x5b', mem, { class: 'rejected', reason: 'gate-max-items', turn: at(e.id, 1), stage: 'gate' });
+    ok(v, 'x5b', mem, {
+      class: 'rejected',
+      reason: 'gate-max-items',
+      turn: at(e.id, 1),
+      stage: 'gate',
+    });
     expect(v.cand_reason).toBe('gate-max-items');
   });
 
@@ -216,16 +292,28 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
       ['rejected', 'load', 'duplicate', 'recent'],
     ]);
     const v = read('x5c', twin.id);
-    ok(v, 'x5c', twin.id, { class: 'rejected', reason: 'duplicate', turn: at(e.id, 1), stage: 'load' });
+    ok(v, 'x5c', twin.id, {
+      class: 'rejected',
+      reason: 'duplicate',
+      turn: at(e.id, 1),
+      stage: 'load',
+    });
     expect([v.cand_reason, v.turns[0].pool]).toEqual(['duplicate', 'recent']);
   });
 
   it('a context call with --limit 1 records the cut match as rejected at limit', async () => {
     make();
-    const a = seed(p.hippoRoot, 'the rollback runbook for postgres migrations lives in the ops wiki');
+    const a = seed(
+      p.hippoRoot,
+      'the rollback runbook for postgres migrations lives in the ops wiki',
+    );
     const b = seed(p.hippoRoot, 'the postgres migration rollback checklist needs two reviewers');
     expect(
-      (await hippoIn(p, ['context', 'postgres', '--limit', '1'], { env: { HIPPO_SESSION_ID: 'x15b' } })).status,
+      (
+        await hippoIn(p, ['context', 'postgres', '--limit', '1'], {
+          env: { HIPPO_SESSION_ID: 'x15b' },
+        })
+      ).status,
     ).toBe(0);
     const cut = rows(`SELECT c.memory_id FROM delivery_candidates c WHERE c.reason = 'limit'`);
     const [e] = events('x15b');
@@ -246,9 +334,17 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     make({ holdout: true });
     await fireIn(p, 'x16', P1);
     const [e] = events('x16');
-    expect([e.block_state, rows('SELECT COUNT(*) AS c FROM delivery_candidates')[0].c]).toEqual(['disabled', 0]);
+    expect([e.block_state, rows('SELECT COUNT(*) AS c FROM delivery_candidates')[0].c]).toEqual([
+      'disabled',
+      0,
+    ]);
     const v = read('x16', pinId());
-    ok(v, 'x16', pinId(), { class: 'rejected', reason: 'block-disabled', turn: at(e.id, 1), stage: null });
+    ok(v, 'x16', pinId(), {
+      class: 'rejected',
+      reason: 'block-disabled',
+      turn: at(e.id, 1),
+      stage: null,
+    });
   });
 });
 
@@ -259,7 +355,12 @@ describe('context availability: was the block that carried the lesson delivered'
     const [e] = events('x6');
     expect([e.block_state, stages('x6', pinId())]).toEqual(['sent', [['emitted', 'final']]]);
     const v = read('x6', pinId(), { transcript: t });
-    ok(v, 'x6', pinId(), { class: 'delivery-unconfirmed', reason: 'no-attachment', turn: at(e.id, 1), stage: 'final' });
+    ok(v, 'x6', pinId(), {
+      class: 'delivery-unconfirmed',
+      reason: 'no-attachment',
+      turn: at(e.id, 1),
+      stage: 'final',
+    });
     expect(v.turns[0].paired_by).toBe('prompt');
   });
 
@@ -283,7 +384,12 @@ describe('context availability: was the block that carried the lesson delivered'
     const [e] = events('x7');
     expect([e.block_state, stages('x7', pinId())]).toEqual(['sent', [['emitted', 'final']]]);
     const v = read('x7', pinId(), { transcript: t });
-    ok(v, 'x7', pinId(), { class: 'application-unknown', reason: null, turn: at(e.id, 1), stage: 'final' });
+    ok(v, 'x7', pinId(), {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(e.id, 1),
+      stage: 'final',
+    });
     expect([v.turns[0].delivery, v.label]).toEqual(['confirmed', null]);
     expect(v.store_hash).toMatch(/^[0-9a-f]{16}$/);
   });
@@ -298,9 +404,20 @@ describe('context availability: was the block that carried the lesson delivered'
       ['emitted', 'final'],
       ['reused', 'final'],
     ]);
-    const v = read('x10', pinId(), { transcript: doc('x10', [turnOf(P1, r1.stdout), turnOf(P2, r2.stdout)]) });
-    ok(v, 'x10', pinId(), { class: 'application-unknown', reason: null, turn: at(e1.id, 1), stage: 'final' });
-    expect([v.turns[1].delivery, v.turns[1].via_event_id, v.turns[1].event_id]).toEqual(['confirmed', e1.id, e2.id]);
+    const v = read('x10', pinId(), {
+      transcript: doc('x10', [turnOf(P1, r1.stdout), turnOf(P2, r2.stdout)]),
+    });
+    ok(v, 'x10', pinId(), {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(e1.id, 1),
+      stage: 'final',
+    });
+    expect([v.turns[1].delivery, v.turns[1].via_event_id, v.turns[1].event_id]).toEqual([
+      'confirmed',
+      e1.id,
+      e2.id,
+    ]);
   });
 
   it('reuse across a compaction the transcript shows but hippo missed is unconfirmed compacted-since-send', async () => {
@@ -308,7 +425,9 @@ describe('context availability: was the block that carried the lesson delivered'
     const r1 = await fireIn(p, 'x11', P1);
     const r2 = await fireIn(p, 'x11', P2);
     expect(
-      rows(`SELECT event_type FROM delivery_events WHERE session_id = 'x11' AND event_type <> 'prompt-submit'`),
+      rows(
+        `SELECT event_type FROM delivery_events WHERE session_id = 'x11' AND event_type <> 'prompt-submit'`,
+      ),
     ).toEqual([]);
     const [e1, e2] = events('x11');
     expect([e1.block_state, e2.block_state, stages('x11', pinId())]).toEqual([
@@ -320,16 +439,26 @@ describe('context availability: was the block that carried the lesson delivered'
       ],
     ]);
     const v = read('x11', pinId(), {
-      transcript: doc('x11', [turnOf(P1, r1.stdout), turnOf(P2, r2.stdout, { compactBefore: true })]),
+      transcript: doc('x11', [
+        turnOf(P1, r1.stdout),
+        turnOf(P2, r2.stdout, { compactBefore: true }),
+      ]),
     });
-    ok(v, 'x11', pinId(), { class: 'application-unknown', reason: null, turn: at(e1.id, 1), stage: 'final' });
+    ok(v, 'x11', pinId(), {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(e1.id, 1),
+      stage: 'final',
+    });
     expect([v.turns[1].delivery, v.turns[1].why]).toEqual(['unconfirmed', 'compacted-since-send']);
   });
 
   it('a compaction hippo saw resets the block, so turn 2 is sent and confirmed on its own attachment', async () => {
     make();
     const r1 = await fireIn(p, 'x11b', P1);
-    expect((await hippoIn(p, ['pre-compact'], { input: preCompactPayload('x11b') })).status).toBe(0);
+    expect((await hippoIn(p, ['pre-compact'], { input: preCompactPayload('x11b') })).status).toBe(
+      0,
+    );
     const r2 = await fireIn(p, 'x11b', P2);
     const prompts = events('x11b').filter((e) => e.event_type === 'prompt-submit');
     expect(prompts.map((e) => e.block_state)).toEqual(['sent', 'sent']);
@@ -337,9 +466,17 @@ describe('context availability: was the block that carried the lesson delivered'
       ['emitted', 'final'],
       ['emitted', 'final'],
     ]);
-    const t = doc('x11b', [turnOf(P1, r1.stdout, { attach: null }), turnOf(P2, r2.stdout, { compactBefore: true })]);
+    const t = doc('x11b', [
+      turnOf(P1, r1.stdout, { attach: null }),
+      turnOf(P2, r2.stdout, { compactBefore: true }),
+    ]);
     const v = read('x11b', pinId(), { transcript: t });
-    ok(v, 'x11b', pinId(), { class: 'application-unknown', reason: null, turn: at(prompts[1].id, 2), stage: 'final' });
+    ok(v, 'x11b', pinId(), {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(prompts[1].id, 2),
+      stage: 'final',
+    });
     expect(v.turns[0].why).toBe('no-attachment');
   });
 
@@ -355,7 +492,12 @@ describe('context availability: was the block that carried the lesson delivered'
       [b.id, 'reused', 'final'],
     ]);
     const v = read('x12', pinId(), { transcript: doc('x12', [turnOf(P1, r1.stdout)]) });
-    ok(v, 'x12', pinId(), { class: 'application-unknown', reason: null, turn: at(a.id, 1), stage: 'final' });
+    ok(v, 'x12', pinId(), {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(a.id, 1),
+      stage: 'final',
+    });
     expect([v.turns.length, v.turns[0].duplicates]).toEqual([1, [b.id]]);
   });
 
@@ -366,7 +508,10 @@ describe('context availability: was the block that carried the lesson delivered'
     const a2 = await fireIn(p, 'x13a', P2);
     const b2 = await fireIn(p, 'x13b', P2);
     const ids = (s: string) => events(s).map((e) => e.id);
-    expect([events('x13a').map((e) => e.block_state), events('x13b').map((e) => e.block_state)]).toEqual([
+    expect([
+      events('x13a').map((e) => e.block_state),
+      events('x13b').map((e) => e.block_state),
+    ]).toEqual([
       ['sent', 'reused'],
       ['sent', 'reused'],
     ]);
@@ -379,10 +524,19 @@ describe('context availability: was the block that carried the lesson delivered'
       ['reused', 'final'],
     ]);
     expect(new Set([...ids('x13a'), ...ids('x13b')]).size).toBe(4);
-    const v = read('x13b', pinId(), { transcript: doc('x13b', [turnOf(P1, b1.stdout), turnOf(P2, b2.stdout)]) });
-    ok(v, 'x13b', pinId(), { class: 'application-unknown', reason: null, turn: at(ids('x13b')[0], 1), stage: 'final' });
+    const v = read('x13b', pinId(), {
+      transcript: doc('x13b', [turnOf(P1, b1.stdout), turnOf(P2, b2.stdout)]),
+    });
+    ok(v, 'x13b', pinId(), {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(ids('x13b')[0], 1),
+      stage: 'final',
+    });
     expect(v.turns.map((t) => t.event_id)).toEqual(ids('x13b'));
-    const va = read('x13a', pinId(), { transcript: doc('x13a', [turnOf(P1, a1.stdout), turnOf(P2, a2.stdout)]) });
+    const va = read('x13a', pinId(), {
+      transcript: doc('x13a', [turnOf(P1, a1.stdout), turnOf(P2, a2.stdout)]),
+    });
     ok(va, 'x13a', pinId(), {
       class: 'application-unknown',
       reason: null,
@@ -401,7 +555,12 @@ describe('context availability: was the block that carried the lesson delivered'
     const v = read('x14a', big.id, {
       transcript: doc('x14a', [turnOf(P1, r1.stdout), turnOf(P2, ''), turnOf(P3, r3.stdout)]),
     });
-    ok(v, 'x14a', big.id, { class: 'indeterminate', reason: 'no-event-row', turn: null, stage: null });
+    ok(v, 'x14a', big.id, {
+      class: 'indeterminate',
+      reason: 'no-event-row',
+      turn: null,
+      stage: null,
+    });
     expect(v.notes.includes('gap:1')).toBe(true);
   });
 
@@ -421,19 +580,30 @@ describe('context availability: was the block that carried the lesson delivered'
     const v = read('x14b', pinId(), {
       transcript: doc('x14b', [turnOf(P1, r1.stdout), turnOf(P2, ''), turnOf(P3, r3.stdout)]),
     });
-    ok(v, 'x14b', pinId(), { class: 'application-unknown', reason: null, turn: at(e1.id, 1), stage: 'final' });
-    expect([v.notes.includes('gap:1'), v.turns.filter((t) => t.event_id !== null).map((t) => t.event_id)]).toEqual([
-      true,
-      [e1.id, e3.id],
-    ]);
+    ok(v, 'x14b', pinId(), {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(e1.id, 1),
+      stage: 'final',
+    });
+    expect([
+      v.notes.includes('gap:1'),
+      v.turns.filter((t) => t.event_id !== null).map((t) => t.event_id),
+    ]).toEqual([true, [e1.id, e3.id]]);
   });
 
   it("an agent's hippo context call returning the lesson is delivery-unconfirmed surface-unjoined", async () => {
     make();
-    const target = seed(p.hippoRoot, 'the rollback runbook for postgres migrations lives in the ops wiki');
+    const target = seed(
+      p.hippoRoot,
+      'the rollback runbook for postgres migrations lives in the ops wiki',
+    );
     expect(
-      (await hippoIn(p, ['context', 'postgres migrations rollback runbook'], { env: { HIPPO_SESSION_ID: 'x15' } }))
-        .status,
+      (
+        await hippoIn(p, ['context', 'postgres migrations rollback runbook'], {
+          env: { HIPPO_SESSION_ID: 'x15' },
+        })
+      ).status,
     ).toBe(0);
     const [e] = events('x15');
     expect([e.event_type, e.session_state, stages('x15', target.id)]).toEqual([
@@ -453,7 +623,10 @@ describe('context availability: was the block that carried the lesson delivered'
 
   it("with prompt recall on, a recall block beside a reused static block confirms on turn 2's own attachment", async () => {
     make({ promptRecall: true });
-    const recall = seed(p.hippoRoot, 'the postgres migration script needs a rollback plan before deploy');
+    const recall = seed(
+      p.hippoRoot,
+      'the postgres migration script needs a rollback plan before deploy',
+    );
     const q1 = 'how should the postgres migration rollback work';
     const q2 = 'does the postgres migration rollback need a review';
     const r1 = await fireIn(p, 'x17', q1);
@@ -470,10 +643,22 @@ describe('context availability: was the block that carried the lesson delivered'
     ]);
     const t = doc('x17', [turnOf(q1, r1.stdout, { attach: null }), turnOf(q2, r2.stdout)]);
     const rv = read('x17', recall.id, { transcript: t });
-    ok(rv, 'x17', recall.id, { class: 'application-unknown', reason: null, turn: at(e2.id, 2), stage: 'final' });
+    ok(rv, 'x17', recall.id, {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(e2.id, 2),
+      stage: 'final',
+    });
     expect([rv.turns[1].delivery, rv.turns[1].via_event_id]).toEqual(['confirmed', null]);
-    const pv = read('x17', pinId(), { transcript: doc('x17-b', [turnOf(q1, r1.stdout), turnOf(q2, r2.stdout)]) });
-    ok(pv, 'x17', pinId(), { class: 'application-unknown', reason: null, turn: at(e1.id, 1), stage: 'final' });
+    const pv = read('x17', pinId(), {
+      transcript: doc('x17-b', [turnOf(q1, r1.stdout), turnOf(q2, r2.stdout)]),
+    });
+    ok(pv, 'x17', pinId(), {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(e1.id, 1),
+      stage: 'final',
+    });
     expect([pv.turns[1].delivery, pv.turns[1].via_event_id]).toEqual(['confirmed', e1.id]);
   });
 
@@ -503,7 +688,12 @@ describe('context availability: was the block that carried the lesson delivered'
     expect([e.block_state, stages('x19a', pinId())]).toEqual(['sent', [['emitted', 'final']]]);
     const t = doc('x19a', [turnOf('what is in this screenshot', r.stdout, { image: true })]);
     const v = read('x19a', pinId(), { transcript: t });
-    ok(v, 'x19a', pinId(), { class: 'application-unknown', reason: null, turn: at(e.id, 1), stage: 'final' });
+    ok(v, 'x19a', pinId(), {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(e.id, 1),
+      stage: 'final',
+    });
     expect([v.turns[0].paired_by, v.turns[0].delivery]).toEqual(['attachment', 'confirmed']);
   });
 
@@ -517,9 +707,17 @@ describe('context availability: was the block that carried the lesson delivered'
       ['emitted', 'final'],
       ['reused', 'final'],
     ]);
-    const t = doc('x19b', [turnOf(P1, r1.stdout), turnOf('what is in this screenshot', r2.stdout, { image: true })]);
+    const t = doc('x19b', [
+      turnOf(P1, r1.stdout),
+      turnOf('what is in this screenshot', r2.stdout, { image: true }),
+    ]);
     const v = read('x19b', pinId(), { transcript: t });
-    ok(v, 'x19b', pinId(), { class: 'application-unknown', reason: null, turn: at(e1.id, 1), stage: 'final' });
+    ok(v, 'x19b', pinId(), {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(e1.id, 1),
+      stage: 'final',
+    });
     expect([v.turns[1].paired_by, v.turns[1].delivery, v.turns[1].via_event_id]).toEqual([
       'position',
       'confirmed',
@@ -530,14 +728,24 @@ describe('context availability: was the block that carried the lesson delivered'
   it('a pin that lives only in the global store is application-unknown with source_store global', async () => {
     make();
     initTestStore(p.globalRoot);
-    const g = seed(p.globalRoot, 'PINNED: the global release checklist lists every region first', { pinned: true });
+    const g = seed(p.globalRoot, 'PINNED: the global release checklist lists every region first', {
+      pinned: true,
+    });
     const r = await fireIn(p, 'x20', P1);
     const [e] = events('x20');
     expect(cand('x20', g.id).map((c) => [c.outcome, c.stage, c.source_store])).toEqual([
       ['emitted', 'final', 'global'],
     ]);
-    const v = read('x20', g.id, { transcript: doc('x20', [turnOf(P1, r.stdout)]), global: p.globalRoot });
-    ok(v, 'x20', g.id, { class: 'application-unknown', reason: null, turn: at(e.id, 1), stage: 'final' });
+    const v = read('x20', g.id, {
+      transcript: doc('x20', [turnOf(P1, r.stdout)]),
+      global: p.globalRoot,
+    });
+    ok(v, 'x20', g.id, {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(e.id, 1),
+      stage: 'final',
+    });
     expect([v.memory_store, v.turns[0].source_store]).toEqual(['global', 'global']);
   });
 
@@ -545,9 +753,20 @@ describe('context availability: was the block that carried the lesson delivered'
     make();
     const r = await fireIn(p, 'x22', P1);
     const [e] = events('x22');
-    expect([events('x22').length, e.block_state, stages('x22', pinId())]).toEqual([1, 'sent', [['emitted', 'final']]]);
-    const v = read('x22', pinId(), { transcript: doc('x22', [turnOf(P1, r.stdout, { queued: true })]) });
-    ok(v, 'x22', pinId(), { class: 'application-unknown', reason: null, turn: at(e.id, 1), stage: 'final' });
+    expect([events('x22').length, e.block_state, stages('x22', pinId())]).toEqual([
+      1,
+      'sent',
+      [['emitted', 'final']],
+    ]);
+    const v = read('x22', pinId(), {
+      transcript: doc('x22', [turnOf(P1, r.stdout, { queued: true })]),
+    });
+    ok(v, 'x22', pinId(), {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(e.id, 1),
+      stage: 'final',
+    });
     expect([v.turns[0].paired_by, v.turns[0].delivery]).toEqual(['prompt', 'confirmed']);
   });
 });
@@ -566,8 +785,16 @@ describe('application: labels act only on a confirmed delivery', () => {
     const t = await sentTurn('x8');
     const [e] = events('x8');
     expect([e.block_state, stages('x8', pinId())]).toEqual(['sent', [['emitted', 'final']]]);
-    const v = read('x8', pinId(), { transcript: t, labels: [label('observed', 'failed-check', 'x8')] });
-    ok(v, 'x8', pinId(), { class: 'applied-but-wrong', reason: null, turn: at(e.id, 1), stage: 'final' });
+    const v = read('x8', pinId(), {
+      transcript: t,
+      labels: [label('observed', 'failed-check', 'x8')],
+    });
+    ok(v, 'x8', pinId(), {
+      class: 'applied-but-wrong',
+      reason: null,
+      turn: at(e.id, 1),
+      stage: 'final',
+    });
     expect(v.label?.signal).toBe('failed-check');
   });
 
@@ -576,8 +803,16 @@ describe('application: labels act only on a confirmed delivery', () => {
     const t = await sentTurn('x9');
     const [e] = events('x9');
     expect([e.block_state, stages('x9', pinId())]).toEqual(['sent', [['emitted', 'final']]]);
-    const v = read('x9', pinId(), { transcript: t, labels: [label('judged', 'resolved-check', 'x9')] });
-    ok(v, 'x9', pinId(), { class: 'applied-supported', reason: null, turn: at(e.id, 1), stage: 'final' });
+    const v = read('x9', pinId(), {
+      transcript: t,
+      labels: [label('judged', 'resolved-check', 'x9')],
+    });
+    ok(v, 'x9', pinId(), {
+      class: 'applied-supported',
+      reason: null,
+      turn: at(e.id, 1),
+      stage: 'final',
+    });
   });
 
   it('an observed label with an unknown signal is indeterminate outcome-unknown', async () => {
@@ -585,8 +820,16 @@ describe('application: labels act only on a confirmed delivery', () => {
     const t = await sentTurn('x9b');
     const [e] = events('x9b');
     expect([e.block_state, stages('x9b', pinId())]).toEqual(['sent', [['emitted', 'final']]]);
-    const v = read('x9b', pinId(), { transcript: t, labels: [label('observed', 'unknown', 'x9b')] });
-    ok(v, 'x9b', pinId(), { class: 'indeterminate', reason: 'outcome-unknown', turn: at(e.id, 1), stage: 'final' });
+    const v = read('x9b', pinId(), {
+      transcript: t,
+      labels: [label('observed', 'unknown', 'x9b')],
+    });
+    ok(v, 'x9b', pinId(), {
+      class: 'indeterminate',
+      reason: 'outcome-unknown',
+      turn: at(e.id, 1),
+      stage: 'final',
+    });
   });
 });
 
@@ -594,8 +837,12 @@ describe('boundary evidence', () => {
   it('a session-end after the turns is a note, not a turn', async () => {
     make();
     const t = await sentTurn('x21');
-    expect((await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('x21') })).status).toBe(0);
-    const end = rows(`SELECT id FROM delivery_events WHERE session_id = 'x21' AND event_type = 'session-end'`);
+    expect(
+      (await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('x21') })).status,
+    ).toBe(0);
+    const end = rows(
+      `SELECT id FROM delivery_events WHERE session_id = 'x21' AND event_type = 'session-end'`,
+    );
     expect(end).toHaveLength(1);
     const [e] = events('x21');
     expect([e.event_type, e.block_state, stages('x21', pinId())]).toEqual([
@@ -604,10 +851,15 @@ describe('boundary evidence', () => {
       [['emitted', 'final']],
     ]);
     const v = read('x21', pinId(), { transcript: t });
-    ok(v, 'x21', pinId(), { class: 'application-unknown', reason: null, turn: at(e.id, 1), stage: 'final' });
-    expect([v.notes.includes(`session-end:${end[0].id}`), v.turns.map((x) => x.event_type)]).toEqual([
-      true,
-      ['prompt-submit'],
-    ]);
+    ok(v, 'x21', pinId(), {
+      class: 'application-unknown',
+      reason: null,
+      turn: at(e.id, 1),
+      stage: 'final',
+    });
+    expect([
+      v.notes.includes(`session-end:${end[0].id}`),
+      v.turns.map((x) => x.event_type),
+    ]).toEqual([true, ['prompt-submit']]);
   });
 });

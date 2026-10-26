@@ -16,7 +16,8 @@ export const HIPPO_LAST_SLEEP_MARKER = 'hippo last-sleep';
 export const HIPPO_CAPTURE_MARKER = 'hippo capture --last-session';
 export const HIPPO_SESSION_END_MARKER = 'hippo session-end';
 export const HIPPO_PINNED_INJECT_MARKER = 'hippo context --pinned-only';
-export const HIPPO_PINNED_INJECT_COMMAND = 'hippo context --pinned-only --include-recent 5 --format additional-context';
+export const HIPPO_PINNED_INJECT_COMMAND =
+  'hippo context --pinned-only --include-recent 5 --format additional-context';
 export const HIPPO_CODEX_WRAPPER_MARKER = 'hippo codex wrapper';
 export const HIPPO_PRE_COMPACT_MARKER = 'hippo pre-compact';
 export const HIPPO_COMPACT_RESUME_MARKER = 'hippo compact-resume';

@@ -5,7 +5,12 @@ const MAPPED_PREFIX = '::ffff:';
 
 /** A URL hostname that stays on this machine: localhost, ::1 (bracketed or not) or any 127.0.0.0/8 address. */
 export function isLoopbackHost(hostname: string): boolean {
-  return hostname === 'localhost' || hostname === '[::1]' || hostname === '::1' || IPV4_LOOPBACK.test(hostname);
+  return (
+    hostname === 'localhost' ||
+    hostname === '[::1]' ||
+    hostname === '::1' ||
+    IPV4_LOOPBACK.test(hostname)
+  );
 }
 
 /** The URL `raw` spells, or undefined when it is not one. */
@@ -22,7 +27,9 @@ export function parseOutboundUrl(raw: string, setting: string, keySetting?: stri
     throw new Error(`${setting} must be an http or https URL`);
   }
   if (parsed.username || parsed.password) {
-    throw new Error(`${setting} must not embed credentials${keySetting ? `; set ${keySetting}` : ''}`);
+    throw new Error(
+      `${setting} must not embed credentials${keySetting ? `; set ${keySetting}` : ''}`,
+    );
   }
   // Plain http would put the key and the memory text on the wire, so only the local machine may use it.
   if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)) {

@@ -5,7 +5,11 @@ import * as path from 'node:path';
 import { preCompactHook } from '../../src/surface/capture/compact.js';
 import { PRE_COMPACT_INSTRUCTION } from '../../src/surface/capture/compaction-record.js';
 import { normalizeHookPayload } from '../../src/surface/cli/stdin.js';
-import { copilotEventsJsonl, copilotPayload, writeCopilotSessionLog } from '../_helpers/copilot-hooks.js';
+import {
+  copilotEventsJsonl,
+  copilotPayload,
+  writeCopilotSessionLog,
+} from '../_helpers/copilot-hooks.js';
 import {
   SNAPSHOT_TASK,
   dispose,
@@ -52,29 +56,36 @@ describe('a hook registered twice does not number a compaction twice', () => {
         expect(hippo(p, [hook], { input, env: { HIPPO_FAKE_NOW: now } }).status).toBe(0);
       }
       const [first, twin, later] = eventsN(p, 'b8', 3);
-      expect([first.turn_seq, twin.turn_seq, twin.duplicate_of, later.turn_seq, later.duplicate_of]).toEqual([
-        1,
-        null,
-        first.id,
-        2,
-        null,
-      ]);
+      expect([
+        first.turn_seq,
+        twin.turn_seq,
+        twin.duplicate_of,
+        later.turn_seq,
+        later.duplicate_of,
+      ]).toEqual([1, null, first.id, 2, null]);
     },
   );
 
-  it.each(HOOKS)('%s: two processes started together leave one numbered row and no lost count', async (hook) => {
-    const run = (): ReturnType<typeof hippoAsync> =>
-      hippoAsync(p, [hook], { input: payloadFor(hook, 'b8-race'), env: { HIPPO_FAKE_NOW: T0 } });
-    const results = await Promise.all([run(), run()]);
-    expect(results.map((r) => r.status)).toEqual([0, 0]);
-    const rows = events(p, 'b8-race');
-    const dropped = results.flatMap((r) => ledgerLines(r.stderr));
-    expect(rows.filter((e) => e.turn_seq !== null)).toHaveLength(1);
-    expect(rows.length + dropped.length).toBe(2);
-  });
+  it.each(HOOKS)(
+    '%s: two processes started together leave one numbered row and no lost count',
+    async (hook) => {
+      const run = (): ReturnType<typeof hippoAsync> =>
+        hippoAsync(p, [hook], { input: payloadFor(hook, 'b8-race'), env: { HIPPO_FAKE_NOW: T0 } });
+      const results = await Promise.all([run(), run()]);
+      expect(results.map((r) => r.status)).toEqual([0, 0]);
+      const rows = events(p, 'b8-race');
+      const dropped = results.flatMap((r) => ledgerLines(r.stderr));
+      expect(rows.filter((e) => e.turn_seq !== null)).toHaveLength(1);
+      expect(rows.length + dropped.length).toBe(2);
+    },
+  );
 
   it('copilot: preCompact then PreCompact for one compaction leave exactly one row', () => {
-    const transcript = writeCopilotSessionLog(path.join(p.dir, '.copilot'), 'copilot-sess-1', copilotEventsJsonl());
+    const transcript = writeCopilotSessionLog(
+      path.join(p.dir, '.copilot'),
+      'copilot-sess-1',
+      copilotEventsJsonl(),
+    );
     const camel = copilotPayload('preCompact', p.cwd, transcript);
     // SAFETY: the fixture is a JSON object; the second fire is the same compaction under the snake_case event name.
     const snake = JSON.stringify({
@@ -120,7 +131,10 @@ function scenario(proj: Project): Observed {
       proj,
       'SELECT session_id, compact_trigger, snapshot_saved, items_written, status FROM compactions ORDER BY started_at, id',
     ),
-    tokens: tableRows(proj, 'SELECT surface, event, items, tokens, session_id FROM token_ledger ORDER BY id'),
+    tokens: tableRows(
+      proj,
+      'SELECT surface, event, items, tokens, session_id FROM token_ledger ORDER BY id',
+    ),
   };
 }
 
@@ -158,9 +172,12 @@ describe('the ledger never changes either hook', () => {
       expect([pre.stdout, maskTimes(resume.stdout)]).toEqual(baseline.stdout);
       expect(ledgerLines(pre.stderr)).toHaveLength(1);
       expect(ledgerLines(resume.stderr)).toHaveLength(1);
-      expect(tableRows(p, 'SELECT surface, event, items, tokens, session_id FROM token_ledger ORDER BY id')).toEqual(
-        baseline.tokens,
-      );
+      expect(
+        tableRows(
+          p,
+          'SELECT surface, event, items, tokens, session_id FROM token_ledger ORDER BY id',
+        ),
+      ).toEqual(baseline.tokens);
       expect(
         tableRows(
           p,
@@ -191,7 +208,11 @@ describe('boundary row contents and a boundary callback that throws', () => {
     // SAFETY: the stub returns instead of exiting, so the hook's tail runs; `never` only satisfies the exit signature.
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     try {
-      const transcript = writeCopilotSessionLog(path.join(p.dir, '.copilot'), 'copilot-sess-1', copilotEventsJsonl());
+      const transcript = writeCopilotSessionLog(
+        path.join(p.dir, '.copilot'),
+        'copilot-sess-1',
+        copilotEventsJsonl(),
+      );
       const logFile = path.join(p.dir, 'u1.log');
       await preCompactHook(p.hippoRoot, hookStore(p.hippoRoot), {
         tenantId: 'default',

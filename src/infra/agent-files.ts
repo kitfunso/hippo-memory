@@ -29,7 +29,8 @@ function readOpenTextFile(file: string, fd: number): TextFile {
   if (!stat.isFile()) return { ok: false, reason: `${file}: not a file` };
   // A tool rewriting a file truncates it first; read as holding no notes, every row would be set aside.
   if (stat.size === 0) return { ok: false, reason: `${file}: empty` };
-  if (stat.size > MAX_ITEM_BYTES) return { ok: false, reason: `${file}: over ${MAX_ITEM_BYTES} bytes` };
+  if (stat.size > MAX_ITEM_BYTES)
+    return { ok: false, reason: `${file}: over ${MAX_ITEM_BYTES} bytes` };
   const buf = fs.readFileSync(fd);
   if (buf.includes(0)) return { ok: false, reason: `${file}: not text` };
   return { ok: true, text: buf.toString('utf8'), mtimeMs: stat.mtimeMs };
@@ -38,7 +39,8 @@ function readOpenTextFile(file: string, fd: number): TextFile {
 function listFiles(dir: string, opts: { readonly recursive: boolean }): DirListing {
   if (!fs.existsSync(dir)) return { status: 'missing' };
   try {
-    if (!fs.statSync(dir).isDirectory()) return { status: 'unreadable', reason: `${dir}: not a folder` };
+    if (!fs.statSync(dir).isDirectory())
+      return { status: 'unreadable', reason: `${dir}: not a folder` };
     const files: string[] = [];
     walk(dir, '', opts.recursive ? MAX_DEPTH : 0, files);
     return { status: 'ok', files: files.sort() };
@@ -51,7 +53,8 @@ function walk(root: string, rel: string, depthLeft: number, out: string[]): void
   for (const entry of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
     if (entry.name.startsWith('.')) continue;
     const child = rel === '' ? entry.name : `${rel}/${entry.name}`;
-    if (entry.isFile() || (entry.isSymbolicLink() && isFile(path.join(root, child)))) out.push(child);
+    if (entry.isFile() || (entry.isSymbolicLink() && isFile(path.join(root, child))))
+      out.push(child);
     else if (entry.isDirectory() && depthLeft > 0) walk(root, child, depthLeft - 1, out);
   }
 }

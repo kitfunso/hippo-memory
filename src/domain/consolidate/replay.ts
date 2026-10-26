@@ -7,7 +7,11 @@
 
 import { HOUR_MS } from '../../base/util/time.js';
 import { mulberry32 } from '../../base/util/prng.js';
-import { PRODUCTION_STRENGTH, resolveConfidence, type StrengthModel } from '../../base/memory/strength.js';
+import {
+  PRODUCTION_STRENGTH,
+  resolveConfidence,
+  type StrengthModel,
+} from '../../base/memory/strength.js';
 import type { MemoryEntry, EmotionalValence } from '../../base/memory/entry.js';
 
 const VALENCE_WEIGHT = {

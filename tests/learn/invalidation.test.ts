@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { extractInvalidationTarget, invalidateMatching } from '../../src/domain/learn/invalidation.js';
+import {
+  extractInvalidationTarget,
+  invalidateMatching,
+} from '../../src/domain/learn/invalidation.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeStore } from '../_helpers/make-root.js';

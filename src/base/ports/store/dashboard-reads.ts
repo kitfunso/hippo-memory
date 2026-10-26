@@ -122,7 +122,11 @@ interface ScatterPoint {
 
 /** Every row by created then id while the project holds at most SCATTER_POINTS_MAX, else per-layer cell counts. */
 export type ScatterRows =
-  | { readonly mode: 'points'; readonly maxAgeDays: number; readonly points: readonly ScatterPoint[] }
+  | {
+      readonly mode: 'points';
+      readonly maxAgeDays: number;
+      readonly points: readonly ScatterPoint[];
+    }
   | { readonly mode: 'grid'; readonly maxAgeDays: number; readonly cells: readonly number[][] };
 
 /** Per project, in the order of DashboardTotals: its live rows and those whose content or tags hold the text. */

@@ -4,7 +4,11 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, type MemoryEntry } from '../../src/base/memory/entry.js';
+import {
+  COMPACTION_MEMORY_TAG,
+  COMPACTION_SOURCE_PREFIX,
+  type MemoryEntry,
+} from '../../src/base/memory/entry.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { contextGet, retrieve } from '../../src/api/index.js';
@@ -27,7 +31,8 @@ let tmpRoot: string;
 let local: string;
 let ctx: FullContext;
 
-const minute = (base: number, i: number): string => new Date(Date.UTC(2026, base, 1, 0, i)).toISOString();
+const minute = (base: number, i: number): string =>
+  new Date(Date.UTC(2026, base, 1, 0, i)).toISOString();
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const entry = {
@@ -55,7 +60,8 @@ function seedItem(
   });
 }
 
-const ids = (result: { entries: Array<{ entry: { id: string } }> }): string[] => result.entries.map((e) => e.entry.id);
+const ids = (result: { entries: Array<{ entry: { id: string } }> }): string[] =>
+  result.entries.map((e) => e.entry.id);
 
 function enablePromptRecall(root: string): void {
   writeFileSync(
@@ -95,7 +101,9 @@ describe('own-session compaction items in recent context', () => {
 
   function seedFortyItemsAndOlderRowsIn() {
     const older = Array.from({ length: 8 }, (_, i) =>
-      seed(local, `older release note ${i} about the checklist for the payments service`, { created: minute(0, i) }),
+      seed(local, `older release note ${i} about the checklist for the payments service`, {
+        created: minute(0, i),
+      }),
     );
     const items = Array.from({ length: 40 }, (_, i) =>
       seedItem(
@@ -152,16 +160,24 @@ describe('own-session compaction items in recent context', () => {
   it('keeps them out of the strength-ranked context too', async () => {
     const { older } = seedFortyItemsAndOlderRows();
 
-    const result = await contextGet(ctx, { budget: 2000, currentProject: PROJECT, currentSessionId: OWN });
+    const result = await contextGet(ctx, {
+      budget: 2000,
+      currentProject: PROJECT,
+      currentSessionId: OWN,
+    });
 
     expect(ids(result).sort()).toEqual(older.map((e) => e.id).sort());
   });
 
   it('keeps an untagged row from the same session', async () => {
-    const plain = seed(local, 'a plain note from the same session about the deploy migration check', {
-      sourceSessionId: OWN,
-      created: minute(6, 0),
-    });
+    const plain = seed(
+      local,
+      'a plain note from the same session about the deploy migration check',
+      {
+        sourceSessionId: OWN,
+        created: minute(6, 0),
+      },
+    );
 
     const result = await contextGet(ctx, {
       pinnedOnly: true,
@@ -197,7 +213,12 @@ describe('own-session compaction items under prompt recall', () => {
     enablePromptRecall(local);
     const { older } = seedRecallRows();
 
-    const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, currentSessionId: OWN, prompt });
+    const result = await contextGet(ctx, {
+      pinnedOnly: true,
+      currentProject: PROJECT,
+      currentSessionId: OWN,
+      prompt,
+    });
 
     expect(ids(result)).toEqual([older.id]);
     expect(result.entries[0]?.promptRecall).toBe(true);

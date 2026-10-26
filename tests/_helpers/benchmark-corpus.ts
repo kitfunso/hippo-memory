@@ -7,8 +7,10 @@ import { writeEntry } from '../_helpers/root-forms.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
-export const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) =>
-  createMemory(content, { baseHalfLifeDays: 7, ...options });
+export const createMemory7 = (
+  content: string,
+  options: Partial<Parameters<typeof createMemory>[1]> = {},
+) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -22,7 +24,11 @@ export function daysAgo(n: number): string {
 }
 
 /** Write a memory and record its id under a stable label. */
-function seed(label: string, content: string, opts: Partial<Parameters<typeof createMemory>[1]> = {}): MemoryEntry {
+function seed(
+  label: string,
+  content: string,
+  opts: Partial<Parameters<typeof createMemory>[1]> = {},
+): MemoryEntry {
   const entry = createMemory7(content, opts);
   // Use label as a deterministic ID fragment so tests are readable
   const withLabel: MemoryEntry = { ...entry, id: `bm_${label}` };

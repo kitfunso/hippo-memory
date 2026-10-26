@@ -49,7 +49,15 @@ describe('serve() under a store that has the predictions group', () => {
       ),
     ).toMatchObject({
       status: 201,
-      body: { prediction: { id: 1, tenantId: TENANT_A, classTag: 'cutover', estimateValue: 2, closureState: 'open' } },
+      body: {
+        prediction: {
+          id: 1,
+          tenantId: TENANT_A,
+          classTag: 'cutover',
+          estimateValue: 2,
+          closureState: 'open',
+        },
+      },
     });
     expect(await call(memberA, 'GET', '/v1/predictions?status=open')).toMatchObject({
       status: 200,
@@ -59,7 +67,9 @@ describe('serve() under a store that has the predictions group', () => {
       status: 200,
       body: { prediction: { id: 1, claimText: 'the cutover takes two days' } },
     });
-    expect(await call(memberA, 'POST', '/v1/predictions/1/close', '{"state":"closed","actual":3}')).toMatchObject({
+    expect(
+      await call(memberA, 'POST', '/v1/predictions/1/close', '{"state":"closed","actual":3}'),
+    ).toMatchObject({
       status: 200,
       body: { prediction: { id: 1, closureState: 'closed', actualValue: 3 } },
     });
@@ -72,7 +82,10 @@ describe('serve() under a store that has the predictions group', () => {
       body: { predictions: [], next_cursor: null },
     });
     expect((await call(memberB, 'GET', '/v1/predictions/1')).status).toBe(404);
-    expect((await call(memberB, 'POST', '/v1/predictions/1/close', '{"state":"closed","actual":3}')).status).toBe(404);
+    expect(
+      (await call(memberB, 'POST', '/v1/predictions/1/close', '{"state":"closed","actual":3}'))
+        .status,
+    ).toBe(404);
     const actor = `api_key:${fixture.keys.memberA}`;
     expect(
       side
@@ -110,8 +123,15 @@ describe('serve() under a store that has the quarantine group', () => {
   });
 
   it("runs the three quarantine routes on that store, inside the caller's tenant", async () => {
-    const call = async (token: string, method: string, path: string): Promise<{ status: number; body: unknown }> => {
-      const res = await fetch(`${handle.url}${path}`, { method, headers: { authorization: `Bearer ${token}` } });
+    const call = async (
+      token: string,
+      method: string,
+      path: string,
+    ): Promise<{ status: number; body: unknown }> => {
+      const res = await fetch(`${handle.url}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${token}` },
+      });
       return { status: res.status, body: await res.json() };
     };
     const { adminA, memberA } = fixture.tokens;
@@ -179,7 +199,9 @@ describe('serve() under a store that has the quarantine group', () => {
     expect(await call(adminA, 'GET', '/v1/quarantine?status=approved')).toMatchObject({
       status: 200,
       body: {
-        quarantine: [{ id: HELD.a1, status: 'approved', decidedBy: `api_key:${fixture.keys.adminA}` }],
+        quarantine: [
+          { id: HELD.a1, status: 'approved', decidedBy: `api_key:${fixture.keys.adminA}` },
+        ],
         next_cursor: null,
       },
     });
@@ -223,7 +245,11 @@ describe('serve() under a store that has the graphReads group', () => {
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
     graph = await seedGraphRows(fixture.dir);
-    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: portOnlySide(fixture.dir).store });
+    handle = await serve({
+      hippoRoot: fixture.dir,
+      port: 0,
+      store: portOnlySide(fixture.dir).store,
+    });
   });
 
   afterAll(async () => {
@@ -235,7 +261,9 @@ describe('serve() under a store that has the graphReads group', () => {
   it("serves GET /v1/graph from that store, inside the caller's tenant and under the caller's scopes, and writes nothing to hippo.db", async () => {
     const before = hippoDbRows();
     const get = async (token: string, path: string): Promise<{ status: number; body: unknown }> => {
-      const res = await fetch(`${handle.url}${path}`, { headers: { authorization: `Bearer ${token}` } });
+      const res = await fetch(`${handle.url}${path}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
       return { status: res.status, body: await res.json() };
     };
     const { adminA, memberA, memberB } = fixture.tokens;
@@ -267,7 +295,11 @@ describe('serve() under a store that has the graphReads group', () => {
     });
     expect(await get(memberA, '/v1/graph?entity=Hub')).toEqual({
       status: 200,
-      body: { nodes: [hub, ...spokes, shared], edges: [edge(e.shared, e.hub), ...amongSpokes], truncated: false },
+      body: {
+        nodes: [hub, ...spokes, shared],
+        edges: [edge(e.shared, e.hub), ...amongSpokes],
+        truncated: false,
+      },
     });
     expect(await get(memberA, '/v1/graph?entity=Secret')).toEqual({
       status: 200,

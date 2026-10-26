@@ -64,7 +64,10 @@ export function openRootStoreRuntime(): StoreRuntime {
 }
 
 /** hippo.db as a server serves it, with an exit hook that closes what the server opened if close() never runs. */
-export function defaultServerRuntime(hippoRoot: string, opts: ServerRuntimeOptions = {}): SqliteServerRuntime {
+export function defaultServerRuntime(
+  hippoRoot: string,
+  opts: ServerRuntimeOptions = {},
+): SqliteServerRuntime {
   const runtime = sqliteServerRuntime(hippoRoot, opts);
   const onExit = (): void => runtime.closeOnExit();
   process.once('exit', onExit);

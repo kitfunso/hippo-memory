@@ -28,7 +28,9 @@ describe('archiveRawMemory', () => {
     // SAFETY: literal SELECT of the raw_archive row this test just wrote via
     // archiveRawMemory above; all four columns are NOT NULL in the schema.
     const archived = db
-      .prepare(`SELECT memory_id, reason, archived_by, payload_json FROM raw_archive WHERE memory_id='r1'`)
+      .prepare(
+        `SELECT memory_id, reason, archived_by, payload_json FROM raw_archive WHERE memory_id='r1'`,
+      )
       .get() as { memory_id: string; reason: string; archived_by: string; payload_json: string };
     expect(archived.memory_id).toBe('r1');
     expect(archived.reason).toBe('GDPR right-to-be-forgotten');
@@ -64,7 +66,9 @@ describe('archiveRawMemory', () => {
   it('throws when memory id does not exist', () => {
     const home = makeRoot('arch');
     const db = openHippoDb(home);
-    expect(() => archiveRawMemory(db, 'missing', { reason: 'test', who: 'user:1' })).toThrow(/not found/i);
+    expect(() => archiveRawMemory(db, 'missing', { reason: 'test', who: 'user:1' })).toThrow(
+      /not found/i,
+    );
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
   });
@@ -92,7 +96,9 @@ describe('archiveRawMemory', () => {
       '[]',
     );
     // Pre-condition: FTS finds it
-    const before = db.prepare(`SELECT id FROM memories_fts WHERE memories_fts MATCH ?`).all('zylph');
+    const before = db
+      .prepare(`SELECT id FROM memories_fts WHERE memories_fts MATCH ?`)
+      .all('zylph');
     expect(before.length).toBe(1);
     archiveRawMemory(db, 'rfts', { reason: 'GDPR delete', who: 'user:99' });
     // Post-condition: FTS no longer finds it
@@ -115,12 +121,20 @@ describe('archiveRawMemory', () => {
       ).run();
       db.exec('DROP TABLE memories_fts');
 
-      expect(() => archiveRawMemory(db, 'rfail', { reason: 'GDPR delete', who: 'user:7' })).toThrow(/memories_fts/);
+      expect(() => archiveRawMemory(db, 'rfail', { reason: 'GDPR delete', who: 'user:7' })).toThrow(
+        /memories_fts/,
+      );
 
-      expect(db.prepare(`SELECT id FROM memories WHERE id = 'rfail'`).get()).toEqual({ id: 'rfail' });
-      expect(db.prepare(`SELECT memory_id FROM raw_archive WHERE memory_id = 'rfail'`).get()).toBeUndefined();
+      expect(db.prepare(`SELECT id FROM memories WHERE id = 'rfail'`).get()).toEqual({
+        id: 'rfail',
+      });
       expect(
-        db.prepare(`SELECT 1 AS x FROM audit_log WHERE op = 'archive_raw' AND target_id = 'rfail'`).get(),
+        db.prepare(`SELECT memory_id FROM raw_archive WHERE memory_id = 'rfail'`).get(),
+      ).toBeUndefined();
+      expect(
+        db
+          .prepare(`SELECT 1 AS x FROM audit_log WHERE op = 'archive_raw' AND target_id = 'rfail'`)
+          .get(),
       ).toBeUndefined();
     } finally {
       closeHippoDb(db);
@@ -145,10 +159,14 @@ describe('archiveRawMemories', () => {
       for (const id of ['one', 'm1', 'm2', 'm3', 'm4', 'm5']) insertRaw(db, id);
       const opts = { reason: 'artifact deleted', who: 'github:bot' };
       const single = recordStatements(() => archiveRawMemories(db, ['one'], opts)).statements;
-      const many = recordStatements(() => archiveRawMemories(db, ['m1', 'm2', 'm3', 'm4', 'm5'], opts)).statements;
+      const many = recordStatements(() =>
+        archiveRawMemories(db, ['m1', 'm2', 'm3', 'm4', 'm5'], opts),
+      ).statements;
       expect(many).toHaveLength(single.length);
       expect(count(db, `SELECT COUNT(*) AS n FROM memories`)).toBe(0);
-      expect(count(db, `SELECT COUNT(*) AS n FROM raw_archive WHERE archived_by = 'github:bot'`)).toBe(6);
+      expect(
+        count(db, `SELECT COUNT(*) AS n FROM raw_archive WHERE archived_by = 'github:bot'`),
+      ).toBe(6);
       expect(count(db, `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'archive_raw'`)).toBe(6);
     } finally {
       closeHippoDb(db);

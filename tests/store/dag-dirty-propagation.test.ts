@@ -18,7 +18,12 @@ import { supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { deleteEntry, loadAllDirtySummaries, writeEntry, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
+import {
+  deleteEntry,
+  loadAllDirtySummaries,
+  writeEntry,
+  batchWriteAndDeleteInFolder,
+} from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -64,7 +69,11 @@ describe('child-write dirty-flag propagation', () => {
     db.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
     closeHippoDb(db);
     // Act: invalidateMatching writes the fact back through writeEntry (L97).
-    await invalidateMatching(sqliteStore(hippoRoot), { from: 'FRED cache', to: null, type: 'removal' }, 'default');
+    await invalidateMatching(
+      sqliteStore(hippoRoot),
+      { from: 'FRED cache', to: null, type: 'removal' },
+      'default',
+    );
     // Assert: parent dirty again.
     expect((await dirtyFor(hippoRoot, 'default')).map((m) => m.id)).toContain(summary.id);
   });
@@ -90,7 +99,9 @@ describe('child-write dirty-flag propagation', () => {
     // SAFETY: `SELECT COUNT(*) AS n` always returns exactly one row shaped { n: number }.
     const beforeCount = (
       db
-        .prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
+        .prepare(
+          `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
+        )
         .get(summary.id) as { n: number }
     ).n;
     closeHippoDb(db);
@@ -104,7 +115,9 @@ describe('child-write dirty-flag propagation', () => {
     // SAFETY: `SELECT COUNT(*) AS n` always returns exactly one row shaped { n: number }.
     const afterCount = (
       db2
-        .prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`)
+        .prepare(
+          `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
+        )
         .get(summary.id) as { n: number }
     ).n;
     closeHippoDb(db2);

@@ -6,7 +6,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/entry.js';
-import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
+import {
+  handleMcpRequest,
+  type McpContext,
+  type McpResponse,
+} from '../../src/surface/mcp/server.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
@@ -56,7 +60,12 @@ function makeHome(config?: StoreConfig): string {
   return home;
 }
 
-function add(s: Seeded, label: string, content: string, opts: Partial<CreateMemoryOptions> = {}): MemoryEntry {
+function add(
+  s: Seeded,
+  label: string,
+  content: string,
+  opts: Partial<CreateMemoryOptions> = {},
+): MemoryEntry {
   const entry = createMemory(content, { baseHalfLifeDays: 7, tenantId: TENANT, ...opts });
   writeEntry(s.home, entry);
   s.labelById.set(entry.id, label);
@@ -67,7 +76,12 @@ function add(s: Seeded, label: string, content: string, opts: Partial<CreateMemo
 
 /** Lexical hits of differing strength, a semantic-only row, scoped, private, legacy, pinned and churn-stale rows, and noise. */
 function seed(config?: StoreConfig): Seeded {
-  const s: Seeded = { home: makeHome(config), labelById: new Map(), idByLabel: new Map(), contentByLabel: new Map() };
+  const s: Seeded = {
+    home: makeHome(config),
+    labelById: new Map(),
+    idByLabel: new Map(),
+    contentByLabel: new Map(),
+  };
   add(s, 'L1', 'deploy pipeline uses blue green rollout');
   add(s, 'L2', 'deploy checklist says run migrations before every deploy');
   add(s, 'L3', 'rollback the deploy when health checks fail twice');
@@ -94,7 +108,12 @@ function call(
   ctx?: Partial<McpContext>,
 ): Promise<McpResponse | null> {
   return handleMcpRequest(
-    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } },
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'hippo_recall', arguments: args },
+    },
     {
       hippoRoot: home,
       tenantId: TENANT,
@@ -111,7 +130,9 @@ function call(
 
 function textOf(res: McpResponse | null): string {
   // SAFETY: hippo_recall's success envelope is written by src/surface/mcp/server.ts as { content: [{ text }] }.
-  return (res?.result as { content?: Array<{ text: string }> } | undefined)?.content?.[0]?.text ?? '';
+  return (
+    (res?.result as { content?: Array<{ text: string }> } | undefined)?.content?.[0]?.text ?? ''
+  );
 }
 
 interface Observed {
@@ -135,9 +156,11 @@ function observe(s: Seeded, text: string): Observed {
   const tail =
     tailAt < 0
       ? []
-      : [...text.slice(tailAt).matchAll(/^- \[(?:tail|summary)\] (\S+?)(?: \(covers \d+ rows\))?:/gm)].map(
-          (m) => s.labelById.get(m[1]) ?? m[1],
-        );
+      : [
+          ...text
+            .slice(tailAt)
+            .matchAll(/^- \[(?:tail|summary)\] (\S+?)(?: \(covers \d+ rows\))?:/gm),
+        ].map((m) => s.labelById.get(m[1]) ?? m[1]);
   const cutoff = /^Showing .*$/m.exec(text)?.[0] ?? null;
   return { ranked, tail, cutoff };
 }
@@ -152,7 +175,9 @@ function retrievalCounts(s: Seeded): Map<string, number> {
       retrieval_count: number;
     }>;
     return new Map(
-      rows.filter((r) => r.retrieval_count > 0).map((r) => [s.labelById.get(r.id) ?? r.id, r.retrieval_count]),
+      rows
+        .filter((r) => r.retrieval_count > 0)
+        .map((r) => [s.labelById.get(r.id) ?? r.id, r.retrieval_count]),
     );
   } finally {
     closeHippoDb(db);
@@ -173,7 +198,10 @@ function withEmbeddings(s: Seeded): void {
     vi.fn(async (_url: string, init: { body: string }) => {
       // SAFETY: body is the OpenAI embeddings request this provider just serialised.
       const body = JSON.parse(init.body) as { input: string[] };
-      return new Response(JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }), { status: 200 });
+      return new Response(
+        JSON.stringify({ data: body.input.map(() => ({ embedding: [1, 0, 0] })) }),
+        { status: 200 },
+      );
     }),
   );
 }
@@ -198,12 +226,16 @@ describe('MCP hippo_recall ranking', () => {
 
   it('default hybrid mode, default budget', async () => {
     const s = track(seed());
-    expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(EXPECTED.defaultHybrid);
+    expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(
+      EXPECTED.defaultHybrid,
+    );
   });
 
   it('a tight budget keeps only the top rows', async () => {
     const s = track(seed());
-    expect(observe(s, textOf(await call(s.home, { query: QUERY, budget: 90 })))).toEqual(EXPECTED.tightBudget);
+    expect(observe(s, textOf(await call(s.home, { query: QUERY, budget: 90 })))).toEqual(
+      EXPECTED.tightBudget,
+    );
   });
 
   it('an explicit scope returns that scope only', async () => {
@@ -229,7 +261,9 @@ describe('MCP hippo_recall ranking', () => {
       source: 'test',
     });
     const args = { query: QUERY, budget: 250 };
-    expect(observe(s, textOf(await call(s.home, args))).ranked).toEqual(EXPECTED.defaultHybrid.ranked);
+    expect(observe(s, textOf(await call(s.home, args))).ranked).toEqual(
+      EXPECTED.defaultHybrid.ranked,
+    );
     const text = textOf(await call(s.home, { ...args, include_continuity: true }));
     expect(text.indexOf('## Continuity')).toBeGreaterThan(text.indexOf('Found '));
     expect(observe(s, text)).toEqual(EXPECTED.continuity);
@@ -238,29 +272,35 @@ describe('MCP hippo_recall ranking', () => {
   it('physics mode without embeddings ranks like hybrid, a short exact match first', async () => {
     const s = track(seed({ physics: { enabled: true } }));
     add(s, 'X1', 'deploy pipeline');
-    expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(EXPECTED.physicsNoEmbeddings);
+    expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(
+      EXPECTED.physicsNoEmbeddings,
+    );
   });
 
   it('hybrid mode with embeddings returns the semantic-only row', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'sk-test');
     const s = track(seed(EMBED_CONFIG));
     withEmbeddings(s);
-    expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(EXPECTED.hybridEmbeddings);
+    expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(
+      EXPECTED.hybridEmbeddings,
+    );
   });
 
   it('physics mode with embeddings returns the semantic-only row', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'sk-test');
     const s = track(seed({ ...EMBED_CONFIG, physics: { enabled: true } }));
     withEmbeddings(s);
-    expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(EXPECTED.physicsEmbeddings);
+    expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(
+      EXPECTED.physicsEmbeddings,
+    );
   });
 
   it('session goals boost by score, not by position', async () => {
     const s = track(seed());
     await pushGoal(s.home, { sessionId: 'sess-rank', tenantId: TENANT, goalName: 'ship-goal' });
-    expect(observe(s, textOf(await call(s.home, { query: QUERY, session_id: 'sess-rank' })))).toEqual(
-      EXPECTED.goalBoost,
-    );
+    expect(
+      observe(s, textOf(await call(s.home, { query: QUERY, session_id: 'sess-rank' }))),
+    ).toEqual(EXPECTED.goalBoost);
   });
 
   it('fresh tail and scorer_window: tail rows follow the list, and only the listed rows are strengthened', async () => {
@@ -268,7 +308,10 @@ describe('MCP hippo_recall ranking', () => {
     for (const n of ['one', 'two', 'three']) {
       add(s, `T-${n}`, `standup chatter ${n}`, { layer: Layer.Buffer, kind: 'raw' });
     }
-    const seen = observe(s, textOf(await call(s.home, { query: QUERY, scorer_window: 2, fresh_tail_count: 3 })));
+    const seen = observe(
+      s,
+      textOf(await call(s.home, { query: QUERY, scorer_window: 2, fresh_tail_count: 3 })),
+    );
     expect(seen).toEqual(EXPECTED.freshTail);
     expect(retrievalCounts(s)).toEqual(new Map(seen.ranked.map((l) => [l, 1])));
   });
@@ -280,18 +323,26 @@ describe('MCP hippo_recall ranking', () => {
     await withSharedStoreHandles(() => {
       for (let i = 0; i < 210; i++) add(s, `F${i}`, `alpha note ${i}`);
     });
-    expect(observe(s, textOf(await call(s.home, { query: 'alpha', budget: 300 })))).toEqual(EXPECTED.windowEdge);
+    expect(observe(s, textOf(await call(s.home, { query: 'alpha', budget: 300 })))).toEqual(
+      EXPECTED.windowEdge,
+    );
   });
 
   it('overflowed children of a level-2 summary bring the summary into the tail', async () => {
     const s = track(seed());
-    const parent = add(s, 'SUM', 'rollup summary of the child notes', { dagLevel: 2, tags: ['dag-summary'] });
+    const parent = add(s, 'SUM', 'rollup summary of the child notes', {
+      dagLevel: 2,
+      tags: ['dag-summary'],
+    });
     // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
     await withSharedStoreHandles(() => {
-      for (let i = 0; i < 3; i++) add(s, `K${i}`, `beta zz child ${i}`, { dagLevel: 0, dagParentId: parent.id });
+      for (let i = 0; i < 3; i++)
+        add(s, `K${i}`, `beta zz child ${i}`, { dagLevel: 0, dagParentId: parent.id });
       for (let i = 0; i < 60; i++) add(s, `B${i}`, `beta row ${i}`);
     });
-    expect(observe(s, textOf(await call(s.home, { query: 'beta', budget: 200 })))).toEqual(EXPECTED.dagOverflow);
+    expect(observe(s, textOf(await call(s.home, { query: 'beta', budget: 200 })))).toEqual(
+      EXPECTED.dagOverflow,
+    );
   });
 
   it('strengthens each shown row once and traces the shown list as pipeline mcp', async () => {
@@ -301,18 +352,27 @@ describe('MCP hippo_recall ranking', () => {
     const db = openHippoDb(s.home);
     try {
       // SAFETY: each SELECT names exactly the columns read below.
-      const traces = db.prepare('SELECT id, pipeline, session_id, result_count FROM recall_traces').all() as Array<{
+      const traces = db
+        .prepare('SELECT id, pipeline, session_id, result_count FROM recall_traces')
+        .all() as Array<{
         id: number;
         pipeline: string;
         session_id: string;
         result_count: number;
       }>;
       expect(traces).toEqual([
-        { id: traces[0]?.id, pipeline: 'mcp', session_id: 'sess-trace', result_count: seen.ranked.length },
+        {
+          id: traces[0]?.id,
+          pipeline: 'mcp',
+          session_id: 'sess-trace',
+          result_count: seen.ranked.length,
+        },
       ]);
       // SAFETY: the SELECT names the one column read below.
       const rows = db
-        .prepare('SELECT memory_id FROM recall_trace_results WHERE trace_id = ? ORDER BY result_rank')
+        .prepare(
+          'SELECT memory_id FROM recall_trace_results WHERE trace_id = ? ORDER BY result_rank',
+        )
         .all(traces[0]?.id) as Array<{ memory_id: string }>;
       expect(rows.map((r) => s.labelById.get(r.memory_id))).toEqual(seen.ranked);
     } finally {
@@ -402,6 +462,7 @@ const EXPECTED = {
   dagOverflow: {
     ranked: ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12'],
     tail: ['SUM'],
-    cutoff: 'Showing 13 of 63 candidates; 50 not shown (rank, budget or limit); 1 summary substitutions added.',
+    cutoff:
+      'Showing 13 of 63 candidates; 50 not shown (rank, budget or limit); 1 summary substitutions added.',
   },
 } satisfies Record<string, Observed>;

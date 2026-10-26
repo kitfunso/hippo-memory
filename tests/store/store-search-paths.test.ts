@@ -129,17 +129,22 @@ describe('loadSearchEntries paths', () => {
     try {
       let lowered = 0;
       // SAFETY: node:sqlite's DatabaseSync has `function` at runtime; DatabaseSyncLike omits it because src registers none.
-      (db as typeof db & { function(name: string, fn: (text: string) => string): void }).function('lower', (text) => {
-        lowered++;
-        return text.toLowerCase();
-      });
+      (db as typeof db & { function(name: string, fn: (text: string) => string): void }).function(
+        'lower',
+        (text) => {
+          lowered++;
+          return text.toLowerCase();
+        },
+      );
       const rowsTested = [3000, 6000].map((size, step) => {
         db.exec('BEGIN');
         for (let i = step * 3000; i < size; i++) writeEntryDbOnly(db, makeRaw(`deploy note ${i}`));
         db.exec('COMMIT');
         const tested = (query: string): number => {
           lowered = 0;
-          expect(listRecallEntries(db, query, { limit: 200, tenantId: 'default' })).toHaveLength(200);
+          expect(listRecallEntries(db, query, { limit: 200, tenantId: 'default' })).toHaveLength(
+            200,
+          );
           // The LIKE predicate lowers content and tags once per term for each row it tests.
           return lowered / 2;
         };
@@ -170,9 +175,13 @@ describe('loadSearchEntries paths', () => {
       const sql = statements.find((text) => text.includes('memories_trigram MATCH'));
       expect(sql).toBeDefined();
       // SAFETY: EXPLAIN QUERY PLAN answers one row per step, its text in `detail`.
-      const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((r) => r.detail);
+      const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map(
+        (r) => r.detail,
+      );
       expect(plan).toContainEqual(expect.stringMatching(/^SCAN t VIRTUAL TABLE INDEX \d+:/));
-      expect(plan).toContainEqual(expect.stringMatching(/^SEARCH m USING INTEGER PRIMARY KEY \(rowid=\?\)/));
+      expect(plan).toContainEqual(
+        expect.stringMatching(/^SEARCH m USING INTEGER PRIMARY KEY \(rowid=\?\)/),
+      );
     } finally {
       closeHippoDb(db);
     }

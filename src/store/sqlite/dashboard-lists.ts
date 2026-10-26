@@ -5,7 +5,13 @@ import type { StoreModel } from './open.js';
 import { withReadSnapshot } from '../../db/busy.js';
 import { pragmaDataVersion } from '../../db/meta.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import { BAND_AT_RISK, CONFIDENCE_ORDER, LAYER_ORDER, listHead, memoryFacts } from '../../base/memory/memory-facts.js';
+import {
+  BAND_AT_RISK,
+  CONFIDENCE_ORDER,
+  LAYER_ORDER,
+  listHead,
+  memoryFacts,
+} from '../../base/memory/memory-facts.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type {
   DashboardPageQuery,
@@ -13,7 +19,14 @@ import type {
   FilterTally,
   ListedRow,
 } from '../../base/ports/store/dashboard-reads.js';
-import { FACT_COLUMNS, factInputs, FILTER_SLOTS, textFilter, tallyOf, type FactRow } from './dashboard-functions.js';
+import {
+  FACT_COLUMNS,
+  factInputs,
+  FILTER_SLOTS,
+  textFilter,
+  tallyOf,
+  type FactRow,
+} from './dashboard-functions.js';
 import { IN_PROJECT, OPEN_PAIRS } from './dashboard-sql.js';
 import { julianDayOfMs, strengthSqlAt } from './rule-sql.js';
 
@@ -130,11 +143,21 @@ function scanSql({ sort, descending, byStrength, holds }: ScanPlan, rules: Store
 /** The page query with the tenant and the time the scan dates its facts at. */
 type ScanQuery = DashboardPageQuery & { readonly tenantId: string; readonly nowMs: number };
 
-function listScan(db: DatabaseSyncLike, rules: StoreModel, query: ScanQuery, list: number): ListScan {
+function listScan(
+  db: DatabaseSyncLike,
+  rules: StoreModel,
+  query: ScanQuery,
+  list: number,
+): ListScan {
   const { tenantId, nowMs } = query;
   const holds = textFilter(db, query.text);
-  const byStrength = query.minStrength !== Number.NEGATIVE_INFINITY || query.maxStrength !== Number.POSITIVE_INFINITY;
-  const layers = LAYER_ORDER.map((layer, i) => [`layer${i}`, query.layers.includes(i) ? layer : null]);
+  const byStrength =
+    query.minStrength !== Number.NEGATIVE_INFINITY ||
+    query.maxStrength !== Number.POSITIVE_INFINITY;
+  const layers = LAYER_ORDER.map((layer, i) => [
+    `layer${i}`,
+    query.layers.includes(i) ? layer : null,
+  ]);
   const binds = {
     tenant: tenantId,
     origin: query.origin,
@@ -147,7 +170,10 @@ function listScan(db: DatabaseSyncLike, rules: StoreModel, query: ScanQuery, lis
   } satisfies Record<string, SqlValue>;
   const { minStrength, maxStrength } = query;
   return {
-    sql: scanSql({ sort: query.sort, descending: query.descending, byStrength, holds: holds.sql }, rules),
+    sql: scanSql(
+      { sort: query.sort, descending: query.descending, byStrength, holds: holds.sql },
+      rules,
+    ),
     binds: byStrength ? { ...binds, minStrength, maxStrength } : binds,
   };
 }
@@ -225,7 +251,11 @@ export class MemoryLists {
   }
 
   /** The tally of `query`'s filter and its page, from one read snapshot; null when the project holds no live row. */
-  page(tenantId: string, query: DashboardPageQuery, nowMs: number): { tally: FilterTally; rows: ListedRow[] } | null {
+  page(
+    tenantId: string,
+    query: DashboardPageQuery,
+    nowMs: number,
+  ): { tally: FilterTally; rows: ListedRow[] } | null {
     return withReadSnapshot(this.#db, () => {
       this.#follow(pragmaDataVersion(this.#db));
       const key = listKey(tenantId, query, nowMs);
@@ -257,9 +287,17 @@ export class MemoryLists {
     return list;
   }
 
-  #sort(key: string, tenantId: string, query: DashboardPageQuery, nowMs: number): SortedList | null {
+  #sort(
+    key: string,
+    tenantId: string,
+    query: DashboardPageQuery,
+    nowMs: number,
+  ): SortedList | null {
     const db = this.#db;
-    const any = cachedStatement(db, `SELECT 1 AS hit FROM memories WHERE ${IN_PROJECT} LIMIT 1`).get({
+    const any = cachedStatement(
+      db,
+      `SELECT 1 AS hit FROM memories WHERE ${IN_PROJECT} LIMIT 1`,
+    ).get({
       tenant: tenantId,
       origin: query.origin,
     });
@@ -268,7 +306,9 @@ export class MemoryLists {
     const scan = listScan(db, this.#rules, { ...query, tenantId, nowMs }, id);
     cachedStatement(db, scan.sql).run(scan.binds);
     // SAFETY: the scan's aggregate arm writes position 0 on every run, with the tally as a BLOB.
-    const head = cachedStatement(db, `SELECT tally FROM ${LISTS} WHERE list = ? AND pos = 0`).get(id) as {
+    const head = cachedStatement(db, `SELECT tally FROM ${LISTS} WHERE list = ? AND pos = 0`).get(
+      id,
+    ) as {
       tally: SqlValue;
     };
     const list = { id, tally: filterTally(head.tally) };

@@ -27,7 +27,9 @@ const VALUE_PRAGMA_COLUMN = { busy_timeout: 'timeout' };
 const MAX_DEPTH = 12;
 
 const hasSafety = (text, from, to) =>
-  [...text.slice(from, to).matchAll(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g)].some((c) => /\bSAFETY\s*:/.test(c[0]));
+  [...text.slice(from, to).matchAll(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g)].some((c) =>
+    /\bSAFETY\s*:/.test(c[0]),
+  );
 
 /** A SAFETY comment just before the cast or one of its ancestors up to the owning statement, as the lint rule looks. */
 function noteAtCast(cast, sf) {
@@ -52,7 +54,11 @@ function rowType(type) {
     );
     return rest.length === 1 ? rowType(rest[0]) : type;
   }
-  if (ts.isTypeReferenceNode(type) && WRAPPERS.has(type.typeName.getText()) && type.typeArguments?.length === 1) {
+  if (
+    ts.isTypeReferenceNode(type) &&
+    WRAPPERS.has(type.typeName.getText()) &&
+    type.typeArguments?.length === 1
+  ) {
     return rowType(type.typeArguments[0]);
   }
   return type;
@@ -81,7 +87,9 @@ function topLevelItems(sql, keyword, stop) {
     }
   }
   if (start < 0) return undefined;
-  return [start, ...cuts].map((from, n) => sql.slice(n === 0 ? from : from + 1, cuts[n] ?? end).trim());
+  return [start, ...cuts].map((from, n) =>
+    sql.slice(n === 0 ? from : from + 1, cuts[n] ?? end).trim(),
+  );
 }
 
 /** The columns a statement answers: RETURNING, else the first top-level SELECT, else a PRAGMA; `*` is a wildcard. */
@@ -111,7 +119,9 @@ class SqlReader {
 
   symbolOf(node) {
     const symbol = this.checker.getSymbolAtLocation(node);
-    return symbol && symbol.flags & ts.SymbolFlags.Alias ? this.checker.getAliasedSymbol(symbol) : symbol;
+    return symbol && symbol.flags & ts.SymbolFlags.Alias
+      ? this.checker.getAliasedSymbol(symbol)
+      : symbol;
   }
 
   /** The initializer of a `const`, or of a `let` that is only ever appended to, which reads as a prefix. */
@@ -145,7 +155,11 @@ class SqlReader {
     if (!ts.isIdentifier(call.expression)) return undefined;
     const decl = this.symbolOf(call.expression)?.valueDeclaration;
     const fn = decl && ts.isVariableDeclaration(decl) ? this.boundValue(decl.name)?.init : decl;
-    if (!fn || !(ts.isFunctionDeclaration(fn) || ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) || !fn.body) {
+    if (
+      !fn ||
+      !(ts.isFunctionDeclaration(fn) || ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) ||
+      !fn.body
+    ) {
       return undefined;
     }
     if (!ts.isBlock(fn.body)) return { fn, body: unwrap(fn.body) };
@@ -155,7 +169,9 @@ class SqlReader {
       else if (!ts.isFunctionLike(n)) ts.forEachChild(n, walk);
     };
     ts.forEachChild(fn.body, walk);
-    return returns.length === 1 && returns[0].expression ? { fn, body: unwrap(returns[0].expression) } : undefined;
+    return returns.length === 1 && returns[0].expression
+      ? { fn, body: unwrap(returns[0].expression) }
+      : undefined;
   }
 
   /** The node an expression stands for: a constant's initializer or a builder's returned expression. */
@@ -188,14 +204,18 @@ class SqlReader {
       }
       return out;
     }
-    const call = ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) ? node : undefined;
+    const call =
+      ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+        ? node
+        : undefined;
     if (call?.expression.name.text === 'split' && call.arguments.length === 1) {
       const whole = this.text(call.expression.expression, env, depth + 1);
       const sep = this.text(call.arguments[0], env, depth + 1);
       return whole.includes(UNKNOWN) || sep.includes(UNKNOWN) ? undefined : whole.split(sep);
     }
     const fn = call?.expression.name.text === 'map' ? unwrap(call.arguments[0] ?? call) : undefined;
-    if (!fn || !ts.isArrowFunction(fn) || fn.parameters.length !== 1 || ts.isBlock(fn.body)) return undefined;
+    if (!fn || !ts.isArrowFunction(fn) || fn.parameters.length !== 1 || ts.isBlock(fn.body))
+      return undefined;
     const param = fn.parameters[0].name.getText();
     const base = this.strings(call.expression.expression, env, depth + 1);
     return base?.map((value) => this.text(fn.body, new Map([...env, [param, value]]), depth + 1));
@@ -209,7 +229,9 @@ class SqlReader {
     if (ts.isTemplateExpression(node)) {
       return (
         node.head.text +
-        node.templateSpans.map((s) => this.text(s.expression, env, depth + 1) + s.literal.text).join('')
+        node.templateSpans
+          .map((s) => this.text(s.expression, env, depth + 1) + s.literal.text)
+          .join('')
       );
     }
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
@@ -225,7 +247,9 @@ class SqlReader {
       const obj = this.source(node.expression, depth + 1);
       const prop =
         obj && ts.isObjectLiteralExpression(obj)
-          ? obj.properties.find((p) => ts.isPropertyAssignment(p) && p.name.getText() === node.name.text)
+          ? obj.properties.find(
+              (p) => ts.isPropertyAssignment(p) && p.name.getText() === node.name.text,
+            )
           : undefined;
       return prop ? this.text(prop.initializer, env, depth + 1) : UNKNOWN;
     }
@@ -272,7 +296,8 @@ class SqlReader {
     }
     if (!ts.isCallExpression(node)) return undefined;
     const callee = node.expression;
-    if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'prepare') return node.arguments[0];
+    if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'prepare')
+      return node.arguments[0];
     if (ts.isIdentifier(callee) && callee.text === 'cachedStatement') return node.arguments[1];
     return undefined;
   }
@@ -307,7 +332,8 @@ function rowCastProblem(checker, sql, cast, read) {
   for (const { name, decl } of namedParts(sql, row)) {
     if (!decl) return `${name} is a type parameter, so the row shape is unknown here`;
     const sf = decl.getSourceFile();
-    if (!hasSafety(sf.text, decl.getFullStart(), decl.getStart(sf))) return `${name} carries no SAFETY note`;
+    if (!hasSafety(sf.text, decl.getFullStart(), decl.getStart(sf)))
+      return `${name} carries no SAFETY note`;
   }
   // A row whose keys are all optional still claims each one, since a read with none of them would fit any SQL.
   const props = checker.getTypeFromTypeNode(row).getProperties();
@@ -337,17 +363,26 @@ export function findRowCasts(program, srcDir) {
   for (const sf of program.getSourceFiles()) {
     if (sf.isDeclarationFile || !sf.fileName.startsWith(`${root}/`)) continue;
     const visit = (node) => {
-      const read = ts.isAsExpression(node) || ts.isTypeAssertionExpression(node) ? node.expression : undefined;
+      const read =
+        ts.isAsExpression(node) || ts.isTypeAssertionExpression(node) ? node.expression : undefined;
       if (
         read &&
         ts.isCallExpression(read) &&
         ts.isPropertyAccessExpression(read.expression) &&
         READS.has(read.expression.name.text)
       ) {
-        const receiver = checker.getTypeAtLocation(read.expression.expression).getSymbol()?.getName() ?? '';
-        const problem = STATEMENT_TYPES.has(receiver) ? rowCastProblem(checker, sql, node, read) : 'not a SQLite read';
+        const receiver =
+          checker.getTypeAtLocation(read.expression.expression).getSymbol()?.getName() ?? '';
+        const problem = STATEMENT_TYPES.has(receiver)
+          ? rowCastProblem(checker, sql, node, read)
+          : 'not a SQLite read';
         const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
-        casts.push({ file: sf.fileName.slice(root.length + 1), line: line + 1, noted: noteAtCast(node, sf), problem });
+        casts.push({
+          file: sf.fileName.slice(root.length + 1),
+          line: line + 1,
+          noted: noteAtCast(node, sf),
+          problem,
+        });
       }
       ts.forEachChild(node, visit);
     };
@@ -361,7 +396,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   // The tests program holds src too, so one program covers both trees.
   const program = programFromConfig('tsconfig.tests.json');
   const casts = ['src', 'tests'].flatMap((dir) =>
-    findRowCasts(program, `${process.cwd()}/${dir}`).map((c) => ({ ...c, file: `${dir}/${c.file}` })),
+    findRowCasts(program, `${process.cwd()}/${dir}`).map((c) => ({
+      ...c,
+      file: `${dir}/${c.file}`,
+    })),
   );
   if (process.argv.includes('--report')) {
     const tag = (c) => `${c.noted ? 'noted' : 'bare'}\t${c.problem ?? 'holds'}`;
@@ -377,5 +415,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     );
     process.exit(1);
   }
-  console.log(`Every SQLite row cast in src/ and tests/ names the keys it reads (${casts.length} casts). OK.`);
+  console.log(
+    `Every SQLite row cast in src/ and tests/ names the keys it reads (${casts.length} casts). OK.`,
+  );
 }

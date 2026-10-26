@@ -7,14 +7,23 @@ import { stampOriginProject } from './entry-row.js';
 import { gatedWrite } from './gated-write.js';
 import { updateStatsOn } from './index-and-stats.js';
 import type { Handles, StoreFiles } from './open.js';
-import type { CaptureDedup, CaptureWriteOptions, CapturedOutcome, Captures } from '../../base/ports/store/capture.js';
+import type {
+  CaptureDedup,
+  CaptureWriteOptions,
+  CapturedOutcome,
+  Captures,
+} from '../../base/ports/store/capture.js';
 import { listTextsHolding } from './candidates.js';
 import { EVERY_SCOPE } from './rule-sql.js';
 import { openStore } from './handles.js';
 import { bound, skipEmpty, type Bodies } from './bound.js';
 
 /** The texts the rows under `dedup` hold, of the rows that may hold an entry's text. */
-function heldKeys(db: DatabaseSyncLike, entries: readonly MemoryEntry[], dedup: CaptureDedup): Set<string> {
+function heldKeys(
+  db: DatabaseSyncLike,
+  entries: readonly MemoryEntry[],
+  dedup: CaptureDedup,
+): Set<string> {
   const texts = entries.map((entry) => entry.content);
   const admit = dedup.everyScope ? EVERY_SCOPE : undefined;
   return storedTextKeys(listTextsHolding(db, dedup.tenantId, texts, dedup.project, admit));
@@ -43,7 +52,8 @@ function writeCapturedEntries(
     });
   });
   for (const entry of written) writeEntryMirrors(files.hippoRoot, entry);
-  if (!opts.lean && written.length > 0) updateStatsOn(db, files.hippoRoot, { remembered: written.length });
+  if (!opts.lean && written.length > 0)
+    updateStatsOn(db, files.hippoRoot, { remembered: written.length });
   return outcomes;
 }
 

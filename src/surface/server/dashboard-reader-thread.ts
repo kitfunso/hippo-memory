@@ -20,7 +20,10 @@ import { rootInfra } from '../../infra/ports.js';
 const DASHBOARD_ACTOR = 'dashboard';
 
 /** The thread is its own root, so it reads the strength model and clock its store and dashboard reads open with. */
-function readerStore(hippoRoot: string, clock: { readonly nowMs: number; readonly wallMs: number }) {
+function readerStore(
+  hippoRoot: string,
+  clock: { readonly nowMs: number; readonly wallMs: number },
+) {
   const rules = evalStoreRules(envLossAversionRatio());
   const store = defaultStore(hippoRoot, rules);
   const reads = defaultDashboardReads(hippoRoot, rules);
@@ -87,7 +90,10 @@ function failed<E>(id: number, err: E): ReaderReply {
 }
 
 // The server logs the failure with its request, so the thread only hands it back.
-async function replyTo(call: ReaderCall, run: (call: ReaderCall) => Promise<ReaderValue>): Promise<ReaderReply> {
+async function replyTo(
+  call: ReaderCall,
+  run: (call: ReaderCall) => Promise<ReaderValue>,
+): Promise<ReaderReply> {
   try {
     return { id: call.id, ok: true, value: await run(call) };
   } catch (err) {
@@ -100,7 +106,10 @@ function answer(port: MessagePort, reply: ReaderReply): void {
   try {
     port.postMessage(reply);
   } catch (err) {
-    log.error(`dashboard reader: reply ${reply.id} could not be sent: ${errorMessage(err)}`, errorFields(err));
+    log.error(
+      `dashboard reader: reply ${reply.id} could not be sent: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     port.postMessage(failed(reply.id, err));
   }
 }

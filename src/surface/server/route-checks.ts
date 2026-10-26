@@ -28,14 +28,19 @@ export function assertAddonRoutes(routes: readonly AddonRoute[]): void {
   const seen = new Set<string>();
   for (const { path, loop } of routes) {
     if (!isPlainV1Path(path)) {
-      throw new Error(`add-on route '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
+      throw new Error(
+        `add-on route '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`,
+      );
     }
     // A typo must not quietly run the handler on the server thread.
     if (loop !== undefined && loop !== 'off') {
-      throw new Error(`add-on route '${path}' has loop '${String(loop)}'; set 'off' or leave it unset`);
+      throw new Error(
+        `add-on route '${path}' has loop '${String(loop)}'; set 'off' or leave it unset`,
+      );
     }
     if (seen.has(path)) throw new Error(`add-on route '${path}' is registered twice`);
-    if (isCorePath('POST', path)) throw new Error(`add-on route '${path}' is already served by core`);
+    if (isCorePath('POST', path))
+      throw new Error(`add-on route '${path}' is already served by core`);
     seen.add(path);
   }
 }
@@ -43,16 +48,22 @@ export function assertAddonRoutes(routes: readonly AddonRoute[]): void {
 const PUBLIC_JSON_MAX_BYTES = 64 * 1024;
 
 /** Boot-time check and serialization: a public path that a core GET route serves would open that route to anyone. */
-export function assertPublicJson(publicJson: Readonly<Record<string, JsonValue>>): ReadonlyMap<string, string> {
+export function assertPublicJson(
+  publicJson: Readonly<Record<string, JsonValue>>,
+): ReadonlyMap<string, string> {
   const bodies = new Map<string, string>();
   for (const [path, value] of Object.entries(publicJson)) {
     if (!isPlainV1Path(path)) {
-      throw new Error(`public JSON path '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
+      throw new Error(
+        `public JSON path '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`,
+      );
     }
-    if (isCorePath('GET', path)) throw new Error(`public JSON path '${path}' is already served by core`);
+    if (isCorePath('GET', path))
+      throw new Error(`public JSON path '${path}' is already served by core`);
     const text = JSON.stringify(value);
     if (text === undefined) throw new Error(`public JSON at '${path}' is not JSON`);
-    if (Buffer.byteLength(text) > PUBLIC_JSON_MAX_BYTES) throw new Error(`public JSON at '${path}' is over 64 KiB`);
+    if (Buffer.byteLength(text) > PUBLIC_JSON_MAX_BYTES)
+      throw new Error(`public JSON at '${path}' is over 64 KiB`);
     bodies.set(path, text);
   }
   return bodies;

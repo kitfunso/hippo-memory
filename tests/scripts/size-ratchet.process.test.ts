@@ -42,18 +42,25 @@ function withFixture(
 }
 
 /** A function declaration spanning exactly `lines` lines. */
-const fn = (name: string, lines: number) => `export function ${name}() {\n${'  void 0;\n'.repeat(lines - 2)}}\n`;
+const fn = (name: string, lines: number) =>
+  `export function ${name}() {\n${'  void 0;\n'.repeat(lines - 2)}}\n`;
 
 /** A one-line statement of exactly `width` characters. */
 const lineOf = (width: number) => `const x = '${'a'.repeat(width - 13)}';\n`;
 
 describe('check-size-ratchet.mjs', () => {
   it('passes a small file with an empty baseline', () => {
-    withFixture({ 'src/a.ts': fn('small', 50), 'scripts/job.mjs': fn('mid', 80) }, {}, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(0);
-      expect(r.stdout).toContain('0 files over 800 lines, 0 functions over 50 in src and 80 in scripts');
-    });
+    withFixture(
+      { 'src/a.ts': fn('small', 50), 'scripts/job.mjs': fn('mid', 80) },
+      {},
+      ({ run }) => {
+        const r = run();
+        expect(r.status).toBe(0);
+        expect(r.stdout).toContain(
+          '0 files over 800 lines, 0 functions over 50 in src and 80 in scripts',
+        );
+      },
+    );
   });
 
   it('fails on a new 51-line function in src, naming it', () => {
@@ -128,9 +135,13 @@ describe('check-size-ratchet.mjs', () => {
       expect(r.status).toBe(0);
       expect(r.stdout).toContain('0 test files over 800 lines');
     });
-    withFixture({ 'tests/other.test.ts': long }, { files: { 'tests/other.test.ts': 801 } }, ({ run }) => {
-      expect(run().status).toBe(1);
-    });
+    withFixture(
+      { 'tests/other.test.ts': long },
+      { files: { 'tests/other.test.ts': 801 } },
+      ({ run }) => {
+        expect(run().status).toBe(1);
+      },
+    );
   });
 
   it('keys methods, nested and anonymous functions by name, not line number', () => {
@@ -158,30 +169,42 @@ describe('check-size-ratchet.mjs', () => {
   });
 
   it('fails when a file gains a line over 120 characters', () => {
-    withFixture({ 'src/a.ts': lineOf(121) + lineOf(121) }, { longLines: { 'src/a.ts': 1 } }, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/a.ts: 1 -> 2');
-    });
+    withFixture(
+      { 'src/a.ts': lineOf(121) + lineOf(121) },
+      { longLines: { 'src/a.ts': 1 } },
+      ({ run }) => {
+        const r = run();
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain('src/a.ts: 1 -> 2');
+      },
+    );
   });
 
   it('passes when a file loses a long line, counts exactly 120 as short, and --update lowers the baseline', () => {
-    withFixture({ 'src/a.ts': lineOf(121) + lineOf(120) }, { longLines: { 'src/a.ts': 2 } }, ({ run, baseline }) => {
-      const r = run();
-      expect(r.status).toBe(0);
-      expect(r.stdout).toContain('1 src lines over 120 characters');
-      expect(run('--update').status).toBe(0);
-      expect(baseline().longLines).toEqual({ 'src/a.ts': 1 });
-    });
+    withFixture(
+      { 'src/a.ts': lineOf(121) + lineOf(120) },
+      { longLines: { 'src/a.ts': 2 } },
+      ({ run, baseline }) => {
+        const r = run();
+        expect(r.status).toBe(0);
+        expect(r.stdout).toContain('1 src lines over 120 characters');
+        expect(run('--update').status).toBe(0);
+        expect(baseline().longLines).toEqual({ 'src/a.ts': 1 });
+      },
+    );
   });
 
   it('fails on a new src file with a long line, and ignores long lines in scripts/', () => {
-    withFixture({ 'src/new.ts': lineOf(200), 'scripts/job.mjs': lineOf(200) }, { longLines: {} }, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/new.ts: new -> 1');
-      expect(r.stderr).not.toContain('scripts/job.mjs');
-    });
+    withFixture(
+      { 'src/new.ts': lineOf(200), 'scripts/job.mjs': lineOf(200) },
+      { longLines: {} },
+      ({ run }) => {
+        const r = run();
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain('src/new.ts: new -> 1');
+        expect(r.stderr).not.toContain('scripts/job.mjs');
+      },
+    );
   });
 
   it('treats a baseline without the longLines key as a first write, not a rise', () => {

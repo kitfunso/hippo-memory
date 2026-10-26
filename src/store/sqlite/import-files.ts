@@ -24,7 +24,8 @@ export function sqliteImportFiles(hippoRoot: string): SqliteImportFiles {
   const { on, files } = handlesOf(hippoRoot);
   return {
     ensure: () => inPortTerms(() => on(() => undefined, openStore)),
-    writeEntry: (write) => inPortTerms(() => on((db) => writeEntryRow(db, files, write), openStore)),
+    writeEntry: (write) =>
+      inPortTerms(() => on((db) => writeEntryRow(db, files, write), openStore)),
     refusedAmong: (checks) => inPortTerms(() => on((db) => refusedAmong(db, checks))),
     textKeysHolding: (filter, texts) =>
       inPortTerms(() => on((db) => listTextKeysHolding(db, filter, texts), openStore)),

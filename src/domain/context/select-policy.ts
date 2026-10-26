@@ -28,7 +28,8 @@ const DEFAULT_PROMPT_RECALL_THRESHOLD = 0.04;
 const DEFAULT_PROMPT_RECALL_MIN_SHARED = 2;
 const DEFAULT_PROMPT_RECALL_MAX_ITEMS = 5;
 
-export const finiteOr = (v: number, dflt: number, min: number): number => (Number.isFinite(v) && v >= min ? v : dflt);
+export const finiteOr = (v: number, dflt: number, min: number): number =>
+  Number.isFinite(v) && v >= min ? v : dflt;
 
 // Mirrors the pin loop's continue-not-break so a big pin cannot block smaller ones from reserving, and dedupes by id
 // because a synced pin sits in both stores. A pin also in the recent slice is counted twice: recents under-fill,
@@ -77,7 +78,10 @@ export function promptRecallGateOf(inject: HippoConfig['pinnedInject']): PromptR
 }
 
 /** The newest `limit` rows worth surfacing; a pin always is. */
-export function newestWorthSurfacing<T extends { entry: MemoryEntry }>(rows: readonly T[], limit: number): T[] {
+export function newestWorthSurfacing<T extends { entry: MemoryEntry }>(
+  rows: readonly T[],
+  limit: number,
+): T[] {
   return (
     [...rows]
       // Newest first, then id: stable within one store, but same-millisecond rows fall to random ids across ingests.
@@ -93,10 +97,15 @@ export function newestWorthSurfacing<T extends { entry: MemoryEntry }>(rows: rea
 }
 
 /** No query: the strongest rows first, each kept if it still fits `left` tokens. */
-export function strongestWithin<T extends PricedRow>(local: readonly T[], global: readonly T[], left: number): T[] {
-  const combined = [...[...local].sort(compareScoredResults), ...[...global].sort(compareScoredResults)].sort(
-    compareScoredResults,
-  );
+export function strongestWithin<T extends PricedRow>(
+  local: readonly T[],
+  global: readonly T[],
+  left: number,
+): T[] {
+  const combined = [
+    ...[...local].sort(compareScoredResults),
+    ...[...global].sort(compareScoredResults),
+  ].sort(compareScoredResults);
   const selected: T[] = [];
   let used = 0;
   for (const r of combined) {

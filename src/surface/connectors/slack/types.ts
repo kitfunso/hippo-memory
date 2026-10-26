@@ -1,7 +1,12 @@
 /** Slack Events API envelope shapes used by the ingestion connector.
  *  Spec: https://api.slack.com/events-api */
 
-import { type JsonValue, isJsonString, isJsonObject, isJsonNumber } from '../../../base/util/json.js';
+import {
+  type JsonValue,
+  isJsonString,
+  isJsonObject,
+  isJsonNumber,
+} from '../../../base/util/json.js';
 
 export interface SlackUrlVerification {
   type: 'url_verification';
@@ -45,7 +50,9 @@ export function isSlackEventEnvelope(x: JsonValue): x is JsonValue & SlackEventE
   return isJsonObject(event) && isJsonString(event.type);
 }
 
-export function isSlackMessageEvent(x: JsonValue | SlackEventEnvelope['event']): x is SlackMessageEvent {
+export function isSlackMessageEvent(
+  x: JsonValue | SlackEventEnvelope['event'],
+): x is SlackMessageEvent {
   if (x === null || typeof x !== 'object' || Array.isArray(x)) return false;
   const o = x;
   return o.type === 'message' && isJsonString(o.channel) && isJsonString(o.ts);

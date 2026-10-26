@@ -22,7 +22,11 @@ describe('temporal-aware search', () => {
       tags: ['extracted', 'speaker:John', 'topic:basketball'],
     });
     // Backdate the old entry
-    const oldEntry = { ...old, created: '2024-01-01T00:00:00.000Z', lastRetrieved: '2024-01-01T00:00:00.000Z' };
+    const oldEntry = {
+      ...old,
+      created: '2024-01-01T00:00:00.000Z',
+      lastRetrieved: '2024-01-01T00:00:00.000Z',
+    };
     writeEntry(hippoRoot, oldEntry);
 
     const recent = createMemory('John scored 35 points in a game', {
@@ -32,7 +36,10 @@ describe('temporal-aware search', () => {
     writeEntry(hippoRoot, recent);
 
     const entries = loadAllEntries(hippoRoot, 'default');
-    const results = rankBm25('John recently scored points', entries, { now: evalNow(), budget: 4000 });
+    const results = rankBm25('John recently scored points', entries, {
+      now: evalNow(),
+      budget: 4000,
+    });
 
     expect(results.length).toBeGreaterThanOrEqual(2);
     // Recent entry should rank first when "recently" cue is present
@@ -44,7 +51,11 @@ describe('temporal-aware search', () => {
       layer: Layer.Semantic,
       tags: ['extracted', 'speaker:John', 'topic:basketball'],
     });
-    const oldEntry = { ...old, created: '2024-01-01T00:00:00.000Z', lastRetrieved: '2024-01-01T00:00:00.000Z' };
+    const oldEntry = {
+      ...old,
+      created: '2024-01-01T00:00:00.000Z',
+      lastRetrieved: '2024-01-01T00:00:00.000Z',
+    };
     writeEntry(hippoRoot, oldEntry);
 
     const recent = createMemory('John scored 35 points in a game', {

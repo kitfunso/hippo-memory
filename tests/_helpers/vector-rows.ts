@@ -49,7 +49,11 @@ export function near(v: readonly number[], seed: number): number[] {
   return unit(v.map((x) => x + ((r() - 0.5) * 0.2) / Math.sqrt(v.length)));
 }
 
-export function seedVectorRows(root: string, rows: readonly VectorRowSeed[], model = 'test:vectors'): void {
+export function seedVectorRows(
+  root: string,
+  rows: readonly VectorRowSeed[],
+  model = 'test:vectors',
+): void {
   const db = openHippoDb(root);
   try {
     db.exec('BEGIN');

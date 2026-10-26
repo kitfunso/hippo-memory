@@ -68,7 +68,10 @@ describe('store initialization', () => {
     expect(beta!.conflictsWith).toEqual(['mem_legacy_alpha']);
     expect(beta!.pinned).toBe(true);
 
-    expect(loadLastRecall(tmpDir).last_retrieval_ids).toEqual(['mem_legacy_alpha', 'mem_legacy_beta']);
+    expect(loadLastRecall(tmpDir).last_retrieval_ids).toEqual([
+      'mem_legacy_alpha',
+      'mem_legacy_beta',
+    ]);
 
     // SAFETY: reports.stats()' Record<string, unknown> return is buildStatsFromDb's fixed
     // stats-mirror shape (src/store/mirrors.ts), which always includes these counter fields.
@@ -76,7 +79,12 @@ describe('store initialization', () => {
       total_remembered: number;
       total_recalled: number;
       total_forgotten: number;
-      consolidation_runs: Array<{ timestamp: string; decayed: number; merged: number; removed: number }>;
+      consolidation_runs: Array<{
+        timestamp: string;
+        decayed: number;
+        merged: number;
+        removed: number;
+      }>;
     };
     expect(stats.total_remembered).toBe(7);
     expect(stats.total_recalled).toBe(11);
@@ -190,7 +198,9 @@ describe('stats tracking', () => {
     flushHeldMirrors(tmpDir);
     updateStats(tmpDir, { recalled: 1 });
     // SAFETY: stats.json holds the LegacyStats mirror, which always carries total_recalled.
-    const file = JSON.parse(fs.readFileSync(path.join(tmpDir, 'stats.json'), 'utf8')) as { total_recalled: number };
+    const file = JSON.parse(fs.readFileSync(path.join(tmpDir, 'stats.json'), 'utf8')) as {
+      total_recalled: number;
+    };
     expect(file.total_recalled).toBe(3);
   });
 
@@ -260,9 +270,9 @@ describe('SQLite-backed search candidates', () => {
       if (hadFts) {
         // SAFETY: the query selects a single COUNT(*) AS count aggregate, so the row
         // (if any) is shaped { count: number }.
-        const row = reopened.prepare('SELECT COUNT(*) AS count FROM memories_fts WHERE id = ?').get(entry.id) as
-          | { count?: number }
-          | undefined;
+        const row = reopened
+          .prepare('SELECT COUNT(*) AS count FROM memories_fts WHERE id = ?')
+          .get(entry.id) as { count?: number } | undefined;
         expect(Number(row?.count ?? 0)).toBe(1);
       }
     } finally {
@@ -309,7 +319,9 @@ describe('active task snapshots', () => {
 
     const mirrorPath = path.join(tmpDir, 'buffer', 'active-task.md');
     expect(fs.existsSync(mirrorPath)).toBe(true);
-    expect(fs.readFileSync(mirrorPath, 'utf8')).toContain('Implement active session resume snapshot support.');
+    expect(fs.readFileSync(mirrorPath, 'utf8')).toContain(
+      'Implement active session resume snapshot support.',
+    );
   });
 
   it('persists an optional session link with the active snapshot', () => {

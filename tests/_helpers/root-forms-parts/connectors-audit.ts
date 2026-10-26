@@ -43,7 +43,11 @@ export function slackEventRecord(hippoRoot: string, eventId: string): ConnectorE
   return onHandle(hippoRoot, (db) => slackSql.slackEventRecord(db, eventId));
 }
 
-export function markSlackEventSeen(hippoRoot: string, eventId: string, memoryId: string | null): void {
+export function markSlackEventSeen(
+  hippoRoot: string,
+  eventId: string,
+  memoryId: string | null,
+): void {
   onHandle(hippoRoot, (db) => {
     slackSql.markSlackEventSeen(db, eventId, memoryId);
   });

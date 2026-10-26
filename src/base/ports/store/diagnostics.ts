@@ -22,7 +22,9 @@ export interface TokenTally {
 }
 
 /** One read's value, or the message of the error that stopped it, so a broken table never hides the reads beside it. */
-export type Attempt<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string };
+export type Attempt<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly message: string };
 
 /** ISO times the health reads count from. */
 export interface HealthCutoffs {

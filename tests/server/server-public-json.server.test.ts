@@ -10,7 +10,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 
 const INFO = '/v1/x-info';
-const BODY = { providers: [{ tenant: 't1', scopes: ['api://x/.default'], redirectUris: ['http://localhost/cb'] }] };
+const BODY = {
+  providers: [
+    { tenant: 't1', scopes: ['api://x/.default'], redirectUris: ['http://localhost/cb'] },
+  ],
+};
 const WELL_FORMED_KEY = `hk_${'a'.repeat(24)}.${'b'.repeat(32)}`;
 
 let root: string;
@@ -122,7 +126,10 @@ describe('a publicJson path behind serve()', () => {
     vi.stubEnv('HIPPO_V1_RPS', '0.5');
     await start({ [INFO]: BODY });
     expect(await send('GET', INFO)).toEqual(served);
-    expect(await send('GET', INFO)).toMatchObject({ status: 429, body: '{"error":"rate limit exceeded"}' });
+    expect(await send('GET', INFO)).toMatchObject({
+      status: 429,
+      body: '{"error":"rate limit exceeded"}',
+    });
   });
 });
 
@@ -175,14 +182,18 @@ describe('serve() refuses a publicJson path it cannot serve safely', () => {
     ['a pattern core GET row', '/v1/sessions/x/assemble'],
     ['a regex core GET row', '/v1/predictions/7'],
   ])('%s: %s', async (_name, path) => {
-    expect((await bootError({ [path]: {} }))?.message).toBe(`public JSON path '${path}' is already served by core`);
+    expect((await bootError({ [path]: {} }))?.message).toBe(
+      `public JSON path '${path}' is already served by core`,
+    );
     expect(existsSync(join(root, 'server.pid'))).toBe(false);
   });
 
   it('a body over 64 KiB once serialized, counted in UTF-8 bytes', async () => {
     expect(await bootError({ [INFO]: 'a'.repeat(64 * 1024 - 2) })).toBeNull();
     for (const over of ['a'.repeat(64 * 1024 - 1), 'é'.repeat(32 * 1024)]) {
-      expect((await bootError({ [INFO]: over }))?.message).toBe(`public JSON at '${INFO}' is over 64 KiB`);
+      expect((await bootError({ [INFO]: over }))?.message).toBe(
+        `public JSON at '${INFO}' is over 64 KiB`,
+      );
     }
     expect(existsSync(join(root, 'server.pid'))).toBe(false);
   });
@@ -191,7 +202,9 @@ describe('serve() refuses a publicJson path it cannot serve safely', () => {
     const bad: unknown[] = [undefined, () => 1];
     for (const value of bad) {
       // SAFETY: both values break the JsonValue contract on purpose, the way an untyped caller could.
-      expect((await bootError({ [INFO]: value as JsonValue }))?.message).toBe(`public JSON at '${INFO}' is not JSON`);
+      expect((await bootError({ [INFO]: value as JsonValue }))?.message).toBe(
+        `public JSON at '${INFO}' is not JSON`,
+      );
     }
   });
 });

@@ -15,7 +15,10 @@ export const ALLOWED = {
     count: 1,
     reason: 'ends the process after a crash or a signal, where no command is left to unwind',
   },
-  'surface/server/sleep-child.ts': { count: 1, reason: 'ends the forked sleep child once its reply is sent' },
+  'surface/server/sleep-child.ts': {
+    count: 1,
+    reason: 'ends the forked sleep child once its reply is sent',
+  },
   'surface/cli/hooks/codex-run.ts': {
     count: 2,
     reason: 'child-process event callbacks of the Codex wrapper, where a throw has no caller',
@@ -60,7 +63,9 @@ export function findProcessExits(srcDir, allowed = ALLOWED) {
     .flatMap(([file, p]) => {
       const lines = processExitLines(readFileSync(p, 'utf8'));
       const limit = Object.hasOwn(allowed, file) ? allowed[file].count : 0;
-      return lines.length > limit ? lines.map((line) => ({ file, line, found: lines.length, allowed: limit })) : [];
+      return lines.length > limit
+        ? lines.map((line) => ({ file, line, found: lines.length, allowed: limit }))
+        : [];
     })
     .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
 }
@@ -72,7 +77,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (hits.length > 0) {
     console.error(`\nprocess.exit calls in ${srcDir}/ beyond the allowed list:`);
     for (const h of hits) {
-      console.error(`  ${srcDir}/${h.file}:${h.line} (${h.found} in this file, ${h.allowed} allowed)`);
+      console.error(
+        `  ${srcDir}/${h.file}:${h.line} (${h.found} in this file, ${h.allowed} allowed)`,
+      );
     }
     console.error(
       '\nFix: print the message, then `throw new CliExit(code)` from src/surface/cli/exit.ts; runCli exits with that code.',

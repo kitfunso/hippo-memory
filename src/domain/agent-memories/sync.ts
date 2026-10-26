@@ -102,7 +102,8 @@ export function allowedTools(
     // The value is never echoed: a secret set in this variable by mistake would reach the log.
     let unknown = 0;
     const known = knownTools(listed, () => unknown++);
-    if (unknown > 0) warnings.push(unknownToolsIgnored(TOOLS_ENV, plural(unknown, 'unknown agent memory tool')));
+    if (unknown > 0)
+      warnings.push(unknownToolsIgnored(TOOLS_ENV, plural(unknown, 'unknown agent memory tool')));
     return known;
   }
   const mine = configuredTools(opts, invoking, warnings);
@@ -114,11 +115,17 @@ export function allowedTools(
   );
 }
 
-function configuredTools(opts: Pick<SyncOptions, 'configAt'>, root: string, warnings: string[]): Set<ToolId> | null {
+function configuredTools(
+  opts: Pick<SyncOptions, 'configAt'>,
+  root: string,
+  warnings: string[],
+): Set<ToolId> | null {
   const tools = opts.configAt(root).agentMemories.tools;
   if (tools === null) return null;
   return knownTools(tools, (id) =>
-    warnings.push(unknownToolsIgnored('config agentMemories.tools', `unknown agent memory tool "${id}"`)),
+    warnings.push(
+      unknownToolsIgnored('config agentMemories.tools', `unknown agent memory tool "${id}"`),
+    ),
   );
 }
 
@@ -139,7 +146,9 @@ function knownTools(ids: readonly string[], onUnknown: (id: string) => void): Se
 export async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportReport> {
   const report = emptyReport();
   const allowed = allowedTools(opts, pass.invoking, pass.target, report.warnings);
-  const listings = ADAPTERS.filter((a) => allowed.has(a.tool)).flatMap((a) => listSafely(a, pass, report));
+  const listings = ADAPTERS.filter((a) => allowed.has(a.tool)).flatMap((a) =>
+    listSafely(a, pass, report),
+  );
   const hasItems = listings.some((l) => l.containers.some((c) => c.items.length > 0));
   let store: OpenStore | null = null;
   let synced: ContainerWork[] = [];
@@ -152,7 +161,8 @@ export async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportRepo
   } finally {
     await store?.store.close();
   }
-  if (pass.handover && !opts.dryRun) await handOver(synced, path.dirname(pass.target), opts, report);
+  if (pass.handover && !opts.dryRun)
+    await handOver(synced, path.dirname(pass.target), opts, report);
   return report;
 }
 
@@ -191,7 +201,11 @@ interface OpenStore {
 
 /** A store that does not exist yet is created only when there is something to put in it; a dry run plans against an
  * empty stand-in. */
-async function openTarget(target: string, hasItems: boolean, opts: SyncOptions): Promise<OpenStore | null> {
+async function openTarget(
+  target: string,
+  hasItems: boolean,
+  opts: SyncOptions,
+): Promise<OpenStore | null> {
   const global = opts.machine.isGlobalRoot(target);
   if (!opts.stores.exists(target)) {
     if (opts.dryRun) return { store: opts.stores.standIn(), root: target, global };
@@ -201,7 +215,12 @@ async function openTarget(target: string, hasItems: boolean, opts: SyncOptions):
   return { store: opts.stores.open(target, { busyWaitMs: opts.busyWaitMs }), root: target, global };
 }
 
-function storeSession(pass: Pass, store: OpenStore, opts: SyncOptions, legacy: LegacyWork | null): StoreSession {
+function storeSession(
+  pass: Pass,
+  store: OpenStore,
+  opts: SyncOptions,
+  legacy: LegacyWork | null,
+): StoreSession {
   const config = opts.configAt(store.root);
   return {
     store: store.store,
@@ -266,7 +285,11 @@ async function syncStore(
   return synced;
 }
 
-async function syncListing(at: PassStore, listing: Listing, report: ImportReport): Promise<SyncedContainer[]> {
+async function syncListing(
+  at: PassStore,
+  listing: Listing,
+  report: ImportReport,
+): Promise<SyncedContainer[]> {
   const tool = toolOf(listing.tool);
   const out = toolReport(report, tool.id);
   const synced: SyncedContainer[] = [];
@@ -299,7 +322,11 @@ async function syncListing(at: PassStore, listing: Listing, report: ImportReport
 }
 
 /** The legacy names plus every name a merge or repair folded into the project; the audit read runs once per pass. */
-async function earlierNames(store: ImportStore, tenantId: string, names: readonly string[]): Promise<string[]> {
+async function earlierNames(
+  store: ImportStore,
+  tenantId: string,
+  names: readonly string[],
+): Promise<string[]> {
   const [id, ...legacyOrigins] = names;
   const folded = await namesFoldedInto(store.auditLog, tenantId, names);
   return [...legacyOrigins, ...folded].filter((n) => n !== '' && n !== id);
@@ -341,13 +368,19 @@ async function syncOne(
     out,
     report,
     isBusy,
-  }: { readonly out: ToolReport; readonly report: ImportReport; readonly isBusy: PassStore['isBusy'] },
+  }: {
+    readonly out: ToolReport;
+    readonly report: ImportReport;
+    readonly isBusy: PassStore['isBusy'];
+  },
 ): Promise<ContainerOutcome | null> {
   try {
     const outcome = await syncContainer(session, work);
     if (outcome === null) {
       out.tally.busy++;
-      report.warnings.push(`${out.label}: ${work.container.path} skipped, the store changed while it was read`);
+      report.warnings.push(
+        `${out.label}: ${work.container.path} skipped, the store changed while it was read`,
+      );
       return null;
     }
     addTally(out.tally, outcome.tally);
@@ -364,7 +397,11 @@ async function syncOne(
   }
 }
 
-async function bumpRemembered(store: ImportStore, remembered: number, report: ImportReport): Promise<void> {
+async function bumpRemembered(
+  store: ImportStore,
+  remembered: number,
+  report: ImportReport,
+): Promise<void> {
   try {
     await store.lessonWrites.bumpRemembered(remembered);
   } catch (err) {
@@ -386,7 +423,9 @@ interface UnlistedRowsOptions {
 async function unlistedRows(session: StoreSession, options: UnlistedRowsOptions): Promise<number> {
   const { tool, scope, listing, machine, partition } = options;
   const listed = listing.containers.flatMap((c) =>
-    (partition ?? ['']).map((name) => containerPrefix(tool.id, containerId(c.path, c.scope, machine, name))),
+    (partition ?? ['']).map((name) =>
+      containerPrefix(tool.id, containerId(c.path, c.scope, machine, name)),
+    ),
   );
   const prefix = `${toolSourcePrefix(tool.id)}${scope === 'project' ? 'p' : 'u'}-`;
   return (await liveUnder(session.store, session.tenantId, prefix))

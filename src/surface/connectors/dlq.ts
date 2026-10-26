@@ -4,7 +4,11 @@
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { DLQ_REDACTED_NOTE, redactPayload } from '../../base/util/secret-detect.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
-import type { ConnectorDeadLetter, DeadLetterConnector, DeadLetterRows } from '../../base/ports/store.js';
+import type {
+  ConnectorDeadLetter,
+  DeadLetterConnector,
+  DeadLetterRows,
+} from '../../base/ports/store.js';
 import type { JsonValue } from '../../base/util/json.js';
 import { errorMessage } from '../../base/util/log.js';
 
@@ -63,7 +67,9 @@ export function listDlq<C extends DeadLetterConnector>(
   store: HippoStore,
   opts: { tenantId: string; limit?: number },
 ): Promise<DeadLetterRows[C][]> {
-  return store.connectorEvents.deadLetters(dlq.connector, opts.tenantId, { limit: opts.limit ?? DEFAULT_LIST_LIMIT });
+  return store.connectorEvents.deadLetters(dlq.connector, opts.tenantId, {
+    limit: opts.limit ?? DEFAULT_LIST_LIMIT,
+  });
 }
 
 /** Every outcome a replay reports; a connector that re-ingests inline reports the ingest outcome itself. */
@@ -115,7 +121,9 @@ async function replayableRow<C extends DeadLetterConnector>(
 ): Promise<DeadLetterRows[C] | null> {
   const [own] = await store.connectorEvents.deadLetters(connector, tenantId, { id });
   if (own !== undefined) return own;
-  const [unroutable] = await store.connectorEvents.deadLetters(connector, UNROUTABLE_TENANT, { id });
+  const [unroutable] = await store.connectorEvents.deadLetters(connector, UNROUTABLE_TENANT, {
+    id,
+  });
   return unroutable ?? null;
 }
 

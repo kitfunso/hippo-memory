@@ -44,10 +44,14 @@ export interface RelevanceRequest {
 }
 
 /** Redacted query plus numbered, redacted, truncated candidates. Shared with CLEF so both arms see matched input. */
-export function buildRelevanceRequest(query: string, head: readonly SearchResult[]): RelevanceRequest {
+export function buildRelevanceRequest(
+  query: string,
+  head: readonly SearchResult[],
+): RelevanceRequest {
   // Strict: this text leaves the machine, so Bearer, Basic-auth and JWT shapes go too.
   const lines = head.map(
-    (r, i) => `[${i + 1}] ${truncateWithEllipsis(redactSecretsStrict(r.entry.content), TRUNCATE_CHARS)}`,
+    (r, i) =>
+      `[${i + 1}] ${truncateWithEllipsis(redactSecretsStrict(r.entry.content), TRUNCATE_CHARS)}`,
   );
   const state =
     `Query: ${redactSecretsStrict(query)}\n\nNumbered candidate memories from an AI coding agent's ` +
@@ -112,7 +116,10 @@ export function createJevReranker(localFallback: RerankerFn, http: Http): Rerank
 }
 
 /** Orders `head` by `scores[i]`, keeping any upstream pre-rerank rank. Shared with CLEF. */
-export function rankByScores(head: readonly SearchResult[], scores: readonly number[]): RerankResult[] {
+export function rankByScores(
+  head: readonly SearchResult[],
+  scores: readonly number[],
+): RerankResult[] {
   const scored = head.map((r, i) => ({
     ...r,
     rerankScore: scores[i],

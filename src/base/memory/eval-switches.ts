@@ -12,7 +12,11 @@ export interface RankAblation {
 }
 
 /** Production ranking: every rank boost on, at the 30-day recency scale. */
-export const NO_RANK_ABLATION: RankAblation = Object.freeze({ recency: false, recencyDays: null, outcomeFast: false });
+export const NO_RANK_ABLATION: RankAblation = Object.freeze({
+  recency: false,
+  recencyDays: null,
+  outcomeFast: false,
+});
 
 /** The strength model and rank switches a ranking runs under. */
 export interface EvalSwitches {

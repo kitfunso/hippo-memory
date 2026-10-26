@@ -1,6 +1,12 @@
 // Leaf module: the one value space JSON.parse can produce, so boundary guards narrow a shared type.
 
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 export type JsonObject = { [key: string]: JsonValue };
 
@@ -18,12 +24,18 @@ export function isJsonBoolean(value: JsonValue | undefined): value is boolean {
 
 /** A non-null, non-array object. */
 export function isJsonObject(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
-  return value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value);
+  return (
+    value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value)
+  );
 }
 
 /** Like `isJsonObject`, but also false for an object whose own `constructor` key shadows `Object`. */
-export function isJsonObjectLiteral(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
-  return value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object;
+export function isJsonObjectLiteral(
+  value: JsonValue | undefined,
+): value is { [key: string]: JsonValue } {
+  return (
+    value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object
+  );
 }
 
 /** `JSON.parse` typed as the values it can produce, so a reader narrows with the guards above instead of a cast. */

@@ -26,7 +26,9 @@ describe('npmShimEntry', () => {
     const script = path.join(dir, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
     fs.mkdirSync(path.dirname(script), { recursive: true });
     fs.writeFileSync(script, '');
-    expect(npmShimEntry(shim('& "node$exe" "$basedir/node_modules/@openai/codex/bin/codex.js" $args'))).toBe(script);
+    expect(
+      npmShimEntry(shim('& "node$exe" "$basedir/node_modules/@openai/codex/bin/codex.js" $args')),
+    ).toBe(script);
     const backslashed = ['$basedir', 'node_modules', '@openai', 'codex', 'bin', 'codex.js'].join(
       String.fromCharCode(92),
     );

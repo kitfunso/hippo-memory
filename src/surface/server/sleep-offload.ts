@@ -27,15 +27,23 @@ export type SleepMessage = SleepJob & { readonly deadline: number };
 
 export type SleepReply<R = SleepResult> =
   | { readonly ok: true; readonly result: R }
-  | { readonly ok: false; readonly busy: boolean; readonly message: string; readonly stack?: string };
+  | {
+      readonly ok: false;
+      readonly busy: boolean;
+      readonly message: string;
+      readonly stack?: string;
+    };
 
 // Resolved from the package root, so a server run from TypeScript source starts the same built file.
-const CHILD_ENTRY = fileURLToPath(new URL('../../../dist/surface/server/sleep-child.js', import.meta.url));
+const CHILD_ENTRY = fileURLToPath(
+  new URL('../../../dist/surface/server/sleep-child.js', import.meta.url),
+);
 
 /** The shape check for what crosses the IPC channel; the result's own fields are the API's to define. */
 export function isSleepReply<R, M>(message: M): message is M & SleepReply<R> {
   if (typeof message !== 'object' || message === null || !('ok' in message)) return false;
-  if (message.ok === true) return 'result' in message && typeof message.result === 'object' && message.result !== null;
+  if (message.ok === true)
+    return 'result' in message && typeof message.result === 'object' && message.result !== null;
   return (
     message.ok === false &&
     'busy' in message &&
@@ -45,8 +53,13 @@ export function isSleepReply<R, M>(message: M): message is M & SleepReply<R> {
   );
 }
 
-function failureOf<R>(reply: SleepReply<R> | undefined, code: number | null, signal: NodeJS.Signals | null): Error {
-  if (!reply || reply.ok) return new Error(`sleep process ended without an answer (code ${code}, signal ${signal})`);
+function failureOf<R>(
+  reply: SleepReply<R> | undefined,
+  code: number | null,
+  signal: NodeJS.Signals | null,
+): Error {
+  if (!reply || reply.ok)
+    return new Error(`sleep process ended without an answer (code ${code}, signal ${signal})`);
   // A lock the child could not get is the same retryable 503 an in-process sleep gave.
   if (reply.busy) return new StoreBusyError(reply.message);
   const failure = new Error(reply.message);
@@ -109,7 +122,11 @@ function childAnswer<R>(job: SleepJob, ended: () => void): Promise<R> {
           ),
         );
       } else if (malformed) {
-        reject(new Error(`sleep process sent a reply that is not a sleep result (code ${code}, signal ${signal})`));
+        reject(
+          new Error(
+            `sleep process sent a reply that is not a sleep result (code ${code}, signal ${signal})`,
+          ),
+        );
       } else reject(failureOf(reply, code, signal));
     });
     child.send({ ...job, deadline: Date.now() + deadlineMs } satisfies SleepMessage);
@@ -162,7 +179,13 @@ export function createSleepQueue(hippoRoot: string, onHippoDb: boolean): SleepQu
     // The child sleeps the hippo.db under the folder, so another store that sets the sleep groups gets 501 as before.
     sleep: (ctx, opts) =>
       onHippoDb
-        ? inTurn<SleepResult>({ kind: 'sleep', hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor, opts })
+        ? inTurn<SleepResult>({
+            kind: 'sleep',
+            hippoRoot,
+            tenantId: ctx.tenantId,
+            actor: ctx.actor,
+            opts,
+          })
         : Promise.reject(new HttpError(501, STORE_NOT_PORTED_MESSAGE)),
     // The child logs the run's skipped passes to its stderr, which is this server's log.
     consolidate: async () => {

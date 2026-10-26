@@ -5,7 +5,10 @@ import { MINUTE_MS } from '../base/util/time.js';
 import { errorCode, errorMessage } from '../base/util/log.js';
 
 /** The package's module namespace, typed by the parts the caller reads; null when neither package is installed. */
-export async function importTransformers<M>(): Promise<{ readonly name: string; readonly mod: M } | null> {
+export async function importTransformers<M>(): Promise<{
+  readonly name: string;
+  readonly mod: M;
+} | null> {
   const pkg = resolveTransformersPackage();
   if (!pkg) return null;
   try {
@@ -13,9 +16,12 @@ export async function importTransformers<M>(): Promise<{ readonly name: string; 
   } catch (err) {
     // A Node error's code (ERR_MODULE_NOT_FOUND and the like) says more than its message alone.
     const code = errorCode(err);
-    throw new Error(`transformers import failed (${pkg.name}): ${code ? `${code} ` : ''}${errorMessage(err)}`, {
-      cause: err,
-    });
+    throw new Error(
+      `transformers import failed (${pkg.name}): ${code ? `${code} ` : ''}${errorMessage(err)}`,
+      {
+        cause: err,
+      },
+    );
   }
 }
 
@@ -31,7 +37,10 @@ export interface ModelLoadPolicy {
 
 // A quantized MiniLM is about 23 MB, so two minutes is a 1.5 Mbit/s link; a load from disk takes about a second.
 // The backoff matches the reranker outage warning's repeat window, so each window has one attempt and one warning.
-export const MODEL_LOAD_POLICY: ModelLoadPolicy = { timeoutMs: 2 * MINUTE_MS, backoffMs: 5 * MINUTE_MS };
+export const MODEL_LOAD_POLICY: ModelLoadPolicy = {
+  timeoutMs: 2 * MINUTE_MS,
+  backoffMs: 5 * MINUTE_MS,
+};
 
 export interface ModelLoads<T> {
   /**
@@ -49,7 +58,10 @@ function loadWithTimeout<T>(
   onLoaded: (model: T) => void,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${key} did not load within ${timeoutMs / 1000} s`)), timeoutMs);
+    const timer = setTimeout(
+      () => reject(new Error(`${key} did not load within ${timeoutMs / 1000} s`)),
+      timeoutMs,
+    );
     timer.unref();
     Promise.resolve()
       .then(start)

@@ -41,7 +41,11 @@ function seed(
   fields: Partial<MemoryEntry> = {},
 ): MemoryEntry {
   const entry = {
-    ...createMemory(`row ${id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT, ...options }),
+    ...createMemory(`row ${id}`, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tenantId: TENANT,
+      ...options,
+    }),
     id,
     ...fields,
   };
@@ -100,7 +104,12 @@ describe('memoryGet answers what readEntry answers', () => {
     };
     const db = openStore(r);
     try {
-      insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: '2026-01-01T00:00:00.000Z' });
+      insertDormantRow(db, {
+        entry,
+        strength: 0.01,
+        reason: 'decay',
+        dormantAt: '2026-01-01T00:00:00.000Z',
+      });
     } finally {
       db.close();
     }

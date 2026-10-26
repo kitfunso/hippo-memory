@@ -4,7 +4,10 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { MAX_PROJECT_ALIASES, MCP_PROJECT_SCOPED_HEADER } from '../../src/entry/project-identity.js';
+import {
+  MAX_PROJECT_ALIASES,
+  MCP_PROJECT_SCOPED_HEADER,
+} from '../../src/entry/project-identity.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -28,15 +31,23 @@ function makeStore(shared: boolean): string {
   const store = path.join(tmp, 'srv', shared ? 'hippo-team' : 'hippo-solo');
   fs.mkdirSync(store, { recursive: true });
   initTestStore(store);
-  if (shared) fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ sharedStore: true }));
+  if (shared)
+    fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ sharedStore: true }));
   return store;
 }
 
 function toolCall(name: string, args: Record<string, string>): string {
-  return JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
+  return JSON.stringify({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: { name, arguments: args },
+  });
 }
 
-const REMEMBER = toolCall('hippo_remember', { text: 'the header test row about blue green deploys' });
+const REMEMBER = toolCall('hippo_remember', {
+  text: 'the header test row about blue green deploys',
+});
 
 /** POST /mcp through node:http, which sends a header given as an array once per value, as a proxy that repeats one would. */
 function post(headers: http.OutgoingHttpHeaders, body: string = REMEMBER): Promise<Reply> {
@@ -45,7 +56,12 @@ function post(headers: http.OutgoingHttpHeaders, body: string = REMEMBER): Promi
       `${handle!.url}/mcp`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json', ...handle?.auth, ...headers },
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+          ...handle?.auth,
+          ...headers,
+        },
       },
       (res) => {
         let text = '';
@@ -54,7 +70,11 @@ function post(headers: http.OutgoingHttpHeaders, body: string = REMEMBER): Promi
           text += chunk;
         });
         res.on('end', () =>
-          resolve({ status: res.statusCode ?? 0, text, scoped: res.headers['x-hippo-project-scoped'] }),
+          resolve({
+            status: res.statusCode ?? 0,
+            text,
+            scoped: res.headers['x-hippo-project-scoped'],
+          }),
         );
       },
     );
@@ -89,7 +109,10 @@ describe('X-Hippo-Project on a shared store', () => {
       expect(r.text).toContain('Remembered');
       expect(loadAllEntries(store, 'default').map((e) => e.originProject)).toEqual(['acme/café']);
 
-      const aliased = { ...createMemory('the aliasmark row from before the rename'), originProject: 'old,name' };
+      const aliased = {
+        ...createMemory('the aliasmark row from before the rename'),
+        originProject: 'old,name',
+      };
       writeEntry(store, aliased);
       const recalled = await post(headers, toolCall('hippo_recall', { query: 'aliasmark' }));
       expect(recalled.status, recalled.text).toBe(200);
@@ -117,7 +140,10 @@ describe('X-Hippo-Project on a shared store', () => {
       ['a raw space', { 'x-hippo-project': 'acme app' }],
       ['a raw comma in the name', { 'x-hippo-project': 'acme,app' }],
       ['the name sent twice', { 'x-hippo-project': ['acme', 'acme'] }],
-      ['the aliases sent twice', { 'x-hippo-project': 'acme', 'x-hippo-project-aliases': ['old', 'old'] }],
+      [
+        'the aliases sent twice',
+        { 'x-hippo-project': 'acme', 'x-hippo-project-aliases': ['old', 'old'] },
+      ],
       ['aliases without a name', { 'x-hippo-project-aliases': 'old' }],
       ['a trailing empty alias', withName('a,')],
       ['a leading empty alias', withName(',a')],
@@ -154,7 +180,10 @@ describe('X-Hippo-Project-Scoped on every /mcp reply', () => {
     handle = await serveKeyed({ hippoRoot: makeStore(true), port: 0 });
     const replies: ReadonlyArray<readonly [number, Reply]> = [
       [200, await post({ 'x-hippo-project': 'acme' })],
-      [202, await post({}, JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }))],
+      [
+        202,
+        await post({}, JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })),
+      ],
       [400, await post({ 'x-hippo-project': 'Acme' })],
       [400, await post({ 'x-hippo-project': 'acme' }, 'not json')],
       [401, await post({ authorization: 'Bearer hk_bogus' })],
@@ -181,10 +210,20 @@ describe('X-Hippo-Project-Scoped on every /mcp reply', () => {
     handle = await serveKeyed({ hippoRoot: makeStore(true), port: 0 });
     const aliases = (n: number): string => Array.from({ length: n }, (_, i) => `a${i}`).join(',');
     expect(
-      (await post({ 'x-hippo-project': 'acme', 'x-hippo-project-aliases': aliases(MAX_PROJECT_ALIASES) })).status,
+      (
+        await post({
+          'x-hippo-project': 'acme',
+          'x-hippo-project-aliases': aliases(MAX_PROJECT_ALIASES),
+        })
+      ).status,
     ).toBe(200);
     expect(
-      (await post({ 'x-hippo-project': 'acme', 'x-hippo-project-aliases': aliases(MAX_PROJECT_ALIASES + 1) })).status,
+      (
+        await post({
+          'x-hippo-project': 'acme',
+          'x-hippo-project-aliases': aliases(MAX_PROJECT_ALIASES + 1),
+        })
+      ).status,
     ).toBe(400);
   });
 });

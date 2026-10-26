@@ -82,7 +82,8 @@ const ENTITY_TYPE_TO_SOURCE_OBJECT = {
  *  unmappable entityType (a graph invariant violation). */
 function sourceObjectOf(entityType: EntityType, e2Id: number): SourceObjectRef {
   const type = ENTITY_TYPE_TO_SOURCE_OBJECT[entityType];
-  if (!type) throw new Error(`graph-extract: entityType '${entityType}' has no source_object_type mapping`);
+  if (!type)
+    throw new Error(`graph-extract: entityType '${entityType}' has no source_object_type mapping`);
   return { type, id: e2Id };
 }
 
@@ -218,12 +219,21 @@ export function deriveGraph(loaded: readonly LoadedType[]): DerivedGraph {
   };
 }
 
-const naturalKeyOf = (e: DerivedEntity): NaturalKey => ({ entityType: e.entityType, sourceObject: e.sourceObject });
+const naturalKeyOf = (e: DerivedEntity): NaturalKey => ({
+  entityType: e.entityType,
+  sourceObject: e.sourceObject,
+});
 
 // Pass 1: every active or superseded object row becomes an entity anchored to its object, so it survives a forgotten
 // mirror; the mirror memory rides along only while it exists.
 function deriveEntities(loaded: readonly LoadedType[]): DerivedEntities {
-  const pass: DerivedEntities = { byType: {}, truncated: [], allRows: [], byKey: new Map(), created: [] };
+  const pass: DerivedEntities = {
+    byType: {},
+    truncated: [],
+    allRows: [],
+    byKey: new Map(),
+    created: [],
+  };
   for (const { entityType, rows, hitCap } of loaded) {
     if (hitCap) pass.truncated.push(entityType);
     pass.byType[entityType] = 0;
@@ -354,7 +364,10 @@ function resultOf(derived: DerivedGraph, skipped: number): ExtractResult {
 
 /** Idempotent rebuild of the tenant's graph from its consolidated objects, in one transaction; safe to re-run.
  *  Returns the derived counts and which types hit the per-type cap. */
-export async function extractGraph(store: StoreWith<'graphRebuild'>, tenantId: string): Promise<ExtractResult> {
+export async function extractGraph(
+  store: StoreWith<'graphRebuild'>,
+  tenantId: string,
+): Promise<ExtractResult> {
   assertTenantId('extractGraph', tenantId);
   // No hold limit, so every op lands in one apply; it re-checks each insert, so a rebuild that committed since this
   // one's read adds no second row.
@@ -384,7 +397,10 @@ async function rebuildGraph(
   let committedAt = 0;
   while (next < ops.length) {
     if (next > 0) await budget.pause(committedAt);
-    const chunk = await store.graphRebuild.applyOps(tenantId, ops, { from: next, holdMs: budget.holdMs });
+    const chunk = await store.graphRebuild.applyOps(tenantId, ops, {
+      from: next,
+      holdMs: budget.holdMs,
+    });
     committedAt = budget.clock();
     next = chunk.next;
     skipped += chunk.skipped;

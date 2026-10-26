@@ -30,7 +30,8 @@ const claudeFolder = (dir: string) => claudeName(fs.realpathSync.native(dir));
 const norm = (p: string) => (process.platform === 'win32' ? p.toLowerCase() : p);
 
 const configOf = (home: string) => path.join(home, '.claude');
-const memDirOf = (config: string, project: string) => path.join(config, 'projects', claudeFolder(project), 'memory');
+const memDirOf = (config: string, project: string) =>
+  path.join(config, 'projects', claudeFolder(project), 'memory');
 const ctxOf = (home: string, over: Partial<AdapterContext> = {}): AdapterContext => ({
   home,
   env: {},
@@ -50,7 +51,15 @@ function writeLesson(home: string, project: string, file: string, body: string):
 function git(cwd: string, ...args: string[]): void {
   execFileSync(
     'git',
-    ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false', ...args],
+    [
+      '-c',
+      'user.email=test@example.com',
+      '-c',
+      'user.name=Test',
+      '-c',
+      'commit.gpgsign=false',
+      ...args,
+    ],
     { cwd, stdio: 'ignore' },
   );
 }
@@ -82,12 +91,24 @@ describe('claudeCodeAdapter project layouts', () => {
   it('lists its own project folder and no other project', () => {
     const home = tmp();
     const project = tmp();
-    writeLesson(home, project, 'own.md', 'Run the migration check before every deploy of this service.');
-    writeLesson(home, tmp(), 'other.md', 'The billing export for the other client runs on Fridays.');
+    writeLesson(
+      home,
+      project,
+      'own.md',
+      'Run the migration check before every deploy of this service.',
+    );
+    writeLesson(
+      home,
+      tmp(),
+      'other.md',
+      'The billing export for the other client runs on Fridays.',
+    );
 
     const listing = claudeCodeAdapter.list(ctxOf(home, { projectRoot: project }), 'project');
     expect(listing.tool).toBe('claude-code');
-    expect(listing.containers.map((c) => norm(c.path))).toEqual([norm(memDirOf(configOf(home), project))]);
+    expect(listing.containers.map((c) => norm(c.path))).toEqual([
+      norm(memDirOf(configOf(home), project)),
+    ]);
     expect(listing.containers[0].scope).toBe('project');
     expect(listing.containers[0].items.map((i) => i.key)).toEqual(['own.md']);
   });
@@ -107,7 +128,12 @@ describe('claudeCodeAdapter project layouts', () => {
     const repo = seedRepo();
     const worktree = path.join(tmp(), 'wt');
     git(repo, 'worktree', 'add', '-q', worktree);
-    writeLesson(home, repo, 'main.md', 'Worktrees share the build cache, so clean it before a release build.');
+    writeLesson(
+      home,
+      repo,
+      'main.md',
+      'Worktrees share the build cache, so clean it before a release build.',
+    );
 
     expect(listed(home, worktree)).toEqual([norm(memDirOf(configOf(home), repo))]);
   });
@@ -115,8 +141,18 @@ describe('claudeCodeAdapter project layouts', () => {
   it("lists a bare repository's folder, not its parent's, for its worktree", () => {
     const home = tmp();
     const { parent, bare, wt } = bareWithWorktree();
-    writeLesson(home, bare, 'bare.md', 'This repository needs the fixture server before its tests run.');
-    writeLesson(home, parent, 'parent.md', 'The parent folder keeps its invoices under the finance share.');
+    writeLesson(
+      home,
+      bare,
+      'bare.md',
+      'This repository needs the fixture server before its tests run.',
+    );
+    writeLesson(
+      home,
+      parent,
+      'parent.md',
+      'The parent folder keeps its invoices under the finance share.',
+    );
 
     expect(listed(home, wt)).toEqual([norm(memDirOf(configOf(home), bare))]);
   });
@@ -126,7 +162,12 @@ describe('claudeCodeAdapter project layouts', () => {
     const base = tmp();
     fs.mkdirSync(path.join(base, 'gitdirs'));
     git(base, 'init', '-q', `--separate-git-dir=${path.join(base, 'gitdirs', 'proj.git')}`, 'proj');
-    writeLesson(home, path.join(base, 'proj'), 'own.md', 'Run the schema check before this project ships.');
+    writeLesson(
+      home,
+      path.join(base, 'proj'),
+      'own.md',
+      'Run the schema check before this project ships.',
+    );
     writeLesson(
       home,
       path.join(base, 'gitdirs'),
@@ -134,7 +175,9 @@ describe('claudeCodeAdapter project layouts', () => {
       'The gitdirs folder holds backups for a different client.',
     );
 
-    expect(listed(home, path.join(base, 'proj'))).toEqual([norm(memDirOf(configOf(home), path.join(base, 'proj')))]);
+    expect(listed(home, path.join(base, 'proj'))).toEqual([
+      norm(memDirOf(configOf(home), path.join(base, 'proj'))),
+    ]);
   });
 
   it('lists the submodule root folder for a submodule subfolder', () => {
@@ -143,10 +186,17 @@ describe('claudeCodeAdapter project layouts', () => {
     const sup = seedRepo();
     git(sup, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', lib, 'lib');
     fs.mkdirSync(path.join(sup, 'lib', 'pkg'));
-    writeLesson(home, path.join(sup, 'lib'), 'lib.md', 'The submodule build needs the vendored headers.');
+    writeLesson(
+      home,
+      path.join(sup, 'lib'),
+      'lib.md',
+      'The submodule build needs the vendored headers.',
+    );
     writeLesson(home, sup, 'super.md', 'The superproject deploys from the release branch only.');
 
-    expect(listed(home, path.join(sup, 'lib', 'pkg'))).toEqual([norm(memDirOf(configOf(home), path.join(sup, 'lib')))]);
+    expect(listed(home, path.join(sup, 'lib', 'pkg'))).toEqual([
+      norm(memDirOf(configOf(home), path.join(sup, 'lib'))),
+    ]);
   });
 
   it("lists the folder Claude Code names with a hash when the project's name passes 200 characters", () => {
@@ -156,7 +206,12 @@ describe('claudeCodeAdapter project layouts', () => {
     const base = tmp();
     const project = path.join(base, 'p'.repeat(Math.max(1, 205 - base.length)));
     fs.mkdirSync(project);
-    writeLesson(home, project, 'own.md', 'The long-path project pins its toolchain in the lockfile.');
+    writeLesson(
+      home,
+      project,
+      'own.md',
+      'The long-path project pins its toolchain in the lockfile.',
+    );
 
     expect(claudeFolder(project).length).toBeGreaterThan(200);
     expect(listed(home, project)).toEqual([norm(memDirOf(configOf(home), project))]);
@@ -170,7 +225,12 @@ describe('claudeCodeAdapter project layouts', () => {
     fs.mkdirSync(repo);
     git(repo, 'init', '-q');
     fs.mkdirSync(path.join(repo, 'pkg'));
-    writeLesson(home, repo, 'repo.md', 'The long-named repository builds its docs before the package.');
+    writeLesson(
+      home,
+      repo,
+      'repo.md',
+      'The long-named repository builds its docs before the package.',
+    );
 
     expect(claudeFolder(repo).length).toBeGreaterThan(200);
     expect(listed(home, path.join(repo, 'pkg'))).toEqual([norm(memDirOf(configOf(home), repo))]);
@@ -181,7 +241,12 @@ describe('claudeCodeAdapter project layouts', () => {
     const base = fs.realpathSync.native(tmp());
     const project = path.join(base, 'q'.repeat(199 - base.length));
     fs.mkdirSync(project);
-    writeLesson(home, project, 'own.md', 'The exact-length project keeps its fixtures beside the tests.');
+    writeLesson(
+      home,
+      project,
+      'own.md',
+      'The exact-length project keeps its fixtures beside the tests.',
+    );
 
     expect(claudeFolder(project)).toHaveLength(200);
     expect(claudeFolderName(project)).toBe(claudeFolder(project));
@@ -253,7 +318,9 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     const paths = (env: Record<string, string>) =>
       claudeCodeAdapter.list(ctxOf(home, { env }), 'project').containers.map((c) => norm(c.path));
 
-    expect(paths({ CLAUDE_CONFIG_DIR: cfg, CLAUDE_CODE_PROJECT_DIR_NAME: 'my_proj-1' })).toEqual([norm(pinnedIn(cfg))]);
+    expect(paths({ CLAUDE_CONFIG_DIR: cfg, CLAUDE_CODE_PROJECT_DIR_NAME: 'my_proj-1' })).toEqual([
+      norm(pinnedIn(cfg)),
+    ]);
     expect(paths({ CLAUDE_CODE_PROJECT_DIR_NAME: 'my_proj-1' })).toEqual([]);
     expect(paths({ CLAUDE_CONFIG_DIR: cfg })).toEqual([]);
   });
@@ -267,11 +334,16 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
         'project',
       ).containers;
     for (const name of ['x'.repeat(64), '../out', 'a/b', 'a b', 'x'.repeat(65), '']) {
-      writeIn(path.join(cfg, 'projects', name, 'memory'), 'n.md', note('A note that only a valid name may reach.'));
+      writeIn(
+        path.join(cfg, 'projects', name, 'memory'),
+        'n.md',
+        note('A note that only a valid name may reach.'),
+      );
     }
 
     expect(found('x'.repeat(64))).toHaveLength(1);
-    for (const name of ['../out', 'a/b', 'a b', 'x'.repeat(65), '']) expect(found(name)).toEqual([]);
+    for (const name of ['../out', 'a/b', 'a b', 'x'.repeat(65), ''])
+      expect(found(name)).toEqual([]);
   });
 
   it('lists the session folder memory alone', () => {
@@ -285,10 +357,15 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     const launch = tmp();
     const repo = path.join(launch, 'repo');
     fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
-    const transcriptOf = (dir: string) => path.join(tmp(), 'projects', claudeFolder(dir), 't.jsonl');
+    const transcriptOf = (dir: string) =>
+      path.join(tmp(), 'projects', claudeFolder(dir), 't.jsonl');
 
     expect(
-      transcriptNotesProject(transcriptOf(launch), repo, { platform: process.platform, env: {}, ...REAL_IO })?.name,
+      transcriptNotesProject(transcriptOf(launch), repo, {
+        platform: process.platform,
+        env: {},
+        ...REAL_IO,
+      })?.name,
     ).toBe('');
     expect(
       transcriptNotesProject(transcriptOf(repo), path.join(repo, 'src'), {
@@ -298,10 +375,18 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
       })?.name,
     ).toBe('repo');
     expect(
-      transcriptNotesProject(transcriptOf(repo), tmp(), { platform: process.platform, env: {}, ...REAL_IO }),
+      transcriptNotesProject(transcriptOf(repo), tmp(), {
+        platform: process.platform,
+        env: {},
+        ...REAL_IO,
+      }),
     ).toBeNull();
     expect(
-      transcriptNotesProject(transcriptOf(repo), null, { platform: process.platform, env: {}, ...REAL_IO }),
+      transcriptNotesProject(transcriptOf(repo), null, {
+        platform: process.platform,
+        env: {},
+        ...REAL_IO,
+      }),
     ).toBeNull();
   });
 
@@ -318,9 +403,10 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     const gone = path.join(launch, 'gone');
     const goneTranscript = path.join(tmp(), 'projects', claudeFolderName(gone), 't.jsonl');
 
-    expect(transcriptNotesProject(transcript, dash, { platform: process.platform, env: {}, ...REAL_IO })?.name).toBe(
-      'my_repo',
-    );
+    expect(
+      transcriptNotesProject(transcript, dash, { platform: process.platform, env: {}, ...REAL_IO })
+        ?.name,
+    ).toBe('my_repo');
     expect(
       transcriptNotesProject(goneTranscript, path.join(gone, 'src'), {
         platform: process.platform,
@@ -337,10 +423,17 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     writeIn(path.dirname(transcript), 't.jsonl', `${JSON.stringify({ cwd: repo })}\n`);
     const env = { CLAUDE_CONFIG_DIR: tmp(), CLAUDE_CODE_PROJECT_DIR_NAME: 'pinned-name' };
 
-    expect(transcriptNotesProject(transcript, tmp(), { platform: process.platform, env, ...REAL_IO })?.name).toBe(
-      'repo',
-    );
-    expect(transcriptNotesProject(transcript, tmp(), { platform: process.platform, env: {}, ...REAL_IO })).toBeNull();
+    expect(
+      transcriptNotesProject(transcript, tmp(), { platform: process.platform, env, ...REAL_IO })
+        ?.name,
+    ).toBe('repo');
+    expect(
+      transcriptNotesProject(transcript, tmp(), {
+        platform: process.platform,
+        env: {},
+        ...REAL_IO,
+      }),
+    ).toBeNull();
   });
 
   it('lists nothing for a project scope without a project root or name', () => {
@@ -365,7 +458,12 @@ describe('claudeCodeAdapter user folder from autoMemoryDirectory', () => {
     const listing = withSettings(home, { autoMemoryDirectory: notes });
     expect(listing.warnings).toEqual([]);
     expect(listing.containers).toHaveLength(1);
-    expect(listing.containers[0]).toMatchObject({ scope: 'user', path: notes, readable: true, textKeyed: false });
+    expect(listing.containers[0]).toMatchObject({
+      scope: 'user',
+      path: notes,
+      readable: true,
+      textKeyed: false,
+    });
     expect(listing.containers[0].items.map((i) => i.key)).toEqual(['a.md']);
     expect(claudeCodeAdapter.list(ctxOf(home), 'project').containers).toEqual([]);
   });
@@ -374,15 +472,19 @@ describe('claudeCodeAdapter user folder from autoMemoryDirectory', () => {
     const home = tmp();
     writeIn(path.join(home, 'notes'), 'a.md', note('A user note kept under the home folder.'));
     for (const value of ['~/notes', '~\\notes']) {
-      expect(withSettings(home, { autoMemoryDirectory: value }).containers.map((c) => norm(c.path))).toEqual([
-        norm(path.join(home, 'notes')),
-      ]);
+      expect(
+        withSettings(home, { autoMemoryDirectory: value }).containers.map((c) => norm(c.path)),
+      ).toEqual([norm(path.join(home, 'notes'))]);
     }
   });
 
   it('ignores a relative value with one warning', () => {
     const home = tmp();
-    writeIn(path.join(configOf(home), 'notes'), 'a.md', note('A note in a folder relative to the config.'));
+    writeIn(
+      path.join(configOf(home), 'notes'),
+      'a.md',
+      note('A note in a folder relative to the config.'),
+    );
     const listing = withSettings(home, { autoMemoryDirectory: 'notes' });
     expect(listing.containers).toEqual([]);
     expect(listing.warnings).toHaveLength(1);
@@ -398,12 +500,18 @@ describe('claudeCodeAdapter user folder from autoMemoryDirectory', () => {
 
   it('gives no container and no warning for a missing settings file, a missing folder or another value type', () => {
     const home = tmp();
-    expect(claudeCodeAdapter.list(ctxOf(home), 'user')).toMatchObject({ containers: [], warnings: [] });
+    expect(claudeCodeAdapter.list(ctxOf(home), 'user')).toMatchObject({
+      containers: [],
+      warnings: [],
+    });
     expect(withSettings(home, { autoMemoryDirectory: path.join(tmp(), 'absent') })).toMatchObject({
       containers: [],
       warnings: [],
     });
-    expect(withSettings(home, { autoMemoryDirectory: 5 })).toMatchObject({ containers: [], warnings: [] });
+    expect(withSettings(home, { autoMemoryDirectory: 5 })).toMatchObject({
+      containers: [],
+      warnings: [],
+    });
   });
 
   it('reads settings.json from CLAUDE_CONFIG_DIR and never from the project', () => {
@@ -415,7 +523,11 @@ describe('claudeCodeAdapter user folder from autoMemoryDirectory', () => {
     writeIn(real, 'r.md', note('A note in the folder the config setting names.'));
     writeIn(configOf(home), 'settings.json', JSON.stringify({ autoMemoryDirectory: decoy }));
     const project = tmp();
-    writeIn(path.join(project, '.claude'), 'settings.json', JSON.stringify({ autoMemoryDirectory: decoy }));
+    writeIn(
+      path.join(project, '.claude'),
+      'settings.json',
+      JSON.stringify({ autoMemoryDirectory: decoy }),
+    );
     writeIn(cfg, 'settings.json', JSON.stringify({ autoMemoryDirectory: real }));
 
     const listing = claudeCodeAdapter.list(
@@ -424,14 +536,17 @@ describe('claudeCodeAdapter user folder from autoMemoryDirectory', () => {
     );
     expect(listing.containers.map((c) => norm(c.path))).toEqual([norm(real)]);
     expect(
-      claudeCodeAdapter.list(ctxOf(home, { projectRoot: project }), 'user').containers.map((c) => norm(c.path)),
+      claudeCodeAdapter
+        .list(ctxOf(home, { projectRoot: project }), 'user')
+        .containers.map((c) => norm(c.path)),
     ).toEqual([norm(decoy)]);
   });
 });
 
 describe('claudeCodeAdapter items', () => {
   const containerIn = (dir: string): Container => {
-    return claudeTranscriptListing(ctxOf(tmp()), path.join(path.dirname(dir), 't.jsonl')).containers[0];
+    return claudeTranscriptListing(ctxOf(tmp()), path.join(path.dirname(dir), 't.jsonl'))
+      .containers[0];
   };
   const memoryDir = () => path.join(tmp(), 'projects', 'p', 'memory');
 
@@ -448,9 +563,19 @@ describe('claudeCodeAdapter items', () => {
     fs.utimesSync(path.join(dir, 'b.md'), mtime, mtime);
 
     const container = containerIn(dir);
-    expect(container).toMatchObject({ scope: 'project', readable: true, skipped: [], warnings: [], textKeyed: false });
+    expect(container).toMatchObject({
+      scope: 'project',
+      readable: true,
+      skipped: [],
+      warnings: [],
+      textKeyed: false,
+    });
     expect(container.items).toEqual([
-      { key: 'a.md', text: 'Body of the first note.', updatedAt: Date.parse('2026-03-01T10:00:00Z') },
+      {
+        key: 'a.md',
+        text: 'Body of the first note.',
+        updatedAt: Date.parse('2026-03-01T10:00:00Z'),
+      },
       { key: 'b.md', text: 'Body of the second note.', updatedAt: mtime.getTime() },
     ]);
   });
@@ -492,7 +617,9 @@ describe('claudeCodeAdapter items', () => {
   });
 
   it('lists no container for a missing folder', () => {
-    expect(claudeTranscriptListing(ctxOf(tmp()), path.join(tmp(), 'projects', 'p', 't.jsonl'))).toMatchObject({
+    expect(
+      claudeTranscriptListing(ctxOf(tmp()), path.join(tmp(), 'projects', 'p', 't.jsonl')),
+    ).toMatchObject({
       containers: [],
       warnings: [],
     });

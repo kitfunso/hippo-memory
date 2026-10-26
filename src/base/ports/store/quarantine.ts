@@ -40,11 +40,21 @@ export interface Quarantine {
   /** In one transaction, all or none: restores the memory's originalScope if it is in the tenant and still under
    * `quarantine:private:...`; marks the record approved (decidedAt from the store's clock, decidedBy `actor`); appends
    * one quarantine_approve row ({originalScope}). */
-  decideQuarantined(tenantId: string, id: string, decision: 'approve', actor: string): Promise<QuarantineApproval>;
+  decideQuarantined(
+    tenantId: string,
+    id: string,
+    decision: 'approve',
+    actor: string,
+  ): Promise<QuarantineApproval>;
   /** In one transaction, both or neither: marks the record rejected (decidedAt/decidedBy as approve) and appends one
    * quarantine_reject row. The memory row is not touched, so it stays under its quarantine scope and a record with no
    * memory row can still be rejected. */
-  decideQuarantined(tenantId: string, id: string, decision: 'reject', actor: string): Promise<QuarantineRejection>;
+  decideQuarantined(
+    tenantId: string,
+    id: string,
+    decision: 'reject',
+    actor: string,
+  ): Promise<QuarantineRejection>;
 }
 
 /** `Quarantine` as an adapter writes it; the port's overloads pair each decision with its answer. */

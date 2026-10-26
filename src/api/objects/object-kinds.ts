@@ -4,8 +4,15 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { Incident, Policy, ProjectBrief } from '../../base/records/object-types.js';
 import { MAX_CUSTOMER_LEN, MAX_NOTE_LEN } from '../../domain/objects/customer-notes.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
-import { resolveActiveDecisionIdByMemory, weakenSupersededMemory } from '../../domain/objects/decisions.js';
-import { openIncident, resolveOpenIncident, type SaveIncidentOptions } from '../../domain/objects/incidents.js';
+import {
+  resolveActiveDecisionIdByMemory,
+  weakenSupersededMemory,
+} from '../../domain/objects/decisions.js';
+import {
+  openIncident,
+  resolveOpenIncident,
+  type SaveIncidentOptions,
+} from '../../domain/objects/incidents.js';
 import { policiesAsOf } from '../../domain/objects/policies.js';
 import { MAX_PROCESS_STEP_LEN, MAX_PROCESS_STEPS } from '../../domain/objects/processes.js';
 import {
@@ -43,7 +50,11 @@ export const OBJECT_CAPS = {
 } as const;
 
 /** Opens an incident as the caller; a linked memory outside the caller's tenant refuses the whole write. */
-export function incidentOpen(ctx: Context, write: SaveIncidentOptions, origin?: WriteOrigin): Promise<Incident> {
+export function incidentOpen(
+  ctx: Context,
+  write: SaveIncidentOptions,
+  origin?: WriteOrigin,
+): Promise<Incident> {
   const { defaultHalfLifeDays } = ctx.config;
   const tagged = taggedFrom(write, origin);
   return openIncident(objectsOf(ctx), defaultHalfLifeDays, ctx.tenantId, tagged, {
@@ -53,7 +64,11 @@ export function incidentOpen(ctx: Context, write: SaveIncidentOptions, origin?: 
 }
 
 /** Moves an open incident to resolved as the caller. */
-export function incidentResolve(ctx: Context, id: number, resolutionText: string): Promise<Incident> {
+export function incidentResolve(
+  ctx: Context,
+  id: number,
+  resolutionText: string,
+): Promise<Incident> {
   return resolveOpenIncident(objectsOf(ctx), ctx.tenantId, id, resolutionText, {
     actor: ctx.actor.subject,
     now: ctx.infra.clock(),
@@ -61,7 +76,11 @@ export function incidentResolve(ctx: Context, id: number, resolutionText: string
 }
 
 /** The caller's policies in force at `date`, optionally one policy's versions only. */
-export function policiesInForce(ctx: Context, date: string, opts: { readonly name?: string }): Promise<Policy[]> {
+export function policiesInForce(
+  ctx: Context,
+  date: string,
+  opts: { readonly name?: string },
+): Promise<Policy[]> {
   return policiesAsOf(objectsOf(ctx), ctx.tenantId, date, { name: opts.name });
 }
 

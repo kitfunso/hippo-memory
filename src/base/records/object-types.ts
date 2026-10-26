@@ -172,7 +172,11 @@ export interface ObjectFields {
   };
   skill: { readonly name: string; readonly instructions: string; readonly trigger: string | null };
   /** `receiptCount` is set only when a refresh wrote this version. */
-  project_brief: { readonly repo: string; readonly summary: string; readonly receiptCount: number | undefined };
+  project_brief: {
+    readonly repo: string;
+    readonly summary: string;
+    readonly receiptCount: number | undefined;
+  };
   customer_note: { readonly customer: string; readonly note: string };
 }
 
@@ -186,7 +190,9 @@ export type ObjectRefusal =
   | { readonly refused: 'vanished' };
 
 /** Tells a refusal from the row a write answered; no row carries a `refused` key. */
-export function isObjectRefusal<T extends object>(written: T | ObjectRefusal): written is ObjectRefusal {
+export function isObjectRefusal<T extends object>(
+  written: T | ObjectRefusal,
+): written is ObjectRefusal {
   return 'refused' in written;
 }
 

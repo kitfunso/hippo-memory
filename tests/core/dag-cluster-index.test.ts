@@ -6,7 +6,9 @@ import { clusterFacts } from '../../src/domain/consolidate/dag.js';
 
 /** The all-pairs scan clusterFacts used to run, kept as the oracle for its output. */
 function allPairsClusters(facts: MemoryEntry[]) {
-  const entityTags = facts.map((f) => f.tags.filter((t) => t.startsWith('speaker:') || t.startsWith('topic:')));
+  const entityTags = facts.map((f) =>
+    f.tags.filter((t) => t.startsWith('speaker:') || t.startsWith('topic:')),
+  );
   const assigned = new Set<number>();
   const clusters: { label: string; members: MemoryEntry[]; entityTags: string[] }[] = [];
   for (let i = 0; i < facts.length; i++) {
@@ -22,7 +24,9 @@ function allPairsClusters(facts: MemoryEntry[]) {
         assigned.add(j);
       }
     }
-    const sharedTags = entityTags[cluster[0]].filter((t) => cluster.every((idx) => entityTags[idx].includes(t)));
+    const sharedTags = entityTags[cluster[0]].filter((t) =>
+      cluster.every((idx) => entityTags[idx].includes(t)),
+    );
     const members = cluster.map((idx) => facts[idx]);
     clusters.push({
       label: sharedTags.map((t) => t.split(':')[1]).join(': ') || members[0].content.slice(0, 40),
@@ -63,7 +67,9 @@ afterEach(() => {
 /** Set.has and Array.includes calls one clusterFacts run makes over `n` facts in disjoint pairs, each pair one cluster. */
 function membershipChecks(n: number): number {
   const facts = Array.from({ length: n }, (_, i) =>
-    createMemory(`fact ${i} about group ${Math.floor(i / 2)}`, { tags: [`topic:group${Math.floor(i / 2)}`] }),
+    createMemory(`fact ${i} about group ${Math.floor(i / 2)}`, {
+      tags: [`topic:group${Math.floor(i / 2)}`],
+    }),
   );
   const has = vi.spyOn(Set.prototype, 'has');
   const includes = vi.spyOn(Array.prototype, 'includes');

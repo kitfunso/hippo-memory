@@ -107,12 +107,18 @@ export function lessonFromFailure(
       : '';
   const head = command.trim().split(/\s+/).slice(0, COMMAND_HEAD_WORDS).join(' ');
   const detail = `${tool}${head ? ` ${head}` : ''}: ${error}`;
-  const routine = (rule: RoutineRule): FailureReading => ({ skip: 'skipped-routine', rule, text, detail });
+  const routine = (rule: RoutineRule): FailureReading => ({
+    skip: 'skipped-routine',
+    rule,
+    text,
+    detail,
+  });
   if (DECLINED.test(error)) return routine('declined');
   if (OS_PERMISSION.test(error)) return routine('os-permission');
   if (NO_MATCH.test(error)) return routine('no-match');
   if (SEARCH_TOOLS.has(tool)) return routine('search-tool');
-  if (SHELL_TOOLS.has(tool) && QUIET_EXIT_1.test(command) && /exit code 1\b/i.test(error)) return routine('quiet-exit');
+  if (SHELL_TOOLS.has(tool) && QUIET_EXIT_1.test(command) && /exit code 1\b/i.test(error))
+    return routine('quiet-exit');
   return { text, detail };
 }
 

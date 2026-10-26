@@ -10,7 +10,11 @@ import type { CommandContext } from '../flag-values.js';
 import { hookRuntime, hookStoreRoot, hostSessionId, payloadCwdRoot } from '../hook-runtime.js';
 
 /** Every path exits 0, and nothing is created when no store exists, since the hook fires in every directory. */
-export async function handleCaptureError({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleCaptureError({
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
   const { text } = await readHookStdin();
   try {
     const root = hookStoreRoot(payloadCwdRoot(hippoRoot, text, hookRuntime(flags)));

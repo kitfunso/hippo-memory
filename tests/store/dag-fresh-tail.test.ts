@@ -138,7 +138,10 @@ describe('fresh-tail recall', () => {
       ...makeRaw(`raw row from ${origin || 'no project'}`),
       originProject: origin,
     }));
-    const store: HippoStore = { ...sqliteStore(root), freshRawEntries: async () => [mine!, theirs!, global!] };
+    const store: HippoStore = {
+      ...sqliteStore(root),
+      freshRawEntries: async () => [mine!, theirs!, global!],
+    };
     const r = await retrieve(
       { ...ctxFor(root), store },
       {

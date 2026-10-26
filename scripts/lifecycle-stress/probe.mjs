@@ -15,7 +15,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createMemory } from '../../dist/entry/memory.js';
-import { initStore, writeEntry, loadAllEntries, loadEmbeddingIndex } from '../../dist/entry/testing.js';
+import {
+  initStore,
+  writeEntry,
+  loadAllEntries,
+  loadEmbeddingIndex,
+} from '../../dist/entry/testing.js';
 import { embedMemory } from '../../dist/entry/testing.js';
 import { isEmbeddingAvailable } from '../../dist/base/embeddings/local.js';
 import { physicsSearch } from '../../dist/entry/store-kit.js';
@@ -128,7 +133,12 @@ function naiveAnswered(entries) {
 async function hippoAnswered(entries) {
   let n = 0;
   for (const f of facts) {
-    const res = await physicsSearch(f.topic, entries, { hippoRoot: root, physicsConfig: pc, budget: B, minResults: 1 });
+    const res = await physicsSearch(f.topic, entries, {
+      hippoRoot: root,
+      physicsConfig: pc,
+      budget: B,
+      minResults: 1,
+    });
     if (hasAns(res, f)) n++;
   }
   return n;
@@ -167,7 +177,12 @@ try {
   closeHippoDb(_db);
 }
 const diag = (
-  await physicsSearch(facts[0].topic, after, { hippoRoot: root, physicsConfig: pc, budget: 100000, minResults: 5 })
+  await physicsSearch(facts[0].topic, after, {
+    hippoRoot: root,
+    physicsConfig: pc,
+    budget: 100000,
+    minResults: 5,
+  })
 )
   .slice(0, 4)
   .map((r) => ({
@@ -190,7 +205,9 @@ function strengthSorted(entries, budget) {
   // Round strength (read-time age-decay micro-varies it) so within-tier ties break
   // deterministically by content. See run.mjs strengthSortedAssemble for the why.
   const sKey = (e) => Math.round((e.strength || 0) * 1000);
-  const sorted = [...entries].sort((a, b) => sKey(b) - sKey(a) || cmp(a.content || '', b.content || ''));
+  const sorted = [...entries].sort(
+    (a, b) => sKey(b) - sKey(a) || cmp(a.content || '', b.content || ''),
+  );
   const ctx = [];
   let used = 0;
   for (const e of sorted) {
@@ -206,7 +223,12 @@ function strengthSorted(entries, budget) {
 const ssNoLife = strengthSorted(before, B);
 const ssFull = strengthSorted(after, B);
 console.log(
-  'STRENGTH-SORTED (B=' + B + '): noLifecycle=' + JSON.stringify(ssNoLife) + '  full=' + JSON.stringify(ssFull),
+  'STRENGTH-SORTED (B=' +
+    B +
+    '): noLifecycle=' +
+    JSON.stringify(ssNoLife) +
+    '  full=' +
+    JSON.stringify(ssFull),
 );
 
 const out = {

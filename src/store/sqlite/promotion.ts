@@ -6,5 +6,9 @@ import { openStore } from './handles.js';
 import { bound } from './bound.js';
 
 export function sqlitePromotion({ on, files }: Handles): Promotion {
-  return bound<Promotion>(on, { writeCopy: (db, ...args) => writePromotedEntry(db, files, ...args) }, openStore);
+  return bound<Promotion>(
+    on,
+    { writeCopy: (db, ...args) => writePromotedEntry(db, files, ...args) },
+    openStore,
+  );
 }

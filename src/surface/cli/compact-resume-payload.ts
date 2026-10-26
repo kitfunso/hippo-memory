@@ -13,7 +13,10 @@ export interface CompactResumePayload {
  * Fail-closed read of the SessionStart payload: only a manual run or a main-session `source: 'compact'` payload may
  * print.
  */
-export function readCompactResumePayload(stdinText: string | undefined, stdinTimedOut: boolean): CompactResumePayload {
+export function readCompactResumePayload(
+  stdinText: string | undefined,
+  stdinTimedOut: boolean,
+): CompactResumePayload {
   // An older Claude Code that ignores `matcher: 'compact'` runs this on every SessionStart, so a parsed payload with
   // any other source stays silent.
   const nonEmptyStdin = !!stdinText && stdinText.trim() !== '';

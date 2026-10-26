@@ -61,7 +61,12 @@ describe('hippo-memory/server entry types', () => {
     expectTypeOf<Context['config']>().toEqualTypeOf<HippoConfig>();
     typeOnly(() => {
       // @ts-expect-error config is required: the api reads no config file of its own
-      const ctx: Context = { hippoRoot: '/tmp/root', tenantId: 't', actor: { subject: 'cli', role: 'admin' }, store };
+      const ctx: Context = {
+        hippoRoot: '/tmp/root',
+        tenantId: 't',
+        actor: { subject: 'cli', role: 'admin' },
+        store,
+      };
       expectTypeOf(ctx).toEqualTypeOf<Context>();
     });
   });
@@ -71,7 +76,8 @@ describe('hippo-memory/server entry types', () => {
     // @ts-expect-error a store with no captures group has nowhere to read or write the session's rows
     typeOnly(() => captureSessionTexts(plain, sessionReq));
     typeOnly(() => {
-      if (hasGroup(plain.store, 'captures')) captureSessionTexts({ ...plain, store: plain.store }, sessionReq);
+      if (hasGroup(plain.store, 'captures'))
+        captureSessionTexts({ ...plain, store: plain.store }, sessionReq);
     });
   });
 

@@ -32,7 +32,10 @@ function cleanup(home: string): void {
 }
 
 async function seedMemory(home: string, content: string, tenantId = 'default'): Promise<string> {
-  const res = await remember(apiCtx(home, tenantId, { subject: 'cli', role: 'admin' }), { content, kind: 'distilled' });
+  const res = await remember(apiCtx(home, tenantId, { subject: 'cli', role: 'admin' }), {
+    content,
+    kind: 'distilled',
+  });
   return res.id;
 }
 
@@ -105,7 +108,10 @@ describe('api.outcomeForLastRecall', () => {
       const id2 = await seedMemory(home, 'audit-target-2');
       seedLastRetrievalIds(home, [id1, id2]);
 
-      const ctx: FullContext = apiCtx(home, 'default', { subject: 'api_key:hk_ofr_test', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', {
+        subject: 'api_key:hk_ofr_test',
+        role: 'admin',
+      });
       const result = await outcomeForLastRecall(ctx, false);
       expect(result.applied).toBe(2);
 
@@ -136,17 +142,22 @@ describe('api.outcomeForLastRecall reads', () => {
     try {
       const ids: string[] = [];
       await withSharedStoreHandles(async () => {
-        for (let i = 0; i < 40; i++) ids.push(await seedMemory(home, `bystander or recalled memory number ${i}`));
+        for (let i = 0; i < 40; i++)
+          ids.push(await seedMemory(home, `bystander or recalled memory number ${i}`));
       });
       const recalled = [ids[3], ids[17]];
       seedLastRetrievalIds(home, recalled);
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-      const { result, statements, rowsRead } = await recordStatementsAsync(async () => outcomeForLastRecall(ctx, true));
+      const { result, statements, rowsRead } = await recordStatementsAsync(async () =>
+        outcomeForLastRecall(ctx, true),
+      );
 
       expect(result).toEqual({ applied: 2, ids: recalled });
       expect(countMatching(statements, 'FROM memories ORDER BY created ASC, id ASC')).toBe(0);
-      expect(countMatching(statements, "FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')")).toBe(1);
+      expect(
+        countMatching(statements, "FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')"),
+      ).toBe(1);
       expect(rowsRead).toBeLessThan(ids.length);
     } finally {
       cleanup(home);

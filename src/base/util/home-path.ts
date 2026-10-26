@@ -22,7 +22,10 @@ const DRIVE_HOME = new RegExp(
   'i',
 );
 const LONG_PATH = /\\\\\?\\/;
-const SHARE_HOME = new RegExp(String.raw`\\\\[^\\/\s]+\\+(?:homes?|users|profiles?)\$?\\+${WIN_USER}`, 'i');
+const SHARE_HOME = new RegExp(
+  String.raw`\\\\[^\\/\s]+\\+(?:homes?|users|profiles?)\$?\\+${WIN_USER}`,
+  'i',
+);
 const SHORT_NAME =
   /[\\/][A-Z0-9_$]{1,6}~\d{1,6}(?:\.[A-Z0-9]{1,3})?(?![\w~])|\b[A-Z0-9_$]{1,6}~\d{1,6}(?:\.[A-Z0-9]{1,3})?[\\/]/;
 
@@ -49,7 +52,12 @@ const MASK = '[home]';
 
 // Global copies, so the shared test patterns keep their lastIndex at 0.
 const allOf = (re: RegExp): RegExp => new RegExp(re.source, `${re.flags}g`);
-const [DRIVE_HOMES, LONG_PATHS, SHARE_HOMES, SHORT_NAMES] = [DRIVE_HOME, LONG_PATH, SHARE_HOME, SHORT_NAME].map(allOf);
+const [DRIVE_HOMES, LONG_PATHS, SHARE_HOMES, SHORT_NAMES] = [
+  DRIVE_HOME,
+  LONG_PATH,
+  SHARE_HOME,
+  SHORT_NAME,
+].map(allOf);
 
 // A home glued after another starts where a mask will end, which no guard refuses: one match takes the whole run, as
 // masking one a pass costs a pass per home. A run holds only shapes whose own step is not still to come, so a later

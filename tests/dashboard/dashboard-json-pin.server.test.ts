@@ -26,7 +26,12 @@ let dash: RunningDashboard;
 
 /** Varied alpha rows: each sort key spreads, two rows share every created time, and the cut points are hit exactly. */
 function seedAlpha(root: string): void {
-  seed(root, 'Zulu first', { id: 'mem_p_a01', created: SAME_TIME, retrievalCount: 3, scope: 'team:a' });
+  seed(root, 'Zulu first', {
+    id: 'mem_p_a01',
+    created: SAME_TIME,
+    retrievalCount: 3,
+    scope: 'team:a',
+  });
   seed(root, 'alpha shared word', { id: 'mem_p_a02', created: SAME_TIME, layer: Layer.Semantic });
   seed(root, 'Kelvin sign note', { id: 'mem_p_a03', confidence: 'verified', scope: 'Team:b' });
   seed(root, 'Ärger upper umlaut', { id: 'mem_p_a04', confidence: 'inferred', retrievalCount: 9 });
@@ -39,13 +44,42 @@ function seedAlpha(root: string): void {
     lastRetrieved: isoAgo(30),
   });
   // Exactly 0.5 at seven days: strong in the seven-day bucket.
-  seed(root, 'cut at seven days', { id: 'mem_p_a07', halfLifeDays: 10, created: isoAgo(3), lastRetrieved: isoAgo(3) });
-  seed(root, 'made in the future', { id: 'mem_p_a08', created: isoAgo(-3), lastRetrieved: isoAgo(-3) });
-  seed(root, 'wrong twice', { id: 'mem_p_a09', outcomeNegative: 2, emotionalValence: 'negative', layer: Layer.Buffer });
-  seed(root, 'pinned old', { id: 'mem_p_a10', pinned: true, created: isoAgo(200), lastRetrieved: isoAgo(120) });
-  seed(root, 'trace step', { id: 'mem_p_a11', layer: Layer.Trace, created: isoAgo(95), lastRetrieved: isoAgo(95) });
+  seed(root, 'cut at seven days', {
+    id: 'mem_p_a07',
+    halfLifeDays: 10,
+    created: isoAgo(3),
+    lastRetrieved: isoAgo(3),
+  });
+  seed(root, 'made in the future', {
+    id: 'mem_p_a08',
+    created: isoAgo(-3),
+    lastRetrieved: isoAgo(-3),
+  });
+  seed(root, 'wrong twice', {
+    id: 'mem_p_a09',
+    outcomeNegative: 2,
+    emotionalValence: 'negative',
+    layer: Layer.Buffer,
+  });
+  seed(root, 'pinned old', {
+    id: 'mem_p_a10',
+    pinned: true,
+    created: isoAgo(200),
+    lastRetrieved: isoAgo(120),
+  });
+  seed(root, 'trace step', {
+    id: 'mem_p_a11',
+    layer: Layer.Trace,
+    created: isoAgo(95),
+    lastRetrieved: isoAgo(95),
+  });
   seed(root, `${'é'.repeat(239)}\u{1F600} past the cut`, { id: 'mem_p_a12', created: isoAgo(12) });
-  seed(root, 'Zulu second', { id: 'mem_p_a13', retrievalCount: 3, scope: 'team:a', created: isoAgo(7) });
+  seed(root, 'Zulu second', {
+    id: 'mem_p_a13',
+    retrievalCount: 3,
+    scope: 'team:a',
+    created: isoAgo(7),
+  });
 }
 
 /** Projects whose first rows share alpha's first created time, so the order they are first seen in rests on ids. */
@@ -94,14 +128,26 @@ afterAll(async () => {
 
 const ALPHA = `/api/projects/${encodeURIComponent('p:alpha')}`;
 const BIG = `/api/projects/${encodeURIComponent('p:big')}`;
-const SORTS = ['content', 'layer', 'strength', 'retrievals', 'last', 'age', 'confidence', 'scope'] as const;
+const SORTS = [
+  'content',
+  'layer',
+  'strength',
+  'retrievals',
+  'last',
+  'age',
+  'confidence',
+  'scope',
+] as const;
 
 const READS: readonly string[] = [
   '/api/overview',
   ALPHA,
   `/api/projects/${encodeURIComponent('p:zeta')}`,
   '/api/projects/global',
-  ...SORTS.flatMap((sort) => [`${ALPHA}/memories?sort=${sort}&dir=asc`, `${ALPHA}/memories?sort=${sort}&dir=desc`]),
+  ...SORTS.flatMap((sort) => [
+    `${ALPHA}/memories?sort=${sort}&dir=asc`,
+    `${ALPHA}/memories?sort=${sort}&dir=desc`,
+  ]),
   `${ALPHA}/memories?q=kelvin`,
   `${ALPHA}/memories?q=${encodeURIComponent('ärger')}`,
   `${ALPHA}/memories?q=needletag`,

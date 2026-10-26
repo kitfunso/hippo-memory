@@ -56,7 +56,8 @@ const processKind: VersionedKind<'process', ProcessBody> = {
     changeSummary: from?.changeSummary,
     supersedesProcessId: from?.id,
   }),
-  recorded: (proc) => `Process recorded: #${proc.id} (v${proc.version}, ${proc.steps.length} steps)`,
+  recorded: (proc) =>
+    `Process recorded: #${proc.id} (v${proc.version}, ${proc.steps.length} steps)`,
   printRow: printProcessRow,
   printDetail: (proc) => {
     console.log(`  name: ${proc.processName}`);
@@ -72,7 +73,8 @@ const processKind: VersionedKind<'process', ProcessBody> = {
 
 export const handleProcess = versionedVerbs(processKind);
 
-const policyRange = (p: Policy): string => (p.validTo ? `${p.validFrom}..${p.validTo}` : `${p.validFrom}..(open)`);
+const policyRange = (p: Policy): string =>
+  p.validTo ? `${p.validFrom}..${p.validTo}` : `${p.validFrom}..(open)`;
 
 function printPolicyRow(p: Policy): void {
   console.log(`#${p.id} [${p.status}] v${p.version} ${policyRange(p)} memory=${p.memoryId ?? '-'}`);
@@ -124,7 +126,11 @@ const policyKind: VersionedKind<'policy', PolicyBody> = {
   body: (flags) => {
     const policyText = requiredText(flags, 'text');
     if (policyText === undefined) return undefined;
-    return { policyText, validFrom: nonEmptyStringFlag(flags, 'from'), validTo: nonEmptyStringFlag(flags, 'to') };
+    return {
+      policyText,
+      validFrom: nonEmptyStringFlag(flags, 'from'),
+      validTo: nonEmptyStringFlag(flags, 'to'),
+    };
   },
   keyOf: (p) => p.policyName,
   write: (policyName, body, from) => ({

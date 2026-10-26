@@ -7,17 +7,42 @@ import { rankMultihop } from '../domain/search/multihop.js';
 import { withEvalSwitches } from './folder-search.js';
 
 /** BM25 * strength * recency with the rank boosts; path tags come from `options.cwd`, else the process's folder. */
-export function search(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {
-  return rankBm25(query, entries, withEvalSwitches({ ...options, cwd: options.cwd ?? process.cwd() }));
+export function search(
+  query: string,
+  entries: MemoryEntry[],
+  options: SearchOptions = {},
+): SearchResult[] {
+  return rankBm25(
+    query,
+    entries,
+    withEvalSwitches({ ...options, cwd: options.cwd ?? process.cwd() }),
+  );
 }
 
 /** Two BM25 passes, the second widened by the entities the first found; the working folder defaults as in search. */
-export function multihopSearch(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {
-  return rankMultihop(query, entries, withEvalSwitches({ ...options, cwd: options.cwd ?? process.cwd() }));
+export function multihopSearch(
+  query: string,
+  entries: MemoryEntry[],
+  options: SearchOptions = {},
+): SearchResult[] {
+  return rankMultihop(
+    query,
+    entries,
+    withEvalSwitches({ ...options, cwd: options.cwd ?? process.cwd() }),
+  );
 }
 
 export { hybridSearch } from './folder-search.js';
 export { explainMatch, MatchExplanation } from '../domain/search/explain.js';
-export { detectTemporalDirection, temporalBoost, computeTemporalRange } from '../domain/search/temporal.js';
+export {
+  detectTemporalDirection,
+  temporalBoost,
+  computeTemporalRange,
+} from '../domain/search/temporal.js';
 export { SearchResult } from '../base/rank/search-types.js';
-export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOptions } from '../domain/graph/recall.js';
+export {
+  graphExpandRecall,
+  MAX_HOPS,
+  DEFAULT_MAX_NEIGHBORS,
+  type GraphExpandOptions,
+} from '../domain/graph/recall.js';

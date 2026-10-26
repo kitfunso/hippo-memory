@@ -2,13 +2,27 @@
 
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import * as path from 'node:path';
-import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG, ERROR_TAG, EXTRACTED_TAG } from '../../base/memory/entry.js';
+import {
+  MemoryEntry,
+  generateId,
+  COMPACTION_MEMORY_TAG,
+  ERROR_TAG,
+  EXTRACTED_TAG,
+} from '../../base/memory/entry.js';
 import { strengthModelFor } from '../../base/memory/eval-switches.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../../base/memory/agent-memory-tools.js';
+import {
+  AGENT_MEMORY_SOURCE_PREFIX,
+  AGENT_MEMORY_TAGS,
+} from '../../base/memory/agent-memory-tools.js';
 import { isPersonalScope, isQuarantineScope } from '../../base/scope/recall-scope.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
-import { embedMemoryDetached, embedAll, folderEmbedTarget, type EmbedRun } from '../search/embed-memories.js';
+import {
+  embedMemoryDetached,
+  embedAll,
+  folderEmbedTarget,
+  type EmbedRun,
+} from '../search/embed-memories.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { chunked } from '../../base/util/chunked.js';
@@ -17,7 +31,13 @@ import { isReusable } from '../../base/memory/memory-quality.js';
 import { log } from '../../base/util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
 import type { SharingStore } from './text-keys.js';
-import type { EntrySignals, PageRequest, StoreGroups, StoreHome, StoreWith } from '../../base/ports/store.js';
+import type {
+  EntrySignals,
+  PageRequest,
+  StoreGroups,
+  StoreHome,
+  StoreWith,
+} from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import type { Captures } from '../../base/ports/store/capture.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
@@ -167,7 +187,12 @@ export async function shareMemory(
 
 /** The global copy of a local row, or null when its transfer score is too low and `force` is off; throws when the row
  * may not be shared. */
-function toGlobalEntry(local: StoreHome, entry: MemoryEntry, force: boolean, now: Date): MemoryEntry | null {
+function toGlobalEntry(
+  local: StoreHome,
+  entry: MemoryEntry,
+  force: boolean,
+  now: Date,
+): MemoryEntry | null {
   assertShareable(entry, entry.id);
 
   const score = transferScore(entry);
@@ -251,16 +276,31 @@ export async function listPeers(
     .sort((a, b) => b.count - a.count);
 }
 
-type AutoShareStats = { secretSkipped: number; rejectedSkipped?: number; neverAutoShareSkipped?: number };
+type AutoShareStats = {
+  secretSkipped: number;
+  rejectedSkipped?: number;
+  neverAutoShareSkipped?: number;
+};
 
 /** The rules a row must clear before autoShare asks the global store whether it already holds the text. */
-function clearsShareRules(entry: MemoryEntry, minScore: number, stats: AutoShareStats | undefined): boolean {
+function clearsShareRules(
+  entry: MemoryEntry,
+  minScore: number,
+  stats: AutoShareStats | undefined,
+): boolean {
   // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on one.
-  if (isQuarantineScope(entry.scope ?? null) || isPersonalScope(entry.scope ?? null) || !isReusable(entry)) {
+  if (
+    isQuarantineScope(entry.scope ?? null) ||
+    isPersonalScope(entry.scope ?? null) ||
+    !isReusable(entry)
+  ) {
     return false;
   }
   // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the bar.
-  if (entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) || entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) {
+  if (
+    entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) ||
+    entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)
+  ) {
     if (stats) stats.neverAutoShareSkipped = (stats.neverAutoShareSkipped ?? 0) + 1;
     return false;
   }
@@ -317,12 +357,19 @@ async function pageCandidates(
   const scored = page.filter((entry) => clearsShareRules(entry, minScore, stats));
   if (scored.length === 0) return [];
   const texts = scored.map((entry) => entry.content).filter((text) => duplicateKey(text) !== '');
-  const globalKeys = storedTextKeys(await to.textsHolding(ALL_TENANTS, texts, { everyScope: true }));
+  const globalKeys = storedTextKeys(
+    await to.textsHolding(ALL_TENANTS, texts, { everyScope: true }),
+  );
   return scored.filter((entry) => isNewAndClean(entry, globalKeys, stats));
 }
 
 /** Writes one page of candidates in one transaction; returns the copies written and how many a tombstone refused. */
-async function sharePage(local: StoreHome, to: SharingStore, page: readonly MemoryEntry[], now: Date) {
+async function sharePage(
+  local: StoreHome,
+  to: SharingStore,
+  page: readonly MemoryEntry[],
+  now: Date,
+) {
   const copies = page.flatMap((entry) => toGlobalEntry(local, entry, true, now) ?? []);
   const written = new Set(await to.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR));
   const shared = copies.filter((copy) => written.has(copy.id));
@@ -348,7 +395,9 @@ async function shareCandidates(
 
   if (rejectedSkipped > 0) {
     if (stats) stats.rejectedSkipped = (stats.rejectedSkipped ?? 0) + rejectedSkipped;
-    log.warn(`autoShare: skipped ${rejectedSkipped} candidate(s) refused by the global store's rejection tombstone`);
+    log.warn(
+      `autoShare: skipped ${rejectedSkipped} candidate(s) refused by the global store's rejection tombstone`,
+    );
   }
   return shared;
 }
@@ -389,7 +438,9 @@ export async function autoShare(
   );
 
   if (shared.length > 0) {
-    void embedAll(folderEmbedTarget(global, options.embed)).catch((err) => logEmbedAllFailure('autoShare', err));
+    void embedAll(folderEmbedTarget(global, options.embed)).catch((err) =>
+      logEmbedAllFailure('autoShare', err),
+    );
   }
 
   return shared;

@@ -12,7 +12,9 @@ const MAX_WARN_LOGS = 5;
  * whether all pending rows were cleaned. */
 export function cleanupArchivedMirrors(hippoRoot: string, db: DatabaseSyncLike): boolean {
   // SAFETY: raw_archive.memory_id is NOT NULL TEXT.
-  const rows = db.prepare(`SELECT memory_id FROM raw_archive WHERE mirror_cleaned_at IS NULL`).all() as Array<{
+  const rows = db
+    .prepare(`SELECT memory_id FROM raw_archive WHERE mirror_cleaned_at IS NULL`)
+    .all() as Array<{
     memory_id: string;
   }>;
 

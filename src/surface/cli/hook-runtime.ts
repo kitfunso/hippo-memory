@@ -9,7 +9,11 @@ import { sessionPilotArm } from '../../api/pilot-arm.js';
 import { cliFolder, cliInfra, cliLedgerReach, cliSyncOptions } from './api-context.js';
 import { detachedEmbedder } from '../../api/embeddings.js';
 import type { CaptureTarget } from '../capture/command.js';
-import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../../base/util/hook-payload.js';
+import {
+  hookPayloadSessionId,
+  hookPayloadString,
+  isSubagentPayload,
+} from '../../base/util/hook-payload.js';
 import { importAtSessionEnd } from '../../api/agent-memories.js';
 import type { HeldLog } from '../../api/session-end.js';
 import { currentMachine } from '../../infra/machine.js';
@@ -38,7 +42,8 @@ export async function logSessionEndImport(
     const report = await importAtSessionEnd(process.cwd(), transcriptPath, sync);
     const line = summaryLine(report);
     if (line !== null) appendSessionEndCloseLog(logFile, line);
-    for (const warning of report.warnings) appendSessionEndCloseLog(logFile, `agent memories: ${warning}`);
+    for (const warning of report.warnings)
+      appendSessionEndCloseLog(logFile, `agent memories: ${warning}`);
   } catch (err) {
     appendSessionEndCloseLog(logFile, `agent memory import failed: ${errorMessage(err)}`);
   }
@@ -141,7 +146,11 @@ export function hookRuntime(flags: CliFlags): HookRuntime {
  * A Copilot hook's project root, from the payload's `cwd`, since VS Code runs user-level hooks in the home folder;
  * other runtimes keep `hippoRoot`.
  */
-export function payloadCwdRoot(hippoRoot: string, stdinText: string | undefined, runtime: HookRuntime): string {
+export function payloadCwdRoot(
+  hippoRoot: string,
+  stdinText: string | undefined,
+  runtime: HookRuntime,
+): string {
   const cwd = runtime === 'copilot' ? hookPayloadString(stdinText, 'cwd') : null;
   if (cwd === null || cwd.trim() === '') return hippoRoot;
   try {
@@ -172,5 +181,10 @@ export async function inPilotHoldout(
 /** What capture writes into for a store folder: its port, its config and what embeds the new rows. */
 export function captureTarget(root: string): CaptureTarget {
   const folder = cliFolder(root);
-  return { root, store: folder.store, config: folder.config, embed: detachedEmbedder(folder, cliInfra()) };
+  return {
+    root,
+    store: folder.store,
+    config: folder.config,
+    embed: detachedEmbedder(folder, cliInfra()),
+  };
 }

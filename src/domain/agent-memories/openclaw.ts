@@ -26,7 +26,11 @@ function workspaceDir(ctx: AdapterContext): string {
 }
 
 function stateDir(ctx: AdapterContext): string {
-  const { OPENCLAW_STATE_DIR: state, OPENCLAW_HOME: openclawHome, OPENCLAW_PROFILE: profile } = ctx.env;
+  const {
+    OPENCLAW_STATE_DIR: state,
+    OPENCLAW_HOME: openclawHome,
+    OPENCLAW_PROFILE: profile,
+  } = ctx.env;
   if (state) return state;
   const suffix = profile && profile !== 'default' ? `-${profile}` : '';
   return path.join(openclawHome || ctx.home, `.openclaw${suffix}`);
@@ -38,7 +42,15 @@ function userContainers(files: AgentFiles, workspace: string): Container[] {
   const read = files.readText(file);
   if (!read.ok) {
     return [
-      { scope: 'user', path: file, readable: false, items: [], skipped: [], warnings: [read.reason], textKeyed: true },
+      {
+        scope: 'user',
+        path: file,
+        readable: false,
+        items: [],
+        skipped: [],
+        warnings: [read.reason],
+        textKeyed: true,
+      },
     ];
   }
   const stored = splitMarkdownItems(read.text).map(({ heading, headingSlug, text }) => ({
@@ -47,5 +59,15 @@ function userContainers(files: AgentFiles, workspace: string): Container[] {
   }));
   const keys = textItemKeys(stored);
   const items = stored.map(({ text }, i) => ({ key: keys[i], text, updatedAt: read.mtimeMs }));
-  return [{ scope: 'user', path: file, readable: true, items, skipped: [], warnings: [], textKeyed: true }];
+  return [
+    {
+      scope: 'user',
+      path: file,
+      readable: true,
+      items,
+      skipped: [],
+      warnings: [],
+      textKeyed: true,
+    },
+  ];
 }

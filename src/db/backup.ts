@@ -5,7 +5,12 @@ import { log, errorFields } from '../base/util/log.js';
 import { PRIVATE_DIR } from '../host/private-dir.js';
 
 /** Copies the database before a repair writes, so the audit ids plus this file are the way back. */
-export function backupStore(db: DatabaseSyncLike, hippoRoot: string, label: string, now = new Date()): string {
+export function backupStore(
+  db: DatabaseSyncLike,
+  hippoRoot: string,
+  label: string,
+  now = new Date(),
+): string {
   const dir = path.join(hippoRoot, 'backups');
   fs.mkdirSync(dir, PRIVATE_DIR);
   const file = path.join(dir, `hippo-${label}-${now.toISOString().replace(/[:.]/g, '-')}.db`);
@@ -28,7 +33,10 @@ export function withBackup<T>(
     try {
       fs.rmSync(backup, { force: true });
     } catch (cleanupError) {
-      log.warn(`Could not delete the unused backup ${backup}: ${String(cleanupError)}`, errorFields(cleanupError));
+      log.warn(
+        `Could not delete the unused backup ${backup}: ${String(cleanupError)}`,
+        errorFields(cleanupError),
+      );
     }
     throw err;
   }

@@ -17,7 +17,11 @@ import { bookTokenUse } from '../../src/api/ledger-db.js';
 import { sqliteLedger } from '../../src/store/sqlite/ledger.js';
 import { firstPilotArmHash } from '../../src/store/sqlite/token-ledger-rows.js';
 import { hashArm, type PilotArm } from '../../src/base/session/pilot-arm.js';
-import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/sqlite/token-ledger.js';
+import {
+  recordTokenUse,
+  summarizeTokenUse,
+  tokensBySession,
+} from '../../src/store/sqlite/token-ledger.js';
 import { runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies, ledgerAt } from '../_helpers/cli-stores.js';
 import type { JsonValue } from '../../src/base/util/json.js';
@@ -58,11 +62,15 @@ async function ensurePilotArm(
   return ledger.pilotArm(tenantId, sessionId, rateBp, { write: true, ...opts });
 }
 
-const readPilotArm = (handle: DatabaseSyncLike, sessionId: string, tenantId: TenantId = ALL_TENANTS): string | null =>
-  firstPilotArmHash(handle, sessionId, tenantId)?.block_hash ?? null;
+const readPilotArm = (
+  handle: DatabaseSyncLike,
+  sessionId: string,
+  tenantId: TenantId = ALL_TENANTS,
+): string | null => firstPilotArmHash(handle, sessionId, tenantId)?.block_hash ?? null;
 // SAFETY: a single COUNT(*) aggregate aliased `n`.
 const armCount = (): number =>
-  (db.prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE event = 'arm'`).get() as { n: number }).n;
+  (db.prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE event = 'arm'`).get() as { n: number })
+    .n;
 
 /** Runs `fn` with SQLite's own busy sleep off, as it overshoots on macOS, and the retry loop's clock moved 50 ms a try; returns the wait the loop saw. */
 function waitOnSteppedClock(reader: DatabaseSyncLike, fn: () => void): number {
@@ -211,7 +219,9 @@ describe('pilot arm helpers', () => {
     const holder = openHippoDb(root);
     try {
       holder.exec('BEGIN IMMEDIATE');
-      const { result, statements } = await recordStatementsAsync(() => ensurePilotArm(db, 'default', 'kept', 1));
+      const { result, statements } = await recordStatementsAsync(() =>
+        ensurePilotArm(db, 'default', 'kept', 1),
+      );
       expect(result).toBe('holdout');
       expect(countMatching(statements, 'BEGIN')).toBe(0);
     } finally {
@@ -302,13 +312,22 @@ describe('ledger readers skip arm rows', () => {
 describe('doctor', () => {
   const pilotCheck = async () => {
     vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-    const report = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd: tmp, home: tmp, version: 'test' });
+    const report = await runDoctor({
+      diagnosticsBodies,
+      tenantId: 'default',
+      cwd: tmp,
+      home: tmp,
+      version: 'test',
+    });
     return report.checks.find((c) => c.id === 'pilot');
   };
 
   it('reports the pilot only when the rate is above 0', async () => {
     expect(await pilotCheck()).toBeUndefined();
     writeConfig({ holdoutRateBp: 2000 });
-    expect(await pilotCheck()).toMatchObject({ status: 'info', detail: expect.stringContaining('about 20%') });
+    expect(await pilotCheck()).toMatchObject({
+      status: 'info',
+      detail: expect.stringContaining('about 20%'),
+    });
   });
 });

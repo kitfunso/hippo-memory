@@ -62,11 +62,16 @@ function activeTaskMirrorPath(hippoRoot: string, tenantId: string): string {
 }
 
 function recentSessionMirrorPath(hippoRoot: string, tenantId: string): string {
-  const file = tenantId === DEFAULT_TENANT_ID ? 'recent-session.md' : `recent-session.${tenantId}.md`;
+  const file =
+    tenantId === DEFAULT_TENANT_ID ? 'recent-session.md' : `recent-session.${tenantId}.md`;
   return path.join(hippoRoot, 'buffer', file);
 }
 
-export function writeActiveTaskMirror(hippoRoot: string, tenantId: string, snapshot: TaskSnapshot): void {
+export function writeActiveTaskMirror(
+  hippoRoot: string,
+  tenantId: string,
+  snapshot: TaskSnapshot,
+): void {
   const filePath = activeTaskMirrorPath(hippoRoot, tenantId);
   const fm = dumpFrontmatter({
     id: snapshot.id,
@@ -108,7 +113,11 @@ export function removeActiveTaskMirror(hippoRoot: string, tenantId: string): voi
   }
 }
 
-export function writeRecentSessionMirror(hippoRoot: string, tenantId: string, events: SessionEvent[]): void {
+export function writeRecentSessionMirror(
+  hippoRoot: string,
+  tenantId: string,
+  events: SessionEvent[],
+): void {
   const filePath = recentSessionMirrorPath(hippoRoot, tenantId);
   if (events.length === 0) {
     if (fs.existsSync(filePath)) {
@@ -149,7 +158,10 @@ export function writeRecentSessionMirror(hippoRoot: string, tenantId: string, ev
 const conflictMirrorName = (conflict: MemoryConflict): string => `conflict_${conflict.id}.md`;
 
 function writeConflictMirror(conflictDir: string, conflict: MemoryConflict): void {
-  const fm = dumpFrontmatter({ ...conflictToWire(conflict), score: Math.round(conflict.score * 10000) / 10000 });
+  const fm = dumpFrontmatter({
+    ...conflictToWire(conflict),
+    score: Math.round(conflict.score * 10000) / 10000,
+  });
   const body = [
     '# Memory Conflict',
     '',
@@ -170,7 +182,8 @@ function writeAllConflictMirrors(hippoRoot: string, open: readonly MemoryConflic
   const keep = new Set(open.map(conflictMirrorName));
   for (const conflict of open) writeConflictMirror(conflictDir, conflict);
   for (const existing of fs.readdirSync(conflictDir)) {
-    if (existing !== '.gitkeep' && !keep.has(existing)) fs.unlinkSync(path.join(conflictDir, existing));
+    if (existing !== '.gitkeep' && !keep.has(existing))
+      fs.unlinkSync(path.join(conflictDir, existing));
   }
 }
 
@@ -242,7 +255,9 @@ function listedLayers(hippoRoot: string, entries: Iterable<MemoryEntry>): LayerL
   if (Array.isArray(entries)) {
     const inLayer = new Map<Layer, number>();
     for (const entry of entries) inLayer.set(entry.layer, (inLayer.get(entry.layer) ?? 0) + 1);
-    layers = [...inLayer].filter(([, n]) => entries.length - n >= LISTING_MIN_BATCH).map(([layer]) => layer);
+    layers = [...inLayer]
+      .filter(([, n]) => entries.length - n >= LISTING_MIN_BATCH)
+      .map(([layer]) => layer);
   }
   return new Map(
     layers.map((layer) => {
@@ -254,7 +269,12 @@ function listedLayers(hippoRoot: string, entries: Iterable<MemoryEntry>): LayerL
 
 /** writeMarkdownMirror against `listed`: a copy in another layer's folder goes, found in its listing or by a probe, and
  * the entry's own file is replaced in place, so no crash leaves it missing; `made` holds the folders already made. */
-function writeListedMirror(hippoRoot: string, entry: MemoryEntry, listed: LayerListing, made: Set<string>): void {
+function writeListedMirror(
+  hippoRoot: string,
+  entry: MemoryEntry,
+  listed: LayerListing,
+  made: Set<string>,
+): void {
   const name = `${entry.id}.md`;
   for (const layer of MIRROR_LAYERS) {
     if (layer === entry.layer) continue;
@@ -270,15 +290,20 @@ function writeListedMirror(hippoRoot: string, entry: MemoryEntry, listed: LayerL
 /** Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge with no reaper to retry it
  * can name the stuck file. */
 function listEntryMirrorPaths(hippoRoot: string, id: string): string[] {
-  return MIRROR_LAYERS.map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`)).filter((file) =>
-    fs.existsSync(file),
+  return MIRROR_LAYERS.map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`)).filter(
+    (file) => fs.existsSync(file),
   );
 }
 
 /** Best-effort mirror purge: retries the unlink once (most failures are transient locks); the reaper only scans
  * `raw_archive`, so a non-raw id's second failure logs the leftover path(s) to delete by hand. Returns true if the
  * mirror ended up purged. */
-export function purgeMirrorBestEffort(hippoRoot: string, id: string, isRaw: boolean, logPrefix: string): boolean {
+export function purgeMirrorBestEffort(
+  hippoRoot: string,
+  id: string,
+  isRaw: boolean,
+  logPrefix: string,
+): boolean {
   try {
     removeEntryMirrors(hippoRoot, id);
     return true;
@@ -347,7 +372,9 @@ export function buildIndexFromDb(db: DatabaseSyncLike): HippoIndex {
 }
 
 /** The last recall's ids and its trace, the two meta keys saveIndex writes together. */
-export function readLastRecall(db: DatabaseSyncLike): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
+export function readLastRecall(
+  db: DatabaseSyncLike,
+): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
   // Read both lockstep keys in ONE statement: two autocommit SELECTs could straddle a concurrent saveIndex and return a
   // mismatched pair.
   const lockstepRows = cachedStatement(
@@ -442,7 +469,10 @@ export function mirrorBestEffort(what: string, write: () => void): void {
   try {
     write();
   } catch (err) {
-    log.warn(`${what} not refreshed (${errorMessage(err)}); the database write succeeded`, errorFields(err));
+    log.warn(
+      `${what} not refreshed (${errorMessage(err)}); the database write succeeded`,
+      errorFields(err),
+    );
   }
 }
 
@@ -468,7 +498,9 @@ export function syncMirrorFiles(hippoRoot: string, db: DatabaseSyncLike): void {
     db,
     `SELECT ${MEMORY_CONFLICT_COLUMNS} FROM memory_conflicts WHERE status = 'open' ORDER BY updated_at DESC, id DESC`,
   ).all() as MemoryConflictRow[];
-  mirrorBestEffort('conflict mirrors', () => writeAllConflictMirrors(hippoRoot, open.map(rowToMemoryConflict)));
+  mirrorBestEffort('conflict mirrors', () =>
+    writeAllConflictMirrors(hippoRoot, open.map(rowToMemoryConflict)),
+  );
   writeStatsMirror(hippoRoot, buildStatsFromDb(db));
 }
 

@@ -26,7 +26,9 @@ const claim = async (key: string, nowMs: number) => await claimOn(sqliteStore(ro
 function holdRows(): number {
   const db = openHippoDb(root);
   try {
-    const row = db.prepare(`SELECT COUNT(*) AS n FROM meta WHERE key LIKE 'delivery_hold:%'`).get() as { n: number };
+    const row = db
+      .prepare(`SELECT COUNT(*) AS n FROM meta WHERE key LIKE 'delivery_hold:%'`)
+      .get() as { n: number };
     return row.n;
   } finally {
     closeHippoDb(db);

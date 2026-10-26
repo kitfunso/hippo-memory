@@ -33,7 +33,11 @@ describe('hippo-memory/json-hooks entry types', () => {
 
   it('JsonHookPaths names the settings file, the log and the display name', () => {
     expectTypeOf(resolveJsonHookPaths).returns.toEqualTypeOf<JsonHookPaths>();
-    expectTypeOf<JsonHookPaths>().toEqualTypeOf<{ settings: string; logFile: string; display: string }>();
+    expectTypeOf<JsonHookPaths>().toEqualTypeOf<{
+      settings: string;
+      logFile: string;
+      display: string;
+    }>();
   });
 
   it('file helpers take a path first', () => {

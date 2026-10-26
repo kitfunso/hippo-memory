@@ -20,7 +20,9 @@ describe('hippo drill CLI', () => {
     vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
     process.chdir(home);
 
-    const res = await runInProcess(() => runCli(['node', 'hippo', 'drill', 'missing', '--depth', '1.5']));
+    const res = await runInProcess(() =>
+      runCli(['node', 'hippo', 'drill', 'missing', '--depth', '1.5']),
+    );
     expect(res.status).toBe(2);
     expect(res.stderr).toContain('--depth must be an integer between 1 and 10');
   });

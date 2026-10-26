@@ -81,7 +81,8 @@ export function planContainer(input: PlanInput): ContainerPlan {
     duplicates: 0,
     refused: 0,
   };
-  for (const item of input.items) planItem(input, item, live.get(item.key) ?? [], dormant.get(item.key) ?? [], draft);
+  for (const item of input.items)
+    planItem(input, item, live.get(item.key) ?? [], dormant.get(item.key) ?? [], draft);
 
   const read = new Set([...input.items.map((i) => i.key), ...input.skipped]);
   const gone = new Map<string, string[]>();
@@ -125,7 +126,11 @@ function planItem(
       draft.duplicates++;
       draft.setAside.push(...tagged.map((r) => r.id));
     } else {
-      draft.writes.push({ key: item.key, hash: item.hash, supersedes: [...rows.map((r) => r.id), ...legacy] });
+      draft.writes.push({
+        key: item.key,
+        hash: item.hash,
+        supersedes: [...rows.map((r) => r.id), ...legacy],
+      });
     }
     return;
   }
@@ -204,7 +209,10 @@ export interface LegacyMatch {
 }
 
 /** Same text first, then one legacy row per file name; anything else is left to decay. */
-export function matchLegacy(rows: readonly LegacyRow[], targets: readonly LegacyTarget[]): LegacyMatch {
+export function matchLegacy(
+  rows: readonly LegacyRow[],
+  targets: readonly LegacyTarget[],
+): LegacyMatch {
   const byText = new Map<string, string>();
   for (const t of targets) if (!byText.has(t.textKey)) byText.set(t.textKey, t.ref);
   const adopt = new Map<string, string>();

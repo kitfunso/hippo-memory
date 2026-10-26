@@ -45,7 +45,9 @@ describe('hippo session complete', () => {
 
   it('rejects invalid outcomes', async () => {
     initTestStore(hippoDir);
-    await expect(runHippo(['session', 'complete', '--session', 'sess-x', '--outcome', 'not-real'])).rejects.toThrow();
+    await expect(
+      runHippo(['session', 'complete', '--session', 'sess-x', '--outcome', 'not-real']),
+    ).rejects.toThrow();
   });
 });
 
@@ -177,7 +179,14 @@ describe('hippo recall --outcome filter', () => {
       ]);
     }
 
-    const out = await runHippo(['recall', 'refactor auth', '--outcome', 'success', '--json', '--why']);
+    const out = await runHippo([
+      'recall',
+      'refactor auth',
+      '--outcome',
+      'success',
+      '--json',
+      '--why',
+    ]);
     const parsed = JSON.parse(out);
     expect(parsed.results).toHaveLength(1);
     for (const r of parsed.results) {
@@ -207,7 +216,13 @@ describe('hippo recall --outcome filter', () => {
     // Remember a regular episodic memory that shares some text
     await runHippo(['remember', 'database connector patch applied successfully to staging']);
 
-    const out = await runHippo(['recall', 'database connector patch', '--outcome', 'success', '--json']);
+    const out = await runHippo([
+      'recall',
+      'database connector patch',
+      '--outcome',
+      'success',
+      '--json',
+    ]);
     const parsed = JSON.parse(out);
     // The failure trace must be dropped; the episodic memory must survive.
     const allText = JSON.stringify(parsed);

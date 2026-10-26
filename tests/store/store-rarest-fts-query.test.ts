@@ -27,7 +27,18 @@ describe('pickRarestFtsQuery', () => {
 
     const db = openHippoDb(root);
     try {
-      const terms = ['common', 'word', 'appears', 'many', 'rows', 'number', 'needle', 'rare', 'distinctive', 'token'];
+      const terms = [
+        'common',
+        'word',
+        'appears',
+        'many',
+        'rows',
+        'number',
+        'needle',
+        'rare',
+        'distinctive',
+        'token',
+      ];
       const query = pickRarestFtsQuery(db, terms, 3);
       const picked = query.split(' ');
       expect(picked).toHaveLength(3);
@@ -98,6 +109,8 @@ describe('listRecallEntries', () => {
     }
 
     expect(viaDb.map((e) => e.id)).toEqual(viaPublic.map((e) => e.id));
-    expect(viaPublic.map((e) => e.content)).toEqual(['the postgres migration rollback plan for deploy']);
+    expect(viaPublic.map((e) => e.content)).toEqual([
+      'the postgres migration rollback plan for deploy',
+    ]);
   });
 });

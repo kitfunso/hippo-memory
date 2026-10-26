@@ -1,8 +1,17 @@
 // A thrown error crosses the worker boundary as plain data and arrives as an instance of its class: the server's
 // mappers test `instanceof`, `errcode` and fields.
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../base/errors/api-errors.js';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
-import { IncompatibleBinaryError, OtherStoreFolderError, SqliteBlockedError } from '../../db/index.js';
+import {
+  IncompatibleBinaryError,
+  OtherStoreFolderError,
+  SqliteBlockedError,
+} from '../../db/index.js';
 import { StoreBusyError } from '../../base/ports/store.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../base/errors/http-errors.js';
 import { errorMessage, log } from '../../base/util/log.js';
@@ -61,7 +70,12 @@ const MAX_CAUSES = 4;
 
 function isFieldValue<V>(value: V): value is V & FieldValue {
   if (Array.isArray(value)) return value.every((item): item is string => typeof item === 'string');
-  return value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+  return (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  );
 }
 
 function classNames(err: Error): string[] {
@@ -83,10 +97,23 @@ function ownFields(err: Error) {
 /** Worker side. A thrown value that is not an Error carries its text and no class. */
 export function encodeError<E>(err: E, depth = 0): WireError {
   if (!(err instanceof Error)) {
-    return { classes: [], message: errorMessage(err), stack: undefined, fields: {}, cause: undefined };
+    return {
+      classes: [],
+      message: errorMessage(err),
+      stack: undefined,
+      fields: {},
+      cause: undefined,
+    };
   }
-  const cause = err.cause === undefined || depth >= MAX_CAUSES ? undefined : encodeError(err.cause, depth + 1);
-  return { classes: classNames(err), message: err.message, stack: err.stack, fields: ownFields(err), cause };
+  const cause =
+    err.cause === undefined || depth >= MAX_CAUSES ? undefined : encodeError(err.cause, depth + 1);
+  return {
+    classes: classNames(err),
+    message: err.message,
+    stack: err.stack,
+    fields: ownFields(err),
+    cause,
+  };
 }
 
 /** Server side: an instance of the thrown class, or of its nearest ancestor in the table, with the worker's stack,
@@ -106,7 +133,9 @@ export function decodeError(wire: WireError): Error {
   // in the message.
   const message = unlisted && known === 'Error' ? `${thrown}: ${wire.message}` : wire.message;
   const rebuilt =
-    wire.cause === undefined ? new Error(message) : new Error(message, { cause: decodeError(wire.cause) });
+    wire.cause === undefined
+      ? new Error(message)
+      : new Error(message, { cause: decodeError(wire.cause) });
   // The constructor is not run again: its arguments did not cross, and the fields below are what it set.
   Object.setPrototypeOf(rebuilt, PROTOTYPES.get(known) ?? Error.prototype);
   Object.assign(rebuilt, wire.fields);

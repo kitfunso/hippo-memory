@@ -16,7 +16,11 @@ import {
   settleTokens,
   snapshotText,
 } from './context-render.js';
-import { createDeliveryRecorder, type DeliveryFault, type DeliveryRecorder } from './delivery-recorder.js';
+import {
+  createDeliveryRecorder,
+  type DeliveryFault,
+  type DeliveryRecorder,
+} from './delivery-recorder.js';
 import type { DeliveryEventInput, DeliveryEventType } from '../base/session/delivery.js';
 import type { HookRuntime } from '../base/session/capture-contract.js';
 import { MAX_ID_LEN } from '../base/util/limits.js';
@@ -52,7 +56,10 @@ export interface DeliveryStart {
 }
 
 /** A delivery recorder for a hook on `ctx`'s store when the ledger store enables one, else null; never throws. */
-export async function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Promise<DeliveryRecorder | null> {
+export async function startDeliveryRecorder(
+  ctx: Context,
+  start: DeliveryStart,
+): Promise<DeliveryRecorder | null> {
   try {
     // The same store the token ledger writes to, so its config governs both.
     const reach = ledgerReachOf(ctx);
@@ -103,7 +110,8 @@ export function takeDelivery(rec: DeliveryRecorder | null): DeliveryEventInput |
 /** Writes the recorder's event on a connection of its own; a second flush is a no-op. */
 export async function flushDeliveryRecorder(rec: DeliveryRecorder | null): Promise<void> {
   const event = takeDelivery(rec);
-  if (rec !== null && event !== undefined) await rec.ledger.recordTurn({ uses: [], delivery: event });
+  if (rec !== null && event !== undefined)
+    await rec.ledger.recordTurn({ uses: [], delivery: event });
 }
 
 /** What one render needs once api.contextGet has answered. */
@@ -136,7 +144,9 @@ export type HookEnvelope = 'user-prompt-submit' | 'copilot-session-start' | 'vsc
 /** A Copilot sessionStart reply's wrapper, picked by the sender's casing: stdin.ts keeps a camelCase `sessionId`, which
  * only the Copilot harness sends. */
 export function sessionStartEnvelope(stdinText: string | undefined): HookEnvelope {
-  return hookPayloadString(stdinText, 'sessionId') !== null ? 'copilot-session-start' : 'vscode-session-start';
+  return hookPayloadString(stdinText, 'sessionId') !== null
+    ? 'copilot-session-start'
+    : 'vscode-session-start';
 }
 
 function hookReply(envelope: HookEnvelope, additionalContext: string): string {
@@ -165,7 +175,12 @@ export function hasContextData(result: ContextResult): boolean {
 export type RenderItem = { entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean };
 
 export function toRenderItems(entries: ContextResultEntry[]): RenderItem[] {
-  return entries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
+  return entries.map((r) => ({
+    entry: r.entry,
+    score: r.score,
+    tokens: r.tokens,
+    isGlobal: r.isGlobal ?? false,
+  }));
 }
 
 /** The hook format's stdout, '' when nothing is sent: a skippable static block (snapshot, handoff, events, pins,
@@ -184,7 +199,9 @@ function renderStaticBlock(
     [
       ...(result.activeSnapshot ? [snapshotText(result.activeSnapshot)] : []),
       ...(result.sessionHandoff ? [handoffText(result.sessionHandoff)] : []),
-      ...(result.recentEvents && result.recentEvents.length > 0 ? [sessionTrailText(result.recentEvents)] : []),
+      ...(result.recentEvents && result.recentEvents.length > 0
+        ? [sessionTrailText(result.recentEvents)]
+        : []),
       // No live strength percentage, so an unchanged set of memories renders byte-identically turn after turn.
       ...(staticItems.length > 0
         ? contextBlockLines(staticItems, t, framing, { now: view.now, showStrength: false })
@@ -194,19 +211,29 @@ function renderStaticBlock(
   );
 }
 
-function renderRecallBlock(recallItems: RenderItem[], framing: ContextView['framing'], now: Date): string {
+function renderRecallBlock(
+  recallItems: RenderItem[],
+  framing: ContextView['framing'],
+  now: Date,
+): string {
   if (recallItems.length === 0) return '';
   return settleTokens((t) =>
-    contextBlockLines(recallItems, t, framing, { now, showStrength: false, heading: 'Prompt-Relevant Memory' }).join(
-      '\n',
-    ),
+    contextBlockLines(recallItems, t, framing, {
+      now,
+      showStrength: false,
+      heading: 'Prompt-Relevant Memory',
+    }).join('\n'),
   );
 }
 
 async function renderAdditionalContext(view: ContextView): Promise<RenderedContext> {
   const { result, rec, framing } = view;
-  const staticEntries = result.entries.filter((r) => r.category !== 'cross-project' && !r.promptRecall);
-  const staticCrossEntries = result.entries.filter((r) => r.category === 'cross-project' && !r.promptRecall);
+  const staticEntries = result.entries.filter(
+    (r) => r.category !== 'cross-project' && !r.promptRecall,
+  );
+  const staticCrossEntries = result.entries.filter(
+    (r) => r.category === 'cross-project' && !r.promptRecall,
+  );
   const staticItems = toRenderItems(staticEntries);
   const recallItems = toRenderItems(result.entries.filter((r) => r.promptRecall));
 
@@ -261,7 +288,8 @@ async function skipUnchangedStatic(
   const { payloadSessionId, rec } = view;
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
   // Session start is the only injection Copilot gets, so a resumed session needs the whole block again.
-  if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') return false;
+  if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start')
+    return false;
   const injectCfg = view.config.pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
   // Hashed on the static text alone so an unchanged pin set still skips while recall varies.
@@ -365,7 +393,9 @@ export function assertCallerIds(sessionId: string, project: CallerProject): void
     throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
   }
   if ([sessionId, name, legacyName, ...aliases].some((v) => v.length > MAX_ID_LEN)) {
-    throw new BadRequestError(`session id and project names: at most ${MAX_ID_LEN} characters each`);
+    throw new BadRequestError(
+      `session id and project names: at most ${MAX_ID_LEN} characters each`,
+    );
   }
 }
 

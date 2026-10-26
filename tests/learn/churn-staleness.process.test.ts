@@ -13,7 +13,13 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
-import { initGitRepo, commit, ANCHOR, BEFORE_ANCHOR, AFTER_ANCHOR } from '../_helpers/churn-git-repo.js';
+import {
+  initGitRepo,
+  commit,
+  ANCHOR,
+  BEFORE_ANCHOR,
+  AFTER_ANCHOR,
+} from '../_helpers/churn-git-repo.js';
 import { processGit } from '../../src/infra/git-runner.js';
 import { markChurnStaleInReach } from '../../src/api/sleep/churn.js';
 import { DAY_MS } from '../../src/base/util/time.js';
@@ -35,12 +41,17 @@ describe('extractChurnRefs', () => {
   });
 
   it('normalizes backslashes and strips a leading ./', () => {
-    expect(extractChurnRefs('see ./src\\domain\\learn\\churn-git.ts').paths).toEqual(['src/domain/learn/churn-git.ts']);
+    expect(extractChurnRefs('see ./src\\domain\\learn\\churn-git.ts').paths).toEqual([
+      'src/domain/learn/churn-git.ts',
+    ]);
   });
 
   it('captures an extension whole when a shorter one is its prefix (json/js, tsx/ts)', () => {
     expect(extractChurnRefs('edit package.json first').paths).toEqual(['package.json']);
-    expect(extractChurnRefs('see src/App.tsx and tsconfig.json:12').paths).toEqual(['src/App.tsx', 'tsconfig.json']);
+    expect(extractChurnRefs('see src/App.tsx and tsconfig.json:12').paths).toEqual([
+      'src/App.tsx',
+      'tsconfig.json',
+    ]);
   });
 
   it('ignores a path with an unlisted extension', () => {
@@ -48,11 +59,15 @@ describe('extractChurnRefs', () => {
   });
 
   it('extracts a backtick-quoted camelCase symbol', () => {
-    expect(extractChurnRefs('call `detectChurnStale` after learn').symbols).toEqual(['detectChurnStale']);
+    expect(extractChurnRefs('call `detectChurnStale` after learn').symbols).toEqual([
+      'detectChurnStale',
+    ]);
   });
 
   it('extracts a backtick-quoted symbol with an inner underscore', () => {
-    expect(extractChurnRefs('see `resolve_tracked_path` helper').symbols).toEqual(['resolve_tracked_path']);
+    expect(extractChurnRefs('see `resolve_tracked_path` helper').symbols).toEqual([
+      'resolve_tracked_path',
+    ]);
   });
 
   it('ignores a short or non-identifier-shaped backtick token', () => {
@@ -66,7 +81,11 @@ describe('extractChurnRefs', () => {
   });
 
   it('returns empty arrays for content with no references', () => {
-    expect(extractChurnRefs('a plain sentence with nothing special')).toEqual({ paths: [], symbols: [], scripts: [] });
+    expect(extractChurnRefs('a plain sentence with nothing special')).toEqual({
+      paths: [],
+      symbols: [],
+      scripts: [],
+    });
   });
 });
 
@@ -93,7 +112,11 @@ describe('detectChurnStale', () => {
     content: string,
     opts: { created?: string; pinned?: boolean; origin?: string | null } = {},
   ): ReturnType<typeof createMemory> {
-    const mem = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [], pinned: opts.pinned });
+    const mem = createMemory(content, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: [],
+      pinned: opts.pinned,
+    });
     if (opts.created) mem.created = opts.created;
     mem.originProject = opts.origin === undefined ? project : opts.origin;
     writeEntry(hippoRoot, mem);
@@ -129,7 +152,8 @@ describe('detectChurnStale', () => {
 
     const opts = { tenantId: 'default', projectName: 'github.com/acme/churn', dryRun: true };
     expect(
-      (await detectChurnStale(sqliteStore(hippoRoot), { root: repoDir, git: processGit }, opts)).preview,
+      (await detectChurnStale(sqliteStore(hippoRoot), { root: repoDir, git: processGit }, opts))
+        .preview,
     ).toHaveLength(0);
     expect(
       (
@@ -206,10 +230,16 @@ describe('detectChurnStale', () => {
   });
 
   it('script-gone: an npm script present at the anchor but absent at HEAD is evidence', async () => {
-    fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ scripts: { oldscript: 'echo hi' } }));
+    fs.writeFileSync(
+      path.join(repoDir, 'package.json'),
+      JSON.stringify({ scripts: { oldscript: 'echo hi' } }),
+    );
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('run `npm run oldscript` to build', { created: ANCHOR });
-    fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ scripts: { newscript: 'echo hi' } }));
+    fs.writeFileSync(
+      path.join(repoDir, 'package.json'),
+      JSON.stringify({ scripts: { newscript: 'echo hi' } }),
+    );
     commit(repoDir, AFTER_ANCHOR);
 
     const result = await detectChurnStale(
@@ -247,7 +277,9 @@ describe('detectChurnStale', () => {
   it('a path that was never tracked in the repo is ignored (no evidence)', async () => {
     fs.writeFileSync(path.join(repoDir, 'real.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
-    const mem = storeMemory('see phantom-file-that-never-existed.ts for setup', { created: ANCHOR });
+    const mem = storeMemory('see phantom-file-that-never-existed.ts for setup', {
+      created: ANCHOR,
+    });
 
     const result = await detectChurnStale(
       sqliteStore(hippoRoot),
@@ -266,7 +298,9 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'n.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     const inside = storeMemory(`see ${root}/n.ts for the setup`, { created: ANCHOR });
-    const outside = storeMemory('see /elsewhere/other-repo/n.ts for the setup', { created: ANCHOR });
+    const outside = storeMemory('see /elsewhere/other-repo/n.ts for the setup', {
+      created: ANCHOR,
+    });
     fs.writeFileSync(path.join(repoDir, 'n.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
@@ -362,7 +396,10 @@ describe('detectChurnStale', () => {
   it('skips a memory from a different origin_project', async () => {
     fs.writeFileSync(path.join(repoDir, 'f.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
-    const mem = storeMemory('see f.ts for the setup', { created: ANCHOR, origin: 'some-other-project' });
+    const mem = storeMemory('see f.ts for the setup', {
+      created: ANCHOR,
+      origin: 'some-other-project',
+    });
     fs.writeFileSync(path.join(repoDir, 'f.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
@@ -546,7 +583,10 @@ describe('detectChurnStale', () => {
   });
 
   it('script-gone fires when package.json itself was deleted after the anchor', async () => {
-    fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ scripts: { goner: 'echo hi' } }));
+    fs.writeFileSync(
+      path.join(repoDir, 'package.json'),
+      JSON.stringify({ scripts: { goner: 'echo hi' } }),
+    );
     fs.writeFileSync(path.join(repoDir, 'keep.txt'), 'x');
     commit(repoDir, BEFORE_ANCHOR);
     storeMemory('run `npm run goner` to build', { created: ANCHOR });
@@ -579,7 +619,10 @@ describe('markChurnStaleInReach', () => {
     const brokenRoot = makeRoot('churn-api-broken');
     const okRoot = makeRoot('churn-api-ok');
     const ctx = apiCtx(okRoot);
-    const mem = createMemory('see a.ts for the setup', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
+    const mem = createMemory('see a.ts for the setup', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      tags: [],
+    });
     mem.created = ANCHOR;
     mem.originProject = ctx.infra.machine.projectIdentity(repoDir).name;
     writeEntry(okRoot, mem);

@@ -5,14 +5,24 @@ import { extractGraph, deriveGraph, loadGraphSources } from '../../src/domain/gr
 import { entityKey } from '../../src/store/rules/graph-delta.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
 import type { EntityType, GraphOp, SourceObjectType } from '../../src/base/ports/store/graph.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  withSharedStoreHandles,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry } from '../_helpers/root-forms.js';
-import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import {
+  saveCustomerNote,
+  saveDecision,
+  savePolicy,
+  saveProjectBrief,
+} from '../../src/entry/testing.js';
 
 const T = 'default';
 
@@ -68,7 +78,10 @@ function storedByKey(home: string, tenant: string) {
     const keyOf = (e: StoredEntity) =>
       entityKey({
         entityType: e.entity_type as EntityType,
-        sourceObject: { type: e.source_object_type as SourceObjectType, id: Number(e.source_object_id) },
+        sourceObject: {
+          type: e.source_object_type as SourceObjectType,
+          id: Number(e.source_object_id),
+        },
       });
     const keyById = new Map(ents.map((e) => [e.id, keyOf(e)]));
     return {
@@ -100,7 +113,9 @@ function entityIdOf(home: string, type: SourceObjectType, objectId: number): num
   return onStore(home, (db) => {
     // SAFETY: the SELECT names one id column.
     const row = db
-      .prepare(`SELECT id FROM entities WHERE source_object_type = ? AND source_object_id = ? ORDER BY id LIMIT 1`)
+      .prepare(
+        `SELECT id FROM entities WHERE source_object_type = ? AND source_object_id = ? ORDER BY id LIMIT 1`,
+      )
       .get(type, objectId) as { id: number } | undefined;
     if (!row) throw new Error(`no entity for ${type} ${objectId}`);
     return row.id;
@@ -157,8 +172,11 @@ const CROSS_OBJECT_FIXTURES: Array<[string, (h: string) => Promise<void>]> = [
   [
     'a name above the length cap',
     async (h) => {
-      const text = 'Adopt the new microservices event-driven architecture with sagas and CQRS for the order domain';
-      await saveDecision(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, { decisionText: text });
+      const text =
+        'Adopt the new microservices event-driven architecture with sagas and CQRS for the order domain';
+      await saveDecision(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, {
+        decisionText: text,
+      });
       await saveDecision(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, {
         decisionText: `${text} - refined further`,
       });
@@ -185,7 +203,10 @@ const CROSS_OBJECT_FIXTURES: Array<[string, (h: string) => Promise<void>]> = [
     async (h) => {
       const names = Array.from({ length: 30 }, (_, i) => `PolicyNum${String(i).padStart(3, '0')}`);
       for (const n of names) {
-        await savePolicy(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, { policyName: n, policyText: 'x' });
+        await savePolicy(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, {
+          policyName: n,
+          policyText: 'x',
+        });
       }
       await saveDecision(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, {
         decisionText: `a decision that mentions ${names.join(' and ')}`,
@@ -199,7 +220,9 @@ const CROSS_OBJECT_FIXTURES: Array<[string, (h: string) => Promise<void>]> = [
         policyName: 'CacheTtl',
         policyText: 'ttl 60s',
       });
-      await saveDecision(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, { decisionText: 'tune CacheTtl down' });
+      await saveDecision(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, {
+        decisionText: 'tune CacheTtl down',
+      });
     },
   ],
   [
@@ -280,7 +303,10 @@ const CROSS_OBJECT_FIXTURES: Array<[string, (h: string) => Promise<void>]> = [
   [
     'a name that prefixes a longer one',
     async (h) => {
-      await savePolicy(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, { policyName: 'postgres', policyText: 'a' });
+      await savePolicy(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, {
+        policyName: 'postgres',
+        policyText: 'a',
+      });
       await savePolicy(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, {
         policyName: 'postgres pro',
         policyText: 'b',
@@ -388,15 +414,21 @@ describe('graph delta', () => {
   });
 
   it('a closed decision gives one entity delete and no inserts', async () => {
-    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Keep this one' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
+      decisionText: 'Keep this one',
+    });
     const gone = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       decisionText: 'Close this one',
     });
     await extractGraph(sqliteStore(home), T);
     // Flipped in SQL: closeDecision also drops the graph row itself, which would leave nothing to diff.
-    onStore(home, (db) => db.prepare(`UPDATE decisions SET status = 'closed' WHERE id = ?`).run(gone.id));
+    onStore(home, (db) =>
+      db.prepare(`UPDATE decisions SET status = 'closed' WHERE id = ?`).run(gone.id),
+    );
 
-    expect(await deltaOf(home)).toEqual([{ op: 'deleteEntity', id: entityIdOf(home, 'decision', gone.id) }]);
+    expect(await deltaOf(home)).toEqual([
+      { op: 'deleteEntity', id: entityIdOf(home, 'decision', gone.id) },
+    ]);
   });
 
   it('a duplicate current entity gives one delete', async () => {
@@ -419,7 +451,11 @@ describe('graph delta', () => {
       decisionText: 'Adopt Postgres',
     });
     await extractGraph(sqliteStore(home), T);
-    const loose = insertEntityAt(home, T, { entityType: 'system', name: 'Postgres', memoryId: d.memoryId });
+    const loose = insertEntityAt(home, T, {
+      entityType: 'system',
+      name: 'Postgres',
+      memoryId: d.memoryId,
+    });
 
     expect(await deltaOf(home)).toEqual([{ op: 'deleteEntity', id: loose.id }]);
   });

@@ -5,7 +5,10 @@ import * as fs from 'node:fs';
 export const PRE_COMPACT_TAIL_BYTES = 256 * 1024;
 
 /** The last `capBytes` of a JSONL transcript, read at an offset and starting on a whole line so every line parses. */
-export function readTranscriptTail(transcriptPath: string, capBytes: number = PRE_COMPACT_TAIL_BYTES): string {
+export function readTranscriptTail(
+  transcriptPath: string,
+  capBytes: number = PRE_COMPACT_TAIL_BYTES,
+): string {
   const fd = fs.openSync(transcriptPath, 'r');
   try {
     return readOpenTranscriptTail(fd, fs.fstatSync(fd).size, capBytes);

@@ -3,7 +3,10 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { ProjectIdentity, ResolveProjectIdentityOptions } from '../base/scope/project-identity.js';
+import type {
+  ProjectIdentity,
+  ResolveProjectIdentityOptions,
+} from '../base/scope/project-identity.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { ignoringCodes, PATH_UNREADABLE } from '../base/util/expected-errors.js';
 import { namesProjectsByRemote } from './config-file.js';
@@ -22,11 +25,17 @@ const globalRemoteRule: RemoteRule = () => namesProjectsByRemote(hippoHomeDir())
 
 /** The id a root names itself by plus every rung that resolves; only the root's own `.git` is read, so a store nested
  * in another checkout keeps its folder name. */
-function namesAt(root: string, legacyName: string, remoteOn: RemoteRule): Pick<ProjectIdentity, 'name' | 'aliases'> {
+function namesAt(
+  root: string,
+  legacyName: string,
+  remoteOn: RemoteRule,
+): Pick<ProjectIdentity, 'name' | 'aliases'> {
   const fileId = projectFileId(root);
   const remoteId = originRemoteId(root);
   const name = fileId ?? (remoteOn() ? remoteId : null) ?? legacyName;
-  const aliases = [...new Set([fileId, remoteId, legacyName])].filter((n): n is string => n !== null && n !== name);
+  const aliases = [...new Set([fileId, remoteId, legacyName])].filter(
+    (n): n is string => n !== null && n !== name,
+  );
   return aliases.length > 0 ? { name, aliases } : { name };
 }
 
@@ -60,7 +69,10 @@ function isDirectoryAt(p: string): boolean {
 }
 
 /** Resolves the project identity for a working directory (default process.cwd()), walking the disk on each call. */
-export function resolveProjectIdentity(cwd?: string, opts?: ResolveProjectIdentityOptions): ProjectIdentity {
+export function resolveProjectIdentity(
+  cwd?: string,
+  opts?: ResolveProjectIdentityOptions,
+): ProjectIdentity {
   return walkIdentity(path.resolve(cwd ?? process.cwd()), opts, globalRemoteRule).identity;
 }
 
@@ -84,8 +96,12 @@ export function walkIdentity(
   const root = hippoRoot ?? gitRoot;
   if (root !== null) {
     const legacyName =
-      (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ?? path.basename(root).toLowerCase();
-    return { identity: { root, ...namesAt(root, legacyName, remoteOn), legacyName, isHome: false }, rooted: true };
+      (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ??
+      path.basename(root).toLowerCase();
+    return {
+      identity: { root, ...namesAt(root, legacyName, remoteOn), legacyName, isHome: false },
+      rooted: true,
+    };
   }
   if (reachedHome || isUnder(real, home)) {
     return { identity: { root: home, name: '', legacyName: '', isHome: true }, rooted: false };
@@ -101,7 +117,9 @@ function linkedWorktreeRepoName(gitRoot: string, home: string): string | null {
   const marker = path.join(gitRoot, '.git');
   if (!fs.existsSync(marker) || isDirectoryAt(marker)) return null;
   // An unreadable link is still a checkout, named after its own folder.
-  const dirs = ignoringCodes(PATH_UNREADABLE, () => readGitFilePointer(gitRoot, fs.readFileSync(marker, 'utf8')));
+  const dirs = ignoringCodes(PATH_UNREADABLE, () =>
+    readGitFilePointer(gitRoot, fs.readFileSync(marker, 'utf8')),
+  );
   if (dirs?.commonDir == null) return null; // no git dir, or a submodule's or a separate git dir's own checkout
   const common = realpathOrResolve(dirs.commonDir);
   const repo = ['.git', '.bare'].includes(path.basename(common)) ? path.dirname(common) : common;
@@ -148,7 +166,10 @@ function walkProjectMarkers(start: string, home: string, stopDirs: readonly stri
 
 /** Nearest ancestor `.hippo` below home and the temp root (never projects; on Windows the temp root sits inside home).
  *  Everything is realpath'd so a symlinked temp root or cwd still matches its bound. */
-export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOptions): string | null {
+export function findHippoStoreDir(
+  cwd?: string,
+  opts?: ResolveProjectIdentityOptions,
+): string | null {
   const home = realpathOrResolve(opts?.homeDir ?? os.homedir());
   const stops = [realpathOrResolve(os.tmpdir())];
   if (opts?.stopDir) stops.push(realpathOrResolve(opts.stopDir));
@@ -158,7 +179,10 @@ export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOpt
 }
 
 /** Nearest ancestor store like git; the strict join is the fallback so `hippo init` still creates `<cwd>/.hippo`. */
-export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOptions): string {
+export function getHippoRoot(
+  cwd: string = process.cwd(),
+  opts?: ResolveProjectIdentityOptions,
+): string {
   return findHippoStoreDir(cwd, opts) ?? path.join(realpathOrResolve(cwd), HIPPO_DIR);
 }
 
@@ -178,7 +202,10 @@ export function isGlobalStoreRoot(p: string): boolean {
 /** Parses a memory's origin from its provenance `source`: `shared:<project>:<ts>` and `promoted:<localRoot>` name the
  * owning project; the home dir basename maps to '' (user-global). Returns null without origin evidence. Pure string
  * logic, since recorded paths may no longer exist. */
-export function originFromSource(source: string | null | undefined, homeName?: string): string | null {
+export function originFromSource(
+  source: string | null | undefined,
+  homeName?: string,
+): string | null {
   if (!source) return null;
   const home = (homeName ?? path.basename(os.homedir())).toLowerCase();
   const shared = /^shared:([^:]+):/.exec(source);

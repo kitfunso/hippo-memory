@@ -94,9 +94,14 @@ describe('api.contextGet', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
-      for (let i = 0; i < 4; i++) await remember(ctx, { content: `getcontext-limit-${i}`, kind: 'distilled' });
+      for (let i = 0; i < 4; i++)
+        await remember(ctx, { content: `getcontext-limit-${i}`, kind: 'distilled' });
 
-      const result = await contextGet(ctx, { currentProject: cwdProject(), budget: 1500, limit: 2 });
+      const result = await contextGet(ctx, {
+        currentProject: cwdProject(),
+        budget: 1500,
+        limit: 2,
+      });
 
       expect(result.entries).toHaveLength(2);
     } finally {

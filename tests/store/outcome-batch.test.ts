@@ -6,7 +6,12 @@ import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../../src/db/index.js';
-import { CHURN_STALE_TAG, DAG_LEVEL, Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import {
+  CHURN_STALE_TAG,
+  DAG_LEVEL,
+  Layer,
+  type MemoryEntry,
+} from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { entryAfterOutcome } from '../../src/base/memory/keep-rules.js';
@@ -80,7 +85,9 @@ function memory(i: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
 /** Summary parents (one already dirty), churn-stale tags, three layers, an out-of-reach personal row, another tenant's
  * row, repeated ids and a missing one. */
 function fixture(count: number) {
-  const summaries = [0, 1, 2].map((i) => memory(10_000 + i, { dagLevel: DAG_LEVEL.topic, layer: Layer.Semantic }));
+  const summaries = [0, 1, 2].map((i) =>
+    memory(10_000 + i, { dagLevel: DAG_LEVEL.topic, layer: Layer.Semantic }),
+  );
   const rows = Array.from({ length: count }, (_, i) =>
     memory(i, {
       tags: i % 7 === 0 ? ['alpha', CHURN_STALE_TAG] : ['alpha'],
@@ -93,7 +100,13 @@ function fixture(count: number) {
   );
   const foreign = memory(20_000, { tenantId: 'other' });
   const repeats = [rows[3]!.id, rows[3]!.id, rows[4]!.id];
-  const ids = [...rows.map((row) => row.id), summaries[0]!.id, foreign.id, ...repeats, 'mem_missing'];
+  const ids = [
+    ...rows.map((row) => row.id),
+    summaries[0]!.id,
+    foreign.id,
+    ...repeats,
+    'mem_missing',
+  ];
   return { entries: [...summaries, ...rows, foreign], ids };
 }
 
@@ -161,35 +174,44 @@ function outcomeOf(ids: readonly string[], good: boolean): OutcomeWrite {
 }
 
 describe('outcome over 200 ids', () => {
-  it.each([true, false])('writes the rows, audit, full-text and mirrors the per-id path wrote (good=%s)', (good) => {
-    const { entries, ids } = fixture(200);
-    const before = seeded('outcome-pin-old', entries);
-    const after = seeded('outcome-pin-new', entries);
-    const expected = applyOutcomePerId(before.db, before.root, outcomeOf(ids, good));
-    // A runtime holds the outcome's mirror rewrite until the flush, as the CLI's does.
-    const runtime = new StoreRuntime();
-    const got = runtime.run(() => {
-      const written = writeOutcome(after.db, storeFilesOf(after.root), outcomeOf(ids, good));
-      flushHeldMirrors(after.root);
-      return written;
-    });
-    expect(got).toEqual(expected);
-    expect(got.length).toBeGreaterThan(190);
-    const want = snapshot(before.root, before.db);
-    // The fixture reaches every branch: two summaries flip dirty, and a good outcome re-indexes churn-stale rows.
-    expect(want.audit.filter((row) => row.op === 'summary_marked_dirty' && row.actor === 'test:pin')).toHaveLength(2);
-    expect(want.fts.some((row) => row.tags.includes(CHURN_STALE_TAG))).toBe(!good);
-    expect(snapshot(after.root, after.db)).toEqual(want);
-  });
+  it.each([true, false])(
+    'writes the rows, audit, full-text and mirrors the per-id path wrote (good=%s)',
+    (good) => {
+      const { entries, ids } = fixture(200);
+      const before = seeded('outcome-pin-old', entries);
+      const after = seeded('outcome-pin-new', entries);
+      const expected = applyOutcomePerId(before.db, before.root, outcomeOf(ids, good));
+      // A runtime holds the outcome's mirror rewrite until the flush, as the CLI's does.
+      const runtime = new StoreRuntime();
+      const got = runtime.run(() => {
+        const written = writeOutcome(after.db, storeFilesOf(after.root), outcomeOf(ids, good));
+        flushHeldMirrors(after.root);
+        return written;
+      });
+      expect(got).toEqual(expected);
+      expect(got.length).toBeGreaterThan(190);
+      const want = snapshot(before.root, before.db);
+      // The fixture reaches every branch: two summaries flip dirty, and a good outcome re-indexes churn-stale rows.
+      expect(
+        want.audit.filter((row) => row.op === 'summary_marked_dirty' && row.actor === 'test:pin'),
+      ).toHaveLength(2);
+      expect(want.fts.some((row) => row.tags.includes(CHURN_STALE_TAG))).toBe(!good);
+      expect(snapshot(after.root, after.db)).toEqual(want);
+    },
+  );
 });
 
 describe('outcome statement count', () => {
   it('runs the same statements over 10 ids as over 200', () => {
     const counts = [10, 200].map((n) => {
       const { entries } = fixture(n);
-      const ids = entries.filter((e) => e.tenantId === 'default' && e.scope === null).map((e) => e.id);
+      const ids = entries
+        .filter((e) => e.tenantId === 'default' && e.scope === null)
+        .map((e) => e.id);
       const { root, db } = seeded(`outcome-count-${n}`, entries);
-      const { statements } = recordStatements(() => writeOutcome(db, storeFilesOf(root), outcomeOf(ids, false)));
+      const { statements } = recordStatements(() =>
+        writeOutcome(db, storeFilesOf(root), outcomeOf(ids, false)),
+      );
       return statements.length;
     });
     expect(counts[0]).toBe(counts[1]);

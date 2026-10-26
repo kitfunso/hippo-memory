@@ -5,7 +5,12 @@ import { randomUUID } from 'node:crypto';
 import { isJsonString } from '../util/json.js';
 import { tokenize } from '../util/tokenize.js';
 import { ID_SUFFIX_CHARS } from '../util/token-text.js';
-import { calculateStrength, netWrong, PRODUCTION_STRENGTH, type StrengthModel } from './strength.js';
+import {
+  calculateStrength,
+  netWrong,
+  PRODUCTION_STRENGTH,
+  type StrengthModel,
+} from './strength.js';
 
 export const DEFAULT_SCHEMA_FIT = 0.5;
 
@@ -168,7 +173,11 @@ export interface CreateMemoryOptions {
 }
 
 /** A new memory entry created at `now`; hippo's own writers name the half-life base, so the type asks for it. */
-export function createMemory(content: string, options: CreateMemoryOptions, now: Date): MemoryEntry {
+export function createMemory(
+  content: string,
+  options: CreateMemoryOptions,
+  now: Date,
+): MemoryEntry {
   assertValidMemoryInput(content, options);
 
   const at = now.toISOString();
@@ -221,7 +230,9 @@ export function createMemory(content: string, options: CreateMemoryOptions, now:
 function assertValidMemoryInput(content: string, options: Partial<CreateMemoryOptions>): void {
   const trimmed = content.trim();
   if (trimmed.length < 3) {
-    throw new BadRequestError(`Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`);
+    throw new BadRequestError(
+      `Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`,
+    );
   }
 
   const validOutcomes: (string | null)[] = ['success', 'failure', 'partial', null];
@@ -243,7 +254,12 @@ export interface SuccessorOptions {
 
 /** The row that replaces `old`, created at `now`: a supersede never changes where a memory belongs or whose it is,
  * so source, scope, owner, session and a stamped origin carry over. */
-export function createSuccessor(old: MemoryEntry, content: string, opts: SuccessorOptions, now: Date): MemoryEntry {
+export function createSuccessor(
+  old: MemoryEntry,
+  content: string,
+  opts: SuccessorOptions,
+  now: Date,
+): MemoryEntry {
   const fields: CreateMemoryOptions = {
     layer: opts.layer ?? old.layer,
     tags: opts.tags ?? [...old.tags],
@@ -268,7 +284,11 @@ export function createSuccessor(old: MemoryEntry, content: string, opts: Success
  * How well new content fits existing knowledge, 0..1: above 0.7 consolidates faster, below 0.3 is novel and decays
  * faster if unused.
  * Tags shared with existing memories count by rarity (a rare shared tag fits more), plus content-token overlap. */
-export function computeSchemaFit(content: string, tags: string[], existingEntries: MemoryEntry[]): number {
+export function computeSchemaFit(
+  content: string,
+  tags: string[],
+  existingEntries: MemoryEntry[],
+): number {
   return schemaFitFrom(content, tags, schemaFitSourceOf(existingEntries));
 }
 
@@ -304,7 +324,11 @@ function significantTokens(text: string): Set<string> {
 }
 
 /** computeSchemaFit against `source`, for a caller that holds counts and texts but no rows. */
-export function schemaFitFrom(content: string, tags: readonly string[], source: SchemaFitSource): number {
+export function schemaFitFrom(
+  content: string,
+  tags: readonly string[],
+  source: SchemaFitSource,
+): number {
   const N = source.rows;
   if (N === 0) return DEFAULT_SCHEMA_FIT;
   const tagFreq = source.tagCounts;
@@ -319,7 +343,8 @@ export function schemaFitFrom(content: string, tags: readonly string[], source: 
     if (freq > 0) weightedOverlap += Math.log(N / freq) + 1;
     totalWeight += maxIdf;
   }
-  const tagScore = totalWeight > 0 ? Math.min(1, (weightedOverlap / totalWeight) * TAG_OVERLAP_SCALE) : 0;
+  const tagScore =
+    totalWeight > 0 ? Math.min(1, (weightedOverlap / totalWeight) * TAG_OVERLAP_SCALE) : 0;
 
   const newTokens = significantTokens(content);
   if (newTokens.size === 0) return Math.min(1, Math.max(0, tagScore));
@@ -350,7 +375,11 @@ function inferValence(tags: string[]): EmotionalValence {
 
 /** Copies with the retrieval count, clock and half-life updated at `now`; the caller persists them. A model whose
  * recall does not strengthen returns the entries unchanged, not empty, since callers derive last_retrieval_ids. */
-export function markRetrieved(entries: MemoryEntry[], now: Date, model: StrengthModel): MemoryEntry[] {
+export function markRetrieved(
+  entries: MemoryEntry[],
+  now: Date,
+  model: StrengthModel,
+): MemoryEntry[] {
   if (!model.recallStrengthens) return entries;
   return entries.map((e) => {
     if (e.supersededBy) return e;

@@ -24,7 +24,10 @@ beforeEach(() => {
 
 async function sleepOver(tags: string[]) {
   for (const content of [BASE, `${BASE} again today`, `${BASE} once more`]) {
-    writeEntry(hippoRoot, createMemory(content, { layer: Layer.Episodic, tenantId: 'default', tags }));
+    writeEntry(
+      hippoRoot,
+      createMemory(content, { layer: Layer.Episodic, tenantId: 'default', tags }),
+    );
   }
   return consolidate(hippoRoot, { dryRun: false, now: FIXED_NOW });
 }
@@ -41,18 +44,23 @@ describe('NO_MERGE_TAGS', () => {
     expect(result.merged).toBe(3);
   });
 
-  it.each([...NO_MERGE_TAGS, PROBE])('a row tagged %s is neither sent to extraction nor merged', async (tag) => {
-    // SAFETY: a tag added at run time proves both call sites read the set, not a copied list.
-    const tags = NO_MERGE_TAGS as Set<string>;
-    const probe = !tags.has(tag);
-    if (probe) tags.add(tag);
-    try {
-      const result = await sleepOver([tag]);
-      expect(result.extractionCandidates).toBe(0);
-      expect(result.merged).toBe(0);
-      expect(loadAllEntries(hippoRoot, 'default').filter((e) => e.layer === Layer.Semantic)).toEqual([]);
-    } finally {
-      if (probe) tags.delete(tag);
-    }
-  });
+  it.each([...NO_MERGE_TAGS, PROBE])(
+    'a row tagged %s is neither sent to extraction nor merged',
+    async (tag) => {
+      // SAFETY: a tag added at run time proves both call sites read the set, not a copied list.
+      const tags = NO_MERGE_TAGS as Set<string>;
+      const probe = !tags.has(tag);
+      if (probe) tags.add(tag);
+      try {
+        const result = await sleepOver([tag]);
+        expect(result.extractionCandidates).toBe(0);
+        expect(result.merged).toBe(0);
+        expect(
+          loadAllEntries(hippoRoot, 'default').filter((e) => e.layer === Layer.Semantic),
+        ).toEqual([]);
+      } finally {
+        if (probe) tags.delete(tag);
+      }
+    },
+  );
 });

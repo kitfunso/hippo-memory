@@ -6,7 +6,12 @@ import { extractFacts, storeExtractedFacts } from '../learn/extract.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
-import { isPermanentFailure, llmFailureFields, type Llm, type LlmFailure } from '../../base/ports/llm.js';
+import {
+  isPermanentFailure,
+  llmFailureFields,
+  type Llm,
+  type LlmFailure,
+} from '../../base/ports/llm.js';
 
 // Bounds the LLM calls one sleep spends on extraction.
 const EXTRACTION_BATCH_LIMIT = 20;
@@ -40,7 +45,8 @@ function sleepLlm(run: SleepRun, llm: Llm | undefined): SleepLlm | null {
 /** Counts the survivors extraction could read and returns the first `limit` of them, holding no others. */
 async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntry[]> {
   const extractedFromIds = new Set<string>();
-  for await (const e of run.survivors.rows()) if (e.extractedFrom) extractedFromIds.add(e.extractedFrom);
+  for await (const e of run.survivors.rows())
+    if (e.extractedFrom) extractedFromIds.add(e.extractedFrom);
   const batch: MemoryEntry[] = [];
   let candidates = 0;
   for await (const e of run.survivors.rows()) {
@@ -106,7 +112,11 @@ async function pooled<T>(
 }
 
 /** Stores one source's extracted facts as semantic memories stamped at the run's instant. */
-function keepFacts(run: SleepRun, source: MemoryEntry, facts: Extraction['facts']): Promise<MemoryEntry[]> {
+function keepFacts(
+  run: SleepRun,
+  source: MemoryEntry,
+  facts: Extraction['facts'],
+): Promise<MemoryEntry[]> {
   return storeExtractedFacts(run.store, source, facts, run.config.defaultHalfLifeDays, run.now);
 }
 
@@ -114,7 +124,11 @@ function keepFacts(run: SleepRun, source: MemoryEntry, facts: Extraction['facts'
  * Extracts facts from each candidate, up to four model calls at once; every write, count and report then runs in input
  * order. True when it stopped on a failure every later call would repeat (bad key, no credit, unknown model).
  */
-async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly MemoryEntry[]): Promise<boolean> {
+async function extractionPass(
+  run: SleepRun,
+  llm: SleepLlm,
+  batch: readonly MemoryEntry[],
+): Promise<boolean> {
   const report = llm.llmError('extraction');
   let stopAt = Number.POSITIVE_INFINITY;
   const extract = async (index: number): Promise<Extraction> => {
@@ -170,7 +184,14 @@ async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Pro
   const extractedFacts: MemoryEntry[] = [];
   let facts = 0;
   for await (const e of run.survivors.rows()) {
-    if (!(e.tags.includes(EXTRACTED_TAG) && e.dagLevel === DAG_LEVEL.extracted && !e.supersededBy && isReusable(e))) {
+    if (
+      !(
+        e.tags.includes(EXTRACTED_TAG) &&
+        e.dagLevel === DAG_LEVEL.extracted &&
+        !e.supersededBy &&
+        isReusable(e)
+      )
+    ) {
       continue;
     }
     facts++;
@@ -206,7 +227,8 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
   const { result } = run;
   try {
     const rawCap = run.config.runtime?.dagRebuildCap;
-    const cap = rawCap !== undefined ? Math.min(rawCap, MAX_DAG_REBUILD_CAP) : DEFAULT_DAG_REBUILD_CAP;
+    const cap =
+      rawCap !== undefined ? Math.min(rawCap, MAX_DAG_REBUILD_CAP) : DEFAULT_DAG_REBUILD_CAP;
     const rebuildResult = await rebuildDirtySummaries(run.store, {
       ...llmOpts,
       onError: llmError('dag rebuild'),
@@ -240,7 +262,9 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
 }
 
 /** Every unprofiled L2 summary, one keyset page per store call: clustering needs them all, a statement need not. */
-async function allUnprofiledTopicSummaries(store: SleepRun['store']['consolidation']): Promise<MemoryEntry[]> {
+async function allUnprofiledTopicSummaries(
+  store: SleepRun['store']['consolidation'],
+): Promise<MemoryEntry[]> {
   const all: MemoryEntry[] = [];
   for (let after: EntryCursor | undefined; ;) {
     const page = await store.unprofiledTopicSummaries({ limit: READ_PAGE_ROWS, after });

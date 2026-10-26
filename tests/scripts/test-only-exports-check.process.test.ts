@@ -29,8 +29,12 @@ ${seam}();
 function seamRows(): Row[] {
   return [
     seamRow('a _verbThingForTests seam name passes', '_setThingForTests', 0, ['check OK']),
-    seamRow('a __setX seam name fails with file:line name', '__setThing', 1, ['src/a.ts:1 __setThing']),
-    seamRow('a ForTests name without the underscore fails', 'setThingForTests', 1, ['src/a.ts:1 setThingForTests']),
+    seamRow('a __setX seam name fails with file:line name', '__setThing', 1, [
+      'src/a.ts:1 __setThing',
+    ]),
+    seamRow('a ForTests name without the underscore fails', 'setThingForTests', 1, [
+      'src/a.ts:1 setThingForTests',
+    ]),
   ];
 }
 

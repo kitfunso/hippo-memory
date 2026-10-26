@@ -30,7 +30,14 @@ const HEADER_AT = {
   upperBytes: 48,
 } as const;
 /** Where each field sits, in bytes from the record start. */
-const RECORD_AT = { rowid: 0, idHash: 8, level: 12, flags: 13, linkCount: 14, upperOffset: 16 } as const;
+const RECORD_AT = {
+  rowid: 0,
+  idHash: 8,
+  level: 12,
+  flags: 13,
+  linkCount: 14,
+  upperOffset: 16,
+} as const;
 const FLAG_REPLACED = 1;
 const ENCODE_TURN_NODES = 1024;
 
@@ -75,7 +82,9 @@ interface FileOrder {
 
 /** Nodes in rowid order, so a row's node is found by a binary search; the newest node of a reused rowid stays. */
 function fileOrder(rows: GraphRows): FileOrder {
-  const order = rows.ids.map((_, node) => node).sort((a, b) => rows.rowids[a] - rows.rowids[b] || a - b);
+  const order = rows.ids
+    .map((_, node) => node)
+    .sort((a, b) => rows.rowids[a] - rows.rowids[b] || a - b);
   const at = new Int32Array(order.length);
   order.forEach((node, i) => {
     at[node] = i;
@@ -92,7 +101,13 @@ function putInt8(unit: Float32Array, out: Int8Array): void {
 }
 
 /** The links of levels 1 and up of one node, level by level from `base`. */
-function writeUpperLinks(view: DataView, base: number, links: readonly number[][], at: ArrayLike<number>, m: number) {
+function writeUpperLinks(
+  view: DataView,
+  base: number,
+  links: readonly number[][],
+  at: ArrayLike<number>,
+  m: number,
+) {
   for (let level = 1; level < links.length; level++) {
     const from = base + (level - 1) * upperLevelBytes(m);
     view.setUint32(from, links[level].length, true);
@@ -186,10 +201,13 @@ export function saveGraphFile(hippoRoot: string, dim: number, bytes: Uint8Array)
   } catch (err) {
     const code = errorCode(err);
     if (code !== 'EPERM' && code !== 'EBUSY') throw err;
-    log.info(`${path.basename(file)} is open in another process (${code}), so the vector graph was not saved`, {
-      hippoRoot,
-      ...errorFields(err),
-    });
+    log.info(
+      `${path.basename(file)} is open in another process (${code}), so the vector graph was not saved`,
+      {
+        hippoRoot,
+        ...errorFields(err),
+      },
+    );
     return false;
   }
 }
@@ -200,7 +218,10 @@ export class GraphFileError extends Error {
 }
 
 export function badGraphFile(file: string, what: string, cause?: unknown): GraphFileError {
-  return new GraphFileError(`${path.basename(file)}: ${what}`, cause === undefined ? undefined : { cause });
+  return new GraphFileError(
+    `${path.basename(file)}: ${what}`,
+    cause === undefined ? undefined : { cause },
+  );
 }
 
 /** Reads and checks the header of the file open on `fd`; throws GraphFileError on anything it cannot trust. */
@@ -221,7 +242,11 @@ export function readStamp(fd: number, file: string, size: number): GraphStamp {
     HEADER_AT.maxLevel,
     HEADER_AT.jsonBytes,
   ].map(u32);
-  const [live, recordBytes, upperBytes] = [HEADER_AT.live, HEADER_AT.recordBytes, HEADER_AT.upperBytes].map(u32);
+  const [live, recordBytes, upperBytes] = [
+    HEADER_AT.live,
+    HEADER_AT.recordBytes,
+    HEADER_AT.upperBytes,
+  ].map(u32);
   const highRowid = head.readDoubleLE(HEADER_AT.highRowid);
   const recordsAt = align(HEADER_BYTES + jsonBytes, 8);
   const upperAt = recordsAt + nodes * recordBytes;
@@ -238,13 +263,28 @@ export function readStamp(fd: number, file: string, size: number): GraphStamp {
     highRowid >= 1;
   if (!fits) throw badGraphFile(file, 'a header value is out of bounds');
   if (upperAt + upperBytes > size) throw badGraphFile(file, 'short file');
-  if (upperAt + upperBytes < size) throw badGraphFile(file, 'the file runs on past its last record');
+  if (upperAt + upperBytes < size)
+    throw badGraphFile(file, 'the file runs on past its last record');
   const json = Buffer.alloc(jsonBytes);
-  if (fs.readSync(fd, json, 0, jsonBytes, HEADER_BYTES) < jsonBytes) throw badGraphFile(file, 'short file');
+  if (fs.readSync(fd, json, 0, jsonBytes, HEADER_BYTES) < jsonBytes)
+    throw badGraphFile(file, 'short file');
   const stamp = tryParseJson(json.toString('utf8'));
   const model = isJsonObject(stamp) ? stamp.model : undefined;
   if (!isJsonString(model)) throw badGraphFile(file, 'the stamp names no model');
-  return { model, dim, m, nodes, entry, maxLevel, highRowid, live, recordsAt, recordBytes, upperAt, upperBytes };
+  return {
+    model,
+    dim,
+    m,
+    nodes,
+    entry,
+    maxLevel,
+    highRowid,
+    live,
+    recordsAt,
+    recordBytes,
+    upperAt,
+    upperBytes,
+  };
 }
 
 export const isReplaced = (flags: number): boolean => (flags & FLAG_REPLACED) !== 0;

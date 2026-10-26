@@ -74,7 +74,11 @@ const SCHEDULER_CALL: ExecFileSyncOptionsWithStringEncoding = {
 };
 
 /** Runs one scheduler program from argv with no shell; tests hand in a stand-in so no real schtasks or crontab runs. */
-type RunScheduler = (file: string, args: readonly string[], opts: ExecFileSyncOptionsWithStringEncoding) => string;
+type RunScheduler = (
+  file: string,
+  args: readonly string[],
+  opts: ExecFileSyncOptionsWithStringEncoding,
+) => string;
 
 /**
  * Node kills a child at its timeout and reports ETIMEDOUT; every other failure here means the scheduler refused or is

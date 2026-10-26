@@ -1,5 +1,11 @@
 import { DEFAULT_TENANT_ID } from '../util/tenant.js';
-import { type MemoryEntry, Layer, DEFAULT_SCHEMA_FIT, type ConfidenceLevel, type MemoryKind } from './entry.js';
+import {
+  type MemoryEntry,
+  Layer,
+  DEFAULT_SCHEMA_FIT,
+  type ConfidenceLevel,
+  type MemoryKind,
+} from './entry.js';
 import { FALLBACK_HALF_LIFE_DAYS } from './strength.js';
 import { fromWire, toWire, type MemoryWire } from './memory-wire.js';
 import { dumpFrontmatter, parseFrontmatter } from '../util/yaml.js';
@@ -124,7 +130,9 @@ export function deserializeEntry(raw: string, now: Date): MemoryEntry | null {
     schema_fit: Number(data['schema_fit'] ?? DEFAULT_SCHEMA_FIT),
     source: String(data['source'] ?? 'cli'),
     outcome_score:
-      data['outcome_score'] === null || data['outcome_score'] === undefined ? null : Number(data['outcome_score']),
+      data['outcome_score'] === null || data['outcome_score'] === undefined
+        ? null
+        : Number(data['outcome_score']),
     outcome_positive: Number(data['outcome_positive'] ?? 0),
     outcome_negative: Number(data['outcome_negative'] ?? 0),
     conflicts_with: normalizeStringArray(data['conflicts_with']),
@@ -135,7 +143,9 @@ export function deserializeEntry(raw: string, now: Date): MemoryEntry | null {
     starred: Boolean(data['starred'] ?? false),
     trace_outcome: (data['trace_outcome'] as MemoryWire['trace_outcome']) ?? null,
     source_session_id: nullableString(data['source_session_id']),
-    valid_from: data['valid_from'] ? String(data['valid_from']) : String(data['created'] ?? now.toISOString()),
+    valid_from: data['valid_from']
+      ? String(data['valid_from'])
+      : String(data['created'] ?? now.toISOString()),
     superseded_by: nullableString(data['superseded_by']),
     extracted_from: (data['extracted_from'] as string) ?? null,
     dag_level: Number(data['dag_level'] ?? 0),

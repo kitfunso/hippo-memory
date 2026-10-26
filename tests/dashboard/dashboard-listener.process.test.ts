@@ -29,7 +29,8 @@ afterEach(async () => {
   }
   for (const holder of holders.splice(0)) await new Promise((done) => holder.close(done));
   for (const s of scratches.splice(0)) removeScratch(s);
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const root of roots.splice(0))
+    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /** A scratch project with a store, its own home folder and its own global store. */
@@ -70,11 +71,17 @@ function watch(child: ChildProcessWithoutNullStreams): Watched {
     console.error(output());
   });
   // 'close' fires after stdio drains; 'exit' can beat the last stderr chunk.
-  const exited = new Promise<Exit>((done) => child.once('close', (code, signal) => done({ code, signal })));
+  const exited = new Promise<Exit>((done) =>
+    child.once('close', (code, signal) => done({ code, signal })),
+  );
   const printed = (pattern: RegExp): Promise<RegExpExecArray> =>
     new Promise((done, fail) => {
       void exited.then(({ code, signal }) =>
-        fail(new Error(`the child ended (code ${code}, signal ${signal}) before the dashboard printed ${pattern}`)),
+        fail(
+          new Error(
+            `the child ended (code ${code}, signal ${signal}) before the dashboard printed ${pattern}`,
+          ),
+        ),
       );
       const check = (): void => {
         const match = pattern.exec(stdout);
@@ -100,7 +107,11 @@ describe('hippo dashboard listener', () => {
     const port = await boundPort(holder);
     const s = project();
 
-    const run = hippoRun(['dashboard', '--port', String(port)], { cwd: s.proj, env: s.env, timeout: 60_000 });
+    const run = hippoRun(['dashboard', '--port', String(port)], {
+      cwd: s.proj,
+      env: s.env,
+      timeout: 60_000,
+    });
 
     expect(ownStderr(run.stderr)).toBe(
       `hippo dashboard: port ${port} is already in use. Stop the program that holds it, or choose another port with --port <number>.\n`,
@@ -127,10 +138,14 @@ describe('hippo dashboard listener', () => {
   it('closes the listener and the snapshot store, then exits 0, on the stop signal this platform can deliver', async () => {
     const s = project();
     const reportFile = join(s.dir, 'connections.json');
-    const child = spawn(process.execPath, [CONNECTIONS_CLI, reportFile, 'dashboard', '--port', '0'], {
-      cwd: s.proj,
-      env: s.env,
-    });
+    const child = spawn(
+      process.execPath,
+      [CONNECTIONS_CLI, reportFile, 'dashboard', '--port', '0'],
+      {
+        cwd: s.proj,
+        env: s.env,
+      },
+    );
     children.push(child);
     const watched = watch(child);
     // The ticket is never on stdout; the banner names the URL file that holds it.

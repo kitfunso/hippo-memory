@@ -1,10 +1,23 @@
 // A store worker's thrown error crosses to the server as plain data: for generated errors of every listed class the server still gets the class, the message, the fields (a flush's list of unit ids among them) and the cause chain.
 import { describe, it, expect } from 'vitest';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../src/base/errors/api-errors.js';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../src/base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../src/base/errors/raw-append-only.js';
-import { IncompatibleBinaryError, OtherStoreFolderError, SqliteBlockedError } from '../../src/db/index.js';
+import {
+  IncompatibleBinaryError,
+  OtherStoreFolderError,
+  SqliteBlockedError,
+} from '../../src/db/index.js';
 import { StoreBusyError } from '../../src/base/ports/store.js';
-import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../src/base/errors/http-errors.js';
+import {
+  BodyTimeoutError,
+  BodyTooLargeError,
+  HttpError,
+} from '../../src/base/errors/http-errors.js';
 import { ScopeForbiddenError } from '../../src/base/scope/recall-scope.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { decodeError, encodeError } from '../../src/store/sqlite/error-codec.js';
@@ -54,7 +67,10 @@ type Recipe = readonly [maker: number, text: string];
 interface Case {
   readonly top: Recipe;
   /** Extra fields holding plain data, which must cross. */
-  readonly carried: readonly (readonly [string, string | number | boolean | null | readonly string[]])[];
+  readonly carried: readonly (readonly [
+    string,
+    string | number | boolean | null | readonly string[],
+  ])[];
   /** Extra fields holding something a thread message cannot carry as a field, which must be left behind. */
   readonly dropped: readonly (readonly [string, object | bigint])[];
   readonly causes: readonly Recipe[];
@@ -88,7 +104,9 @@ function chain(error: Error): Error[] {
 
 /** The own fields of `error` that hold plain data: everything but its cause and the fields named in `dropped`. */
 function plainFields(error: Error, dropped: readonly string[]): object {
-  return Object.fromEntries(Object.entries(error).filter(([name]) => name !== 'cause' && !dropped.includes(name)));
+  return Object.fromEntries(
+    Object.entries(error).filter(([name]) => name !== 'cause' && !dropped.includes(name)),
+  );
 }
 
 describe('error codec properties', () => {

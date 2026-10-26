@@ -9,15 +9,20 @@ export function tableColumns(db: DatabaseSyncLike, tableName: string): Set<strin
   return new Set(rows.flatMap((row) => (row.name === undefined ? [] : [row.name])));
 }
 
-export function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
+export function tableHasColumn(
+  db: DatabaseSyncLike,
+  tableName: string,
+  columnName: string,
+): boolean {
   return tableColumns(db, tableName).has(columnName);
 }
 
 export function tableExists(db: DatabaseSyncLike, tableName: string): boolean {
   if (!/^[a-z_]+$/i.test(tableName)) throw new Error(`Invalid table name: ${tableName}`);
-  const row = cachedStatement(db, `SELECT name FROM sqlite_master WHERE type='table' AND name = ?`).get(tableName) as
-    | { name?: string }
-    | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT name FROM sqlite_master WHERE type='table' AND name = ?`,
+  ).get(tableName) as { name?: string } | undefined;
   return !!row?.name;
 }
 

@@ -71,7 +71,10 @@ export function weakenSupersededMemory(
 ): Promise<void> {
   const tags = entry.tags.includes(SUPERSEDED_TAG) ? entry.tags : [...entry.tags, SUPERSEDED_TAG];
   const halved = Math.max(1, Math.floor(entry.halfLifeDays / 2));
-  return writes.writeEntry({ entry: { ...entry, halfLifeDays: halved, confidence: 'stale', tags }, actor });
+  return writes.writeEntry({
+    entry: { ...entry, halfLifeDays: halved, confidence: 'stale', tags },
+    actor,
+  });
 }
 
 export function loadDecisions(
@@ -90,6 +93,10 @@ export async function resolveActiveDecisionIdByMemory(
   memoryId: string,
 ): Promise<number | null> {
   assertTenantId('resolveActiveDecisionIdByMemory', tenantId);
-  const [row] = await objects.listObjects(tenantId, 'decision', { status: 'active', memoryId, limit: 1 });
+  const [row] = await objects.listObjects(tenantId, 'decision', {
+    status: 'active',
+    memoryId,
+    limit: 1,
+  });
   return row ? row.id : null;
 }

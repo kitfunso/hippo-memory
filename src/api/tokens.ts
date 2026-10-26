@@ -40,7 +40,10 @@ export function tokenSummary(ctx: Context, opts: { days?: number } = {}): Promis
 }
 
 /** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default 30). */
-export function failureSummary(ctx: Context, opts: { days?: number } = {}): Promise<FailureSummary> {
+export function failureSummary(
+  ctx: Context,
+  opts: { days?: number } = {},
+): Promise<FailureSummary> {
   return ctx.store.reports.failures(ctx.tenantId, reportWindowStart(opts.days, ctx.infra.clock()));
 }
 

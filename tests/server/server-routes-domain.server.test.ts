@@ -68,9 +68,12 @@ describe('server HTTP routes — memories', () => {
   });
 
   it.skipIf(needsHippoDb('db'))('DELETE /v1/memories/:id removes the row', async () => {
-    const { id } = await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
-      content: 'forget-canary-target',
-    });
+    const { id } = await apiRemember(
+      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
+      {
+        content: 'forget-canary-target',
+      },
+    );
     const res = await fetch(`${handle.url}/v1/memories/${id}`, { method: 'DELETE' });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ ok: boolean; id: string }>(res);
@@ -87,23 +90,32 @@ describe('server HTTP routes — memories', () => {
     }
   });
 
-  it.skipIf(needsHippoDb('team'))('POST /v1/memories/:id/promote copies to global store', async () => {
-    const { id } = await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
-      content: 'promote-canary-payload',
-    });
-    const res = await fetch(`${handle.url}/v1/memories/${id}/promote`, { method: 'POST' });
-    expect(res.status).toBe(200);
-    const body = await jsonAs<{ ok: boolean; sourceId: string; globalId: string }>(res);
-    expect(body.ok).toBe(true);
-    expect(body.sourceId).toBe(id);
-    // copyToGlobal mints a fresh id on the global store; prefix is 'g_'.
-    expect(body.globalId).toMatch(/^g_/);
-  });
+  it.skipIf(needsHippoDb('team'))(
+    'POST /v1/memories/:id/promote copies to global store',
+    async () => {
+      const { id } = await apiRemember(
+        apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
+        {
+          content: 'promote-canary-payload',
+        },
+      );
+      const res = await fetch(`${handle.url}/v1/memories/${id}/promote`, { method: 'POST' });
+      expect(res.status).toBe(200);
+      const body = await jsonAs<{ ok: boolean; sourceId: string; globalId: string }>(res);
+      expect(body.ok).toBe(true);
+      expect(body.sourceId).toBe(id);
+      // copyToGlobal mints a fresh id on the global store; prefix is 'g_'.
+      expect(body.globalId).toMatch(/^g_/);
+    },
+  );
 
   it.skipIf(needsHippoDb('db'))('POST /v1/memories/:id/supersede chains old to new', async () => {
-    const { id } = await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
-      content: 'supersede-old-content',
-    });
+    const { id } = await apiRemember(
+      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
+      {
+        content: 'supersede-old-content',
+      },
+    );
     const res = await fetch(`${handle.url}/v1/memories/${id}/supersede`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -117,16 +129,18 @@ describe('server HTTP routes — memories', () => {
     expect(body.newId).not.toBe(id);
   });
 
-  it.skipIf(needsHippoDb('db'))('POST /v1/memories/:id/archive archives a kind=raw row', async () => {
-    // Seed a raw row directly: createMemory defaults to distilled, but
-    // archiveRawMemory requires kind='raw'.
-    const db = openHippoDb(home);
-    let rawId: string;
-    try {
-      rawId = `mem_raw_http_${Math.random().toString(36).slice(2, 10)}`;
-      const now = new Date().toISOString();
-      db.prepare(
-        `INSERT INTO memories(
+  it.skipIf(needsHippoDb('db'))(
+    'POST /v1/memories/:id/archive archives a kind=raw row',
+    async () => {
+      // Seed a raw row directly: createMemory defaults to distilled, but
+      // archiveRawMemory requires kind='raw'.
+      const db = openHippoDb(home);
+      let rawId: string;
+      try {
+        rawId = `mem_raw_http_${Math.random().toString(36).slice(2, 10)}`;
+        const now = new Date().toISOString();
+        db.prepare(
+          `INSERT INTO memories(
            id, created, last_retrieved, retrieval_count, strength, half_life_days, layer,
            tags_json, emotional_valence, schema_fit, source, outcome_score,
            outcome_positive, outcome_negative,
@@ -139,38 +153,39 @@ describe('server HTTP routes — memories', () => {
                    '[]', 0, 'verified', 'raw-http-canary',
                    '[]', 0,
                    ?, 'raw', 'default', datetime('now'))`,
-      ).run(rawId, now, now, now);
-    } finally {
-      closeHippoDb(db);
-    }
+        ).run(rawId, now, now, now);
+      } finally {
+        closeHippoDb(db);
+      }
 
-    const res = await fetch(`${handle.url}/v1/memories/${rawId}/archive`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: 'gdpr-http' }),
-    });
-    expect(res.status).toBe(200);
-    const body = await jsonAs<{ ok: boolean; archivedAt: string }>(res);
-    expect(body.ok).toBe(true);
-    expect(body.archivedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      const res = await fetch(`${handle.url}/v1/memories/${rawId}/archive`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason: 'gdpr-http' }),
+      });
+      expect(res.status).toBe(200);
+      const body = await jsonAs<{ ok: boolean; archivedAt: string }>(res);
+      expect(body.ok).toBe(true);
+      expect(body.archivedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
-    const db2 = openHippoDb(home);
-    try {
-      const row = db2.prepare(`SELECT id FROM memories WHERE id = ?`).get(rawId);
-      expect(row).toBeUndefined();
-      // SAFETY: SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?
-      // names exactly those two columns against the row the /archive route
-      // just wrote for rawId; may be undefined only if archiving silently
-      // failed (checked by the assertions below).
-      const archived = db2.prepare(`SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?`).get(rawId) as
-        | { memory_id: string; reason: string }
-        | undefined;
-      expect(archived?.memory_id).toBe(rawId);
-      expect(archived?.reason).toBe('gdpr-http');
-    } finally {
-      closeHippoDb(db2);
-    }
-  });
+      const db2 = openHippoDb(home);
+      try {
+        const row = db2.prepare(`SELECT id FROM memories WHERE id = ?`).get(rawId);
+        expect(row).toBeUndefined();
+        // SAFETY: SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?
+        // names exactly those two columns against the row the /archive route
+        // just wrote for rawId; may be undefined only if archiving silently
+        // failed (checked by the assertions below).
+        const archived = db2
+          .prepare(`SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?`)
+          .get(rawId) as { memory_id: string; reason: string } | undefined;
+        expect(archived?.memory_id).toBe(rawId);
+        expect(archived?.reason).toBe('gdpr-http');
+      } finally {
+        closeHippoDb(db2);
+      }
+    },
+  );
 });
 
 describe('server HTTP routes — auth + audit', () => {
@@ -259,7 +274,9 @@ describe('server HTTP routes — auth + audit', () => {
     expect(secondBody.revokedAt).toBe(firstBody.revokedAt);
 
     // Unknown key_id → 404 (mapApiError sees "Unknown key_id: ..." and routes 404).
-    const missing = await fetch(`${handle.url}/v1/auth/keys/hk_does_not_exist`, { method: 'DELETE' });
+    const missing = await fetch(`${handle.url}/v1/auth/keys/hk_does_not_exist`, {
+      method: 'DELETE',
+    });
     expect(missing.status).toBe(404);
     const missingBody = await jsonAs<{ error: string }>(missing);
     expect(missingBody.error).toMatch(/unknown key_id/i);

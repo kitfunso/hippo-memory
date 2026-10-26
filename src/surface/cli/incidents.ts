@@ -15,7 +15,13 @@ import {
   type CommandContext,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
-import { closeObjectVerb, foundOrExit, idArgOrExit, listObjectsVerb, type ObjectNames } from './object-verbs.js';
+import {
+  closeObjectVerb,
+  foundOrExit,
+  idArgOrExit,
+  listObjectsVerb,
+  type ObjectNames,
+} from './object-verbs.js';
 import { fail } from './exit.js';
 import { shellFolder } from './versioned-verbs.js';
 
@@ -55,10 +61,16 @@ async function incidentGet(ctx: Context, args: string[]): Promise<void> {
 }
 
 async function resolveIncident(ctx: Context, args: string[], flags: CliFlags): Promise<void> {
-  const id = idArgOrExit(args, 'Usage: hippo incident resolve <id> --resolution "<text>"', INCIDENT.idLabel);
+  const id = idArgOrExit(
+    args,
+    'Usage: hippo incident resolve <id> --resolution "<text>"',
+    INCIDENT.idLabel,
+  );
   const resolutionRaw = stringFlag(flags, 'resolution');
   if (!resolutionRaw?.trim()) {
-    fail('--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".');
+    fail(
+      '--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".',
+    );
   }
   const resolved = await incidentResolve(ctx, id, resolutionRaw);
   console.log(`Incident #${resolved.id} resolved.`);
@@ -68,7 +80,12 @@ function incidentClose(ctx: Context, args: string[]): Promise<void> {
   return closeObjectVerb(args, INCIDENT, (id) => objectClose(ctx, 'incident', id));
 }
 
-export async function handleIncident({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleIncident({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -84,7 +101,9 @@ export async function handleIncident({ hippoRoot, tenantId, args, flags }: Comma
 
 async function incidentCreate(ctx: Context, incidentText: string, flags: CliFlags): Promise<void> {
   if (!incidentText) {
-    printError('Usage: hippo incident "<incident>" [--context "<details>"] [--link <memory-id>]...');
+    printError(
+      'Usage: hippo incident "<incident>" [--context "<details>"] [--link <memory-id>]...',
+    );
     printError('       hippo incident list [--status open|resolved|closed|all] [--limit N]');
     printError('       hippo incident get <id>');
     printError('       hippo incident resolve <id> --resolution "<text>"');
@@ -96,7 +115,11 @@ async function incidentCreate(ctx: Context, incidentText: string, flags: CliFlag
   }
   const linkedMemoryIds = repeatedFlag(flags, 'link');
 
-  const created = await incidentOpen(ctx, { incidentText, context, linkedMemoryIds }, shellFolder());
+  const created = await incidentOpen(
+    ctx,
+    { incidentText, context, linkedMemoryIds },
+    shellFolder(),
+  );
 
   console.log(`Incident recorded: #${created.id}`);
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);

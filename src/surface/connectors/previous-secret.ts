@@ -25,7 +25,8 @@ export const GITHUB_PREVIOUS: PreviousSecretVars = {
   openKey: 'GITHUB_WEBHOOK_SECRET_PREVIOUS-open',
 };
 
-const DATE_OR_ISO = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
+const DATE_OR_ISO =
+  /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
 
 /** Epoch ms of an ISO date (00:00 UTC) or timestamp, or null; a day that rolls over, as 2026-02-31, is no date. */
 function untilMs(text: string): number | null {

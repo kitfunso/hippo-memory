@@ -16,7 +16,12 @@ import {
   parseLimitParam,
   validateIdSegment,
 } from '../validation.js';
-import { MAX_ARRAY_ITEMS, MAX_CONTENT_LEN, MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
+import {
+  MAX_ARRAY_ITEMS,
+  MAX_CONTENT_LEN,
+  MAX_ID_LEN,
+  MAX_SHORT_FIELD_LEN,
+} from '../../../base/util/limits.js';
 import { isJsonBoolean, type JsonValue } from '../../../base/util/json.js';
 import type { SleepResult } from '../../../api/index.js';
 import { sleepEventLines } from '../../render/sleep-events.js';
@@ -67,7 +72,10 @@ export async function handleGetGraph({ res, ctx, query }: AuthedRouteRequest): P
 }
 
 // /v1/memories/:id/* and DELETE /v1/memories/:id
-export async function handleArchiveMemory({ req, res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+export async function handleArchiveMemory(
+  { req, res, ctx }: AuthedRouteRequest,
+  { id }: RouteParams,
+): Promise<void> {
   validateIdSegment(id, 'memory id');
   const body = await parseJsonBody(req, ctx);
   const reason = getString(body, 'reason', MAX_SHORT_FIELD_LEN);
@@ -79,7 +87,10 @@ export async function handleArchiveMemory({ req, res, ctx }: AuthedRouteRequest,
   return;
 }
 
-export async function handleSupersedeMemory({ req, res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+export async function handleSupersedeMemory(
+  { req, res, ctx }: AuthedRouteRequest,
+  { id }: RouteParams,
+): Promise<void> {
   validateIdSegment(id, 'memory id');
   const body = await parseJsonBody(req, ctx);
   const content = getString(body, 'content', MAX_CONTENT_LEN);
@@ -101,7 +112,10 @@ export async function handlePromoteMemory(
   return;
 }
 
-export async function handleForgetMemory({ res, ctx }: AuthedRouteRequest, { id }: RouteParams): Promise<void> {
+export async function handleForgetMemory(
+  { res, ctx }: AuthedRouteRequest,
+  { id }: RouteParams,
+): Promise<void> {
   validateIdSegment(id, 'memory id');
   const result = await forget(ctx, id);
   sendJson(res, 200, result);
@@ -122,7 +136,10 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
   const ids = getStringArray(body, 'ids', MAX_OUTCOME_IDS, MAX_ID_LEN, {
     nonEmpty: 'raw',
     rejectNull: true,
-    messages: { notArray: 'ids must be an array of non-empty strings', count: `ids exceeds ${MAX_OUTCOME_IDS}-id cap` },
+    messages: {
+      notArray: 'ids must be an array of non-empty strings',
+      count: `ids exceeds ${MAX_OUTCOME_IDS}-id cap`,
+    },
   });
   if (ids !== undefined) {
     const { applied } = await outcome(ctx, ids, good);
@@ -139,7 +156,9 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
 function sleepReply(result: SleepResult): Record<string, JsonValue> {
   return Object.fromEntries(
     Object.entries(result).map(([key, value]): [string, JsonValue] =>
-      key === 'events' ? ['details', sleepEventLines(result.events ?? [], result.dryRun)] : [key, value],
+      key === 'events'
+        ? ['details', sleepEventLines(result.events ?? [], result.dryRun)]
+        : [key, value],
     ),
   );
 }

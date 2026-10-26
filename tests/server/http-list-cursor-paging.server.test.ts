@@ -27,7 +27,12 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { listApiKeys, loadAllPredictions } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
-import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import {
+  saveCustomerNote,
+  saveDecision,
+  savePolicy,
+  saveProjectBrief,
+} from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 const ROWS = 7;
@@ -90,12 +95,21 @@ async function seedTenant(tenantId: string, count: number): Promise<void> {
       customer: `${tenantId} customer ${i}`,
       note: 'a note',
     });
-    await savePrediction(home, tenantId, { classTag: 'paging', claimText: `${tenantId} claim ${i}` });
+    await savePrediction(home, tenantId, {
+      classTag: 'paging',
+      claimText: `${tenantId} claim ${i}`,
+    });
     const { id } = await api.remember(ctx, { content: `${tenantId} held memory ${i} for review` });
     const db = openHippoDb(home);
     try {
       createApiKey(db, { tenantId, label: `${tenantId} key ${i}`, role: 'member' });
-      recordQuarantine(db, { tenantId, memoryId: id, originalScope: null, reason: 'test', actor: 'test' });
+      recordQuarantine(db, {
+        tenantId,
+        memoryId: id,
+        originalScope: null,
+        reason: 'test',
+        actor: 'test',
+      });
     } finally {
       closeHippoDb(db);
     }
@@ -139,19 +153,32 @@ async function getPage(route: ListRoute, params: Record<string, string> = {}): P
   });
   const body: JsonValue = await res.json();
   if (route.key === null) {
-    return { status: res.status, body, items: Array.isArray(body) ? body : [], next: res.headers.get('x-next-cursor') };
+    return {
+      status: res.status,
+      body,
+      items: Array.isArray(body) ? body : [],
+      next: res.headers.get('x-next-cursor'),
+    };
   }
   const record: Record<string, JsonValue> = isJsonObject(body) ? body : {};
   const list = record[route.key];
   const next = record['next_cursor'];
-  return { status: res.status, body, items: Array.isArray(list) ? list : [], next: isJsonString(next) ? next : null };
+  return {
+    status: res.status,
+    body,
+    items: Array.isArray(list) ? list : [],
+    next: isJsonString(next) ? next : null,
+  };
 }
 
 async function pageThrough(route: ListRoute, limit: number): Promise<JsonValue[][]> {
   const pages: JsonValue[][] = [];
   let cursor: string | null = null;
   do {
-    const page = await getPage(route, cursor === null ? { limit: String(limit) } : { limit: String(limit), cursor });
+    const page = await getPage(
+      route,
+      cursor === null ? { limit: String(limit) } : { limit: String(limit), cursor },
+    );
     expect(page.status).toBe(200);
     pages.push(page.items);
     cursor = page.next;
@@ -176,7 +203,12 @@ describe.each(ROUTES)('GET $path paging', (route) => {
 
   it('a malformed cursor is a 400 in the shared {error} shape', async () => {
     const objectCursor = Buffer.from(JSON.stringify({ a: 1 })).toString('base64url');
-    for (const cursor of ['not a cursor!', objectCursor, Buffer.from('[1]').toString('base64url'), '']) {
+    for (const cursor of [
+      'not a cursor!',
+      objectCursor,
+      Buffer.from('[1]').toString('base64url'),
+      '',
+    ]) {
       const page = await getPage(route, { cursor });
       expect(page.status).toBe(400);
       expect(Object.keys(page.body ?? {})).toEqual(['error']);
@@ -191,14 +223,38 @@ describe('no paging params: the body a small store got before cursors existed', 
   // Each reference is the store call the route made before paging, with the same arguments.
   const before = new Map<string, () => JsonValue | Promise<JsonValue>>([
     ['/v1/quarantine', async () => json(await api.quarantineList(ctx(), { status: 'pending' }))],
-    ['/v1/predictions', async () => json(await loadAllPredictions(home, 'default', { limit: 100 }))],
-    ['/v1/decisions', async () => json(await loadDecisions(objectsAt(home), 'default', { limit: 100 }))],
-    ['/v1/incidents', async () => json(await listObjects(objectsAt(home), INCIDENT, 'default', { limit: 100 }))],
-    ['/v1/processes', async () => json(await listObjects(objectsAt(home), PROCESS, 'default', { limit: 100 }))],
-    ['/v1/policies', async () => json(await loadPolicies(objectsAt(home), 'default', { limit: 100 }))],
-    ['/v1/skills', async () => json(await listObjects(objectsAt(home), SKILL, 'default', { limit: 100 }))],
-    ['/v1/project-briefs', async () => json(await loadProjectBriefs(objectsAt(home), 'default', { limit: 100 }))],
-    ['/v1/customer-notes', async () => json(await loadCustomerNotes(objectsAt(home), 'default', { limit: 100 }))],
+    [
+      '/v1/predictions',
+      async () => json(await loadAllPredictions(home, 'default', { limit: 100 })),
+    ],
+    [
+      '/v1/decisions',
+      async () => json(await loadDecisions(objectsAt(home), 'default', { limit: 100 })),
+    ],
+    [
+      '/v1/incidents',
+      async () => json(await listObjects(objectsAt(home), INCIDENT, 'default', { limit: 100 })),
+    ],
+    [
+      '/v1/processes',
+      async () => json(await listObjects(objectsAt(home), PROCESS, 'default', { limit: 100 })),
+    ],
+    [
+      '/v1/policies',
+      async () => json(await loadPolicies(objectsAt(home), 'default', { limit: 100 })),
+    ],
+    [
+      '/v1/skills',
+      async () => json(await listObjects(objectsAt(home), SKILL, 'default', { limit: 100 })),
+    ],
+    [
+      '/v1/project-briefs',
+      async () => json(await loadProjectBriefs(objectsAt(home), 'default', { limit: 100 })),
+    ],
+    [
+      '/v1/customer-notes',
+      async () => json(await loadCustomerNotes(objectsAt(home), 'default', { limit: 100 })),
+    ],
   ]);
 
   it.each(ROUTES.filter((r) => r.key !== null))(
@@ -214,7 +270,9 @@ describe('no paging params: the body a small store got before cursors existed', 
 
   it('/v1/auth/keys returns the same bare array, with no next-page header', async () => {
     const expected = json(
-      listApiKeys(home, { tenantId: ALL_TENANTS, active: true }).filter((k) => k.tenantId === 'default'),
+      listApiKeys(home, { tenantId: ALL_TENANTS, active: true }).filter(
+        (k) => k.tenantId === 'default',
+      ),
     );
     const page = await getPage(ROUTES[0]!);
     expect(page.status).toBe(200);
@@ -238,7 +296,9 @@ describe('rows that share a sort key', () => {
     const db = openHippoDb(home);
     try {
       // The test is about SQL ordering, so it pins the timestamps with SQL.
-      db.prepare(`UPDATE decisions SET created_at = '2026-01-01T00:00:00.000Z' WHERE tenant_id = 'default'`).run();
+      db.prepare(
+        `UPDATE decisions SET created_at = '2026-01-01T00:00:00.000Z' WHERE tenant_id = 'default'`,
+      ).run();
       db.prepare(
         `UPDATE memory_quarantine SET quarantined_at = '2026-01-01T00:00:00.000Z' WHERE tenant_id = 'default'`,
       ).run();
@@ -255,10 +315,13 @@ describe('rows that share a sort key', () => {
 });
 
 describe('limit on the routes that had none', () => {
-  it.each(['/v1/auth/keys', '/v1/quarantine'])('%s rejects a bad limit with a 400', async (path) => {
-    for (const limit of ['0', '1.5', '1001', 'abc']) {
-      const page = await getPage({ path, key: null }, { limit });
-      expect(page.status).toBe(400);
-    }
-  });
+  it.each(['/v1/auth/keys', '/v1/quarantine'])(
+    '%s rejects a bad limit with a 400',
+    async (path) => {
+      for (const limit of ['0', '1.5', '1001', 'abc']) {
+        const page = await getPage({ path, key: null }, { limit });
+        expect(page.status).toBe(400);
+      }
+    },
+  );
 });

@@ -30,7 +30,13 @@ function runHook(args: string[], input: string) {
   const traceDir = path.join(tmp, 'lock-waits');
   const res = spawnSync(process.execPath, ['--no-warnings', HIPPO_JS, ...args], {
     env: tracingLockWaits(
-      { ...process.env, HOME: tmp, USERPROFILE: tmp, HIPPO_HOME: path.join(tmp, 'global'), HIPPO_LOG: 'warn' },
+      {
+        ...process.env,
+        HOME: tmp,
+        USERPROFILE: tmp,
+        HIPPO_HOME: path.join(tmp, 'global'),
+        HIPPO_LOG: 'warn',
+      },
       traceDir,
     ),
     cwd: projectDir,
@@ -53,12 +59,16 @@ beforeEach(() => {
   fs.mkdirSync(projectDir, { recursive: true });
   initTestStore(localRoot);
   writeEntry(localRoot, {
-    ...createMemory('PINNED: always check the rollback plan before deploy', { baseHalfLifeDays: 30 }),
+    ...createMemory('PINNED: always check the rollback plan before deploy', {
+      baseHalfLifeDays: 30,
+    }),
     pinned: true,
   });
   writeEntry(
     localRoot,
-    createMemory('the postgres migration needs a rollback plan and a dry run', { baseHalfLifeDays: 30 }),
+    createMemory('the postgres migration needs a rollback plan and a dry run', {
+      baseHalfLifeDays: 30,
+    }),
   );
 });
 
@@ -70,7 +80,10 @@ afterEach(async () => {
 describe('context hook while another process holds the store write lock', () => {
   it('waits for the lock once, for the hook wait, then exits 0 with one warning', async () => {
     holder = await holdStoreWriteLock(getHippoDbPath(localRoot));
-    const payload = JSON.stringify({ session_id: 'sess-busy-1', prompt: 'postgres migration rollback plan' });
+    const payload = JSON.stringify({
+      session_id: 'sess-busy-1',
+      prompt: 'postgres migration rollback plan',
+    });
 
     const run = runHook(
       ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'],
@@ -86,7 +99,10 @@ describe('context hook while another process holds the store write lock', () => 
   });
 
   it('injects as usual once the lock is gone', () => {
-    const payload = JSON.stringify({ session_id: 'sess-busy-2', prompt: 'postgres migration rollback plan' });
+    const payload = JSON.stringify({
+      session_id: 'sess-busy-2',
+      prompt: 'postgres migration rollback plan',
+    });
     const run = runHook(
       ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'],
       payload,

@@ -1,6 +1,9 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { backfillChannel, type SlackHistoryFetcher } from '../../src/surface/connectors/slack/backfill.js';
+import {
+  backfillChannel,
+  type SlackHistoryFetcher,
+} from '../../src/surface/connectors/slack/backfill.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -9,7 +12,8 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
 
-const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
+const ctx = (root: string): FullContext =>
+  apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 
 describe('backfillChannel', () => {
   let root: string;
@@ -56,7 +60,9 @@ describe('backfillChannel', () => {
       closeHippoDb(db);
     }
 
-    expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:slack'))).toHaveLength(3);
+    expect(
+      loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:slack')),
+    ).toHaveLength(3);
   });
 
   it('resumes from the saved cursor (idempotent on rerun)', async () => {
@@ -77,6 +83,8 @@ describe('backfillChannel', () => {
     };
     await backfillChannel(ctx(root), { teamId: 'T1', channel: { id: 'C1' }, fetcher });
     await backfillChannel(ctx(root), { teamId: 'T1', channel: { id: 'C1' }, fetcher });
-    expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:slack'))).toHaveLength(1);
+    expect(
+      loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:slack')),
+    ).toHaveLength(1);
   });
 });

@@ -78,14 +78,40 @@ export async function seedLocalGroups(root: string): Promise<void> {
       source: `${IMPORTED}old.md#h2`,
       originProject: PROJECT,
     });
-    insertDormantRow(db, { entry: gone, strength: 0.01, reason: 'source-deleted', dormantAt: EVER });
+    insertDormantRow(db, {
+      entry: gone,
+      strength: 0.01,
+      reason: 'source-deleted',
+      dormantAt: EVER,
+    });
     // Started long enough ago to be past the replay window, the later one ending the earlier one's transcript window.
-    const start = { sessionId: 'compact-session', originProject: 'stale-project', trigger: 'auto', cwd: CWD };
-    startCompaction(db, TENANT, { ...start, transcriptPath: TRANSCRIPT }, new Date(Date.now() - 3 * HOUR_MS));
-    startCompaction(db, TENANT, { ...start, transcriptPath: TRANSCRIPT }, new Date(Date.now() - 2 * HOUR_MS));
+    const start = {
+      sessionId: 'compact-session',
+      originProject: 'stale-project',
+      trigger: 'auto',
+      cwd: CWD,
+    };
+    startCompaction(
+      db,
+      TENANT,
+      { ...start, transcriptPath: TRANSCRIPT },
+      new Date(Date.now() - 3 * HOUR_MS),
+    );
+    startCompaction(
+      db,
+      TENANT,
+      { ...start, transcriptPath: TRANSCRIPT },
+      new Date(Date.now() - 2 * HOUR_MS),
+    );
   });
   const s = sqliteStore(root);
-  await s.entryWrites.applyOutcome({ tenantId: TENANT, actor: ACTOR, ownScope: null, ids: [NOTE], good: true });
+  await s.entryWrites.applyOutcome({
+    tenantId: TENANT,
+    actor: ACTOR,
+    ownScope: null,
+    ids: [NOTE],
+    good: true,
+  });
   // Folds the compaction records' stale project name into the seeded one, which leaves the merge's audit row.
   await s.projectTags.merge(
     { tenantId: TENANT, actor: ACTOR },
@@ -100,15 +126,27 @@ const CUTOFFS = { since: EVER, stuckBefore: NEVER, transcriptFloor: EVER };
 export const LOCAL_GROUP_READS: readonly Read[] = [
   read('captures.textsHolding', (s) => s.captures.textsHolding(TENANT, [PLAIN], {}), PLAIN),
   read('compactionHooks.openRecords', (s) => s.compactionHooks.openRecords(TENANT, {}), TRANSCRIPT),
-  read('consolidation.entryIdsPage', (s) => s.consolidation.entryIdsPage({ limit: 3 }), /ids: \[ 'mem_/),
+  read(
+    'consolidation.entryIdsPage',
+    (s) => s.consolidation.entryIdsPage({ limit: 3 }),
+    /ids: \[ 'mem_/,
+  ),
   read(
     'consolidation.rejected',
     (s) => s.consolidation.rejected(TENANT, [rejectionDigest(REFUSED), rejectionDigest(PLAIN)]),
     "reason: 'wrong'",
   ),
   read('consolidation.particleIds', (s) => s.consolidation.particleIds(), 'mem_p_noise'),
-  read('consolidation.duplicateCandidates', (s) => s.consolidation.duplicateCandidates(), 'mem_z_twin2'),
-  read('consolidation.dirtyGraphTenants', (s) => s.consolidation.dirtyGraphTenants(), /maxPendingId: [1-9]/),
+  read(
+    'consolidation.duplicateCandidates',
+    (s) => s.consolidation.duplicateCandidates(),
+    'mem_z_twin2',
+  ),
+  read(
+    'consolidation.dirtyGraphTenants',
+    (s) => s.consolidation.dirtyGraphTenants(),
+    /maxPendingId: [1-9]/,
+  ),
   read('consolidation.dirtySummaries', (s) => s.consolidation.dirtySummaries(10), 'mem_x_child1'),
   read(
     'consolidation.unprofiledTopicSummaries',
@@ -122,7 +160,11 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
     (s) => s.learning.entriesMentioning(['deploy'], 'goal-alpha', TENANT, { limit: 50 }),
     'mem_p_plain',
   ),
-  read('learning.readEntry', (s) => s.learning.readEntry(NOTE, TENANT), 'the rollout runbook lives in the team wiki'),
+  read(
+    'learning.readEntry',
+    (s) => s.learning.readEntry(NOTE, TENANT),
+    'the rollout runbook lives in the team wiki',
+  ),
   read(
     'projectTags.originTallies',
     (s) => s.projectTags.originTallies(TENANT, IMPORTED),
@@ -143,5 +185,9 @@ export const LOCAL_GROUP_READS: readonly Read[] = [
     `cwd: '${CWD}', origin: '${PROJECT}', transcript: '${TRANSCRIPT}'`,
   ),
   read('projectTags.repairedOnce', (s) => s.projectTags.repairedOnce(), /^true$/),
-  read('learning.confirmedOutcomeTimes', (s) => s.learning.confirmedOutcomeTimes(TENANT, EVER), `'${NOTE}' =>`),
+  read(
+    'learning.confirmedOutcomeTimes',
+    (s) => s.learning.confirmedOutcomeTimes(TENANT, EVER),
+    `'${NOTE}' =>`,
+  ),
 ];

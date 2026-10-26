@@ -1,5 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, utimesSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+  existsSync,
+  utimesSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
@@ -173,7 +181,9 @@ describe('server-detect', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
-        throw new TypeError('fetch failed', { cause: Object.assign(new Error('reset'), { code: 'ECONNRESET' }) });
+        throw new TypeError('fetch failed', {
+          cause: Object.assign(new Error('reset'), { code: 'ECONNRESET' }),
+        });
       }),
     );
     try {
@@ -189,7 +199,9 @@ describe('server-detect', () => {
       );
       expect(await detectServer(home)).toBeNull();
       expect(existsSync(pidfile)).toBe(true);
-      expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain('kept: the /health probe failed');
+      expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain(
+        'kept: the /health probe failed',
+      );
     } finally {
       vi.unstubAllGlobals();
       warn.mockRestore();
@@ -201,7 +213,10 @@ describe('server-detect', () => {
     ['JSON null', 'null'],
     ['a JSON array', '[]'],
     ['a JSON number', '42'],
-    ['an object without a port', JSON.stringify({ pid: process.pid, url: 'http://127.0.0.1:1', started_at: 'x' })],
+    [
+      'an object without a port',
+      JSON.stringify({ pid: process.pid, url: 'http://127.0.0.1:1', started_at: 'x' }),
+    ],
   ])('treats a pidfile holding %s as no server, warns and unlinks it', async (_name, text) => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
@@ -229,7 +244,13 @@ describe('server-detect', () => {
       const port = await boundPort(stub);
       writeFileSync(
         pidfile,
-        JSON.stringify({ schema: 1, pid: process.pid, port, url: `http://127.0.0.1:${port}`, started_at: 'x' }),
+        JSON.stringify({
+          schema: 1,
+          pid: process.pid,
+          port,
+          url: `http://127.0.0.1:${port}`,
+          started_at: 'x',
+        }),
       );
       expect(await detectServer(home)).toBeNull();
       expect(existsSync(pidfile)).toBe(false);

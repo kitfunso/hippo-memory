@@ -12,7 +12,12 @@ let dash: ServerHandle;
 beforeEach(async () => {
   store = makeStore('hippo-dash-failure-log');
   // A session id is no tenant, so every card read under it fails.
-  dash = await serveDashboard({ hippoRoot: store.hippoRoot, port: 0, token: DASHBOARD_TOKEN, tenantId: 'sess_x' });
+  dash = await serveDashboard({
+    hippoRoot: store.hippoRoot,
+    port: 0,
+    token: DASHBOARD_TOKEN,
+    tenantId: 'sess_x',
+  });
 });
 
 afterEach(async () => {

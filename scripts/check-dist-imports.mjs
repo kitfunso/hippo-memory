@@ -27,7 +27,8 @@ function erased(node) {
   if (!clause) return false;
   if (clause.isTypeOnly) return true;
   const named = ts.isImportDeclaration(node) ? clause.namedBindings : node.exportClause;
-  const elements = named && (ts.isNamedImports(named) || ts.isNamedExports(named)) ? named.elements : [];
+  const elements =
+    named && (ts.isNamedImports(named) || ts.isNamedExports(named)) ? named.elements : [];
   return !clause.name && elements.length > 0 && elements.every((e) => e.isTypeOnly);
 }
 
@@ -35,33 +36,46 @@ function erased(node) {
 function valueNames(node) {
   if (ts.isExportDeclaration(node)) {
     if (node.isTypeOnly || !node.exportClause || !ts.isNamedExports(node.exportClause)) return [];
-    return node.exportClause.elements.filter((e) => !e.isTypeOnly).map((e) => (e.propertyName ?? e.name).text);
+    return node.exportClause.elements
+      .filter((e) => !e.isTypeOnly)
+      .map((e) => (e.propertyName ?? e.name).text);
   }
   const clause = node.importClause;
   if (!clause || clause.isTypeOnly) return [];
-  const named = clause.namedBindings && ts.isNamedImports(clause.namedBindings) ? clause.namedBindings.elements : [];
+  const named =
+    clause.namedBindings && ts.isNamedImports(clause.namedBindings)
+      ? clause.namedBindings.elements
+      : [];
   const names = named.filter((e) => !e.isTypeOnly).map((e) => (e.propertyName ?? e.name).text);
   return clause.name ? ['default', ...names] : names;
 }
 
 /** `pathToFileURL(x)`, `pathToFileURL(x).href` and `new URL(x, import.meta.url)` load what `x` names. */
 function unwrapUrl(node) {
-  if (ts.isPropertyAccessExpression(node) && node.name.text === 'href') return unwrapUrl(node.expression);
+  if (ts.isPropertyAccessExpression(node) && node.name.text === 'href')
+    return unwrapUrl(node.expression);
   const call = ts.isCallExpression(node) || ts.isNewExpression(node) ? node : null;
   const callee = call && ts.isIdentifier(call.expression) ? call.expression.text : '';
-  if ((callee === 'pathToFileURL' || callee === 'URL') && call.arguments?.length) return unwrapUrl(call.arguments[0]);
+  if ((callee === 'pathToFileURL' || callee === 'URL') && call.arguments?.length)
+    return unwrapUrl(call.arguments[0]);
   return node;
 }
 
 /** A literal path, or `path.join(root, 'dist', ...)` and `join(DIST, ...)` with literal parts after the root. */
 function targetOf(arg) {
   const node = unwrapUrl(arg);
-  if (ts.isStringLiteralLike(node)) return DIST_SPEC.test(node.text) ? { spec: node.text, fromRepo: false } : null;
-  if (!ts.isCallExpression(node) || !/^(?:path\.)?(?:join|resolve)$/.test(node.expression.getText())) return null;
+  if (ts.isStringLiteralLike(node))
+    return DIST_SPEC.test(node.text) ? { spec: node.text, fromRepo: false } : null;
+  if (
+    !ts.isCallExpression(node) ||
+    !/^(?:path\.)?(?:join|resolve)$/.test(node.expression.getText())
+  )
+    return null;
   const [first, ...rest] = node.arguments;
   if (!first || !rest.every(ts.isStringLiteralLike)) return null;
   const parts = rest.map((part) => part.text);
-  if (ts.isIdentifier(first) && first.text === 'DIST') return { spec: ['dist', ...parts].join('/'), fromRepo: true };
+  if (ts.isIdentifier(first) && first.text === 'DIST')
+    return { spec: ['dist', ...parts].join('/'), fromRepo: true };
   const at = parts.indexOf('dist');
   return at < 0 ? null : { spec: parts.slice(at).join('/'), fromRepo: true };
 }
@@ -84,7 +98,9 @@ function dynamicImport(node) {
   if (node.expression.kind === ts.SyntaxKind.ImportKeyword) return targetOf(node.arguments[0]);
   const arg = node.arguments[0];
   const isDistImport = ts.isIdentifier(node.expression) && node.expression.text === 'distImport';
-  return isDistImport && ts.isStringLiteralLike(arg) ? { spec: `dist/${arg.text}`, fromRepo: true } : null;
+  return isDistImport && ts.isStringLiteralLike(arg)
+    ? { spec: `dist/${arg.text}`, fromRepo: true }
+    : null;
 }
 
 /**
@@ -101,9 +117,15 @@ export function distImports(text, fileName) {
   const found = [];
   const visit = (node) => {
     const isStatic = ts.isImportDeclaration(node) || ts.isExportDeclaration(node);
-    if (isStatic && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier) && !erased(node)) {
+    if (
+      isStatic &&
+      node.moduleSpecifier &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      !erased(node)
+    ) {
       const spec = node.moduleSpecifier.text;
-      if (DIST_SPEC.test(spec)) found.push({ line: lineOf(node), spec, fromRepo: false, names: valueNames(node) });
+      if (DIST_SPEC.test(spec))
+        found.push({ line: lineOf(node), spec, fromRepo: false, names: valueNames(node) });
     }
     const dynamic = dynamicImport(node);
     if (dynamic) found.push({ line: lineOf(node), ...dynamic, names: boundNames(node) });
@@ -125,7 +147,12 @@ function listSources(dir) {
 /** Exports of each declaration file that carry no value, so a TypeScript import of one without `type` is no miss. */
 function typeOnlyExports(dtsFiles) {
   // Symbol flags need no lib types, and parsing the default libs cost seconds per call.
-  const program = ts.createProgram(dtsFiles, { noEmit: true, noLib: true, skipLibCheck: true, types: [] });
+  const program = ts.createProgram(dtsFiles, {
+    noEmit: true,
+    noLib: true,
+    skipLibCheck: true,
+    types: [],
+  });
   const checker = program.getTypeChecker();
   return new Map(
     dtsFiles.map((file) => {
@@ -165,7 +192,9 @@ function withTargets(repo, files) {
     const rel = relative(repo, file).replace(/\\/g, '/');
     return distImports(readFileSync(file, 'utf8'), file).flatMap((imp) => {
       const target = resolve(imp.fromRepo ? repo : dirname(file), imp.spec);
-      return target.startsWith(dist) ? [{ file: rel, isTs: TS_SOURCE.test(file), target, ...imp }] : [];
+      return target.startsWith(dist)
+        ? [{ file: rel, isTs: TS_SOURCE.test(file), target, ...imp }]
+        : [];
     });
   });
 }
@@ -187,8 +216,13 @@ export async function checkDistImports(repo, { roots = SCANNED, allowed = ALLOWE
     return { imp, gone: imp.names.filter((n) => !(n in mod)) };
   });
   const dts = (target) => target.slice(0, -extname(target).length) + '.d.ts';
-  const typed = missing.filter(({ imp, gone }) => imp.isTs && gone.length > 0 && existsSync(dts(imp.target)));
-  const types = typed.length > 0 ? typeOnlyExports([...new Set(typed.map(({ imp }) => dts(imp.target)))]) : new Map();
+  const typed = missing.filter(
+    ({ imp, gone }) => imp.isTs && gone.length > 0 && existsSync(dts(imp.target)),
+  );
+  const types =
+    typed.length > 0
+      ? typeOnlyExports([...new Set(typed.map(({ imp }) => dts(imp.target)))])
+      : new Map();
   const problems = missing.flatMap(({ imp, gone }) => {
     const { error } = loaded.get(imp.target);
     const values = gone.filter((n) => !types.get(dts(imp.target))?.has(n));
@@ -211,8 +245,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (problems.length > 0) {
     console.error(`\ndist/ imports in ${SCANNED.join(', ')} that the build no longer serves:`);
     for (const p of problems) console.error(`  ${p.file}:${p.line} -> ${p.spec}: ${p.problem}`);
-    console.error('\nFix: point the import at the file that exports the name now, often dist/index.js.\n');
+    console.error(
+      '\nFix: point the import at the file that exports the name now, often dist/index.js.\n',
+    );
     process.exit(1);
   }
-  console.log(`${checked} dist/ imports in ${SCANNED.join(', ')} load, with every value they name. OK.`);
+  console.log(
+    `${checked} dist/ imports in ${SCANNED.join(', ')} load, with every value they name. OK.`,
+  );
 }

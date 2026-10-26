@@ -68,12 +68,16 @@ export const v24: Migration = {
       `CREATE INDEX IF NOT EXISTS idx_github_event_log_memory ` +
         `ON github_event_log(memory_id) WHERE memory_id IS NOT NULL`,
     );
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_github_event_log_delivery ON github_event_log(delivery_id)`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_github_event_log_delivery ON github_event_log(delivery_id)`,
+    );
 
     db.exec(CREATE_TABLE_GITHUB_CURSORS_SQL);
 
     db.exec(CREATE_TABLE_GITHUB_DLQ_SQL);
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_github_dlq_tenant_received ON github_dlq(tenant_id, received_at)`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_github_dlq_tenant_received ON github_dlq(tenant_id, received_at)`,
+    );
 
     db.exec(CREATE_TABLE_GITHUB_INSTALLATIONS_SQL);
 

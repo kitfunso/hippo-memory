@@ -17,7 +17,8 @@ function inFixture<T>(files: Record<string, string>, body: (root: string) => T):
   }
 }
 
-const params = (n: number): string => Array.from({ length: n }, (_, i) => `p${i}: number`).join(', ');
+const params = (n: number): string =>
+  Array.from({ length: n }, (_, i) => `p${i}: number`).join(', ');
 
 describe('check-positional-params.mjs', () => {
   it('limits a declaration to five positional parameters', () => {
@@ -74,7 +75,12 @@ describe('check-positional-params.mjs', () => {
   it('reads files in nested folders but not .d.ts files or folders outside src', () => {
     const long = `export function wide(${params(6)}) {}\n`;
     inFixture(
-      { 'src/deep/er/a.ts': long, 'src/types.d.ts': long, 'scripts/job.ts': long, 'tests/a.ts': long },
+      {
+        'src/deep/er/a.ts': long,
+        'src/types.d.ts': long,
+        'scripts/job.ts': long,
+        'tests/a.ts': long,
+      },
       (root) => {
         expect(findLongLists(root).map((hit) => hit.site)).toEqual(['src/deep/er/a.ts:1 wide']);
       },
@@ -84,7 +90,11 @@ describe('check-positional-params.mjs', () => {
   it('counts the store adapters and the port like the rest of src', () => {
     const long = `export function wide(${params(6)}) {}\n`;
     inFixture(
-      { 'src/store/sqlite/a.ts': long, 'src/base/ports/store/b.ts': long, 'src/store/search-rows.ts': long },
+      {
+        'src/store/sqlite/a.ts': long,
+        'src/base/ports/store/b.ts': long,
+        'src/store/search-rows.ts': long,
+      },
       (root) => {
         expect(findLongLists(root).map((hit) => hit.site)).toEqual([
           'src/base/ports/store/b.ts:1 wide',

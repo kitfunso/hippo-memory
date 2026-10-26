@@ -19,13 +19,16 @@ function tsFiles(dir, out = []) {
 }
 
 const positional = (node) =>
-  node.parameters.filter((p) => !p.dotDotDotToken && !(ts.isIdentifier(p.name) && p.name.text === 'this')).length;
+  node.parameters.filter(
+    (p) => !p.dotDotDotToken && !(ts.isIdentifier(p.name) && p.name.text === 'this'),
+  ).length;
 
 /** The name a declaration answers to: its own, or the variable or property holding it. */
 function labelOf(node) {
   if (node.name) return node.name.getText();
   const p = node.parent;
-  if (ts.isVariableDeclaration(p) || ts.isPropertyAssignment(p) || ts.isPropertyDeclaration(p)) return p.name.getText();
+  if (ts.isVariableDeclaration(p) || ts.isPropertyAssignment(p) || ts.isPropertyDeclaration(p))
+    return p.name.getText();
   return ts.isConstructorDeclaration(node) ? 'constructor' : '(anonymous)';
 }
 
@@ -62,7 +65,9 @@ function main(args) {
   if (long.length > 0) {
     console.error(`Declarations in src/ with ${LIMIT} or more positional parameters:`);
     for (const { site, count } of long) console.error(`  ${site}: ${count}`);
-    console.error('Take one options object instead. `--list` shows every declaration with 4 or more.');
+    console.error(
+      'Take one options object instead. `--list` shows every declaration with 4 or more.',
+    );
     return 1;
   }
   console.log(`Positional parameters OK: no declaration in src/ takes ${LIMIT} or more.`);

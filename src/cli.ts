@@ -20,17 +20,30 @@ import {
   printSlackBackfillUsage,
   printSlackWorkspacesUsage,
 } from './surface/cli/usage.js';
-import { type FlagKind, type VerbFlags, flagKind, isKnownFlag, undeclaredFlags } from './surface/cli/flags.js';
+import {
+  type FlagKind,
+  type VerbFlags,
+  flagKind,
+  isKnownFlag,
+  undeclaredFlags,
+} from './surface/cli/flags.js';
 import { COMMANDS } from './surface/cli/verbs.js';
 import type { VerbSpec } from './surface/cli/verb-row.js';
 import { CliExit, fail } from './surface/cli/exit.js';
 import { withRootStoreRuntime } from './surface/open-store.js';
 
 // A command that does not honour --dry-run would ignore it and run for real.
-function dryRunRefusal(command: string, spec: VerbSpec | undefined, args: string[], flags: CliFlags): string | null {
+function dryRunRefusal(
+  command: string,
+  spec: VerbSpec | undefined,
+  args: string[],
+  flags: CliFlags,
+): string | null {
   const only = spec?.dryRun;
   const honoured =
-    only === undefined ? spec?.flags.switches?.includes('dry-run') : only !== false && only.honoured(args, flags);
+    only === undefined
+      ? spec?.flags.switches?.includes('dry-run')
+      : only !== false && only.honoured(args, flags);
   if (honoured) return null;
   const where = only ? ` outside \`hippo ${command} ${only.form}\`` : '';
   return `hippo ${command} has no --dry-run${where}, so it would run for real. Nothing was changed.`;
@@ -58,7 +71,12 @@ function setGluedFlag(flags: CliFlags, key: string, value: string, kind: FlagKin
 }
 
 /** Returns how many tokens the flag consumed: its own, plus `next` when that is its value. */
-function setSeparatedFlag(flags: CliFlags, key: string, next: string | undefined, kind: FlagKind): number {
+function setSeparatedFlag(
+  flags: CliFlags,
+  key: string,
+  next: string | undefined,
+  kind: FlagKind,
+): number {
   if (kind === 'switch' && (next === 'true' || next === 'false')) {
     // Kept as a value so main() rejects it, instead of `--pin true` pinning the text "... true".
     flags[key] = next;
@@ -135,7 +153,10 @@ const COMMAND_INDEX: ReadonlyMap<string, VerbSpec> = new Map(
 );
 
 export function usageText(): string {
-  const blocks = [...ROWS.flatMap((row) => row.usage ?? []), ...ROWS.flatMap((row) => row.listedLast ?? [])];
+  const blocks = [
+    ...ROWS.flatMap((row) => row.usage ?? []),
+    ...ROWS.flatMap((row) => row.listedLast ?? []),
+  ];
   return USAGE_HEADER + blocks.join('') + USAGE_EXAMPLES;
 }
 
@@ -203,7 +224,8 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
   // card checks its flags per subcommand, with a stricter message.
   if (command === 'card') return;
   for (const [name, advice] of Object.entries(spec?.removedFlags ?? {})) {
-    if (Object.hasOwn(flags, name)) fail(`hippo ${command}: --${name} was removed in 3.0. ${advice}`);
+    if (Object.hasOwn(flags, name))
+      fail(`hippo ${command}: --${name} was removed in 3.0. ${advice}`);
   }
   const flagNames = (keys: readonly string[]): string => keys.map((key) => `--${key}`).join(', ');
   const unknown = Object.keys(flags).filter((key) => !isKnownFlag(key));
@@ -212,13 +234,22 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
     throw new CliExit(2);
   }
   // main() refuses --dry-run by name on a verb without one, so that flag is not also called ignored.
-  const ignored = declared ? undeclaredFlags(declared, Object.keys(flags)).filter((key) => key !== 'dry-run') : unknown;
+  const ignored = declared
+    ? undeclaredFlags(declared, Object.keys(flags)).filter((key) => key !== 'dry-run')
+    : unknown;
   if (ignored.length > 0) {
-    printError(`hippo: ignoring unknown flag ${flagNames(ignored)}. A later release will reject it.`);
+    printError(
+      `hippo: ignoring unknown flag ${flagNames(ignored)}. A later release will reject it.`,
+    );
   }
 }
 
-async function main(command: string, args: string[], flags: CliFlags, hippoRoot: string): Promise<void> {
+async function main(
+  command: string,
+  args: string[],
+  flags: CliFlags,
+  hippoRoot: string,
+): Promise<void> {
   if (command === '--version' || command === '-v' || boolFlag(flags, 'version')) printVersion();
   if (command === '' || command === 'help' || command === '--help' || command === '-h') {
     printUsage();
@@ -235,7 +266,9 @@ async function main(command: string, args: string[], flags: CliFlags, hippoRoot:
   rejectNonNumericFlags(flags, spec?.flags);
   rejectValuedSwitches(flags, spec?.flags);
   checkUnknownFlags(command, flags, spec);
-  const refusal = Object.hasOwn(flags, 'dry-run') ? dryRunRefusal(command, spec, args, flags) : null;
+  const refusal = Object.hasOwn(flags, 'dry-run')
+    ? dryRunRefusal(command, spec, args, flags)
+    : null;
   if (refusal) {
     printError(refusal);
     throw new CliExit(2);
@@ -245,7 +278,8 @@ async function main(command: string, args: string[], flags: CliFlags, hippoRoot:
     printUsage();
     throw new CliExit(1);
   }
-  const run = (): void | Promise<void> => spec.run({ hippoRoot, tenantId: envTenant(), args, flags });
+  const run = (): void | Promise<void> =>
+    spec.run({ hippoRoot, tenantId: envTenant(), args, flags });
   await (spec.scoped ? (await import('./surface/cli/api-context.js')).cliRequest(run) : run());
 }
 
@@ -268,7 +302,10 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
       process.exitCode = err.code;
       return;
     }
-    printError('Error:', isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err);
+    printError(
+      'Error:',
+      isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err,
+    );
     // The message alone rarely says where it came from; debug is the level that asks for the rest.
     if (isLevelEnabled('debug')) {
       const fields = errorFields(err);
@@ -282,7 +319,11 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
 
 // bin/hippo.js calls runCli(); this keeps `node dist/cli.js` working while an import runs nothing.
 const entryPath = process.argv[1];
-if (entryPath && fs.existsSync(entryPath) && fs.realpathSync(entryPath) === fileURLToPath(import.meta.url)) {
+if (
+  entryPath &&
+  fs.existsSync(entryPath) &&
+  fs.realpathSync(entryPath) === fileURLToPath(import.meta.url)
+) {
   // runCli reports a verb's failure itself; a throw from before its try (argument parsing, the store root) lands here.
   runCli().catch((err) => {
     log.error('hippo: the command could not start', errorFields(err));

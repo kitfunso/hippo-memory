@@ -4,7 +4,12 @@ import { createRequire } from 'node:module';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  getHippoDbPath,
+  openHippoDb,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import type { ServeOptions, ServerHandle } from '../../src/server.js';
 import { serveKeyed } from './keyed-server.js';
@@ -37,7 +42,9 @@ export async function undoAll(): Promise<void> {
 }
 
 export function removeLater(root: string): string {
-  cleanups.push(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
+  cleanups.push(() =>
+    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+  );
   return root;
 }
 
@@ -91,7 +98,9 @@ export function keyFor(
   tenantId: string,
   opts: { readonly role?: 'admin' | 'member'; readonly expiresAt?: string } = {},
 ): { keyId: string; plaintext: string } {
-  return onDb(root, (db) => createApiKey(db, { tenantId, label: `executor-${tenantId}`, role: 'admin', ...opts }));
+  return onDb(root, (db) =>
+    createApiKey(db, { tenantId, label: `executor-${tenantId}`, role: 'admin', ...opts }),
+  );
 }
 
 export const jsonHeaders = (token?: string): Record<string, string> =>
@@ -99,12 +108,21 @@ export const jsonHeaders = (token?: string): Record<string, string> =>
     ? { 'content-type': 'application/json' }
     : { 'content-type': 'application/json', authorization: `Bearer ${token}` };
 
-export function postText(server: ServerHandle, path: string, body: string, token?: string): Promise<Response> {
+export function postText(
+  server: ServerHandle,
+  path: string,
+  body: string,
+  token?: string,
+): Promise<Response> {
   return fetch(`${server.url}${path}`, { method: 'POST', headers: jsonHeaders(token), body });
 }
 
-export const post = (server: ServerHandle, path: string, body: JsonValue, token?: string): Promise<Response> =>
-  postText(server, path, JSON.stringify(body), token);
+export const post = (
+  server: ServerHandle,
+  path: string,
+  body: JsonValue,
+  token?: string,
+): Promise<Response> => postText(server, path, JSON.stringify(body), token);
 
 export function get(server: ServerHandle, path: string, token?: string): Promise<Response> {
   return fetch(`${server.url}${path}`, { headers: jsonHeaders(token) });
@@ -148,13 +166,18 @@ export function watched(inner: SqliteExecutor) {
 
 /** A worker-backed store whose threads wait on the write lock for as long as the test holds it. */
 export function patientStore(root: string, opts: ExecutorOptions = {}) {
-  const { executor, ops, sent } = watched(createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS, ...opts }));
+  const { executor, ops, sent } = watched(
+    createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS, ...opts }),
+  );
   return { executor, ops, sent, store: workerSqliteStore(root, executor) };
 }
 
 /** What differs between two stores by construction: generated ids, key ids and secrets, clock readings, and what is computed from a clock reading. */
 export function scrub(text: string, keyIds: readonly string[] = []): string {
-  const withoutKeys = keyIds.reduce((soFar, keyId, index) => soFar.replaceAll(keyId, `<key ${index}>`), text);
+  const withoutKeys = keyIds.reduce(
+    (soFar, keyId, index) => soFar.replaceAll(keyId, `<key ${index}>`),
+    text,
+  );
   return withoutKeys
     .replace(/hk_[a-z0-9]{8,}(\.[a-z0-9]+)?/g, '<minted key>')
     .replace(/(sem|mem)_[0-9a-f]+/g, '<memory>')
@@ -169,13 +192,17 @@ const PER_REQUEST_HEADERS = new Set(['date', 'x-request-id', 'content-length']);
 export async function seen(label: string, res: Response, keyIds: readonly string[] = []) {
   const kept = [...res.headers].filter(([name]) => !PER_REQUEST_HEADERS.has(name));
   // The page cursor encodes a clock reading and a row id.
-  const headers = kept.map(([name, value]) => [name, name === 'x-next-cursor' ? '<cursor>' : value]).sort();
+  const headers = kept
+    .map(([name, value]) => [name, name === 'x-next-cursor' ? '<cursor>' : value])
+    .sort();
   return { label, status: res.status, headers, body: scrub(await res.text(), keyIds) };
 }
 
 export function auditRows(root: string, keyIds: readonly string[]): string[] {
   const rows = onDb(root, (db) =>
-    db.prepare('SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id').all(),
+    db
+      .prepare('SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id')
+      .all(),
   );
   return rows.map((row) => scrub(JSON.stringify(row), keyIds));
 }

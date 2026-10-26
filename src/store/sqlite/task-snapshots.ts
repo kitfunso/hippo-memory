@@ -9,7 +9,11 @@ import { TASK_SNAPSHOT_COLUMNS, type TaskSnapshotRow, rowToTaskSnapshot } from '
 import type { TaskSnapshot, SnapshotInput } from '../../base/ports/store/sessions.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror } from './mirrors.js';
 import type { StoreFiles } from './open.js';
-import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../../base/ports/store/types.js';
+import {
+  continuityStamp,
+  type ContinuityKey,
+  type ContinuityStamp,
+} from '../../base/ports/store/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { handleStamp } from './handle-clock.js';

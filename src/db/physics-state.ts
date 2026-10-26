@@ -43,10 +43,14 @@ interface PhysicsRow {
   temperature: number;
   last_simulation: string;
 }
-const PHYSICS_COLUMNS = 'memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation';
+const PHYSICS_COLUMNS =
+  'memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation';
 
 /** The stored particles of `memoryIds`; an empty list reads nothing. */
-export function loadPhysicsState(db: DatabaseSyncLike, memoryIds: readonly string[]): Map<string, PhysicsParticle> {
+export function loadPhysicsState(
+  db: DatabaseSyncLike,
+  memoryIds: readonly string[],
+): Map<string, PhysicsParticle> {
   const rows: PhysicsRow[] = [];
   // Chunked so a whole-store candidate list stays under SQLite's bound-parameter limit.
   for (const chunk of chunked(memoryIds)) {
@@ -62,7 +66,9 @@ export function loadPhysicsState(db: DatabaseSyncLike, memoryIds: readonly strin
 
 /** Every stored particle, for a caller that has checked the count is small. */
 export function loadAllPhysicsState(db: DatabaseSyncLike): Map<string, PhysicsParticle> {
-  return particlesOf(cachedStatement(db, `SELECT ${PHYSICS_COLUMNS} FROM memory_physics`).all() as PhysicsRow[]);
+  return particlesOf(
+    cachedStatement(db, `SELECT ${PHYSICS_COLUMNS} FROM memory_physics`).all() as PhysicsRow[],
+  );
 }
 
 function particlesOf(rows: readonly PhysicsRow[]): Map<string, PhysicsParticle> {
@@ -87,7 +93,9 @@ export function physicsSpeedSum(db: DatabaseSyncLike) {
   let count = 0;
   let speedSum = 0;
   // SAFETY: the SELECT names exactly this one column.
-  const rows = db.prepare('SELECT velocity_blob FROM memory_physics ORDER BY rowid').iterate() as Iterable<{
+  const rows = db
+    .prepare('SELECT velocity_blob FROM memory_physics ORDER BY rowid')
+    .iterate() as Iterable<{
     velocity_blob: Uint8Array;
   }>;
   for (const row of rows) {
@@ -150,7 +158,10 @@ export function resetAllPhysicsState(
   return resetPhysicsFromSeeds(db, seedsOf(entries, embeddingIndex), model, now);
 }
 
-function* seedsOf(entries: Iterable<MemoryEntry>, embeddingIndex: Record<string, number[]>): Generator<ParticleSeed> {
+function* seedsOf(
+  entries: Iterable<MemoryEntry>,
+  embeddingIndex: Record<string, number[]>,
+): Generator<ParticleSeed> {
   for (const entry of entries) {
     const embedding = embeddingIndex[entry.id];
     if (embedding && embedding.length > 0) yield [entry, embedding];

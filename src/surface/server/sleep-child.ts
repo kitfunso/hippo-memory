@@ -36,7 +36,10 @@ function failed<E>(err: E): SleepReply<never> {
 }
 
 /** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global store. */
-function sleepJob({ hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>): Promise<SleepResult> {
+function sleepJob({
+  hippoRoot,
+  ...job
+}: Extract<SleepJob, { kind: 'sleep' }>): Promise<SleepResult> {
   const store = storeAt(hippoRoot);
   const reach = contextReach(
     defaultReach(hippoRoot, store, undefined, storeAt, childHost),
@@ -61,7 +64,11 @@ async function saveGraphAfter(job: SleepMessage): Promise<void> {
 function sendReply(reply: SleepReply<JobResult>): Promise<number> {
   return new Promise((resolve) => {
     process.send?.(reply, (sendErr: Error | null) => {
-      if (sendErr) log.error(`sleep child: sending the reply failed: ${errorMessage(sendErr)}`, errorFields(sendErr));
+      if (sendErr)
+        log.error(
+          `sleep child: sending the reply failed: ${errorMessage(sendErr)}`,
+          errorFields(sendErr),
+        );
       resolve(sendErr ? 1 : 0);
     });
   });

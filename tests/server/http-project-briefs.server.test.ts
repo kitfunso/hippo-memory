@@ -40,7 +40,10 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-async function createBrief(body: { repo: string; summary: string }, key: CreateApiKeyResult = apiKey) {
+async function createBrief(
+  body: { repo: string; summary: string },
+  key: CreateApiKeyResult = apiKey,
+) {
   return fetch(`${handle.url}/v1/project-briefs`, {
     method: 'POST',
     headers: authHeaders(key),
@@ -70,7 +73,9 @@ describe('HTTP /v1/project-briefs (repo-scoped first-class object)', () => {
     );
     expect(padded.briefs.length).toBe(2); // the filter is trimmed before the lookup
     const active = await jsonAs<BriefListResponse>(
-      await fetch(`${handle.url}/v1/project-briefs?repo=r&status=active`, { headers: authHeaders(apiKey) }),
+      await fetch(`${handle.url}/v1/project-briefs?repo=r&status=active`, {
+        headers: authHeaders(apiKey),
+      }),
     );
     expect(active.briefs.length).toBe(1);
     expect(active.briefs[0].version).toBe(2);

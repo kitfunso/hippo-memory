@@ -56,7 +56,11 @@ export function makeStore(prefix: string): TmpStore {
 }
 
 /** Writes one memory in project `alpha`, five days old with a 100 day half-life (strong, not at risk), unless `over` says otherwise. */
-export function seed(hippoRoot: string, content: string, over: Partial<MemoryEntry> = {}): MemoryEntry {
+export function seed(
+  hippoRoot: string,
+  content: string,
+  over: Partial<MemoryEntry> = {},
+): MemoryEntry {
   const entry: MemoryEntry = {
     ...createMemory(content, { tags: [] }),
     originProject: 'alpha',
@@ -90,7 +94,11 @@ export interface DashboardView {
 
 /** The dashboard's reads and snapshot clock over the store under `hippoRoot`, as the reader thread builds them;
  * `reads.close` releases the connection the clock reads its commit signal on. */
-export function dashboardOf(hippoRoot: string, now: () => number, cacheClock?: () => number): DashboardView {
+export function dashboardOf(
+  hippoRoot: string,
+  now: () => number,
+  cacheClock?: () => number,
+): DashboardView {
   const reads = sqliteDashboardReads(hippoRoot);
   return { reads, clock: createSnapshotClock(reads, now, cacheClock) };
 }
@@ -99,8 +107,14 @@ export function dashboardOf(hippoRoot: string, now: () => number, cacheClock?: (
 export const DASHBOARD_TOKEN = 'test-dashboard-token';
 
 /** The `Cookie` header a browser holds after opening the dashboard on `port` with `token`. */
-export function sessionCookie(port: number, token: string = DASHBOARD_TOKEN, issuedAtMs: number = Date.now()): string {
-  const mac = createHmac('sha256', token).update(`hippo-dashboard-session:${port}:${issuedAtMs}`).digest('hex');
+export function sessionCookie(
+  port: number,
+  token: string = DASHBOARD_TOKEN,
+  issuedAtMs: number = Date.now(),
+): string {
+  const mac = createHmac('sha256', token)
+    .update(`hippo-dashboard-session:${port}:${issuedAtMs}`)
+    .digest('hex');
   return `hippo_dashboard_${port}=${issuedAtMs}.${mac}`;
 }
 
@@ -138,7 +152,12 @@ export interface CallOptions {
   body?: string;
 }
 
-export function call(port: number, method: string, path: string, opts: CallOptions = {}): Promise<Reply> {
+export function call(
+  port: number,
+  method: string,
+  path: string,
+  opts: CallOptions = {},
+): Promise<Reply> {
   return new Promise((resolve, reject) => {
     const headers = { cookie: sessionCookie(port), ...opts.headers };
     const req = httpRequest({ host: '127.0.0.1', port, path, method, headers }, (res) => {
@@ -169,7 +188,10 @@ export function postJson(
   payload: Json = {},
   headers: Record<string, string> = {},
 ): Promise<Reply> {
-  return call(port, 'POST', path, { headers: { ...JSON_HEADERS, ...headers }, body: JSON.stringify(payload) });
+  return call(port, 'POST', path, {
+    headers: { ...JSON_HEADERS, ...headers },
+    body: JSON.stringify(payload),
+  });
 }
 
 /** Parses a reply body; the caller names the shape it expects from the wire contract. */

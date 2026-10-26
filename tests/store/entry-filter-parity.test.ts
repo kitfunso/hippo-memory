@@ -26,7 +26,12 @@ oneRequestPerTest();
 const at = (minute: number): string => new Date(Date.UTC(2026, 2, 1, 0, minute)).toISOString();
 
 function row(id: string, minute: number, over: Partial<MemoryEntry> = {}): MemoryEntry {
-  return { ...createMemory(`note ${id}`, { tenantId: TENANT_A }), id: `mem_${id}`, created: at(minute), ...over };
+  return {
+    ...createMemory(`note ${id}`, { tenantId: TENANT_A }),
+    id: `mem_${id}`,
+    created: at(minute),
+    ...over,
+  };
 }
 
 const IMPORTED = 'agent-memory:claude:p/';
@@ -35,13 +40,22 @@ const DIGEST = { source: 'session-digest', tags: ['session-digest'] };
 // Each field's edges: the byte after a prefix, case and wildcard refs, superseded and kind spreads, ties on created.
 const ROWS: readonly MemoryEntry[] = [
   row('f01', 1, { source: 'cli', tags: ['deploy'] }),
-  row('f02', 2, { source: `${IMPORTED}a.md#h`, originProject: 'alpha', tags: ['claude-code-memory'] }),
+  row('f02', 2, {
+    source: `${IMPORTED}a.md#h`,
+    originProject: 'alpha',
+    tags: ['claude-code-memory'],
+  }),
   row('f03', 3, { source: `${IMPORTED}b.md#h`, originProject: 'beta', supersededBy: 'mem_f01' }),
   row('f04', 4, { source: 'agent-memorz', originProject: 'alpha' }),
   row('f05', 5, { ...DIGEST, sourceSessionId: 's1' }),
   row('f06', 6, { source: 'session-digest', tags: ['other'], sourceSessionId: 's2' }),
   row('f07', 7, { source: 'cli', tags: ['session-digest'] }),
-  row('f08', 8, { kind: 'raw', artifactRef: 'vault:notes:a.md', sourceSessionId: 's1', originProject: 'alpha' }),
+  row('f08', 8, {
+    kind: 'raw',
+    artifactRef: 'vault:notes:a.md',
+    sourceSessionId: 's1',
+    originProject: 'alpha',
+  }),
   row('f09', 9, { kind: 'raw', artifactRef: 'vault:Notes:b.md', sourceSessionId: 's1' }),
   row('f10', 10, { kind: 'raw', artifactRef: 'vault:notesX:c.md', sourceSessionId: 's2' }),
   row('f11', 11, { kind: 'raw', sourceSessionId: 's1', originProject: 'beta' }),
@@ -53,7 +67,13 @@ const ROWS: readonly MemoryEntry[] = [
   row('f16', 16, { source: `${IMPORTED}日本.md` }),
   row('f17', 17, { source: 'cli' }),
   row('f18', 18, { source: 'cli' }),
-  row('g01', 2, { ...DIGEST, tenantId: TENANT_B, kind: 'raw', sourceSessionId: 's1', originProject: 'alpha' }),
+  row('g01', 2, {
+    ...DIGEST,
+    tenantId: TENANT_B,
+    kind: 'raw',
+    sourceSessionId: 's1',
+    originProject: 'alpha',
+  }),
   row('g02', 3, { source: `${IMPORTED}a.md#h`, tenantId: TENANT_B }),
 ];
 
@@ -61,7 +81,12 @@ const DORMANT: readonly MemoryEntry[] = [
   row('d01', 20, { source: `${IMPORTED}gone.md#h`, originProject: 'alpha', tags: ['x'] }),
   row('d02', 21, { source: 'cli', sourceSessionId: 's1' }),
   row('d03', 22, { source: `${IMPORTED}gone.md#h`, originProject: 'alpha', tenantId: TENANT_B }),
-  row('d04', 23, { source: `${IMPORTED}old.md#h`, originProject: 'beta', kind: 'raw', supersededBy: 'mem_f01' }),
+  row('d04', 23, {
+    source: `${IMPORTED}old.md#h`,
+    originProject: 'beta',
+    kind: 'raw',
+    supersededBy: 'mem_f01',
+  }),
 ];
 
 /** The rows, then those the writer cannot make: tags that are a JSON string or not JSON, an empty superseded_by. */
@@ -102,10 +127,21 @@ const FILTERS = {
   'two kinds': { tenantId: TENANT_A, kinds: ['distilled', 'superseded'] },
   live: { tenantId: TENANT_A, live: true },
   session: { tenantId: TENANT_A, sessionId: 's1' },
-  'assemble raws': { tenantId: TENANT_A, kinds: ['raw'], live: true, sessionId: 's1', origins: ['', 'alpha'] },
+  'assemble raws': {
+    tenantId: TENANT_A,
+    kinds: ['raw'],
+    live: true,
+    sessionId: 's1',
+    origins: ['', 'alpha'],
+  },
   digests: { tenantId: TENANT_A, source: 'session-digest', tag: 'session-digest', live: true },
   'vault raws': { tenantId: TENANT_A, kinds: ['raw'], artifactRefPrefix: 'vault:notes:' },
-  'churn rows': { tenantId: TENANT_A, origins: ['alpha'], live: true, kinds: ['distilled', 'superseded'] },
+  'churn rows': {
+    tenantId: TENANT_A,
+    origins: ['alpha'],
+    live: true,
+    kinds: ['distilled', 'superseded'],
+  },
   'merge rows': { tenantId: TENANT_A, origins: [''], live: true, sourcePrefix: 'consolidation' },
   'imported rows': { tenantId: TENANT_A, sourcePrefix: 'agent-memory:', live: true },
 } satisfies Readonly<Record<string, EntryFilter>>;
@@ -139,7 +175,8 @@ describe('reports.entriesWhere', () => {
     kept = new Map(
       named.map(([name], i) => {
         const outcome = sqlite.outcomes[i];
-        if (outcome === undefined || !('value' in outcome)) throw new Error(`${name} did not resolve`);
+        if (outcome === undefined || !('value' in outcome))
+          throw new Error(`${name} did not resolve`);
         const rows = Array.isArray(outcome.value) ? outcome.value : outcome.value.entries;
         return [name, rows.map((e) => e.id)];
       }),
@@ -148,15 +185,19 @@ describe('reports.entriesWhere', () => {
 
   afterAll(() => rmSync(fixture.dir, { recursive: true, force: true }));
 
-  it.each(Object.keys(FILTERS))('%s keeps rows, and newest first is oldest first reversed', (name) => {
-    const oldest = kept.get(`${name} oldest`) ?? [];
-    expect(oldest.length > 0).toBe(!EMPTY.has(name));
-    expect(kept.get(`${name} newest`)).toEqual([...oldest].reverse());
-    expect(kept.get(`${name} first page`)).toEqual(oldest.slice(0, 3));
-  });
+  it.each(Object.keys(FILTERS))(
+    '%s keeps rows, and newest first is oldest first reversed',
+    (name) => {
+      const oldest = kept.get(`${name} oldest`) ?? [];
+      expect(oldest.length > 0).toBe(!EMPTY.has(name));
+      expect(kept.get(`${name} newest`)).toEqual([...oldest].reverse());
+      expect(kept.get(`${name} first page`)).toEqual(oldest.slice(0, 3));
+    },
+  );
 
   it('reads each edge as the field means it', () => {
-    const ids = (name: string): string[] => (kept.get(`${name} oldest`) ?? []).map((id) => id.slice(4));
+    const ids = (name: string): string[] =>
+      (kept.get(`${name} oldest`) ?? []).map((id) => id.slice(4));
     expect(ids('ref prefix')).toEqual(['f08']);
     expect(ids('tag a JSON string holds')).toEqual(['f02']);
     expect(ids('prefix')).toEqual(['f02', 'f03', 'f16']);
@@ -183,7 +224,12 @@ describe('dormant snapshots under the same filter', () => {
     const db = openHippoDb(fixture.dir);
     try {
       const every = dormantSnapshotsWhere(db, { tenantId: ALL_TENANTS });
-      expect(every.map((snap) => snap.entry.id)).toEqual(['mem_d01', 'mem_d02', 'mem_d04', 'mem_d03']);
+      expect(every.map((snap) => snap.entry.id)).toEqual([
+        'mem_d01',
+        'mem_d02',
+        'mem_d04',
+        'mem_d03',
+      ]);
       const kept = (name: keyof typeof FILTERS): string[] =>
         dormantSnapshotsWhere(db, FILTERS[name]).map((snap) => snap.entry.id);
       expect(kept('one tenant')).toEqual(['mem_d01', 'mem_d02', 'mem_d04']);

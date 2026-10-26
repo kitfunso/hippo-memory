@@ -2,7 +2,11 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { remember } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { ingestEvent, type IngestEvent, type IngestInput } from '../../src/surface/connectors/github/ingest.js';
+import {
+  ingestEvent,
+  type IngestEvent,
+  type IngestInput,
+} from '../../src/surface/connectors/github/ingest.js';
 import type { IngestResult } from '../../src/surface/connectors/ingest.js';
 import { computeIdempotencyKey } from '../../src/surface/connectors/github/signature.js';
 import { issueEventToRememberOpts } from '../../src/surface/connectors/github/transform.js';
@@ -19,7 +23,8 @@ import { loadAllEntries } from '../_helpers/root-forms.js';
 
 // -- Test helpers ----------------------------------------------------------
 
-const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' });
+const ctx = (root: string): FullContext =>
+  apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' });
 
 function makeIssueEvent(overrides: Partial<GitHubIssueEvent['issue']> = {}): GitHubIssueEvent {
   return {
@@ -102,13 +107,19 @@ interface LostRace {
 /** The second worker's write of the same issue event, run on a scratch store so its rows can be copied in under a held lock. */
 async function storeAsOtherWorker(scratch: string, { event }: IngestInput): Promise<IngestResult> {
   const opts = event.eventName === 'issues' ? issueEventToRememberOpts(event.payload) : null;
-  if (event.eventName !== 'issues' || !opts) throw new Error('the raced event is an issue with a body');
+  if (event.eventName !== 'issues' || !opts)
+    throw new Error('the raced event is an issue with a body');
   const { issue, repository } = event.payload;
   const idempotencyKey = computeIdempotencyKey(
     `github://${repository?.full_name}/issue/${issue.number}`,
     issue.updated_at ?? null,
   );
-  const logged = { connector: 'github', idempotencyKey, deliveryId: 'd-other-worker', eventName: 'issues' } as const;
+  const logged = {
+    connector: 'github',
+    idempotencyKey,
+    deliveryId: 'd-other-worker',
+    eventName: 'issues',
+  } as const;
   const stored = await remember(ctx(scratch), { ...opts, untrusted: true, event: logged });
   return {
     status: stored.duplicate ? 'skipped_duplicate' : 'ingested',
@@ -169,7 +180,12 @@ describe('ingestEvent', () => {
           `SELECT idempotency_key, delivery_id, event_name, memory_id FROM github_event_log WHERE idempotency_key = ?`,
         )
         .get(idempotencyKey) as
-        | { idempotency_key: string; delivery_id: string; event_name: string; memory_id: string | null }
+        | {
+            idempotency_key: string;
+            delivery_id: string;
+            event_name: string;
+            memory_id: string | null;
+          }
         | undefined;
       expect(row?.delivery_id).toBe('d-1');
       expect(row?.event_name).toBe('issues');
@@ -228,9 +244,9 @@ describe('ingestEvent', () => {
     try {
       const key = computeIdempotencyKey('github://acme/demo/issue/42', null);
       // SAFETY: the SELECT explicitly lists memory_id, so the row shape matches.
-      const row = db.prepare(`SELECT memory_id FROM github_event_log WHERE idempotency_key = ?`).get(key) as
-        | { memory_id: string | null }
-        | undefined;
+      const row = db
+        .prepare(`SELECT memory_id FROM github_event_log WHERE idempotency_key = ?`)
+        .get(key) as { memory_id: string | null } | undefined;
       expect(row?.memory_id).toBeNull();
     } finally {
       closeHippoDb(db);
@@ -319,11 +335,19 @@ describe('ingestEvent', () => {
     const rawBody = JSON.stringify(payload);
     const event: IngestEvent = { eventName: 'issues', payload };
 
-    const r1 = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'attacker-replay-uuid-1' });
+    const r1 = await ingestEvent(ctx(root), {
+      event,
+      rawBody,
+      deliveryId: 'attacker-replay-uuid-1',
+    });
     expect(r1.status).toBe('ingested');
 
     // Same signed body, different (unsigned, attacker-controlled) delivery UUID.
-    const r2 = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'attacker-replay-uuid-2' });
+    const r2 = await ingestEvent(ctx(root), {
+      event,
+      rawBody,
+      deliveryId: 'attacker-replay-uuid-2',
+    });
     expect(r2.status).toBe('duplicate');
     expect(r2.memoryId).toBe(r1.memoryId);
   });

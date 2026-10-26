@@ -64,13 +64,20 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     // 8-entry pool. strong=0 is a top lexical hit; weak=7 is the answer: lexically last
     // but graph-adjacent (1-hop) to strong.
     const strong = mem(home, T, 'primary topic strongly matched by the query terms here');
-    const distractors = [1, 2, 3, 4, 5, 6].map((i) => mem(home, T, `distractor number ${i} mid pool lexical`));
+    const distractors = [1, 2, 3, 4, 5, 6].map((i) =>
+      mem(home, T, `distractor number ${i} mid pool lexical`),
+    );
     const weak = mem(home, T, 'orthogonal wording the query barely matches zzz');
     const entries: MemoryEntry[] = [strong, ...distractors, weak];
 
     const es = ent(home, T, strong, 'STRONG');
     const ew = ent(home, T, weak, 'WEAK');
-    insertRelationAt(home, T, { fromEntityId: es, toEntityId: ew, relType: 'supersedes', memoryId: strong.id });
+    insertRelationAt(home, T, {
+      fromEntityId: es,
+      toEntityId: ew,
+      relType: 'supersedes',
+      memoryId: strong.id,
+    });
 
     // Lexical rankings: strong rank1 ... weak rank8 (last) in BOTH streams.
     const bm25Ranked = [0, 1, 2, 3, 4, 5, 6, 7];
@@ -85,11 +92,18 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     // from strong(0). seedCount=3 keeps weak a non-seed.
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3);
     expect(seeds.map((s) => s.index)).not.toContain(7); // weak is NOT a seed
-    const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
+    const graphRanked = await graphRankStream(entries, seeds, {
+      store: sqliteStore(home),
+      tenantId: T,
+    });
     expect(graphRanked).toContain(7); // the graph stream surfaces weak
 
     // 3-list fusion lifts weak into top-5.
-    const order3 = fusedOrder(entries.length, [bm25Ranked, cosineRanked, graphRanked], [BM25_W, DENSE_W, 0.5]);
+    const order3 = fusedOrder(
+      entries.length,
+      [bm25Ranked, cosineRanked, graphRanked],
+      [BM25_W, DENSE_W, 0.5],
+    );
     const rank3 = order3.indexOf(7);
     expect(rank3).toBeLessThan(5); // now in top-5
     expect(rank3).toBeLessThan(rank2); // strictly improved
@@ -104,7 +118,10 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     const cosineRanked = [0, 1, 2, 3, 4];
 
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3);
-    const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
+    const graphRanked = await graphRankStream(entries, seeds, {
+      store: sqliteStore(home),
+      tenantId: T,
+    });
     expect(graphRanked).toEqual([]); // no graph -> empty -> wiring skips the 3rd list
 
     const order2 = fusedOrder(entries.length, [bm25Ranked, cosineRanked], [BM25_W, DENSE_W]);
@@ -123,16 +140,28 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     // Graph edge: a strong seed (mids[0], index 1) -> adjacent (index 5). The ANSWER has no path.
     const eSeed = ent(home, T, mids[0], 'SEED');
     const eAdj = ent(home, T, adjacent, 'ADJ');
-    insertRelationAt(home, T, { fromEntityId: eSeed, toEntityId: eAdj, relType: 'supersedes', memoryId: mids[0].id });
+    insertRelationAt(home, T, {
+      fromEntityId: eSeed,
+      toEntityId: eAdj,
+      relType: 'supersedes',
+      memoryId: mids[0].id,
+    });
 
     const bm25Ranked = [0, 1, 2, 3, 4, 5]; // answer rank1, adjacent rank6 (tail)
     const cosineRanked = [0, 1, 2, 3, 4, 5];
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3); // top-3: 0,1,2 ; adjacent(5) NOT a seed
-    const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
+    const graphRanked = await graphRankStream(entries, seeds, {
+      store: sqliteStore(home),
+      tenantId: T,
+    });
     expect(graphRanked).toEqual([5]); // the graph IS populated and boosts the distractor, its only reach
 
     const order2 = fusedOrder(entries.length, [bm25Ranked, cosineRanked], [BM25_W, DENSE_W]);
-    const order3 = fusedOrder(entries.length, [bm25Ranked, cosineRanked, graphRanked], [BM25_W, DENSE_W, 0.5]);
+    const order3 = fusedOrder(
+      entries.length,
+      [bm25Ranked, cosineRanked, graphRanked],
+      [BM25_W, DENSE_W, 0.5],
+    );
     expect(order2[0]).toBe(0); // answer is rank 1 under 2-stream
     expect(order3[0]).toBe(0); // ...and STILL rank 1 under 3-stream (no displacement)
     expect(order3).toEqual([0, 1, 5, 2, 3, 4]); // boosted distractor rose from 6th to 3rd, not to the top
@@ -143,11 +172,16 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     const bm25Ranked = [0, 1, 2, 3];
     const cosineRanked = [3, 2, 1, 0];
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 2);
-    const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
+    const graphRanked = await graphRankStream(entries, seeds, {
+      store: sqliteStore(home),
+      tenantId: T,
+    });
     expect(graphRanked).toEqual([]);
 
     // The wiring's skip branch: rrfFuse over the 2 lists. Identical scores either way.
-    const twoList = rrfFuse([bm25Ranked, cosineRanked], [BM25_W, DENSE_W], { absentRank: entries.length + 1 });
+    const twoList = rrfFuse([bm25Ranked, cosineRanked], [BM25_W, DENSE_W], {
+      absentRank: entries.length + 1,
+    });
     const order = [...twoList.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([i]) => i);
     // Symmetric reverse lists + equal-ish weights -> deterministic tie-broken order.
     expect(order.length).toBe(4);

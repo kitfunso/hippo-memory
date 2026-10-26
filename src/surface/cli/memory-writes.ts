@@ -192,12 +192,16 @@ function servedReason(err: Error): string {
 
 function serverWrites(hippoRoot: string, server: ServerInfo, local: MemoryWrites): MemoryWrites {
   const apiKey = callerKey(hippoRoot);
-  const send = <T>(request: () => Promise<T>, refused: Refused, fallBack: () => Promise<T>): Promise<T> =>
-    sendOrFallBack(hippoRoot, server, { request, refused, fallBack });
+  const send = <T>(
+    request: () => Promise<T>,
+    refused: Refused,
+    fallBack: () => Promise<T>,
+  ): Promise<T> => sendOrFallBack(hippoRoot, server, { request, refused, fallBack });
   return {
     remember: (request) =>
       send(
-        async () => relayed(server, await client.postRemember(server.url, apiKey, relayedRequest(request))),
+        async () =>
+          relayed(server, await client.postRemember(server.url, apiKey, relayedRequest(request))),
         passOn,
         () => local.remember(request),
       ),
@@ -246,7 +250,11 @@ interface ServedCall<T> {
 
 /** Sends one write. A request that never left runs on the store and heals the stale pidfile; one that may have landed
  * is never replayed, as every write here is non-idempotent. */
-async function sendOrFallBack<T>(hippoRoot: string, server: ServerInfo, call: ServedCall<T>): Promise<T> {
+async function sendOrFallBack<T>(
+  hippoRoot: string,
+  server: ServerInfo,
+  call: ServedCall<T>,
+): Promise<T> {
   try {
     return await call.request();
   } catch (err) {

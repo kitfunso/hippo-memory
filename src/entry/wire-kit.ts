@@ -29,7 +29,10 @@ export type WireStrengthInputs = Pick<
   | 'outcome_negative'
 >;
 
-export function createMemoryWire(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryWire {
+export function createMemoryWire(
+  content: string,
+  options: Partial<CreateMemoryOptions> = {},
+): MemoryWire {
   return toWire(createMemory(content, options));
 }
 

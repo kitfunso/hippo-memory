@@ -141,11 +141,10 @@ function settleFailureOutcome(
   requestId: string,
   outcome: FailureOutcome,
 ): void {
-  cachedStatement(db, `UPDATE failure_log SET outcome = ? WHERE tenant_id = ? AND request_id = ?`).run(
-    outcome,
-    tenantId,
-    requestId,
-  );
+  cachedStatement(
+    db,
+    `UPDATE failure_log SET outcome = ? WHERE tenant_id = ? AND request_id = ?`,
+  ).run(outcome, tenantId, requestId);
 }
 
 /** The tenant's rated failures in id order, the ones before the window too: they decide which session hit first. */
@@ -156,26 +155,38 @@ function ratedFailures(db: DatabaseSyncLike, tenantId: string): RatedFailure[] {
      WHERE tenant_id = ? AND session_id IS NOT NULL AND sig_hash IS NOT NULL
        AND outcome IN (SELECT value FROM json_each(?))
      ORDER BY id`,
-  ).all(tenantId, JSON.stringify(RATED_OUTCOMES)) as Array<{ ts: string; session_id: string; sig_hash: string }>;
+  ).all(tenantId, JSON.stringify(RATED_OUTCOMES)) as Array<{
+    ts: string;
+    session_id: string;
+    sig_hash: string;
+  }>;
   return rows.map((r) => ({ ts: r.ts, sessionId: r.session_id, sigHash: r.sig_hash }));
 }
 
 /** Failed tool calls logged since `sinceIso`, in every tenant; throws when the table is missing. */
 export function countFailuresSince(db: DatabaseSyncLike, sinceIso: string): number {
-  const row = cachedStatement(db, `SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(sinceIso) as
-    | { n: number }
-    | undefined;
+  const row = cachedStatement(db, `SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(
+    sinceIso,
+  ) as { n: number } | undefined;
   return Number(row?.n ?? 0);
 }
 
 /** Sum the failure log for one tenant since `sinceIso`. */
-export function summarizeFailures(db: DatabaseSyncLike, tenantId: string, sinceIso: string): FailureSummary {
+export function summarizeFailures(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sinceIso: string,
+): FailureSummary {
   const rows = cachedStatement(
     db,
     `SELECT outcome, COUNT(*) AS n FROM failure_log WHERE tenant_id = ? AND ts >= ? GROUP BY outcome`,
   ).all(tenantId, sinceIso) as Array<{ outcome: string; n: number }>;
   const counts = new Map(rows.map((r) => [r.outcome, Number(r.n)] as const));
-  return failureTotals(sinceIso, (outcome) => counts.get(outcome) ?? 0, ratedFailures(db, tenantId));
+  return failureTotals(
+    sinceIso,
+    (outcome) => counts.get(outcome) ?? 0,
+    ratedFailures(db, tenantId),
+  );
 }
 
 const failureLogBodies: Bodies<FailureLog> = {

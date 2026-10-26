@@ -15,7 +15,9 @@ describe('capture coherence', () => {
     const items = extractFromTexts(['Never use --no-verify on git commits in this project.']);
     expect(items).toHaveLength(1);
     expect(items[0].content.toLowerCase()).toContain('never');
-    expect(items[0].content.toLowerCase()).not.toBe('use --no-verify on git commits in this project');
+    expect(items[0].content.toLowerCase()).not.toBe(
+      'use --no-verify on git commits in this project',
+    );
   });
 
   it('2. fragment self-rejects: clause-bounding shortens it, the write gate then drops it', () => {
@@ -26,14 +28,18 @@ describe('capture coherence', () => {
   });
 
   it('3. a whole sentence keeps its consequence: the "so it is" tail stays attached', () => {
-    const items = extractFromTexts(['I have never seen this test fail on master before, so it is probably a flake.']);
+    const items = extractFromTexts([
+      'I have never seen this test fail on master before, so it is probably a flake.',
+    ]);
     expect(items.map((i) => i.content)).toEqual([
       'I have never seen this test fail on master before, so it is probably a flake',
     ]);
   });
 
   it('4. periods inside tokens survive clause-bounding', () => {
-    const items = extractFromTexts(['Never edit capture.ts and audit.ts in the same commit without running npm test.']);
+    const items = extractFromTexts([
+      'Never edit capture.ts and audit.ts in the same commit without running npm test.',
+    ]);
     expect(items).toHaveLength(1);
     expect(items[0].content).toContain('capture.ts');
   });
@@ -44,14 +50,18 @@ describe('capture coherence', () => {
     expect(mustNever[0].content.toLowerCase()).toContain('must never');
     expect(mustNever[0].content).toContain('.env');
 
-    const shouldAlways = extractFromTexts(['We should always run the suite twice locally before merging any change.']);
+    const shouldAlways = extractFromTexts([
+      'We should always run the suite twice locally before merging any change.',
+    ]);
     expect(shouldAlways).toHaveLength(1);
     expect(shouldAlways[0].content.toLowerCase()).toContain('always run the suite twice');
   });
 
   it('6. DECISION and ERROR sets follow the same semantic-vs-label split as RULE', () => {
     // SEMANTIC keyword ("decided to") carries the meaning -> preserved.
-    const decision = extractFromTexts(['We decided to pin the version to avoid a repeat of the outage.']);
+    const decision = extractFromTexts([
+      'We decided to pin the version to avoid a repeat of the outage.',
+    ]);
     expect(decision).toHaveLength(1);
     expect(decision[0].category).toBe('decision');
     expect(decision[0].content.toLowerCase()).toContain('decided');
@@ -74,7 +84,9 @@ describe('capture coherence', () => {
     expect(error[0].content.toLowerCase()).toContain('reserve loop');
 
     // the regression this narrowing exists to prevent
-    const plan = extractFromTexts(['The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.']);
+    const plan = extractFromTexts([
+      'The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.',
+    ]);
     expect(plan, 'a "the plan is to ..." memory must not vanish').toHaveLength(1);
     expect(plan[0].content.toLowerCase()).toContain('ship the df2 branch');
   });
@@ -143,7 +155,9 @@ describe('capture coherence', () => {
   it('9. upper bound: a sentence of 500 chars or fewer is stored whole, a longer one is skipped, never cut', () => {
     const kept = `Always keep going ${'x'.repeat(400)} no matter what happens here today`;
     expect(extractFromTexts([kept]).map((i) => i.content)).toEqual([kept]);
-    expect(extractFromTexts([`Always keep going ${'x'.repeat(500)} no matter what happens here today`])).toEqual([]);
+    expect(
+      extractFromTexts([`Always keep going ${'x'.repeat(500)} no matter what happens here today`]),
+    ).toEqual([]);
   });
 
   /**
@@ -158,7 +172,9 @@ describe('capture coherence', () => {
     // the "the X is/was" label left exactly that residue, so these stored
     // NOTHING while master stored them. Absence of a memory is invisible -
     // no error, no log, nothing to notice in the field.
-    const plan = extractFromTexts(['The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.']);
+    const plan = extractFromTexts([
+      'The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.',
+    ]);
     expect(plan, 'a "the plan is to ..." memory must not vanish').toHaveLength(1);
 
     const fix = extractFromTexts([
@@ -176,7 +192,9 @@ describe('capture coherence', () => {
     // ordinary prose master handles correctly.
     const items = extractFromTexts(["Always pass 'user's a, b list' to the parser."]);
     expect(items).toHaveLength(1);
-    expect(items[0].content, 'possessive inside a literal must not close it').toContain("'user's a, b list'");
+    expect(items[0].content, 'possessive inside a literal must not close it').toContain(
+      "'user's a, b list'",
+    );
   });
 
   // Whole-sentence capture never decides where a quote opens or closes, so the shapes the clause scanner could not resolve come through intact.
@@ -188,7 +206,9 @@ describe('capture coherence', () => {
     ]) {
       expect(extractFromTexts([text]).map((i) => i.content)).toEqual([text.slice(0, -1)]);
     }
-    expect(extractFromTexts(['Never use --no-verify on git commits in this project.'])[0]?.content).toContain('Never');
+    expect(
+      extractFromTexts(['Never use --no-verify on git commits in this project.'])[0]?.content,
+    ).toContain('Never');
   });
 
   // Codex P1 on this branch: the clause scanner cut inside code delimiters,
@@ -219,8 +239,12 @@ describe('capture coherence', () => {
     // It is now resolved by KEEPING both. The invariant the reviewers
     // actually asked for - identical handling - still holds, and is what
     // this test pins.
-    const wasItems = extractFromTexts(['The issue was the config file was missing from the deploy bundle.']);
-    const isItems = extractFromTexts(['The issue is the config file goes missing from the deploy bundle.']);
+    const wasItems = extractFromTexts([
+      'The issue was the config file was missing from the deploy bundle.',
+    ]);
+    const isItems = extractFromTexts([
+      'The issue is the config file goes missing from the deploy bundle.',
+    ]);
     expect(wasItems).toHaveLength(1);
     expect(isItems).toHaveLength(1);
     expect(wasItems[0].content.toLowerCase()).toContain('the issue was');
@@ -264,7 +288,9 @@ describe('capture coherence', () => {
       "Always pass 'a, " + 'x'.repeat(600) + "' to the parser.",
       "Always keep 'em enabled, then " + 'y'.repeat(520) + " check user's config.",
     ]) {
-      expect(extractFromTexts([text]), 'a sentence over 500 chars is skipped, never cut').toEqual([]);
+      expect(extractFromTexts([text]), 'a sentence over 500 chars is skipped, never cut').toEqual(
+        [],
+      );
     }
   });
 });

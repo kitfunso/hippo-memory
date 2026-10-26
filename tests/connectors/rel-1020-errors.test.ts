@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GitHubFetchError, realGitHubFetcher } from '../../src/surface/connectors/github/octokit-client.js';
+import {
+  GitHubFetchError,
+  realGitHubFetcher,
+} from '../../src/surface/connectors/github/octokit-client.js';
 import { isSleepReply } from '../../src/surface/server/sleep-offload.js';
 
 describe('a GitHub error whose body cannot be read', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('still throws the status, with the URL cut to host and path', async () => {
-    const broken = new ReadableStream<Uint8Array>({ start: (c) => c.error(new Error('connection reset')) });
+    const broken = new ReadableStream<Uint8Array>({
+      start: (c) => c.error(new Error('connection reset')),
+    });
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(broken, { status: 404 })),

@@ -26,13 +26,19 @@ export async function runChurnStaleForRepo(
   tenantId: string,
   dryRun: boolean,
 ): Promise<{ root: string; result: ChurnStaleResult }[]> {
-  return markChurnStaleInReach(cliApiContext(hippoRoot, tenantId), { root: hippoRoot, repoDir: process.cwd(), dryRun });
+  return markChurnStaleInReach(cliApiContext(hippoRoot, tenantId), {
+    root: hippoRoot,
+    repoDir: process.cwd(),
+    dryRun,
+  });
 }
 
 /** True, after one line, on a shared store: this account's commits and agent notes are not its members' memories. */
 export function skipLearnOnSharedStore(hippoRoot: string): boolean {
   if (!isSharedStore(hippoRoot)) return false;
-  console.log("Shared store: skipped learning from this account's git commits and coding agents' own memories.");
+  console.log(
+    "Shared store: skipped learning from this account's git commits and coding agents' own memories.",
+  );
   return true;
 }
 

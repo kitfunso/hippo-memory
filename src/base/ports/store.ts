@@ -38,10 +38,20 @@ import type {
 /** Every group a store has: the required ones, then five optional capabilities, each a set of groups a store sets or
  * leaves unset together. `RequiredStore` is the smallest store, and `runStoreConformance` from store-kit checks one. */
 export interface StoreGroups
-  extends RequiredGroups, FallbackGroups, FolderGroups, SleepGroups, CaptureGroups, MaintenanceGroups {}
+  extends
+    RequiredGroups,
+    FallbackGroups,
+    FolderGroups,
+    SleepGroups,
+    CaptureGroups,
+    MaintenanceGroups {}
 
 /** The groups a store may leave unset, each with a fallback or a 501 where it is missing. */
-export type OptionalGroup = keyof (FallbackGroups & FolderGroups & SleepGroups & CaptureGroups & MaintenanceGroups);
+export type OptionalGroup = keyof (FallbackGroups &
+  FolderGroups &
+  SleepGroups &
+  CaptureGroups &
+  MaintenanceGroups);
 
 /** The groups a sleep runs on. */
 export type SleepGroup = keyof SleepGroups;
@@ -120,7 +130,10 @@ export type SleepStore = StoreWith<SleepGroup>;
 export type StoreGroup = 'base' | keyof StoreGroups;
 
 /** True when the store sets `group`; for an optional group the store is narrowed to one that does. */
-export function hasGroup<G extends OptionalGroup>(store: HippoStore, group: G): store is StoreWith<G>;
+export function hasGroup<G extends OptionalGroup>(
+  store: HippoStore,
+  group: G,
+): store is StoreWith<G>;
 export function hasGroup(store: HippoStore, group: StoreGroup): boolean;
 export function hasGroup(store: HippoStore, group: StoreGroup): boolean {
   return group === 'base' || store[group] !== undefined;
@@ -145,7 +158,8 @@ export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from '../util/store-b
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an await, since a lock wait
  * blocks the event loop; a lock timeout throws `StoreBusyError`. */
-export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pick<StoreGroups, OptionalGroup>> {
+export interface HippoStore
+  extends Omit<StoreGroups, OptionalGroup>, Partial<Pick<StoreGroups, OptionalGroup>> {
   /** A name for logs and errors; what a store can do beyond the required groups is the optional ones it sets. */
   readonly kind: string;
   /** The API key record for `keyId` with its scope grants, revoked or not; null when none matches. */
@@ -169,9 +183,16 @@ export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pi
   /** The newest active snapshot a non-null `key` must narrow to one owner and project (null only on an unshared store),
    * then for its session the newest handoff (same key) and `eventLimit` newest events returned oldest first, each tie
    * broken by the larger id; the caller applies scope. */
-  continuity(tenantId: string, eventLimit: number, key: ContinuityKey | null): Promise<ContinuityBlock>;
+  continuity(
+    tenantId: string,
+    eventLimit: number,
+    key: ContinuityKey | null,
+  ): Promise<ContinuityBlock>;
   /** Resolves a forward claim's tokens to one class and reads its baserate, writing no audit row. */
-  planningFallacyEvidence(tenantId: string, classQueryTokens: readonly string[]): Promise<PlanningFallacyEvidence>;
+  planningFallacyEvidence(
+    tenantId: string,
+    classQueryTokens: readonly string[],
+  ): Promise<PlanningFallacyEvidence>;
   /** Appends the rows in order, all or none. */
   appendAuditEvents(events: readonly AppendAuditOptions[]): Promise<void>;
   /** Writes the goal log and audit rows in one transaction and rejects with none written if it fails. Then the trace
@@ -210,7 +231,12 @@ export type {
   DeadLetterRows,
 } from './store/connectors.js';
 
-export type { RecallSearchArgs, RecallWrites, LastRecallWrites, LastRecall } from './store/recall-writes.js';
+export type {
+  RecallSearchArgs,
+  RecallWrites,
+  LastRecallWrites,
+  LastRecall,
+} from './store/recall-writes.js';
 export type {
   VectorReads,
   StoredPart,

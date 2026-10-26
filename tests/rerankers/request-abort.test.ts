@@ -31,7 +31,9 @@ function hangingFetch(seen: Seen): typeof fetch {
   return (_url, init) =>
     new Promise((_resolve, reject) => {
       seen.signal = init?.signal ?? undefined;
-      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      init?.signal?.addEventListener('abort', () =>
+        reject(new DOMException('aborted', 'AbortError')),
+      );
     });
 }
 
@@ -78,7 +80,9 @@ describe('the outage warning', () => {
   });
 
   it('records the outage when the request is still live', () => {
-    createOutageWarning('clef', 'keeping the native order').failed('no answer', { errorClass: 'Error' });
+    createOutageWarning('clef', 'keeping the native order').failed('no answer', {
+      errorClass: 'Error',
+    });
     expect(warn).toHaveBeenCalledOnce();
     expect(warn.mock.calls[0][1]).toEqual({ errorClass: 'Error' });
   });
@@ -87,9 +91,12 @@ describe('the outage warning', () => {
 describe('the CLEF reranker', () => {
   it('keeps the native order and warns with the error fields on a real failure', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
-    const out = await createClefReranker('clef-flash', processHttp)('q', inputs(), { clef: HANDED });
+    const out = await createClefReranker('clef-flash', processHttp)('q', inputs(), {
+      clef: HANDED,
+    });
     expect(out.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
-    const [message, fields] = warn.mock.calls.find(([m]) => String(m).includes('reranker unavailable')) ?? [];
+    const [message, fields] =
+      warn.mock.calls.find(([m]) => String(m).includes('reranker unavailable')) ?? [];
     expect(String(message)).toContain('clef-flash reranker unavailable');
     expect(fields).toEqual(expect.objectContaining({ errorClass: 'TypeError' }));
   });

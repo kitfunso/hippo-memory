@@ -59,14 +59,18 @@ export const DEFAULT_MIN_POOL = 10;
 export const DEFAULT_MIN_OLDER_PASSED_OVER = 3;
 
 function parseTimestamps(refs: readonly AgeRef[]): { id: string; ts: number }[] {
-  return refs.map((e) => ({ id: e.id, ts: Date.parse(e.created) })).filter((e) => Number.isFinite(e.ts));
+  return refs
+    .map((e) => ({ id: e.id, ts: Date.parse(e.created) }))
+    .filter((e) => Number.isFinite(e.ts));
 }
 
 /**
  * Returns an AvailabilityHint when the returned slice is recency-dominated, the pool skews older and older matches were
  * passed over; else null.
  * Entries with an unparseable `created` are dropped so a malformed row cannot poison the medians with NaN. */
-export function detectAvailabilityBias(opts: DetectAvailabilityBiasOptions): AvailabilityHint | null {
+export function detectAvailabilityBias(
+  opts: DetectAvailabilityBiasOptions,
+): AvailabilityHint | null {
   const now = opts.now ?? Date.now();
   const recencyWindowMs = opts.recencyWindowMs ?? DEFAULT_RECENCY_WINDOW_MS;
   const recentFractionThreshold = opts.recentFractionThreshold ?? DEFAULT_RECENT_FRACTION_THRESHOLD;

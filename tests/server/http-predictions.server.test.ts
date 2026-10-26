@@ -91,7 +91,10 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
   it.skipIf(needsHippoDb('db'))(
     'GET /v1/predictions with no class and no status lists closed predictions too',
     async () => {
-      const open = await savePrediction(home, 'default', { classTag: 'ship', claimText: 'the release ships friday' });
+      const open = await savePrediction(home, 'default', {
+        classTag: 'ship',
+        claimText: 'the release ships friday',
+      });
       const done = await savePrediction(home, 'default', {
         classTag: 'migrate',
         claimText: 'the migration takes two days',
@@ -118,12 +121,16 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
     });
     const created = (await jsonAs<{ prediction: Prediction }>(create)).prediction;
 
-    const getRes = await fetch(`${handle.url}/v1/predictions/${created.id}`, { headers: authHeaders(apiKey) });
+    const getRes = await fetch(`${handle.url}/v1/predictions/${created.id}`, {
+      headers: authHeaders(apiKey),
+    });
     expect(getRes.status).toBe(200);
     const fetched = (await jsonAs<{ prediction: Prediction }>(getRes)).prediction;
     expect(fetched.id).toBe(created.id);
 
-    const missingRes = await fetch(`${handle.url}/v1/predictions/99999`, { headers: authHeaders(apiKey) });
+    const missingRes = await fetch(`${handle.url}/v1/predictions/99999`, {
+      headers: authHeaders(apiKey),
+    });
     expect(missingRes.status).toBe(404);
   });
 

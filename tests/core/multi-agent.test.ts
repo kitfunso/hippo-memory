@@ -68,7 +68,17 @@ describe('transferScore', () => {
 
   it('is clamped to [0, 1]', () => {
     const high = createMemory('Universal truth', {
-      tags: ['error', 'platform', 'windows', 'python', 'shell', 'pattern', 'rule', 'gotcha', 'best-practice'],
+      tags: [
+        'error',
+        'platform',
+        'windows',
+        'python',
+        'shell',
+        'pattern',
+        'rule',
+        'gotcha',
+        'best-practice',
+      ],
       pinned: true,
     });
     const highEntry: MemoryEntry = { ...high, retrievalCount: 100 };

@@ -126,7 +126,9 @@ describe('session_handoffs tenant isolation', () => {
     try {
       // SAFETY: better-sqlite3's `.get()` returns `unknown`; the row shape is guaranteed
       // by the `SELECT id` above, and the handoff was just inserted via saveSessionHandoff.
-      const row = db.prepare(`SELECT id FROM session_handoffs WHERE session_id='sess-a'`).get() as { id: number };
+      const row = db.prepare(`SELECT id FROM session_handoffs WHERE session_id='sess-a'`).get() as {
+        id: number;
+      };
       id = row.id;
     } finally {
       closeHippoDb(db);
@@ -140,7 +142,9 @@ describe('session_handoffs tenant isolation', () => {
 describe('runtime guards', () => {
   it('throws clear error when tenantId is empty string', () => {
     initTestStore(tmpDir);
-    expect(() => listSessionEvents(tmpDir, '', { session_id: 'x' })).toThrow(/tenantId is required/);
+    expect(() => listSessionEvents(tmpDir, '', { session_id: 'x' })).toThrow(
+      /tenantId is required/,
+    );
     expect(() => loadLatestHandoff(tmpDir, '', 'x')).toThrow(/tenantId is required/);
   });
 
@@ -151,7 +155,9 @@ describe('runtime guards', () => {
     // before it silently filters to a non-existent tenant.
     // SAFETY: the cast forces a session-id-shaped string past the tenantId type on
     // purpose, to reproduce the v0.40-caller misbinding the runtime guard defends against.
-    expect(() => loadLatestHandoff(tmpDir, 'sess-abc' as never)).toThrow(/looks like a session id/i);
+    expect(() => loadLatestHandoff(tmpDir, 'sess-abc' as never)).toThrow(
+      /looks like a session id/i,
+    );
     // SAFETY: same deliberate misbinding as above, for listSessionEvents' tenantId param.
     expect(() => listSessionEvents(tmpDir, 'sess_xyz' as never, { session_id: 'x' })).toThrow(
       /looks like a session id/i,
@@ -171,7 +177,9 @@ describe('runtime guards', () => {
     initTestStore(tmpDir);
     // SAFETY: casts force non-string values past the tenantId: string type on purpose,
     // to verify the runtime guard rejects them the same way a JS (non-TS) caller could.
-    expect(() => loadLatestHandoff(tmpDir, undefined as never, 'x')).toThrow(/tenantId is required/);
+    expect(() => loadLatestHandoff(tmpDir, undefined as never, 'x')).toThrow(
+      /tenantId is required/,
+    );
     // SAFETY: same deliberate non-string tenantId as above (null case).
     expect(() => loadLatestHandoff(tmpDir, null as never, 'x')).toThrow(/tenantId is required/);
     // SAFETY: same deliberate non-string tenantId as above (number case).

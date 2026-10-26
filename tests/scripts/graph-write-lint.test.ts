@@ -41,9 +41,18 @@ describe('check-graph-writes lint', () => {
     }
 
     it('flags INSERT INTO / UPDATE of graph tables in a non-sanctioned file', () => {
-      file('clean.ts', `export const x = 1;\nconst q = db.prepare('SELECT * FROM entities WHERE id = ?');\n`);
-      file('bad-insert.ts', `db.prepare(\`INSERT INTO entities(tenant_id, name) VALUES (?, ?)\`).run(t, n);\n`);
-      file('bad-update.ts', `db.prepare('UPDATE relations SET rel_type = ? WHERE id = ?').run(r, id);\n`);
+      file(
+        'clean.ts',
+        `export const x = 1;\nconst q = db.prepare('SELECT * FROM entities WHERE id = ?');\n`,
+      );
+      file(
+        'bad-insert.ts',
+        `db.prepare(\`INSERT INTO entities(tenant_id, name) VALUES (?, ?)\`).run(t, n);\n`,
+      );
+      file(
+        'bad-update.ts',
+        `db.prepare('UPDATE relations SET rel_type = ? WHERE id = ?').run(r, id);\n`,
+      );
       const v = findGraphWriteViolations(dir);
       const files = v.map((x) => x.file.replace(/\\/g, '/'));
       expect(files.some((f) => f.endsWith('bad-insert.ts'))).toBe(true);
@@ -53,12 +62,23 @@ describe('check-graph-writes lint', () => {
     });
 
     it('does NOT flag the two sanctioned store writers (exact relative paths), but DOES flag subgraph.ts AND a subdir store/sqlite/graph-writes.ts', () => {
-      file('store/sqlite/graph-writes.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`);
-      file('store/sqlite/graph-queue.ts', `db.prepare('UPDATE graph_extraction_queue SET status = ?').run(s);\n`);
+      file(
+        'store/sqlite/graph-writes.ts',
+        `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`,
+      );
+      file(
+        'store/sqlite/graph-queue.ts',
+        `db.prepare('UPDATE graph_extraction_queue SET status = ?').run(s);\n`,
+      );
       file('subgraph.ts', `db.prepare('INSERT INTO relations(rel_type) VALUES (?)').run(r);\n`);
-      file('connectors/store/sqlite/graph-writes.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`); // a DIFFERENT store/graph-writes.ts, not sanctioned
+      file(
+        'connectors/store/sqlite/graph-writes.ts',
+        `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`,
+      ); // a DIFFERENT store/graph-writes.ts, not sanctioned
       const files = findGraphWriteViolations(dir).map((x) => x.file.replace(/\\/g, '/'));
-      expect(files.some((f) => f.endsWith('/store/sqlite/graph-writes.ts') && !f.includes('connectors'))).toBe(false);
+      expect(
+        files.some((f) => f.endsWith('/store/sqlite/graph-writes.ts') && !f.includes('connectors')),
+      ).toBe(false);
       expect(files.some((f) => f.endsWith('/store/sqlite/graph-queue.ts'))).toBe(false);
       expect(files.some((f) => f.endsWith('subgraph.ts'))).toBe(true);
       expect(files.some((f) => f.endsWith('connectors/store/sqlite/graph-writes.ts'))).toBe(true); // subdir store/sqlite/graph-writes.ts IS linted
@@ -71,17 +91,29 @@ describe('check-graph-writes lint', () => {
     });
 
     it('catches a MULTI-LINE write (verb and table on separate lines)', () => {
-      file('multiline.ts', `db.prepare(\`\n  INSERT INTO\n  entities(name)\n  VALUES (?)\`).run(n);\n`);
+      file(
+        'multiline.ts',
+        `db.prepare(\`\n  INSERT INTO\n  entities(name)\n  VALUES (?)\`).run(n);\n`,
+      );
       const v = findGraphWriteViolations(dir);
       expect(v.length).toBe(1);
       expect(v[0].file.replace(/\\/g, '/').endsWith('multiline.ts')).toBe(true);
     });
 
     it('catches SQLite write variants: INSERT OR IGNORE/REPLACE + quoted/bracketed identifiers', () => {
-      file('or-ignore.ts', `db.prepare('INSERT OR IGNORE INTO entities(name) VALUES (?)').run(n);\n`);
-      file('or-replace.ts', `db.prepare('INSERT OR REPLACE INTO relations(rel_type) VALUES (?)').run(r);\n`);
+      file(
+        'or-ignore.ts',
+        `db.prepare('INSERT OR IGNORE INTO entities(name) VALUES (?)').run(n);\n`,
+      );
+      file(
+        'or-replace.ts',
+        `db.prepare('INSERT OR REPLACE INTO relations(rel_type) VALUES (?)').run(r);\n`,
+      );
       file('quoted.ts', `db.prepare('INSERT INTO "entities"(name) VALUES (?)').run(n);\n`);
-      file('bracketed.ts', `db.prepare('UPDATE [graph_extraction_queue] SET status = ?').run(s);\n`);
+      file(
+        'bracketed.ts',
+        `db.prepare('UPDATE [graph_extraction_queue] SET status = ?').run(s);\n`,
+      );
       const files = findGraphWriteViolations(dir).map((x) => x.file.replace(/\\/g, '/'));
       for (const f of ['or-ignore.ts', 'or-replace.ts', 'quoted.ts', 'bracketed.ts']) {
         expect(

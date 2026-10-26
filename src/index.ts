@@ -55,4 +55,10 @@ export {
   consolidate,
   strengthBucket,
 } from './entry/sleep.js';
-export { captureError, extractLessons, partitionLessons, getGlobalRoot, transferScore } from './entry/learning.js';
+export {
+  captureError,
+  extractLessons,
+  partitionLessons,
+  getGlobalRoot,
+  transferScore,
+} from './entry/learning.js';

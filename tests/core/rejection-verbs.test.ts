@@ -18,7 +18,12 @@ import { listRejectionsForTenant } from '../../src/domain/trust/reject-flow.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { replaceDetectedConflicts, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
+import {
+  replaceDetectedConflicts,
+  listMemoryConflicts,
+  writeEntry,
+  readEntry,
+} from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -93,7 +98,9 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     writeEntry(tmpDir, a);
     await api.reject(ctx(), { memoryId: a.id, reason: 'refused' });
 
-    await expect(api.remember(ctx(), { content: 'refuse me please' })).rejects.toThrow(RejectedValueError);
+    await expect(api.remember(ctx(), { content: 'refuse me please' })).rejects.toThrow(
+      RejectedValueError,
+    );
   });
 
   it('unreject then re-remember succeeds', async () => {
@@ -105,14 +112,21 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     expect(unrejectResult.ok).toBe(true);
     expect((await listRejectionsForTenant(sqliteStore(tmpDir), 'default')).length).toBe(0);
 
-    expect(await api.remember(ctx(), { content: 'temporarily rejected' })).toMatchObject({ id: expect.any(String) });
+    expect(await api.remember(ctx(), { content: 'temporarily rejected' })).toMatchObject({
+      id: expect.any(String),
+    });
   });
 
   it('reject --value pre-emptive path: zero removals, still refuses a later write', async () => {
-    const result = await api.reject(ctx(), { value: 'never seen before value', reason: 'pre-emptive' });
+    const result = await api.reject(ctx(), {
+      value: 'never seen before value',
+      reason: 'pre-emptive',
+    });
     expect(result.removedIds.length).toBe(0);
 
-    await expect(api.remember(ctx(), { content: 'never seen before value' })).rejects.toThrow(RejectedValueError);
+    await expect(api.remember(ctx(), { content: 'never seen before value' })).rejects.toThrow(
+      RejectedValueError,
+    );
   });
 
   it('reject requires a non-empty reason', async () => {
@@ -125,7 +139,11 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     const a = createMemory('both forms supplied at once', { tags: [] });
     writeEntry(tmpDir, a);
     await expect(
-      api.reject(ctx(), { memoryId: a.id, value: 'a different value entirely', reason: 'ambiguous' }),
+      api.reject(ctx(), {
+        memoryId: a.id,
+        value: 'a different value entirely',
+        reason: 'ambiguous',
+      }),
     ).rejects.toThrow();
   });
 
@@ -198,12 +216,16 @@ describe('resolveConflict rejection wiring', () => {
 
   it('rejectLoserValue tombstones + removes the loser; re-remember of its content is refused', async () => {
     const { aId, bId, conflictId } = await seedConflict();
-    await api.conflictResolve(ctx(), conflictId, { keepId: aId, rejectLoser: true, reason: 'loser rejected' });
+    await api.conflictResolve(ctx(), conflictId, {
+      keepId: aId,
+      rejectLoser: true,
+      reason: 'loser rejected',
+    });
     expect(readEntry(tmpDir, bId)).toBeNull();
 
-    await expect(api.remember(ctx(), { content: 'Use && to chain commands in PowerShell' })).rejects.toThrow(
-      RejectedValueError,
-    );
+    await expect(
+      api.remember(ctx(), { content: 'Use && to chain commands in PowerShell' }),
+    ).rejects.toThrow(RejectedValueError);
 
     const db = openHippoDb(tmpDir);
     try {
@@ -250,7 +272,9 @@ describe('resolveConflict rejection wiring', () => {
       closeHippoDb(db);
     }
 
-    await expect(api.remember(ctx(), { content: loserContent })).rejects.toThrow(RejectedValueError);
+    await expect(api.remember(ctx(), { content: loserContent })).rejects.toThrow(
+      RejectedValueError,
+    );
   });
 
   it('raw loser via resolve --forget no longer throws (kind-aware removal)', async () => {
@@ -269,7 +293,9 @@ describe('resolveConflict rejection wiring', () => {
     const conflicts = await listMemoryConflicts(tmpDir, 'open');
     const conflictId = conflicts[0]!.id;
 
-    await expect(api.conflictResolve(ctx(), conflictId, { keepId: a.id, forget: true })).resolves.toEqual({
+    await expect(
+      api.conflictResolve(ctx(), conflictId, { keepId: a.id, forget: true }),
+    ).resolves.toEqual({
       conflictId,
       keptId: a.id,
       loserId: rawLoser.id,
@@ -288,7 +314,10 @@ describe('resolveConflict rejection wiring', () => {
 
   it('raw loser via PLAIN resolve --forget (no --reject-loser) purges its mirror + stamps mirror_cleaned_at', async () => {
     const a = createMemory('keeper content for raw mirror-purge conflict', { tags: ['x'] });
-    const rawLoser = createMemory('raw loser content for the mirror-purge test', { tags: ['x'], kind: 'raw' });
+    const rawLoser = createMemory('raw loser content for the mirror-purge test', {
+      tags: ['x'],
+      kind: 'raw',
+    });
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, rawLoser);
     const mirrorPath = path.join(tmpDir, Layer.Episodic, `${rawLoser.id}.md`);
@@ -317,9 +346,9 @@ describe('resolveConflict rejection wiring', () => {
     try {
       // SAFETY: row's shape matches the single `mirror_cleaned_at` column
       // named in the SELECT above.
-      const row = db.prepare(`SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`).get(rawLoser.id) as
-        | { mirror_cleaned_at: string | null }
-        | undefined;
+      const row = db
+        .prepare(`SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`)
+        .get(rawLoser.id) as { mirror_cleaned_at: string | null } | undefined;
       expect(row?.mirror_cleaned_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     } finally {
       closeHippoDb(db);
@@ -358,7 +387,9 @@ describe('resolveConflict rejection wiring', () => {
     expect(readEntry(tmpDir, rawLoser.id)).toBeNull();
     const db = openHippoDb(tmpDir);
     try {
-      const archiveRow = db.prepare(`SELECT memory_id FROM raw_archive WHERE memory_id = ?`).get(rawLoser.id);
+      const archiveRow = db
+        .prepare(`SELECT memory_id FROM raw_archive WHERE memory_id = ?`)
+        .get(rawLoser.id);
       expect(archiveRow).not.toBeUndefined();
     } finally {
       closeHippoDb(db);
@@ -366,7 +397,9 @@ describe('resolveConflict rejection wiring', () => {
 
     // Tombstone written: re-remembering the raw loser's content is refused.
     await expect(
-      api.remember(ctx(), { content: 'raw loser content later rejected via the reject-loser path' }),
+      api.remember(ctx(), {
+        content: 'raw loser content later rejected via the reject-loser path',
+      }),
     ).rejects.toThrow(RejectedValueError);
 
     const db2 = openHippoDb(tmpDir);
@@ -391,7 +424,10 @@ describe('supersedeMemory write-order contract', () => {
     const old = createMemory('the old belief to correct', { tags: ['s'] });
     writeEntry(tmpDir, old);
 
-    await api.reject(ctx(), { value: 'the corrected but rejected belief', reason: 'known-bad correction' });
+    await api.reject(ctx(), {
+      value: 'the corrected but rejected belief',
+      reason: 'known-bad correction',
+    });
 
     const newEntry = createMemory('the corrected but rejected belief', {
       tags: ['s'],

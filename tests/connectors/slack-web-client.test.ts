@@ -32,7 +32,8 @@ describe('slackHistoryFetcher', () => {
 
   it('throws when ok=false', async () => {
     const fakeFetch: FetchImpl = vi.fn(
-      async () => new Response(JSON.stringify({ ok: false, error: 'not_in_channel' }), { status: 200 }),
+      async () =>
+        new Response(JSON.stringify({ ok: false, error: 'not_in_channel' }), { status: 200 }),
     );
     const fetcher = slackHistoryFetcher('t', fakeFetch);
     await expect(fetcher({ channelId: 'C1', cursor: null })).rejects.toThrow(/not_in_channel/);
@@ -64,7 +65,9 @@ describe('slackHistoryFetcher: a reply that is not the documented shape', () => 
   }
 
   it('throws on an HTML error page served with status 200', async () => {
-    const err = await failure(new Response('<html><body>Service Unavailable</body></html>', { status: 200 }));
+    const err = await failure(
+      new Response('<html><body>Service Unavailable</body></html>', { status: 200 }),
+    );
     expectNamesTheReply(err, /reply is not JSON/);
     expect(err.cause).toBeInstanceOf(Error);
   });
@@ -77,7 +80,10 @@ describe('slackHistoryFetcher: a reply that is not the documented shape', () => 
 
   it('throws when `messages` is not an array', async () => {
     const body = JSON.stringify({ ok: true, messages: { 0: { type: 'message', ts: '1.1' } } });
-    expectNamesTheReply(await failure(new Response(body, { status: 200 })), /`messages` is not an array/);
+    expectNamesTheReply(
+      await failure(new Response(body, { status: 200 })),
+      /`messages` is not an array/,
+    );
   });
 
   it('throws on a body over the byte cap', async () => {
@@ -96,9 +102,14 @@ describe('slackHistoryFetcher: a reply that is not the documented shape', () => 
         { type: 'message' },
       ],
     };
-    const fetcher = slackHistoryFetcher(SECRET, async () => new Response(JSON.stringify(body), { status: 200 }));
+    const fetcher = slackHistoryFetcher(
+      SECRET,
+      async () => new Response(JSON.stringify(body), { status: 200 }),
+    );
     const page = await fetcher({ channelId: 'C0CHANNEL', cursor: null });
-    expect(page.messages).toEqual([{ type: 'message', text: 'hi', ts: '1.1', channel: 'C0CHANNEL' }]);
+    expect(page.messages).toEqual([
+      { type: 'message', text: 'hi', ts: '1.1', channel: 'C0CHANNEL' },
+    ]);
     expect(page.next_cursor).toBeNull();
   });
 });

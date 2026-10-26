@@ -15,7 +15,9 @@ import type { VectorCandidateSpec } from '../../base/ports/store/vectors.js';
  * hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact private regex, entry
  * filters).
  */
-export type HybridVectorCandidates = VectorCandidateSpec & { admit?: (entry: MemoryEntry) => boolean };
+export type HybridVectorCandidates = VectorCandidateSpec & {
+  admit?: (entry: MemoryEntry) => boolean;
+};
 
 /** What the vector arm produced; fields fill in step by step, so a late failure keeps the rows already added. */
 export interface VectorArm {
@@ -104,7 +106,9 @@ export async function vectorCandidatesOutside(
   const inPool = new Set(entries.map((e) => e.id));
   // The port takes data alone: `admit` is this side's rule, and a function cannot be sent to a store on another thread.
   const { admit, ...stored } = spec;
-  return (await reads.nearestEntries(queryVector, stored)).filter((e) => !inPool.has(e.id) && (admit?.(e) ?? true));
+  return (await reads.nearestEntries(queryVector, stored)).filter(
+    (e) => !inPool.has(e.id) && (admit?.(e) ?? true),
+  );
 }
 
 /** Embeds the query and loads stored vectors; any failure leaves BM25 to rank alone. */
@@ -114,7 +118,13 @@ export async function resolveVectorArm(
   source: VectorSource | undefined,
   options: VectorArmOptions,
 ): Promise<VectorArm> {
-  const arm: VectorArm = { entries, addedRows: false, useEmbeddings: false, embeddingIndex: {}, queryVector: [] };
+  const arm: VectorArm = {
+    entries,
+    addedRows: false,
+    useEmbeddings: false,
+    embeddingIndex: {},
+    queryVector: [],
+  };
   if (!source) return arm;
   try {
     await fillVectorArm(arm, query, source, options);
@@ -147,7 +157,11 @@ async function fillVectorArm(
   // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search can use.
   if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
   const configuredMs = options.runtime?.queryEmbedTimeoutMs;
-  const vec = await embedQueryBy(options.queryEmbedDeadline ?? startQueryEmbedDeadline(configuredMs), provider, query);
+  const vec = await embedQueryBy(
+    options.queryEmbedDeadline ?? startQueryEmbedDeadline(configuredMs),
+    provider,
+    query,
+  );
   if (vec === null) {
     warnBm25Fallback(
       'query-embed-budget',
@@ -157,10 +171,15 @@ async function fillVectorArm(
   }
   arm.queryVector = vec;
   if (arm.queryVector.length === 0) {
-    warnBm25Fallback('empty-query-vector', 'the embedding provider returned no vector for the query');
+    warnBm25Fallback(
+      'empty-query-vector',
+      'the embedding provider returned no vector for the query',
+    );
     return;
   }
-  const added = spec ? await vectorCandidatesOutside(store.vectors, arm.entries, arm.queryVector, spec) : [];
+  const added = spec
+    ? await vectorCandidatesOutside(store.vectors, arm.entries, arm.queryVector, spec)
+    : [];
   if (added.length > 0) {
     arm.addedRows = true;
     arm.entries = currentEntries([...arm.entries, ...added], options);

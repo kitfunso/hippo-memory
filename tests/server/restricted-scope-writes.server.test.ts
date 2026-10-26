@@ -38,7 +38,12 @@ interface Reply {
   body: string;
 }
 
-async function send(key: string, method: 'DELETE' | 'POST', id: string, action = ''): Promise<Reply> {
+async function send(
+  key: string,
+  method: 'DELETE' | 'POST',
+  id: string,
+  action = '',
+): Promise<Reply> {
   const res = await fetch(`${handle.url}/v1/memories/${id}${action}`, {
     method,
     headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
@@ -53,7 +58,11 @@ const kept = (): string[] => loadEntriesByIds(root, [note.id, raw.id], 'default'
 
 beforeEach(async () => {
   root = makeRoot('restricted-writes', { config: { embeddings: { enabled: false } } });
-  note = createMemory('the ops rota sits in the locked channel', { tenantId: 'default', scope: OPS, owner: OWNER });
+  note = createMemory('the ops rota sits in the locked channel', {
+    tenantId: 'default',
+    scope: OPS,
+    owner: OWNER,
+  });
   raw = createMemory('raw ops channel message about the rota', {
     tenantId: 'default',
     scope: OPS,
@@ -76,19 +85,28 @@ describe('DELETE /v1/memories/:id and POST /v1/memories/:id/archive on a restric
   it('answer a member without the grant 404, word for word as a missing id, and keep both rows', async () => {
     const missing = await forget(keys.member, 'mem_missing');
     expect(missing.status).toBe(404);
-    expect([await forget(keys.member, note.id), await archive(keys.member, raw.id)]).toEqual([missing, missing]);
+    expect([await forget(keys.member, note.id), await archive(keys.member, raw.id)]).toEqual([
+      missing,
+      missing,
+    ]);
     expect(kept()).toEqual(expect.arrayContaining([note.id, raw.id]));
     // The same member's recall of that scope is refused too, so writes and reads share one rule.
-    const recall = await fetch(`${handle.url}/v1/memories?q=rota&scope=${encodeURIComponent(OPS)}`, {
-      headers: { authorization: `Bearer ${keys.member}` },
-    });
+    const recall = await fetch(
+      `${handle.url}/v1/memories?q=rota&scope=${encodeURIComponent(OPS)}`,
+      {
+        headers: { authorization: `Bearer ${keys.member}` },
+      },
+    );
     expect(recall.status).toBe(403);
   });
 
   it.skipIf(needsHippoDb('db')).each(['granted', 'admin'] as const)(
     'let a %s key delete and archive both rows',
     async (who) => {
-      const [deleted, archived] = [await forget(keys[who], note.id), await archive(keys[who], raw.id)];
+      const [deleted, archived] = [
+        await forget(keys[who], note.id),
+        await archive(keys[who], raw.id),
+      ];
       expect([deleted.status, archived.status]).toEqual([200, 200]);
       expect(JSON.parse(deleted.body)).toEqual({ ok: true, id: '<id>' });
       expect(kept()).toEqual([]);

@@ -38,7 +38,9 @@ const leaderboard = rows;
 fs.writeFileSync(path.join(sweepDir, 'leaderboard.json'), JSON.stringify(leaderboard, null, 2));
 console.log('label\trecall@1\trecall@3\trecall@5\trecall@10');
 for (const r of leaderboard) {
-  console.log(`${r.label}\t${r['recall@1']}\t${r['recall@3']}\t${r['recall@5']}\t${r['recall@10']}`);
+  console.log(
+    `${r.label}\t${r['recall@1']}\t${r['recall@3']}\t${r['recall@5']}\t${r['recall@10']}`,
+  );
 }
 
 const winnersPath = 'results/hybrid_tuning_winners.json';

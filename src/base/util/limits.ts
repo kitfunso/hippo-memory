@@ -45,5 +45,7 @@ export function resolveListLimit(
   maxLimit: number = Infinity,
 ): number | undefined {
   if (requested === undefined) return defaultLimit;
-  return Number.isInteger(requested) && requested > 0 && requested <= maxLimit ? requested : undefined;
+  return Number.isInteger(requested) && requested > 0 && requested <= maxLimit
+    ? requested
+    : undefined;
 }

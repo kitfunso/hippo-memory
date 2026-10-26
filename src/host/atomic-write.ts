@@ -22,7 +22,9 @@ function renameOnto(tmp: string, target: string): void {
       return;
     } catch (err) {
       const transient =
-        process.platform === 'win32' && err instanceof Error && WINDOWS_RENAME_REFUSALS.includes(errorCode(err));
+        process.platform === 'win32' &&
+        err instanceof Error &&
+        WINDOWS_RENAME_REFUSALS.includes(errorCode(err));
       const left = deadline - Date.now();
       if (!transient || left <= 0) throw err;
       Atomics.wait(idle, 0, 0, Math.min(pause, left));
@@ -35,7 +37,11 @@ function renameOnto(tmp: string, target: string): void {
  */
 function writeTarget(file: string): string {
   let target = file;
-  for (let hop = 0; hop < MAX_LINK_HOPS && fs.lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink(); hop++) {
+  for (
+    let hop = 0;
+    hop < MAX_LINK_HOPS && fs.lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink();
+    hop++
+  ) {
     target = path.resolve(path.dirname(target), fs.readlinkSync(target));
   }
   return fs.existsSync(target) ? fs.realpathSync(target) : target;
@@ -60,7 +66,12 @@ function removeTemp(tmp: string): void {
 /**
  * Flushed before the rename, or a crash soon after could leave the file's name on bytes that never reached the disk.
  */
-function writeFlushed(tmp: string, data: string | Uint8Array, old: fs.Stats | undefined, opts: WriteOptions): void {
+function writeFlushed(
+  tmp: string,
+  data: string | Uint8Array,
+  old: fs.Stats | undefined,
+  opts: WriteOptions,
+): void {
   const fd = fs.openSync(tmp, 'w', (old?.mode ?? opts.mode) & 0o777);
   try {
     fs.writeFileSync(fd, data, 'utf8');
@@ -137,7 +148,11 @@ type WriteOptions = Required<Pick<AtomicWriteOptions, 'durable' | 'mode'>>;
  * content or the new, whole.
  * A file with other hard links, or a rename the platform refuses (logged), is written in place unless `inPlace` is
  * false: a crash mid-write can leave it truncated. */
-export function writeFileAtomic(file: string, data: string | Uint8Array, opts: AtomicWriteOptions = {}): void {
+export function writeFileAtomic(
+  file: string,
+  data: string | Uint8Array,
+  opts: AtomicWriteOptions = {},
+): void {
   const write: WriteOptions = { durable: opts.durable !== false, mode: opts.mode ?? 0o666 };
   const inPlace = opts.inPlace !== false;
   const target = writeTarget(file);
@@ -157,7 +172,8 @@ export function writeFileAtomic(file: string, data: string | Uint8Array, opts: A
   try {
     replaceViaTemp(target, data, old, write);
   } catch (err) {
-    if (!inPlace || !(err instanceof Error) || !REPLACE_REFUSALS.includes(errorCode(err))) throw err;
+    if (!inPlace || !(err instanceof Error) || !REPLACE_REFUSALS.includes(errorCode(err)))
+      throw err;
     log.warn(
       `${target} could not be replaced by a rename (${errorCode(err)}), so it is ` +
         `written in place: not atomic, a crash mid-write can leave it truncated`,

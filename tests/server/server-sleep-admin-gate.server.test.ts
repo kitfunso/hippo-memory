@@ -43,7 +43,11 @@ describe('POST /v1/sleep admin-role gate', () => {
       `${handle.url}${path}`,
       method === 'GET'
         ? { method }
-        : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dry_run: true }) },
+        : {
+            method,
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ dry_run: true }),
+          },
     );
 
   it.skipIf(needsHippoDb('sleep'))(
@@ -57,28 +61,35 @@ describe('POST /v1/sleep admin-role gate', () => {
     },
   );
 
-  it.skipIf(needsHippoDb('db'))('member Bearer → 403 with admin-role-required message', async () => {
-    const db = openHippoDb(home);
-    let memberKey: string;
-    try {
-      const result = createApiKey(db, { tenantId: 'default', label: 'member-test', role: 'member' });
-      memberKey = result.plaintext;
-    } finally {
-      closeHippoDb(db);
-    }
+  it.skipIf(needsHippoDb('db'))(
+    'member Bearer → 403 with admin-role-required message',
+    async () => {
+      const db = openHippoDb(home);
+      let memberKey: string;
+      try {
+        const result = createApiKey(db, {
+          tenantId: 'default',
+          label: 'member-test',
+          role: 'member',
+        });
+        memberKey = result.plaintext;
+      } finally {
+        closeHippoDb(db);
+      }
 
-    const res = await fetch(`${handle.url}/v1/sleep`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${memberKey}`,
-      },
-      body: JSON.stringify({ dry_run: true }),
-    });
-    expect(res.status).toBe(403);
-    // SAFETY: this route's 403 handler always returns a JSON body shaped
-    // { error: string } (src/server.ts admin-role gate on POST /v1/sleep).
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('admin role');
-  });
+      const res = await fetch(`${handle.url}/v1/sleep`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${memberKey}`,
+        },
+        body: JSON.stringify({ dry_run: true }),
+      });
+      expect(res.status).toBe(403);
+      // SAFETY: this route's 403 handler always returns a JSON body shaped
+      // { error: string } (src/server.ts admin-role gate on POST /v1/sleep).
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain('admin role');
+    },
+  );
 });

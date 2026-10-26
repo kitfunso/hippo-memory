@@ -29,22 +29,31 @@ const cases: ReadonlyArray<[string, CliFlags]> = [
 
 describe('flag readers', () => {
   it('stringFlag returns only a real string', () => {
-    expect(cases.map(([, f]) => stringFlag(f, 'x'))).toEqual([undefined, undefined, 'abc', '', undefined]);
+    expect(cases.map(([, f]) => stringFlag(f, 'x'))).toEqual([
+      undefined,
+      undefined,
+      'abc',
+      '',
+      undefined,
+    ]);
   });
 
   it('numberFlag parses only a real string', () => {
     expect(numberFlag({ x: '12' }, 'x')).toBe(12);
-    expect(cases.filter(([n]) => n !== 'string' && n !== 'empty string').map(([, f]) => numberFlag(f, 'x'))).toEqual([
-      undefined,
-      undefined,
-      undefined,
-    ]);
+    expect(
+      cases
+        .filter(([n]) => n !== 'string' && n !== 'empty string')
+        .map(([, f]) => numberFlag(f, 'x')),
+    ).toEqual([undefined, undefined, undefined]);
   });
 
   it('integer flags refuse a value that is not all digits', () => {
     expect([parseLimitFlag({ x: '12' }, 'x'), parseCountFlag({ x: '12' }, 'x')]).toEqual([12, 12]);
     for (const bad of ['12abc', ' 12']) {
-      expect([parseLimitFlag({ x: bad }, 'x'), parseCountFlag({ x: bad }, 'x')]).toEqual([Infinity, 0]);
+      expect([parseLimitFlag({ x: bad }, 'x'), parseCountFlag({ x: bad }, 'x')]).toEqual([
+        Infinity,
+        0,
+      ]);
     }
   });
 
@@ -106,7 +115,9 @@ describe('intFlagInRange', () => {
 
   it('has no upper bound without a max', () => {
     expect(intFlagInRange({ hops: '9000' }, 'hops', { min: 1 })).toEqual({ value: 9000 });
-    expect(refusal({ hops: '0' }, { min: 1 })).toBe('Invalid --hops: "0". Must be a positive integer.');
+    expect(refusal({ hops: '0' }, { min: 1 })).toBe(
+      'Invalid --hops: "0". Must be a positive integer.',
+    );
   });
 });
 
@@ -118,7 +129,9 @@ describe('parsePositiveId', () => {
       for (const bad of ['12abc', '1.5', '0', '-3', '']) {
         expect(() => parsePositiveId(bad, 'handoff')).toThrow(CliExit);
       }
-      expect(String(err.mock.calls[0]?.[0])).toBe('Invalid handoff id: "12abc" (expected a positive integer).');
+      expect(String(err.mock.calls[0]?.[0])).toBe(
+        'Invalid handoff id: "12abc" (expected a positive integer).',
+      );
     } finally {
       err.mockRestore();
     }
@@ -132,13 +145,18 @@ describe('inline flag reads', () => {
       if (d.isDirectory()) return sourceFiles(full);
       return d.name.endsWith('.ts') ? [full] : [];
     });
-  const files = [path.resolve('src/cli.ts'), ...sourceFiles(path.resolve('src/surface/cli'))].filter(
+  const files = [
+    path.resolve('src/cli.ts'),
+    ...sourceFiles(path.resolve('src/surface/cli')),
+  ].filter(
     (f) => path.basename(f) !== 'flag-values.ts' || !f.includes(`${path.sep}cli${path.sep}`),
   );
   const INLINE = /typeof flags\[[^\]]+\]\s*===\s*'string'\s*\?|flags\[[^\]]+\]\s+as string(?!\[)/;
 
   it('src/surface/cli has no typeof-string ternary or string cast on a flag', () => {
-    const hits = files.filter((f) => INLINE.test(fs.readFileSync(f, 'utf8'))).map((f) => path.relative('.', f));
+    const hits = files
+      .filter((f) => INLINE.test(fs.readFileSync(f, 'utf8')))
+      .map((f) => path.relative('.', f));
     expect(hits).toEqual([]);
   });
 

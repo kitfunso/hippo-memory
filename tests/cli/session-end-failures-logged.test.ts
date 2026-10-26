@@ -35,7 +35,8 @@ beforeEach(async () => {
     'HIPPO_LOG_FORMAT',
   ]);
   env = {};
-  for (const [key, value] of Object.entries(process.env)) if (!drop.has(key.toUpperCase())) env[key] = value;
+  for (const [key, value] of Object.entries(process.env))
+    if (!drop.has(key.toUpperCase())) env[key] = value;
   Object.assign(env, {
     HIPPO_HOME: path.join(tmp, 'global'),
     HOME: home,
@@ -50,7 +51,8 @@ afterEach(() => {
 });
 
 /** The lines of `text` that hold `needle`. */
-const linesWith = (text: string, needle: string): string[] => text.split('\n').filter((line) => line.includes(needle));
+const linesWith = (text: string, needle: string): string[] =>
+  text.split('\n').filter((line) => line.includes(needle));
 
 describe('a session-end step that fails', () => {
   it('a Codex history file that cannot be read is named in the session log and at warn', async () => {
@@ -93,6 +95,8 @@ describe('a session-end step that fails', () => {
     const text = fs.readFileSync(log, 'utf8');
     expect(linesWith(text, ' session-end: sleep failed: ')).toHaveLength(1);
     expect(linesWith(run.stderr, '[hippo] warn: session-end: sleep failed: ')).toHaveLength(1);
-    expect(text.indexOf('skip: no session_id')).toBeGreaterThan(text.indexOf(' session-end: sleep failed: '));
+    expect(text.indexOf('skip: no session_id')).toBeGreaterThan(
+      text.indexOf(' session-end: sleep failed: '),
+    );
   });
 });

@@ -45,9 +45,12 @@ describe('parseOlderThanFlag', () => {
     expect(parseOlderThanFlag(raw)).toBe(days);
   });
 
-  it.each(['', '0', '0d', '-5', '-5d', 'abc', '30days', '30 d', '1.5d', 'd'])('rejects invalid input %s', (raw) => {
-    expect(() => parseOlderThanFlag(raw)).toThrow(/Invalid --older-than/);
-  });
+  it.each(['', '0', '0d', '-5', '-5d', 'abc', '30days', '30 d', '1.5d', 'd'])(
+    'rejects invalid input %s',
+    (raw) => {
+      expect(() => parseOlderThanFlag(raw)).toThrow(/Invalid --older-than/);
+    },
+  );
 });
 
 describe('computeCutoff', () => {
@@ -101,7 +104,10 @@ describe('auditPrune', () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 95 });
 
-    const result = await auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 90, dryRun: true });
+    const result = await auditPrune(apiCtx(root, 'acme', adminActor('cli')), {
+      olderThanDays: 90,
+      dryRun: true,
+    });
     expect(result.count).toBe(2);
     expect(result.dryRun).toBe(true);
     expect(countAudit(db, 'acme')).toBe(2); // nothing deleted, no audit_prune emitted
@@ -115,7 +121,9 @@ describe('auditPrune', () => {
     // SAFETY: literal SELECT of these three known columns for the
     // audit_prune row auditPrune just emitted.
     const row = db
-      .prepare(`SELECT actor, op, metadata_json FROM audit_log WHERE tenant_id = ? AND op = 'audit_prune'`)
+      .prepare(
+        `SELECT actor, op, metadata_json FROM audit_log WHERE tenant_id = ? AND op = 'audit_prune'`,
+      )
       .get('acme') as { actor: string; op: string; metadata_json: string } | undefined;
     expect(row?.actor).toBe('cli:test');
     expect(row!.op).toBe('audit_prune');
@@ -136,21 +144,21 @@ describe('auditPrune', () => {
   });
 
   it('throws on non-positive olderThanDays', async () => {
-    await expect(auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 0 })).rejects.toThrow(
-      /positive number/,
-    );
-    await expect(auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: -1 })).rejects.toThrow(
-      /positive number/,
-    );
-    await expect(auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: NaN })).rejects.toThrow(
-      /positive number/,
-    );
+    await expect(
+      auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 0 }),
+    ).rejects.toThrow(/positive number/);
+    await expect(
+      auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: -1 }),
+    ).rejects.toThrow(/positive number/);
+    await expect(
+      auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: NaN }),
+    ).rejects.toThrow(/positive number/);
   });
 
   it('throws on missing tenantId', async () => {
-    await expect(auditPrune(apiCtx(root, '', adminActor('cli')), { olderThanDays: 30 })).rejects.toThrow(
-      /tenantId is required/,
-    );
+    await expect(
+      auditPrune(apiCtx(root, '', adminActor('cli')), { olderThanDays: 30 }),
+    ).rejects.toThrow(/tenantId is required/);
   });
 
   it('the just-emitted audit_prune row is NOT itself pruned by the same call', async () => {
@@ -161,7 +169,9 @@ describe('auditPrune', () => {
     expect(countAudit(db, 'acme')).toBe(1);
     // SAFETY: literal SELECT of the op column against the known audit_log
     // schema; op is NOT NULL.
-    const surviving = db.prepare(`SELECT op FROM audit_log WHERE tenant_id = ?`).all('acme') as Array<{ op: string }>;
+    const surviving = db
+      .prepare(`SELECT op FROM audit_log WHERE tenant_id = ?`)
+      .all('acme') as Array<{ op: string }>;
     expect(surviving.map((r) => r.op)).toEqual(['audit_prune']);
   });
 });

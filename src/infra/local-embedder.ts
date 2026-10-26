@@ -18,7 +18,10 @@ interface FetchGate {
  * The one call this file makes on a Transformers.js feature-extraction pipeline, and the part of its tensor it reads.
  */
 interface EmbeddingPipeline {
-  (input: string, options: { pooling: 'cls' | 'mean'; normalize: boolean }): Promise<{ data: ArrayLike<number> }>;
+  (
+    input: string,
+    options: { pooling: 'cls' | 'mean'; normalize: boolean },
+  ): Promise<{ data: ArrayLike<number> }>;
 }
 
 type PipelineFactory = (
@@ -80,7 +83,9 @@ export interface LocalEmbedder {
 }
 
 /** One pipeline per model for the embedder's life, since a pipeline is expensive to load. */
-export function createLocalEmbedder(transformers: LocalTransformers = INSTALLED_TRANSFORMERS): LocalEmbedder {
+export function createLocalEmbedder(
+  transformers: LocalTransformers = INSTALLED_TRANSFORMERS,
+): LocalEmbedder {
   let available: boolean | null = null;
   const gates = new Map<string, FetchGate>();
   const pipelines = createModelLoads<EmbeddingPipeline>(MODEL_LOAD_POLICY, warnLoadFailure);
@@ -89,13 +94,17 @@ export function createLocalEmbedder(transformers: LocalTransformers = INSTALLED_
   const isAvailable = (): boolean => (available ??= transformers.installed());
   return {
     isAvailable,
-    requirePipeline: (model, signal) => waitForPipeline(load(model), signal && gateOf(gates, model).opened, signal),
+    requirePipeline: (model, signal) =>
+      waitForPipeline(load(model), signal && gateOf(gates, model).opened, signal),
     async embed(text, model, role) {
       if (!isAvailable()) return [];
       try {
         const pipe = await load(model);
         const prefix = prefixFor(model, role);
-        const output = await pipe(prefix ? `${prefix}${text}` : text, { pooling: poolingFor(model), normalize: true });
+        const output = await pipe(prefix ? `${prefix}${text}` : text, {
+          pooling: poolingFor(model),
+          normalize: true,
+        });
         return Array.from(output.data);
       } catch (err) {
         // The caller sees `[]` and names the memory; the first failure per model warns, then every 100th repeat.
@@ -139,7 +148,8 @@ async function createPipeline(
   if (!pipelineFn) throw new Error(`${name} exports no pipeline function`);
 
   // The offline bundle used in egress-blocked sandboxes ships only the FP32 model, so use whichever file is on disk.
-  const quantized = !cache || fs.existsSync(path.join(cache, model, 'onnx', 'model_quantized.onnx'));
+  const quantized =
+    !cache || fs.existsSync(path.join(cache, model, 'onnx', 'model_quantized.onnx'));
   if (fetchesWeights(mod.env, model)) gateOf(gates, model).open();
   try {
     return await pipelineFn('feature-extraction', model, { quantized });
@@ -174,7 +184,8 @@ function gateOf(gates: Map<string, FetchGate>, model: string): FetchGate {
 function rejectOnAbort(signal: AbortSignal, done: AbortSignal): Promise<never> {
   return new Promise<never>((_resolve, reject) => {
     if (signal.aborted) reject(signal.reason);
-    else signal.addEventListener('abort', () => reject(signal.reason), { once: true, signal: done });
+    else
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true, signal: done });
   });
 }
 
@@ -202,6 +213,10 @@ export const sharedLocalEmbedder = createLocalEmbedder();
 
 /** Embeds `text` with the local model, or returns `[]` when Transformers.js is missing or fails; `role` adds e5-style
  * prefixes. */
-export function getEmbedding(text: string, model = DEFAULT_EMBEDDING_MODEL, role?: EmbeddingRole): Promise<number[]> {
+export function getEmbedding(
+  text: string,
+  model = DEFAULT_EMBEDDING_MODEL,
+  role?: EmbeddingRole,
+): Promise<number[]> {
   return sharedLocalEmbedder.embed(text, model, role);
 }

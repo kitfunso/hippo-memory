@@ -14,7 +14,10 @@ export function requireStatus<S extends string>(status: string, states: Readonly
 }
 
 /** `--status` checked against the kind's states; undefined when absent or `all`. */
-export function statusFilter<S extends string>(flags: CliFlags, states: ReadonlySet<S>): S | undefined {
+export function statusFilter<S extends string>(
+  flags: CliFlags,
+  states: ReadonlySet<S>,
+): S | undefined {
   const status = stringFlag(flags, 'status')?.trim() ?? 'all';
   return status === 'all' ? undefined : requireStatus(status, states);
 }
@@ -26,7 +29,10 @@ export interface ObjectListSpec<O, S extends string> {
   readonly printRow: (o: O) => void;
 }
 
-export async function listObjectsVerb<O, S extends string>(flags: CliFlags, spec: ObjectListSpec<O, S>): Promise<void> {
+export async function listObjectsVerb<O, S extends string>(
+  flags: CliFlags,
+  spec: ObjectListSpec<O, S>,
+): Promise<void> {
   const limit = parseListLimit(flags);
   const status = statusFilter(flags, spec.states);
   const results = await spec.load(status === undefined ? { limit } : { status, limit });

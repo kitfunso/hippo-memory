@@ -28,7 +28,10 @@ export function copilotScratch(): CopilotScratch {
   const s = scratch();
   const copilotHome = path.join(s.dir, '.copilot');
   // VS Code's folders too, so no hook run can read a real VS Code User folder.
-  const vscodeFolders = { APPDATA: path.join(s.dir, 'appdata'), XDG_CONFIG_HOME: path.join(s.dir, 'xdg-config') };
+  const vscodeFolders = {
+    APPDATA: path.join(s.dir, 'appdata'),
+    XDG_CONFIG_HOME: path.join(s.dir, 'xdg-config'),
+  };
   return { ...s, copilotHome, env: { ...s.env, COPILOT_HOME: copilotHome, ...vscodeFolders } };
 }
 
@@ -58,7 +61,8 @@ export function claudeCodePayload(
     permission_mode: 'default',
     hook_event_name: event,
   };
-  if (event === 'PreCompact') return JSON.stringify({ ...common, trigger: 'auto', custom_instructions: '' });
+  if (event === 'PreCompact')
+    return JSON.stringify({ ...common, trigger: 'auto', custom_instructions: '' });
   if (event === 'SessionEnd') return JSON.stringify({ ...common, reason: 'other' });
   return JSON.stringify({
     ...common,
@@ -74,10 +78,16 @@ export function claudeCodePayload(
 export function writeClaudeTranscript(dir: string): string {
   const file = path.join(dir, `${CLAUDE_SESSION}.jsonl`);
   const lines = [
-    { type: 'user', message: { role: 'user', content: 'fix the flaky login test in auth.spec.ts' } },
+    {
+      type: 'user',
+      message: { role: 'user', content: 'fix the flaky login test in auth.spec.ts' },
+    },
     {
       type: 'assistant',
-      message: { role: 'assistant', content: [{ type: 'text', text: 'The retry is fixed; the test run is next.' }] },
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'The retry is fixed; the test run is next.' }],
+      },
     },
   ];
   fs.writeFileSync(file, lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
@@ -96,7 +106,11 @@ export function copilotEventsTail(): string {
 }
 
 /** Writes the event log where the Copilot CLI keeps it, `<COPILOT_HOME>/session-state/<id>/events.jsonl`. */
-export function writeCopilotSessionLog(copilotHome: string, sessionId: string, text: string): string {
+export function writeCopilotSessionLog(
+  copilotHome: string,
+  sessionId: string,
+  text: string,
+): string {
   const dir = path.join(copilotHome, 'session-state', sessionId);
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, 'events.jsonl');

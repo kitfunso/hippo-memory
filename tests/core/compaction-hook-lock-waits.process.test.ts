@@ -51,7 +51,10 @@ describe('pre-compact on a locked store', () => {
         '\n' +
         JSON.stringify({
           type: 'assistant',
-          message: { role: 'assistant', content: [{ type: 'text', text: 'Looking at the login test now.' }] },
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Looking at the login test now.' }],
+          },
         }) +
         '\n',
     );
@@ -68,7 +71,11 @@ describe('pre-compact on a locked store', () => {
         trigger: 'auto',
         session_id: 's1',
       });
-      const result = hippoRun(['pre-compact', '--log-file', logFile], { cwd: s.proj, env: s.env, input: payload });
+      const result = hippoRun(['pre-compact', '--log-file', logFile], {
+        cwd: s.proj,
+        env: s.env,
+        input: payload,
+      });
       expect(result.status).toBe(0);
       expect(result.stdout).toBe(`${INSTRUCTION}\n`);
       // One wait for the token-ledger row and one for the record, then none: far inside the 30 s Claude Code gives PreCompact.
@@ -93,7 +100,9 @@ describe('post-compact on a locked store', () => {
         input: postCompactPayload('s1', s.proj, summaryWith(ITEMS)),
       });
       expect(hook.status).toBe(0);
-      expect(oneLine(hook.stdout)).toBe('Hippo will finish saving this compaction at the next sleep.');
+      expect(oneLine(hook.stdout)).toBe(
+        'Hippo will finish saving this compaction at the next sleep.',
+      );
       // One wait, then the spool: a small part of the 10 s Claude Code gives PostCompact.
       expect(lockWaitAskedMs(waits, hook.pid)).toBe(COMPACTION_DB_WAIT_MS);
     } finally {
@@ -108,6 +117,8 @@ describe('post-compact on a locked store', () => {
     expect((await runHippoIn(['sleep', '--no-learn', '--no-share'], s.proj, s.env)).status).toBe(0);
     expect(fs.readdirSync(spool)).toEqual([]);
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
-    expect(compactionRows(s.hippoRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2 }]);
+    expect(compactionRows(s.hippoRoot)).toMatchObject([
+      { session_id: 's1', status: 'done', items_written: 2 },
+    ]);
   });
 });

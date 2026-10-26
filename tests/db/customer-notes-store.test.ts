@@ -28,7 +28,9 @@ function memTags(home: string, memoryId: string): string[] {
   try {
     // SAFETY: caller passes the id of a memory row that was just written, so
     // it exists and its tags_json column is always a JSON array string.
-    const r = db.prepare(`SELECT tags_json FROM memories WHERE id = ?`).get(memoryId) as { tags_json: string };
+    const r = db.prepare(`SELECT tags_json FROM memories WHERE id = ?`).get(memoryId) as {
+      tags_json: string;
+    };
     // SAFETY: tags_json is always written as a JSON array of strings (see
     // src/store/entry-writes.ts writeEntry serialization); never any other JSON shape.
     return JSON.parse(r.tags_json) as string[];
@@ -45,10 +47,15 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
   afterEach(() => removeAfterRequest(home));
 
   it('saveCustomerNote creates memory + row + customer_note_create audit; v1', async () => {
-    const n = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
-      customer: 'Acme Corp',
-      note: 'renewal call notes',
-    });
+    const n = await saveCustomerNote(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      'default',
+      {
+        customer: 'Acme Corp',
+        note: 'renewal call notes',
+      },
+    );
     // The first row of a fresh AUTOINCREMENT table.
     expect(n.id).toBe(1);
     expect(n.memoryId).not.toBeNull();
@@ -61,7 +68,9 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
     try {
       // SAFETY: n.memoryId is the id just returned by saveCustomerNote's memory
       // mirror write, so the row exists with these columns.
-      const memRow = db.prepare(`SELECT content, source FROM memories WHERE id = ?`).get(n.memoryId!) as {
+      const memRow = db
+        .prepare(`SELECT content, source FROM memories WHERE id = ?`)
+        .get(n.memoryId!) as {
         content: string;
         source: string;
       };
@@ -71,12 +80,16 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
       // SAFETY: metadata_json is always a JSON object with a customer_note_create
       // audit's fields (see src/domain/objects/customer-notes.ts saveCustomerNote audit write).
       const rows = db
-        .prepare(`SELECT metadata_json FROM audit_log WHERE op='customer_note_create' AND target_id=?`)
+        .prepare(
+          `SELECT metadata_json FROM audit_log WHERE op='customer_note_create' AND target_id=?`,
+        )
         .all(String(n.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
       // SAFETY: metadata_json for a customer_note_create audit row always
       // includes the `customer` field written by saveCustomerNote.
-      expect((JSON.parse(rows[0].metadata_json) as { customer: string }).customer).toBe('Acme Corp');
+      expect((JSON.parse(rows[0].metadata_json) as { customer: string }).customer).toBe(
+        'Acme Corp',
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -95,11 +108,16 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
     expect(n).toContain('customer_note');
     expect(n).toContain('customer:acme corp'); // lowercased
     // a customer containing a colon does not corrupt the tag (it is one element)
-    const n2 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
-      customer: 'acme:corp',
-      note: 'y',
-      extraTags: ['vip'],
-    });
+    const n2 = await saveCustomerNote(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      'default',
+      {
+        customer: 'acme:corp',
+        note: 'y',
+        extraTags: ['vip'],
+      },
+    );
     const tags2 = memTags(home, n2.memoryId!);
     expect(tags2).toContain('customer:acme:corp');
     expect(tags2).toContain('vip');
@@ -107,29 +125,53 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
 
   it('status + customer filters; MANY active notes per customer', async () => {
     // a single customer accrues MANY notes (the key difference from project_brief)
-    const a1 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+    const a1 = await saveCustomerNote(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      'default',
+      {
+        customer: 'Acme',
+        note: 'note 1',
+      },
+    );
+    const a2 = await saveCustomerNote(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      'default',
+      {
+        customer: 'Acme',
+        note: 'note 2',
+      },
+    );
+    const b1 = await saveCustomerNote(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      'default',
+      {
+        customer: 'Beta',
+        note: 'b note',
+      },
+    );
+    await closeObject(objectsAt(home), CUSTOMER_NOTE, 'default', b1.id, {
+      actor: CLI_ACTOR,
+      now: evalNow(),
+    });
+    const acmeActive = await loadCustomerNotes(objectsAt(home), 'default', {
       customer: 'Acme',
-      note: 'note 1',
+      status: 'active',
     });
-    const a2 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
-      customer: 'Acme',
-      note: 'note 2',
-    });
-    const b1 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
-      customer: 'Beta',
-      note: 'b note',
-    });
-    await closeObject(objectsAt(home), CUSTOMER_NOTE, 'default', b1.id, { actor: CLI_ACTOR, now: evalNow() });
-    const acmeActive = await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Acme', status: 'active' });
     expect(acmeActive.map((x) => x.id).sort()).toEqual([a1.id, a2.id].sort());
     expect(acmeActive.length).toBe(2); // MANY-per-customer
-    expect((await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Beta' })).length).toBe(1);
-    expect((await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Beta', status: 'active' })).length).toBe(
-      0,
-    ); // closed
-    expect((await loadCustomerNotes(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([
-      b1.id,
-    ]);
+    expect((await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Beta' })).length).toBe(
+      1,
+    );
+    expect(
+      (await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Beta', status: 'active' }))
+        .length,
+    ).toBe(0); // closed
+    expect(
+      (await loadCustomerNotes(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id),
+    ).toEqual([b1.id]);
     expect((await loadCustomerNotes(objectsAt(home), 'default')).length).toBe(3);
   });
 
@@ -141,7 +183,10 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
       }),
     ).rejects.toThrow(/customer must not be blank/);
     await expect(
-      saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'c', note: '  ' }),
+      saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+        customer: 'c',
+        note: '  ',
+      }),
     ).rejects.toThrow(/note must not be blank/);
     await expect(
       saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {

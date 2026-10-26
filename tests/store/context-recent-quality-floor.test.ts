@@ -94,10 +94,18 @@ describe('includeRecent quality floor (api.contextGet)', () => {
       });
       const contents = result.entries.map((e) => e.entry.content);
 
-      expect(contents).toContain('clean memory number one with plenty of specific detail worth keeping');
-      expect(contents).toContain('clean memory number two with plenty of specific detail worth keeping');
-      expect(contents).toContain('clean memory number three with plenty of specific detail worth keeping');
-      expect(contents).toContain('clean memory number four with plenty of specific detail worth keeping');
+      expect(contents).toContain(
+        'clean memory number one with plenty of specific detail worth keeping',
+      );
+      expect(contents).toContain(
+        'clean memory number two with plenty of specific detail worth keeping',
+      );
+      expect(contents).toContain(
+        'clean memory number three with plenty of specific detail worth keeping',
+      );
+      expect(contents).toContain(
+        'clean memory number four with plenty of specific detail worth keeping',
+      );
       expect(contents).not.toContain('fixed signals');
       expect(contents.length).toBe(4);
     } finally {
@@ -147,7 +155,9 @@ describe('includeRecent quality floor (api.contextGet)', () => {
 
       expect(contents).toContain('clean memory alpha with plenty of specific detail worth keeping');
       expect(contents).toContain('clean memory bravo with plenty of specific detail worth keeping');
-      expect(contents).toContain('clean memory charlie with plenty of specific detail worth keeping');
+      expect(contents).toContain(
+        'clean memory charlie with plenty of specific detail worth keeping',
+      );
       expect(contents).toContain('clean memory delta with plenty of specific detail worth keeping');
       expect(contents).toContain('clean memory echo with plenty of specific detail worth keeping');
       expect(contents).not.toContain('quick patch applied');
@@ -273,7 +283,11 @@ describe('includeRecent quality floor (api.contextGet)', () => {
       });
       seed(home, 'fixed signals', { created: '2026-08-20T10:00:00.000Z' });
 
-      const resultAbsent = await contextGet(ctx, { currentProject: cwdProject(), pinnedOnly: true, budget: 500 });
+      const resultAbsent = await contextGet(ctx, {
+        currentProject: cwdProject(),
+        pinnedOnly: true,
+        budget: 500,
+      });
       const resultExplicitZero = await contextGet(ctx, {
         currentProject: cwdProject(),
         pinnedOnly: true,
@@ -400,9 +414,15 @@ describe('includeRecent quality floor (api.contextGet)', () => {
       const contents = result.entries.map((e) => e.entry.content);
 
       expect(contents).toContain('fixed signals');
-      expect(contents).toContain('clean recent entry alpha with plenty of specific detail worth keeping');
-      expect(contents).toContain('clean recent entry bravo with plenty of specific detail worth keeping');
-      expect(contents).toContain('clean recent entry charlx with plenty of specific detail worth keeping');
+      expect(contents).toContain(
+        'clean recent entry alpha with plenty of specific detail worth keeping',
+      );
+      expect(contents).toContain(
+        'clean recent entry bravo with plenty of specific detail worth keeping',
+      );
+      expect(contents).toContain(
+        'clean recent entry charlx with plenty of specific detail worth keeping',
+      );
       expect(contents.length).toBe(4);
     } finally {
       restore();
@@ -430,7 +450,9 @@ describe('includeRecent quality floor (api.contextGet)', () => {
       });
       const contents = result.entries.map((e) => e.entry.content);
 
-      expect(contents).toEqual(['surviving pinned rule that must still appear even with all recent junk']);
+      expect(contents).toEqual([
+        'surviving pinned rule that must still appear even with all recent junk',
+      ]);
     } finally {
       restore();
     }
@@ -452,7 +474,9 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
     const saved = process.cwd();
     process.chdir(tmpDir);
     try {
-      const r = await runInProcess(() => withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])));
+      const r = await runInProcess(() =>
+        withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])),
+      );
       expect(r.status, r.stderr).toBe(0);
       return r.stdout;
     } finally {
@@ -462,11 +486,17 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
 
   it('`hippo context --pinned-only --include-recent 5` excludes junk against a seeded store', async () => {
     initTestStore(hippoDir);
-    const junk = createMemory('fixed signals', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
-    const clean = createMemory('clean CLI-seeded memory with plenty of specific detail worth keeping', {
+    const junk = createMemory('fixed signals', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
     });
+    const clean = createMemory(
+      'clean CLI-seeded memory with plenty of specific detail worth keeping',
+      {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        layer: Layer.Episodic,
+      },
+    );
     junk.created = '2026-08-20T10:00:01.000Z';
     clean.created = '2026-08-20T10:00:00.000Z';
     writeEntry(hippoDir, junk);
@@ -485,7 +515,9 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
     const parsed = JSON.parse(out);
     const context = parsed.hookSpecificOutput.additionalContext;
 
-    expect(context).toContain('clean CLI-seeded memory with plenty of specific detail worth keeping');
+    expect(context).toContain(
+      'clean CLI-seeded memory with plenty of specific detail worth keeping',
+    );
     expect(context).not.toContain('fixed signals');
   });
 });
@@ -528,12 +560,15 @@ describe('pinned budget reserve dedupes mirrored entries', () => {
     writeEntry(home, pin);
     writeEntry(globalTmp, pin);
 
-    const recent = createMemory('a clean recent memory that should still fit alongside the single pin', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      pinned: false,
-      layer: Layer.Episodic,
-      tenantId: 'default',
-    });
+    const recent = createMemory(
+      'a clean recent memory that should still fit alongside the single pin',
+      {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        pinned: false,
+        layer: Layer.Episodic,
+        tenantId: 'default',
+      },
+    );
     writeEntry(home, recent);
 
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'test', role: 'admin' });
@@ -544,7 +579,12 @@ describe('pinned budget reserve dedupes mirrored entries', () => {
     // A larger budget passes either way and proves nothing (verified: at 46
     // both branches leave room, which is why the first draft of this test was
     // green against the unfixed code).
-    const res = await contextGet(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 3, budget: 35 });
+    const res = await contextGet(ctx, {
+      currentProject: cwdProject(),
+      pinnedOnly: true,
+      includeRecent: 3,
+      budget: 35,
+    });
     const contents = res.entries.map((e) => e.entry.content);
 
     expect(contents).toContain(pin.content);

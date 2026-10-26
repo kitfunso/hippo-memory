@@ -18,7 +18,12 @@ import {
   upperLevelBytes,
 } from './vector-graph-file.js';
 import { admittedRows, proposedMatches, STALE_SHARE, storedModel } from './vector-graph-rows.js';
-import type { ProposedMatches, VectorIndex, VectorMatch, VectorMatchQuery } from './vector-store.js';
+import type {
+  ProposedMatches,
+  VectorIndex,
+  VectorMatch,
+  VectorMatchQuery,
+} from './vector-store.js';
 
 // Rows below the file's newest that may be checked for the newest row still holding what the file read.
 const INTACT_WALK = 32;
@@ -99,7 +104,8 @@ class GraphFileView implements GraphView {
     const known = this.#records.get(node);
     if (known) return known;
     const { nodes, recordsAt, recordBytes, highRowid, maxLevel, m, dim, upperBytes } = this.stamp;
-    if (!Number.isInteger(node) || node < 0 || node >= nodes) throw this.#bad(`node ${node} is out of range`);
+    if (!Number.isInteger(node) || node < 0 || node >= nodes)
+      throw this.#bad(`node ${node} is out of range`);
     const buf = this.#read(recordsAt + node * recordBytes, recordBytes);
     const rowid = buf.readDoubleLE(RECORD_AT.rowid);
     const [level, flags, count, upperOffset] = [
@@ -108,16 +114,26 @@ class GraphFileView implements GraphView {
       buf.readUInt16LE(RECORD_AT.linkCount),
       buf.readUInt32LE(RECORD_AT.upperOffset),
     ];
-    const upperFits = level === 0 || (upperOffset % 4 === 0 && upperOffset + level * upperLevelBytes(m) <= upperBytes);
-    const fits = Number.isSafeInteger(rowid) && rowid >= 1 && rowid <= highRowid && level <= maxLevel && flags <= 1;
-    if (!fits || count > 2 * m || !upperFits) throw this.#bad(`node ${node} has a value out of bounds`);
+    const upperFits =
+      level === 0 ||
+      (upperOffset % 4 === 0 && upperOffset + level * upperLevelBytes(m) <= upperBytes);
+    const fits =
+      Number.isSafeInteger(rowid) &&
+      rowid >= 1 &&
+      rowid <= highRowid &&
+      level <= maxLevel &&
+      flags <= 1;
+    if (!fits || count > 2 * m || !upperFits)
+      throw this.#bad(`node ${node} has a value out of bounds`);
     const record: NodeRecord = {
       rowid,
       idHash: buf.readUInt32LE(RECORD_AT.idHash),
       level,
       replaced: isReplaced(flags),
       links: this.#links(buf, RECORD_HEAD, count, node),
-      vector: new Float32Array(new Int8Array(buf.buffer, buf.byteOffset + RECORD_HEAD + 8 * m, dim)),
+      vector: new Float32Array(
+        new Int8Array(buf.buffer, buf.byteOffset + RECORD_HEAD + 8 * m, dim),
+      ),
       upperOffset,
     };
     this.#records.set(node, record);
@@ -127,12 +143,16 @@ class GraphFileView implements GraphView {
   linksOf(node: number, level: number): ArrayLike<number> {
     const record = this.record(node);
     if (level === 0) return record.links;
-    if (level > record.level) throw this.#bad(`node ${node} is linked at level ${level}, above its own`);
+    if (level > record.level)
+      throw this.#bad(`node ${node} is linked at level ${level}, above its own`);
     const key = node * 16 + level;
     const known = this.#upper.get(key);
     if (known) return known;
     const { upperAt, m } = this.stamp;
-    const buf = this.#read(upperAt + record.upperOffset + (level - 1) * upperLevelBytes(m), upperLevelBytes(m));
+    const buf = this.#read(
+      upperAt + record.upperOffset + (level - 1) * upperLevelBytes(m),
+      upperLevelBytes(m),
+    );
     const count = buf.readUInt32LE(0);
     if (count > m) throw this.#bad(`node ${node} has ${count} links at level ${level}`);
     const links = this.#links(buf, 4, count, node);
@@ -156,7 +176,8 @@ class GraphFileView implements GraphView {
     const links = new Uint32Array(count);
     for (let j = 0; j < count; j++) {
       links[j] = buf.readUInt32LE(at + 4 * j);
-      if (links[j] >= this.stamp.nodes) throw this.#bad(`node ${node} links to node ${links[j]}, out of range`);
+      if (links[j] >= this.stamp.nodes)
+        throw this.#bad(`node ${node} links to node ${links[j]}, out of range`);
     }
     return links;
   }
@@ -223,7 +244,8 @@ function fileMatches(
   const filter = { dim: q.length, where, params };
   return proposedMatches(query, k, {
     nodes: file.stamp.nodes,
-    walk: (ef) => searchView(file, q, { k: ef, ef, admit, vectorOf: (node) => file.record(node).vector }),
+    walk: (ef) =>
+      searchView(file, q, { k: ef, ef, admit, vectorOf: (node) => file.record(node).vector }),
     admit: (nodes) =>
       admittedRows(
         db,

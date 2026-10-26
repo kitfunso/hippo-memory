@@ -28,7 +28,10 @@ interface ArchivedMemoryRow {
 
 /** Stamps the archived copy of `memoryId` as having its markdown mirror cleaned at `at`. */
 export function markMirrorCleaned(db: DatabaseSyncLike, memoryId: string, at: string): void {
-  cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(at, memoryId);
+  cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
+    at,
+    memoryId,
+  );
 }
 
 // Every id list binds as one JSON array, so each statement's text is the same for one row or many.
@@ -37,9 +40,10 @@ const IDS = 'SELECT value FROM json_each(?)';
 /** The rows behind `ids`, in their order; throws for the first one that is missing or not raw. */
 function readRawRows(db: DatabaseSyncLike, ids: readonly string[]): ArchivedMemoryRow[] {
   // SAFETY: the four selected columns are the interface's keys, each a memories column.
-  const rows = cachedStatement(db, `SELECT id, kind, tenant_id, dag_parent_id FROM memories WHERE id IN (${IDS})`).all(
-    JSON.stringify(ids),
-  ) as ArchivedMemoryRow[];
+  const rows = cachedStatement(
+    db,
+    `SELECT id, kind, tenant_id, dag_parent_id FROM memories WHERE id IN (${IDS})`,
+  ).all(JSON.stringify(ids)) as ArchivedMemoryRow[];
   const byId = new Map(rows.map((row) => [row.id, row]));
   return ids.map((id) => {
     const row = byId.get(id);
@@ -50,7 +54,11 @@ function readRawRows(db: DatabaseSyncLike, ids: readonly string[]): ArchivedMemo
   });
 }
 
-function moveRowsToArchive(db: DatabaseSyncLike, rows: readonly ArchivedMemoryRow[], opts: ArchiveOptions): string {
+function moveRowsToArchive(
+  db: DatabaseSyncLike,
+  rows: readonly ArchivedMemoryRow[],
+  opts: ArchiveOptions,
+): string {
   // GDPR: raw_archive stores ONLY metadata, never the original content; the archive_raw audit row is the compliance
   // trail, so the content is unrecoverable from here on.
   const archivedAt = handleStamp(db);
@@ -74,13 +82,18 @@ function moveRowsToArchive(db: DatabaseSyncLike, rows: readonly ArchivedMemoryRo
   cachedStatement(db, `UPDATE memories SET kind = 'archived' WHERE id IN (${IDS})`).run(ids);
   cachedStatement(db, `DELETE FROM memories WHERE id IN (${IDS})`).run(ids);
   // Archived text must be unsearchable at commit, so a failed purge fails (and rolls back) the whole archive.
-  if (isFtsAvailable(db)) cachedStatement(db, `DELETE FROM memories_fts WHERE id IN (${IDS})`).run(ids);
+  if (isFtsAvailable(db))
+    cachedStatement(db, `DELETE FROM memories_fts WHERE id IN (${IDS})`).run(ids);
   return archivedAt;
 }
 
 // Emit the archive_raw audit inside the SAVEPOINT so it commits atomically with the row deletion, attributed to each
 // row's own tenant_id, not whatever HIPPO_TENANT the calling shell has set.
-function auditArchive(db: DatabaseSyncLike, rows: readonly ArchivedMemoryRow[], opts: ArchiveOptions): void {
+function auditArchive(
+  db: DatabaseSyncLike,
+  rows: readonly ArchivedMemoryRow[],
+  opts: ArchiveOptions,
+): void {
   const actor = opts.who || CLI_ACTOR;
   try {
     appendAuditEvents(
@@ -101,17 +114,27 @@ function auditArchive(db: DatabaseSyncLike, rows: readonly ArchivedMemoryRow[], 
 
 // Archiving a child under a level-2 summary marks the parent dirty, inside the SAVEPOINT so the dirty-mark commits
 // atomically with the archive.
-function markParentsDirty(db: DatabaseSyncLike, rows: readonly ArchivedMemoryRow[], who: string): void {
+function markParentsDirty(
+  db: DatabaseSyncLike,
+  rows: readonly ArchivedMemoryRow[],
+  who: string,
+): void {
   const parents = new Map<string, string>();
   for (const row of rows) {
-    if (row.dag_parent_id) parents.set(String(row.dag_parent_id), String(row.tenant_id ?? DEFAULT_TENANT_ID));
+    if (row.dag_parent_id)
+      parents.set(String(row.dag_parent_id), String(row.tenant_id ?? DEFAULT_TENANT_ID));
   }
-  for (const [parent, tenant] of parents) markSummaryDirtyInTx(db, parent, tenant, who || CLI_ACTOR);
+  for (const [parent, tenant] of parents)
+    markSummaryDirtyInTx(db, parent, tenant, who || CLI_ACTOR);
 }
 
 /** archiveRawMemory for every row in `ids` in one write scope, in the same few statements for one row or many; throws,
  * archiving none, if any is missing or not raw. Returns the archived_at. */
-export function archiveRawMemories(db: DatabaseSyncLike, ids: readonly string[], opts: ArchiveOptions): string {
+export function archiveRawMemories(
+  db: DatabaseSyncLike,
+  ids: readonly string[],
+  opts: ArchiveOptions,
+): string {
   const rows = readRawRows(db, [...new Set(ids)]);
   // A SAVEPOINT when already inside a transaction (e.g. batchWriteAndDelete), so a throw here rolls back only this
   // archive.

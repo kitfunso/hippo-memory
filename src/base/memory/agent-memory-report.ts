@@ -87,7 +87,14 @@ export function toolReport(report: ImportReport, tool: ToolId): ToolReport {
   const found = report.tools.find((t) => t.tool === tool);
   if (found) return found;
   const label = AGENT_MEMORY_TOOLS.find((t) => t.id === tool)?.label ?? tool;
-  const created: ToolReport = { tool, label, homes: [], containers: [], tally: emptyTally(), unlisted: 0 };
+  const created: ToolReport = {
+    tool,
+    label,
+    homes: [],
+    containers: [],
+    tally: emptyTally(),
+    unlisted: 0,
+  };
   report.tools.push(created);
   return created;
 }
@@ -141,7 +148,9 @@ export function detailLines(report: ImportReport, dryRun: boolean): string[] {
         `    ${c.scope} ${c.path}: ${c.readable ? plural(c.items, 'note', 'notes') : 'unreadable'}, into ${c.store}`,
       );
     }
-    const moved = TALLY_FIELDS.filter((f) => t.tally[f] > 0).map((f) => `${t.tally[f]} ${TALLY_WORDS[f]}`);
+    const moved = TALLY_FIELDS.filter((f) => t.tally[f] > 0).map(
+      (f) => `${t.tally[f]} ${TALLY_WORDS[f]}`,
+    );
     if (moved.length > 0) lines.push(`    ${dryRun ? 'would be ' : ''}${moved.join(', ')}`);
     if (t.unlisted > 0) {
       lines.push(
@@ -163,12 +172,17 @@ export function summaryLine(report: ImportReport): string | null {
     total.replaced > 0 ? `${total.replaced} replaced` : '',
     total.restored > 0 ? `${total.restored} brought back` : '',
     total.setAside > 0 ? `${total.setAside} set aside` : '',
-    total.untagged > 0 ? `${plural(total.untagged, 'pinned memory', 'pinned memories')} kept with the note gone` : '',
+    total.untagged > 0
+      ? `${plural(total.untagged, 'pinned memory', 'pinned memories')} kept with the note gone`
+      : '',
     total.secret > 0 ? `${total.secret} skipped for a secret` : '',
     total.rejected > 0 ? `${total.rejected} skipped as rejected` : '',
   ].filter((p) => p !== '');
-  if (total.imported === 0) return parts.length === 0 ? null : `Agent memories: ${parts.join(', ')}.`;
-  const byTool = report.tools.filter((t) => t.tally.imported > 0).map((t) => `${t.label} ${t.tally.imported}`);
+  if (total.imported === 0)
+    return parts.length === 0 ? null : `Agent memories: ${parts.join(', ')}.`;
+  const byTool = report.tools
+    .filter((t) => t.tally.imported > 0)
+    .map((t) => `${t.label} ${t.tally.imported}`);
   const head = `Imported ${plural(total.imported, 'agent memory', 'agent memories')} (${byTool.join(', ')})`;
   return parts.length === 0 ? `${head}.` : `${head}; ${parts.join(', ')}.`;
 }

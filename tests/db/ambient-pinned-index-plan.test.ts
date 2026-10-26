@@ -16,7 +16,9 @@ interface AmbientSql {
 }
 
 function ambientSql(root: string): AmbientSql {
-  const { statements } = recordStatements(() => loadAmbientCandidates(root, 'default', 1, () => true));
+  const { statements } = recordStatements(() =>
+    loadAmbientCandidates(root, 'default', 1, () => true),
+  );
   const pinned = statements.find((sql) => sql.includes('pinned = 1'));
   const drift = statements.find((sql) => sql.includes('length(created)'));
   if (pinned === undefined || drift === undefined) {
@@ -34,7 +36,9 @@ function plan(db: DatabaseSyncLike, sql: string): string {
 function indexNames(db: DatabaseSyncLike): string[] {
   // SAFETY: one `name` TEXT column.
   return (
-    db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memories'`).all() as Array<{
+    db
+      .prepare(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memories'`)
+      .all() as Array<{
       name: string;
     }>
   ).map((r) => r.name);
@@ -73,10 +77,18 @@ describe('ambient pinned query plan', () => {
     try {
       // SAFETY: one `id` TEXT column.
       const seeded = (
-        db.prepare(`SELECT id FROM memories WHERE pinned = 1 ORDER BY id`).all() as Array<{ id: string }>
+        db.prepare(`SELECT id FROM memories WHERE pinned = 1 ORDER BY id`).all() as Array<{
+          id: string;
+        }>
       ).map((r) => r.id);
-      const created = ['2021-03-01T00:00:00.000Z', '2021-01-01T00:00:00.000Z', '2021-02-01T00:00:00.000Z'];
-      seeded.forEach((id, i) => db.prepare(`UPDATE memories SET created = ? WHERE id = ?`).run(created[i], id));
+      const created = [
+        '2021-03-01T00:00:00.000Z',
+        '2021-01-01T00:00:00.000Z',
+        '2021-02-01T00:00:00.000Z',
+      ];
+      seeded.forEach((id, i) =>
+        db.prepare(`UPDATE memories SET created = ? WHERE id = ?`).run(created[i], id),
+      );
       const pins = loadAmbientCandidates(root, 'default', 0, () => true).entries;
       expect(pins.map((e) => e.id)).toEqual([seeded[1], seeded[2], seeded[0]]);
       expect(db.prepare(AMBIENT_DRIFT_SQL).get('default')).toBeUndefined();
@@ -103,9 +115,10 @@ describe('ambient pinned query plan', () => {
       expect(first).toContain('idx_memories_pinned');
       expect(first).toContain('idx_memories_created_drift');
       // SAFETY: meta.value is TEXT; one row by primary key.
-      expect((db.prepare(`SELECT value FROM meta WHERE key='schema_version'`).get() as { value: string }).value).toBe(
-        LATEST_SCHEMA_VERSION_STR,
-      );
+      expect(
+        (db.prepare(`SELECT value FROM meta WHERE key='schema_version'`).get() as { value: string })
+          .value,
+      ).toBe(LATEST_SCHEMA_VERSION_STR);
     } finally {
       closeHippoDb(db);
     }

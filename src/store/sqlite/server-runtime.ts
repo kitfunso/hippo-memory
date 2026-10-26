@@ -5,7 +5,12 @@ import type { HippoStore, StoreReach } from '../../base/ports/store.js';
 import { createSqliteExecutor, type ExecutorOptions } from './executor.js';
 import { workerCounts } from './executor-counts.js';
 import { isHippoDbStore } from './hippo-db-stores.js';
-import { createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder } from './held-connection.js';
+import {
+  createStoreHolder,
+  offLoopFor,
+  outsideRouteBlock,
+  type StoreHolder,
+} from './held-connection.js';
 import { sqliteReach } from './store.js';
 import { globalStoresFor, workerSqliteStore } from './worker-store.js';
 import { currentStoreRuntime, StoreRuntime } from '../../db/store-runtime.js';
@@ -38,7 +43,10 @@ export interface SqliteServerRuntime extends Omit<StoreHolder, 'release'> {
 }
 
 /** hippo.db under `hippoRoot` as a server runs it: `opts.store` when given, else a worker store on `opts`' executor. */
-export function sqliteServerRuntime(hippoRoot: string, opts: ServerRuntimeOptions = {}): SqliteServerRuntime {
+export function sqliteServerRuntime(
+  hippoRoot: string,
+  opts: ServerRuntimeOptions = {},
+): SqliteServerRuntime {
   const { store: given, host = createHost(), ...executorOpts } = opts;
   // The root's runtime when the server starts inside one (`hippo serve`), else the server's own; every request runs in
   // it, so the requests share its idle handles.
@@ -46,7 +54,9 @@ export function sqliteServerRuntime(hippoRoot: string, opts: ServerRuntimeOption
   const stores = joined ?? new StoreRuntime();
   // Built inside the runtime, so the executor and the holder share its checkpoint state.
   const { store, globalStores, holder } = stores.run(() => {
-    const served = given ?? workerSqliteStore(hippoRoot, createSqliteExecutor(hippoRoot, executorOpts), executorOpts);
+    const served =
+      given ??
+      workerSqliteStore(hippoRoot, createSqliteExecutor(hippoRoot, executorOpts), executorOpts);
     return {
       store: served,
       globalStores: globalStoresFor(served, executorOpts),

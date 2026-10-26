@@ -6,7 +6,13 @@ import { closeHippoDb, openHippoDb, outsideRequestStores } from '../../src/db/in
 import { cardDetailOf } from '../_helpers/card-detail.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { claimCard, completeCard, createCard, loadCard, reviewCard } from '../_helpers/root-forms.js';
+import {
+  claimCard,
+  completeCard,
+  createCard,
+  loadCard,
+  reviewCard,
+} from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();
@@ -16,7 +22,9 @@ interface Preparer {
   prepare(sql: string): object;
 }
 // SAFETY: node:sqlite has no bundled types; prepare takes SQL text and returns a statement object.
-const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: Preparer } };
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
+  DatabaseSync: { prototype: Preparer };
+};
 let root: string;
 
 beforeEach(() => {
@@ -56,7 +64,9 @@ async function seedFamily(children: number): Promise<Family> {
   const ids: string[] = [];
   for (let i = 0; i < children; i++) {
     const second = i % 4 === 3 ? [openParent] : i % 3 === 1 ? [doneParent] : [];
-    ids.push((await createCard(root, TENANT, { title: `child ${i}`, dependsOn: [parent, ...second] })).id);
+    ids.push(
+      (await createCard(root, TENANT, { title: `child ${i}`, dependsOn: [parent, ...second] })).id,
+    );
   }
   await finish(doneParent);
   const db = openHippoDb(root);
@@ -97,7 +107,9 @@ describe('completeCard child promotion', () => {
           assigneeRuntime: null,
         });
       }
-      expect(await Promise.all(family.others.map((before) => card(before.id)))).toEqual(family.others);
+      expect(await Promise.all(family.others.map((before) => card(before.id)))).toEqual(
+        family.others,
+      );
     },
   );
 
@@ -106,7 +118,9 @@ describe('completeCard child promotion', () => {
     const result = await completeCard(root, TENANT, family.parent, 'failure');
     expect(result?.promotedChildren).toEqual([]);
     const promotable = await Promise.all([...family.promotable].map((id) => card(id)));
-    expect(promotable.map((child) => child.status)).toEqual([...family.promotable].map(() => 'backlog'));
+    expect(promotable.map((child) => child.status)).toEqual(
+      [...family.promotable].map(() => 'backlog'),
+    );
   });
 
   it("leaves another tenant's child of the same parent id in backlog", async () => {
@@ -132,7 +146,10 @@ describe('completeCard child promotion', () => {
 function recordPrepares<T>(fn: () => T) {
   const prepared: string[] = [];
   const prepare = DatabaseSync.prototype.prepare;
-  const spy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (this: Preparer, sql: string) {
+  const spy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (
+    this: Preparer,
+    sql: string,
+  ) {
     prepared.push(sql);
     return prepare.call(this, sql);
   });
@@ -152,7 +169,9 @@ describe('statements one completion prepares and runs', () => {
       const family = await seedFamily(children);
       // The completion's statements all run inside the call; only its answer waits on the Promise.
       const log = recordStatements(() =>
-        recordPrepares(() => outsideRequestStores(() => completeCard(root, TENANT, family.parent, 'success'))),
+        recordPrepares(() =>
+          outsideRequestStores(() => completeCard(root, TENANT, family.parent, 'success')),
+        ),
       );
       expect((await log.result.result)?.promotedChildren).toHaveLength(family.promotable.size);
       runs.push({ prepared: log.result.prepared, run: log.statements });
@@ -169,16 +188,21 @@ describe('statements one completion prepares and runs', () => {
 
   it('prepares the dependency insert of a new card once for 20 parents', async () => {
     const parents: string[] = [];
-    for (let i = 0; i < 20; i++) parents.push((await createCard(root, TENANT, { title: `parent ${i}` })).id);
+    for (let i = 0; i < 20; i++)
+      parents.push((await createCard(root, TENANT, { title: `parent ${i}` })).id);
     const log = recordStatements(() =>
       recordPrepares(() =>
-        outsideRequestStores(() => createCard(root, TENANT, { title: 'child', dependsOn: parents })),
+        outsideRequestStores(() =>
+          createCard(root, TENANT, { title: 'child', dependsOn: parents }),
+        ),
       ),
     );
     expect(countMatching(log.result.prepared, 'INSERT INTO card_deps')).toBe(1);
     expect(countMatching(log.statements, 'INSERT INTO card_deps')).toBe(20);
     const child = await log.result.result;
     expect(child.status).toBe('backlog');
-    expect((await cardDetailOf(root, TENANT, child.id))?.deps.parents.sort()).toEqual([...parents].sort());
+    expect((await cardDetailOf(root, TENANT, child.id))?.deps.parents.sort()).toEqual(
+      [...parents].sort(),
+    );
   });
 });

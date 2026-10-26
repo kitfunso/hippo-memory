@@ -6,7 +6,12 @@ import type { JsonObject } from '../../src/base/util/json.js';
 import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
-import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
+import {
+  writeEntry,
+  saveActiveTaskSnapshot,
+  appendSessionEvent,
+  saveSessionHandoff,
+} from '../_helpers/root-forms.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
 
 let home: string;
@@ -24,7 +29,10 @@ afterEach(async () => {
 
 describe('GET /v1/memories continuity + scope', () => {
   it('default: no continuity, yet no-store on this reply and on a second /v1 route', async () => {
-    writeEntry(home, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      home,
+      createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     const res = await fetch(`${handle.url}/v1/memories?q=deploys`);
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
@@ -34,7 +42,10 @@ describe('GET /v1/memories continuity + scope', () => {
   });
 
   it('include_continuity=1: returns continuity block with no-store cache header', async () => {
-    writeEntry(home, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      home,
+      createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     saveActiveTaskSnapshot(home, 'default', {
       task: 'HTTP continuity',
       summary: 's',
@@ -149,14 +160,22 @@ describe('continuity JSON on the wire', () => {
     await seedSession();
     writeEntry(
       home,
-      createMemory('a memory so the context has an entry', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      createMemory('a memory so the context has an entry', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      }),
     );
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
     expect(res.status).toBe(200);
     const body = await jsonAs<JsonObject>(res);
-    expect(Object.keys(body)).toEqual(['entries', 'tokens', 'activeSnapshot', 'recentEvents', 'ambientState']);
-    expect(at(JSON.stringify({ activeSnapshot: body.activeSnapshot, recentEvents: body.recentEvents }))).toBe(
-      `{"activeSnapshot":${SNAPSHOT_JSON},"recentEvents":${EVENTS_JSON}}`,
-    );
+    expect(Object.keys(body)).toEqual([
+      'entries',
+      'tokens',
+      'activeSnapshot',
+      'recentEvents',
+      'ambientState',
+    ]);
+    expect(
+      at(JSON.stringify({ activeSnapshot: body.activeSnapshot, recentEvents: body.recentEvents })),
+    ).toBe(`{"activeSnapshot":${SNAPSHOT_JSON},"recentEvents":${EVENTS_JSON}}`);
   });
 });

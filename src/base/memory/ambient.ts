@@ -91,7 +91,11 @@ export function isErrorTagged(tags: readonly string[]): boolean {
 }
 
 /** Tallies over loaded entries; superseded rows count toward the total only, as they always have here. */
-export function tallyAmbientEntries(entries: readonly MemoryEntry[], now: Date, model: StrengthModel): AmbientTallies {
+export function tallyAmbientEntries(
+  entries: readonly MemoryEntry[],
+  now: Date,
+  model: StrengthModel,
+): AmbientTallies {
   const t: AmbientTallies = {
     total: 0,
     strengthSum: 0,
@@ -124,7 +128,8 @@ export function foldAmbientRows(
     for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
     t.strengthSum += calculateStrength(entry, currentTime, model);
     if (new Date(entry.created).getTime() > freshAfter) t.fresh++;
-    if (entry.emotionalValence === 'negative' || entry.emotionalValence === 'critical') t.negative++;
+    if (entry.emotionalValence === 'negative' || entry.emotionalValence === 'critical')
+      t.negative++;
     if (isErrorTagged(entry.tags)) t.errors++;
     if (entry.schemaFit > HIGH_SCHEMA_FIT) t.highSchemaFit++;
     if (entry.layer === Layer.Semantic) t.semantic++;
@@ -135,7 +140,11 @@ export function foldAmbientRows(
   }
 }
 
-export function computeAmbientState(entries: MemoryEntry[], now: Date, model: StrengthModel): AmbientState {
+export function computeAmbientState(
+  entries: MemoryEntry[],
+  now: Date,
+  model: StrengthModel,
+): AmbientState {
   return ambientStateFromTallies(tallyAmbientEntries(entries, now, model));
 }
 

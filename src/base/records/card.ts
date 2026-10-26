@@ -1,9 +1,24 @@
 // Work-queue card types: a claimable unit of work, N candidates claim one row, first wins.
 import { HOUR_MS } from '../util/time.js';
 /** A work-queue card's lifecycle state; CARD_TRANSITIONS lists the legal moves between them. */
-export type CardStatus = 'backlog' | 'ready' | 'running' | 'blocked' | 'review' | 'done' | 'shelved';
+export type CardStatus =
+  | 'backlog'
+  | 'ready'
+  | 'running'
+  | 'blocked'
+  | 'review'
+  | 'done'
+  | 'shelved';
 
-const CARD_STATUSES: readonly CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
+const CARD_STATUSES: readonly CardStatus[] = [
+  'backlog',
+  'ready',
+  'running',
+  'blocked',
+  'review',
+  'done',
+  'shelved',
+];
 
 /** Narrows a raw string, such as a CLI flag value, to a CardStatus. */
 export function isCardStatus(v: string): v is CardStatus {

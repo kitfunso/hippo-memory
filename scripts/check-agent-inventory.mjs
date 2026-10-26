@@ -5,13 +5,23 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const rootFlag = process.argv.indexOf('--root');
-const root = rootFlag === -1 ? fileURLToPath(new URL('..', import.meta.url)) : path.resolve(process.argv[rootFlag + 1]);
+const root =
+  rootFlag === -1
+    ? fileURLToPath(new URL('..', import.meta.url))
+    : path.resolve(process.argv[rootFlag + 1]);
 const read = (rel) => readFileSync(path.join(root, rel), 'utf8');
 const isStr = (v) => String(v) === v;
 const isStrOrNull = (v) => v === null || isStr(v);
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-const INTEGRATIONS = new Set(['native-hooks', 'native-plugin', 'wrapper', 'instruction-file', 'mcp-recipe', 'none']);
+const INTEGRATIONS = new Set([
+  'native-hooks',
+  'native-plugin',
+  'wrapper',
+  'instruction-file',
+  'mcp-recipe',
+  'none',
+]);
 const STATUSES = new Set(['verified', 'shipped', 'planned', 'blocked', 'unknown']);
 const ROUTES = [
   'promptContext',
@@ -26,7 +36,8 @@ const MIN_FRAMEWORK_ROWS = 6;
 const issues = [];
 
 const inventory = JSON.parse(read('docs/integrations/agent-inventory.json'));
-if (inventory.schemaVersion !== 1) issues.push(`schemaVersion must be 1, got ${inventory.schemaVersion}`);
+if (inventory.schemaVersion !== 1)
+  issues.push(`schemaVersion must be 1, got ${inventory.schemaVersion}`);
 
 const ids = new Set();
 const names = new Set();
@@ -44,8 +55,10 @@ function checkMode(at, m, routes) {
   }
   for (const key of ['checkpointBeforeLoss', 'lessonsBeforeLoss']) {
     const status = m?.[key];
-    if (!STATUSES.has(status)) issues.push(`${where}: ${key} must be one of ${[...STATUSES].join(', ')}`);
-    if (status === 'verified' && !m.liveEvidence?.length) issues.push(`${where}: ${key} verified needs liveEvidence`);
+    if (!STATUSES.has(status))
+      issues.push(`${where}: ${key} must be one of ${[...STATUSES].join(', ')}`);
+    if (status === 'verified' && !m.liveEvidence?.length)
+      issues.push(`${where}: ${key} verified needs liveEvidence`);
     if (status === 'shipped' && !m.fixtureEvidence?.length) {
       issues.push(`${where}: ${key} shipped needs fixtureEvidence`);
     }
@@ -75,12 +88,15 @@ for (const e of inventory.entries ?? []) {
     if (!isStrOrNull(e.routes?.[key])) issues.push(`${at}: routes.${key} must be a string or null`);
   }
   for (const key of ['preLossEvent', 'beforeTrimOrReset']) {
-    if (!isStrOrNull(e.upstream?.[key])) issues.push(`${at}: upstream.${key} must be a string or null`);
+    if (!isStrOrNull(e.upstream?.[key]))
+      issues.push(`${at}: upstream.${key} must be a string or null`);
   }
   for (const key of NULLABLE) {
-    if (!(key in e) || !isStrOrNull(e[key])) issues.push(`${at}: ${key} must be present, a string or null`);
+    if (!(key in e) || !isStrOrNull(e[key]))
+      issues.push(`${at}: ${key} must be present, a string or null`);
   }
-  if (!e.owner || !e.nextAction || !e.roadmap) issues.push(`${at}: owner, nextAction and roadmap are required`);
+  if (!e.owner || !e.nextAction || !e.roadmap)
+    issues.push(`${at}: owner, nextAction and roadmap are required`);
   for (const p of [...(e.sources ?? []), ...(e.claims ?? [])]) exists(at, p);
   for (const p of e.sources ?? []) cited.add(p.replace(/\/$/, ''));
   for (const m of e.modes ?? []) checkMode(at, m, e.routes);
@@ -91,7 +107,11 @@ const claimed = [];
 const readme = read('README.md').split(/\r?\n/);
 const tableStart = readme.findIndex((l) => /^\|\s*Framework\s*\|/.test(l));
 const rows = [];
-for (let i = tableStart + 2; tableStart !== -1 && i < readme.length && readme[i].startsWith('|'); i++) {
+for (
+  let i = tableStart + 2;
+  tableStart !== -1 && i < readme.length && readme[i].startsWith('|');
+  i++
+) {
   rows.push(readme[i]);
 }
 if (rows.length < MIN_FRAMEWORK_ROWS) {
@@ -103,7 +123,8 @@ for (const row of rows) claimed.push(['README.md framework table', row.split('|'
 
 const mcp = read('extensions/mcp/README.md');
 const clientList = mcp.match(/Works with any MCP-compatible client:\s*([^\n]+)/);
-if (!clientList) issues.push('extensions/mcp/README.md: "Works with any MCP-compatible client:" list not found');
+if (!clientList)
+  issues.push('extensions/mcp/README.md: "Works with any MCP-compatible client:" list not found');
 else {
   for (const n of clientList[1].replace(/\.$/, '').split(',')) {
     const name = n.trim();
@@ -114,7 +135,8 @@ const setup = mcp.match(/^## Setup\s*$([\s\S]*?)^## /m);
 if (!setup) issues.push('extensions/mcp/README.md: ## Setup section not found');
 else {
   for (const h of setup[1].matchAll(/^### (.+)$/gm)) {
-    for (const n of h[1].split('/')) claimed.push(['extensions/mcp/README.md setup heading', n.trim()]);
+    for (const n of h[1].split('/'))
+      claimed.push(['extensions/mcp/README.md setup heading', n.trim()]);
   }
 }
 const generic = new Set(inventory.nonAgentKeywords ?? []);
@@ -122,18 +144,27 @@ for (const k of JSON.parse(read('package.json')).keywords ?? []) {
   if (!generic.has(k)) claimed.push(['package.json keywords', k]);
 }
 for (const [where, name] of claimed) {
-  if (!names.has(name.toLowerCase())) issues.push(`${where} names "${name}", which no inventory entry lists in names`);
+  if (!names.has(name.toLowerCase()))
+    issues.push(`${where} names "${name}", which no inventory entry lists in names`);
 }
 
 for (const f of readdirSync(path.join(root, 'integrations')).filter((f) => f.endsWith('.md'))) {
-  if (!cited.has(`integrations/${f}`)) issues.push(`integrations/${f} is not in any entry's sources`);
+  if (!cited.has(`integrations/${f}`))
+    issues.push(`integrations/${f} is not in any entry's sources`);
 }
-for (const d of readdirSync(path.join(root, 'extensions'), { withFileTypes: true }).filter((d) => d.isDirectory())) {
-  if (!cited.has(`extensions/${d.name}`)) issues.push(`extensions/${d.name} is not in any entry's sources`);
+for (const d of readdirSync(path.join(root, 'extensions'), { withFileTypes: true }).filter((d) =>
+  d.isDirectory(),
+)) {
+  if (!cited.has(`extensions/${d.name}`))
+    issues.push(`extensions/${d.name} is not in any entry's sources`);
 }
 
 if (issues.length) {
-  console.error(`agent inventory: ${issues.length} problem(s)\n${issues.map((i) => `  - ${i}`).join('\n')}`);
+  console.error(
+    `agent inventory: ${issues.length} problem(s)\n${issues.map((i) => `  - ${i}`).join('\n')}`,
+  );
   process.exit(1);
 }
-console.log(`agent inventory: ${inventory.entries.length} entries, ${claimed.length} named claims reconciled`);
+console.log(
+  `agent inventory: ${inventory.entries.length} entries, ${claimed.length} named claims reconciled`,
+);

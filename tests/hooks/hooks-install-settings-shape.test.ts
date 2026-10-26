@@ -55,7 +55,15 @@ describe('first-party hook command lines', () => {
     }
     lines.push(
       ...hippoCommandsIn(
-        path.resolve(__dirname, '..', '..', 'extensions', 'claude-code-plugin', 'hooks', 'hooks.json'),
+        path.resolve(
+          __dirname,
+          '..',
+          '..',
+          'extensions',
+          'claude-code-plugin',
+          'hooks',
+          'hooks.json',
+        ),
       ),
     );
     installOpencodePlugin();
@@ -106,12 +114,20 @@ describe('installJsonHooks(claude-code) settings shape', () => {
           ],
           SessionEnd: [
             { hooks: [{ type: 'command', command: 'hippo sleep --log-file "x.log"' }] },
-            { hooks: [{ type: 'command', command: 'hippo capture --last-session --log-file "x.log"' }] },
+            {
+              hooks: [
+                { type: 'command', command: 'hippo capture --last-session --log-file "x.log"' },
+              ],
+            },
           ],
           UserPromptSubmit: [
             {
               hooks: [
-                { type: 'command', command: 'hippo context --pinned-only --format additional-context', timeout: 5 },
+                {
+                  type: 'command',
+                  command: 'hippo context --pinned-only --format additional-context',
+                  timeout: 5,
+                },
               ],
             },
           ],
@@ -121,8 +137,10 @@ describe('installJsonHooks(claude-code) settings shape', () => {
     );
 
     const first = installJsonHooks('claude-code');
-    expect({ ...first, settingsPath: path.relative(env.home, first.settingsPath).replace(/\\/g, '/') })
-      .toMatchInlineSnapshot(`
+    expect({
+      ...first,
+      settingsPath: path.relative(env.home, first.settingsPath).replace(/\\/g, '/'),
+    }).toMatchInlineSnapshot(`
       {
         "installedCaptureError": true,
         "installedCompactResume": true,

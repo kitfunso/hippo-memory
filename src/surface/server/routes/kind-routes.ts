@@ -41,7 +41,12 @@ export function kindRows(kind: KindRoutes): Route[] {
       return { method, path: `${base}/${sub}`, auth: 'caller', handler };
     }),
     ...Object.entries(kind.actions).map(([action, handler]): Route => {
-      return { method: 'POST', pattern: `${base}/${ID}/${action}`, auth: 'caller', handler: byId(handler) };
+      return {
+        method: 'POST',
+        pattern: `${base}/${ID}/${action}`,
+        auth: 'caller',
+        handler: byId(handler),
+      };
     }),
     { method: 'GET', pattern: `${base}/${ID}`, auth: 'caller', handler: byId(kind.get) },
   ];

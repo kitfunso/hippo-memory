@@ -34,7 +34,8 @@ afterEach(undoAll);
 
 const bareRoot = (): string => removeLater(mkdtempSync(join(tmpdir(), 'hippo-setup-first-')));
 
-const halfLifeBase = (root: string): string => onDb(root, (db) => getMeta(db, META_KEY.halfLifeBase, ''));
+const halfLifeBase = (root: string): string =>
+  onDb(root, (db) => getMeta(db, META_KEY.halfLifeBase, ''));
 
 /** A memory as a store kept it before hippo.db: one markdown file, which setup imports while the store has no memory row. */
 function legacyMarkdown(root: string, content: string): void {
@@ -81,7 +82,9 @@ describe('a root with no hippo.db', () => {
       legacyMarkdown(root, 'the legacy deploy runbook lives in the wiki');
       const server = await start(root);
 
-      expect(await recalled(server, 'runbook')).toEqual(['the legacy deploy runbook lives in the wiki']);
+      expect(await recalled(server, 'runbook')).toEqual([
+        'the legacy deploy runbook lives in the wiki',
+      ]);
     },
   );
 });
@@ -98,8 +101,12 @@ describe('markdown that appears on a still empty store after the setup', () => {
       const read = await get(server, '/v1/sessions/sess-1/assemble');
 
       expect(read.status).toBe(200);
-      expect((await post(server, '/v1/memories', { content: 'the first note written here' })).status).toBe(200);
-      expect(await recalled(server, 'runbook')).toEqual(['a runbook copied in while the server ran']);
+      expect(
+        (await post(server, '/v1/memories', { content: 'the first note written here' })).status,
+      ).toBe(200);
+      expect(await recalled(server, 'runbook')).toEqual([
+        'a runbook copied in while the server ran',
+      ]);
     },
   );
 });
@@ -112,7 +119,8 @@ describe('a setup still waiting for the write lock', () => {
     // A short wait ends the setup in its busy error. A read that was not held would answer from a reader meanwhile.
     const executor = createSqliteExecutor(root, { busyWaitMs: 100 });
     cleanups.push(() => executor.close());
-    const read = (): Promise<void> => executor.call('readiness.ping', [], { mode: 'read', requestId: undefined });
+    const read = (): Promise<void> =>
+      executor.call('readiness.ping', [], { mode: 'read', requestId: undefined });
     // Taken after the executor, so a failed run gives the lock up before it waits for the threads to exit.
     const lock = holdWriteLock(root);
 
@@ -134,7 +142,8 @@ describe('a setup that fails', () => {
     mkdirSync(getHippoDbPath(root));
     const executor = createSqliteExecutor(root);
     cleanups.push(() => executor.close());
-    const read = (): Promise<void> => executor.call('readiness.ping', [], { mode: 'read', requestId: undefined });
+    const read = (): Promise<void> =>
+      executor.call('readiness.ping', [], { mode: 'read', requestId: undefined });
 
     await expect(read()).rejects.toThrow(/unable to open database file/);
     rmdirSync(getHippoDbPath(root));

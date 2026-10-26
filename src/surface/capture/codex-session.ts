@@ -45,13 +45,19 @@ function codexSessionIds(delta: string, historyPath: string): string[] {
         ordered.push(sessionId);
       }
     } catch (err) {
-      log.warn(`codex history ${historyPath}: skipped a malformed JSONL line (${errorMessage(err)})`, errorFields(err));
+      log.warn(
+        `codex history ${historyPath}: skipped a malformed JSONL line (${errorMessage(err)})`,
+        errorFields(err),
+      );
     }
   }
   return ordered;
 }
 
-function readCodexSessionIdsFromHistoryDelta(historyPath: string, startOffsetBytes: number): string[] {
+function readCodexSessionIdsFromHistoryDelta(
+  historyPath: string,
+  startOffsetBytes: number,
+): string[] {
   if (!fs.existsSync(historyPath)) return [];
   const raw = fs.readFileSync(historyPath);
   if (startOffsetBytes >= raw.length) return [];
@@ -77,11 +83,16 @@ function findNewestCodexTranscriptSince(sessionsDir: string, startedAtMs: number
   return matches[0]?.filePath ?? null;
 }
 
-export function resolveCodexSessionTranscript(options: CodexSessionTranscriptOptions): string | null {
+export function resolveCodexSessionTranscript(
+  options: CodexSessionTranscriptOptions,
+): string | null {
   const { codexHome, historyPath, startOffsetBytes, startedAtMs } = options;
   const sessionsDir = path.join(codexHome, 'sessions');
 
-  for (const sessionId of readCodexSessionIdsFromHistoryDelta(historyPath, startOffsetBytes).reverse()) {
+  for (const sessionId of readCodexSessionIdsFromHistoryDelta(
+    historyPath,
+    startOffsetBytes,
+  ).reverse()) {
     const transcript = findCodexTranscriptBySessionId(sessionsDir, sessionId);
     if (transcript) return transcript;
   }

@@ -13,7 +13,10 @@ import { explainMatch } from '../../domain/search/explain.js';
 import { fitBudget } from '../../domain/search/finalize.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import type { ContinuityBlock, HippoStore } from '../../base/ports/store.js';
-import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
+import {
+  passesCliRecallScopeFilter,
+  passesScopeFilterForRecall,
+} from '../../base/scope/recall-scope.js';
 import type { Context, ContextWith } from '../types.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../../domain/graph/recall.js';
@@ -44,7 +47,10 @@ export interface RecallRowOrigin {
 /** Whether the call reaches a global store, and which ranked rows came from it. */
 export function recallRowOrigin(ctx: Context, setting: RecallStoreSetting): RecallRowOrigin {
   const globalOn = ctx.reach?.global !== undefined;
-  return { globalOn, isGlobal: (r) => setting.primaryIsGlobal || (globalOn && r.isGlobal === true) };
+  return {
+    globalOn,
+    isGlobal: (r) => setting.primaryIsGlobal || (globalOn && r.isGlobal === true),
+  };
 }
 
 /** How many of `query`'s search candidates the scope rule hides from a recall asking for `requested`; the read is
@@ -78,7 +84,8 @@ export async function loadScopedContinuity(
   } = await ctx.store.continuity(ctx.tenantId, 5, null);
   // The same shared scope rule as api.recall; the active scope merges --scope and detectScope().
   const effectiveScope = setting.activeScope || undefined;
-  const passes = (r: { scope?: string | null }): boolean => passesScopeFilterForRecall(r.scope ?? null, effectiveScope);
+  const passes = (r: { scope?: string | null }): boolean =>
+    passesScopeFilterForRecall(r.scope ?? null, effectiveScope);
   return {
     activeSnapshot: rawSnapshot && passes(rawSnapshot) ? rawSnapshot : null,
     sessionHandoff: rawHandoff && passes(rawHandoff) ? rawHandoff : null,
@@ -93,10 +100,16 @@ export interface RecallRerankerPick {
 
 /** The reranker `name` picks from the Context's registry and the top-k it takes by default; an unknown name throws, a
  * blank one picks none. */
-export function recallRerankerPick(ctx: Pick<Context, 'infra'>, name: string): RecallRerankerPick | null {
+export function recallRerankerPick(
+  ctx: Pick<Context, 'infra'>,
+  name: string,
+): RecallRerankerPick | null {
   const fn = rerankerOf(ctx, name);
   if (!fn) return null;
-  return { fn, defaultTopK: name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : DEFAULT_RERANK_TOP_K };
+  return {
+    fn,
+    defaultTopK: name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : DEFAULT_RERANK_TOP_K,
+  };
 }
 
 /** A registry reranker that sends `clef` when a call names no transport of its own, for a script that reranks outside a
@@ -108,7 +121,8 @@ export function rerankerWithClef(
 ): RerankerFn | null {
   const fn = rerankerOf(ctx, name);
   if (fn === null) return null;
-  return (query, results, options) => fn(query, results, { ...options, clef: options?.clef ?? clef });
+  return (query, results, options) =>
+    fn(query, results, { ...options, clef: options?.clef ?? clef });
 }
 
 /** How a shown list is cut to a token budget: each row by its own cost, then the rendered text as a whole. */

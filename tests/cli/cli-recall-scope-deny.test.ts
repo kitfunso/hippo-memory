@@ -78,7 +78,15 @@ describe('cli recall scope default-deny', () => {
   });
 
   it('explicit --scope UNLOCKS the named scope on top of the default set (additive CLI semantics)', async () => {
-    const out = await hippo(home, 'recall', 'deploykey', '--scope', 'slack:private:C1', '--limit', '10');
+    const out = await hippo(
+      home,
+      'recall',
+      'deploykey',
+      '--scope',
+      'slack:private:C1',
+      '--limit',
+      '10',
+    );
     // Deliberate access to the requested private scope is preserved...
     expect(out).toContain(PRIV_SLACK);
     // ...the default-admitted set stays (the CLI flag is historically a
@@ -112,7 +120,10 @@ describe('cli recall scope default-deny', () => {
 
   it('hasGlobal path (searchBothHybrid recallScope) filters global-store rows equally', async () => {
     initTestStore(globalDir);
-    writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      globalDir,
+      createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     writeEntry(
       globalDir,
       createMemory('global private deploykey note', {
@@ -131,7 +142,10 @@ describe('cli recall scope default-deny', () => {
     // independent-review-critic round 1 med: the additive unlock was only
     // covered on the local-only path.
     initTestStore(globalDir);
-    writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      globalDir,
+      createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     writeEntry(
       globalDir,
       createMemory('global private deploykey note', {
@@ -140,7 +154,15 @@ describe('cli recall scope default-deny', () => {
       }),
     );
 
-    const out = await hippo(home, 'recall', 'deploykey', '--scope', 'slack:private:CG', '--limit', '10');
+    const out = await hippo(
+      home,
+      'recall',
+      'deploykey',
+      '--scope',
+      'slack:private:CG',
+      '--limit',
+      '10',
+    );
     expect(out).toContain('global private deploykey note');
     expect(out).toContain('global clean deploykey note');
     // Non-requested private scopes stay denied on both stores.
@@ -167,7 +189,9 @@ describe('cli recall scope default-deny', () => {
       }
       writeEntry(
         hippoDir,
-        createMemory('windowstarve admitted public row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+        createMemory('windowstarve admitted public row', {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        }),
       );
     });
 
@@ -184,7 +208,12 @@ describe('cli recall scope default-deny', () => {
 
   it('hippo explain applies the same rule and prints an honest note', async () => {
     const res = await runInProcess(() =>
-      handleExplain({ hippoRoot: join(home, '.hippo'), tenantId: 'default', args: ['deploykey'], flags: {} }),
+      handleExplain({
+        hippoRoot: join(home, '.hippo'),
+        tenantId: 'default',
+        args: ['deploykey'],
+        flags: {},
+      }),
     );
     expect(res.status).toBe(0);
     expect(res.stdout).not.toContain(PRIV_SLACK);

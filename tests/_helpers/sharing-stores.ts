@@ -11,10 +11,18 @@ export type TestFolder = ConfiguredFolder<HippoStore & StoreGroups> & { readonly
 
 /** The folder's hippo.db beside its folder, with its config as the CLI loads it. */
 export function folderStore(root: string): TestFolder {
-  return { root, store: sqliteStore(root), config: loadConfig(root), embedderFor: resolveEmbeddingProvider };
+  return {
+    root,
+    store: sqliteStore(root),
+    config: loadConfig(root),
+    embedderFor: resolveEmbeddingProvider,
+  };
 }
 
 /** The store under `localRoot` and the global store: the operator's own unless `globalRoot` names another folder. */
-export function sharingStores(localRoot: string, globalRoot: string = getGlobalRoot()): [TestFolder, TestFolder] {
+export function sharingStores(
+  localRoot: string,
+  globalRoot: string = getGlobalRoot(),
+): [TestFolder, TestFolder] {
   return [folderStore(localRoot), folderStore(globalRoot)];
 }

@@ -56,7 +56,11 @@ type EntityDeltaRow = { step: 0 | 1 | 2; at: number; id: number | null };
 type RelationDeltaRow = { step: 0 | 1; at: number };
 
 /** The ops diffGraph plans, in its apply order, from two statements on one snapshot. */
-export function graphDeltaOn(db: DatabaseSyncLike, tenantId: string, desired: DesiredGraph): GraphOp[] {
+export function graphDeltaOn(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  desired: DesiredGraph,
+): GraphOp[] {
   const entities = [...wantedEntities(desired).values()];
   const relations = [...wantedRelations(desired)];
   const entityJson = JSON.stringify(entities.map((e) => [entityKey(e), e.name, e.memoryId]));
@@ -64,7 +68,11 @@ export function graphDeltaOn(db: DatabaseSyncLike, tenantId: string, desired: De
     relations.map(([key, r]) => [key, r.memoryId, r.sourceObject.type, r.sourceObject.id]),
   );
   return withReadSnapshot(db, () => {
-    const entityRows = cachedStatement(db, ENTITY_DELTA).all(entityJson, tenantId, tenantId) as EntityDeltaRow[];
+    const entityRows = cachedStatement(db, ENTITY_DELTA).all(
+      entityJson,
+      tenantId,
+      tenantId,
+    ) as EntityDeltaRow[];
     const relationRows = cachedStatement(db, RELATION_DELTA).all(
       entityJson,
       tenantId,
@@ -75,7 +83,9 @@ export function graphDeltaOn(db: DatabaseSyncLike, tenantId: string, desired: De
       ...entityRows.map((row): GraphOp => {
         if (row.step === 0) return { op: 'deleteEntity', id: row.at };
         const entity = entities[row.at]!;
-        return row.step === 1 ? { op: 'updateEntity', id: row.id!, entity } : { op: 'insertEntity', entity };
+        return row.step === 1
+          ? { op: 'updateEntity', id: row.id!, entity }
+          : { op: 'insertEntity', entity };
       }),
       ...relationRows.map((row): GraphOp =>
         row.step === 0

@@ -52,7 +52,10 @@ function notFound<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, id: number): 
   return new HttpError(404, `${cfg.noun} ${id} not found`);
 }
 
-async function createRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: AuthedRouteRequest): Promise<void> {
+async function createRoute<K extends ObjectKind>(
+  cfg: ObjectRouteConfig<K>,
+  rr: AuthedRouteRequest,
+): Promise<void> {
   const { req, res, ctx } = rr;
   const body = await parseJsonBody(req, ctx);
   try {
@@ -64,17 +67,27 @@ async function createRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: 
   }
 }
 
-async function listRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: AuthedRouteRequest): Promise<void> {
+async function listRoute<K extends ObjectKind>(
+  cfg: ObjectRouteConfig<K>,
+  rr: AuthedRouteRequest,
+): Promise<void> {
   const { res, query, ctx } = rr;
   const status = query.get('status') ?? 'all';
   const filter = cfg.filterParam === undefined ? null : query.get(cfg.filterParam);
   const limit = parseLimitParam(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
-  const listOpts: ObjectListOptions<K> = { limit: limit + 1, after, filter: filter?.trim() || undefined };
+  const listOpts: ObjectListOptions<K> = {
+    limit: limit + 1,
+    after,
+    filter: filter?.trim() || undefined,
+  };
   if (status !== 'all') {
     const states = objectStates(cfg.kind);
     if (!isSetMember(states, status)) {
-      throw new HttpError(400, `status must be one of: ${[...states].join(' | ')} | all (got "${status}")`);
+      throw new HttpError(
+        400,
+        `status must be one of: ${[...states].join(' | ')} | all (got "${status}")`,
+      );
     }
     listOpts.status = status;
   }

@@ -64,7 +64,9 @@ async function startServer(workspace: string): Promise<SpawnedServer> {
   await waitFor(
     async () => {
       if (child.exitCode !== null) {
-        throw new Error(`hippo serve exited early (code=${child.exitCode}). stdout=${stdoutBuf} stderr=${stderrBuf}`);
+        throw new Error(
+          `hippo serve exited early (code=${child.exitCode}). stdout=${stdoutBuf} stderr=${stderrBuf}`,
+        );
       }
       const info = await detectServer(join(workspace, '.hippo'));
       if (info !== null) ready.push(info);
@@ -80,11 +82,15 @@ async function startServer(workspace: string): Promise<SpawnedServer> {
     if (child.exitCode !== null) return;
     child.kill('SIGTERM');
     // Windows doesn't actually deliver SIGTERM; fall back to SIGKILL after a beat.
-    await waitFor(() => child.exitCode !== null, { timeoutMs: 3_000, intervalMs: 50 }).catch(() => undefined);
+    await waitFor(() => child.exitCode !== null, { timeoutMs: 3_000, intervalMs: 50 }).catch(
+      () => undefined,
+    );
     if (child.exitCode === null) child.kill('SIGKILL');
     // Wait for the pidfile to be cleared OR for the process to be gone, then
     // best-effort wipe so the next spawn starts clean.
-    await waitFor(() => !existsSync(pidfilePath), { timeoutMs: 2_000, intervalMs: 50 }).catch(() => undefined);
+    await waitFor(() => !existsSync(pidfilePath), { timeoutMs: 2_000, intervalMs: 50 }).catch(
+      () => undefined,
+    );
     if (existsSync(pidfilePath)) {
       try {
         rmSync(pidfilePath);
@@ -200,7 +206,9 @@ function getRowForContent(workspace: string, contentNeedle: string): StoredRow |
   try {
     // SAFETY: literal SELECT of known columns against the memories schema.
     const row = db
-      .prepare(`SELECT tags_json, half_life_days, emotional_valence FROM memories WHERE content LIKE ?`)
+      .prepare(
+        `SELECT tags_json, half_life_days, emotional_valence FROM memories WHERE content LIKE ?`,
+      )
       .get(`%${contentNeedle}%`) as
       | { tags_json: string; half_life_days: number; emotional_valence: string }
       | undefined;
@@ -266,14 +274,28 @@ describe('cli thin-client mode', () => {
     try {
       server = await startServer(routedWorkspace);
 
-      const routedRun = runCli(routedWorkspace, 'remember', 'error-tag-parity-canary', '--error', '--tag', 't');
+      const routedRun = runCli(
+        routedWorkspace,
+        'remember',
+        'error-tag-parity-canary',
+        '--error',
+        '--tag',
+        't',
+      );
       expect(routedRun.stdout, `stderr: ${routedRun.stderr}`).toMatch(/Remembered .*\(via http/);
       expect(getActorForContent(routedWorkspace, 'error-tag-parity-canary')).toBe('localhost:cli');
 
       await server.stop();
       server = null;
 
-      const directRun = runCli(directWorkspace, 'remember', 'error-tag-parity-canary', '--error', '--tag', 't');
+      const directRun = runCli(
+        directWorkspace,
+        'remember',
+        'error-tag-parity-canary',
+        '--error',
+        '--tag',
+        't',
+      );
       expect(directRun.stdout, `stderr: ${directRun.stderr}`).toMatch(/Remembered \[/);
       expect(getActorForContent(directWorkspace, 'error-tag-parity-canary')).toBe('cli');
 
@@ -373,14 +395,23 @@ describe('cli thin-client mode', () => {
 
       // With the server up, forget --archive now routes over HTTP like plain
       // forget does; the archive endpoint has existed since ea155d6.
-      const run = runCli(workspace, 'forget', 'mem_rawthin', '--archive', '--reason', 'thin-client archive test');
+      const run = runCli(
+        workspace,
+        'forget',
+        'mem_rawthin',
+        '--archive',
+        '--reason',
+        'thin-client archive test',
+      );
       expect(run.stdout, `stderr: ${run.stderr}`).toMatch(/Archived mem_rawthin/);
 
       // Row archived: gone from memories, archive_raw audit emitted with the
       // HTTP-path actor (parity with the remember test's actor split above).
       const db2 = openHippoDb(hippoRoot);
       try {
-        expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_rawthin'`).get()).toBeUndefined();
+        expect(
+          db2.prepare(`SELECT id FROM memories WHERE id = 'mem_rawthin'`).get(),
+        ).toBeUndefined();
         const events = listAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
         expect(events).toHaveLength(1);
         expect(events[0].actor).toMatch(/^api_key:/);
@@ -416,7 +447,14 @@ describe('cli thin-client mode', () => {
       // No server running. --archive must now honour HIPPO_REQUIRE_SERVER the
       // same way plain forget does, instead of silently writing directly.
       vi.stubEnv('HIPPO_REQUIRE_SERVER', '1');
-      const run = runCli(workspace, 'forget', 'mem_rsarchive', '--archive', '--reason', 'require-server archive test');
+      const run = runCli(
+        workspace,
+        'forget',
+        'mem_rsarchive',
+        '--archive',
+        '--reason',
+        'require-server archive test',
+      );
       expect(run.stdout + run.stderr).toMatch(/HIPPO_REQUIRE_SERVER/);
 
       const db2 = openHippoDb(hippoRoot);
@@ -456,7 +494,14 @@ describe('cli thin-client mode', () => {
       vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
 
       // raw-archive.ts throws "is not raw" for a non-raw kind; the server's refusal must read as the store's does.
-      const run = runCli(workspace, 'forget', 'mem_notraw', '--archive', '--reason', 'non-raw archive test');
+      const run = runCli(
+        workspace,
+        'forget',
+        'mem_notraw',
+        '--archive',
+        '--reason',
+        'non-raw archive test',
+      );
       expect(run.stdout + run.stderr).toMatch(/Could not archive mem_notraw: /);
       expect(run.stdout + run.stderr).toMatch(/is not raw/);
     } finally {
@@ -617,7 +662,9 @@ describe('cli thin-client mode', () => {
 
       const db2 = openHippoDb(hippoRoot);
       try {
-        expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_racearchive'`).get()).toBeUndefined();
+        expect(
+          db2.prepare(`SELECT id FROM memories WHERE id = 'mem_racearchive'`).get(),
+        ).toBeUndefined();
         const events = listAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
         expect(events[0]?.actor).toBe('cli');
       } finally {
@@ -642,7 +689,9 @@ describe('cli thin-client mode', () => {
 
       const routedRemember = runCli(workspace, 'remember', 'routed-counter-canary');
       const routedId = /Remembered \[([^\]]+)\]/.exec(routedRemember.stdout)?.[1];
-      expect(routedId, `stdout: ${routedRemember.stdout} stderr: ${routedRemember.stderr}`).toMatch(/^mem_[0-9a-f]+$/);
+      expect(routedId, `stdout: ${routedRemember.stdout} stderr: ${routedRemember.stderr}`).toMatch(
+        /^mem_[0-9a-f]+$/,
+      );
 
       // The local key is a member, which may not change a row it does not own, so the CLI sends an admin key.
       vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
@@ -665,7 +714,9 @@ describe('cli thin-client mode', () => {
 
       const directRemember = runCli(workspace, 'remember', 'direct-counter-canary');
       const directId = /Remembered \[([^\]]+)\]/.exec(directRemember.stdout)?.[1];
-      expect(directId, `stdout: ${directRemember.stdout} stderr: ${directRemember.stderr}`).toMatch(/^mem_[0-9a-f]+$/);
+      expect(directId, `stdout: ${directRemember.stdout} stderr: ${directRemember.stderr}`).toMatch(
+        /^mem_[0-9a-f]+$/,
+      );
       const directForget = runCli(workspace, 'forget', directId!);
       expect(directForget.stdout, `stderr: ${directForget.stderr}`).toMatch(/Forgot/);
       expect(getActorForId(workspace, directId!)).toBe('cli');
@@ -693,7 +744,9 @@ describe('cli thin-client mode', () => {
       server = await startServer(workspace);
       const remembered = runCli(workspace, 'remember', 'local-key-refusal-canary');
       const id = /Remembered \[([^\]]+)\]/.exec(remembered.stdout)?.[1];
-      expect(id, `stdout: ${remembered.stdout} stderr: ${remembered.stderr}`).toMatch(/^mem_[0-9a-f]+$/);
+      expect(id, `stdout: ${remembered.stdout} stderr: ${remembered.stderr}`).toMatch(
+        /^mem_[0-9a-f]+$/,
+      );
 
       const refused = runCli(workspace, 'forget', id!);
       // Exactly 1: a refused routed write once ended in a libuv abort on Windows, with a crash code.

@@ -36,7 +36,10 @@ function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent 
   if (eventName === 'pull_request' && isGitHubPullRequestEvent(parsed, eventName)) {
     return { eventName: 'pull_request', payload: parsed };
   }
-  if (eventName === 'pull_request_review_comment' && isGitHubPullRequestReviewCommentEvent(parsed, eventName)) {
+  if (
+    eventName === 'pull_request_review_comment' &&
+    isGitHubPullRequestReviewCommentEvent(parsed, eventName)
+  ) {
     return { eventName: 'pull_request_review_comment', payload: parsed };
   }
   return null;
@@ -67,13 +70,18 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
   }
   const token = envGitHubToken();
   if (!token) {
-    console.error('GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.');
+    console.error(
+      'GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.',
+    );
     throw new CliExit(2);
   }
   const maxPerStream = maxPerStreamFlag(flags);
   const sinceIso = stringFlag(flags, 'since');
 
-  const ctx: Context = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-backfill') };
+  const ctx: Context = {
+    ...cliApiContext(hippoRoot, tenantId),
+    actor: adminActor('cli:github-backfill'),
+  };
   try {
     const result = await backfillRepo(ctx, {
       repoFullName: repo,
@@ -90,14 +98,20 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
   }
 }
 
-export async function listGitHubDlq(hippoRoot: string, tenantId: string, _flags: CliFlags): Promise<void> {
+export async function listGitHubDlq(
+  hippoRoot: string,
+  tenantId: string,
+  _flags: CliFlags,
+): Promise<void> {
   const items = await listDlq(githubDlq, cliStore(hippoRoot), { tenantId });
   if (items.length === 0) {
     console.log('no entries');
     return;
   }
   for (const it of items) {
-    console.log(`${it.id}\t${it.bucket}\t${it.tenantId}\t${it.eventName ?? '-'}\t${it.receivedAt}\t${it.error}`);
+    console.log(
+      `${it.id}\t${it.bucket}\t${it.tenantId}\t${it.eventName ?? '-'}\t${it.receivedAt}\t${it.error}`,
+    );
   }
 }
 
@@ -107,7 +121,9 @@ const PAYLOAD_PREVIEW_CHARS = 200;
 export class GitHubPayloadParseError extends Error {
   constructor(command: string, rawPayload: string, cause: unknown) {
     const start = JSON.stringify(rawPayload.slice(0, PAYLOAD_PREVIEW_CHARS));
-    super(`${command}: payload is not valid JSON (${errorMessage(cause)}); starts with ${start}`, { cause });
+    super(`${command}: payload is not valid JSON (${errorMessage(cause)}); starts with ${start}`, {
+      cause,
+    });
     this.name = 'GitHubPayloadParseError';
   }
 }
@@ -137,7 +153,10 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
       event.eventName === 'issue_comment'
         ? `github://${repo}/issue/${event.payload.issue.number}/comment/${event.payload.comment.id}`
         : `github://${repo}/pull/${event.payload.pull_request.number}/review_comment/${event.payload.comment.id}`;
-    const idempotencyKey = computeDeletionKey(artifactRef, event.payload.comment.updated_at ?? null);
+    const idempotencyKey = computeDeletionKey(
+      artifactRef,
+      event.payload.comment.updated_at ?? null,
+    );
     const r = await handleCommentDeleted(innerCtx, {
       artifactRef,
       idempotencyKey,
@@ -162,7 +181,10 @@ export async function replayGitHubDlq(
   args: string[],
   flags: CliFlags,
 ): Promise<void> {
-  const ctx: Context = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-dlq-replay') };
+  const ctx: Context = {
+    ...cliApiContext(hippoRoot, tenantId),
+    actor: adminActor('cli:github-dlq-replay'),
+  };
   // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook re-runs ingest.
   await runDlqReplay('github', args[0], flags, (id, force) =>
     replayGithubDlqEntry(ctx, id, {
@@ -174,7 +196,12 @@ export async function replayGitHubDlq(
   );
 }
 
-export async function handleGitHub({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleGitHub({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
     await backfillGitHub(hippoRoot, tenantId, flags);

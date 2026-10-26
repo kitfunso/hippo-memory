@@ -75,8 +75,13 @@ export interface CacheRatios {
 export const DEFAULT_CACHE_RATIOS: Readonly<CacheRatios> = { write: 1.25, read: 0.1 };
 
 /** Input cost of `usage` in uncached-equivalent tokens (output excluded). */
-export function uncachedEquivalentInput(usage: Usage, ratios: CacheRatios = DEFAULT_CACHE_RATIOS): number {
-  return usage.inputTokens + usage.cacheWriteTokens * ratios.write + usage.cacheReadTokens * ratios.read;
+export function uncachedEquivalentInput(
+  usage: Usage,
+  ratios: CacheRatios = DEFAULT_CACHE_RATIOS,
+): number {
+  return (
+    usage.inputTokens + usage.cacheWriteTokens * ratios.write + usage.cacheReadTokens * ratios.read
+  );
 }
 
 /** A point estimate with a percentile bootstrap confidence interval. */
@@ -385,7 +390,9 @@ export function verdict(e: TestedEstimate, adjustedP: number, spec: VerdictSpec)
     const harmfulSide = lowerIsHelpful ? e.estimate > nullValue : e.estimate < nullValue;
     if (harmfulSide) return { verdict: 'loss', reachesMinimum: false };
     if (helpfulSide) {
-      const reaches = lowerIsHelpful ? e.estimate <= spec.minimumEffectAt : e.estimate >= spec.minimumEffectAt;
+      const reaches = lowerIsHelpful
+        ? e.estimate <= spec.minimumEffectAt
+        : e.estimate >= spec.minimumEffectAt;
       return { verdict: 'win', reachesMinimum: reaches };
     }
   }
@@ -395,7 +402,8 @@ export function verdict(e: TestedEstimate, adjustedP: number, spec: VerdictSpec)
 
 /** A win must hold under both codings of not-applicable, while a loss under either is reported. */
 export function combineCodings(a: VerdictResult, b: VerdictResult): VerdictResult {
-  if (a.verdict === 'loss' || b.verdict === 'loss') return { verdict: 'loss', reachesMinimum: false };
+  if (a.verdict === 'loss' || b.verdict === 'loss')
+    return { verdict: 'loss', reachesMinimum: false };
   if (a.verdict === 'win' && b.verdict === 'win') {
     return { verdict: 'win', reachesMinimum: a.reachesMinimum && b.reachesMinimum };
   }

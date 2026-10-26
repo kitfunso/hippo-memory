@@ -4,7 +4,11 @@ import { envHomeDir } from '../../base/util/env.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import { calculateStrength, calculateRewardFactor, resolveConfidence } from '../../base/memory/strength.js';
+import {
+  calculateStrength,
+  calculateRewardFactor,
+  resolveConfidence,
+} from '../../base/memory/strength.js';
 import { strengthOf } from '../../api/types.js';
 import { Layer } from '../../base/memory/entry.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
@@ -83,7 +87,10 @@ export async function handleStatus({ hippoRoot, tenantId }: CommandContext): Pro
   await printPhysicsStatus(ctx);
 }
 
-async function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 'total' | 'embedded'>): Promise<void> {
+async function printEmbeddingStatus(
+  ctx: CliContext,
+  counts: Pick<StatusCounts, 'total' | 'embedded'>,
+): Promise<void> {
   const embedProvider = (() => {
     try {
       return resolveEmbeddingProvider(cliConfig(ctx.hippoRoot).embeddings);
@@ -95,7 +102,9 @@ async function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 
   })();
   console.log('');
   if (!embedProvider) {
-    console.log(`Embeddings:        misconfigured (check embeddings.provider / apiBaseUrl), BM25 only`);
+    console.log(
+      `Embeddings:        misconfigured (check embeddings.provider / apiBaseUrl), BM25 only`,
+    );
     return;
   }
   const embeddingsDisabled = cliConfig(ctx.hippoRoot).embeddings.enabled === false;
@@ -103,11 +112,15 @@ async function printEmbeddingStatus(ctx: CliContext, counts: Pick<StatusCounts, 
   if (embeddingsDisabled) {
     console.log(`Embeddings:        disabled in config (embeddings.enabled = false), BM25 only`);
   } else if (embedProvider.kind === 'local') {
-    console.log(`Embeddings:        ${embAvail ? `available [${embedProvider.id}]` : 'not installed (BM25 only)'}`);
+    console.log(
+      `Embeddings:        ${embAvail ? `available [${embedProvider.id}]` : 'not installed (BM25 only)'}`,
+    );
   } else if (embAvail) {
     console.log(`Embeddings:        ${embedProvider.kind} api [${embedProvider.id}]`);
   } else {
-    console.log(`Embeddings:        ${embedProvider.kind} configured but ${embedProvider.keyEnv} not set (BM25 only)`);
+    console.log(
+      `Embeddings:        ${embedProvider.kind} configured but ${embedProvider.keyEnv} not set (BM25 only)`,
+    );
   }
   // Show cached counts whenever vectors exist on disk (even when disabled or the key was removed), so the user still
   // sees what is already indexed.
@@ -143,7 +156,10 @@ async function printPhysicsStatus(ctx: CliContext): Promise<void> {
   }
 }
 
-export function physicsEnergyText(stats: Pick<ParticleStats, 'count' | 'particles'>, gMemory: number): string {
+export function physicsEnergyText(
+  stats: Pick<ParticleStats, 'count' | 'particles'>,
+  gMemory: number,
+): string {
   if (stats.particles === null) return `energy: skipped (${stats.count} particles)`;
   const energy = computeSystemEnergy(stats.particles, gMemory);
   return `energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)})`;
@@ -171,7 +187,8 @@ async function inspectMemory(hippoRoot: string, tenantId: string, id: string): P
   console.log(`Memory: ${entry.id}`);
   console.log('---------------------------');
   console.log(`Layer:            ${entry.layer}`);
-  const effective = effectiveConfidence !== entry.confidence ? ` (effective: ${effectiveConfidence})` : '';
+  const effective =
+    effectiveConfidence !== entry.confidence ? ` (effective: ${effectiveConfidence})` : '';
   console.log(`Confidence:       ${entry.confidence}${effective}`);
   console.log(`Created:          ${entry.created} (${fmt(ageDays, 1)}d ago)`);
   console.log(`Last retrieved:   ${entry.lastRetrieved} (${fmt(daysSince, 1)}d ago)`);
@@ -185,7 +202,8 @@ async function inspectMemory(hippoRoot: string, tenantId: string, id: string): P
   const rewardFactor = calculateRewardFactor(entry, rules);
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
-  const outcomeLabel = pos === 0 && neg === 0 ? 'none' : `+${pos} / -${neg} (reward factor: ${fmt(rewardFactor)})`;
+  const outcomeLabel =
+    pos === 0 && neg === 0 ? 'none' : `+${pos} / -${neg} (reward factor: ${fmt(rewardFactor)})`;
   console.log(`Outcomes:         ${outcomeLabel}`);
   if (entry.conflictsWith.length > 0) {
     console.log(`Conflicts with:   ${entry.conflictsWith.join(', ')}`);
@@ -212,7 +230,9 @@ export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContex
     console.log(`No memory text recorded in the last ${windowDays} days.`);
     return;
   }
-  console.log(`Memory text handed to agents, last ${windowDays} days (estimated tokens, characters / 4)\n`);
+  console.log(
+    `Memory text handed to agents, last ${windowDays} days (estimated tokens, characters / 4)\n`,
+  );
   console.log(
     `  ${'surface'.padEnd(14)}${'sent'.padStart(8)}${'tokens'.padStart(12)}${'skipped'.padStart(10)}` +
       `${'saved'.padStart(12)}` +
@@ -234,17 +254,25 @@ export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContex
       ` counted for ${summary.rereadSessions} of ${summary.hookSessions} sessions.`,
   );
   if (summary.meanTokensPerSession > 0) {
-    console.log(`  Mean per session (rows with a session id): ${summary.meanTokensPerSession} tokens.`);
+    console.log(
+      `  Mean per session (rows with a session id): ${summary.meanTokensPerSession} tokens.`,
+    );
   }
   console.log(
     '  Re-reads are counted for hook and compact-resume blocks when a session ends; ' +
       'other surfaces, and open or crashed sessions, show sent only.',
   );
-  console.log("  Re-reads usually bill at the provider's cached-input rate, a fraction of the full input price.");
+  console.log(
+    "  Re-reads usually bill at the provider's cached-input rate, a fraction of the full input price.",
+  );
 }
 
 /** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions. */
-export async function handleFailures({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleFailures({
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
   // The store the capture-error hook writes to; a report never creates one.
   const root = boolFlag(flags, 'global') ? hippoHomeDir() : hookStoreRoot(hippoRoot);
   requireInit(root);
@@ -256,7 +284,10 @@ export async function handleFailures({ hippoRoot, tenantId, flags }: CommandCont
     return;
   }
   const windowDays = days > 0 ? days : 30;
-  const kept = windowDays > FAILURE_LOG_RETENTION_DAYS ? ` (rows are kept ${FAILURE_LOG_RETENTION_DAYS} days)` : '';
+  const kept =
+    windowDays > FAILURE_LOG_RETENTION_DAYS
+      ? ` (rows are kept ${FAILURE_LOG_RETENTION_DAYS} days)`
+      : '';
   if (summary.total === 0) {
     console.log(`No failed tool calls recorded in the last ${windowDays} days${kept}.`);
     return;
@@ -284,7 +315,11 @@ export async function handleFailures({ hippoRoot, tenantId, flags }: CommandCont
   }
 }
 
-export async function handleCorrectionLatency({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleCorrectionLatency({
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const report = await correctionLatencyReport(cliApiContext(hippoRoot, tenantId));
   if (boolFlag(flags, 'json')) {
@@ -302,9 +337,13 @@ export async function handleCorrectionLatency({ hippoRoot, tenantId, flags }: Co
     console.log(
       `Corrections: ${report.count} total (${report.extractionCount} extraction-driven, ${report.manualCount} manual)`,
     );
-    console.log(`Latency p50: ${fmt(report.p50Ms)}, p95: ${fmt(report.p95Ms)}, max: ${fmt(report.maxMs)}`);
+    console.log(
+      `Latency p50: ${fmt(report.p50Ms)}, p95: ${fmt(report.p95Ms)}, max: ${fmt(report.maxMs)}`,
+    );
     if (report.extractionCount === 0 && report.manualCount > 0) {
-      console.log(`\nAll ${report.manualCount} corrections were manual supersedes: no measurable observation lag.`);
+      console.log(
+        `\nAll ${report.manualCount} corrections were manual supersedes: no measurable observation lag.`,
+      );
       console.log(
         `To measure latency, route corrections through extraction (set new.extracted_from to the raw receipt).`,
       );
@@ -312,7 +351,11 @@ export async function handleCorrectionLatency({ hippoRoot, tenantId, flags }: Co
   }
 }
 
-export async function handleProvenance({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleProvenance({
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const coverage = await provenanceCoverageReport(cliApiContext(hippoRoot, tenantId));
   if (boolFlag(flags, 'json')) {

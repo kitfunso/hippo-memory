@@ -13,13 +13,20 @@ export function goalPush(ctx: EntryContext, opts: GoalPushOptions): Promise<Goal
 }
 
 /** The caller's goals for `sessionId`: active ones, or every status when `all` is set. */
-export async function goalList(ctx: Context, opts: { sessionId: string; all: boolean }): Promise<Goal[]> {
+export async function goalList(
+  ctx: Context,
+  opts: { sessionId: string; all: boolean },
+): Promise<Goal[]> {
   if (opts.all) return ctx.store.goals.sessionGoals(ctx.tenantId, opts.sessionId);
   return (await ctx.store.activeGoals({ sessionId: opts.sessionId, tenantId: ctx.tenantId })).goals;
 }
 
 /** Complete a goal by id; a no-op for an unknown, another tenant's or an already completed goal. Host admin only. */
-export async function goalComplete(ctx: Context, goalId: string, opts: CompleteGoalOptions): Promise<void> {
+export async function goalComplete(
+  ctx: Context,
+  goalId: string,
+  opts: CompleteGoalOptions,
+): Promise<void> {
   requireHostAdmin(ctx, 'Completing a goal by id');
   await ctx.store.goals.complete(ctx.tenantId, goalId, opts);
 }

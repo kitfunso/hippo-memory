@@ -10,7 +10,9 @@ import { copilotHomeDir, type ToolDetection } from './rules/shared.js';
 /** Codex counts as installed only when its config folder exists: Codex itself refuses a CODEX_HOME that is not a
  * folder. */
 export function isCodexPresent(home: string = homeDir()): boolean {
-  return fs.statSync(codexHomeDir(home, processEnv()), { throwIfNoEntry: false })?.isDirectory() === true;
+  return (
+    fs.statSync(codexHomeDir(home, processEnv()), { throwIfNoEntry: false })?.isDirectory() === true
+  );
 }
 
 /** The VS Code User folders that exist; Stable and Insiders keep their own, and only an edition the user has run has
@@ -28,8 +30,9 @@ export function vscodeUserDirs(
  * ~/.copilot on a machine with neither. */
 export function isCopilotPresent(home: string = os.homedir()): boolean {
   return (
-    fs.statSync(copilotHomeDir({ home, env: processEnv() }), { throwIfNoEntry: false })?.isDirectory() === true ||
-    vscodeUserDirs(processEnv(), home).length > 0
+    fs
+      .statSync(copilotHomeDir({ home, env: processEnv() }), { throwIfNoEntry: false })
+      ?.isDirectory() === true || vscodeUserDirs(processEnv(), home).length > 0
   );
 }
 
@@ -44,7 +47,12 @@ export function detectInstalledTools(): ToolDetection[] {
   const exists = (...parts: string[]) => fs.existsSync(path.join(home, ...parts));
   const claudeDir = claudeConfigDir(os.homedir(), processEnv());
   return [
-    { name: 'claude-code', configDir: claudeDir, detected: fs.existsSync(claudeDir), kind: 'json-hook' },
+    {
+      name: 'claude-code',
+      configDir: claudeDir,
+      detected: fs.existsSync(claudeDir),
+      kind: 'json-hook',
+    },
     {
       name: 'opencode',
       configDir: '~/.config/opencode',
@@ -64,7 +72,8 @@ export function detectInstalledTools(): ToolDetection[] {
       configDir: '~/.codex',
       detected: isCodexPresent(home),
       kind: 'wrapper',
-      notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation',
+      notes:
+        'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation',
     },
     {
       name: 'copilot',

@@ -12,7 +12,8 @@ let root: string;
 let db: DatabaseSyncLike;
 let prepare: MockInstance<DatabaseSyncLike['prepare']>;
 
-const preparedOf = (text: string): number => prepare.mock.calls.filter(([sql]) => sql.includes(text)).length;
+const preparedOf = (text: string): number =>
+  prepare.mock.calls.filter(([sql]) => sql.includes(text)).length;
 
 beforeEach(() => {
   root = makeRoot('hot-prepares');
@@ -34,14 +35,18 @@ describe('hot read statements', () => {
       return entry.id;
     });
 
-    for (let i = 0; i < 4; i++) expect(readEntriesInIdOrder(db, ids, 'default').map((e) => e.id)).toHaveLength(3);
+    for (let i = 0; i < 4; i++)
+      expect(readEntriesInIdOrder(db, ids, 'default').map((e) => e.id)).toHaveLength(3);
     readEntriesInIdOrder(db, ids.slice(0, 2), 'default');
 
     expect(preparedOf('FROM memories WHERE id IN')).toBe(1);
   });
 
   it('pickRarestFtsQuery prepares its vocabulary read once for the same term count', () => {
-    writeEntryDbOnly(db, { ...createMemory('kafka redis cache', { baseHalfLifeDays: 30 }), id: 'k' });
+    writeEntryDbOnly(db, {
+      ...createMemory('kafka redis cache', { baseHalfLifeDays: 30 }),
+      id: 'k',
+    });
 
     for (let i = 0; i < 4; i++) pickRarestFtsQuery(db, ['kafka', 'redis']);
 

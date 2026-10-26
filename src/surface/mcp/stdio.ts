@@ -3,7 +3,11 @@
 import { exitAfterFlush, installCrashHandlers } from '../../base/util/crash-handlers.js';
 import { envRequestDeadlineMs, envTenant } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { requestDeadlineMs, currentRequestId, runWithRequestId } from '../../base/util/request-scope.js';
+import {
+  requestDeadlineMs,
+  currentRequestId,
+  runWithRequestId,
+} from '../../base/util/request-scope.js';
 import { MAX_BODY_BYTES } from '../../base/util/limits.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
 import {
@@ -55,7 +59,12 @@ function frameReader(onBody: (body: string) => void): (raw: Buffer) => void {
     pending.push(chunk);
     pendingBytes += chunk.length;
     // Joining on every chunk would copy the whole pending frame each time; wait until a frame can have ended.
-    if (needs === undefined ? !chunk.includes(0x0a) && pendingBytes <= MAX_BODY_BYTES : pendingBytes < needs) return;
+    if (
+      needs === undefined
+        ? !chunk.includes(0x0a) && pendingBytes <= MAX_BODY_BYTES
+        : pendingBytes < needs
+    )
+      return;
     let buffer: Buffer = Buffer.concat(pending, pendingBytes);
     needs = undefined;
     while (true) {
@@ -140,14 +149,24 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
   const timer = setTimeout(() => {
     expired = true;
     const name = callName(req);
-    log.warn(`mcp: ${name} did not answer within ${ms} ms; its next step is cancelled and its reply will be dropped`, {
-      method: req.method,
-    });
+    log.warn(
+      `mcp: ${name} did not answer within ${ms} ms; its next step is cancelled and its reply will be dropped`,
+      {
+        method: req.method,
+      },
+    );
     abort.abort(new DOMException(`${name} did not finish within ${ms} ms`, 'TimeoutError'));
     if (!owedReply) return;
     const requestId = currentRequestId();
     const message = `Request timed out: ${name} did not finish within ${ms} ms; a write it started may or may not be saved`;
-    send(errorReply(req.id, REQUEST_TIMEOUT, message, requestId === undefined ? undefined : { requestId }));
+    send(
+      errorReply(
+        req.id,
+        REQUEST_TIMEOUT,
+        message,
+        requestId === undefined ? undefined : { requestId },
+      ),
+    );
   }, ms);
   // Stdin and the call keep the process alive; this timer alone must not.
   timer.unref();
@@ -202,7 +221,10 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
       handleFrame(req, host)
         .then(() => {})
         .catch((err) => {
-          log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`, errorFields(err));
+          log.error(
+            `mcp notification ${req.method} failed: ${errorMessage(err)}`,
+            errorFields(err),
+          );
         })
         .finally(stopWatching),
     );
@@ -220,7 +242,10 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
         if (timedOut() && err instanceof DOMException && err.name === 'TimeoutError') {
           log.debug(`mcp: ${callName(req)} stopped at its deadline`, errorFields(err));
         } else if (timedOut()) {
-          log.error(`mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`, errorFields(err));
+          log.error(
+            `mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`,
+            errorFields(err),
+          );
         } else send(mcpErrorResponse(req.id, err, undefined, callName(req)));
       }),
   );
@@ -251,7 +276,10 @@ export function startStdioLoop(host: McpHost): void {
 
   exitOnStreamError();
   // A crash waits for the calls in flight as stdin's end does, so a client is not left without its reply.
-  installCrashHandlers('mcp', { run: drainInFlight, boundMs: STDIN_END_DRAIN_MS + CRASH_DRAIN_SLACK_MS });
+  installCrashHandlers('mcp', {
+    run: drainInFlight,
+    boundMs: STDIN_END_DRAIN_MS + CRASH_DRAIN_SLACK_MS,
+  });
 }
 
 function exitOnStreamError(): void {

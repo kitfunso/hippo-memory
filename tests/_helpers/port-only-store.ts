@@ -25,14 +25,21 @@ export const FOLDER_GROUPS = [
 type FolderGroup = (typeof FOLDER_GROUPS)[number];
 
 // The optional groups, which an add-on store at its smallest has none of.
-const LEFT_OUT: ReadonlySet<string> = new Set<OptionalGroup>(['readiness', 'lastRecall', ...FOLDER_GROUPS]);
+const LEFT_OUT: ReadonlySet<string> = new Set<OptionalGroup>([
+  'readiness',
+  'lastRecall',
+  ...FOLDER_GROUPS,
+]);
 
 /** `store` without its folder groups, as a store that is not hippo.db holds none; copying string keys alone drops the
  * symbol that marks a store as hippo.db. */
 export function withoutFolderGroups<S extends HippoStore>(store: S): Omit<S, FolderGroup> {
   const folder: ReadonlySet<string> = new Set(FOLDER_GROUPS);
   // SAFETY: the string-keyed members of `store` minus exactly the folder groups.
-  return Object.fromEntries(Object.entries(store).filter(([key]) => !folder.has(key))) as Omit<S, FolderGroup>;
+  return Object.fromEntries(Object.entries(store).filter(([key]) => !folder.has(key))) as Omit<
+    S,
+    FolderGroup
+  >;
 }
 
 function allowed<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
@@ -41,7 +48,9 @@ function allowed<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) =>
 
 function allowedGroup<T extends object>(group: T): T {
   // SAFETY: every member of a store group is a method, each swapped for a wrapper of the same signature.
-  return Object.fromEntries(Object.entries(group).map(([name, method]) => [name, allowed(method)])) as T;
+  return Object.fromEntries(
+    Object.entries(group).map(([name, method]) => [name, allowed(method)]),
+  ) as T;
 }
 
 /** hippo.db's required groups and none of the optional ones: an add-on store at its smallest. Base
@@ -65,10 +74,9 @@ export function portOnlyStore(hippoRoot: string): HippoStore {
   };
   const groups = Object.entries(inner).filter(([key]) => !(key in base) && !LEFT_OUT.has(key));
   // SAFETY: what is left of sqliteStore's own keys is its required groups, each wrapped whole.
-  const required = Object.fromEntries(groups.map(([key, group]) => [key, allowedGroup(group)])) as Omit<
-    StoreGroups,
-    OptionalGroup
-  >;
+  const required = Object.fromEntries(
+    groups.map(([key, group]) => [key, allowedGroup(group)]),
+  ) as Omit<StoreGroups, OptionalGroup>;
   return { ...base, ...required };
 }
 
@@ -87,7 +95,10 @@ function logged(store: HippoStore, calls: string[]): HippoStore {
     continuity: log('continuity', store.continuity),
     searchRecallEntries: log('searchRecallEntries', store.searchRecallEntries),
     // SAFETY: log passes every argument through and returns read's own answer, so each overload still holds.
-    sessions: { ...sessions, read: log('sessions.read', sessions.read) as HippoStore['sessions']['read'] },
+    sessions: {
+      ...sessions,
+      read: log('sessions.read', sessions.read) as HippoStore['sessions']['read'],
+    },
     contextReads: {
       ambientCandidates: log('ambientCandidates', c.ambientCandidates),
       contextCandidates: log('contextCandidates', c.contextCandidates),

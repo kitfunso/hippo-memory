@@ -35,16 +35,24 @@ export async function runPredictBaserateTool({ args, ctx }: ToolCall): Promise<s
   if (baserate.meanEstimate !== null) {
     lines.push(`mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
   }
-  if (baserate.meanActual !== null) lines.push(`mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
-  if (baserate.meanRatio !== null) lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
-  if (baserate.p50Ratio !== null) lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
-  if (baserate.mae !== null) lines.push(`mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanActual !== null)
+    lines.push(`mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanRatio !== null)
+    lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.p50Ratio !== null)
+    lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.mae !== null)
+    lines.push(`mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
   return lines.join('\n');
 }
 
 export async function runStatusTool({ ctx, config }: ToolCall): Promise<string> {
   const api = mcpApiContext(ctx);
-  const tallies = await api.store.reports.memoryStatus(api.tenantId, api.infra.clock(), AT_RISK_BELOW);
+  const tallies = await api.store.reports.memoryStatus(
+    api.tenantId,
+    api.infra.clock(),
+    AT_RISK_BELOW,
+  );
   const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
   return [
     `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,
@@ -59,9 +67,13 @@ export async function runConflictsTool(call: ToolCall): Promise<string> {
   const { ctx } = call;
   const apiCtx = mcpApiContext(ctx);
   const lines: string[] = [];
-  for await (const page of conflictPages((p) => conflictListOpen(apiCtx, { ...p, project: ctx?.project }))) {
+  for await (const page of conflictPages((p) =>
+    conflictListOpen(apiCtx, { ...p, project: ctx?.project }),
+  )) {
     for (const c of page.conflicts) {
-      lines.push(`conflict_${c.id}: ${c.memoryAId} <-> ${c.memoryBId} (score=${c.score.toFixed(2)}) — ${c.reason}`);
+      lines.push(
+        `conflict_${c.id}: ${c.memoryAId} <-> ${c.memoryBId} (score=${c.score.toFixed(2)}) — ${c.reason}`,
+      );
     }
   }
   return lines.length === 0 ? 'No open conflicts.' : lines.join('\n');
@@ -77,14 +89,23 @@ export async function runResolveTool({ args, ctx }: ToolCall): Promise<string> {
   let loserId: string;
   try {
     const apiCtx = mcpApiContext(ctx);
-    ({ loserId } = await conflictResolve(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
+    ({ loserId } = await conflictResolve(apiCtx, conflictId, {
+      keepId,
+      forget,
+      rejectLoser,
+      reason,
+    }));
   } catch (err) {
     // A missing, unreachable or settled conflict answers alike, so the reply says nothing of a pair the caller cannot
     // touch.
     if (err instanceof NotFoundError || err instanceof ConflictError) return NOT_RESOLVED;
     throw err;
   }
-  const action = rejectLoser ? 'rejected (tombstoned) and removed' : forget ? 'deleted' : 'weakened';
+  const action = rejectLoser
+    ? 'rejected (tombstoned) and removed'
+    : forget
+      ? 'deleted'
+      : 'weakened';
   return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${loserId}`;
 }
 
@@ -106,6 +127,8 @@ export async function runPeersTool({ ctx }: LocalToolCall): Promise<string> {
   const peers = await sharePeers(mcpApiContext(ctx));
   if (peers.length === 0) return 'No peers found.';
   return peers
-    .map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`)
+    .map(
+      (p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`,
+    )
     .join('\n');
 }

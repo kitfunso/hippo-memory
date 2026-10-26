@@ -99,7 +99,9 @@ describe('mcp hippo_recall fresh-tail policy', () => {
     expect((thrown as RecallContractError).code).toBe('fresh_tail_requires_session_id');
     // SAFETY: the toBeInstanceOf(RecallContractError) assertion above just
     // confirmed thrown's runtime type.
-    expect((thrown as RecallContractError).message).toContain('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
+    expect((thrown as RecallContractError).message).toContain(
+      'HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL',
+    );
   });
 
   it('env=1, session_id provided → no error, content returned', async () => {
@@ -207,14 +209,18 @@ describe('mcp hippo_recall fresh tail on a shared store', () => {
       config: cliConfig(shared),
       infra: testInfra(),
     };
-    for (const args of [{ fresh_tail_count: 3 }, { fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' }]) {
+    for (const args of [
+      { fresh_tail_count: 3 },
+      { fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' },
+    ]) {
       // SAFETY: hippo_recall's tool result carries result.content, as in the cases above.
       const r = (await callTool('hippo_recall', { query: 'zzqqxx', ...args }, ctx)) as {
         result?: { content: Array<{ text: string }> };
       };
       const text = r.result?.content?.[0]?.text ?? '';
       expect(text, JSON.stringify(args)).toContain(`[tail] ${rows[0]!.id}: tail row from acme`);
-      for (const hidden of rows.slice(1)) expect(text, JSON.stringify(args)).not.toContain(hidden.id);
+      for (const hidden of rows.slice(1))
+        expect(text, JSON.stringify(args)).not.toContain(hidden.id);
     }
   });
 });

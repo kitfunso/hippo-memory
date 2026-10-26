@@ -15,7 +15,12 @@ import {
   surfaceTotals,
 } from './token-ledger-rows.js';
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
-import type { TokenSummary, TokenSurface, TokenSurfaceSummary, TokenUse } from '../../base/ports/store/ledger.js';
+import type {
+  TokenSummary,
+  TokenSurface,
+  TokenSurfaceSummary,
+  TokenUse,
+} from '../../base/ports/store/ledger.js';
 import type { LastSent } from '../../base/session/skip-unchanged.js';
 import type { ApiCall } from '../../base/session/transcript-calls.js';
 import { DAY_MS } from '../../base/util/time.js';
@@ -80,7 +85,11 @@ export function lastSentState(
 }
 
 /** Sum the ledger for one tenant since `sinceIso`; surfaces with no rows are omitted. */
-export function summarizeTokenUse(db: DatabaseSyncLike, tenantId: string, sinceIso: string): TokenSummary {
+export function summarizeTokenUse(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sinceIso: string,
+): TokenSummary {
   const rows = surfaceTotals(db, tenantId, sinceIso);
   const bySurface = new Map(rows.map((r) => [r.surface, r]));
   const surfaces: TokenSurfaceSummary[] = [];
@@ -126,7 +135,11 @@ interface SessionTokens {
 
 /** Ledger totals per session id since `sinceIso`, across surfaces; hook rows carry the host's session id (the
  * transcript file name), so they join to its usage records. */
-export function tokensBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionTokens[] {
+export function tokensBySession(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sinceIso: string,
+): SessionTokens[] {
   return sessionTokenRows(db, tenantId, sinceIso).map((r) => ({
     sessionId: r.session_id,
     sent: Number(r.sent),
@@ -166,7 +179,12 @@ export function recordRereads(
     const add = (surface: TokenSurface, at: number, rereads: number, tokens: number): void => {
       const key = `${surface} ${new Date(at).toISOString().slice(0, DATE_PREFIX_CHARS)}`;
       const day = days.get(key) ?? { surface, at, rereads: 0, tokens: 0 };
-      days.set(key, { surface, at: Math.max(day.at, at), rereads: day.rereads + rereads, tokens: day.tokens + tokens });
+      days.set(key, {
+        surface,
+        at: Math.max(day.at, at),
+        rereads: day.rereads + rereads,
+        tokens: day.tokens + tokens,
+      });
     };
     for (const row of rows) {
       const sentAt = Date.parse(row.ts);
@@ -174,7 +192,8 @@ export function recordRereads(
       // session in coverage.
       add(row.surface, sentAt, 0, 0);
       // The first carrying call is the send itself; every later one is a re-read.
-      for (const call of carryingCalls(calls, sentAt).slice(1)) add(row.surface, call.at, 1, Number(row.tokens));
+      for (const call of carryingCalls(calls, sentAt).slice(1))
+        add(row.surface, call.at, 1, Number(row.tokens));
     }
     deleteRereadRows(db, tenantId, sessionId);
     for (const day of days.values()) {

@@ -37,7 +37,12 @@ describe('resolveProjectIdentity', () => {
     const proj = mkdirs('home', 'my-app');
     fs.mkdirSync(path.join(proj, '.hippo'), PRIVATE_DIR);
     const id = resolveProjectIdentity(proj, { homeDir: home });
-    expect(id).toEqual({ root: fs.realpathSync.native(proj), name: 'my-app', legacyName: 'my-app', isHome: false });
+    expect(id).toEqual({
+      root: fs.realpathSync.native(proj),
+      name: 'my-app',
+      legacyName: 'my-app',
+      isHome: false,
+    });
   });
 
   it('resolves from a nested subdirectory to the nearest .hippo ancestor', () => {
@@ -81,7 +86,12 @@ describe('resolveProjectIdentity', () => {
     const wt = mkdirs('home', 'repo-wt');
     fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${link}\n`);
     const id = resolveProjectIdentity(mkdirs('home', 'repo-wt', 'src'), { homeDir: home });
-    expect(id).toEqual({ root: fs.realpathSync.native(wt), name: 'repo', legacyName: 'repo', isHome: false });
+    expect(id).toEqual({
+      root: fs.realpathSync.native(wt),
+      name: 'repo',
+      legacyName: 'repo',
+      isHome: false,
+    });
     expect(resolveProjectIdentity(main, { homeDir: home }).name).toBe('repo');
   });
 
@@ -208,7 +218,9 @@ describe('assertCallerProject', () => {
       { name: 'x'.repeat(MAX_ID_LEN + 1) },
       { name: 'acme/app', aliases: ['y'.repeat(MAX_ID_LEN + 1)] },
     ]) {
-      expect(() => assertCallerProject(project), JSON.stringify(project).slice(0, 60)).toThrow(BadRequestError);
+      expect(() => assertCallerProject(project), JSON.stringify(project).slice(0, 60)).toThrow(
+        BadRequestError,
+      );
     }
   });
 

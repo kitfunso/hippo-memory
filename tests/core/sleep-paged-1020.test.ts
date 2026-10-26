@@ -22,11 +22,14 @@ afterEach(() => {
   for (const r of roots.splice(0)) removeAfterRequest(r);
 });
 
-const ctxFor = (root: string): FullContext => apiCtx(root, 'default', { subject: 'paged-test', role: 'admin' });
+const ctxFor = (root: string): FullContext =>
+  apiCtx(root, 'default', { subject: 'paged-test', role: 'admin' });
 
 // Every row shares the fake clock's `created`, so the ids set the page order: a copy in another page of PAGE rows
 // beats the earlier copy (p-03 and p-04, p-02 then p-06 then p-10, acme p-07 and p-13).
-const ROWS: ReadonlyArray<readonly [string, string, { tenantId?: string; pinned?: boolean; retrievals?: number }]> = [
+const ROWS: ReadonlyArray<
+  readonly [string, string, { tenantId?: string; pinned?: boolean; retrievals?: number }]
+> = [
   ['p-00', 'the deploy runs on friday at noon', {}],
   ['p-01', 'billing is owned by alice in finance', {}],
   ['p-02', 'the cache warms every hour on the hour', {}],
@@ -129,7 +132,9 @@ describe('sleep in keyset pages', () => {
     const root = seeded();
     const ctx = ctxFor(root);
     const paged = await auditMemoryQuality(ctx, { pageSize: 2 });
-    expect(paged.total).toBe(ROWS.filter(([, , o]) => (o.tenantId ?? 'default') === 'default').length);
+    expect(paged.total).toBe(
+      ROWS.filter(([, , o]) => (o.tenantId ?? 'default') === 'default').length,
+    );
     expect(paged).toEqual(await auditMemoryQuality(ctx));
   });
 });

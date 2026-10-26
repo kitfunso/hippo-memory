@@ -34,7 +34,11 @@ export async function forget(ctx: Context, id: string): Promise<ForgetResult> {
 
 /** The row `forget`, or with `archive` `rawArchive`, would remove now; throws the refusal that call would throw. Reads
  * only. */
-export async function removalTarget(ctx: Context, id: string, archive: boolean): Promise<MemoryEntry> {
+export async function removalTarget(
+  ctx: Context,
+  id: string,
+  archive: boolean,
+): Promise<MemoryEntry> {
   const entry = await memoryGet(ctx, id);
   if (entry === null) throw new NotFoundError(`memory not found: ${id}`);
   const refusal = rawRemovalRefusal(entry, archive);

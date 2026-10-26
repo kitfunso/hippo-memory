@@ -32,13 +32,18 @@ async function graphShow(
   entity: string | undefined,
   flags: CliFlags,
 ): Promise<void> {
-  const model = await graphViewOnHost(cliApiContext(hippoRoot, tenantId), { entity, limit: DEFAULT_VIEW_LIMIT });
+  const model = await graphViewOnHost(cliApiContext(hippoRoot, tenantId), {
+    entity,
+    limit: DEFAULT_VIEW_LIMIT,
+  });
   if (boolFlag(flags, 'json')) {
     console.log(JSON.stringify(model, null, 2));
     return;
   }
   if (model.nodes.length === 0) {
-    console.log(entity ? `No entity named "${entity}".` : 'Graph is empty. Run `hippo graph extract` first.');
+    console.log(
+      entity ? `No entity named "${entity}".` : 'Graph is empty. Run `hippo graph extract` first.',
+    );
     return;
   }
   console.log(
@@ -73,17 +78,27 @@ async function graphView(
   if (format !== 'html' && format !== 'canvas') {
     fail("graph view: --format must be 'html' or 'canvas'");
   }
-  const model = await graphViewOnHost(cliApiContext(hippoRoot, tenantId), { entity, limit: DEFAULT_VIEW_LIMIT });
+  const model = await graphViewOnHost(cliApiContext(hippoRoot, tenantId), {
+    entity,
+    limit: DEFAULT_VIEW_LIMIT,
+  });
   const content = format === 'canvas' ? renderGraphCanvas(model) : renderGraphHtml(model);
   const defaultOut = format === 'canvas' ? 'hippo-graph.canvas' : 'hippo-graph.html';
   const out = stringFlag(flags, 'out') ?? defaultOut;
   fs.writeFileSync(out, content, 'utf8');
   const truncated = model.truncated ? ' (truncated)' : '';
-  console.log(`Wrote ${model.nodes.length} entities + ${model.edges.length} relations to ${out}${truncated}`);
+  console.log(
+    `Wrote ${model.nodes.length} entities + ${model.edges.length} relations to ${out}${truncated}`,
+  );
   if (boolFlag(flags, 'open') && format === 'html') openInBrowser(out);
 }
 
-export async function handleGraph({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+export async function handleGraph({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+}: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
   if (subcommand === 'extract') return extractAndReport(hippoRoot, tenantId);

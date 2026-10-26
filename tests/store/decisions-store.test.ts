@@ -15,7 +15,11 @@ import { createMemory } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { loadDecisions, resolveActiveDecisionIdByMemory, DECISION } from '../../src/domain/objects/decisions.js';
+import {
+  loadDecisions,
+  resolveActiveDecisionIdByMemory,
+  DECISION,
+} from '../../src/domain/objects/decisions.js';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -110,9 +114,14 @@ describe('decisions store (first-class object)', () => {
   });
 
   it('a supersede that loses its race after the preflight is a ConflictError (409), like the other five save paths', async () => {
-    const prior = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
-      decisionText: 'ship on fridays',
-    });
+    const prior = await saveDecision(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      'default',
+      {
+        decisionText: 'ship on fridays',
+      },
+    );
     const db = openHippoDb(home);
     try {
       // The trigger stands in for a concurrent writer: the preflight sees an active row, the UPDATE changes nothing.
@@ -143,7 +152,11 @@ describe('decisions store (first-class object)', () => {
     expect(d.context).toBeNull();
     const db = openHippoDb(home);
     try {
-      const memRow = getRow<{ content: string }>(db, `SELECT content FROM memories WHERE id = ?`, d.memoryId!);
+      const memRow = getRow<{ content: string }>(
+        db,
+        `SELECT content FROM memories WHERE id = ?`,
+        d.memoryId!,
+      );
       expect(memRow.content).toBe('adopt trunk-based dev');
       const rows = allRows<{ metadata_json: string }>(
         db,
@@ -166,7 +179,10 @@ describe('decisions store (first-class object)', () => {
     const c = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'to-supersede',
     });
-    await closeObject(objectsAt(home), DECISION, 'default', b.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), DECISION, 'default', b.id, {
+      actor: CLI_ACTOR,
+      now: evalNow(),
+    });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'successor',
       supersedesDecisionId: c.id,
@@ -194,7 +210,9 @@ describe('decisions store (first-class object)', () => {
     const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'first-class',
     });
-    expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', d.memoryId!)).toBe(d.id);
+    expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', d.memoryId!)).toBe(
+      d.id,
+    );
 
     // A legacy decision-tagged memory with NO decisions row
     const legacy = createMemory('legacy decision memory', {
@@ -209,13 +227,20 @@ describe('decisions store (first-class object)', () => {
     expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', legacy.id)).toBeNull();
 
     // A superseded decision's memory no longer resolves (status != active)
-    const sup = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
-      decisionText: 'old',
-    });
+    const sup = await saveDecision(
+      objectsAt(home),
+      loadConfig(home).defaultHalfLifeDays,
+      'default',
+      {
+        decisionText: 'old',
+      },
+    );
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'new',
       supersedesDecisionId: sup.id,
     });
-    expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', sup.memoryId!)).toBeNull();
+    expect(
+      await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', sup.memoryId!),
+    ).toBeNull();
   });
 });

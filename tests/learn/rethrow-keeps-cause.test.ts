@@ -104,7 +104,9 @@ describe('rethrown errors keep their cause', () => {
   describe('embedding provider', () => {
     it('keeps the transport error when the API port refuses the connection', async () => {
       vi.stubEnv('OPENAI_API_KEY', 'test-key');
-      const provider = resolveEmbeddingProvider(loadConfig(embeddingRoot(await closedPort())).embeddings);
+      const provider = resolveEmbeddingProvider(
+        loadConfig(embeddingRoot(await closedPort())).embeddings,
+      );
       const err = await caught(() => provider.embed(['hello']));
       expect(err.message).toContain('embedding request to openai failed');
       expect(err.cause).toBeInstanceOf(Error);
@@ -127,7 +129,9 @@ describe('rethrown errors keep their cause', () => {
 
     it('keeps the key out of the cause when the transport refuses the header', async () => {
       vi.stubEnv('OPENAI_API_KEY', 'sk-test' + String.fromCharCode(10) + 'SECRETPART');
-      const provider = resolveEmbeddingProvider(loadConfig(embeddingRoot(await closedPort())).embeddings);
+      const provider = resolveEmbeddingProvider(
+        loadConfig(embeddingRoot(await closedPort())).embeddings,
+      );
       const err = await caught(() => provider.embed(['hello']));
       expect(err.cause).toBeInstanceOf(Error);
       expect(inspect(err, { depth: 5 })).not.toContain('SECRETPART');

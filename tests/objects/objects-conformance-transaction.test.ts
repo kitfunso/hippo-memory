@@ -56,15 +56,24 @@ describe("hippo.db's Objects writes are one transaction each", () => {
       const successor = saving(c, 3, { at: T2, supersedesId: 1 });
       const before = auditRowsAt(root);
 
-      await expect(objects.saveObject(TENANT_A, c.kind, fresh.save)).rejects.toThrow('audit row refused');
-      await expect(objects.saveObject(TENANT_A, c.kind, successor.save)).rejects.toThrow('audit row refused');
+      await expect(objects.saveObject(TENANT_A, c.kind, fresh.save)).rejects.toThrow(
+        'audit row refused',
+      );
+      await expect(objects.saveObject(TENANT_A, c.kind, successor.save)).rejects.toThrow(
+        'audit row refused',
+      );
       await expect(
         objects.closeObject(TENANT_A, c.kind, 1, { from: ['active'], actor: ACTOR, at: T3 }),
       ).rejects.toThrow('audit row refused');
 
-      expect(await objects.listObjects(TENANT_A, c.kind, { limit: 10 })).toEqual([rowOf(c, 1, first)]);
+      expect(await objects.listObjects(TENANT_A, c.kind, { limit: 10 })).toEqual([
+        rowOf(c, 1, first),
+      ]);
       expect(
-        await store.entriesByIds([first.save.mirror.id, fresh.save.mirror.id, successor.save.mirror.id], TENANT_A),
+        await store.entriesByIds(
+          [first.save.mirror.id, fresh.save.mirror.id, successor.save.mirror.id],
+          TENANT_A,
+        ),
       ).toMatchObject([{ id: first.save.mirror.id }]);
       expect(auditRowsAt(root)).toEqual(before);
       await store.close();
@@ -79,13 +88,22 @@ describe("hippo.db's Objects writes are one transaction each", () => {
     const first = opening(1);
     await objects.saveObject(TENANT_A, 'incident', first.open);
     const held = Array.from({ length: 1200 }, () => mirrorIdOf(first));
-    const late = [...held.slice(0, 1100), 'mem_missing_late', 'mem_missing_later', ...held.slice(1100)];
+    const late = [
+      ...held.slice(0, 1100),
+      'mem_missing_late',
+      'mem_missing_later',
+      ...held.slice(1100),
+    ];
 
-    expect(await objects.saveObject(TENANT_A, 'incident', opening(2, { at: T2, links: late }).open)).toEqual({
+    expect(
+      await objects.saveObject(TENANT_A, 'incident', opening(2, { at: T2, links: late }).open),
+    ).toEqual({
       refused: 'unlinked',
       memoryId: 'mem_missing_late',
     });
-    expect(await objects.saveObject(TENANT_A, 'incident', opening(3, { at: T2, links: held }).open)).toMatchObject({
+    expect(
+      await objects.saveObject(TENANT_A, 'incident', opening(3, { at: T2, links: held }).open),
+    ).toMatchObject({
       status: 'open',
     });
     await store.close();
@@ -102,15 +120,19 @@ describe("hippo.db's Objects writes are one transaction each", () => {
     const second = opening(2, { at: T2, links: [mirrorIdOf(first)] });
     const before = auditRowsAt(root);
 
-    await expect(objects.saveObject(TENANT_A, 'incident', second.open)).rejects.toThrow('audit row refused');
-    await expect(objects.closeObject(TENANT_A, 'incident', 1, { text: 'fixed', actor: ACTOR, at: T3 })).rejects.toThrow(
+    await expect(objects.saveObject(TENANT_A, 'incident', second.open)).rejects.toThrow(
       'audit row refused',
     );
+    await expect(
+      objects.closeObject(TENANT_A, 'incident', 1, { text: 'fixed', actor: ACTOR, at: T3 }),
+    ).rejects.toThrow('audit row refused');
 
-    expect(await objects.listObjects(TENANT_A, 'incident', { limit: 10 })).toEqual([incidentOf(1, first)]);
-    expect(await store.entriesByIds([mirrorIdOf(first), mirrorIdOf(second)], TENANT_A)).toMatchObject([
-      { id: mirrorIdOf(first) },
+    expect(await objects.listObjects(TENANT_A, 'incident', { limit: 10 })).toEqual([
+      incidentOf(1, first),
     ]);
+    expect(
+      await store.entriesByIds([mirrorIdOf(first), mirrorIdOf(second)], TENANT_A),
+    ).toMatchObject([{ id: mirrorIdOf(first) }]);
     expect(auditRowsAt(root)).toEqual(before);
     await store.close();
   });

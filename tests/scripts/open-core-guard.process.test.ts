@@ -22,7 +22,11 @@ describe('check-open-core', () => {
   };
   const run = () => {
     const env = { ...process.env, GITHUB_EVENT_PATH: '', GITHUB_EVENT_NAME: '' };
-    return spawnSync(process.execPath, [SCRIPT, '--base', 'HEAD~1'], { cwd: repo, encoding: 'utf8', env }).status;
+    return spawnSync(process.execPath, [SCRIPT, '--base', 'HEAD~1'], {
+      cwd: repo,
+      encoding: 'utf8',
+      env,
+    }).status;
   };
 
   beforeEach(() => {
@@ -41,7 +45,11 @@ describe('check-open-core', () => {
     expect(run()).toBe(1);
     commit('ui/app.ts', '// commercial\nexport {};\n', 'feat: ui');
     expect(run()).toBe(1);
-    commit('src/surface/server/route.ts', "export const path = '/v1/hooks/prompt';\n", 'feat: hook route');
+    commit(
+      'src/surface/server/route.ts',
+      "export const path = '/v1/hooks/prompt';\n",
+      'feat: hook route',
+    );
     expect(run()).toBe(1);
     commit('src/processor.ts', 'export const processor = "session";\n', 'feat: core');
     expect(run()).toBe(0);

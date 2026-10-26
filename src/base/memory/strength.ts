@@ -60,14 +60,23 @@ export function parseLossAversionRatio(raw: string | number | undefined): number
 }
 
 /** `model` with the root's HIPPO_LOSS_AVERSION_RATIO, floored as parseLossAversionRatio floors it. */
-export function withLossAversion(model: StrengthModel, ratio: string | number | undefined): StrengthModel {
+export function withLossAversion(
+  model: StrengthModel,
+  ratio: string | number | undefined,
+): StrengthModel {
   const lossAversionRatio = parseLossAversionRatio(ratio);
-  return lossAversionRatio === model.lossAversionRatio ? model : Object.freeze({ ...model, lossAversionRatio });
+  return lossAversionRatio === model.lossAversionRatio
+    ? model
+    : Object.freeze({ ...model, lossAversionRatio });
 }
 
 /** Scales only the `negative` multiplier; `critical` stays unscaled so the knob moves just the losses-vs-gains
  * claim. */
-export function applyLossAversionRatio(valence: EmotionalValence, baseMultiplier: number, ratio: number): number {
+export function applyLossAversionRatio(
+  valence: EmotionalValence,
+  baseMultiplier: number,
+  ratio: number,
+): number {
   if (valence !== 'negative') return baseMultiplier;
   return baseMultiplier * ratio;
 }
@@ -137,12 +146,20 @@ export function calculateStrength(
   if (effectiveHalfLife <= 0) return 0.0;
 
   // Without decay the [0,1] clamp below caps the boost at baseline.
-  const decay = model.decays ? Math.pow(model.decayBase, decayExponentFor(basis, daysSince, effectiveHalfLife)) : 1.0;
+  const decay = model.decays
+    ? Math.pow(model.decayBase, decayExponentFor(basis, daysSince, effectiveHalfLife))
+    : 1.0;
   const retrievalBoost =
-    model.recallStrengthens && wrong === 0 ? 1 + model.retrievalBoostSlope * Math.log2(entry.retrievalCount + 1) : 1.0;
+    model.recallStrengthens && wrong === 0
+      ? 1 + model.retrievalBoostSlope * Math.log2(entry.retrievalCount + 1)
+      : 1.0;
 
   const baseMultiplier = EMOTIONAL_MULTIPLIERS[entry.emotionalValence] ?? 1.0;
-  const emotionalMultiplier = applyLossAversionRatio(entry.emotionalValence, baseMultiplier, model.lossAversionRatio);
+  const emotionalMultiplier = applyLossAversionRatio(
+    entry.emotionalValence,
+    baseMultiplier,
+    model.lossAversionRatio,
+  );
 
   const raw = decay * retrievalBoost * emotionalMultiplier;
 

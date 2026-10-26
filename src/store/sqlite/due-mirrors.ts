@@ -50,7 +50,8 @@ export function deferDueMirrors(hippoRoot: string): void {
  * open probe's answer when it had one, so a store with none due reads nothing more. */
 export function recoverDueMirrors(hippoRoot: string, db: DatabaseSyncLike, due?: boolean): void {
   oncePerStore(hippoRoot, 'due-mirrors', () => {
-    if (due ?? dueMarks(db, DUE).length > 0) mirrorBestEffort('markdown mirrors', () => rewriteDueMirrorsIn(hippoRoot));
+    if (due ?? dueMarks(db, DUE).length > 0)
+      mirrorBestEffort('markdown mirrors', () => rewriteDueMirrorsIn(hippoRoot));
   });
 }
 
@@ -88,11 +89,10 @@ function rewriteDueMirrors(db: DatabaseSyncLike, hippoRoot: string): void {
 }
 
 function dueMarks(db: DatabaseSyncLike, after: string): DueMark[] {
-  return cachedStatement(db, `SELECT key, value FROM meta WHERE key > ? AND key < ? ORDER BY key LIMIT ?`).all(
-    after,
-    DUE_END,
-    DUE_PAGE,
-  ) as DueMark[];
+  return cachedStatement(
+    db,
+    `SELECT key, value FROM meta WHERE key > ? AND key < ? ORDER BY key LIMIT ?`,
+  ).all(after, DUE_END, DUE_PAGE) as DueMark[];
 }
 
 function clearMarks(db: DatabaseSyncLike, marks: readonly DueMark[]): void {

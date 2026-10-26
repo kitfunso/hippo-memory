@@ -1,7 +1,12 @@
 // The composition roots' request scopes carry the lock wait each root had before they moved into the store layer.
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { currentRequestStores, HOOK_DB_WAIT_MS, runWithRequestStores, SERVER_DB_WAIT_MS } from '../../src/db/index.js';
+import {
+  currentRequestStores,
+  HOOK_DB_WAIT_MS,
+  runWithRequestStores,
+  SERVER_DB_WAIT_MS,
+} from '../../src/db/index.js';
 import { runDetachedSqliteRequest, runSqliteRequest } from '../../src/store/sqlite/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -13,8 +18,12 @@ afterEach(() => {
 describe('runSqliteRequest presets', () => {
   it("opens a scope at the root's lock wait", async () => {
     expect(await runSqliteRequest(() => currentRequestStores()?.busyWaitMs, 'cli')).toBeUndefined();
-    expect(await runSqliteRequest(() => currentRequestStores()?.busyWaitMs, 'server')).toBe(SERVER_DB_WAIT_MS);
-    expect(await runSqliteRequest(() => currentRequestStores()?.busyWaitMs, 'hook')).toBe(HOOK_DB_WAIT_MS);
+    expect(await runSqliteRequest(() => currentRequestStores()?.busyWaitMs, 'server')).toBe(
+      SERVER_DB_WAIT_MS,
+    );
+    expect(await runSqliteRequest(() => currentRequestStores()?.busyWaitMs, 'hook')).toBe(
+      HOOK_DB_WAIT_MS,
+    );
   });
 
   it('a hook scope drops its handles to no wait once one wait runs out; a server scope does not', async () => {

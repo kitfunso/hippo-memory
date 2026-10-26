@@ -2,7 +2,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { openHippoDb, closeHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  openHippoDb,
+  closeHippoDb,
+  runWithRequestStores,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { bindSessionOwner, type Context } from '../../src/server.js';
@@ -40,18 +45,32 @@ function ctx(owner: string, tenantId = 'default'): Context {
   };
 }
 
-function bindings(): Array<{ tenant_id: string; session_id: string; owner_subject: string; created_at: string }> {
+function bindings(): Array<{
+  tenant_id: string;
+  session_id: string;
+  owner_subject: string;
+  created_at: string;
+}> {
   // SAFETY: the SELECT names exactly these four TEXT columns.
   return withDb(
     (db) =>
       db
-        .prepare(`SELECT tenant_id, session_id, owner_subject, created_at FROM session_owners ORDER BY tenant_id`)
-        .all() as Array<{ tenant_id: string; session_id: string; owner_subject: string; created_at: string }>,
+        .prepare(
+          `SELECT tenant_id, session_id, owner_subject, created_at FROM session_owners ORDER BY tenant_id`,
+        )
+        .all() as Array<{
+        tenant_id: string;
+        session_id: string;
+        owner_subject: string;
+        created_at: string;
+      }>,
   );
 }
 
 function setFloor(v: string): void {
-  withDb((db) => db.prepare(`UPDATE meta SET value = ? WHERE key = 'min_compatible_binary'`).run(v));
+  withDb((db) =>
+    db.prepare(`UPDATE meta SET value = ? WHERE key = 'min_compatible_binary'`).run(v),
+  );
 }
 
 /** The released binary that shipped neither v53 nor v54. */
@@ -61,8 +80,11 @@ function floor(): string | undefined {
   // SAFETY: one TEXT `value` column by primary key.
   return withDb(
     (db) =>
-      (db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as { value?: string } | undefined)
-        ?.value,
+      (
+        db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as
+          | { value?: string }
+          | undefined
+      )?.value,
   );
 }
 

@@ -19,31 +19,34 @@ it.each([
     () => JSON.stringify({ realCodexPath: process.execPath, logFile: 'x' }),
   ],
   ['is not JSON', () => '{ not json'],
-])('starts nothing when the metadata %s, and names the file to reinstall', async (_label, metadata) => {
-  const metadataPath = path.join(dir, '.hippo', 'integrations', 'codex.json');
-  fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
-  fs.writeFileSync(metadataPath, metadata());
-  const sentinel = path.join(dir, 'launched');
-  const script = path.join(dir, 'leave-sentinel.mjs');
-  fs.writeFileSync(
-    script,
-    `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(sentinel)}, 'ran');\n`,
-  );
+])(
+  'starts nothing when the metadata %s, and names the file to reinstall',
+  async (_label, metadata) => {
+    const metadataPath = path.join(dir, '.hippo', 'integrations', 'codex.json');
+    fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
+    fs.writeFileSync(metadataPath, metadata());
+    const sentinel = path.join(dir, 'launched');
+    const script = path.join(dir, 'leave-sentinel.mjs');
+    fs.writeFileSync(
+      script,
+      `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(sentinel)}, 'ran');\n`,
+    );
 
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    HOME: dir,
-    USERPROFILE: dir,
-    HIPPO_HOME: path.join(dir, 'global'),
-    CODEX_HOME: path.join(dir, '.codex'),
-    HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-  };
-  const run = await runCliAs(['codex-run', '--', script], { cwd: dir, env });
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      HOME: dir,
+      USERPROFILE: dir,
+      HIPPO_HOME: path.join(dir, 'global'),
+      CODEX_HOME: path.join(dir, '.codex'),
+      HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+    };
+    const run = await runCliAs(['codex-run', '--', script], { cwd: dir, env });
 
-  expect(run.status).not.toBe(0);
-  expect(run.stderr).toContain(
-    `${metadataPath} does not describe a Codex wrapper hippo installed, so Codex was not ` +
-      'started. Run `hippo hook install codex` again.',
-  );
-  expect(fs.existsSync(sentinel)).toBe(false);
-});
+    expect(run.status).not.toBe(0);
+    expect(run.stderr).toContain(
+      `${metadataPath} does not describe a Codex wrapper hippo installed, so Codex was not ` +
+        'started. Run `hippo hook install codex` again.',
+    );
+    expect(fs.existsSync(sentinel)).toBe(false);
+  },
+);

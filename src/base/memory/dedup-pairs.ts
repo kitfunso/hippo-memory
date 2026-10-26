@@ -8,9 +8,9 @@ export interface DedupGroups<P> {
   readonly cross: P[];
 }
 
-export function groupDedupPairs<P extends { readonly keptLayer: string; readonly removedLayer: string }>(
-  pairs: readonly P[],
-): DedupGroups<P> {
+export function groupDedupPairs<
+  P extends { readonly keptLayer: string; readonly removedLayer: string },
+>(pairs: readonly P[]): DedupGroups<P> {
   const sameLayer = (layer: Layer) => (p: P) => p.keptLayer === layer && p.removedLayer === layer;
   return {
     semantic: pairs.filter(sameLayer(Layer.Semantic)),

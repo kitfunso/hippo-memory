@@ -25,7 +25,9 @@ function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined 
 
 async function handleResolveIncident(rr: AuthedRouteRequest, id: number): Promise<void> {
   const { req, res, ctx } = rr;
-  const resolutionText = requiredString(await parseJsonBody(req, ctx), 'resolutionText', { max: MAX_SHORT_FIELD_LEN });
+  const resolutionText = requiredString(await parseJsonBody(req, ctx), 'resolutionText', {
+    max: MAX_SHORT_FIELD_LEN,
+  });
   sendJson(res, 200, { incident: await incidentResolve(ctx, id, resolutionText) });
 }
 

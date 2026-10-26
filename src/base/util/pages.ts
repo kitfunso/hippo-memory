@@ -16,7 +16,9 @@ export function* rowsInPages<T, C>(
 }
 
 /** A keyset-paged read that answers through a Promise, one page per call. */
-type PageRead<T, C> = (after: C | undefined) => Promise<{ readonly entries: readonly T[]; readonly next: C | null }>;
+type PageRead<T, C> = (
+  after: C | undefined,
+) => Promise<{ readonly entries: readonly T[]; readonly next: C | null }>;
 
 /** Each page of `read`, in order, one held at a time. */
 export async function* readPages<T, C>(read: PageRead<T, C>): AsyncGenerator<readonly T[]> {

@@ -35,7 +35,10 @@ function ago(days: number): string {
 }
 
 function seed(root: string, content: string, over: Partial<MemoryEntry> = {}): MemoryEntry {
-  const e = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['facets'] }), ...over };
+  const e = {
+    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['facets'] }),
+    ...over,
+  };
   writeEntry(root, e);
   return e;
 }
@@ -45,7 +48,9 @@ async function hippo(cwd: string, args: string[]): Promise<string> {
   const saved = process.cwd();
   process.chdir(cwd);
   try {
-    const r = await runInProcess(() => withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])));
+    const r = await runInProcess(() =>
+      withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])),
+    );
     expect(r.status, r.stderr).toBe(0);
     return r.stdout;
   } finally {
@@ -56,7 +61,13 @@ async function hippo(cwd: string, args: string[]): Promise<string> {
 function get(port: number, path: string): Promise<string> {
   return new Promise((res, rej) => {
     const req = httpRequest(
-      { host: '127.0.0.1', port, path, method: 'GET', headers: { cookie: sessionCookie(port, DASHBOARD_TOKEN) } },
+      {
+        host: '127.0.0.1',
+        port,
+        path,
+        method: 'GET',
+        headers: { cookie: sessionCookie(port, DASHBOARD_TOKEN) },
+      },
       (r) => {
         let body = '';
         r.setEncoding('utf8');
@@ -231,18 +242,28 @@ describe('confidence facets', () => {
       lastRetrieved: ago(45),
     });
 
-    server = await serveDashboard({ hippoRoot, port: 0, token: DASHBOARD_TOKEN, tenantId: 'default' });
+    server = await serveDashboard({
+      hippoRoot,
+      port: 0,
+      token: DASHBOARD_TOKEN,
+      tenantId: 'default',
+    });
     const { port } = server;
 
     // SAFETY: each route returns the dashboard-types.ts shape named in the cast.
-    const overview = JSON.parse(await get(port, '/api/overview')) as { projects: Array<{ key: string }> };
+    const overview = JSON.parse(await get(port, '/api/overview')) as {
+      projects: Array<{ key: string }>;
+    };
     const key = encodeURIComponent(overview.projects[0]!.key);
     // SAFETY: the memory page route returns the MemoryPage of dashboard-types.ts.
     const page = JSON.parse(await get(port, `/api/projects/${key}/memories`)) as {
       rows: Array<{ id: string; confidence: string }>;
     };
     // SAFETY: the memory route returns the MemoryDetail of dashboard-types.ts.
-    const detail = JSON.parse(await get(port, `/api/memory/${e.id}`)) as { confidence: string; agedOut: boolean };
+    const detail = JSON.parse(await get(port, `/api/memory/${e.id}`)) as {
+      confidence: string;
+      agedOut: boolean;
+    };
 
     expect(page.rows.find((m) => m.id === e.id)?.confidence).toBe('observed');
     expect(detail.confidence).toBe('observed');
@@ -257,7 +278,9 @@ describe('confidence facets', () => {
 
     expect(await hippo(home, ['trace', e.id])).toContain('observed, aged');
 
-    const json: { confidence: string; aged_out: boolean } = JSON.parse(await hippo(home, ['trace', e.id, '--json']));
+    const json: { confidence: string; aged_out: boolean } = JSON.parse(
+      await hippo(home, ['trace', e.id, '--json']),
+    );
     expect(json.confidence).toBe('observed');
     expect(json.aged_out).toBe(true);
   });
@@ -272,7 +295,8 @@ describe('confidence facets', () => {
       lastRetrieved: ago(1),
     });
 
-    const line = async (id: string): Promise<string> => /Confidence:.*/.exec(await hippo(home, ['trace', id]))![0];
+    const line = async (id: string): Promise<string> =>
+      /Confidence:.*/.exec(await hippo(home, ['trace', id]))![0];
     const agedLine = await line(aged.id);
 
     expect(agedLine).toContain('observed, aged');

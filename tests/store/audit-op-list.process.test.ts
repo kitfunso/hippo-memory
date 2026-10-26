@@ -23,7 +23,10 @@ describe('audit op filter', () => {
     ({ base: home, root: hippoRoot } = makeStore('audit-op'));
     globalHome = makeRoot('audit-op-global', { init: false });
     // writeEntry appends a 'remember' audit row, so an accepted op has a row to return.
-    writeEntry(hippoRoot, createMemory('audit op filter seed', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      hippoRoot,
+      createMemory('audit op filter seed', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     vi.stubEnv('HIPPO_HOME', globalHome);
   });
 
@@ -32,7 +35,8 @@ describe('audit op filter', () => {
   });
 
   function runAuditList(op: string) {
-    if (!existsSync(CLI)) throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
+    if (!existsSync(CLI))
+      throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
     const r = hippoRun(['audit', 'list', '--op', op, '--json'], {
       cwd: home,
       env: { ...process.env, HIPPO_HOME: hippoRoot },
@@ -64,7 +68,11 @@ describe('audit op filter', () => {
     beforeEach(async () => {
       const db = openHippoDb(hippoRoot);
       try {
-        bearer = createApiKey(db, { tenantId: 'default', label: 'audit-op-admin', role: 'admin' }).plaintext;
+        bearer = createApiKey(db, {
+          tenantId: 'default',
+          label: 'audit-op-admin',
+          role: 'admin',
+        }).plaintext;
       } finally {
         closeHippoDb(db);
       }
@@ -76,12 +84,16 @@ describe('audit op filter', () => {
     });
 
     it('rejects an unknown op with 400', async () => {
-      const res = await fetch(`${handle.url}/v1/audit?op=bogus`, { headers: { authorization: `Bearer ${bearer}` } });
+      const res = await fetch(`${handle.url}/v1/audit?op=bogus`, {
+        headers: { authorization: `Bearer ${bearer}` },
+      });
       expect(res.status).toBe(400);
     });
 
     it('returns the rows for a real op', async () => {
-      const res = await fetch(`${handle.url}/v1/audit?op=remember`, { headers: { authorization: `Bearer ${bearer}` } });
+      const res = await fetch(`${handle.url}/v1/audit?op=remember`, {
+        headers: { authorization: `Bearer ${bearer}` },
+      });
       expect(res.status).toBe(200);
       // SAFETY: GET /v1/audit's response body is the serialized AuditEvent[], checked by the assertions below.
       const body = (await res.json()) as Array<{ op: string }>;

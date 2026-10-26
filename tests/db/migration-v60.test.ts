@@ -32,9 +32,9 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
 function indexSql(db: DatabaseSyncLike): string | undefined {
   // SAFETY: one TEXT `sql` column.
   return (
-    db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`).get(DECAY_KEY_INDEX) as
-      | { sql?: string }
-      | undefined
+    db
+      .prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`)
+      .get(DECAY_KEY_INDEX) as { sql?: string } | undefined
   )?.sql;
 }
 
@@ -50,7 +50,9 @@ describe('schema v60', () => {
   it('a fresh store has the decay-key index, led by tenant and pinned, over rows with a half-life', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
-      expect(indexSql(db)).toContain(`ON memories(tenant_id, pinned, (${DECAY_KEY_SQL})) WHERE ${DECAY_KEY_WHERE}`);
+      expect(indexSql(db)).toContain(
+        `ON memories(tenant_id, pinned, (${DECAY_KEY_SQL})) WHERE ${DECAY_KEY_WHERE}`,
+      );
     });
   });
 
@@ -67,7 +69,9 @@ describe('schema v60', () => {
        VALUES ('mem_v56_row', '2025-01-02T03:04:05.000Z', '2025-02-03T04:05:06.000Z', 0, 1, 30, 'semantic', '[]', 'neutral', 0.5, 'cli', '[]', 0, 'verified', 'survives the index build')`,
       )
       .run();
-    expect(old.prepare(`SELECT name FROM sqlite_master WHERE name = ?`).get(DECAY_KEY_INDEX)).toBeUndefined();
+    expect(
+      old.prepare(`SELECT name FROM sqlite_master WHERE name = ?`).get(DECAY_KEY_INDEX),
+    ).toBeUndefined();
     old.close();
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);

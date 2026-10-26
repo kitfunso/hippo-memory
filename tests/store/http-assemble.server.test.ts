@@ -106,7 +106,9 @@ describe('GET /v1/sessions/:id/assemble', () => {
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(home, e);
     }
-    const res = await fetch(`${handle.url}/v1/sessions/sess-noop/assemble?summarizeOlder=0&freshTail=1`);
+    const res = await fetch(
+      `${handle.url}/v1/sessions/sess-noop/assemble?summarizeOlder=0&freshTail=1`,
+    );
     const body = await jsonAs<{
       summarized: number;
       items: Array<{ isSummary?: boolean }>;

@@ -27,14 +27,17 @@ describe('timeouts', () => {
     ['HIPPO_HEALTH_PROBE_MS', envHealthProbeMs],
     ['HIPPO_QUERY_EMBED_TIMEOUT_MS', () => envRuntimeSettings().queryEmbedTimeoutMs],
   ];
-  it.each(readers)('%s drops a negative or zero value so the caller default applies', (name, read) => {
-    for (const bad of ['-5', '0', 'soon', '']) {
-      vi.stubEnv(name, bad);
-      expect(read(), `${name}=${bad}`).toBeUndefined();
-    }
-    vi.stubEnv(name, '250');
-    expect(read()).toBe(250);
-  });
+  it.each(readers)(
+    '%s drops a negative or zero value so the caller default applies',
+    (name, read) => {
+      for (const bad of ['-5', '0', 'soon', '']) {
+        vi.stubEnv(name, bad);
+        expect(read(), `${name}=${bad}`).toBeUndefined();
+      }
+      vi.stubEnv(name, '250');
+      expect(read()).toBe(250);
+    },
+  );
 });
 
 describe('HIPPO_REQUIRE_SERVER', () => {

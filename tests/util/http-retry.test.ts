@@ -27,7 +27,9 @@ let server: http.Server | null = null;
 const stalled: http.ServerResponse[] = [];
 
 /** Serves `replies` in order (the last one repeats); a null reply never answers and 'reset' drops the socket unanswered. */
-async function startServer(replies: readonly (Reply | 'reset' | null)[]): Promise<{ url: string; hits: () => number }> {
+async function startServer(
+  replies: readonly (Reply | 'reset' | null)[],
+): Promise<{ url: string; hits: () => number }> {
   let hits = 0;
   server = http.createServer((req, res) => {
     const reply = replies[Math.min(hits, replies.length - 1)];
@@ -159,7 +161,10 @@ describe('fetchWithRetry against a local server', () => {
   });
 
   it('waits the Retry-After seconds on a 429, then retries', async () => {
-    const { url, hits } = await startServer([{ status: 429, headers: { 'retry-after': '2' } }, { status: 200 }]);
+    const { url, hits } = await startServer([
+      { status: 429, headers: { 'retry-after': '2' } },
+      { status: 200 },
+    ]);
     const sleeps: number[] = [];
     const res = await fetchWithRetry(
       url,
@@ -178,7 +183,11 @@ describe('fetchWithRetry against a local server', () => {
 
   it('hands back a 5xx to a POST at once, since the far side may have committed it', async () => {
     const { url, hits } = await startServer([{ status: 503 }, { status: 200 }]);
-    const res = await fetchWithRetry(url, { method: 'POST', body: '{}' }, { timeoutMs: 2000, ...noSleep });
+    const res = await fetchWithRetry(
+      url,
+      { method: 'POST', body: '{}' },
+      { timeoutMs: 2000, ...noSleep },
+    );
     expect(res.status).toBe(503);
     expect(hits()).toBe(1);
   });
@@ -186,20 +195,34 @@ describe('fetchWithRetry against a local server', () => {
   it('retries a 5xx to a POST whose caller says a replay is safe', async () => {
     const { url, hits } = await startServer([{ status: 503 }, { status: 200 }]);
     const init = { method: 'POST', body: '{}' };
-    const res = await fetchWithRetry(url, init, { timeoutMs: 2000, retryTransport: true, ...noSleep });
+    const res = await fetchWithRetry(url, init, {
+      timeoutMs: 2000,
+      retryTransport: true,
+      ...noSleep,
+    });
     expect(res.status).toBe(200);
     expect(hits()).toBe(2);
   });
 
   it('retries a 429 to a POST, which the far side refused unrun', async () => {
-    const { url, hits } = await startServer([{ status: 429, headers: { 'retry-after': '0' } }, { status: 200 }]);
-    const res = await fetchWithRetry(url, { method: 'POST', body: '{}' }, { timeoutMs: 2000, ...noSleep });
+    const { url, hits } = await startServer([
+      { status: 429, headers: { 'retry-after': '0' } },
+      { status: 200 },
+    ]);
+    const res = await fetchWithRetry(
+      url,
+      { method: 'POST', body: '{}' },
+      { timeoutMs: 2000, ...noSleep },
+    );
     expect(res.status).toBe(200);
     expect(hits()).toBe(2);
   });
 
   it('never retries a 400', async () => {
-    const { url, hits } = await startServer([{ status: 400, body: 'bad request' }, { status: 200 }]);
+    const { url, hits } = await startServer([
+      { status: 400, body: 'bad request' },
+      { status: 200 },
+    ]);
     const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, ...noSleep });
     expect(res.status).toBe(400);
     expect(hits()).toBe(1);
@@ -247,7 +270,11 @@ describe('fetchWithRetry against a local server', () => {
     it('hands back the last 5xx once the next wait would pass totalMs, before the attempt cap', async () => {
       const { url, hits } = await startServer([{ status: 503 }]);
       const { sleeps, policy } = fakeClock();
-      const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 1800, ...policy });
+      const res = await fetchWithRetry(
+        url,
+        {},
+        { timeoutMs: 2000, attempts: 10, totalMs: 1800, ...policy },
+      );
       expect(res.status).toBe(503);
       // Waits of 125, 250 and 500 end at 875; the next one, 1000, would end at 1875, past the budget.
       expect(sleeps).toEqual([125, 250, 500]);
@@ -257,9 +284,9 @@ describe('fetchWithRetry against a local server', () => {
     it('throws the transport error once the next wait would pass totalMs', async () => {
       const { url, hits } = await startServer(['reset']);
       const { sleeps, policy } = fakeClock();
-      await expect(fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 850, ...policy })).rejects.toThrow(
-        /fetch failed|socket/i,
-      );
+      await expect(
+        fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 850, ...policy }),
+      ).rejects.toThrow(/fetch failed|socket/i);
       // Waits of 125 and 250 end at 375; the next one, 500, would end at 875, past the budget.
       expect(sleeps).toEqual([125, 250]);
       expect(hits()).toBe(3);
@@ -273,7 +300,10 @@ describe('fetchWithRetry against a local server', () => {
   });
 
   it('returns a 429 whose Retry-After exceeds the cap, so the caller can run its own longer pause', async () => {
-    const { url, hits } = await startServer([{ status: 429, headers: { 'retry-after': '60' } }, { status: 200 }]);
+    const { url, hits } = await startServer([
+      { status: 429, headers: { 'retry-after': '60' } },
+      { status: 200 },
+    ]);
     const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, ...noSleep });
     expect(res.status).toBe(429);
     expect(hits()).toBe(1);
@@ -315,7 +345,10 @@ describe('the wait between attempts under a caller signal', () => {
   }
 
   it('ends when the signal aborts during the wait a 503 asked for, with the abort reason and no further attempt', async () => {
-    const { url, hits } = await startServer([{ status: 503, headers: { 'retry-after': '2' } }, { status: 200 }]);
+    const { url, hits } = await startServer([
+      { status: 503, headers: { 'retry-after': '2' } },
+      { status: 200 },
+    ]);
     const controller = new AbortController();
     const { fetchFn, calls } = countedFetch();
     const reason = new Error('caller gave up');
@@ -333,7 +366,11 @@ describe('the wait between attempts under a caller signal', () => {
       });
     });
     const cleared = vi.spyOn(globalThis, 'clearTimeout');
-    const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000, fetchFn });
+    const pending = fetchWithRetry(
+      url,
+      { signal: controller.signal },
+      { timeoutMs: 60_000, fetchFn },
+    );
     await waiting;
     controller.abort(reason);
     await expect(pending).rejects.toBe(reason);
@@ -411,7 +448,9 @@ describe('the wait between attempts under a caller signal', () => {
 describe('the pooled-socket release between attempts', () => {
   it('still retries when cancelling the failed reply body rejects', async () => {
     const bad = new Response('x', { status: 503 });
-    Object.defineProperty(bad, 'body', { value: { cancel: () => Promise.reject(new TypeError('cancel failed')) } });
+    Object.defineProperty(bad, 'body', {
+      value: { cancel: () => Promise.reject(new TypeError('cancel failed')) },
+    });
     const fetchFn = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(bad)

@@ -13,6 +13,11 @@ export async function bindSessionOwner(ctx: EntryContext, sessionId: string): Pr
   assertTenantId('bindSessionOwner', ctx.tenantId);
   const owner = ownerOrSubject(ctx.actor);
   const retentionMs = BINDING_RETENTION_DAYS * DAY_MS;
-  const bound = await ctx.store.sessions.bindSessionOwner(ctx.tenantId, sessionId, owner, retentionMs);
+  const bound = await ctx.store.sessions.bindSessionOwner(
+    ctx.tenantId,
+    sessionId,
+    owner,
+    retentionMs,
+  );
   if (bound !== owner) throw new ConflictError('session id belongs to another caller');
 }

@@ -10,14 +10,19 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../../');
 // The CI job that has already fetched the weights points HIPPO_TEST_MODEL_CACHE at them (vitest blanks HIPPO_MODEL_CACHE for every test); a developer vendors them under benchmarks/.
 const MODEL_CACHE =
-  process.env.HIPPO_TEST_MODEL_CACHE || path.join(REPO_ROOT, 'benchmarks/longmemeval/data/model-cache');
+  process.env.HIPPO_TEST_MODEL_CACHE ||
+  path.join(REPO_ROOT, 'benchmarks/longmemeval/data/model-cache');
 const DIST_EMBEDDINGS = path.join(REPO_ROOT, 'dist/infra/local-embedder.js');
 const MINILM_DIR = path.join(MODEL_CACHE, 'Xenova/all-MiniLM-L6-v2');
 
 describe('local-cache: HIPPO_MODEL_CACHE', () => {
   it('produces a 384-dim embedding vector without network access', (ctx) => {
     // The weights are not in a clean checkout, so this skips there; the job that has them sets the flag, and there a missing folder fails.
-    if (!process.env.HIPPO_REQUIRE_MODEL_CACHE && !(existsSync(DIST_EMBEDDINGS) && existsSync(MINILM_DIR))) ctx.skip();
+    if (
+      !process.env.HIPPO_REQUIRE_MODEL_CACHE &&
+      !(existsSync(DIST_EMBEDDINGS) && existsSync(MINILM_DIR))
+    )
+      ctx.skip();
     expect(existsSync(MINILM_DIR)).toBe(true);
 
     // Build a tiny Node.js script that exercises getEmbedding() directly.

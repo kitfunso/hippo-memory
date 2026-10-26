@@ -4,7 +4,11 @@ import type { EmbeddingsConfig } from '../../src/base/config/config.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { embedMemory as embedOnFolder, loadEmbeddingIndex, writeEntry } from '../../src/entry/testing.js';
+import {
+  embedMemory as embedOnFolder,
+  loadEmbeddingIndex,
+  writeEntry,
+} from '../../src/entry/testing.js';
 import { embedMemoryInto as embedOnTarget } from '../../src/domain/search/embed-memories.js';
 import { isJsonObject, type JsonValue } from '../../src/base/util/json.js';
 import { localIndex } from '../_helpers/cli-stores.js';
@@ -24,7 +28,9 @@ beforeEach(() => {
       // SAFETY: the stub only receives the embeddings request body, which is JSON.
       const body = JSON.parse(String(init?.body)) as JsonValue;
       const input = isJsonObject(body) && Array.isArray(body.input) ? body.input : [];
-      return new Response(JSON.stringify({ data: input.map((_text, index) => ({ index, embedding: [1, 0] })) }));
+      return new Response(
+        JSON.stringify({ data: input.map((_text, index) => ({ index, embedding: [1, 0] })) }),
+      );
     }),
   );
 });
@@ -34,7 +40,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function seededFolder(name: string, embeddings: Partial<EmbeddingsConfig>, entry: MemoryEntry): string {
+function seededFolder(
+  name: string,
+  embeddings: Partial<EmbeddingsConfig>,
+  entry: MemoryEntry,
+): string {
   const root = makeRoot(name, { config: { embeddings } });
   writeEntry(root, entry);
   return root;
@@ -42,7 +52,9 @@ function seededFolder(name: string, embeddings: Partial<EmbeddingsConfig>, entry
 
 describe('embedMemory in the eval kit', () => {
   it('indexes a memory the way the target form does', async () => {
-    const entry = createMemory('the kestrel deploy runs on tuesdays', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const entry = createMemory('the kestrel deploy runs on tuesdays', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     const config: Partial<EmbeddingsConfig> = { provider: 'openai', model: 'm' };
     const viaFolder = seededFolder('embed-folder-form', config, entry);
     const viaTarget = seededFolder('embed-target-form', config, entry);
@@ -57,7 +69,9 @@ describe('embedMemory in the eval kit', () => {
   });
 
   it('answers off and writes no vector when the folder disables embeddings', async () => {
-    const entry = createMemory('the heron backup runs nightly', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const entry = createMemory('the heron backup runs nightly', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    });
     const config: Partial<EmbeddingsConfig> = { enabled: false, provider: 'openai', model: 'm' };
     const viaFolder = seededFolder('embed-folder-off', config, entry);
     const viaTarget = seededFolder('embed-target-off', config, entry);

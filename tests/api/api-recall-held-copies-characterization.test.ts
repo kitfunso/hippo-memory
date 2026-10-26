@@ -39,9 +39,16 @@ describe('recall held-copy drop', () => {
     writeEntry(root, raw('quokka habitat notes'));
     writeEntry(root, raw('quokka diet notes'));
     const result = await retrieve(ctxFor(root), { query: 'quokka', window: { limit: 10 } });
-    expect(result.results.map((r) => r.content).sort()).toEqual(['quokka diet notes', 'quokka habitat notes']);
+    expect(result.results.map((r) => r.content).sort()).toEqual([
+      'quokka diet notes',
+      'quokka habitat notes',
+    ]);
     expect(result.total).toBe(3);
-    expect(result.suppressionSummary).toMatchObject({ totalCandidates: 3, droppedPreRank: 1, droppedByBudget: 0 });
+    expect(result.suppressionSummary).toMatchObject({
+      totalCandidates: 3,
+      droppedPreRank: 1,
+      droppedByBudget: 0,
+    });
   });
 
   it('keepHeldCopies returns every copy and drops nothing', async () => {
@@ -59,7 +66,10 @@ describe('recall held-copy drop', () => {
   it('fresh tail skips a recent row whose text the base band already shows', async () => {
     writeEntry(root, raw('quokka habitat notes'));
     writeEntry(root, raw('unrelated wombat line'));
-    const result = await retrieve(ctxFor(root), { query: 'quokka', window: { limit: 1, freshTailCount: 5 } });
+    const result = await retrieve(ctxFor(root), {
+      query: 'quokka',
+      window: { limit: 1, freshTailCount: 5 },
+    });
     const contents = result.results.map((r) => r.content);
     expect(contents.filter((c) => c === 'quokka habitat notes')).toHaveLength(1);
     expect(result.results.every((r) => r.isFreshTail === true)).toBe(true);

@@ -45,5 +45,7 @@ export function runSqliteBatch<T>(fn: () => T): T {
 /** A scope of its own: the caller closes a handle the work holds across its pauses; the lock wait carries over. */
 export function runDetachedSqliteRequest<T>(fn: () => T | Promise<T>): Promise<T> {
   const busyWaitMs = scopedBusyWait();
-  return outsideRequestStores(() => runWithRequestStores(fn, { busyWaitMs })).catch(rethrowInPortTerms);
+  return outsideRequestStores(() => runWithRequestStores(fn, { busyWaitMs })).catch(
+    rethrowInPortTerms,
+  );
 }

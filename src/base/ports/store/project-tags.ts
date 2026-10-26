@@ -30,7 +30,12 @@ export interface ProjectTagReads {
   readonly auditLog: Pick<AuditLog, 'listAuditEvents'>;
 }
 
-export type SetAsideWhy = 'note-gone' | 'note-changed' | 'handover' | 'project-merge' | 'project-repair';
+export type SetAsideWhy =
+  | 'note-gone'
+  | 'note-changed'
+  | 'handover'
+  | 'project-merge'
+  | 'project-repair';
 
 export type SetAsideResult =
   | { readonly kind: 'untagged'; readonly entry: MemoryEntry }

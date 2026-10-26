@@ -31,7 +31,8 @@ afterEach(async () => {
   }
   // After the children: a stuck one still holds the write lock.
   for (const db of watchers.splice(0)) closeHippoDb(db);
-  for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const home of homes.splice(0))
+    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /** A trigger that makes the next saved prediction run a statement for hours, so the store's writer thread cannot be stopped or closed. Returns a connection that watches the write lock. */
@@ -72,7 +73,9 @@ function serveThen(home: string, after: readonly string[]): Served {
       ...after,
     ].join('\n'),
   );
-  const child = spawn(process.execPath, [script], { env: { ...process.env, HIPPO_HOME: join(home, '.global') } });
+  const child = spawn(process.execPath, [script], {
+    env: { ...process.env, HIPPO_HOME: join(home, '.global') },
+  });
   children.push(child);
   let stdout = '';
   let stderr = '';
@@ -96,7 +99,11 @@ function serveThen(home: string, after: readonly string[]): Served {
   const printed = (line: string): Promise<void> =>
     new Promise((done, fail) => {
       void exited.then(({ code, signal }) =>
-        fail(new Error(`the child ended (code ${code}, signal ${signal}) before the script printed "${line}"`)),
+        fail(
+          new Error(
+            `the child ended (code ${code}, signal ${signal}) before the script printed "${line}"`,
+          ),
+        ),
       );
       const check = (): void => {
         if (stdout.split('\n').includes(line)) done();
@@ -145,7 +152,8 @@ ${served.output()}`);
 }
 
 // A kill has no exit code of its own: Windows reports 1, and elsewhere the parent sees the signal.
-const KILLED = process.platform === 'win32' ? { code: 1, signal: null } : { code: null, signal: 'SIGKILL' };
+const KILLED =
+  process.platform === 'win32' ? { code: 1, signal: null } : { code: null, signal: 'SIGKILL' };
 
 describe('serve() shutdown bound', () => {
   // Waits out the 10 s store-close bound in a child process before it can see the exit.

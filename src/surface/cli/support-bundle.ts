@@ -5,13 +5,22 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { findHippoStoreDir, isGlobalStoreRoot, isInitialized } from '../../host/project-identity.js';
+import {
+  findHippoStoreDir,
+  isGlobalStoreRoot,
+  isInitialized,
+} from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { realpathOrResolve } from '../../host/real-path.js';
 import { runDoctor, type DoctorOptions } from './doctor.js';
 import { loadConfig } from '../../host/config-file.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { type JsonValue, isJsonString, isJsonObject, type JsonObject } from '../../base/util/json.js';
+import {
+  type JsonValue,
+  isJsonString,
+  isJsonObject,
+  type JsonObject,
+} from '../../base/util/json.js';
 import { tryReadJsonFile } from '../../host/json-file.js';
 import { tryParseUrl } from '../../base/util/net.js';
 import { ignoringCodes, PATH_UNREADABLE } from '../../base/util/expected-errors.js';
@@ -56,7 +65,8 @@ const OTHER_ENV_NAMES: readonly string[] = [
   'MCP_SSE_MAX_AGE_SEC',
 ];
 
-const CONFIG_SECRET_KEY_RE = /key|token|secret|passw|credential|auth|cookie|bearer|signature|private/i;
+const CONFIG_SECRET_KEY_RE =
+  /key|token|secret|passw|credential|auth|cookie|bearer|signature|private/i;
 
 function buildRuntime(): JsonObject {
   return {
@@ -114,7 +124,16 @@ async function buildStoreEntry(
     const { diagnostics } = opts.diagnosticsBodies(storeDir);
     const { schemaVersion, minCompatibleBinary, tables } = await diagnostics.inventory();
     const { configFile, config } = readStoreConfig(storeDir);
-    return { kind, path: storeDir, schemaVersion, minCompatibleBinary, files, tables, configFile, config };
+    return {
+      kind,
+      path: storeDir,
+      schemaVersion,
+      minCompatibleBinary,
+      files,
+      tables,
+      configFile,
+      config,
+    };
   } catch (err) {
     return { kind, path: storeDir, error: errorMessage(err) };
   }
@@ -127,7 +146,8 @@ async function buildStores(opts: SupportBundleOptions): Promise<JsonValue[]> {
 
   const globalDir = hippoHomeDir();
   const alreadyListed = projectDir !== null && isGlobalStoreRoot(projectDir);
-  if (isInitialized(globalDir) && !alreadyListed) stores.push(await buildStoreEntry(opts, 'global', globalDir));
+  if (isInitialized(globalDir) && !alreadyListed)
+    stores.push(await buildStoreEntry(opts, 'global', globalDir));
 
   return stores;
 }
@@ -175,7 +195,11 @@ function tailLogFile(file: string): string[] {
   return redacted
     .split('\n')
     .slice(-TAIL_MAX_LINES)
-    .map((line) => (line.length > TAIL_MAX_LINE_CHARS ? `${line.slice(0, TAIL_MAX_LINE_CHARS)} [truncated]` : line));
+    .map((line) =>
+      line.length > TAIL_MAX_LINE_CHARS
+        ? `${line.slice(0, TAIL_MAX_LINE_CHARS)} [truncated]`
+        : line,
+    );
 }
 
 function buildLogsSection(opts: SupportBundleOptions): JsonObject {
@@ -197,14 +221,21 @@ function buildLogsSection(opts: SupportBundleOptions): JsonObject {
 // The native realpath is the only form that exposes a short-name (8.3) or symlinked alias for what it is.
 function nativeRealPathKey(p: string): string | null {
   // A path that does not exist, or that loops, has no alias to find.
-  const real = ignoringCodes([...PATH_UNREADABLE, 'ELOOP', 'ENAMETOOLONG'], () => fs.realpathSync.native(p));
+  const real = ignoringCodes([...PATH_UNREADABLE, 'ELOOP', 'ENAMETOOLONG'], () =>
+    fs.realpathSync.native(p),
+  );
   if (real === undefined) return null;
   return process.platform === 'win32' ? real.toLowerCase() : real;
 }
 
 function collectHomeAliases(home: string, probes: readonly string[]): Set<string> {
   const aliases = new Set<string>();
-  for (const base of [home, realpathOrResolve(home), os.homedir(), realpathOrResolve(os.homedir())]) {
+  for (const base of [
+    home,
+    realpathOrResolve(home),
+    os.homedir(),
+    realpathOrResolve(os.homedir()),
+  ]) {
     aliases.add(base);
     aliases.add(path.resolve(base));
   }
@@ -212,7 +243,9 @@ function collectHomeAliases(home: string, probes: readonly string[]): Set<string
   // The alias (e.g. a short-name temp root) can sit above the probe itself, so walk ancestors and compare native
   // realpaths rather than checking each probe alone.
   const homeKeys = new Set(
-    [nativeRealPathKey(home), nativeRealPathKey(os.homedir())].filter((k): k is string => k !== null),
+    [nativeRealPathKey(home), nativeRealPathKey(os.homedir())].filter(
+      (k): k is string => k !== null,
+    ),
   );
   for (const probe of probes) {
     let dir = path.resolve(probe);
@@ -293,7 +326,10 @@ function buildHomePattern(home: string, probes: readonly string[]): RegExp | nul
   // the start is spellingPattern's call, because the path below the drive may follow anything.
   const before = process.platform === 'win32' ? '' : '(?<![\\p{L}\\p{N}_])';
   const alternatives = [...patterns.values()].join('|');
-  return new RegExp(`${before}(?:${alternatives})(?![\\p{L}\\p{N}_])`, process.platform === 'win32' ? 'giu' : 'gu');
+  return new RegExp(
+    `${before}(?:${alternatives})(?![\\p{L}\\p{N}_])`,
+    process.platform === 'win32' ? 'giu' : 'gu',
+  );
 }
 
 const URL_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;
@@ -343,7 +379,10 @@ export async function buildSupportBundle(opts: SupportBundleOptions): Promise<Js
   };
   // Store paths found from the working folder arrive resolved; the global root arrives as HIPPO_HOME was typed, and log
   // lines often quote the temp folder, which usually sits under the home.
-  const redacted = redactStrings(bundle, buildHomePattern(opts.home, [hippoHomeDir(), os.tmpdir()]));
+  const redacted = redactStrings(
+    bundle,
+    buildHomePattern(opts.home, [hippoHomeDir(), os.tmpdir()]),
+  );
   // SAFETY: the value built above is always a JsonObject; redactStrings preserves object shape.
   return redacted as JsonObject;
 }

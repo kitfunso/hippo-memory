@@ -57,9 +57,19 @@ function skipped(reason: string): DigestOutcome {
  * but the echo filter only needs the recent ones a session most likely saw) and the ambient handoff, never this
  * session's own. */
 async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]> {
-  const filter = { tenantId: ctx.tenantId, source: SESSION_DIGEST_TAG, tag: SESSION_DIGEST_TAG, live: true } as const;
-  const { entries } = await ctx.store.reports.entriesWhere(filter, { limit: READ_PAGE_ROWS, newest: true });
-  const digests = entries.filter((e) => !e.extractedFrom && e.sourceSessionId !== key).map((e) => e.content);
+  const filter = {
+    tenantId: ctx.tenantId,
+    source: SESSION_DIGEST_TAG,
+    tag: SESSION_DIGEST_TAG,
+    live: true,
+  } as const;
+  const { entries } = await ctx.store.reports.entriesWhere(filter, {
+    limit: READ_PAGE_ROWS,
+    newest: true,
+  });
+  const digests = entries
+    .filter((e) => !e.extractedFrom && e.sourceSessionId !== key)
+    .map((e) => e.content);
   const handoff = await ctx.store.sessions.read(
     ctx.tenantId,
     'handoff',
@@ -73,22 +83,30 @@ async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]>
     null,
   );
   if (!handoff) return digests;
-  return [...digests, [handoff.taskId, handoff.summary, handoff.nextAction].filter(Boolean).join('\n')];
+  return [
+    ...digests,
+    [handoff.taskId, handoff.summary, handoff.nextAction].filter(Boolean).join('\n'),
+  ];
 }
 
 /** The reason a session earns no digest, in the order the checks run, else the repo root it ran in. */
 function skipReason(req: SessionDigestRequest): { reason: string } | { root: string } {
   if (req.prompts.length === 0) return { reason: 'no human prompt' };
-  if (!req.finalText.trim() && req.editCount === 0) return { reason: 'no final message and no edits' };
+  if (!req.finalText.trim() && req.editCount === 0)
+    return { reason: 'no final message and no edits' };
   if (!req.cwd) return { reason: 'the transcript names no working directory' };
   const root = req.repo.root();
   if (root === null) return { reason: 'the repo is on a network path' };
-  if (req.repo.relative(req.cwd, root) === null) return { reason: 'the session ran outside this repo' };
+  if (req.repo.relative(req.cwd, root) === null)
+    return { reason: 'the session ran outside this repo' };
   return { root };
 }
 
 /** Writes the session's digest row, keyed on the session so a second run updates it; a rejected value skips. */
-export async function writeSessionDigest(ctx: DigestContext, req: SessionDigestRequest): Promise<DigestOutcome> {
+export async function writeSessionDigest(
+  ctx: DigestContext,
+  req: SessionDigestRequest,
+): Promise<DigestOutcome> {
   const gate = skipReason(req);
   if ('reason' in gate) return skipped(gate.reason);
   const { root } = gate;

@@ -21,14 +21,16 @@ describe('resolveTenant', () => {
   it('returns the mapped tenant_id when a row exists', async () => {
     const db = openHippoDb(root);
     try {
-      db.prepare(`INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
-        'TTEAM1',
-        'tenant-alpha',
-        new Date().toISOString(),
-      );
-      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEAM1' }, fallback())).toBe(
-        'tenant-alpha',
-      );
+      db.prepare(
+        `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
+      ).run('TTEAM1', 'tenant-alpha', new Date().toISOString());
+      expect(
+        await resolveTenant(
+          sqliteStore(root),
+          { connector: 'slack', teamId: 'TTEAM1' },
+          fallback(),
+        ),
+      ).toBe('tenant-alpha');
     } finally {
       closeHippoDb(db);
     }
@@ -37,19 +39,25 @@ describe('resolveTenant', () => {
   it('matches team_id exactly (no prefix bleed); fails closed on unknown when workspaces non-empty', async () => {
     const db = openHippoDb(root);
     try {
-      db.prepare(`INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
-        'TTEAM',
-        'tenant-short',
-        new Date().toISOString(),
-      );
+      db.prepare(
+        `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
+      ).run('TTEAM', 'tenant-short', new Date().toISOString());
       // Prefix-extended id must NOT match — fail closed (workspaces non-empty).
-      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEAMX' }, fallback())).toBeNull();
+      expect(
+        await resolveTenant(
+          sqliteStore(root),
+          { connector: 'slack', teamId: 'TTEAMX' },
+          fallback(),
+        ),
+      ).toBeNull();
       // Substring must NOT match — fail closed.
-      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEA' }, fallback())).toBeNull();
+      expect(
+        await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEA' }, fallback()),
+      ).toBeNull();
       // Exact still works.
-      expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEAM' }, fallback())).toBe(
-        'tenant-short',
-      );
+      expect(
+        await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEAM' }, fallback()),
+      ).toBe('tenant-short');
     } finally {
       closeHippoDb(db);
     }

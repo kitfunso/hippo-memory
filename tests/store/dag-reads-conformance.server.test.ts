@@ -9,7 +9,11 @@ import { shareRoot } from '../_helpers/share-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
 import type { AuditEvent, HippoStore, MemoryEntry } from '../../src/entry/store-kit.js';
-import type { DescendantWalk, SessionRawCount, SummaryDescendants } from '../../src/base/ports/store.js';
+import type {
+  DescendantWalk,
+  SessionRawCount,
+  SummaryDescendants,
+} from '../../src/base/ports/store.js';
 import type { EntryCursor } from '../../src/base/ports/store/types.js';
 import { READ_PAGE_ROWS, readAll } from '../../src/base/util/pages.js';
 import { CLEARED_ENV, seeded } from '../_helpers/recall-golden-seed.js';
@@ -31,7 +35,12 @@ const OWN = 'personal:private:alice';
 
 const at = (minute: number): string => `2026-03-01T10:${String(minute).padStart(2, '0')}:00.000Z`;
 
-function row(tenantId: string, id: string, minute: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
+function row(
+  tenantId: string,
+  id: string,
+  minute: number,
+  extra: Partial<MemoryEntry> = {},
+): MemoryEntry {
   return seeded(`${id} holds a note about the rollout`, id, at(minute), {
     tenantId: tenantId,
     originProject: 'proj',
@@ -39,10 +48,18 @@ function row(tenantId: string, id: string, minute: number, extra: Partial<Memory
   });
 }
 
-const raw = (tenantId: string, id: string, minute: number, extra: Partial<MemoryEntry> = {}): MemoryEntry =>
-  row(tenantId, id, minute, { kind: 'raw', sourceSessionId: SESSION, ...extra });
+const raw = (
+  tenantId: string,
+  id: string,
+  minute: number,
+  extra: Partial<MemoryEntry> = {},
+): MemoryEntry => row(tenantId, id, minute, { kind: 'raw', sourceSessionId: SESSION, ...extra });
 
-const under = (parent: string, level: number, extra: Partial<MemoryEntry> = {}): Partial<MemoryEntry> => ({
+const under = (
+  parent: string,
+  level: number,
+  extra: Partial<MemoryEntry> = {},
+): Partial<MemoryEntry> => ({
   dagParentId: parent,
   dagLevel: level,
   ...extra,
@@ -107,7 +124,15 @@ const SESSION_IDS = [
   'raw_a_no_origin',
 ];
 /** sum_a's children the default scope deny admits: fact_a_private is left out, and leaf_a_under_private with it. */
-const SUM_A_CHILDREN = ['raw_a_0', 'raw_a_1', 'raw_a_2', 'fact_a_0', 'fact_a_1', 'fact_a_tie_x', 'fact_a_tie_y'];
+const SUM_A_CHILDREN = [
+  'raw_a_0',
+  'raw_a_1',
+  'raw_a_2',
+  'fact_a_0',
+  'fact_a_1',
+  'fact_a_tie_x',
+  'fact_a_tie_y',
+];
 
 type Call<R> = GroupCall<'dagReads', R>;
 
@@ -140,14 +165,23 @@ const window =
   (cap: number, over: Partial<RawWindow> = {}): GroupCall<'reports', string[]> =>
   async (g) => {
     const { tenantId, sessionId, origins } = { tenantId: TENANT_A, sessionId: SESSION, ...over };
-    const raws = { tenantId, kinds: ['raw'], live: true, sessionId, origins: origins && ['', ...origins] } as const;
+    const raws = {
+      tenantId,
+      kinds: ['raw'],
+      live: true,
+      sessionId,
+      origins: origins && ['', ...origins],
+    } as const;
     const rows =
       cap > 0
         ? (await g.entriesWhere(raws, { limit: cap, newest: true })).entries.reverse()
-        : await readAll((after?: EntryCursor) => g.entriesWhere(raws, { limit: READ_PAGE_ROWS, after }));
+        : await readAll((after?: EntryCursor) =>
+            g.entriesWhere(raws, { limit: READ_PAGE_ROWS, after }),
+          );
     return rows.map((r) => r.id);
   };
-const raws = (calls: readonly GroupCall<'reports', string[]>[]): Promise<string[][]> => conformsOn('reports', calls);
+const raws = (calls: readonly GroupCall<'reports', string[]>[]): Promise<string[][]> =>
+  conformsOn('reports', calls);
 const count =
   (over: Partial<SessionRawCount> = {}): Call<number> =>
   (g) =>
@@ -191,12 +225,22 @@ describe("Reports.entriesWhere over a session's raw rows", () => {
   });
 
   it('reads a one-row session, and a whole session oldest first with a shared timestamp ordered by id', async () => {
-    expect(await raws([window(5, { sessionId: 'sess-one' }), window(100)])).toEqual([['raw_a_solo'], SESSION_IDS]);
+    expect(await raws([window(5, { sessionId: 'sess-one' }), window(100)])).toEqual([
+      ['raw_a_solo'],
+      SESSION_IDS,
+    ]);
   });
 
   it('keeps the newest rows at, under and over the cap, and reads them all for a cap of zero or less', async () => {
     const n = SESSION_IDS.length;
-    const got = await raws([window(n), window(n - 1), window(n + 1), window(1), window(0), window(-1)]);
+    const got = await raws([
+      window(n),
+      window(n - 1),
+      window(n + 1),
+      window(1),
+      window(0),
+      window(-1),
+    ]);
     expect(got).toEqual([
       SESSION_IDS,
       SESSION_IDS.slice(1),
@@ -227,10 +271,9 @@ describe("Reports.entriesWhere over a session's raw rows", () => {
   });
 
   it("reads only the asking tenant's rows of a session id two tenants share", async () => {
-    expect(await raws([window(100, { tenantId: TENANT_B }), window(1, { tenantId: TENANT_B })])).toEqual([
-      ['raw_b_0', 'raw_b_1'],
-      ['raw_b_1'],
-    ]);
+    expect(
+      await raws([window(100, { tenantId: TENANT_B }), window(1, { tenantId: TENANT_B })]),
+    ).toEqual([['raw_b_0', 'raw_b_1'], ['raw_b_1']]);
   });
 });
 
@@ -272,11 +315,9 @@ describe('DagReads.sessionRawCount', () => {
 
 describe('DagReads.summaryWithDescendants', () => {
   it("answers null for a missing id and for another tenant's summary", async () => {
-    expect(await conforms([walk('sum_missing', 1), walk('sum_b', 1), walk('sum_a', 1, {}, TENANT_B)])).toEqual([
-      null,
-      null,
-      null,
-    ]);
+    expect(
+      await conforms([walk('sum_missing', 1), walk('sum_b', 1), walk('sum_a', 1, {}, TENANT_B)]),
+    ).toEqual([null, null, null]);
   });
 
   it("lists one level by created then id, without another tenant's row linked under the summary", async () => {
@@ -340,7 +381,10 @@ interface Reply {
 
 const SERVED: readonly (readonly [string, number])[] = [
   [`/v1/sessions/${SESSION}/assemble?freshTail=3&budget=100000`, 200],
-  [`/v1/sessions/${SESSION}/assemble?freshTail=3&budget=100000&scope=${encodeURIComponent(PRIVATE)}`, 200],
+  [
+    `/v1/sessions/${SESSION}/assemble?freshTail=3&budget=100000&scope=${encodeURIComponent(PRIVATE)}`,
+    200,
+  ],
   [`/v1/sessions/${SESSION}/assemble?summarizeOlder=false&budget=60`, 200],
   ['/v1/sessions/sess-none/assemble', 200],
   ['/v1/recall/drill/sum_a', 200],
@@ -404,11 +448,21 @@ describe('assemble and drill over serve()', () => {
     expect(onHippoDb[5]?.body).toMatchObject({ totalChildren: 12, truncated: true });
     expect(onHippoDb.slice(8).map((r) => r.body)).toMatchObject([
       { totalChildren: 2, truncated: true, children: [{ id: 'sum_a2' }] },
-      { totalChildren: 7, truncated: true, children: [{ id: 'raw_a_0' }, { id: 'raw_a_1' }, { id: 'raw_a_2' }] },
+      {
+        totalChildren: 7,
+        truncated: true,
+        children: [{ id: 'raw_a_0' }, { id: 'raw_a_1' }, { id: 'raw_a_2' }],
+      },
       {
         totalChildren: 10,
         truncated: true,
-        children: [{ id: 'sum_a2' }, { id: 'sum_a' }, { id: 'fact_a2_0' }, { id: 'raw_a_0' }, { id: 'raw_a_1' }],
+        children: [
+          { id: 'sum_a2' },
+          { id: 'sum_a' },
+          { id: 'fact_a2_0' },
+          { id: 'raw_a_0' },
+          { id: 'raw_a_1' },
+        ],
       },
       { totalChildren: 12, truncated: true },
       { totalChildren: 1, truncated: false, children: [{ id: 'loop_b' }] },

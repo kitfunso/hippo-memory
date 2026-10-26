@@ -2,7 +2,12 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { TaskSnapshot, Sessions } from '../../base/ports/store/sessions.js';
 import { isInitialized } from '../../host/project-identity.js';
-import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactions } from './compaction-record.js';
+import {
+  PRE_COMPACT_INSTRUCTION,
+  postCompactLine,
+  saveCompaction,
+  replayCompactions,
+} from './compaction-record.js';
 import type { CompactionHooks, CompactionStart } from '../../base/ports/store/capture.js';
 import { COMPACTION_DB_WAIT_MS } from '../../base/session/compaction-timing.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks-install/rules/shared.js';
@@ -87,7 +92,11 @@ const TWIN_FIRE_MS = 10_000;
 /** The folder's store as a compaction hook reaches it, built by the CLI root. */
 export type CompactionStore = Pick<StoreGroups, 'compactionHooks' | 'sessions'>;
 
-async function snapshotJustSaved(sessions: Sessions, tenantId: string, sessionId: string | null): Promise<boolean> {
+async function snapshotJustSaved(
+  sessions: Sessions,
+  tenantId: string,
+  sessionId: string | null,
+): Promise<boolean> {
   if (sessionId === null || sessionId === '') return false;
   const active = await sessions.loadSnapshot(tenantId, {}, null);
   return (
@@ -123,10 +132,16 @@ async function runPreCompact(
   // nor reads the summarizer text.
   const vscode = runtime === 'claude-code' && isVscodeTranscript(payloadTranscriptPath);
   if (vscode && fs.existsSync(vscodeUserHooksFile(processHomes()))) {
-    appendPreCompactLog(logFile, 'skip: VS Code payload, hippo.json runs pre-compact for this chat');
+    appendPreCompactLog(
+      logFile,
+      'skip: VS Code payload, hippo.json runs pre-compact for this chat',
+    );
     return;
   }
-  if (runtime === 'copilot' && (await snapshotJustSaved(store.sessions, options.tenantId, sessionId))) {
+  if (
+    runtime === 'copilot' &&
+    (await snapshotJustSaved(store.sessions, options.tenantId, sessionId))
+  ) {
     appendPreCompactLog(
       logFile,
       `skip: snapshot for session ${sessionId} saved under ${TWIN_FIRE_MS / 1000} s ago, by the other preCompact entry`,
@@ -135,13 +150,26 @@ async function runPreCompact(
   }
 
   const closable = runtime === 'claude-code' && !vscode;
-  const recordId = await markCompactionBoundary(store.compactionHooks, options, logFile, receipt.input, closable);
+  const recordId = await markCompactionBoundary(
+    store.compactionHooks,
+    options,
+    logFile,
+    receipt.input,
+    closable,
+  );
 
-  const transcriptPath = resolvePreCompactTranscript(payloadTranscriptPath, stdinText, logFile, runtime);
+  const transcriptPath = resolvePreCompactTranscript(
+    payloadTranscriptPath,
+    stdinText,
+    logFile,
+    runtime,
+  );
   if (!transcriptPath) return;
 
   // Nothing derivable skips the write, so a user-authored active snapshot is never clobbered with junk.
-  const derived = transcriptWorkingState(transcriptPath, (message) => appendPreCompactLog(logFile, message));
+  const derived = transcriptWorkingState(transcriptPath, (message) =>
+    appendPreCompactLog(logFile, message),
+  );
   if (!derived) return;
 
   await saveDerivedSnapshot(store, options.tenantId, logFile, { sessionId, recordId }, derived);
@@ -204,7 +232,10 @@ async function markSnapshotOnRecord(
   try {
     await hooks.markSnapshotSaved(tenantId, recordId);
   } catch (err) {
-    appendPreCompactLog(logFile, `compaction record not marked with its snapshot: ${errorMessage(err)}`);
+    appendPreCompactLog(
+      logFile,
+      `compaction record not marked with its snapshot: ${errorMessage(err)}`,
+    );
   }
 }
 
@@ -222,7 +253,10 @@ function resolvePreCompactTranscript(
     if (isReadableFile(payloadTranscriptPath)) {
       transcriptPath = payloadTranscriptPath;
     } else {
-      appendPreCompactLog(logFile, `skip: payload transcript_path unreadable: ${payloadTranscriptPath}`);
+      appendPreCompactLog(
+        logFile,
+        `skip: payload transcript_path unreadable: ${payloadTranscriptPath}`,
+      );
       return null;
     }
   } else if (runtime === 'copilot') {
@@ -266,7 +300,12 @@ async function saveDerivedSnapshot(
     );
   } else {
     try {
-      await sessions.save(tenantId, 'snapshot', { ...merged, source: 'pre-compact', sessionId }, null);
+      await sessions.save(
+        tenantId,
+        'snapshot',
+        { ...merged, source: 'pre-compact', sessionId },
+        null,
+      );
       appendPreCompactLog(logFile, 'snapshot saved');
       if (recordId !== null) await markSnapshotOnRecord(hooks, tenantId, recordId, logFile);
     } catch (err) {
@@ -311,7 +350,11 @@ export interface PostCompactOptions {
   stdinText?: string;
   stdinTimedOut?: boolean;
   logFile?: string;
-  afterSave?: (transcriptPath: string, cwd: string | null, log: (message: string) => void) => Promise<void>;
+  afterSave?: (
+    transcriptPath: string,
+    cwd: string | null,
+    log: (message: string) => void,
+  ) => Promise<void>;
 }
 
 /** A PostCompact hook has 10 s in all; replay stops starting new records after this. */
@@ -350,7 +393,8 @@ export async function postCompactHook(
         }
       }
     }
-    if (!storeBusy) await replayCompactions(folder, log, { busyWaitMs: COMPACTION_DB_WAIT_MS, deadline });
+    if (!storeBusy)
+      await replayCompactions(folder, log, { busyWaitMs: COMPACTION_DB_WAIT_MS, deadline });
     return line;
   } catch (err) {
     log(`failed: ${errorMessage(err)}`);

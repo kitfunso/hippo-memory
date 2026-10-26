@@ -22,8 +22,16 @@ import {
   type StrengthModel,
 } from '../base/memory/strength.js';
 import { applyOutcome as applyOutcomeAt } from '../base/memory/keep-rules.js';
-import { computeAmbientState as ambientStateAt, type AmbientState } from '../base/memory/ambient.js';
-import { evalNow, evalSwitches, strengthModelUnder, type StrengthAblation } from '../infra/eval-switches.js';
+import {
+  computeAmbientState as ambientStateAt,
+  type AmbientState,
+} from '../base/memory/ambient.js';
+import {
+  evalNow,
+  evalSwitches,
+  strengthModelUnder,
+  type StrengthAblation,
+} from '../infra/eval-switches.js';
 
 export {
   MemoryEntry,
@@ -50,12 +58,22 @@ function modelOf(options: Pick<DecayOptions, 'ablation' | 'lossAversionRatio'>):
 }
 
 /** The published signature keeps `baseHalfLifeDays` optional; hippo's own writers name it. */
-export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
-  const fields = { ...options, baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS };
+export function createMemory(
+  content: string,
+  options: Partial<CreateMemoryOptions> = {},
+): MemoryEntry {
+  const fields = {
+    ...options,
+    baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS,
+  };
   return createMemoryAt(content, fields, evalNow());
 }
 
-export function calculateStrength(entry: StrengthInputs, now: Date = evalNow(), options: DecayOptions = {}): number {
+export function calculateStrength(
+  entry: StrengthInputs,
+  now: Date = evalNow(),
+  options: DecayOptions = {},
+): number {
   return strengthAt(entry, now, modelOf(options), options);
 }
 
@@ -88,7 +106,12 @@ export function computeAmbientState(entries: MemoryEntry[], now?: Date): Ambient
   return ambientStateAt(entries, now ?? evalNow(), evalSwitches().strength);
 }
 
-export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from '../base/session/handoff.js';
+export {
+  SessionHandoff,
+  HandoffOutcome,
+  HandoffEvidence,
+  isHandoffOutcome,
+} from '../base/session/handoff.js';
 export {
   Card,
   CardStatus,
@@ -99,7 +122,12 @@ export {
   CARD_TRANSITIONS,
   CARD_LEASE_MS,
 } from '../base/records/card.js';
-export { computeSalience, SalienceDecision, SalienceResult, SalienceOptions } from '../base/memory/salience.js';
+export {
+  computeSalience,
+  SalienceDecision,
+  SalienceResult,
+  SalienceOptions,
+} from '../base/memory/salience.js';
 export { renderAmbientSummary, formatAmbientVector, AmbientState } from '../base/memory/ambient.js';
 export { estimateTokens } from '../base/util/token-text.js';
 export { tokenize, textOverlap } from '../base/util/tokenize.js';

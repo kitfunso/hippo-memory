@@ -17,8 +17,19 @@ import {
   HIPPO_POST_COMPACT_MARKER,
   copilotHooksFile,
 } from './shared.js';
-import { HIPPO_DIR, claudeConfigDir, codexHomeDir, userHome, type Homes } from '../../../base/util/agent-homes.js';
-import { type JsonValue, isJsonString, isJsonObjectLiteral, type JsonObject } from '../../../base/util/json.js';
+import {
+  HIPPO_DIR,
+  claudeConfigDir,
+  codexHomeDir,
+  userHome,
+  type Homes,
+} from '../../../base/util/agent-homes.js';
+import {
+  type JsonValue,
+  isJsonString,
+  isJsonObjectLiteral,
+  type JsonObject,
+} from '../../../base/util/json.js';
 import { escapeRegex } from '../../../base/util/escape.js';
 
 // Hook timeouts by cost: a local read or write, a short store lookup, a pass that may compact.
@@ -102,7 +113,10 @@ function handlerCommand(handler: JsonValue | undefined): string | null {
 
 /** `groups` minus the handlers `isOurs` picks; a group goes only once it has no handler left. Null when no handler
  * matched. */
-function withoutHandlers(groups: JsonValue[], isOurs: (command: string) => boolean): JsonValue[] | null {
+function withoutHandlers(
+  groups: JsonValue[],
+  isOurs: (command: string) => boolean,
+): JsonValue[] | null {
   let removed = false;
   const kept = groups.flatMap((group): JsonValue[] => {
     if (!isJsonObjectLiteral(group) || !Array.isArray(group.hooks)) return [group];
@@ -118,7 +132,11 @@ function withoutHandlers(groups: JsonValue[], isOurs: (command: string) => boole
 }
 
 /** Removes the matching handlers from one event's groups; the event key goes once no group is left. */
-function stripHandlers(hooks: JsonObject, event: string, isOurs: (command: string) => boolean): boolean {
+function stripHandlers(
+  hooks: JsonObject,
+  event: string,
+  isOurs: (command: string) => boolean,
+): boolean {
   const groups = hooks[event];
   if (!Array.isArray(groups)) return false;
   const kept = withoutHandlers(groups, isOurs);
@@ -131,18 +149,24 @@ function stripHandlers(hooks: JsonObject, event: string, isOurs: (command: strin
 /** Every command string in `groups`; a group or handler of an unexpected shape adds none. */
 function handlerCommands(groups: JsonValue[]): string[] {
   return groups.flatMap((group) =>
-    isJsonObjectLiteral(group) && Array.isArray(group.hooks) ? group.hooks.flatMap((h) => handlerCommand(h) ?? []) : [],
+    isJsonObjectLiteral(group) && Array.isArray(group.hooks)
+      ? group.hooks.flatMap((h) => handlerCommand(h) ?? [])
+      : [],
   );
 }
 
 /** The loose "already installed?" test, on purpose weaker than isHippoCommand: a launcher or env prefix still counts,
  * and a false hit only skips an append. */
 function hookArrayContains(hookArray: JsonValue | undefined, marker: string): boolean {
-  return Array.isArray(hookArray) && handlerCommands(hookArray).some((command) => command.includes(marker));
+  return (
+    Array.isArray(hookArray) &&
+    handlerCommands(hookArray).some((command) => command.includes(marker))
+  );
 }
 
 function addIncludeRecentToPinnedCommand(command: string): string {
-  if (!isHippoCommand(command, HIPPO_PINNED_INJECT_MARKER) || command.includes('--include-recent')) return command;
+  if (!isHippoCommand(command, HIPPO_PINNED_INJECT_MARKER) || command.includes('--include-recent'))
+    return command;
   return command.includes(' --format ')
     ? command.replace(' --format ', ' --include-recent 5 --format ')
     : `${command} --include-recent 5`;
@@ -190,7 +214,12 @@ export function nothingInstalled(target: JsonHookTarget, settingsPath: string): 
 /** A command hook with a Windows form: Codex runs hooks in PowerShell there, whose execution policy can block npm's
  * hippo.ps1. */
 function codexCommandHook(command: string, timeout: number): JsonObject {
-  return { type: 'command', command, commandWindows: command.replace(/^hippo /, 'hippo.cmd '), timeout };
+  return {
+    type: 'command',
+    command,
+    commandWindows: command.replace(/^hippo /, 'hippo.cmd '),
+    timeout,
+  };
 }
 
 /** Assigns `settings.hooks = {}` when it is absent, then returns it if it is an object whose `events`, where present,
@@ -214,7 +243,8 @@ export interface HookInstallPlan {
  * edits an entry. */
 function planCodexHooks(settingsPath: string, settings: JsonValue): HookInstallPlan {
   const result = nothingInstalled('codex', settingsPath);
-  if (!isJsonObjectLiteral(settings)) return { result: { ...result, invalidJson: true }, write: null };
+  if (!isJsonObjectLiteral(settings))
+    return { result: { ...result, invalidJson: true }, write: null };
   const hooks = ensureHooksObject(settings, ['UserPromptSubmit', 'SessionStart']);
   if (hooks === null) return { result: { ...result, invalidJson: true }, write: null };
   const append = (event: string, marker: string, group: JsonObject): boolean => {
@@ -252,13 +282,19 @@ function copilotHooksTable(): JsonObject {
         'context --pinned-only --include-recent 5 --format copilot',
         HOOK_MEDIUM_TIMEOUT_SECONDS,
       ),
-      postToolUseFailure: copilotCommandHook('capture-error --runtime copilot', HOOK_MEDIUM_TIMEOUT_SECONDS),
+      postToolUseFailure: copilotCommandHook(
+        'capture-error --runtime copilot',
+        HOOK_MEDIUM_TIMEOUT_SECONDS,
+      ),
       preCompact: copilotCommandHook('pre-compact --runtime copilot', HOOK_LONG_TIMEOUT_SECONDS),
       // VS Code maps no camelCase preCompact. The Copilot CLI may run both names, so pre-compact skips a snapshot saved
       // seconds before.
       PreCompact: copilotCommandHook('pre-compact --runtime copilot', HOOK_LONG_TIMEOUT_SECONDS),
       // VS Code's per-reply Stop. --turn acts on a VS Code payload only, so the Copilot CLI's agentStop does nothing.
-      agentStop: copilotCommandHook('session-end --runtime copilot --turn', HOOK_LONG_TIMEOUT_SECONDS),
+      agentStop: copilotCommandHook(
+        'session-end --runtime copilot --turn',
+        HOOK_LONG_TIMEOUT_SECONDS,
+      ),
       sessionEnd: copilotCommandHook('session-end --runtime copilot', HOOK_LONG_TIMEOUT_SECONDS),
     },
   };
@@ -300,7 +336,10 @@ export function planJsonHooks(
   settings: JsonValue | undefined,
   compactLog: string,
 ): HookInstallPlan {
-  const invalid = { result: { ...nothingInstalled(target, paths.settings), invalidJson: true }, write: null };
+  const invalid = {
+    result: { ...nothingInstalled(target, paths.settings), invalidJson: true },
+    write: null,
+  };
   if (settings === undefined) return invalid;
   if (target === 'codex') return planCodexHooks(paths.settings, settings);
   if (!isJsonObjectLiteral(settings)) return invalid;
@@ -322,8 +361,14 @@ function migrateLegacyClaudeHooks(hooks: ClaudeHooks): LegacyHookMigration {
   // absent.
   let migratedLegacySessionEnd = false;
   let migratedSplitSessionEnd = false;
-  if (Array.isArray(hooks.SessionEnd) && !hookArrayContains(hooks.SessionEnd, HIPPO_SESSION_END_MARKER)) {
-    const kept = withoutHandlers(hooks.SessionEnd, runsHippo(HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER));
+  if (
+    Array.isArray(hooks.SessionEnd) &&
+    !hookArrayContains(hooks.SessionEnd, HIPPO_SESSION_END_MARKER)
+  ) {
+    const kept = withoutHandlers(
+      hooks.SessionEnd,
+      runsHippo(HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER),
+    );
     if (kept !== null) {
       // Whatever form was removed reports as the split migration; the legacy flag also marks a SessionEnd that held
       // several groups.
@@ -341,7 +386,12 @@ function claudeCommandGroup(command: string, timeout: number, matcher?: string):
   return matcher === undefined ? { hooks } : { matcher, hooks };
 }
 
-function appendHookIfMissing(hooks: ClaudeHooks, event: string, marker: string, group: JsonObject): boolean {
+function appendHookIfMissing(
+  hooks: ClaudeHooks,
+  event: string,
+  marker: string,
+  group: JsonObject,
+): boolean {
   if (hookArrayContains(hooks[event], marker)) return false;
   if (!Array.isArray(hooks[event])) hooks[event] = [];
   hooks[event].push(group);
@@ -362,7 +412,9 @@ const CLAUDE_HOOK_MARKERS: ReadonlyArray<readonly [string, readonly string[]]> =
 
 // Stop is only ever migrated away, so install never appends to it and a Stop that is not a list does not block the
 // install.
-const CLAUDE_APPENDED_EVENTS = CLAUDE_HOOK_MARKERS.map(([event]) => event).filter((event) => event !== 'Stop');
+const CLAUDE_APPENDED_EVENTS = CLAUDE_HOOK_MARKERS.map(([event]) => event).filter(
+  (event) => event !== 'Stop',
+);
 
 function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
   const installedSessionEnd = appendHookIfMissing(
@@ -387,7 +439,12 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
     HIPPO_PINNED_INJECT_MARKER,
     claudeCommandGroup(HIPPO_PINNED_INJECT_COMMAND, HOOK_SHORT_TIMEOUT_SECONDS),
   );
-  return { installedSessionEnd, installedSessionStart, migratedPinnedInjectRecent, installedUserPromptSubmit };
+  return {
+    installedSessionEnd,
+    installedSessionStart,
+    migratedPinnedInjectRecent,
+    installedUserPromptSubmit,
+  };
 }
 
 function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
@@ -417,7 +474,10 @@ function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
     hooks,
     'PostCompact',
     HIPPO_POST_COMPACT_MARKER,
-    claudeCommandGroup(`hippo post-compact --log-file "${compactLog}"`, HOOK_MEDIUM_TIMEOUT_SECONDS),
+    claudeCommandGroup(
+      `hippo post-compact --log-file "${compactLog}"`,
+      HOOK_MEDIUM_TIMEOUT_SECONDS,
+    ),
   );
   return { installedPreCompact, installedCompactResume, installedPostCompact };
 }
@@ -430,18 +490,23 @@ function planClaudeCodeHooks(
 ): HookInstallPlan {
   const merge = ensureHooksObject(settings, CLAUDE_APPENDED_EVENTS);
   if (merge === null) {
-    return { result: { ...nothingInstalled('claude-code', settingsPath), invalidJson: true }, write: null };
+    return {
+      result: { ...nothingInstalled('claude-code', settingsPath), invalidJson: true },
+      write: null,
+    };
   }
   // SAFETY: ensureHooksObject left every event hippo appends to absent or an array.
   const hooks = merge as ClaudeHooks;
   const migration = migrateLegacyClaudeHooks(hooks);
 
-  const { installedSessionEnd, installedSessionStart, migratedPinnedInjectRecent, installedUserPromptSubmit } =
-    appendSessionHooks(hooks, logFile);
-  const { installedPreCompact, installedCompactResume, installedPostCompact } = appendCompactionHooks(
-    hooks,
-    compactLog,
-  );
+  const {
+    installedSessionEnd,
+    installedSessionStart,
+    migratedPinnedInjectRecent,
+    installedUserPromptSubmit,
+  } = appendSessionHooks(hooks, logFile);
+  const { installedPreCompact, installedCompactResume, installedPostCompact } =
+    appendCompactionHooks(hooks, compactLog);
 
   // PostToolUseFailure: a failed tool call becomes an error memory, after `hippo capture-error` drops routine failures
   // (interrupts, declined permissions, empty searches) and repeats. Same hook the plugin ships.
@@ -503,8 +568,12 @@ export interface HookRemovalPlan {
 }
 
 /** Removes hippo's own hook handlers and keeps every other handler. */
-export function planHookRemoval(target: 'claude-code' | 'codex', settings: JsonValue): HookRemovalPlan {
-  if (!isJsonObjectLiteral(settings) || !isJsonObjectLiteral(settings.hooks)) return { write: null, kept: [] };
+export function planHookRemoval(
+  target: 'claude-code' | 'codex',
+  settings: JsonValue,
+): HookRemovalPlan {
+  if (!isJsonObjectLiteral(settings) || !isJsonObjectLiteral(settings.hooks))
+    return { write: null, kept: [] };
   const hooks = settings.hooks;
   const changed = target === 'codex' ? uninstallCodexHooks(hooks) : uninstallClaudeCodeHooks(hooks);
   const kept = target === 'claude-code' ? keptHippoHandlers(hooks) : [];
@@ -516,7 +585,10 @@ export function planHookRemoval(target: 'claude-code' | 'codex', settings: JsonV
 /** False for settings uninstall cannot edit: not a JSON object (undefined when the text did not parse), or a `hooks`
  * that is not one. */
 export function canEditHooks(settings: JsonValue | undefined): boolean {
-  return isJsonObjectLiteral(settings) && (settings.hooks === undefined || isJsonObjectLiteral(settings.hooks));
+  return (
+    isJsonObjectLiteral(settings) &&
+    (settings.hooks === undefined || isJsonObjectLiteral(settings.hooks))
+  );
 }
 
 function uninstallClaudeCodeHooks(hooks: JsonObject): boolean {

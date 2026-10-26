@@ -6,7 +6,11 @@ import { reproveStoreSchema } from '../../src/db/connect.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
-import { saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
+import {
+  saveActiveTaskSnapshot,
+  appendSessionEvent,
+  saveSessionHandoff,
+} from '../_helpers/root-forms.js';
 
 const CONTINUITY_TABLES = [
   'task_snapshots',
@@ -22,13 +26,17 @@ const CONTINUITY_TABLES = [
 function tableNames(db: DatabaseSyncLike): string[] {
   // SAFETY: row shape guaranteed by the `SELECT name FROM sqlite_master` projection.
   return (
-    db.prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`).all() as Array<{ name: string }>
+    db.prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`).all() as Array<{
+      name: string;
+    }>
   ).map((r) => r.name);
 }
 
 function getMeta(db: DatabaseSyncLike, key: string): string | undefined {
   // SAFETY: row shape guaranteed by the `SELECT value FROM meta` projection.
-  const row = db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined;
+  const row = db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as
+    | { value?: string }
+    | undefined;
   return row?.value;
 }
 
@@ -47,7 +55,9 @@ function columns(db: DatabaseSyncLike, table: string): ColumnInfo[] {
 
 function indexNames(db: DatabaseSyncLike, table: string): string[] {
   // SAFETY: PRAGMA index_list always yields rows with a `name` column.
-  return (db.prepare(`PRAGMA index_list(${table})`).all() as Array<{ name: string }>).map((r) => r.name).sort();
+  return (db.prepare(`PRAGMA index_list(${table})`).all() as Array<{ name: string }>)
+    .map((r) => r.name)
+    .sort();
 }
 
 describe('continuity tables self-heal, missing table after schema stamp', () => {
@@ -293,7 +303,9 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
 
     const healed = openHippoDb(hippoDir);
     try {
-      expect(tableNames(healed)).toEqual(expect.arrayContaining(['session_handoffs', 'session_events']));
+      expect(tableNames(healed)).toEqual(
+        expect.arrayContaining(['session_handoffs', 'session_events']),
+      );
     } finally {
       closeHippoDb(healed);
     }

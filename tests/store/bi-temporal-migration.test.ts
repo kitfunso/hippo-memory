@@ -9,7 +9,10 @@ import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 describe('bi-temporal schema v11', () => {
   it('new entries have valid_from defaulting to created and superseded_by null', () => {
     const home = makeRoot('bt');
-    const e = createMemory('test bi-temporal', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
+    const e = createMemory('test bi-temporal', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Episodic,
+    });
     writeEntry(home, e);
     const read = readEntry(home, e.id);
     expect(read).not.toBeNull();

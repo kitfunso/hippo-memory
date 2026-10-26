@@ -66,8 +66,13 @@ describe('auditRemoveErrors', () => {
   });
 
   it('answers an empty list without opening the store', async () => {
-    const ctx: FullContext = apiCtx('/no/such/root', 'default', { subject: 'audit-test', role: 'admin' });
-    expect(await auditRemoveErrors(ctx, 'sleep-audit', [issue('x', 'warning', 'vague')])).toEqual([]);
+    const ctx: FullContext = apiCtx('/no/such/root', 'default', {
+      subject: 'audit-test',
+      role: 'admin',
+    });
+    expect(await auditRemoveErrors(ctx, 'sleep-audit', [issue('x', 'warning', 'vague')])).toEqual(
+      [],
+    );
   });
 });
 

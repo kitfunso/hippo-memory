@@ -26,7 +26,9 @@ export async function seedVectors(root: string, url: string): Promise<void> {
       .map((r) => String((r as { id: unknown }).id)),
   );
   const entries = loadEntriesByIds(root, ids);
-  const index = Object.fromEntries(entries.map((e): [string, number[]] => [e.id, hashedVector(e.content)]));
+  const index = Object.fromEntries(
+    entries.map((e): [string, number[]] => [e.id, hashedVector(e.content)]),
+  );
   const identity = embeddingIndexIdentity(`openai:${MODEL}`);
   onDb(root, (db) => {
     upsertVectors(db, Object.entries(index), identity);
@@ -40,6 +42,9 @@ export async function seedVectors(root: string, url: string): Promise<void> {
   });
   writeFileSync(
     join(root, 'config.json'),
-    JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: url }, physics: { enabled: true } }),
+    JSON.stringify({
+      embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: url },
+      physics: { enabled: true },
+    }),
   );
 }

@@ -71,7 +71,9 @@ const RAW = "kind = 'raw'";
 function rawProvenance(db: DatabaseSyncLike, page: ReportPage): RawProvenancePage {
   return withReadSnapshot(db, () => {
     // SAFETY: an aggregate with no GROUP BY always answers one row.
-    const { n } = cachedStatement(db, `SELECT COUNT(*) AS n FROM memories WHERE ${RAW}`).get() as { n: number };
+    const { n } = cachedStatement(db, `SELECT COUNT(*) AS n FROM memories WHERE ${RAW}`).get() as {
+      n: number;
+    };
     const range = afterRange('created', 'id', page.after);
     // SAFETY: the SELECT names exactly these four columns.
     const gaps = cachedStatement(

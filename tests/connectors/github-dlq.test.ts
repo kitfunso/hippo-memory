@@ -1,7 +1,11 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { parkInDlq, listDlq } from '../../src/surface/connectors/dlq.js';
-import { githubDlq, replayGithubDlqEntry, type DlqBucket } from '../../src/surface/connectors/github/dlq.js';
+import {
+  githubDlq,
+  replayGithubDlqEntry,
+  type DlqBucket,
+} from '../../src/surface/connectors/github/dlq.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -62,7 +66,9 @@ describe('github DLQ', () => {
       error: 'no tenant',
       bucket: 'unroutable',
     });
-    const item = (await sqliteStore(root).connectorEvents.deadLetters('github', '__unroutable__', { id }))[0];
+    const item = (
+      await sqliteStore(root).connectorEvents.deadLetters('github', '__unroutable__', { id })
+    )[0];
     expect(item!.tenantId).toBe('__unroutable__');
     expect(item!.bucket).toBe('unroutable');
     const listed = await listDlq(githubDlq, sqliteStore(root), {
@@ -229,6 +235,8 @@ describe('github DLQ', () => {
       status: 'not_found',
       retryCount: 0,
     });
-    expect((await store.connectorEvents.deadLetters('github', 'acme', { id: acmes }))[0]?.retryCount).toBe(0);
+    expect(
+      (await store.connectorEvents.deadLetters('github', 'acme', { id: acmes }))[0]?.retryCount,
+    ).toBe(0);
   });
 });

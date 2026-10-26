@@ -35,7 +35,9 @@ const scriptRerankers = realRerankers();
 export { scriptRerankers as getReranker };
 
 /** A folder's embedding target, embedding with the real provider its config names. */
-export function folderIndex(folder: Omit<ConfiguredFolder<HippoStore>, 'embedderFor'>): EmbedTarget {
+export function folderIndex(
+  folder: Omit<ConfiguredFolder<HippoStore>, 'embedderFor'>,
+): EmbedTarget {
   return folderEmbedTarget({ ...folder, embedderFor: resolveEmbeddingProvider }, evalRun());
 }
 
@@ -45,11 +47,18 @@ export function hybridSearch(
   entries: MemoryEntry[],
   options: HybridRankOptions = {},
 ): Promise<SearchResult[]> {
-  return rankHybrid(query, entries, { switches: evalSwitches(), ...options, now: options.now ?? evalNow() });
+  return rankHybrid(query, entries, {
+    switches: evalSwitches(),
+    ...options,
+    now: options.now ?? evalNow(),
+  });
 }
 
 /** The outcome nudge, off when HIPPO_ABLATE_OUTCOME or _OUTCOME_FAST is set and the caller passes no `ablated`. */
-export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean = isOutcomeFastAblated()): number {
+export function outcomeMultiplier(
+  entry: MemoryEntry,
+  ablated: boolean = isOutcomeFastAblated(),
+): number {
   return outcomeNudge(entry, ablated);
 }
 
@@ -57,17 +66,25 @@ export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean = isOutco
 export type JudgeConnection = Omit<JudgeOptions, 'http'> & { readonly fetcher?: typeof fetch };
 
 /** Judge many candidates under a bounded concurrency pool, order preserved. */
-export function judgeAll(contents: readonly string[], opts: JudgeConnection): Promise<(Judgment | null)[]> {
+export function judgeAll(
+  contents: readonly string[],
+  opts: JudgeConnection,
+): Promise<(Judgment | null)[]> {
   const { fetcher, ...rest } = opts;
   return judgeOver(contents, { ...rest, http: httpOver(fetcher) });
 }
 
 /** `fn` with the entry's real ports filled into a Context its script built without them. */
-function filled<A extends unknown[], R>(fn: (ctx: Context, ...args: A) => R): (ctx: EntryContext, ...args: A) => R {
+function filled<A extends unknown[], R>(
+  fn: (ctx: Context, ...args: A) => R,
+): (ctx: EntryContext, ...args: A) => R {
   return (ctx, ...args) => fn(withEntryInfra(ctx), ...args);
 }
 
-export function remember(ctx: EntryContext, opts: GatedRememberOptions): Promise<RememberResult | RememberSkipped>;
+export function remember(
+  ctx: EntryContext,
+  opts: GatedRememberOptions,
+): Promise<RememberResult | RememberSkipped>;
 export function remember(ctx: EntryContext, opts: RememberOptions): Promise<RememberResult>;
 export function remember(
   ctx: EntryContext,

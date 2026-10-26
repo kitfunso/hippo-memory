@@ -15,12 +15,18 @@ import {
   reportSessionEndFailure,
 } from '../hook-runtime.js';
 
-export async function handleCodexSessionEndWorker({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleCodexSessionEndWorker({
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
   // Like the other hooks: project store, else global; a folder with neither must not get one made.
   const store = hookStoreRoot(hippoRoot);
   if (!isInitialized(store)) {
-    appendSessionEndCloseLog(logFile, 'skip: no hippo store for this folder or globally', { startFresh: true });
+    appendSessionEndCloseLog(logFile, 'skip: no hippo store for this folder or globally', {
+      startFresh: true,
+    });
     return;
   }
 
@@ -28,7 +34,11 @@ export async function handleCodexSessionEndWorker({ hippoRoot, tenantId, flags }
   await captureCodexTranscript(hippoRoot, tenantId, store, flags, logFile);
 }
 
-async function sleepCodexProjectStore(hippoRoot: string, tenantId: string, logFile: string | null): Promise<void> {
+async function sleepCodexProjectStore(
+  hippoRoot: string,
+  tenantId: string,
+  logFile: string | null,
+): Promise<void> {
   // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
   if (isInitialized(hippoRoot)) {
     try {
@@ -44,7 +54,9 @@ async function sleepCodexProjectStore(hippoRoot: string, tenantId: string, logFi
       reportSessionEndFailure(logFile, 'codex session-end: sleep', err);
     }
   } else {
-    appendSessionEndCloseLog(logFile, 'skip sleep: this folder has no store of its own', { startFresh: true });
+    appendSessionEndCloseLog(logFile, 'skip sleep: this folder has no store of its own', {
+      startFresh: true,
+    });
     await logSessionEndImport(logFile, tenantId, undefined);
   }
 }

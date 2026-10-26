@@ -24,6 +24,7 @@ export function capText<T extends string | undefined>(value: T, max: number, fie
 }
 
 export function oneLine(value: string, field: string): string {
-  if (/[\r\n]/.test(value)) throw new BadRequestError(`${field} must be a single line (no newlines)`);
+  if (/[\r\n]/.test(value))
+    throw new BadRequestError(`${field} must be a single line (no newlines)`);
   return value;
 }

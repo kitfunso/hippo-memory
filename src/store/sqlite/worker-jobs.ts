@@ -50,7 +50,10 @@ class WorkerStores extends RequestStores {
 
   constructor(init: WorkerInit) {
     // The executor sends a reader its first job only after the writer has run the setup.
-    super({ busyWaitMs: init.busyWaitMs, ...(init.mode === 'read' && { setupDoneFor: init.hippoRoot }) });
+    super({
+      busyWaitMs: init.busyWaitMs,
+      ...(init.mode === 'read' && { setupDoneFor: init.hippoRoot }),
+    });
     this.#init = init;
     this.#commitFlag = init.commitFlag && new Int32Array(init.commitFlag);
   }
@@ -91,7 +94,9 @@ function runsOnWorker(group: WorkerGroup, method: string): boolean {
 type MethodsOf<T> = T extends T ? T[keyof T] : never;
 
 /** What a method the op table names can return. */
-type Ran = ReturnType<MethodsOf<Ops[Exclude<WorkerGroup, 'base'>] | Pick<Ops, keyof typeof WORKER_OPS.base>>>;
+type Ran = ReturnType<
+  MethodsOf<Ops[Exclude<WorkerGroup, 'base'>] | Pick<Ops, keyof typeof WORKER_OPS.base>>
+>;
 
 function methodsOf(ops: Ops, group: WorkerGroup) {
   // SAFETY: every group is an object of methods, and the server thread sent the arguments the port's own signature for
@@ -104,7 +109,8 @@ function methodsOf(ops: Ops, group: WorkerGroup) {
 /** Runs `op`; only a method the op table places on a worker can run. */
 function runOp(ops: Ops, op: string, args: readonly unknown[]) {
   const [group = '', method = ''] = op.split('.');
-  const run = isWorkerGroup(group) && runsOnWorker(group, method) ? methodsOf(ops, group)[method] : undefined;
+  const run =
+    isWorkerGroup(group) && runsOnWorker(group, method) ? methodsOf(ops, group)[method] : undefined;
   if (run === undefined) throw new Error(`the store worker has no op '${op}'`);
   return run(...args);
 }
@@ -115,7 +121,12 @@ interface Thread {
   readonly stores: WorkerStores;
 }
 
-async function answer(ops: Ops, { runtime, stores }: Thread, hippoRoot: string, job: Job): Promise<Reply> {
+async function answer(
+  ops: Ops,
+  { runtime, stores }: Thread,
+  hippoRoot: string,
+  job: Job,
+): Promise<Reply> {
   const failuresBefore = auditWriteFailureCount();
   stores.requestId = job.requestId;
   stores.walPages = job.walPages;
@@ -128,15 +139,28 @@ async function answer(ops: Ops, { runtime, stores }: Thread, hippoRoot: string, 
           : runOp(ops, job.op, restoreAllTenants(job.args, job.allTenants)),
       ),
     );
-    return { id: job.id, ok: true, value, auditFailures: auditWriteFailureCount() - failuresBefore };
+    return {
+      id: job.id,
+      ok: true,
+      value,
+      auditFailures: auditWriteFailureCount() - failuresBefore,
+    };
   } catch (err) {
-    return { id: job.id, ok: false, error: encodeError(err), auditFailures: auditWriteFailureCount() - failuresBefore };
+    return {
+      id: job.id,
+      ok: false,
+      error: encodeError(err),
+      auditFailures: auditWriteFailureCount() - failuresBefore,
+    };
   }
 }
 
 function post(port: MessagePort, reply: Reply): void {
   try {
-    port.postMessage(reply, reply.ok && reply.value instanceof PackedVectors ? [reply.value.buffer] : []);
+    port.postMessage(
+      reply,
+      reply.ok && reply.value instanceof PackedVectors ? [reply.value.buffer] : [],
+    );
   } catch (err) {
     // A result that cannot be copied to the server thread must still answer, or its caller would wait for ever.
     port.postMessage({
@@ -152,7 +176,10 @@ function post(port: MessagePort, reply: Reply): void {
  * files. */
 export function serveJobs(port: MessagePort, init: WorkerInit): void {
   const graphs = init.pinned
-    ? new VectorGraphs(init.hippoRoot, { threshold: init.vectorGraphThreshold, maxVectors: init.vectorGraphMaxVectors })
+    ? new VectorGraphs(init.hippoRoot, {
+        threshold: init.vectorGraphThreshold,
+        maxVectors: init.vectorGraphMaxVectors,
+      })
     : undefined;
   const ops = workerOps(init, graphs);
   // A thread is its own composition root: its runtime holds its mirror writes and closes its connection at stop.
@@ -186,6 +213,8 @@ export function serveJobs(port: MessagePort, init: WorkerInit): void {
     // Ends in a catch, so a reply that cannot be posted never rejects `last` and skips the stop above.
     last = answer(ops, thread, init.hippoRoot, message)
       .then((reply) => post(port, reply))
-      .catch((err) => log.error(`store worker: no reply was posted for job ${message.id}`, errorFields(err)));
+      .catch((err) =>
+        log.error(`store worker: no reply was posted for job ${message.id}`, errorFields(err)),
+      );
   });
 }

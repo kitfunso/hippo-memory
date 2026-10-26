@@ -28,7 +28,9 @@ describe('/v1/auth/keys role rules', () => {
   }
 
   function isActive(keyId: string): boolean {
-    return listApiKeys(home, { tenantId: ALL_TENANTS, active: true }).some((k) => k.keyId === keyId);
+    return listApiKeys(home, { tenantId: ALL_TENANTS, active: true }).some(
+      (k) => k.keyId === keyId,
+    );
   }
 
   function post(bearer: string, body: { role?: string }): Promise<Response> {
@@ -65,7 +67,9 @@ describe('/v1/auth/keys role rules', () => {
       const res = await post(member.plaintext, body);
       expect(res.status).toBe(403);
       // SAFETY: mapApiError sends { error: string } for every 403.
-      expect(((await res.json()) as { error: string }).error).toContain('/v1/auth/keys requires admin role');
+      expect(((await res.json()) as { error: string }).error).toContain(
+        '/v1/auth/keys requires admin role',
+      );
     }
   });
 
@@ -93,31 +97,39 @@ describe('/v1/auth/keys role rules', () => {
         };
         expect((await post(admin.plaintext, { role: 'admin' })).status).toBe(200);
         expect(made.role).toBe('member');
-        expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes(made.plaintext))).toEqual(
-          [],
-        );
+        expect(
+          warn.mock.calls
+            .map((call) => String(call[0]))
+            .filter((line) => line.includes(made.plaintext)),
+        ).toEqual([]);
       } finally {
         warn.mockRestore();
       }
     },
   );
 
-  it.skipIf(needsHippoDb('db'))('a member key cannot revoke another key, or probe a missing one', async () => {
-    const member = mint('member');
-    const other = mint('member');
-    expect((await revoke(member.plaintext, other.keyId)).status).toBe(403);
-    expect(isActive(other.keyId)).toBe(true);
-    expect((await revoke(member.plaintext, 'hk_does_not_exist')).status).toBe(403);
-  });
+  it.skipIf(needsHippoDb('db'))(
+    'a member key cannot revoke another key, or probe a missing one',
+    async () => {
+      const member = mint('member');
+      const other = mint('member');
+      expect((await revoke(member.plaintext, other.keyId)).status).toBe(403);
+      expect(isActive(other.keyId)).toBe(true);
+      expect((await revoke(member.plaintext, 'hk_does_not_exist')).status).toBe(403);
+    },
+  );
 
-  it.skipIf(needsHippoDb('db'))('a member key can revoke itself, and an admin key can revoke any key', async () => {
-    const member = mint('member');
-    expect((await revoke(member.plaintext, member.keyId)).status).toBe(200);
-    expect(isActive(member.keyId)).toBe(false);
+  it.skipIf(needsHippoDb('db'))(
+    'a member key can revoke itself, and an admin key can revoke any key',
+    async () => {
+      const member = mint('member');
+      expect((await revoke(member.plaintext, member.keyId)).status).toBe(200);
+      expect(isActive(member.keyId)).toBe(false);
 
-    const admin = mint('admin');
-    const target = mint('member');
-    expect((await revoke(admin.plaintext, target.keyId)).status).toBe(200);
-    expect(isActive(target.keyId)).toBe(false);
-  });
+      const admin = mint('admin');
+      const target = mint('member');
+      expect((await revoke(admin.plaintext, target.keyId)).status).toBe(200);
+      expect(isActive(target.keyId)).toBe(false);
+    },
+  );
 });

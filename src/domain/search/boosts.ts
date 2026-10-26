@@ -1,5 +1,10 @@
 import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
-import { CHURN_STALE_TAG, DAG_LEVEL, EXTRACTED_TAG, type MemoryEntry } from '../../base/memory/entry.js';
+import {
+  CHURN_STALE_TAG,
+  DAG_LEVEL,
+  EXTRACTED_TAG,
+  type MemoryEntry,
+} from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import {
   NO_RANK_ABLATION,
@@ -104,7 +109,10 @@ export function summaryScoring(options: {
 
 export function summaryMultipliers(entry: MemoryEntry, now: Date, s: SummaryScoring) {
   if (!isDagSummary(entry)) return { deboost: 1.0, freshness: 1.0 };
-  return { deboost: s.deboost, freshness: s.freshness ? summaryFreshnessMultiplier(entry, now) : 1.0 };
+  return {
+    deboost: s.deboost,
+    freshness: s.freshness ? summaryFreshnessMultiplier(entry, now) : 1.0,
+  };
 }
 
 export function strengthRecencyMultipliers(
@@ -112,7 +120,8 @@ export function strengthRecencyMultipliers(
   ctx: Pick<BoostContext, 'now' | 'strength' | 'ablation'>,
 ) {
   return {
-    strength: STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrength(entry, ctx.now, ctx.strength),
+    strength:
+      STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * calculateStrength(entry, ctx.now, ctx.strength),
     recency: RECENCY_RANK_FLOOR + RECENCY_RANK_SPAN * recencyBoost(entry, ctx.now, ctx.ablation),
   };
 }
@@ -162,7 +171,11 @@ export interface AppliedBoosts {
 }
 
 /** Applies every rank multiplier one at a time, in a fixed order, so float rounding matches across paths. */
-export function applyRankBoosts(score: number, entry: MemoryEntry, ctx: BoostContext): AppliedBoosts {
+export function applyRankBoosts(
+  score: number,
+  entry: MemoryEntry,
+  ctx: BoostContext,
+): AppliedBoosts {
   const decisionBoost = entry.tags.includes('decision') ? DECISION_TAG_BOOST : 1.0;
   const churnStaleMultiplier = churnStaleFactor(entry);
   const pathBoost = pathBoostMultiplier(entry.tags, ctx.pathTags);

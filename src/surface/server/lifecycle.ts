@@ -56,7 +56,9 @@ export async function drainAndClose(
   const late = await Promise.race([closed.then(() => false), timedOut]);
   clearTimeout(timer);
   if (late) {
-    log.warn(`shutdown: ${inflight.size} request(s) still running after ${drainMs} ms; closing them`);
+    log.warn(
+      `shutdown: ${inflight.size} request(s) still running after ${drainMs} ms; closing them`,
+    );
     server.closeAllConnections?.();
   }
   await closed;

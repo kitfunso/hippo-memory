@@ -26,7 +26,11 @@ import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 // One token_ledger row per session names its pilot arm, `hippo` or `holdout`, with the holdout rate in basis points in
 // `items`; readers outside this repo depend on these rows, so their shape is fixed.
 /** The session's first stored arm, or null; never writes. */
-function readPilotArm(db: DatabaseSyncLike, sessionId: string, tenantId: TenantId): PilotArm | null {
+function readPilotArm(
+  db: DatabaseSyncLike,
+  sessionId: string,
+  tenantId: TenantId,
+): PilotArm | null {
   const row = firstPilotArmHash(db, sessionId, tenantId);
   return row?.block_hash === 'holdout' || row?.block_hash === 'hippo' ? row.block_hash : null;
 }
@@ -105,7 +109,11 @@ function noteLedgerRowSkipped<E>(error: E): void {
     log.debug(`token ledger row skipped: ${expectedErrorText(error)}`);
     return;
   }
-  log.warnThenDebug('token-ledger-row', `token ledger row skipped: ${errorMessage(error)}`, errorFields(error));
+  log.warnThenDebug(
+    'token-ledger-row',
+    `token ledger row skipped: ${errorMessage(error)}`,
+    errorFields(error),
+  );
 }
 
 /** The turn's rows on `db`: each its own attempt with `perRow`, else up to the first that fails. */
@@ -128,7 +136,11 @@ function recordRows(db: DatabaseSyncLike, turn: LedgerTurn): void {
 }
 
 /** The delivery event on the rows' own handle, so it costs no second open; a failed write is logged. */
-function recordDelivery(db: DatabaseSyncLike, input: DeliveryEventInput, prune: DeliveryPruneSchedule): void {
+function recordDelivery(
+  db: DatabaseSyncLike,
+  input: DeliveryEventInput,
+  prune: DeliveryPruneSchedule,
+): void {
   try {
     writeDeliveryEventOnHandle(db, input, prune);
   } catch (error) {
@@ -174,7 +186,8 @@ function pilotArm(
   const { ownTenantOnly } = opts;
   return opts.write
     ? ensurePilotArm(db, tenantId, sessionId, rateBp, { ownTenantOnly })
-    : (readPilotArm(db, sessionId, ownTenantOnly ? tenantId : ALL_TENANTS) ?? hashArm(sessionId, rateBp));
+    : (readPilotArm(db, sessionId, ownTenantOnly ? tenantId : ALL_TENANTS) ??
+        hashArm(sessionId, rateBp));
 }
 
 /** Each call runs on the request's handle or a short-lived one. A turn takes the opener, since its delivery event is

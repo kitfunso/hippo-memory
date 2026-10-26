@@ -160,13 +160,24 @@ export async function hybridSearch(
   const { source } = options;
   const arm = await resolveVectorArm(query, pool, source, options);
   // A prepared corpus covers the caller's entries only, so rows the vector arm added force a rebuild.
-  const corpus = (arm.addedRows ? undefined : options.preparedCorpus) ?? buildCorpus(arm.entries.map(entryText));
+  const corpus =
+    (arm.addedRows ? undefined : options.preparedCorpus) ?? buildCorpus(arm.entries.map(entryText));
   const bm25Scores = arm.entries.map((_, i) => bm25Score(corpus, i, queryTerms));
   const dense = denseScores(arm);
-  const fusion = { entries: arm.entries, bm25Scores, dense, bm25Weight: 1 - embeddingWeight, embeddingWeight };
+  const fusion = {
+    entries: arm.entries,
+    bm25Scores,
+    dense,
+    bm25Weight: 1 - embeddingWeight,
+    embeddingWeight,
+  };
   const rrfScores =
     arm.useEmbeddings && options.scoring === 'rrf'
-      ? await fuseRanks({ ...fusion, graph: graphStoresOf(source, options), graphStream: options.graphStream })
+      ? await fuseRanks({
+          ...fusion,
+          graph: graphStoresOf(source, options),
+          graphStream: options.graphStream,
+        })
       : null;
 
   const scored = scoreHybridPool({
@@ -179,8 +190,18 @@ export async function hybridSearch(
     boosts: hybridBoostContext(query, arm.entries, now, options),
   });
   scored.sort(compareScoredResults);
-  const ordered = await orderHybrid(query, withDagChildren(dedupeExtracted(scored), arm.entries), arm, options);
-  return fitBudget(ordered, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
+  const ordered = await orderHybrid(
+    query,
+    withDagChildren(dedupeExtracted(scored), arm.entries),
+    arm,
+    options,
+  );
+  return fitBudget(
+    ordered,
+    options.budget ?? DEFAULT_RECALL_BUDGET,
+    options.minResults ?? 1,
+    options.cost,
+  );
 }
 
 /** The vector arm over `store`, embedding queries with the provider `embedderFor` builds from `config`. */
@@ -198,11 +219,19 @@ export function vectorSourceOf({
   return { store, provider: () => embedderFor(config.embeddings), onHippoDb };
 }
 
-function graphStoresOf(source: VectorSource | undefined, options: HybridRankOptions): FusionInput['graph'] {
+function graphStoresOf(
+  source: VectorSource | undefined,
+  options: HybridRankOptions,
+): FusionInput['graph'] {
   return source && { store: source.store, global: options.graphGlobal };
 }
 
-function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, options: HybridRankOptions): BoostContext {
+function hybridBoostContext(
+  query: string,
+  pool: MemoryEntry[],
+  now: Date,
+  options: HybridRankOptions,
+): BoostContext {
   return {
     now,
     pathTags: pathTagsOf(options.cwd),
@@ -224,6 +253,10 @@ async function orderHybrid(
 ): Promise<SearchResult[]> {
   const mmrLambda = options.mmrLambda ?? DEFAULT_MMR_LAMBDA;
   const applyMmr = (options.mmr ?? true) && arm.useEmbeddings && scored.length > 1 && mmrLambda < 1;
-  const ordered = applyMmr ? applyMmrWindow(scored, arm.embeddingIndex, mmrLambda, options.explain ?? false) : scored;
-  return options.reranker ? applyReranker(query, ordered, options.reranker, options.rerankerOptions) : ordered;
+  const ordered = applyMmr
+    ? applyMmrWindow(scored, arm.embeddingIndex, mmrLambda, options.explain ?? false)
+    : scored;
+  return options.reranker
+    ? applyReranker(query, ordered, options.reranker, options.rerankerOptions)
+    : ordered;
 }

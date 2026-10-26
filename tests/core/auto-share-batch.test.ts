@@ -40,11 +40,14 @@ describe('autoShare batching', () => {
     for (const topic of topics) {
       writeEntry(
         hippoRoot,
-        createMemory(`gotcha: ${topic} needs the explicit flag or the command silently does nothing`, {
-          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-          tags: ['error'],
-          tenantId: 'default',
-        }),
+        createMemory(
+          `gotcha: ${topic} needs the explicit flag or the command silently does nothing`,
+          {
+            baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+            tags: ['error'],
+            tenantId: 'default',
+          },
+        ),
       );
     }
     const { result, statements } = await recordStatementsAsync(() =>

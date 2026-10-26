@@ -82,7 +82,11 @@ if (!existsSync(VERSION_TS)) {
   const src = readFileSync(VERSION_TS, 'utf8');
   const m = src.match(/export const PACKAGE_VERSION = '([^']+)'/);
   if (!m) {
-    drifts.push({ path: VERSION_TS, found: '(PACKAGE_VERSION not found)', expected: expectedVersion });
+    drifts.push({
+      path: VERSION_TS,
+      found: '(PACKAGE_VERSION not found)',
+      expected: expectedVersion,
+    });
   } else if (m[1] !== expectedVersion) {
     drifts.push({ path: VERSION_TS, found: m[1], expected: expectedVersion });
   }
@@ -106,7 +110,11 @@ if (!existsSync(LOCKFILE)) {
     lock = JSON.parse(readFileSync(LOCKFILE, 'utf8'));
   } catch (e) {
     parsed = false;
-    drifts.push({ path: LOCKFILE, found: '(parse error: ' + e.message + ')', expected: expectedVersion });
+    drifts.push({
+      path: LOCKFILE,
+      found: '(parse error: ' + e.message + ')',
+      expected: expectedVersion,
+    });
   }
   if (parsed) {
     const lockstep = [

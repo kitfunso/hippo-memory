@@ -22,14 +22,21 @@ export const SERVER_DB_WAIT_MS = 250;
 
 /** A busy store made a command skip work: warn once per process (the holder is usually `hippo sleep`). */
 export function noteStoreBusy(skipped: string): void {
-  log.once('store-busy', 'warn', `store busy (another hippo process holds the write lock); ${skipped}`);
+  log.once(
+    'store-busy',
+    'warn',
+    `store busy (another hippo process holds the write lock); ${skipped}`,
+  );
   currentRequestStores()?.noteBusy();
 }
 
 /** Runs `fn` with one handle per store: openHippoDb reuses it and closeHippoDb leaves it open until `fn` settles or the
  * process exits.
  * `busyWaitMs` is the lock wait of every open inside `fn` that does not pass its own. */
-export async function withSharedStoreHandles<T>(fn: () => T | Promise<T>, opts?: { busyWaitMs?: number }): Promise<T> {
+export async function withSharedStoreHandles<T>(
+  fn: () => T | Promise<T>,
+  opts?: { busyWaitMs?: number },
+): Promise<T> {
   return runWithRequestStores(fn, { busyWaitMs: opts?.busyWaitMs });
 }
 
@@ -83,7 +90,10 @@ function markerKind(marker: string): string {
   try {
     return readFileSync(marker, 'utf8').trim() || 'unknown';
   } catch (err) {
-    log.warn(`${marker} is unreadable, so its store kind reads as unknown: ${errorMessage(err)}`, errorFields(err));
+    log.warn(
+      `${marker} is unreadable, so its store kind reads as unknown: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return 'unknown';
   }
 }
@@ -108,7 +118,9 @@ export function openHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): 
 export function openHippoDbWithFacts(hippoRoot: string, opts?: { busyWaitMs?: number }): OpenedDb {
   assertSqliteAllowed(hippoRoot);
   const stores = currentRequestStores();
-  return stores ? stores.getWithFacts(hippoRoot, opts) : connectWithFacts(hippoRoot, opts?.busyWaitMs);
+  return stores
+    ? stores.getWithFacts(hippoRoot, opts)
+    : connectWithFacts(hippoRoot, opts?.busyWaitMs);
 }
 
 /** Open an existing store without changing it: no mkdir, WAL switch, migration or mirror cleanup. Throws when hippo.db
@@ -135,7 +147,11 @@ export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
 
 /** Runs `fn` on an existing hippo.db opened without migrations, for a repair of a store whose schema is behind; closes
  * it after. */
-export function withUnmigratedDb<T>(hippoRoot: string, readOnly: boolean, fn: (db: DatabaseSyncLike) => T): T {
+export function withUnmigratedDb<T>(
+  hippoRoot: string,
+  readOnly: boolean,
+  fn: (db: DatabaseSyncLike) => T,
+): T {
   // Skips openHippoDb, so it takes the same refusal itself.
   assertSqliteAllowed(hippoRoot);
   const file = getHippoDbPath(hippoRoot);

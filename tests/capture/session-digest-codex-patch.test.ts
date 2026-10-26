@@ -2,7 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { patchPaths, shellPatch } from '../../src/surface/capture/codex-patch.js';
 
-const patch = (...lines: string[]): string => ['*** Begin Patch', ...lines, '*** End Patch'].join('\n');
+const patch = (...lines: string[]): string =>
+  ['*** Begin Patch', ...lines, '*** End Patch'].join('\n');
 
 describe('patchPaths', () => {
   it('reads Add, Update, Delete and Move headers in patch order', () => {
@@ -25,11 +26,15 @@ describe('patchPaths', () => {
   });
 
   it('trims marker lines outside hunks, as the Codex parser does', () => {
-    expect(patchPaths('  *** Begin Patch\n  *** Add File: b.ts  \n+x\n*** End Patch')).toEqual(['b.ts']);
+    expect(patchPaths('  *** Begin Patch\n  *** Add File: b.ts  \n+x\n*** End Patch')).toEqual([
+      'b.ts',
+    ]);
   });
 
   it('stops at End Patch and ignores text with no patch', () => {
-    expect(patchPaths(`${patch('*** Add File: a.ts', '+x')}\n*** Add File: after.ts`)).toEqual(['a.ts']);
+    expect(patchPaths(`${patch('*** Add File: a.ts', '+x')}\n*** Add File: after.ts`)).toEqual([
+      'a.ts',
+    ]);
     expect(patchPaths('Updated src/a.ts by hand.')).toEqual([]);
   });
 
@@ -51,14 +56,18 @@ describe('shellPatch', () => {
   });
 
   it('keeps the cd target of a cd-and-patch heredoc', () => {
-    expect(shellPatch(['bash', '-lc', `cd "pkg one" && apply_patch <<'PATCH'\n${body}\nPATCH`])).toEqual({
+    expect(
+      shellPatch(['bash', '-lc', `cd "pkg one" && apply_patch <<'PATCH'\n${body}\nPATCH`]),
+    ).toEqual({
       body,
       cd: 'pkg one',
     });
   });
 
   it('reads PowerShell and a plain command string', () => {
-    expect(shellPatch(['pwsh', '-NoProfile', '-Command', `apply_patch <<'EOF'\n${body}\nEOF`])?.body).toBe(body);
+    expect(
+      shellPatch(['pwsh', '-NoProfile', '-Command', `apply_patch <<'EOF'\n${body}\nEOF`])?.body,
+    ).toBe(body);
     expect(shellPatch(`apply_patch <<'EOF'\n${body}\nEOF`)?.body).toBe(body);
   });
 

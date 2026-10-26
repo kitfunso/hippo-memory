@@ -12,7 +12,12 @@ const VERSION_RE = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
 function parseVersion(version) {
   const m = VERSION_RE.exec(version);
   if (!m) throw new Error(`invalid version: ${version}`);
-  return { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]), prerelease: m[4] ?? null };
+  return {
+    major: Number(m[1]),
+    minor: Number(m[2]),
+    patch: Number(m[3]),
+    prerelease: m[4] ?? null,
+  };
 }
 
 // Numeric, not string, compare: minor 10 sorts after minor 9 as an integer.
@@ -28,7 +33,9 @@ export function distTagFor(version, latest) {
   const l = parseVersion(latest);
   const byCore = compareCore(v, l);
   // Semver ranks a release above its own prereleases, so 2.0.0 replaces a 2.0.0-rc.1 left on latest.
-  return byCore > 0 || (byCore === 0 && l.prerelease !== null) ? 'latest' : `maint-${v.major}.${v.minor}`;
+  return byCore > 0 || (byCore === 0 && l.prerelease !== null)
+    ? 'latest'
+    : `maint-${v.major}.${v.minor}`;
 }
 
 /** Current `latest` dist-tag. Fails closed: hippo has published, so a 404, a missing

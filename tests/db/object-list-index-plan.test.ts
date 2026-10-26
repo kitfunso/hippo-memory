@@ -15,7 +15,15 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
 import { saveDecision } from '../../src/entry/testing.js';
 
-const OBJECT_TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'];
+const OBJECT_TABLES = [
+  'decisions',
+  'incidents',
+  'processes',
+  'policies',
+  'skills',
+  'project_briefs',
+  'customer_notes',
+];
 const NEW_INDEXES = [
   ...OBJECT_TABLES.map((t) => `idx_${t}_tenant_status_created`),
   'idx_memories_source_tenant_created',
@@ -42,7 +50,9 @@ function plan(db: DatabaseSyncLike, sql: string, ...params: Array<string | numbe
 function indexNames(db: DatabaseSyncLike): string[] {
   // SAFETY: one `name` TEXT column.
   return (
-    db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name`).all() as Array<{ name: string }>
+    db.prepare(`SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name`).all() as Array<{
+      name: string;
+    }>
   ).map((r) => r.name);
 }
 
@@ -73,7 +83,9 @@ describe('object list query plan', () => {
         decisionText: `decide ${text}`,
       });
     }
-    const first = (await loadDecisions(objectsAt(root), 'default', { status: 'active', limit: 1 }))[0]!;
+    const first = (
+      await loadDecisions(objectsAt(root), 'default', { status: 'active', limit: 1 })
+    )[0]!;
     const listSql = await preparedSql(async () => {
       await loadDecisions(objectsAt(root), 'default', { status: 'active', limit: 2 });
     }, 'ORDER BY created_at DESC, id DESC');
@@ -107,7 +119,9 @@ describe('object list query plan', () => {
           'active',
           5,
         );
-        expect(detail).toMatch(new RegExp(`USING (COVERING )?INDEX idx_${table}_tenant_status_created`));
+        expect(detail).toMatch(
+          new RegExp(`USING (COVERING )?INDEX idx_${table}_tenant_status_created`),
+        );
         expect(detail).not.toContain('TEMP B-TREE');
       }
     });
@@ -117,18 +131,18 @@ describe('object list query plan', () => {
     const root = newRoot();
     const saved = await Promise.all(
       ['a', 'b', 'c', 'd', 'e'].map((t) =>
-        saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: `tie ${t}` }),
+        saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
+          decisionText: `tie ${t}`,
+        }),
       ),
     );
     await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'other', {
       decisionText: 'another tenant',
     });
     withDb(root, (db) => {
-      db.prepare(`UPDATE decisions SET created_at = '2026-01-01T00:00:00.000Z' WHERE id IN (?, ?, ?)`).run(
-        saved[0]!.id,
-        saved[2]!.id,
-        saved[4]!.id,
-      );
+      db.prepare(
+        `UPDATE decisions SET created_at = '2026-01-01T00:00:00.000Z' WHERE id IN (?, ?, ?)`,
+      ).run(saved[0]!.id, saved[2]!.id, saved[4]!.id);
     });
     const all = await loadDecisions(objectsAt(root), 'default', { status: 'active', limit: 50 });
     const expected = [...all].sort((x, y) =>
@@ -140,7 +154,11 @@ describe('object list query plan', () => {
       const paged: number[] = [];
       let after: { key: string; id: number } | undefined;
       for (;;) {
-        const page = await loadDecisions(objectsAt(root), 'default', { status: 'active', limit: size, after });
+        const page = await loadDecisions(objectsAt(root), 'default', {
+          status: 'active',
+          limit: size,
+          after,
+        });
         paged.push(...page.map((d) => d.id));
         if (page.length < size) break;
         const last = page[page.length - 1]!;
@@ -152,7 +170,12 @@ describe('object list query plan', () => {
 });
 
 // The filter the session digest reads its injected digests with.
-const DIGESTS = { tenantId: 'default', source: 'session-digest', tag: 'session-digest', live: true } as const;
+const DIGESTS = {
+  tenantId: 'default',
+  source: 'session-digest',
+  tag: 'session-digest',
+  live: true,
+} as const;
 
 describe('session digest read plan', () => {
   it('reads the digest rows through idx_memories_source_tenant_created, not the tenant walk', async () => {
@@ -162,7 +185,9 @@ describe('session digest read plan', () => {
     }, 'json_valid(tags_json)');
     withDb(root, (db) => {
       const detail = plan(db, sql, 'session-digest', 'session-digest', 'default', 501);
-      expect(detail).toContain('USING INDEX idx_memories_source_tenant_created (source=? AND tenant_id=?)');
+      expect(detail).toContain(
+        'USING INDEX idx_memories_source_tenant_created (source=? AND tenant_id=?)',
+      );
       expect(detail).not.toContain('TEMP B-TREE');
     });
   });
@@ -173,7 +198,8 @@ describe('session digest read plan', () => {
       content: string,
       extra: Partial<CreateMemoryOptions> = {},
       tags = ['session-digest'],
-    ): MemoryEntry => createMemory(content, { source: 'session-digest', tags, sourceSessionId: 's2', ...extra });
+    ): MemoryEntry =>
+      createMemory(content, { source: 'session-digest', tags, sourceSessionId: 's2', ...extra });
     const entries = [
       digest('digest from another session'),
       digest('digest from this session', { sourceSessionId: 's1' }),
@@ -186,10 +212,15 @@ describe('session digest read plan', () => {
     ];
     for (const e of entries) writeEntry(root, e);
     withDb(root, (db) =>
-      db.prepare('UPDATE memories SET superseded_by = ? WHERE id = ?').run(entries[0]!.id, entries[7]!.id),
+      db
+        .prepare('UPDATE memories SET superseded_by = ? WHERE id = ?')
+        .run(entries[0]!.id, entries[7]!.id),
     );
     const expected = loadAllEntries(root, 'default')
-      .filter((e) => e.source === 'session-digest' && e.tags.includes('session-digest') && !e.supersededBy)
+      .filter(
+        (e) =>
+          e.source === 'session-digest' && e.tags.includes('session-digest') && !e.supersededBy,
+      )
       .map((e) => e.content);
     expect([...expected].sort()).toEqual([
       'digest extracted from a row',
@@ -211,9 +242,13 @@ describe('v56 migration', () => {
     });
     const first = withDb(root, (db) => {
       // SAFETY: meta.value is TEXT; one row by primary key.
-      expect((db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as { value: string }).value).toBe(
-        LATEST_SCHEMA_VERSION_STR,
-      );
+      expect(
+        (
+          db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as {
+            value: string;
+          }
+        ).value,
+      ).toBe(LATEST_SCHEMA_VERSION_STR);
       return indexNames(db);
     });
     for (const name of NEW_INDEXES) expect(first).toContain(name);

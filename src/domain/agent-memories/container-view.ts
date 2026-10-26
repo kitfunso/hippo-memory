@@ -63,7 +63,9 @@ export async function liveUnder(
   prefix: string,
 ): Promise<MemoryEntry[]> {
   const under = { tenantId, sourcePrefix: prefix, live: true } as const;
-  return readAll((after?: EntryCursor) => store.reports.entriesWhere(under, { limit: READ_PAGE_ROWS, after }));
+  return readAll((after?: EntryCursor) =>
+    store.reports.entriesWhere(under, { limit: READ_PAGE_ROWS, after }),
+  );
 }
 
 export async function readContainer(s: StoreSession, w: ContainerWork): Promise<ContainerView> {
@@ -79,7 +81,11 @@ export async function readContainer(s: StoreSession, w: ContainerWork): Promise<
   return {
     ...draft,
     live: oldestFirst(draft.live),
-    read: read.map((row) => ({ id: row.id, source: row.source, tagged: row.tags.includes(w.tool.tag) })),
+    read: read.map((row) => ({
+      id: row.id,
+      source: row.source,
+      tagged: row.tags.includes(w.tool.tag),
+    })),
   };
 }
 
@@ -100,7 +106,10 @@ async function adoptLegacy(s: StoreSession, w: ContainerWork, draft: Draft): Pro
 }
 
 /** The legacy rows still live at the source the match read, as they stand now: another sync may have adopted one. */
-async function standingLegacy(s: StoreSession, rows: readonly MemoryEntry[]): Promise<Map<string, MemoryEntry>> {
+async function standingLegacy(
+  s: StoreSession,
+  rows: readonly MemoryEntry[],
+): Promise<Map<string, MemoryEntry>> {
   const from = new Map(rows.map((row) => [row.id, row.source]));
   const out = new Map<string, MemoryEntry>();
   for (const row of await s.store.entriesByIds([...from.keys()], s.tenantId)) {
@@ -125,7 +134,10 @@ async function adoptPrefix(
   }
   if (rows.length === 0 && (w.container.items.length === 0 || draft.live.length > 0)) return;
   draft.steps.push({ kind: 'moveDormant', from: old, to: w.prefix, origin });
-  for (const snap of await s.store.projectTags.dormantWhere({ tenantId: s.tenantId, sourcePrefix: old })) {
+  for (const snap of await s.store.projectTags.dormantWhere({
+    tenantId: s.tenantId,
+    sourcePrefix: old,
+  })) {
     const source = w.prefix + snap.entry.source.slice(old.length);
     draft.movedDormant.push({
       ...snap,

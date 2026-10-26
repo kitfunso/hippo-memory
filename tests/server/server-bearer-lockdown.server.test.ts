@@ -13,15 +13,20 @@ afterEach(() => {
 });
 
 // The /v1 rows come from the live table; the routes outside it come from HOST_ROUTES, which boot.ts dispatches.
-const INLINE_ROUTES: readonly string[] = Object.values(HOST_ROUTES).map(({ method, path }) => `${method} ${path}`);
+const INLINE_ROUTES: readonly string[] = Object.values(HOST_ROUTES).map(
+  ({ method, path }) => `${method} ${path}`,
+);
 
 // Rows the old source-text parse found in the table.
 const OLD_PARSED_V1_COUNT = 62;
 
 // The rows that skip the key check because their own signature check is the proof.
-const PUBLIC = V1_ROWS.filter(({ route }) => route.auth === 'webhook-signature').map(({ key }) => key);
+const PUBLIC = V1_ROWS.filter(({ route }) => route.auth === 'webhook-signature').map(
+  ({ key }) => key,
+);
 
-const derivedRoutes = (): Set<string> => new Set([...V1_ROWS.map((row) => row.key), ...INLINE_ROUTES]);
+const derivedRoutes = (): Set<string> =>
+  new Set([...V1_ROWS.map((row) => row.key), ...INLINE_ROUTES]);
 
 // Every authed route with a request shape that clears pre-auth validation, so a
 // 401 (not 400) proves the Bearer check ran. :param segments become '1'.
@@ -187,7 +192,12 @@ describe('server Bearer lockdown', () => {
       await res.arrayBuffer();
       statuses[key] = res.status;
     }
-    expect(statuses).toEqual({ 'GET /health': 200, 'GET /ready': 200, 'POST /mcp': 401, 'GET /mcp/stream': 401 });
+    expect(statuses).toEqual({
+      'GET /health': 200,
+      'GET /ready': 200,
+      'POST /mcp': 401,
+      'GET /mcp/stream': 401,
+    });
   });
 
   it('the live /v1 table is at least as large as the 62 rows the old source parse found', () => {
@@ -195,7 +205,10 @@ describe('server Bearer lockdown', () => {
   });
 
   it('only the two documented webhooks are public', () => {
-    expect([...PUBLIC].sort()).toEqual(['POST /v1/connectors/github/events', 'POST /v1/connectors/slack/events']);
+    expect([...PUBLIC].sort()).toEqual([
+      'POST /v1/connectors/github/events',
+      'POST /v1/connectors/slack/events',
+    ]);
   });
 
   it('AUTHED_ROUTES covers exactly the derived routes minus public routes minus the GET /health and GET /ready probes', () => {
@@ -213,13 +226,21 @@ describe('server Bearer lockdown', () => {
 
   it('a configured publicJson path needs no Bearer; the unconfigured GET routes beside it still do', async () => {
     await handle.stop();
-    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0, publicJson: { '/v1/x-public': { ok: true } } });
+    handle = await serve({
+      hippoRoot: root,
+      host: '127.0.0.1',
+      port: 0,
+      publicJson: { '/v1/x-public': { ok: true } },
+    });
     const publicUrl = `http://127.0.0.1:${handle.port}/v1/x-public`;
     for (const res of [
       await fetch(publicUrl),
       await fetch(publicUrl, { headers: { authorization: 'Bearer hk_invalid.deadbeef' } }),
     ]) {
-      expect({ status: res.status, body: await res.text() }).toEqual({ status: 200, body: '{"ok":true}' });
+      expect({ status: res.status, body: await res.text() }).toEqual({
+        status: 200,
+        body: '{"ok":true}',
+      });
     }
     for (const r of AUTHED_ROUTES.filter((route) => route.method === 'GET')) {
       const path = requestPath(r.pattern, r.query);
@@ -234,13 +255,17 @@ describe('server Bearer lockdown', () => {
       const path = requestPath(r.pattern, r.query);
       for (const [label, headers] of [
         ['missing header', { 'content-type': 'application/json' }],
-        ['bad token', { 'content-type': 'application/json', authorization: 'Bearer hk_invalid.deadbeef' }],
+        [
+          'bad token',
+          { 'content-type': 'application/json', authorization: 'Bearer hk_invalid.deadbeef' },
+        ],
       ] as const) {
         const init: RequestInit = { method: r.method, headers };
         if (r.body !== undefined) init.body = r.body;
         const res = await fetch(`http://127.0.0.1:${handle.port}${path}`, init);
         const text = await res.text();
-        if (res.status !== 401) open.push(`${r.method} ${path} (${label}) -> ${res.status}: ${text}`);
+        if (res.status !== 401)
+          open.push(`${r.method} ${path} (${label}) -> ${res.status}: ${text}`);
       }
     }
     expect(open).toEqual([]);

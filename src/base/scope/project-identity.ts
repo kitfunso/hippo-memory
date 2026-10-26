@@ -43,7 +43,9 @@ export function projectId(project: ProjectRef): string {
 /** Every origin_project value the reader's own rows carry: the id first, then each alias and the legacy name. */
 export function projectNames(project: ProjectRef): readonly string[] {
   if (isBareName(project) || project.name === '') return [projectId(project)];
-  return [...new Set([project.name, ...(project.aliases ?? []), project.legacyName])].filter((n) => n !== '');
+  return [...new Set([project.name, ...(project.aliases ?? []), project.legacyName])].filter(
+    (n) => n !== '',
+  );
 }
 
 // Each project name is matched against every candidate row, so the caller's list stays short.
@@ -53,7 +55,10 @@ export const MCP_PROJECT_SCOPED_HEADER = 'X-Hippo-Project-Scoped';
 /** Refuses a caller's project that is blank (it would stamp user-global), past the caps, or unlike the resolver's ids:
  * rows match verbatim, so a rewrite would split a project. Inner spaces pass, since a checkout with no remote is named
  * by its folder. */
-export function assertCallerProject(project: { readonly name: string; readonly aliases?: readonly string[] }): void {
+export function assertCallerProject(project: {
+  readonly name: string;
+  readonly aliases?: readonly string[];
+}): void {
   const { name, aliases = [] } = project;
   if (name.trim() === '') throw new BadRequestError('project name must not be blank');
   if (aliases.length > MAX_PROJECT_ALIASES) {
@@ -63,7 +68,9 @@ export function assertCallerProject(project: { readonly name: string; readonly a
     throw new BadRequestError(`project names: at most ${MAX_ID_LEN} characters each`);
   }
   if ([name, ...aliases].some((n) => n !== n.trim().toLowerCase() || /[:\p{Cc}]/u.test(n))) {
-    throw new BadRequestError('project names: lowercase, not padded, with no colon or control character');
+    throw new BadRequestError(
+      'project names: lowercase, not padded, with no colon or control character',
+    );
   }
 }
 

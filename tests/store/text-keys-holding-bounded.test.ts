@@ -6,7 +6,12 @@ import { AGENT_MEMORY_SOURCE_PREFIX } from '../../src/base/memory/agent-memory-t
 import { chunked } from '../../src/base/util/chunked.js';
 import { duplicateKey, heldTextKeys, mergedText } from '../../src/base/util/same-text.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { closeHippoDb, openHippoDb, setFtsInSync, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  openHippoDb,
+  setFtsInSync,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { listTextKeysHolding } from '../../src/store/sqlite/copy-rows.js';
 import { countMatching, peakRowsRead, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -70,39 +75,47 @@ describe('copy reads by whole text', () => {
     writeEntriesTogether(root, [...sharing, ...COPIES, ...LEFT_OUT]);
   });
 
-  it.each([true, false])('textKeysHolding reads only the copies a whole scan finds, index in sync: %s', (inSync) => {
-    withDb(root, (db) => setFtsInSync(db, inSync));
-    const { result, reads } = recordStatements(() =>
-      withDb(root, (db) => listTextKeysHolding(db, { tenantId: 'default' }, TEXTS)),
-    );
-    const whole = wholeScan(root, (r) => r.tenant_id === 'default');
-    const found = TEXTS.map((text) =>
-      result
-        .filter((k) => heldTextKeys(k).includes(duplicateKey(text)))
-        .map((k) => k.id)
-        .sort(),
-    );
-    expect(found).toEqual(whole);
-    // The 2 copies plus the superseded and agent-memory rows, which this read keeps; none of the 50 sharing rows.
-    expect(result.map((k) => k.id).sort()).toEqual(whole.flat().sort());
-    expect(peakRowsRead(reads, 'json_each')).toBe(4);
-  });
+  it.each([true, false])(
+    'textKeysHolding reads only the copies a whole scan finds, index in sync: %s',
+    (inSync) => {
+      withDb(root, (db) => setFtsInSync(db, inSync));
+      const { result, reads } = recordStatements(() =>
+        withDb(root, (db) => listTextKeysHolding(db, { tenantId: 'default' }, TEXTS)),
+      );
+      const whole = wholeScan(root, (r) => r.tenant_id === 'default');
+      const found = TEXTS.map((text) =>
+        result
+          .filter((k) => heldTextKeys(k).includes(duplicateKey(text)))
+          .map((k) => k.id)
+          .sort(),
+      );
+      expect(found).toEqual(whole);
+      // The 2 copies plus the superseded and agent-memory rows, which this read keeps; none of the 50 sharing rows.
+      expect(result.map((k) => k.id).sort()).toEqual(whole.flat().sort());
+      expect(peakRowsRead(reads, 'json_each')).toBe(4);
+    },
+  );
 
-  it.each([true, false])('the live rows the import asks about match a whole scan, index in sync: %s', (inSync) => {
-    withDb(root, (db) => setFtsInSync(db, inSync));
-    const held = withDb(root, (db) => listTextKeysHolding(db, { tenantId: 'default', live: true }, TEXTS)).filter(
-      (k) => !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX),
-    );
-    const found = TEXTS.map((text) =>
-      held
-        .filter((k) => heldTextKeys(k).includes(duplicateKey(text)))
-        .map((k) => k.id)
-        .sort(),
-    );
-    const live = (r: ScanRow) =>
-      r.tenant_id === 'default' && r.superseded_by === null && !r.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX);
-    expect(found).toEqual(wholeScan(root, live));
-  });
+  it.each([true, false])(
+    'the live rows the import asks about match a whole scan, index in sync: %s',
+    (inSync) => {
+      withDb(root, (db) => setFtsInSync(db, inSync));
+      const held = withDb(root, (db) =>
+        listTextKeysHolding(db, { tenantId: 'default', live: true }, TEXTS),
+      ).filter((k) => !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX));
+      const found = TEXTS.map((text) =>
+        held
+          .filter((k) => heldTextKeys(k).includes(duplicateKey(text)))
+          .map((k) => k.id)
+          .sort(),
+      );
+      const live = (r: ScanRow) =>
+        r.tenant_id === 'default' &&
+        r.superseded_by === null &&
+        !r.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX);
+      expect(found).toEqual(wholeScan(root, live));
+    },
+  );
 });
 
 describe('copy reads statements', () => {

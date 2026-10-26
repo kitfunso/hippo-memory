@@ -79,7 +79,10 @@ export function dropVectorStaging(db: DatabaseSyncLike): void {
 }
 
 /** Stages `rows` on the handle openVectorStaging ran on, skipping empty or non-finite vectors; answers how many. */
-export function stageVectors(db: DatabaseSyncLike, rows: Iterable<readonly [string, readonly number[]]>): number {
+export function stageVectors(
+  db: DatabaseSyncLike,
+  rows: Iterable<readonly [string, readonly number[]]>,
+): number {
   const stmt = cachedStatement(
     db,
     'INSERT OR REPLACE INTO temp.staged_vectors (memory_id, dim, vector) VALUES (?, ?, ?)',
@@ -125,8 +128,10 @@ export function countVectors(db: DatabaseSyncLike): VectorCounts {
 /** Drop vectors whose memory row is gone; returns how many went. */
 export function deleteOrphanVectors(db: DatabaseSyncLike): number {
   return Number(
-    cachedStatement(db, 'DELETE FROM memory_vectors WHERE memory_id NOT IN (SELECT id FROM memories)').run().changes ??
-      0,
+    cachedStatement(
+      db,
+      'DELETE FROM memory_vectors WHERE memory_id NOT IN (SELECT id FROM memories)',
+    ).run().changes ?? 0,
   );
 }
 
@@ -145,7 +150,11 @@ function eachStoredVector(
     }
   };
   if (ids === undefined) {
-    read(db.prepare('SELECT memory_id, vector FROM memory_vectors').iterate() as Iterable<StoredVectorRow>);
+    read(
+      db
+        .prepare('SELECT memory_id, vector FROM memory_vectors')
+        .iterate() as Iterable<StoredVectorRow>,
+    );
     return;
   }
   const unique = [...new Set(ids)];
@@ -167,7 +176,10 @@ export function loadVectors(db: DatabaseSyncLike, ids?: readonly string[]): Map<
 }
 
 /** `loadVectors` for `ids` with no copy: each value views the bytes the store returned for that row. */
-export function loadVectorViews(db: DatabaseSyncLike, ids: readonly string[]): Map<string, Float32Array> {
+export function loadVectorViews(
+  db: DatabaseSyncLike,
+  ids: readonly string[],
+): Map<string, Float32Array> {
   const out = new Map<string, Float32Array>();
   eachStoredVector(db, ids, (id, vector) => out.set(id, vector));
   return out;
@@ -181,9 +193,10 @@ export function countStoredVectors(db: DatabaseSyncLike): number {
 
 /** Float count of the first stored row, from its blob length; the vector is never read. */
 export function storedVectorDims(db: DatabaseSyncLike): number | undefined {
-  const row = cachedStatement(db, 'SELECT length(vector) AS bytes FROM memory_vectors LIMIT 1').get() as
-    | { bytes: number }
-    | undefined;
+  const row = cachedStatement(
+    db,
+    'SELECT length(vector) AS bytes FROM memory_vectors LIMIT 1',
+  ).get() as { bytes: number } | undefined;
   return row === undefined ? undefined : Math.floor(row.bytes / 4);
 }
 
@@ -208,7 +221,11 @@ export interface VectorRow {
  * The query rounds to Float32 as stored vectors are, and scores add up in float64, so every store that feeds it the
  * same bytes ranks alike.
  */
-export function rankVectorRows(query: readonly number[], rows: Iterable<VectorRow>, k: number): VectorMatch[] {
+export function rankVectorRows(
+  query: readonly number[],
+  rows: Iterable<VectorRow>,
+  k: number,
+): VectorMatch[] {
   const best = bestMatches(query, k);
   if (!best) return [];
   for (const { id, vector } of rows) best.offer(id, vector);
@@ -279,7 +296,9 @@ class MatchHeap {
   }
 
   sorted(): VectorMatch[] {
-    return [...this.#heap].sort((a, b) => (beats(a.score, a.id, b) ? -1 : beats(b.score, b.id, a) ? 1 : 0));
+    return [...this.#heap].sort((a, b) =>
+      beats(a.score, a.id, b) ? -1 : beats(b.score, b.id, a) ? 1 : 0,
+    );
   }
 
   #worse(i: number, j: number): boolean {
@@ -295,7 +314,11 @@ class MatchHeap {
 
   /** Answers where the match at `i` came to rest. */
   #siftUp(i: number): number {
-    for (let parent = (i - 1) >> 1; i > 0 && this.#worse(i, parent); i = parent, parent = (i - 1) >> 1) {
+    for (
+      let parent = (i - 1) >> 1;
+      i > 0 && this.#worse(i, parent);
+      i = parent, parent = (i - 1) >> 1
+    ) {
       this.#swap(i, parent);
     }
     return i;
@@ -363,7 +386,10 @@ export interface TopVectorMatchesOptions extends VectorMatchQuery {
 
 /** The `k` stored vectors closest to `query` among `memories m` rows passing `where` (SQL starting with ` AND`).
  *  Filters run before the cut, so rows a caller may not see can never push admitted rows out of the top k. */
-export async function topVectorMatches(db: DatabaseSyncLike, options: TopVectorMatchesOptions): Promise<VectorMatch[]> {
+export async function topVectorMatches(
+  db: DatabaseSyncLike,
+  options: TopVectorMatchesOptions,
+): Promise<VectorMatch[]> {
   const { query, k, where, params, index } = options;
   const best = bestMatches(query, k);
   if (!best) return [];
@@ -385,7 +411,10 @@ async function offerPages(
   { query, where, params }: VectorMatchQuery,
   from: { readonly key: 'memory_id' | 'rowid'; readonly after: string | number },
 ): Promise<VectorMatch[]> {
-  const page = cachedStatement(db, `${admittedVectorsSql(where)} AND v.${from.key} > ? ORDER BY v.${from.key} LIMIT ?`);
+  const page = cachedStatement(
+    db,
+    `${admittedVectorsSql(where)} AND v.${from.key} > ? ORDER BY v.${from.key} LIMIT ?`,
+  );
   const floats = new Float32Array(query.length);
   const bytes = new Uint8Array(floats.buffer);
   let after = from.after;
@@ -499,7 +528,9 @@ export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: stri
         | { value?: string }
         | undefined
     )?.value ?? '';
-  const written = withWriteScope(db, 'import_legacy_vectors', () => upsertVectors(db, index, model));
+  const written = withWriteScope(db, 'import_legacy_vectors', () =>
+    upsertVectors(db, index, model),
+  );
   const backup = `${fp}.imported-${stamp()}`;
   if (moveAside(fp, backup)) {
     log.info(

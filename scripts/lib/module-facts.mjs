@@ -26,7 +26,8 @@ const PROCESS_STATE = /^(env|cwd|chdir|argv|exit|exitCode|stdout|stderr|stdin|ki
 const IO_GLOBALS = new Set(['fetch', 'console', 'globalThis', 'require']);
 
 const isScope = (n) => ts.isFunctionLike(n) || ts.isClassLike(n);
-const hasOwnName = (n) => ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isClassLike(n);
+const hasOwnName = (n) =>
+  ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isClassLike(n);
 
 /** Names a function, class or top-level declaration binds itself; nested functions and classes keep theirs. */
 function boundIn(scope) {
@@ -34,8 +35,12 @@ function boundIn(scope) {
   if (hasOwnName(scope) && scope.name) names.add(scope.name.text);
   const visit = (n) => {
     const binds =
-      ts.isParameter(n) || ts.isVariableDeclaration(n) || ts.isBindingElement(n) || ts.isTypeParameterDeclaration(n);
-    const declares = ts.isFunctionDeclaration(n) || ts.isClassDeclaration(n) || ts.isEnumDeclaration(n);
+      ts.isParameter(n) ||
+      ts.isVariableDeclaration(n) ||
+      ts.isBindingElement(n) ||
+      ts.isTypeParameterDeclaration(n);
+    const declares =
+      ts.isFunctionDeclaration(n) || ts.isClassDeclaration(n) || ts.isEnumDeclaration(n);
     if ((binds || declares) && n.name && ts.isIdentifier(n.name)) names.add(n.name.text);
     if (!isScope(n)) ts.forEachChild(n, visit);
   };
@@ -58,7 +63,8 @@ function isTypePosition(n) {
   if (!ts.isExpressionWithTypeArguments(n)) return true;
   const clause = n.parent;
   return (
-    ts.isHeritageClause(clause) && (clause.token === K.ImplementsKeyword || ts.isInterfaceDeclaration(clause.parent))
+    ts.isHeritageClause(clause) &&
+    (clause.token === K.ImplementsKeyword || ts.isInterfaceDeclaration(clause.parent))
   );
 }
 
@@ -81,8 +87,11 @@ function writeTargets(n) {
   if (!ts.isCallExpression(n) || !ts.isPropertyAccessExpression(n.expression)) return [];
   const receiver = n.expression.expression;
   if (MUTATORS.has(n.expression.name.text)) return [receiver];
-  const onObject = ts.isIdentifier(receiver) && (receiver.text === 'Object' || receiver.text === 'Reflect');
-  return onObject && OBJECT_WRITERS.has(n.expression.name.text) && n.arguments[0] ? [n.arguments[0]] : [];
+  const onObject =
+    ts.isIdentifier(receiver) && (receiver.text === 'Object' || receiver.text === 'Reflect');
+  return onObject && OBJECT_WRITERS.has(n.expression.name.text) && n.arguments[0]
+    ? [n.arguments[0]]
+    : [];
 }
 
 /** Splits a destructuring target (`[a, b.c] = ...`, `({ x: d.e } = ...)`) into the single expressions it writes. */
@@ -162,7 +171,8 @@ export function analyze(root) {
     if (ts.isIdentifier(n)) {
       if (isReference(n) && free(n.text)) noteRead(facts, n, inType);
     } else {
-      if (ts.isCallExpression(n) && n.expression.kind === K.ImportKeyword) facts.globals.add('import()');
+      if (ts.isCallExpression(n) && n.expression.kind === K.ImportKeyword)
+        facts.globals.add('import()');
       for (const e of writeTargets(n).flatMap(leaves)) {
         const at = rootOf(e);
         if (at && free(at.name)) facts.writes.push(at);

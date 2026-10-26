@@ -2,7 +2,10 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { spawn } from 'node:child_process';
-import { installedRealCodexPath, resolveCodexWrapperPaths } from '../../hooks-install/codex-wrapper.js';
+import {
+  installedRealCodexPath,
+  resolveCodexWrapperPaths,
+} from '../../hooks-install/codex-wrapper.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { exitAfterFlush } from '../../../base/util/crash-handlers.js';
 import { ignoringCodes } from '../../../base/util/expected-errors.js';
@@ -12,16 +15,26 @@ import { handleLastSleep } from '../last-sleep.js';
 import type { CommandContext } from '../flag-values.js';
 import { handleCodexSessionEndWorker } from './codex-session-end-worker.js';
 
-function spawnRealCodex(realCodexPath: string, forwardArgs: string[], cwd: string): ReturnType<typeof spawn> {
+function spawnRealCodex(
+  realCodexPath: string,
+  forwardArgs: string[],
+  cwd: string,
+): ReturnType<typeof spawn> {
   const ext = path.extname(realCodexPath).toLowerCase();
 
   if (process.platform === 'win32' && ext === '.ps1') {
     // Node runs the shim's script directly: no PowerShell, no execution-policy bypass, no shell parsing the arguments.
     const entry = npmShimEntry(realCodexPath);
     if (entry === null) {
-      throw new Error(`${realCodexPath} is not an npm shim whose script hippo can find, so Codex was not started.`);
+      throw new Error(
+        `${realCodexPath} is not an npm shim whose script hippo can find, so Codex was not started.`,
+      );
     }
-    return spawn(process.execPath, [entry, ...forwardArgs], { cwd, stdio: 'inherit', windowsHide: false });
+    return spawn(process.execPath, [entry, ...forwardArgs], {
+      cwd,
+      stdio: 'inherit',
+      windowsHide: false,
+    });
   }
 
   if (process.platform === 'win32' && (ext === '.cmd' || ext === '.bat')) {
@@ -46,7 +59,10 @@ export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): v
   try {
     handleLastSleep({ hippoRoot, flags: { path: logFile } }, 'terminal');
   } catch (err) {
-    log.debug(`codex run: the last sleep summary was not shown: ${errorMessage(err)}`, errorFields(err));
+    log.debug(
+      `codex run: the last sleep summary was not shown: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
 
   const child = spawnRealCodex(realCodexPath, args, process.cwd());
@@ -56,7 +72,14 @@ export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): v
   });
 
   child.on('exit', async (code, signal) => {
-    await launchCodexSessionEndWorker({ hippoRoot, tenantId, historyPath, startOffsetBytes, startedAtMs, logFile });
+    await launchCodexSessionEndWorker({
+      hippoRoot,
+      tenantId,
+      historyPath,
+      startOffsetBytes,
+      startedAtMs,
+      logFile,
+    });
     exitLikeChild(code, signal);
   });
 }
@@ -103,7 +126,10 @@ async function launchCodexSessionEndWorker(options: CodexSessionEndWorkerOptions
       },
     });
   } catch (inlineErr) {
-    log.debug(`codex run: the inline session-end failed: ${errorMessage(inlineErr)}`, errorFields(inlineErr));
+    log.debug(
+      `codex run: the inline session-end failed: ${errorMessage(inlineErr)}`,
+      errorFields(inlineErr),
+    );
   }
 }
 
@@ -120,7 +146,11 @@ function detachedWorkerStarted(workerArgs: readonly string[]): Promise<boolean> 
       resolve(false);
     };
     try {
-      const worker = spawn(process.execPath, workerArgs, { detached: true, stdio: 'ignore', windowsHide: true });
+      const worker = spawn(process.execPath, workerArgs, {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      });
       // An async spawn failure (ENOENT, EAGAIN) arrives as an 'error' event, which a try cannot catch.
       worker.on('error', failed);
       worker.once('spawn', () => resolve(true));

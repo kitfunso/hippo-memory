@@ -6,12 +6,21 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
-import { closeHippoDb, getMeta, openHippoDb, withSharedStoreHandles, withWriteScope } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  getMeta,
+  openHippoDb,
+  withSharedStoreHandles,
+  withWriteScope,
+} from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { loadAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { initializeParticle } from '../../src/base/rank/physics.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
-import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
+import {
+  embeddingIndexIdentity,
+  embeddingInputText,
+} from '../../src/base/embeddings/index-identity.js';
 import { embedAll, embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
@@ -24,10 +33,18 @@ import {
   recordStatementsAsync,
   type StatementLog,
 } from '../_helpers/count-statements.js';
-import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
+import {
+  hashedVector,
+  startHashedEmbeddings,
+  type HashedEmbeddings,
+} from '../_helpers/hashed-embedding-server.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries, resetStoredParticles, loadEmbeddingIndex } from '../_helpers/root-forms.js';
+import {
+  loadEveryTenantEntries,
+  resetStoredParticles,
+  loadEmbeddingIndex,
+} from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import type { EmbeddingIndex } from '../../src/base/ports/store.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
@@ -66,8 +83,10 @@ interface IndexState {
   readonly particles: PhysicsParticle[];
 }
 
-const fakeVector = (id: string, entry: MemoryEntry): number[] => hashedVector(`${id} ${embeddingInputText(entry)}`);
-const hashedServerVector = (entry: MemoryEntry): number[] => hashedVector(embeddingInputText(entry));
+const fakeVector = (id: string, entry: MemoryEntry): number[] =>
+  hashedVector(`${id} ${embeddingInputText(entry)}`);
+const hashedServerVector = (entry: MemoryEntry): number[] =>
+  hashedVector(embeddingInputText(entry));
 // The index of the 120 rows written after the first backfill, spread through the store's order and both tenants.
 const isLate = (i: number): boolean => i % 5 < 2;
 
@@ -114,7 +133,9 @@ function copyOf(from: string): string {
 function useHashedServer(root: string): void {
   writeFileSync(
     join(root, 'config.json'),
-    JSON.stringify({ embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } }),
+    JSON.stringify({
+      embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url },
+    }),
   );
 }
 
@@ -124,10 +145,14 @@ function indexOn(root: string): IndexState {
     return {
       // SAFETY: the SELECT names exactly VectorRow's four fields.
       vectors: db
-        .prepare('SELECT memory_id, model, dim, hex(vector) AS bytes FROM memory_vectors ORDER BY rowid')
+        .prepare(
+          'SELECT memory_id, model, dim, hex(vector) AS bytes FROM memory_vectors ORDER BY rowid',
+        )
         .all() as VectorRow[],
       model: getMeta(db, EMBEDDING_MODEL_META_KEY, ''),
-      particles: [...loadAllPhysicsState(db).values()].sort((a, b) => (a.memoryId < b.memoryId ? -1 : 1)),
+      particles: [...loadAllPhysicsState(db).values()].sort((a, b) =>
+        a.memoryId < b.memoryId ? -1 : 1,
+      ),
     };
   } finally {
     closeHippoDb(db);
@@ -147,11 +172,18 @@ function vectorRow(entry: MemoryEntry, model: string, vector: number[]): VectorR
 const byId = (a: MemoryEntry, b: MemoryEntry): number => (a.id < b.id ? -1 : 1);
 
 function particleOf(entry: MemoryEntry, vector: number[], at: string): PhysicsParticle {
-  return { ...initializeParticle(entry, vector, PRODUCTION_STRENGTH, new Date(at)), position: vector.map(Math.fround) };
+  return {
+    ...initializeParticle(entry, vector, PRODUCTION_STRENGTH, new Date(at)),
+    position: vector.map(Math.fround),
+  };
 }
 
 /** The state a rebuild under `providerId` must leave: every row in id order, each with a particle dated FAKE_NOW. */
-function rebuiltState(root: string, providerId: string, vectorOf: (entry: MemoryEntry) => number[]): IndexState {
+function rebuiltState(
+  root: string,
+  providerId: string,
+  vectorOf: (entry: MemoryEntry) => number[],
+): IndexState {
   const entries = loadEveryTenantEntries(root).sort(byId);
   const model = embeddingIndexIdentity(providerId);
   return {
@@ -190,7 +222,12 @@ beforeAll(async () => {
       savePhysicsState(
         db,
         loadEveryTenantEntries(indexedOld).map((e) =>
-          initializeParticle(e, fakeVector('fake-old', e), PRODUCTION_STRENGTH, new Date(SEEDED_AT)),
+          initializeParticle(
+            e,
+            fakeVector('fake-old', e),
+            PRODUCTION_STRENGTH,
+            new Date(SEEDED_AT),
+          ),
         ),
       );
     } finally {
@@ -237,7 +274,10 @@ describe('embedAll backfill on hippo.db', () => {
     expect(calls.flat()).toEqual(pending.map((e) => embeddingInputText(e)));
     const model = embeddingIndexIdentity('fake-old');
     expect(indexOn(root)).toEqual({
-      vectors: [...before.vectors, ...pending.map((e) => vectorRow(e, model, fakeVector('fake-old', e)))],
+      vectors: [
+        ...before.vectors,
+        ...pending.map((e) => vectorRow(e, model, fakeVector('fake-old', e))),
+      ],
       model,
       particles: [],
     });
@@ -262,7 +302,9 @@ describe('embedAll backfill on hippo.db', () => {
 describe('a model identity change on hippo.db', () => {
   it("embedAll rebuilds every tenant's vectors under the new model, saves its identity and resets every particle", async () => {
     const root = copyOf(indexedOld);
-    expect(indexOn(root).particles.map((p) => p.lastSimulation)).toEqual(Array.from({ length: ROWS }, () => SEEDED_AT));
+    expect(indexOn(root).particles.map((p) => p.lastSimulation)).toEqual(
+      Array.from({ length: ROWS }, () => SEEDED_AT),
+    );
     expect(await embedAll(localIndex(root), undefined, fake('fake-new'))).toBe(ROWS);
     const state = indexOn(root);
     expect(state).toEqual(rebuiltState(root, 'fake-new', (e) => fakeVector('fake-new', e)));
@@ -323,14 +365,22 @@ describe('a model identity change on hippo.db', () => {
 
 /** The most full memory rows one statement of a run can hand back: the rows it returned. */
 function peakFullRowsRead(log: StatementLog<unknown>, fullReads: number): number {
-  expect(log.statements.filter((sql) => sql.includes(MEMORY_SELECT_COLUMNS))).toHaveLength(fullReads);
+  expect(log.statements.filter((sql) => sql.includes(MEMORY_SELECT_COLUMNS))).toHaveLength(
+    fullReads,
+  );
   return peakRowsRead(log.reads, MEMORY_SELECT_COLUMNS);
 }
 
 describe('rows held while embedding hippo.db', () => {
   // A rebuild reads its 300 rows twice, once to embed and once to reset the particles.
   it.each([
-    { name: 'a backfill of 120 rows', template: (): string => partly, id: 'fake-old', embedded: 120, fullReads: 2 },
+    {
+      name: 'a backfill of 120 rows',
+      template: (): string => partly,
+      id: 'fake-old',
+      embedded: 120,
+      fullReads: 2,
+    },
     {
       name: 'a rebuild of 300 rows',
       template: (): string => indexedOld,
@@ -338,21 +388,24 @@ describe('rows held while embedding hippo.db', () => {
       embedded: ROWS,
       fullReads: 10,
     },
-  ])('reads full rows and embeds them at most 64 at a time on $name', async ({ template, id, embedded, fullReads }) => {
-    const root = copyOf(template());
-    const calls: number[] = [];
-    const log = await recordStatementsAsync(() =>
-      embedAll(
-        localIndex(root),
-        undefined,
-        fake(id, (texts) => calls.push(texts.length)),
-      ),
-    );
-    expect(log.result).toBe(embedded);
-    expect(Math.max(...calls)).toBe(PAGE);
-    expect(peakFullRowsRead(log, fullReads)).toBe(PAGE);
-    expect(peakRowsRead(log.reads, VECTOR_READ)).toBeLessThanOrEqual(PAGE);
-  });
+  ])(
+    'reads full rows and embeds them at most 64 at a time on $name',
+    async ({ template, id, embedded, fullReads }) => {
+      const root = copyOf(template());
+      const calls: number[] = [];
+      const log = await recordStatementsAsync(() =>
+        embedAll(
+          localIndex(root),
+          undefined,
+          fake(id, (texts) => calls.push(texts.length)),
+        ),
+      );
+      expect(log.result).toBe(embedded);
+      expect(Math.max(...calls)).toBe(PAGE);
+      expect(peakFullRowsRead(log, fullReads)).toBe(PAGE);
+      expect(peakRowsRead(log.reads, VECTOR_READ)).toBeLessThanOrEqual(PAGE);
+    },
+  );
 
   it("resets particles for both tenants' embedded rows, reading the rows and vectors at most 64 at a time", () => {
     const root = copyOf(partly);

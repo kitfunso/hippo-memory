@@ -27,14 +27,18 @@ let checkout: string;
 let fixture: string;
 
 beforeAll(() => {
-  sandboxRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-guard-ancestors-')));
+  sandboxRoot = fs.realpathSync.native(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-guard-ancestors-')),
+  );
   home = path.join(sandboxRoot, 'home');
   outer = path.join(home, 'outer');
   checkout = path.join(outer, 'checkout');
   fixture = path.join(checkout, 'fixture');
   fs.mkdirSync(path.join(outer, '.hippo'), PRIVATE_DIR);
   fs.mkdirSync(fixture, { recursive: true });
-  offWalkHome = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-guard-offwalk-')));
+  offWalkHome = fs.realpathSync.native(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-guard-offwalk-')),
+  );
 });
 
 afterAll(() => {
@@ -80,7 +84,11 @@ describe('watchedStoreDirs ancestor coverage', () => {
   it('arm 6: HIPPO_HOME colliding with an ancestor store is listed once, not twice', () => {
     vi.stubEnv('HIPPO_HOME', path.join(outer, '.hippo'));
     const dirs = watchedStoreDirs(fixture, home);
-    expect(dirs).toEqual([path.join(fixture, '.hippo'), path.join(checkout, '.hippo'), path.join(outer, '.hippo')]);
+    expect(dirs).toEqual([
+      path.join(fixture, '.hippo'),
+      path.join(checkout, '.hippo'),
+      path.join(outer, '.hippo'),
+    ]);
   });
 
   describe.skipIf(process.platform !== 'win32')('case-insensitive collision (win32 only)', () => {

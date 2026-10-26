@@ -27,7 +27,9 @@ const DECLARED: ReadonlyMap<VerbFlags, ReadonlyMap<string, FlagKind>> = new Map(
   [GLOBAL_FLAGS, ...Object.values(COMMANDS).map((row) => row.flags)].map((verb) => [
     verb,
     new Map(
-      FIELD_KINDS.flatMap(([field, kind]) => (verb[field] ?? []).map((name): [string, FlagKind] => [name, kind])),
+      FIELD_KINDS.flatMap(([field, kind]) =>
+        (verb[field] ?? []).map((name): [string, FlagKind] => [name, kind]),
+      ),
     ),
   ]),
 );
@@ -37,7 +39,8 @@ const DECLARED: ReadonlyMap<VerbFlags, ReadonlyMap<string, FlagKind>> = new Map(
 const SHARED_KIND: ReadonlyMap<string, FlagKind> = (() => {
   const shared = new Map<string, FlagKind>();
   for (const kinds of DECLARED.values()) {
-    for (const [name, kind] of kinds) shared.set(name, (shared.get(name) ?? kind) === kind ? kind : 'value');
+    for (const [name, kind] of kinds)
+      shared.set(name, (shared.get(name) ?? kind) === kind ? kind : 'value');
   }
   return shared;
 })();

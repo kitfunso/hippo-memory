@@ -11,8 +11,16 @@ import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { StoreFiles } from './open.js';
 import { continuityWhere, readActiveTaskSnapshot } from './task-snapshots.js';
-import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../../base/ports/store/types.js';
-import type { HandoffFilter, SessionEndHandoffRequest, TaskSnapshot } from '../../base/ports/store/sessions.js';
+import {
+  continuityStamp,
+  type ContinuityKey,
+  type ContinuityStamp,
+} from '../../base/ports/store/types.js';
+import type {
+  HandoffFilter,
+  SessionEndHandoffRequest,
+  TaskSnapshot,
+} from '../../base/ports/store/sessions.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { handleNow, handleStamp } from './handle-clock.js';
 
@@ -75,7 +83,9 @@ function sessionEndHandoff(
 ): Omit<SessionHandoff, 'updatedAt'> {
   const { snapshot } = source;
   const carry =
-    existing != null && existing.taskId === snapshot.task && (existing.scope ?? null) === (snapshot.scope ?? null);
+    existing != null &&
+    existing.taskId === snapshot.task &&
+    (existing.scope ?? null) === (snapshot.scope ?? null);
   return {
     version: 1,
     sessionId,
@@ -157,9 +167,10 @@ export function saveSessionHandoff(
   const result = insertHandoffRow(db, tenantId, handoff, stamp, now);
 
   const id = Number(result.lastInsertRowid ?? 0);
-  const row = cachedStatement(db, `SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = ?`).get(id) as
-    | SessionHandoffDbRow
-    | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = ?`,
+  ).get(id) as SessionHandoffDbRow | undefined;
   if (!row) {
     throw new Error('Failed to reload saved session handoff');
   }
@@ -238,7 +249,11 @@ export function readLatestHandoff(
 }
 
 /** Load a specific handoff by its row ID. */
-export function readHandoff(db: DatabaseSyncLike, tenantId: string, id: number): SessionHandoff | null {
+export function readHandoff(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: number,
+): SessionHandoff | null {
   assertTenantId('readHandoff', tenantId);
   const row = cachedStatement(
     db,
@@ -283,10 +298,19 @@ function replaceTranscriptHandoff(
   handoff: Omit<SessionHandoff, 'updatedAt'>,
   key: ContinuityKey | null | undefined,
 ): SessionHandoff | null {
-  const { conditions, params } = handoffConditions(tenantId, handoff.sessionId, {}, key, handleNow(db));
+  const { conditions, params } = handoffConditions(
+    tenantId,
+    handoff.sessionId,
+    {},
+    key,
+    handleNow(db),
+  );
   const newest = `SELECT id FROM session_handoffs WHERE ${conditions.join(' AND ')}
     ORDER BY created_at DESC, id DESC LIMIT 1`;
-  const columns: HandoffColumn[] = [['created_at', handleStamp(db)], ...handoffContentColumns(handoff)];
+  const columns: HandoffColumn[] = [
+    ['created_at', handleStamp(db)],
+    ...handoffContentColumns(handoff),
+  ];
   const assignments = columns.map(([column]) => `${column} = ?`).join(', ');
   const result = cachedStatement(
     db,
@@ -295,9 +319,10 @@ function replaceTranscriptHandoff(
       AND json_extract(evidence_json, '$.derivedFrom') = 'transcript'`,
   ).run(...columns.map(([, value]) => value), ...params);
   if (Number(result.changes ?? 0) === 0) return null;
-  const row = cachedStatement(db, `SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = (${newest})`).get(
-    ...params,
-  ) as SessionHandoffDbRow | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = (${newest})`,
+  ).get(...params) as SessionHandoffDbRow | undefined;
   return row ? rowToSessionHandoff(row) : null;
 }
 
@@ -318,13 +343,23 @@ export function writeSessionEndHandoff(
   const existing = readLatestHandoff(db, tenantId, sessionId, {}, key);
   const source = sessionEndSource(active, existing, request);
   if (!source) return null;
-  const handoff = sessionEndHandoff(sessionId, source, existing, sessionOutcome(db, tenantId, sessionId));
+  const handoff = sessionEndHandoff(
+    sessionId,
+    source,
+    existing,
+    sessionOutcome(db, tenantId, sessionId),
+  );
   // A miss means a handoff landed since the read, and a new transcript row would hide it.
-  if (source.fromTranscript && inPlace && existing) return replaceTranscriptHandoff(db, tenantId, handoff, key);
+  if (source.fromTranscript && inPlace && existing)
+    return replaceTranscriptHandoff(db, tenantId, handoff, key);
   return saveSessionHandoff(db, tenantId, handoff, key);
 }
 
-function sessionOutcome(db: DatabaseSyncLike, tenantId: string, sessionId: string): HandoffOutcome | null {
+function sessionOutcome(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sessionId: string,
+): HandoffOutcome | null {
   const content = (
     cachedStatement(
       db,

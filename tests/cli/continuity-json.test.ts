@@ -18,7 +18,12 @@ const EVENT_JSON =
   '"scope":null,"metadata":{"k":1},"created_at":"<at>"}';
 
 let root = '';
-const c = (args: string[], flags: CliFlags): CommandContext => ({ hippoRoot: root, tenantId: 'default', args, flags });
+const c = (args: string[], flags: CliFlags): CommandContext => ({
+  hippoRoot: root,
+  tenantId: 'default',
+  args,
+  flags,
+});
 
 /** The printed JSON, key order kept, with each timestamp masked. */
 async function printed(run: () => Promise<void>): Promise<string> {
@@ -53,11 +58,15 @@ afterEach(() => {
 
 describe('continuity --json keeps snake_case keys', () => {
   it('snapshot show', async () => {
-    expect(await printed(() => handleSnapshot(c(['show'], { json: true })))).toBe(`{"snapshot":${SNAPSHOT_JSON}}`);
+    expect(await printed(() => handleSnapshot(c(['show'], { json: true })))).toBe(
+      `{"snapshot":${SNAPSHOT_JSON}}`,
+    );
   });
 
   it('session show and session latest', async () => {
-    expect(await printed(() => handleSession(c(['show'], { json: true })))).toBe(`{"events":[${EVENT_JSON}]}`);
+    expect(await printed(() => handleSession(c(['show'], { json: true })))).toBe(
+      `{"events":[${EVENT_JSON}]}`,
+    );
     expect(await printed(() => handleSession(c(['latest'], { json: true })))).toBe(
       `{"snapshot":${SNAPSHOT_JSON},"events":[${EVENT_JSON}]}`,
     );

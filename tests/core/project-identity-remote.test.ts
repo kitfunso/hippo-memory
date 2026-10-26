@@ -29,7 +29,10 @@ function originConfig(url: string): string {
 function repo(url: string | null, ...segments: string[]): string {
   const root = mkdirs(...segments);
   fs.mkdirSync(path.join(root, '.git'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.git', 'config'), url === null ? '[core]\n\tbare = false\n' : originConfig(url));
+  fs.writeFileSync(
+    path.join(root, '.git', 'config'),
+    url === null ? '[core]\n\tbare = false\n' : originConfig(url),
+  );
   return root;
 }
 
@@ -57,15 +60,27 @@ describe('normalizeRemote', () => {
       'https://oauth2:not-a-real-token@gitlab.example.com:8443/acme/api.git/',
       'gitlab.example.com/acme/api',
     ],
-    ['Azure DevOps https', 'https://org@dev.azure.com/org/proj/_git/repo', 'dev.azure.com/org/proj/repo'],
+    [
+      'Azure DevOps https',
+      'https://org@dev.azure.com/org/proj/_git/repo',
+      'dev.azure.com/org/proj/repo',
+    ],
     ['Azure DevOps ssh', 'git@ssh.dev.azure.com:v3/org/proj/repo', 'dev.azure.com/org/proj/repo'],
-    ['Azure DevOps old host', 'https://org.visualstudio.com/proj/_git/repo', 'dev.azure.com/org/proj/repo'],
+    [
+      'Azure DevOps old host',
+      'https://org.visualstudio.com/proj/_git/repo',
+      'dev.azure.com/org/proj/repo',
+    ],
     [
       'Azure DevOps old host with its collection',
       'https://org.visualstudio.com/DefaultCollection/proj/_git/repo',
       'dev.azure.com/org/proj/repo',
     ],
-    ['Azure DevOps old ssh host', 'org@vs-ssh.visualstudio.com:v3/org/proj/repo', 'dev.azure.com/org/proj/repo'],
+    [
+      'Azure DevOps old ssh host',
+      'org@vs-ssh.visualstudio.com:v3/org/proj/repo',
+      'dev.azure.com/org/proj/repo',
+    ],
     [
       'https with a token in the query',
       'https://gitlab.example.com/acme/api.git?private_token=not-a-real-token',
@@ -103,7 +118,9 @@ describe('originUrlFromConfig', () => {
     expect(originUrlFromConfig('[remote.origin]\nurl = https://github.com/acme/api\n')).toBe(
       'https://github.com/acme/api',
     );
-    expect(originUrlFromConfig('[remote "Origin"]\n\turl = https://github.com/acme/api\n')).toBeNull();
+    expect(
+      originUrlFromConfig('[remote "Origin"]\n\turl = https://github.com/acme/api\n'),
+    ).toBeNull();
   });
 });
 
@@ -137,7 +154,10 @@ describe('resolveProjectIdentity with an origin remote', () => {
 
   it('refuses a remote-shaped id in .hippo-project.json, so a clone cannot claim another project', () => {
     const root = repo(null, 'home', 'api');
-    fs.writeFileSync(path.join(root, '.hippo-project.json'), JSON.stringify({ id: 'github.com/acme/billing' }));
+    fs.writeFileSync(
+      path.join(root, '.hippo-project.json'),
+      JSON.stringify({ id: 'github.com/acme/billing' }),
+    );
     expect(identity(root).name).toBe('api');
   });
 
@@ -159,7 +179,11 @@ describe('resolveProjectIdentity with an origin remote', () => {
     fs.writeFileSync(path.join(link, 'commondir'), '../..\n');
     const wt = mkdirs('home', 'api-wt');
     fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${link}\n`);
-    expect(identity(wt)).toMatchObject({ root: wt, name: 'github.com/acme/api', legacyName: 'api' });
+    expect(identity(wt)).toMatchObject({
+      root: wt,
+      name: 'github.com/acme/api',
+      legacyName: 'api',
+    });
   });
 
   it('gives a worktree of a bare repo the bare repo remote', () => {
@@ -183,8 +207,15 @@ describe('resolveProjectIdentity with an origin remote', () => {
 
   it('keeps home user-global even when home is a checkout with a remote', () => {
     fs.mkdirSync(path.join(home, '.git'));
-    fs.writeFileSync(path.join(home, '.git', 'config'), originConfig('git@github.com:me/dotfiles.git'));
-    expect(identity(mkdirs('home', 'notes'))).toMatchObject({ name: '', legacyName: '', isHome: true });
+    fs.writeFileSync(
+      path.join(home, '.git', 'config'),
+      originConfig('git@github.com:me/dotfiles.git'),
+    );
+    expect(identity(mkdirs('home', 'notes'))).toMatchObject({
+      name: '',
+      legacyName: '',
+      isHome: true,
+    });
   });
 
   it('names a nested store by its own folder, since the remote names the whole checkout', () => {

@@ -6,7 +6,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 const savedCwd = process.cwd();
 let home = '';
 
-const run = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
+const run = (...args: string[]): Promise<InProcessResult> =>
+  runInProcess(() => runCli(['node', 'hippo', ...args]));
 
 async function hippo(...args: string[]): Promise<string> {
   const res = await run(...args);

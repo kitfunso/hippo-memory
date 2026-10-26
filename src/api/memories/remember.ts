@@ -1,7 +1,15 @@
 // Write path: remember stores one memory after secret vetting and, for untrusted content, the instruction check.
 
-import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../base/ports/store.js';
-import { detectInstruction, INSTRUCTION_LIKE_TAG, UNTRUSTED_ORIGIN_TAG } from '../instruction-detect.js';
+import type {
+  ConnectorEvent,
+  ConnectorWrite,
+  ConnectorWriteOutcome,
+} from '../../base/ports/store.js';
+import {
+  detectInstruction,
+  INSTRUCTION_LIKE_TAG,
+  UNTRUSTED_ORIGIN_TAG,
+} from '../instruction-detect.js';
 import { quarantineScopeFor } from '../../domain/trust/quarantine.js';
 import {
   createMemory,
@@ -104,7 +112,8 @@ function rememberScope(ctx: Context, opts: RememberOptions): string | null {
     }
     return scope;
   }
-  if (opts.untrusted) throw new Error('personal memories come from their owner, never from a connector');
+  if (opts.untrusted)
+    throw new Error('personal memories come from their owner, never from a connector');
   if (opts.scope !== undefined) throw new BadRequestError('send personal or scope, not both');
   const own = personalScopeOf(ctx.actor);
   if (own === null) {
@@ -135,7 +144,9 @@ function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember 
   assertOwnerIsCallers(ctx, opts.owner);
   const requestedScope = rememberScope(ctx, opts);
   const vetted = vetSecrets(opts.content);
-  const detection = opts.untrusted ? detectInstruction(vetted.content) : { flagged: false, reason: null };
+  const detection = opts.untrusted
+    ? detectInstruction(vetted.content)
+    : { flagged: false, reason: null };
   const flagged = memberShares(ctx, opts) && detectInstruction(vetted.content).flagged;
   const tags = trustTagged(opts.tags, opts.untrusted === true, flagged);
   const local = opts.local ?? {};
@@ -168,8 +179,15 @@ function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember 
 }
 
 /** `tags` plus the marks that make the row print framed: its untrusted origin, and a member row the check flagged. */
-function trustTagged(tags: string[] | undefined, untrusted: boolean, flagged: boolean): string[] | undefined {
-  const marks = [...(untrusted ? [UNTRUSTED_ORIGIN_TAG] : []), ...(flagged ? [INSTRUCTION_LIKE_TAG] : [])];
+function trustTagged(
+  tags: string[] | undefined,
+  untrusted: boolean,
+  flagged: boolean,
+): string[] | undefined {
+  const marks = [
+    ...(untrusted ? [UNTRUSTED_ORIGIN_TAG] : []),
+    ...(flagged ? [INSTRUCTION_LIKE_TAG] : []),
+  ];
   return marks.length > 0 ? [...(tags ?? []), ...marks] : tags;
 }
 
@@ -186,7 +204,11 @@ function weakened(entry: MemoryEntry, weaken: NonNullable<RememberLocal['weaken'
   };
 }
 
-function rememberResult(ctx: Context, prepared: PreparedRemember, written?: ConnectorWriteOutcome): RememberResult {
+function rememberResult(
+  ctx: Context,
+  prepared: PreparedRemember,
+  written?: ConnectorWriteOutcome,
+): RememberResult {
   const { entry, detection, warnings } = prepared;
   const result: RememberResult = {
     id: entry.id,
@@ -202,8 +224,13 @@ function rememberResult(ctx: Context, prepared: PreparedRemember, written?: Conn
 }
 
 /** A flagged row's review record, which the store writes in the row's own transaction. */
-function quarantineOf({ requestedScope, detection }: PreparedRemember): ConnectorWrite['quarantine'] {
-  return detection.flagged ? { originalScope: requestedScope, reason: detection.reason ?? 'unknown' } : undefined;
+function quarantineOf({
+  requestedScope,
+  detection,
+}: PreparedRemember): ConnectorWrite['quarantine'] {
+  return detection.flagged
+    ? { originalScope: requestedScope, reason: detection.reason ?? 'unknown' }
+    : undefined;
 }
 
 // The newest rows the gate compares against, whatever `recentWindow` says: a window below 1 once meant the whole
@@ -212,13 +239,22 @@ const MAX_SALIENCE_ROWS = 500;
 const WEAK_HALF_LIFE_FACTOR = 0.5;
 
 /** The gate's verdict on one write, or null where it does not judge: the store has it off, or the write is pinned. */
-async function salienceVerdict(ctx: Context, opts: RememberOptions): Promise<SalienceResult | null> {
+async function salienceVerdict(
+  ctx: Context,
+  opts: RememberOptions,
+): Promise<SalienceResult | null> {
   const { salience } = ctx.config;
   if (!salience.enabled || opts.local?.pinned) return null;
   // computeSalience compares against the last `recentWindow` rows only.
   const window = Math.trunc(salience.recentWindow);
-  const rows = Number.isSafeInteger(window) && window >= 1 ? Math.min(window, MAX_SALIENCE_ROWS) : MAX_SALIENCE_ROWS;
-  const newest = await ctx.store.reports.entriesWhere({ tenantId: ctx.tenantId }, { limit: rows, newest: true });
+  const rows =
+    Number.isSafeInteger(window) && window >= 1
+      ? Math.min(window, MAX_SALIENCE_ROWS)
+      : MAX_SALIENCE_ROWS;
+  const newest = await ctx.store.reports.entriesWhere(
+    { tenantId: ctx.tenantId },
+    { limit: rows, newest: true },
+  );
   return computeSalience(opts.content, [...(opts.tags ?? [])], newest.entries.reverse(), {
     recentWindow: salience.recentWindow,
     overlapThreshold: salience.overlapThreshold,
@@ -229,18 +265,28 @@ async function salienceVerdict(ctx: Context, opts: RememberOptions): Promise<Sal
 
 /** Store one memory, then start the root's auto-sleep if enough new memories have landed (`ctx.callers`). With
  * `salienceGate` the write may be dropped instead (see GatedRememberOptions). */
-export async function remember(ctx: Context, opts: GatedRememberOptions): Promise<RememberResult | RememberSkipped>;
+export async function remember(
+  ctx: Context,
+  opts: GatedRememberOptions,
+): Promise<RememberResult | RememberSkipped>;
 export async function remember(ctx: Context, opts: RememberOptions): Promise<RememberResult>;
 export async function remember(
   ctx: Context,
   opts: RememberOptions | GatedRememberOptions,
 ): Promise<RememberResult | RememberSkipped> {
-  const verdict = 'salienceGate' in opts && opts.salienceGate ? await salienceVerdict(ctx, opts) : null;
-  if (verdict?.decision === 'skip') return { skipped: { reason: verdict.reason, score: verdict.score } };
+  const verdict =
+    'salienceGate' in opts && opts.salienceGate ? await salienceVerdict(ctx, opts) : null;
+  if (verdict?.decision === 'skip')
+    return { skipped: { reason: verdict.reason, score: verdict.score } };
   const startedWeak =
-    verdict?.decision === 'start_weak' ? { reason: verdict.reason, strength: verdict.score } : undefined;
+    verdict?.decision === 'start_weak'
+      ? { reason: verdict.reason, strength: verdict.score }
+      : undefined;
   const local = startedWeak
-    ? { ...opts.local, weaken: { strength: startedWeak.strength, halfLifeFactor: WEAK_HALF_LIFE_FACTOR } }
+    ? {
+        ...opts.local,
+        weaken: { strength: startedWeak.strength, halfLifeFactor: WEAK_HALF_LIFE_FACTOR },
+      }
     : opts.local;
   const result = await writeRemembered(ctx, { ...opts, local });
   await autoSleepAfterWrite(ctx);

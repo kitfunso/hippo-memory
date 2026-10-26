@@ -1,7 +1,12 @@
 import { CURRENT_DISTILLED } from '../../db/continuity.js';
 import { duplicateHash } from '../../base/util/same-text.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { isFtsAvailable, isFtsInSync, withReadSnapshot, type DatabaseSyncLike } from '../../db/index.js';
+import {
+  isFtsAvailable,
+  isFtsInSync,
+  withReadSnapshot,
+  type DatabaseSyncLike,
+} from '../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
@@ -36,12 +41,16 @@ import type { EntrySignals, EntryTextKeyPage } from '../../base/ports/store/shar
 import type { EntryCursor, EntryPage } from '../../base/ports/store/types.js';
 
 /** Read a memory entry by ID; a row in another tenant reads as null. */
-export function readEntry(db: DatabaseSyncLike, id: string, tenantId: TenantId): MemoryEntry | null {
+export function readEntry(
+  db: DatabaseSyncLike,
+  id: string,
+  tenantId: TenantId,
+): MemoryEntry | null {
   const tenant = tenantAnd(tenantId);
-  const row = cachedStatement(db, `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?${tenant.sql}`).get(
-    id,
-    ...tenant.params,
-  ) as MemoryRow | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?${tenant.sql}`,
+  ).get(id, ...tenant.params) as MemoryRow | undefined;
   return row ? rowToEntry(row) : null;
 }
 
@@ -91,7 +100,11 @@ export function readChildrenByParent(
 }
 
 /** The rows of every id in `ids`, in the by-id read's order; the rows of one chunk alone cannot be sorted in SQL. */
-export function readEntriesInIdOrder(db: DatabaseSyncLike, ids: readonly string[], tenantId: TenantId): MemoryEntry[] {
+export function readEntriesInIdOrder(
+  db: DatabaseSyncLike,
+  ids: readonly string[],
+  tenantId: TenantId,
+): MemoryEntry[] {
   return [...readEntriesByIds(db, ids, tenantId).values()].sort(byIdOrder);
 }
 
@@ -107,7 +120,11 @@ export function originAnd(origins: readonly string[] | null | undefined): SqlFra
 type SessionRows<Q extends SessionRawQuery> = Omit<Q, 'tenantId'> & { readonly tenantId: TenantId };
 
 /** The WHERE both session raw-row reads share: the session's unsuperseded raw rows in the tenant and origins. */
-function sessionRawWhere({ sessionId, tenantId, origins }: SessionRows<SessionRawQuery>): SqlFragment {
+function sessionRawWhere({
+  sessionId,
+  tenantId,
+  origins,
+}: SessionRows<SessionRawQuery>): SqlFragment {
   const tenant = tenantAnd(tenantId);
   const origin = originAnd(origins);
   return {
@@ -119,16 +136,21 @@ function sessionRawWhere({ sessionId, tenantId, origins }: SessionRows<SessionRa
 /** Pre-cap, scope-aware row count for a session, so `assemble` reports the full size without leaking rows the caller
  * could not load. Mirrors `passesScopeFilterForRecall`'s default-deny: explicit scope matches exactly, none admits only
  * `ownScope`. */
-export function countSessionRawMemories(db: DatabaseSyncLike, query: SessionRows<SessionRawCount>): number {
+export function countSessionRawMemories(
+  db: DatabaseSyncLike,
+  query: SessionRows<SessionRawCount>,
+): number {
   if (!query.sessionId) return 0;
   const where = sessionRawWhere(query);
   const { scope, ownScope } = query;
   const admit =
-    scope !== undefined && scope !== '' ? { sql: 'scope = ?', params: [scope] } : scopeAdmitSql('', ownScope);
-  const row = cachedStatement(db, `SELECT COUNT(*) AS c FROM memories WHERE ${where.sql} AND ${admit.sql}`).get(
-    ...where.params,
-    ...admit.params,
-  ) as { c?: number } | undefined;
+    scope !== undefined && scope !== ''
+      ? { sql: 'scope = ?', params: [scope] }
+      : scopeAdmitSql('', ownScope);
+  const row = cachedStatement(
+    db,
+    `SELECT COUNT(*) AS c FROM memories WHERE ${where.sql} AND ${admit.sql}`,
+  ).get(...where.params, ...admit.params) as { c?: number } | undefined;
   return Number(row?.c ?? 0);
 }
 
@@ -163,15 +185,19 @@ export function listFreshRawMemories(
 }
 
 /** Up to `page.limit` of the tenant's memory ids in loadAllEntries' order, after `page.after`. */
-export function listEntryIdsPage(db: DatabaseSyncLike, tenantId: TenantId, page: EntryPageRequest): EntryIdPage {
+export function listEntryIdsPage(
+  db: DatabaseSyncLike,
+  tenantId: TenantId,
+  page: EntryPageRequest,
+): EntryIdPage {
   const { rows, next } = entryPage(
     tenantId,
     page,
     (within, limit) =>
-      cachedStatement(db, `SELECT id, created FROM memories WHERE ${within.match('1')} ${ENTRY_PAGE_ORDER}`).all(
-        ...within.params,
-        limit,
-      ) as EntryKeyRow[],
+      cachedStatement(
+        db,
+        `SELECT id, created FROM memories WHERE ${within.match('1')} ${ENTRY_PAGE_ORDER}`,
+      ).all(...within.params, limit) as EntryKeyRow[],
   );
   return { ids: rows.map((row) => row.id), next };
 }
@@ -182,16 +208,18 @@ type EntryKeyRow = EntryCursor;
 /** Up to `page.limit` memory ids of every tenant in id order after `page.afterId`, off the primary key. */
 export function listEveryTenantEntryIds(db: DatabaseSyncLike, page: IdPageRequest): IdPage {
   const after = afterIdAnd(page.afterId);
-  const rows = cachedStatement(db, `SELECT id FROM memories WHERE 1${after.sql} ORDER BY id LIMIT ?`).all(
-    ...after.params,
-    page.limit + 1,
-  ) as Array<{ id: string }>;
+  const rows = cachedStatement(
+    db,
+    `SELECT id FROM memories WHERE 1${after.sql} ORDER BY id LIMIT ?`,
+  ).all(...after.params, page.limit + 1) as Array<{ id: string }>;
   return idPageOf(rows, page.limit);
 }
 
 /** How many memory rows the store holds across every tenant. */
 export function countAllEntries(db: DatabaseSyncLike): number {
-  const row = cachedStatement(db, 'SELECT COUNT(*) AS c FROM memories').get() as { c?: number } | undefined;
+  const row = cachedStatement(db, 'SELECT COUNT(*) AS c FROM memories').get() as
+    | { c?: number }
+    | undefined;
   return Number(row?.c ?? 0);
 }
 
@@ -199,7 +227,8 @@ export function countAllEntries(db: DatabaseSyncLike): number {
 const FOLDS_TO_ASCII = ['İ', 'K'];
 
 // Chars or bytes differ only when a non-ASCII char is present; the check never decodes the value.
-const hasNonAscii = (column: string): string => `length(${column}) != length(CAST(${column} AS BLOB))`;
+const hasNonAscii = (column: string): string =>
+  `length(${column}) != length(CAST(${column} AS BLOB))`;
 
 /** The FTS5 phrase for `text`: its ASCII alphanumeric runs in order, which is how unicode61 splits it; null when it
  * holds none (the phrase would be empty) or any non-ASCII char. */
@@ -239,9 +268,12 @@ export function listEntriesMentioning(
   // A tag needing JSON escapes or case folding past ASCII is not found by a substring of tags_json, so every tagged row
   // stays in.
   const plainTag = /^[ -~]*$/.test(tag) && !/["\\]/.test(tag);
-  const ftsQuery = plainTag && isFtsAvailable(db) && isFtsInSync(db) ? ftsMentionQuery(tokens, tag) : null;
+  const ftsQuery =
+    plainTag && isFtsAvailable(db) && isFtsInSync(db) ? ftsMentionQuery(tokens, tag) : null;
   if (ftsQuery !== null) {
-    return entriesPage(tenantId, page, (within, limit) => ftsMentionRows(db, ftsQuery, within, limit));
+    return entriesPage(tenantId, page, (within, limit) =>
+      ftsMentionRows(db, ftsQuery, within, limit),
+    );
   }
   const like = likeMentionFilter(tokens, tag, plainTag);
   return entriesPage(
@@ -277,13 +309,21 @@ const NON_ASCII_ROWS = `(${hasNonAscii('content')} OR ${hasNonAscii('tags_json')
 
 // Two reads, not one OR, so only the non-ASCII read decodes each row's text, and with a full page of hits it stops at
 // the last hit, past which no row can make the page.
-function ftsMentionRows(db: DatabaseSyncLike, ftsQuery: string, within: EntryRows, limit: number): MemoryRow[] {
+function ftsMentionRows(
+  db: DatabaseSyncLike,
+  ftsQuery: string,
+  within: EntryRows,
+  limit: number,
+): MemoryRow[] {
   const hits = cachedStatement(
     db,
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${within.match(FTS_HITS)} ${ENTRY_PAGE_ORDER}`,
   ).all(ftsQuery, ...within.params, limit) as MemoryRow[];
   const last = hits.length === limit ? hits[limit - 1] : undefined;
-  const upTo = last === undefined ? { sql: '', params: [] } : { sql: ' AND created <= ?', params: [last.created] };
+  const upTo =
+    last === undefined
+      ? { sql: '', params: [] }
+      : { sql: ' AND created <= ?', params: [last.created] };
   const nonAscii = within.match(NON_ASCII_ROWS + upTo.sql);
   const others = cachedStatement(
     db,
@@ -294,7 +334,11 @@ function ftsMentionRows(db: DatabaseSyncLike, ftsQuery: string, within: EntryRow
 }
 
 /** entryPage over whole rows, decoded. */
-function entriesPage(tenantId: TenantId, page: EntryPageRequest, read: EntryRowsRead<MemoryRow>): EntryPage {
+function entriesPage(
+  tenantId: TenantId,
+  page: EntryPageRequest,
+  read: EntryRowsRead<MemoryRow>,
+): EntryPage {
   const { rows, next } = entryPage(tenantId, page, read);
   return { entries: rows.map(rowToEntry), next };
 }
@@ -356,7 +400,11 @@ interface TenantTextPage {
 
 /** A page of a tenant's rows in loadAllEntries' order with the columns a text match needs: callers read whole rows only
  * for the ids that match. */
-export function listTenantTextsPage(db: DatabaseSyncLike, tenantId: string, page: EntryPageRequest): TenantTextPage {
+export function listTenantTextsPage(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  page: EntryPageRequest,
+): TenantTextPage {
   const { rows, next } = entryPage(
     tenantId,
     page,
@@ -373,7 +421,11 @@ export function listTenantTextsPage(db: DatabaseSyncLike, tenantId: string, page
 type OriginTallyDbRow = OriginTally;
 
 /** Each project name's live rows in one grouped read, in the order its first row comes in loadAllEntries' order. */
-export function countByOrigin(db: DatabaseSyncLike, tenantId: string, sourcePrefix: string): OriginTally[] {
+export function countByOrigin(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sourcePrefix: string,
+): OriginTally[] {
   // The unit separator sorts below every character of a time or an id, so the joined string orders as (created, id).
   return cachedStatement(
     db,
@@ -387,9 +439,10 @@ export function countByOrigin(db: DatabaseSyncLike, tenantId: string, sourcePref
 export function readTakenIds(db: DatabaseSyncLike, ids: readonly string[]): string[] {
   const taken: string[] = [];
   for (const chunk of chunked([...new Set(ids)])) {
-    const rows = cachedStatement(db, `SELECT id FROM memories WHERE id IN (SELECT value FROM json_each(?))`).all(
-      JSON.stringify(chunk),
-    ) as Array<{ id: string }>;
+    const rows = cachedStatement(
+      db,
+      `SELECT id FROM memories WHERE id IN (SELECT value FROM json_each(?))`,
+    ).all(JSON.stringify(chunk)) as Array<{ id: string }>;
     for (const row of rows) taken.push(row.id);
   }
   return taken;
@@ -438,7 +491,8 @@ export function listPreviewRowsPage(
   page: { readonly limit: number; readonly afterRowid: number },
 ): Array<PreviewRow & { row_id: number }> {
   const tenant = columns.has('tenant_id') ? ' AND tenant_id = ?' : '';
-  const column = (name: string, fallback: string): string => (columns.has(name) ? name : `${fallback} AS ${name}`);
+  const column = (name: string, fallback: string): string =>
+    columns.has(name) ? name : `${fallback} AS ${name}`;
   const statement = cachedStatement(
     db,
     `SELECT rowid AS row_id, id, content, ${column('source', "''")}, ` +
@@ -461,9 +515,9 @@ export function entryRejectRow(
   db: DatabaseSyncLike,
   id: string,
 ): { content: string; tenant_id: string; scope: string | null } | undefined {
-  return cachedStatement(db, `SELECT content, tenant_id, scope FROM memories WHERE id = ?`).get(id) as
-    | { content: string; tenant_id: string; scope: string | null }
-    | undefined;
+  return cachedStatement(db, `SELECT content, tenant_id, scope FROM memories WHERE id = ?`).get(
+    id,
+  ) as { content: string; tenant_id: string; scope: string | null } | undefined;
 }
 
 /** The typed-object tables whose rows name a backing memory in `memory_id`. */
@@ -478,7 +532,9 @@ const OBJECT_TABLES = [
 ] as const;
 
 const backsObject = (statuses: string): string =>
-  OBJECT_TABLES.map((t) => `EXISTS (SELECT 1 FROM ${t} WHERE ${t}.memory_id = memories.id${statuses})`).join(' OR ');
+  OBJECT_TABLES.map(
+    (t) => `EXISTS (SELECT 1 FROM ${t} WHERE ${t}.memory_id = memories.id${statuses})`,
+  ).join(' OR ');
 
 // Each table's partial memory_id index answers the EXISTS, so no object table is read whole.
 const OBJECT_LINK_SQL =
@@ -529,7 +585,8 @@ export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidat
       if (keys.length < DUPLICATE_KEYS_PAGE) break;
       after = keys[keys.length - 1]!.k;
     }
-    for (const hashes of chunked([...unread], DUPLICATE_KEYS_PAGE)) rows.push(...rowsWithHashes(db, hashes));
+    for (const hashes of chunked([...unread], DUPLICATE_KEYS_PAGE))
+      rows.push(...rowsWithHashes(db, hashes));
     // Pages come in hash order; the port's order is created then id, as SQLite compares the ASCII stamps and ids.
     rows.sort(byCreatedThenId);
     return { rows: rows.map(rowToEntry), firstSeen: firstSeenPartitions(db) };
@@ -556,7 +613,11 @@ function firstSeenPartitions(db: DatabaseSyncLike): DuplicateCandidates['firstSe
     db,
     `SELECT tenant_id, scope, origin_project FROM memories WHERE ${CURRENT_DISTILLED} ` +
       `GROUP BY tenant_id, scope, origin_project ORDER BY MIN(created || char(31) || id)`,
-  ).all() as Array<{ tenant_id: string | null; scope: string | null; origin_project: string | null }>;
+  ).all() as Array<{
+    tenant_id: string | null;
+    scope: string | null;
+    origin_project: string | null;
+  }>;
   return firsts.map((f) => ({
     tenantId: f.tenant_id ?? DEFAULT_TENANT_ID,
     scope: f.scope,

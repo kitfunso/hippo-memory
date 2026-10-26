@@ -4,7 +4,10 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
-import { rejectionDigest, normalizeValueForRejection } from '../../src/base/records/rejection-digest.js';
+import {
+  rejectionDigest,
+  normalizeValueForRejection,
+} from '../../src/base/records/rejection-digest.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -107,7 +110,11 @@ describe('rejection guard', () => {
     // `hippo reject` does (reject-flow.ts), done here directly at the
     // store/rejection.ts layer to match this file's existing convention.
     deleteEntry(home, entry.id);
-    const digest = reject(home, raceText, 'rejected mid-race, between producer check and batch commit');
+    const digest = reject(
+      home,
+      raceText,
+      'rejected mid-race, between producer check and batch commit',
+    );
     expect(readEntry(home, entry.id)).toBeNull();
 
     expect(() => batchWriteAndDeleteInFolder(home, [queuedRePersist], [])).not.toThrow();
@@ -266,7 +273,9 @@ describe('rejection guard', () => {
     expect(() => writeEntry(home, moved)).toThrow(RejectedValueError);
 
     // The row stays in tenant A, untouched.
-    expect(readEntry(home, entry.id, 'tenant-a')!.content).toBe('shared content across a tenant move');
+    expect(readEntry(home, entry.id, 'tenant-a')!.content).toBe(
+      'shared content across a tenant move',
+    );
     expect(readEntry(home, entry.id, 'tenant-b')).toBeNull();
   });
 });

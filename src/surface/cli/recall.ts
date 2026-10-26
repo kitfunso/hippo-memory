@@ -13,9 +13,20 @@ import type {
   PlanningFallacyWatching,
 } from '../../base/records/planning-fallacy.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import { hashQueryText, sessionRing, shownRecallRows, type AnchoringHint } from '../../api/recall/finish.js';
+import {
+  hashQueryText,
+  sessionRing,
+  shownRecallRows,
+  type AnchoringHint,
+} from '../../api/recall/finish.js';
 import type { AvailabilityHint } from '../../api/availability.js';
-import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../../api/context-render.js';
+import {
+  handoffText,
+  printedTokens,
+  sessionTrailText,
+  settleTokens,
+  snapshotText,
+} from '../../api/context-render.js';
 import type {
   RankRecallResult,
   RecallGraphHops,
@@ -119,7 +130,8 @@ function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
 
 function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
   const nameRaw = stringFlag(flags, 'reranker');
-  if (hasFlag(flags, 'reranker') && nameRaw === undefined) return { fail: failLater('--reranker requires a value.') };
+  if (hasFlag(flags, 'reranker') && nameRaw === undefined)
+    return { fail: failLater('--reranker requires a value.') };
   const name = nameRaw?.trim() ?? '';
   let picked: RecallRerankerPick | null;
   try {
@@ -142,16 +154,24 @@ function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
 
 function parseSalienceFlag(flags: CliFlags): ParsedFlag<number> {
   // A bare --salience-threshold has always read as 1, since Number(true) is 1.
-  const raw = flagValueless(flags, 'salience-threshold') ? '1' : stringFlag(flags, 'salience-threshold');
+  const raw = flagValueless(flags, 'salience-threshold')
+    ? '1'
+    : stringFlag(flags, 'salience-threshold');
   if (raw === undefined) return {};
   const threshold = Number(raw);
   if (!Number.isFinite(threshold) || threshold <= 0) {
-    return { fail: failLater(`Invalid --salience-threshold: "${raw}". Must be a positive number.`) };
+    return {
+      fail: failLater(`Invalid --salience-threshold: "${raw}". Must be a positive number.`),
+    };
   }
   return { value: threshold };
 }
 
-function parseChoiceFlag(flags: CliFlags, name: 'outcome' | 'layer', valid: readonly string[]): ParsedFlag<string> {
+function parseChoiceFlag(
+  flags: CliFlags,
+  name: 'outcome' | 'layer',
+  valid: readonly string[],
+): ParsedFlag<string> {
   const raw = stringFlag(flags, name);
   if (hasFlag(flags, name) && raw === undefined) {
     return { fail: failLater(`--${name} requires a value. Must be one of: ${valid.join(', ')}.`) };
@@ -159,7 +179,9 @@ function parseChoiceFlag(flags: CliFlags, name: 'outcome' | 'layer', valid: read
   const value = raw?.trim() ?? '';
   if (!value) return {};
   if (!valid.includes(value)) {
-    return { fail: failLater(`Invalid --${name}: "${value}". Must be one of: ${valid.join(', ')}.`) };
+    return {
+      fail: failLater(`Invalid --${name}: "${value}". Must be one of: ${valid.join(', ')}.`),
+    };
   }
   return { value };
 }
@@ -283,11 +305,16 @@ export interface PricedEntries extends RecallRowOrigin {
   readonly printCost: (r: SearchResult) => number;
 }
 
-function priceRecallEntries(ctx: api.Context, query: string, parsed: ParsedRecallFlags): PricedEntries {
+function priceRecallEntries(
+  ctx: api.Context,
+  query: string,
+  parsed: ParsedRecallFlags,
+): PricedEntries {
   const origin = recallRowOrigin(ctx, parsed.setting);
   const isGlobal = origin.isGlobal;
   const now = ctx.infra.clock();
-  const entryText = (r: SearchResult): string => recallEntryText(r, query, parsed.showWhy, isGlobal(r), now);
+  const entryText = (r: SearchResult): string =>
+    recallEntryText(r, query, parsed.showWhy, isGlobal(r), now);
   const printCost = (r: SearchResult): number => printedTokens(entryText(r));
   return { globalOn: origin.globalOn, isGlobal, entryText, printCost };
 }
@@ -300,7 +327,10 @@ function rankOptions(
   priced: PricedEntries,
 ): api.CliCoreRecall['rank'] {
   // Engines spend the budget on the text each result prints as, less the header, so selection and print agree.
-  const entryBudget = Math.max(0, parsed.budget - printedTokens(recallHeading(parsed.budget, parsed.budget, query)));
+  const entryBudget = Math.max(
+    0,
+    parsed.budget - printedTokens(recallHeading(parsed.budget, parsed.budget, query)),
+  );
   return {
     budget: entryBudget,
     cost: priced.printCost,
@@ -342,10 +372,19 @@ export interface RecallBlockHints extends RecallHints {
 type HintsFor = (list: SearchResult[], held: number) => RecallBlockHints;
 
 /** Each pipeline computes its hints over the list it returns, so they follow the list as it shrinks. */
-function recallHinter(ctx: api.Context, query: string, parsed: ParsedRecallFlags, rank: RankRecallResult): HintsFor {
+function recallHinter(
+  ctx: api.Context,
+  query: string,
+  parsed: ParsedRecallFlags,
+  rank: RankRecallResult,
+): HintsFor {
   const { tenantId, sessionId } = parsed;
   // HIPPO_ANCHORING=off and HIPPO_AVAILABILITY=off skip the work entirely.
-  const anchorRing = sessionRing({ config: ctx.config, tenantId, callers: ctx.callers }, 'cli', sessionId);
+  const anchorRing = sessionRing(
+    { config: ctx.config, tenantId, callers: ctx.callers },
+    'cli',
+    sessionId,
+  );
   const queryHash = hashQueryText(query);
   const pool = availabilityPool(ctx.config, () => [...rank.localEntries, ...rank.globalEntries]);
   return (list, held) => {
@@ -355,7 +394,10 @@ function recallHinter(ctx: api.Context, query: string, parsed: ParsedRecallFlags
         // The total includes graph-surfaced rows, so total == preRank + byBudget + returned holds for callers.
         totalCandidates: rank.totalCandidates + rank.graphAdded,
         droppedPreRank: rank.droppedPreRank + held,
-        droppedByBudget: Math.max(0, rank.totalCandidates + rank.graphAdded - rank.droppedPreRank - held - list.length),
+        droppedByBudget: Math.max(
+          0,
+          rank.totalCandidates + rank.graphAdded - rank.droppedPreRank - held - list.length,
+        ),
         summarySubstitutionsAdded: 0,
         freshTailAdded: 0,
       },
@@ -375,7 +417,11 @@ interface RecallRenderView {
   readonly entryText: (r: SearchResult) => string;
 }
 
-function renderRecallBlock(list: SearchResult[], hints: RecallBlockHints, view: RecallRenderView): string {
+function renderRecallBlock(
+  list: SearchResult[],
+  hints: RecallBlockHints,
+  view: RecallRenderView,
+): string {
   const { query, showWhy, showPlan, planText, hasContinuity, entryText } = view;
   const { activeSnapshot, sessionHandoff, recentSessionEvents } = view.continuity;
   const continuity = continuityTexts(activeSnapshot, sessionHandoff, recentSessionEvents);
@@ -383,12 +429,15 @@ function renderRecallBlock(list: SearchResult[], hints: RecallBlockHints, view: 
   const plan = showPlan && planText !== null ? [planText, ''] : [];
   return settleTokens((t) => {
     if (list.length === 0) {
-      const none = hasContinuity ? `(no memories matched "${query}")` : `No memories found for: ${query}`;
+      const none = hasContinuity
+        ? `(no memories matched "${query}")`
+        : `No memories found for: ${query}`;
       return [...plan, ...(hasContinuity ? continuity : []), none].join('\n');
     }
     // Anchoring is the stronger pull, so it prints first; the Cutoff line sits above the list, where a reader sees it.
     const lines = [...continuity];
-    if (hints.anchoring) lines.push(`[anchored_on: ${hints.anchoring.memoryId}] ${hints.anchoring.summary}`, '');
+    if (hints.anchoring)
+      lines.push(`[anchored_on: ${hints.anchoring.memoryId}] ${hints.anchoring.summary}`, '');
     if (hints.availability) {
       const { recentCount, returnedCount, summary } = hints.availability;
       lines.push(`Availability bias (${recentCount}/${returnedCount} recent): ${summary}`, '');
@@ -407,7 +456,10 @@ function payContinuity(loaded: api.ContinuityBlock, sectionBudget: number) {
   const { pays, left } = tokenPurse(sectionBudget);
   if (activeSnapshot && !pays(printedTokens(snapshotText(activeSnapshot)))) activeSnapshot = null;
   if (sessionHandoff && !pays(printedTokens(handoffText(sessionHandoff)))) sessionHandoff = null;
-  if (recentSessionEvents.length > 0 && !pays(printedTokens(sessionTrailText(recentSessionEvents)))) {
+  if (
+    recentSessionEvents.length > 0 &&
+    !pays(printedTokens(sessionTrailText(recentSessionEvents)))
+  ) {
     recentSessionEvents = [];
   }
   const continuity: api.ContinuityBlock = { activeSnapshot, sessionHandoff, recentSessionEvents };
@@ -422,7 +474,11 @@ interface RenderedRecall {
 }
 
 /** The block over one cut of the ranked rows. */
-function renderRows(rows: SearchResult[], hintsFor: HintsFor, view: RecallRenderView): RenderedRecall {
+function renderRows(
+  rows: SearchResult[],
+  hintsFor: HintsFor,
+  view: RecallRenderView,
+): RenderedRecall {
   // Copies go after every cut, so a merged row the budget drops never hides its sources.
   const results = dropHeldCopies(rows, (r) => r.entry);
   const hints = hintsFor(results, rows.length - results.length);
@@ -455,7 +511,8 @@ function fitRecallBlock(options: FitRecallBlockOptions): FittedRecall {
   const { continuity, continuityTokens } = payContinuity(loaded, sectionBudget);
   let left = sectionBudget - continuityTokens;
   const { activeSnapshot, sessionHandoff, recentSessionEvents } = continuity;
-  const hasContinuity = activeSnapshot !== null || sessionHandoff !== null || recentSessionEvents.length > 0;
+  const hasContinuity =
+    activeSnapshot !== null || sessionHandoff !== null || recentSessionEvents.length > 0;
 
   // The baserate hint depends on the query alone, so `retrieveWithCliCore` evaluates it and this only prices the line.
   const planText = planningLine(planning);
@@ -528,7 +585,10 @@ async function presentRecall(
   );
   // The token ledger books the text this recall prints, on whichever exit it takes; the ring keeps the hint the final
   // detect made.
-  return { text, shown: { results, audit, tokens: estimateTokens(text), anchoredOn: hints.anchoring?.memoryId } };
+  return {
+    text,
+    shown: { results, audit, tokens: estimateTokens(text), anchoredOn: hints.anchoring?.memoryId },
+  };
 }
 
 /** Where the presenter parks what it built; a `let` it assigned would read as never-assigned after the await. */
@@ -590,7 +650,13 @@ function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefine
   return tail;
 }
 
-export async function handleRecall({ hippoRoot, tenantId, args, flags, callers }: CommandContext): Promise<void> {
+export async function handleRecall({
+  hippoRoot,
+  tenantId,
+  args,
+  flags,
+  callers,
+}: CommandContext): Promise<void> {
   const query = args.join(' ').trim();
   if (!query) {
     fail('Please provide a search query.');

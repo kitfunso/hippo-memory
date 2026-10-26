@@ -10,7 +10,8 @@ import { isFile } from './real-path.js';
 /** Quotes one cmd.exe argument; each `%` leaves the quotes as `^%`, so no %NAME% pair can expand. */
 export function quoteCmdArg(arg: string): string {
   // cmd.exe ends the command line at CR or LF, so what follows would run as a new command.
-  if (/[\r\n]/.test(arg)) throw new Error('cmd.exe argument contains a CR or LF, which would start a new command');
+  if (/[\r\n]/.test(arg))
+    throw new Error('cmd.exe argument contains a CR or LF, which would start a new command');
   if (arg.length === 0) return '""';
   if (!/[ \t"&()^<>|%!]/.test(arg)) return arg;
   // MSVCRT reads a backslash run as literal only when no quote follows it, so a run before a quote or the closing
@@ -55,11 +56,15 @@ const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
  */
 function resolveWindowsCommand(command: string): string | null {
   const exts = (envPathExt() ?? DEFAULT_PATHEXT).split(';').filter((ext) => ext.length > 0);
-  const dirs = /[\\/]/.test(command) ? [''] : (envPath() ?? '').split(path.delimiter).filter((dir) => dir.length > 0);
+  const dirs = /[\\/]/.test(command)
+    ? ['']
+    : (envPath() ?? '').split(path.delimiter).filter((dir) => dir.length > 0);
   for (const dir of dirs) {
     const base = dir === '' ? command : path.join(dir, command);
     const candidates =
-      path.extname(command) === '' ? exts.map((ext) => base + ext) : [base, ...exts.map((ext) => base + ext)];
+      path.extname(command) === ''
+        ? exts.map((ext) => base + ext)
+        : [base, ...exts.map((ext) => base + ext)];
     const hit = candidates.find(isFile);
     if (hit !== undefined) return hit;
   }
@@ -71,7 +76,8 @@ function resolveWindowsCommand(command: string): string | null {
  * (CVE-2024-27980), so on win32 such a shim runs through cmd.exe with every argument quoted for it. */
 export function spawnArgv(argv: readonly string[], options: SpawnOptions): ChildProcess {
   const [command, ...args] = argv;
-  if (command === undefined || command.length === 0) throw new RangeError('spawnArgv needs a command: argv is empty');
+  if (command === undefined || command.length === 0)
+    throw new RangeError('spawnArgv needs a command: argv is empty');
   if (process.platform === 'win32') {
     const resolved = resolveWindowsCommand(command);
     const ext = resolved === null ? '' : path.extname(resolved).toLowerCase();
@@ -84,5 +90,9 @@ export function spawnArgv(argv: readonly string[], options: SpawnOptions): Child
       });
     }
   }
-  return spawn(command, args, { ...options, windowsHide: options.windowsHide ?? true, shell: false });
+  return spawn(command, args, {
+    ...options,
+    windowsHide: options.windowsHide ?? true,
+    shell: false,
+  });
 }

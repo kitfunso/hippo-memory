@@ -8,7 +8,12 @@ import {
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '../../api/index.js';
 import { sharedStoreOf } from '../../api/types.js';
-import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
+import {
+  handleMcpRequest,
+  mcpErrorResponse,
+  type McpContext,
+  type McpRequest,
+} from '../mcp/server.js';
 import { HttpError } from '../../base/errors/http-errors.js';
 import { bodyDeadlineMs, readBody, sendJson } from '../http/http-util.js';
 import { errorFields, log } from '../../base/util/log.js';
@@ -35,7 +40,8 @@ const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 const HEADER_PIECE = /^[A-Za-z0-9\-_.!~*'()%]+$/;
 
 function decodeHeaderPiece(raw: string, header: string): string {
-  if (!HEADER_PIECE.test(raw)) throw new HttpError(400, `${header} must be percent-encoded, with no empty names`);
+  if (!HEADER_PIECE.test(raw))
+    throw new HttpError(400, `${header} must be percent-encoded, with no empty names`);
   const decoded = tryDecodeUri(raw);
   if (decoded === undefined) throw new HttpError(400, `${header} holds a bad percent escape`);
   return decoded;
@@ -43,12 +49,16 @@ function decodeHeaderPiece(raw: string, header: string): string {
 
 /** On a shared store, the caller's project from X-Hippo-Project and the comma-separated X-Hippo-Project-Aliases; any
  * other store ignores both. */
-export function callerProjectFromHeaders(req: IncomingMessage, shared: boolean): CallerProject | undefined {
+export function callerProjectFromHeaders(
+  req: IncomingMessage,
+  shared: boolean,
+): CallerProject | undefined {
   if (!shared) return undefined;
   const names = req.headersDistinct['x-hippo-project'];
   const aliasHeaders = req.headersDistinct['x-hippo-project-aliases'];
   if (names === undefined) {
-    if (aliasHeaders !== undefined) throw new HttpError(400, 'X-Hippo-Project-Aliases needs X-Hippo-Project');
+    if (aliasHeaders !== undefined)
+      throw new HttpError(400, 'X-Hippo-Project-Aliases needs X-Hippo-Project');
     return undefined;
   }
   if (names.length > 1 || (aliasHeaders?.length ?? 0) > 1) {
@@ -57,7 +67,9 @@ export function callerProjectFromHeaders(req: IncomingMessage, shared: boolean):
   const name = decodeHeaderPiece(names[0]!, 'X-Hippo-Project');
   const rawAliases = aliasHeaders?.[0] ?? '';
   const aliases =
-    rawAliases === '' ? [] : rawAliases.split(',').map((a) => decodeHeaderPiece(a, 'X-Hippo-Project-Aliases'));
+    rawAliases === ''
+      ? []
+      : rawAliases.split(',').map((a) => decodeHeaderPiece(a, 'X-Hippo-Project-Aliases'));
   assertCallerProject({ name, aliases });
   return { name, legacyName: name, aliases };
 }
@@ -130,12 +142,20 @@ function streamSlotKey(req: IncomingMessage): string {
 }
 
 /** Takes a stream slot or throws 429; the slot is released once, when the response closes. */
-function acquireStreamSlot(req: IncomingMessage, res: ServerResponse, slots: Map<string, number>): void {
+function acquireStreamSlot(
+  req: IncomingMessage,
+  res: ServerResponse,
+  slots: Map<string, number>,
+): void {
   const max = envMcpSseMaxStreams() ?? DEFAULT_MAX_STREAMS_PER_CLIENT;
   const key = streamSlotKey(req);
   const open = slots.get(key) ?? 0;
   if (open >= max) {
-    throw new HttpError(429, `too many open streams for this client (limit ${max}); close one first`, 60);
+    throw new HttpError(
+      429,
+      `too many open streams for this client (limit ${max}); close one first`,
+      60,
+    );
   }
   slots.set(key, open + 1);
   res.once('close', () => {
@@ -168,7 +188,11 @@ export async function handleMcpStream(
   keepStreamAlive(req, res, opts);
 }
 
-function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOptions): void {
+function keepStreamAlive(
+  req: IncomingMessage,
+  res: ServerResponse,
+  opts: ResolvedServeOptions,
+): void {
   const heartbeatMs = envMcpSseHeartbeatMs() ?? DEFAULT_SSE_HEARTBEAT_MS;
   const maxAgeMs = (envMcpSseMaxAgeSec() ?? DEFAULT_SSE_MAX_AGE_SEC) * 1000;
   const startedAt = Date.now();
@@ -194,7 +218,8 @@ function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: Resolv
     heartbeatVerdict(req, opts)
       .then((verdict) => {
         checking = false;
-        if (!closed && verdict === 'unavailable') log.warn('heartbeat tick skipped: auth check unavailable');
+        if (!closed && verdict === 'unavailable')
+          log.warn('heartbeat tick skipped: auth check unavailable');
         if (closed || verdict === 'unavailable') return;
         if (verdict === 'revoked') {
           closeWith('auth_revoked');

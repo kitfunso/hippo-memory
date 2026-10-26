@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { adapterReach, findDomainIo, hostReach, ioImports } from '../../scripts/check-domain-io.mjs';
+import {
+  adapterReach,
+  findDomainIo,
+  hostReach,
+  ioImports,
+} from '../../scripts/check-domain-io.mjs';
 
 describe('check-domain-io', () => {
   let dir: string;
@@ -90,7 +95,9 @@ describe('check-domain-io', () => {
 
   it('fails the file it once exempted: no exemption list exists to put one back on', () => {
     file('domain/sharing/project-merge.ts', "import * as fs from 'node:fs';\n");
-    expect(findDomainIo(dir)).toEqual([{ file: 'domain/sharing/project-merge.ts', line: 1, spec: 'node:fs' }]);
+    expect(findDomainIo(dir)).toEqual([
+      { file: 'domain/sharing/project-merge.ts', line: 1, spec: 'node:fs' },
+    ]);
   });
 
   it('finds a domain import of src/infra, an adapter module or function, and a fetch call', () => {
@@ -119,10 +126,16 @@ describe('check-domain-io', () => {
 
   it('holds domain to its ports and leaves infra, api and surface to reach the adapters', () => {
     file('domain/rerankers/a.ts', "import { processHttp } from '../../infra/http.js';\n");
-    file('domain/search/b.ts', "export const x = 1;\nconst r = await fetch('https://example.com');\n");
+    file(
+      'domain/search/b.ts',
+      "export const x = 1;\nconst r = await fetch('https://example.com');\n",
+    );
     file('api/c.ts', "import { getReranker } from '../infra/rerankers.js';\n");
     file('infra/d.ts', "import { fetchWithRetry } from './http-retry.js';\n");
-    file('surface/e.ts', "import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';\n");
+    file(
+      'surface/e.ts',
+      "import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';\n",
+    );
     expect(findDomainIo(dir)).toEqual([
       { file: 'domain/rerankers/a.ts', line: 1, spec: '../../infra/http.js' },
       { file: 'domain/search/b.ts', line: 2, spec: 'fetch()' },

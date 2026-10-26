@@ -38,7 +38,10 @@ import { DAY_MS } from '../../src/base/util/time.js';
 const yieldOnce = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 /** The hold a test picks; the store's pause, read at each flush, yields once instead of waiting out the real gap. */
-const budget = (holdMs: number, pause: WriteBudget['pause'] = yieldOnce): Pick<WriteBudget, 'holdMs'> => {
+const budget = (
+  holdMs: number,
+  pause: WriteBudget['pause'] = yieldOnce,
+): Pick<WriteBudget, 'holdMs'> => {
   vi.spyOn(WRITE_BUDGET, 'pause').mockImplementation(pause);
   return { holdMs };
 };
@@ -104,7 +107,10 @@ function seed(counts: { clusters: number; dormant: number; filler: number }): Fi
   const gone = { ...row('retired source alpha text', 70, 1), supersededBy: kept.id };
   const header = '[Consolidated from 2 related memories, newest first]';
   const retired = {
-    ...row(mergedText(header, [kept.content, gone.content]), 70, 1, { layer: Layer.Semantic, source: 'consolidation' }),
+    ...row(mergedText(header, [kept.content, gone.content]), 70, 1, {
+      layer: Layer.Semantic,
+      source: 'consolidation',
+    }),
     parents: [gone.id, kept.id],
   };
   const filler = Array.from({ length: counts.filler }, (_, i) =>
@@ -162,7 +168,10 @@ function probe(db: DatabaseSyncLike, seen: Array<{ merged: number; runs: number 
     throw err;
   }
   upsertEntryRow(db, createMemory(`prober row number ${seen.length}`, { pinned: true }));
-  seen.push({ merged: count(db, MERGED_SQL), runs: count(db, 'SELECT COUNT(*) AS c FROM consolidation_runs') });
+  seen.push({
+    merged: count(db, MERGED_SQL),
+    runs: count(db, 'SELECT COUNT(*) AS c FROM consolidation_runs'),
+  });
   db.exec('COMMIT');
 }
 
@@ -184,7 +193,8 @@ function countFlushBegins(prober: DatabaseSyncLike) {
     this: DatabaseSyncLike,
     sql: string,
   ) {
-    if (sql === 'BEGIN IMMEDIATE' && this !== prober && callStack().includes('batchWriteAndDelete')) begins++;
+    if (sql === 'BEGIN IMMEDIATE' && this !== prober && callStack().includes('batchWriteAndDelete'))
+      begins++;
     exec.call(this, sql);
   });
   return { count: () => begins, restore: () => spy.mockRestore() };
@@ -211,7 +221,9 @@ function storeState(root: string) {
     const all = (sql: string): unknown[] => db.prepare(sql).all();
     // SAFETY: pragma_table_info yields one row per column with its name.
     const columns = (
-      all(`SELECT name FROM pragma_table_info('memories') WHERE name != 'updated_at'`) as Array<{ name: string }>
+      all(`SELECT name FROM pragma_table_info('memories') WHERE name != 'updated_at'`) as Array<{
+        name: string;
+      }>
     ).map((c) => c.name);
     return {
       memories: all(`SELECT ${columns.join(', ')} FROM memories ORDER BY id`),
@@ -239,12 +251,17 @@ function storeFacts(fx: Fixture) {
     // SAFETY: both SELECTs name the columns their casts read.
     const halfLife = new Map(
       (
-        db.prepare('SELECT id, half_life_days FROM memories').all() as Array<{ id: string; half_life_days: number }>
+        db.prepare('SELECT id, half_life_days FROM memories').all() as Array<{
+          id: string;
+          half_life_days: number;
+        }>
       ).map((r) => [r.id, r.half_life_days]),
     );
     // SAFETY: parents_json is NOT NULL and always holds the JSON array of ids writeEntry stored.
     const merges = (
-      db.prepare(`SELECT parents_json FROM memories WHERE source = 'consolidation'`).all() as Array<{
+      db
+        .prepare(`SELECT parents_json FROM memories WHERE source = 'consolidation'`)
+        .all() as Array<{
         parents_json: string;
       }>
     ).map((r) => JSON.parse(r.parents_json) as string[]);
@@ -255,8 +272,11 @@ function storeFacts(fx: Fixture) {
       memoryIds,
       ftsIds: ids(db, 'SELECT id FROM memories_fts'),
       merged: clusterParents.length,
-      parentsDemoted: clusterParents.flat().every((id) => (halfLife.get(id) ?? Infinity) < fx.memberHalfLife),
-      retiredXorSuccessor: present.has(fx.retired) !== merges.some((p) => p.length === 1 && p[0] === fx.keptSource),
+      parentsDemoted: clusterParents
+        .flat()
+        .every((id) => (halfLife.get(id) ?? Infinity) < fx.memberHalfLife),
+      retiredXorSuccessor:
+        present.has(fx.retired) !== merges.some((p) => p.length === 1 && p[0] === fx.keptSource),
       sharedParents: allParents.filter((id, i) => allParents.indexOf(id) !== i),
       inBoth: dormantIds.filter((id) => present.has(id)),
       dormantMoved: fx.dormant.every((id) => dormantIds.includes(id) && !present.has(id)),
@@ -304,8 +324,12 @@ describe('chunked consolidation flush', () => {
     roots.push(copy);
     copyTree(fx.root, copy);
 
-    const chunked = await withCountedIds(() => consolidate(fx.root, { now: NOW, budget: budget(0) }));
-    const whole = await withCountedIds(() => consolidate(copy, { now: NOW, budget: budget(Infinity) }));
+    const chunked = await withCountedIds(() =>
+      consolidate(fx.root, { now: NOW, budget: budget(0) }),
+    );
+    const whole = await withCountedIds(() =>
+      consolidate(copy, { now: NOW, budget: budget(Infinity) }),
+    );
 
     expect(chunked.semanticCreated).toBe(30);
     expect(chunked.dormant).toBe(20);
@@ -324,7 +348,9 @@ describe('chunked consolidation flush', () => {
     const atNow: typeof runConsolidation = (store, opts) =>
       runConsolidation(store, { ...opts, now: NOW, budget: stopsOnSecondPause });
 
-    await expect(runSleep(ctx, { noShare: true }, { consolidate: atNow })).rejects.toThrow('stopped between chunks');
+    await expect(runSleep(ctx, { noShare: true }, { consolidate: atNow })).rejects.toThrow(
+      'stopped between chunks',
+    );
 
     const stopped = storeFacts(fx);
     // A zero hold commits one unit per chunk, so two clusters land before the second pause throws.
@@ -335,8 +361,13 @@ describe('chunked consolidation flush', () => {
     expect(stopped.inBoth).toEqual([]);
     expect(stopped.ftsIds).toEqual(stopped.memoryIds);
     expect(stopped.runRecord).toEqual({ runs: 0, sleepCount: '0', rescues: 0 });
-    const [audit] = onStore(fx.root, (db) => listAuditEvents(db, { tenantId: '__host__', op: 'consolidate' }));
-    expect(audit?.metadata).toMatchObject({ partial: true, nextUnitIds: expect.arrayContaining(fx.clusters[2]!) });
+    const [audit] = onStore(fx.root, (db) =>
+      listAuditEvents(db, { tenantId: '__host__', op: 'consolidate' }),
+    );
+    expect(audit?.metadata).toMatchObject({
+      partial: true,
+      nextUnitIds: expect.arrayContaining(fx.clusters[2]!),
+    });
 
     await consolidate(fx.root, { now: NOW, budget: budget(0) });
     const finished = storeFacts(fx);
@@ -360,9 +391,12 @@ describe('chunked consolidation flush', () => {
       await once(holder, 'message');
     });
 
-    const result = await runWithRequestStores(() => consolidate(fx.root, { now: NOW, budget: holdsOnFirstPause }), {
-      busyWaitMs: 250,
-    });
+    const result = await runWithRequestStores(
+      () => consolidate(fx.root, { now: NOW, budget: holdsOnFirstPause }),
+      {
+        busyWaitMs: 250,
+      },
+    );
 
     expect(await exited).toEqual([0]);
     expect(result.semanticCreated).toBe(4);
@@ -372,31 +406,44 @@ describe('chunked consolidation flush', () => {
   it.each([
     ['in process', (root: string) => sqliteStore(root)],
     ['on a store worker', (root: string) => workerSqliteStore(root)],
-  ])('the partial audit row names the unit that threw, not the first unit of its chunk, %s', async (_, storeAt) => {
-    const fx = seed({ clusters: 6, dormant: 0, filler: 0 });
-    const bad = fx.clusters[3]!;
-    onStore(fx.root, (db) =>
-      db.exec(
-        `CREATE TRIGGER boom BEFORE UPDATE ON memories WHEN NEW.id = '${bad[0]}' BEGIN SELECT RAISE(ABORT, 'boom'); END`,
-      ),
-    );
-    const store = storeAt(fx.root);
-    const ctx: FullContext = { ...apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' }), store };
-    const oneChunk: typeof runConsolidation = (on, opts) =>
-      runConsolidation(on, { ...opts, now: NOW, budget: budget(Infinity) });
+  ])(
+    'the partial audit row names the unit that threw, not the first unit of its chunk, %s',
+    async (_, storeAt) => {
+      const fx = seed({ clusters: 6, dormant: 0, filler: 0 });
+      const bad = fx.clusters[3]!;
+      onStore(fx.root, (db) =>
+        db.exec(
+          `CREATE TRIGGER boom BEFORE UPDATE ON memories WHEN NEW.id = '${bad[0]}' BEGIN SELECT RAISE(ABORT, 'boom'); END`,
+        ),
+      );
+      const store = storeAt(fx.root);
+      const ctx: FullContext = {
+        ...apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' }),
+        store,
+      };
+      const oneChunk: typeof runConsolidation = (on, opts) =>
+        runConsolidation(on, { ...opts, now: NOW, budget: budget(Infinity) });
 
-    try {
-      await expect(runSleep(ctx, { noShare: true }, { consolidate: oneChunk })).rejects.toThrow('boom');
-    } finally {
-      await store.close();
-    }
+      try {
+        await expect(runSleep(ctx, { noShare: true }, { consolidate: oneChunk })).rejects.toThrow(
+          'boom',
+        );
+      } finally {
+        await store.close();
+      }
 
-    const [audit] = onStore(fx.root, (db) => listAuditEvents(db, { tenantId: '__host__', op: 'consolidate' }));
-    expect(audit?.metadata).toMatchObject({ partial: true, nextUnitIds: expect.arrayContaining(bad) });
-    // SAFETY: consolidate writes nextUnitIds into the partial audit metadata as an array of unit ids.
-    const meta = audit?.metadata as { nextUnitIds: string[] } | undefined;
-    expect(meta?.nextUnitIds).not.toContain(fx.clusters[0]![0]);
-  });
+      const [audit] = onStore(fx.root, (db) =>
+        listAuditEvents(db, { tenantId: '__host__', op: 'consolidate' }),
+      );
+      expect(audit?.metadata).toMatchObject({
+        partial: true,
+        nextUnitIds: expect.arrayContaining(bad),
+      });
+      // SAFETY: consolidate writes nextUnitIds into the partial audit metadata as an array of unit ids.
+      const meta = audit?.metadata as { nextUnitIds: string[] } | undefined;
+      expect(meta?.nextUnitIds).not.toContain(fx.clusters[0]![0]);
+    },
+  );
 
   it('a sleep inside shared hook handles leaves their lock wait as it was', async () => {
     const fx = seed({ clusters: 2, dormant: 0, filler: 0 });

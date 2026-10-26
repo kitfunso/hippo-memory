@@ -9,7 +9,13 @@ export class RawAppendOnlyError extends Error {
 }
 
 /** Forget refuses a raw row and the raw archive refuses every other kind; null when the removal may go ahead. */
-export function rawRemovalRefusal(row: { readonly id: string; readonly kind: string }, archive: boolean): Error | null {
-  if (archive) return row.kind === 'raw' ? null : new BadRequestError(`memory ${row.id} is not raw (kind=${row.kind})`);
+export function rawRemovalRefusal(
+  row: { readonly id: string; readonly kind: string },
+  archive: boolean,
+): Error | null {
+  if (archive)
+    return row.kind === 'raw'
+      ? null
+      : new BadRequestError(`memory ${row.id} is not raw (kind=${row.kind})`);
   return row.kind === 'raw' ? new RawAppendOnlyError() : null;
 }

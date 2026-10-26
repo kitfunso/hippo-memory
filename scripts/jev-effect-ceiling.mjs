@@ -42,8 +42,19 @@ for (const x of lane4.rows) {
   const sBase = calculateStrength(base, now);
   // The Jev arm: error tag doubles half-life (memory.ts:394) and the tag is
   // written with negative valence, which also feeds the emotional multiplier.
-  const sTag = calculateStrength({ ...base, half_life_days: e.half_life_days * 2, emotional_valence: 'negative' }, now);
-  rows.push({ id: x.id, p: x.jev.p, label: x.label_error, sBase, sTag, mBase: mult(sBase), mTag: mult(sTag) });
+  const sTag = calculateStrength(
+    { ...base, half_life_days: e.half_life_days * 2, emotional_valence: 'negative' },
+    now,
+  );
+  rows.push({
+    id: x.id,
+    p: x.jev.p,
+    label: x.label_error,
+    sBase,
+    sTag,
+    mBase: mult(sBase),
+    mTag: mult(sTag),
+  });
 }
 
 const f = (x) => x.toFixed(4);
@@ -51,7 +62,9 @@ console.log(`rows matched in live store: ${rows.length} of ${lane4.rows.length}\
 
 const clampedBase = rows.filter((r) => r.sBase >= 0.9999).length;
 const clampedTag = rows.filter((r) => r.sTag >= 0.9999).length;
-console.log(`at the strength clamp (1.0): baseline ${clampedBase}/${rows.length}, tagged ${clampedTag}/${rows.length}`);
+console.log(
+  `at the strength clamp (1.0): baseline ${clampedBase}/${rows.length}, tagged ${clampedTag}/${rows.length}`,
+);
 console.log(
   `strength baseline: min ${f(Math.min(...rows.map((r) => r.sBase)))} max ${f(Math.max(...rows.map((r) => r.sBase)))}`,
 );
@@ -62,7 +75,9 @@ const baseRate = rows.filter((r) => r.label).length / rows.length;
 const K = Math.round(baseRate * rows.length);
 const ranked = [...rows].sort((a, b) => b.p - a.p);
 const tagSet = new Set(ranked.slice(0, K).map((r) => r.id));
-console.log(`\nselective arm: tag top ${K} of ${rows.length} by Jev p (store base rate ${f(baseRate)})`);
+console.log(
+  `\nselective arm: tag top ${K} of ${rows.length} by Jev p (store base rate ${f(baseRate)})`,
+);
 
 const arm = rows.map((r) => ({ ...r, mArm: tagSet.has(r.id) ? r.mTag : r.mBase }));
 const moved = arm.filter((r) => Math.abs(r.mArm - r.mBase) > 1e-9);

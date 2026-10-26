@@ -39,7 +39,10 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'huggingface-token', re: /\bhf_[A-Za-z]{34}\b/ },
   { name: 'gitlab-token', re: /\bglpat-[\w-]{20,}/ },
   { name: 'google-oauth-token', re: /\bya29\.[\w-]{20,}/ },
-  { name: 'slack-webhook', re: /\bhooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}/ },
+  {
+    name: 'slack-webhook',
+    re: /\bhooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}/,
+  },
   { name: 'private-key-block', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
   // sk-... (OpenAI/Anthropic) and sk_<vendor>_... shapes need a key-ish noun nearby (co-occurrence guard), so prose
   // like "the sk- prefix identifies API keys" does not flag but "prod API key sk_live_..." does.
@@ -89,7 +92,8 @@ export function detectSecret(entry: { content: string; tags: string[] }): Secret
 
 /** Only a run's first character starts a match, so a long run is scanned once; a domain's first label opens on a
  * letter, so logo@2x.png and react@18.2.0 stay. */
-const EMAIL = /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
+const EMAIL =
+  /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
 
 /**
  * Memories never hold a raw email address (AGENTS.md); phone numbers are left alone, as their patterns misfire on ids.
@@ -126,7 +130,8 @@ export function vetSecrets(content: string): SecretVet {
 const JSON_STRING = /"(?:[^"\\]|\\.)*"/g;
 
 /** Appended to a dead-letter row's error when `redactPayload` changed its body. */
-export const DLQ_REDACTED_NOTE = 'secret-shaped text redacted, signature dropped; replay needs --force';
+export const DLQ_REDACTED_NOTE =
+  'secret-shaped text redacted, signature dropped; replay needs --force';
 
 /**
  * `vetSecrets` redaction for a raw webhook body: JSON stays valid for replay, and an untouched body stays

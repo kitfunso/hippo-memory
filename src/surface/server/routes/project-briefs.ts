@@ -37,6 +37,11 @@ export const PROJECT_BRIEF_ROUTES: VersionedRouteConfig<'project_brief'> = {
   revise: (body) => {
     const summary = requiredString(body, 'summary', SUMMARY);
     const changeSummary = getString(body, 'changeSummary', OBJECT_CAPS.briefChange);
-    return (existing, id) => ({ repo: existing.repo, summary, changeSummary, supersedesBriefId: id });
+    return (existing, id) => ({
+      repo: existing.repo,
+      summary,
+      changeSummary,
+      supersedesBriefId: id,
+    });
   },
 };

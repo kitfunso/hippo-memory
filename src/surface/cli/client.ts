@@ -71,7 +71,10 @@ async function throwForStatus(res: Response): Promise<never> {
     }
   } catch (err) {
     // body wasn't JSON or ran past the cap; fall back to status line.
-    log.debug(`server error body unreadable (${errorMessage(err)}); using the status line`, errorFields(err));
+    log.debug(
+      `server error body unreadable (${errorMessage(err)}); using the status line`,
+      errorFields(err),
+    );
   }
   throw new HttpResponseError(message, res.status);
 }
@@ -98,7 +101,10 @@ async function readReply<T>(
 ): Promise<T> {
   const body = await readCappedJson(res, MAX_REPLY_BYTES);
   if (!isJsonObject(body)) {
-    throw new MalformedReplyError(route, body === null ? 'null' : Array.isArray(body) ? 'array' : 'a scalar');
+    throw new MalformedReplyError(
+      route,
+      body === null ? 'null' : Array.isArray(body) ? 'array' : 'a scalar',
+    );
   }
   if (guard && !guard(body)) throw new MalformedReplyError(route, 'unexpected fields');
   const reply: JsonValue = body;
@@ -141,7 +147,9 @@ export async function postForget(
     headers: buildHeaders(apiKey, false),
   });
   if (!res.ok) await throwForStatus(res);
-  return readReply<{ ok: true; id: string }>(res, 'DELETE /v1/memories/:id', (b) => isJsonString(b.id));
+  return readReply<{ ok: true; id: string }>(res, 'DELETE /v1/memories/:id', (b) =>
+    isJsonString(b.id),
+  );
 }
 
 export async function postPromote(
@@ -229,7 +237,12 @@ export function classifyTransportFailure(err: Error): TransportFailure {
   // replayed on the direct path.
   if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'never-sent';
   // The socket died mid-exchange.
-  if (code === 'ECONNRESET' || code === 'ECONNABORTED' || code === 'EPIPE' || code === 'UND_ERR_SOCKET') {
+  if (
+    code === 'ECONNRESET' ||
+    code === 'ECONNABORTED' ||
+    code === 'EPIPE' ||
+    code === 'UND_ERR_SOCKET'
+  ) {
     return 'delivery-unknown';
   }
   // Fetch rejects every network failure as a TypeError, with a cause only when the syscall is known, so no code means

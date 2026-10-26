@@ -1,6 +1,11 @@
 // Write-side tool handlers: hippo_remember, hippo_outcome and hippo_learn.
 
-import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN } from '../../api/index.js';
+import {
+  remember as apiRemember,
+  outcome as apiOutcome,
+  learn as apiLearn,
+  MCP_LEARN,
+} from '../../api/index.js';
 import { processGit } from '../../infra/git-runner.js';
 import { ERROR_TAG } from '../../base/memory/entry.js';
 import { mcpApiContext, type ToolCall } from './protocol.js';
@@ -53,7 +58,8 @@ export async function runLearnTool({ args, ctx }: ToolCall): Promise<string> {
     git: processGit,
   });
   if (result.status === 'not-a-repo') return 'No git history found.';
-  if (result.status === 'no-commits') return 'No fix/revert/bug commits found in the specified period.';
+  if (result.status === 'no-commits')
+    return 'No fix/revert/bug commits found in the specified period.';
   const { added, skipped, rejected, lowInfo } = result;
   const rejectedSuffix = rejected > 0 ? `, ${rejected} rejected values skipped` : '';
   const lowInfoSuffix = lowInfo > 0 ? `, ${lowInfo} low-information subjects dropped` : '';

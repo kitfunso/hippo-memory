@@ -141,19 +141,25 @@ function sqliteFolderGroups(handles: Handles): FolderGroups {
   };
 }
 
-const baseReadsBodies: Bodies<Pick<BaseMethods, 'findApiKey' | 'activeGoals' | 'planningFallacyEvidence'>> = {
+const baseReadsBodies: Bodies<
+  Pick<BaseMethods, 'findApiKey' | 'activeGoals' | 'planningFallacyEvidence'>
+> = {
   findApiKey: readApiKeyRecord,
   activeGoals: activeGoalsWithPolicies,
   planningFallacyEvidence: planningFallacyEvidence,
 };
 
-const entryReadsBodies: Bodies<Pick<BaseMethods, 'searchRecallEntries' | 'entriesByIds' | 'freshRawEntries'>> = {
+const entryReadsBodies: Bodies<
+  Pick<BaseMethods, 'searchRecallEntries' | 'entriesByIds' | 'freshRawEntries'>
+> = {
   searchRecallEntries: listRecallEntries,
   entriesByIds: readEntriesInIdOrder,
   freshRawEntries: listFreshRawMemories,
 };
 
-function storeFilesBodies(files: StoreFiles): Bodies<Pick<BaseMethods, 'continuity' | 'bumpRecallStats'>> {
+function storeFilesBodies(
+  files: StoreFiles,
+): Bodies<Pick<BaseMethods, 'continuity' | 'bumpRecallStats'>> {
   return {
     continuity: (db, ...args) => continuity(db, files, ...args),
     bumpRecallStats: (db, recalled) => updateStats(db, files, { recalled }),
@@ -183,7 +189,10 @@ function sqliteBaseMethods({ on, files }: Handles): BaseMethods {
 }
 
 function sqliteVectorWrites(on: OnHandle): VectorWrites {
-  return bound<VectorWrites>(on, { entriesWithoutVector: entriesWithoutVector, writeVectors: writeVectors });
+  return bound<VectorWrites>(on, {
+    entriesWithoutVector: entriesWithoutVector,
+    writeVectors: writeVectors,
+  });
 }
 
 function sqliteAuditLog(on: OnHandle): AuditLog {
@@ -217,7 +226,8 @@ export function sqliteReach(
   const sharedStore = shared === true || host.isSharedStore(hippoRoot);
   const globalRoot = hippoHomeDir();
   const canReadGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
-  const globalTarget = other === undefined ? { root: globalRoot, store: openGlobal(globalRoot) } : undefined;
+  const globalTarget =
+    other === undefined ? { root: globalRoot, store: openGlobal(globalRoot) } : undefined;
   const reach: StoreReach = {
     hasLocal: other !== undefined || isInitialized(hippoRoot),
     isGlobal: isGlobalStoreRoot(hippoRoot),
@@ -231,13 +241,19 @@ export function sqliteReach(
 
 /** hippo.db as `hippo doctor` and `hippo support-bundle` read it: diagnostics and the project-tag reads on read-only
  * handles, so a check never creates or migrates the store it inspects. */
-export function sqliteDiagnosticsStore(hippoRoot: string): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {
+export function sqliteDiagnosticsStore(
+  hippoRoot: string,
+): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {
   const handles = handlesOf(hippoRoot);
   const { on } = handles;
   return {
     diagnostics: sqliteDiagnostics(on),
     projectTags: sqliteProjectTags(handles, openHippoDbReadOnly),
-    reports: bound<ProjectTagReads['reports']>(on, { entriesWhere: listEntriesWhere }, openHippoDbReadOnly),
+    reports: bound<ProjectTagReads['reports']>(
+      on,
+      { entriesWhere: listEntriesWhere },
+      openHippoDbReadOnly,
+    ),
     auditLog: bound<ProjectTagReads['auditLog']>(on, { listAuditEvents }, openHippoDbReadOnly),
   };
 }
@@ -280,6 +296,8 @@ function continuity(
   return {
     activeSnapshot,
     sessionHandoff: sessionId ? readLatestHandoff(db, tenantId, sessionId, {}, key) : null,
-    recentSessionEvents: sessionId ? listSessionEvents(db, tenantId, { session_id: sessionId, limit: eventLimit }) : [],
+    recentSessionEvents: sessionId
+      ? listSessionEvents(db, tenantId, { session_id: sessionId, limit: eventLimit })
+      : [],
   };
 }

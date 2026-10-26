@@ -8,7 +8,11 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { rescueSet } from '../../src/domain/consolidate/memory-value.js';
 import { mulberry32 } from '../_helpers/property.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadEveryTenantEntries, loadSessionDecayContext, writeEntriesTogether } from '../_helpers/root-forms.js';
+import {
+  loadEveryTenantEntries,
+  loadSessionDecayContext,
+  writeEntriesTogether,
+} from '../_helpers/root-forms.js';
 import { closeHippoDb, openHippoDb, withWriteScope } from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -98,7 +102,8 @@ describe('(h) scale characterization', () => {
           const isCondemned = rand() < CONDEMNED_FRACTION;
           const wordCount = 3 + Math.floor(rand() * 20);
           const words: string[] = [];
-          for (let w = 0; w < wordCount; w++) words.push(wordBank[Math.floor(rand() * wordBank.length)]);
+          for (let w = 0; w < wordCount; w++)
+            words.push(wordBank[Math.floor(rand() * wordBank.length)]);
           const content = `${tenantId} entry ${i}: ${words.join(' ')}`;
           // 95% non-Episodic so the merge pass's O(N^2) episodic-candidate
           // scan and detectConflicts's O(N^2) non-Semantic scan both stay
@@ -166,7 +171,9 @@ describe('(h) scale characterization', () => {
       sleepCount: sessionCtx.sleepCount,
     };
     const condemnedIds = new Set(
-      loaded.filter((e) => !e.pinned && calculateStrength(e, NOW, decayOpts) < 0.05).map((e) => e.id),
+      loaded
+        .filter((e) => !e.pinned && calculateStrength(e, NOW, decayOpts) < 0.05)
+        .map((e) => e.id),
     );
     // The seed's draws condemn 106, 117 and 104 rows: 200+ days old at a one-day half-life, while every other row is under 5 days old.
     expect(condemnedIds.size).toBe(327);
@@ -209,7 +216,9 @@ describe('(h) scale characterization', () => {
     const rescueRate = rescued1.size / condemnedIds.size;
     const perTenant: Record<string, { condemned: number; rescued: number }> = {};
     for (const tenantId of TENANTS) {
-      const tCondemned = [...condemnedIds].filter((id) => loaded.find((x) => x.id === id)?.tenantId === tenantId);
+      const tCondemned = [...condemnedIds].filter(
+        (id) => loaded.find((x) => x.id === id)?.tenantId === tenantId,
+      );
       const tRescued = tCondemned.filter((id) => rescued1.has(id));
       perTenant[tenantId] = { condemned: tCondemned.length, rescued: tRescued.length };
     }
@@ -282,7 +291,10 @@ describe('(h) scale characterization', () => {
     expect([...mutatedByIdMeta.keys()].sort()).toEqual([...cycle1ByIdMeta.keys()].sort());
     for (const [id, meta1] of cycle1ByIdMeta) {
       const meta2 = mutatedByIdMeta.get(id);
-      expect(meta2, `tenant A rescue metadata differs in the tenant-B-mutated store for ${id}`).toEqual(meta1);
+      expect(
+        meta2,
+        `tenant A rescue metadata differs in the tenant-B-mutated store for ${id}`,
+      ).toEqual(meta1);
       expect(meta2!.rank).toBe(meta1.rank);
       expect(meta2!.totalNonPinned).toBe(meta1.totalNonPinned);
       expect(meta2!.keepN).toBe(meta1.keepN);
@@ -364,14 +376,20 @@ describe('(i) dry-run parity', () => {
 
     const rescueLines = detailLines(realResult).filter((l) => l.includes('🛟'));
     expect(rescueLines).toHaveLength(3);
-    for (const l of rescueLines) expect(l).toMatch(/ - rescued \(rank [123]\/10 in tenant ti, top 3\)$/);
+    for (const l of rescueLines)
+      expect(l).toMatch(/ - rescued \(rank [123]\/10 in tenant ti, top 3\)$/);
 
     const events = auditRescueRows(dirReal, 'ti');
     expect(events.length).toBe(3);
     expect(new Set(events.map((e) => e.targetId))).toEqual(expectedRescued);
     for (const ev of events) {
       // SAFETY: consolidate.ts's mv_rescue audit always writes metadata as exactly { rank, totalNonPinned, keepN, score }.
-      const meta = ev.metadata as { rank?: number; totalNonPinned?: number; keepN?: number; score?: number };
+      const meta = ev.metadata as {
+        rank?: number;
+        totalNonPinned?: number;
+        keepN?: number;
+        score?: number;
+      };
       expect(meta.totalNonPinned).toBe(10);
       expect(meta.keepN).toBe(3);
       expect(meta.rank).toBeGreaterThanOrEqual(1);

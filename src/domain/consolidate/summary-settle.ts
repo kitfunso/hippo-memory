@@ -28,12 +28,19 @@ export async function applyRebuild(
   patch: RebuildPatch,
 ): Promise<SummarySettled> {
   const { id, tenantId } = summary;
-  const content = patch.bumpRebuildCount ? { text: patch.content, rebuiltAt: patch.now.toISOString() } : undefined;
+  const content = patch.bumpRebuildCount
+    ? { text: patch.content, rebuiltAt: patch.now.toISOString() }
+    : undefined;
   const settled = await store.consolidation.settleSummary({
     id,
     tenantId,
     actor: patch.actor,
-    fields: { content, descendantCount: patch.descendantCount, earliestAt: patch.earliestAt, latestAt: patch.latestAt },
+    fields: {
+      content,
+      descendantCount: patch.descendantCount,
+      earliestAt: patch.earliestAt,
+      latestAt: patch.latestAt,
+    },
     audit: [
       {
         tenantId,
@@ -74,7 +81,13 @@ export async function settleFreshSummary(
     tenantId,
     actor,
     audit: [
-      { tenantId, actor, op: 'summary_marked_clean', targetId: id, metadata: { dag_level: summary.dagLevel, source } },
+      {
+        tenantId,
+        actor,
+        op: 'summary_marked_clean',
+        targetId: id,
+        metadata: { dag_level: summary.dagLevel, source },
+      },
     ],
   });
 }

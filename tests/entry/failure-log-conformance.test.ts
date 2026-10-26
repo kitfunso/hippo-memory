@@ -38,15 +38,31 @@ const event = (over: Partial<FailureEvent> = {}): FailureEvent => ({
 
 async function seed(dir: string): Promise<void> {
   const log = sqliteStore(dir).failureLog;
-  await log.record(event({ requestId: 'req-old', outcome: 'duplicate', now: '2025-10-01T00:00:00.000Z' }));
-  await log.record(event({ requestId: 'req-1', outcome: 'store-failed', now: '2026-02-28T00:00:00.000Z' }));
   await log.record(
-    event({ tenantId: TENANT_B, sessionId: 's-b', requestId: 'req-1', now: '2026-02-28T00:00:00.000Z' }),
+    event({ requestId: 'req-old', outcome: 'duplicate', now: '2025-10-01T00:00:00.000Z' }),
   );
-  const lesson = (content: string, over: Parameters<typeof createMemory>[1], origin: string | null): void =>
+  await log.record(
+    event({ requestId: 'req-1', outcome: 'store-failed', now: '2026-02-28T00:00:00.000Z' }),
+  );
+  await log.record(
+    event({
+      tenantId: TENANT_B,
+      sessionId: 's-b',
+      requestId: 'req-1',
+      now: '2026-02-28T00:00:00.000Z',
+    }),
+  );
+  const lesson = (
+    content: string,
+    over: Parameters<typeof createMemory>[1],
+    origin: string | null,
+  ): void =>
     writeEntry(
       dir,
-      { ...createMemory(content, { tenantId: TENANT_A, tags: ['error', TAG], ...over }), originProject: origin },
+      {
+        ...createMemory(content, { tenantId: TENANT_A, tags: ['error', TAG], ...over }),
+        originProject: origin,
+      },
       { actor: 'cli' },
     );
   lesson('lesson in proj', {}, 'proj');
@@ -58,7 +74,10 @@ async function seed(dir: string): Promise<void> {
   lesson('lesson of tenant b', { tenantId: TENANT_B }, 'proj');
 }
 
-async function conforms<G extends 'failureLog' | 'lessonWrites'>(group: G, calls: readonly GroupCall<G, Value>[]) {
+async function conforms<G extends 'failureLog' | 'lessonWrites'>(
+  group: G,
+  calls: readonly GroupCall<G, Value>[],
+) {
   const sqlite = await runOnFixture(fixture, group, calls);
   return sqlite.outcomes;
 }
@@ -115,7 +134,12 @@ describe('FailureLog.record', () => {
       (g) => g.requestOutcome(TENANT_A, 'req-old', 's-1'),
       (g) => g.record(event({ requestId: 'req-1' })),
     ]);
-    expect(outcomes.slice(0, 4)).toEqual([{ value: 4 }, { value: 5 }, { value: 'stored' }, { value: null }]);
+    expect(outcomes.slice(0, 4)).toEqual([
+      { value: 4 },
+      { value: 5 },
+      { value: 'stored' },
+      { value: null },
+    ]);
     expect(outcomes[4]).toHaveProperty('error');
   });
 });

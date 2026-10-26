@@ -24,10 +24,17 @@ export interface ScryptParams {
   readonly maxmem: number;
 }
 
-export const DEFAULT_SCRYPT: ScryptParams = { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: SCRYPT_MAXMEM };
+export const DEFAULT_SCRYPT: ScryptParams = {
+  N: SCRYPT_N,
+  r: SCRYPT_R,
+  p: SCRYPT_P,
+  maxmem: SCRYPT_MAXMEM,
+};
 
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
-const MINTED_KEY_PATTERN = new RegExp(`^${API_KEY_PREFIX}[a-z2-7]{${ID_LEN}}\\.[a-z2-7]{${SECRET_LEN}}$`);
+const MINTED_KEY_PATTERN = new RegExp(
+  `^${API_KEY_PREFIX}[a-z2-7]{${ID_LEN}}\\.[a-z2-7]{${SECRET_LEN}}$`,
+);
 
 function randBase32(n: number): string {
   const bytes = randomBytes(n);
@@ -61,7 +68,9 @@ export function mintApiKey(): MintedApiKey {
 
 /** The key id of a minted-key-shaped token, else null. */
 export function mintedKeyId(plaintext: string): string | null {
-  return MINTED_KEY_PATTERN.test(plaintext) ? plaintext.slice(0, API_KEY_PREFIX.length + ID_LEN) : null;
+  return MINTED_KEY_PATTERN.test(plaintext)
+    ? plaintext.slice(0, API_KEY_PREFIX.length + ID_LEN)
+    : null;
 }
 
 /** What a stored `scrypt$<saltHex>$<hashHex>` or `scrypt2$<N>$<r>$<p>$<saltHex>$<hashHex>` value asks of a derivation,
@@ -150,7 +159,12 @@ export function isUsableKey<R extends KeyRowFacts>(record: R | null, now: number
 export function verifiedKeyOf(keyId: string, record: KeyRowFacts): VerifiedApiKey {
   // Fail-safe to least privilege: any role value but 'admin' reads as 'member'.
   const role: 'admin' | 'member' = record.role === 'admin' ? 'admin' : 'member';
-  const key: VerifiedApiKey = { tenantId: record.tenantId, keyId, role, scopes: [...record.scopes] };
+  const key: VerifiedApiKey = {
+    tenantId: record.tenantId,
+    keyId,
+    role,
+    scopes: [...record.scopes],
+  };
   // Only a real name counts as an owner; anything else leaves the key keyed on its own id.
   if (record.ownerSubject) key.ownerSubject = record.ownerSubject;
   return key;

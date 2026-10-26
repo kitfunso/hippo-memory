@@ -10,7 +10,12 @@ import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from 
 import { gitLayout, type GitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container, Listing } from './types.js';
 import type { Scope } from '../../base/memory/agent-memory-tools.js';
-import { isJsonObjectLiteral, isJsonString, parseJson, tryParseJson } from '../../base/util/json.js';
+import {
+  isJsonObjectLiteral,
+  isJsonString,
+  parseJson,
+  tryParseJson,
+} from '../../base/util/json.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 
 const NAME_SLUG_MAX_CHARS = 200;
@@ -56,8 +61,14 @@ export const claudeCodeAdapter: Adapter = {
   list(ctx, scope) {
     const config = claudeConfigDir(ctx.home, ctx.env);
     const warnings: string[] = [];
-    const folders = scope === 'project' ? projectFolders(ctx, config) : userFolders(ctx, config, warnings);
-    return { tool: 'claude-code', home: config, containers: readFolders(ctx, folders, scope), warnings };
+    const folders =
+      scope === 'project' ? projectFolders(ctx, config) : userFolders(ctx, config, warnings);
+    return {
+      tool: 'claude-code',
+      home: config,
+      containers: readFolders(ctx, folders, scope),
+      warnings,
+    };
   },
 };
 
@@ -130,7 +141,8 @@ function transcriptStartCwd(files: AgentFiles, transcriptPath: string): string |
 
 function projectFolders(ctx: AdapterContext, config: string): string[] {
   const projects = path.join(config, 'projects');
-  const names = ctx.projectRoot === undefined ? [] : [...claudeMemoryFolderNames(ctx, ctx.projectRoot)];
+  const names =
+    ctx.projectRoot === undefined ? [] : [...claudeMemoryFolderNames(ctx, ctx.projectRoot)];
   const pinned = pinnedProjectDirName(ctx.env);
   if (pinned !== null) names.push(pinned);
   return names.map((name) => path.join(projects, name, 'memory'));
@@ -139,7 +151,9 @@ function projectFolders(ctx: AdapterContext, config: string): string[] {
 function pinnedProjectDirName(env: AdapterContext['env']): string | null {
   const pinned = env.CLAUDE_CODE_PROJECT_DIR_NAME;
   // Claude reads the pinned name only alongside a pinned config folder.
-  return env.CLAUDE_CONFIG_DIR && pinned !== undefined && PROJECT_DIR_NAME.test(pinned) ? pinned : null;
+  return env.CLAUDE_CONFIG_DIR && pinned !== undefined && PROJECT_DIR_NAME.test(pinned)
+    ? pinned
+    : null;
 }
 
 function userFolders(ctx: AdapterContext, config: string, warnings: string[]): string[] {
@@ -148,7 +162,11 @@ function userFolders(ctx: AdapterContext, config: string, warnings: string[]): s
 }
 
 // User settings only: a cloned repository's own settings must not point the import at another project's notes.
-function autoMemoryDirectory(ctx: AdapterContext, settings: string, warnings: string[]): string | null {
+function autoMemoryDirectory(
+  ctx: AdapterContext,
+  settings: string,
+  warnings: string[],
+): string | null {
   if (!ctx.files.exists(settings)) return null;
   const file = ctx.files.readText(settings);
   if (!file.ok) {
@@ -167,7 +185,9 @@ function autoMemoryDirectory(ctx: AdapterContext, settings: string, warnings: st
   if (!isStringValue(value) || value === '') return null;
   const dir = expandHome(value, ctx.home);
   if (path.isAbsolute(dir)) return dir;
-  warnings.push(`${settings}: autoMemoryDirectory "${value}" is not absolute or under ~/, so it is ignored`);
+  warnings.push(
+    `${settings}: autoMemoryDirectory "${value}" is not absolute or under ~/, so it is ignored`,
+  );
   return null;
 }
 

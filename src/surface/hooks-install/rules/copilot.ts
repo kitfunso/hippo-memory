@@ -101,7 +101,9 @@ function isHipposServer(entry: JsonValue | undefined, host: McpHost): boolean {
   if (!isJsonObjectLiteral(entry) || !('command' in entry) || !('args' in entry)) return false;
   const ours = host.server();
   return Object.entries(entry).every(([key, value]) =>
-    key === 'command' ? value === 'hippo' || value === 'hippo.cmd' : isDeepStrictEqual(value, ours[key]),
+    key === 'command'
+      ? value === 'hippo' || value === 'hippo.cmd'
+      : isDeepStrictEqual(value, ours[key]),
   );
 }
 
@@ -129,7 +131,10 @@ export type McpMergeStatus = 'added' | 'present' | 'user-owned' | 'unreadable';
 
 /** Adds hippo's server and keeps every other key; a "hippo" key hippo did not write stays as it is. The caller writes
  * the config on `added`. */
-export function addHippoServer(read: McpConfig, host: McpHost): Exclude<McpMergeStatus, 'unreadable'> {
+export function addHippoServer(
+  read: McpConfig,
+  host: McpHost,
+): Exclude<McpMergeStatus, 'unreadable'> {
   const existing = read.servers[MCP_KEY];
   if (existing !== undefined) return isHipposServer(existing, host) ? 'present' : 'user-owned';
   read.servers[MCP_KEY] = host.server();
@@ -140,7 +145,10 @@ export type McpRemoveStatus = 'removed' | 'absent' | 'user-owned' | 'unreadable'
 
 /** Removes the "hippo" key only when hippo wrote it, and the host's table once it is empty. The caller writes the
  * config on `removed`. */
-export function removeHippoServer(read: McpConfig, host: McpHost): Exclude<McpRemoveStatus, 'unreadable'> {
+export function removeHippoServer(
+  read: McpConfig,
+  host: McpHost,
+): Exclude<McpRemoveStatus, 'unreadable'> {
   const existing = read.servers[MCP_KEY];
   if (existing === undefined) return 'absent';
   if (!isHipposServer(existing, host)) return 'user-owned';
@@ -202,7 +210,8 @@ function withoutCopilotBlock(text: string, found: FoundBlock): string {
   const from = found.start - HOOK_MARKERS.start.length;
   const to = found.end + HOOK_MARKERS.end.length;
   const after = text.startsWith('\r\n', to) ? 2 : text.startsWith('\n', to) ? 1 : 0;
-  const before = after > 0 ? 0 : text.endsWith('\r\n', from) ? 2 : text.endsWith('\n', from) ? 1 : 0;
+  const before =
+    after > 0 ? 0 : text.endsWith('\r\n', from) ? 2 : text.endsWith('\n', from) ? 1 : 0;
   return text.slice(0, from - before) + text.slice(to + after);
 }
 
@@ -217,7 +226,8 @@ export interface InstructionsRemovalPlan {
 /** Splices out only hippo's own Copilot block and keeps every other byte. */
 export function planInstructionsRemoval(old: string): InstructionsRemovalPlan {
   const found = hippoBlock(old);
-  if (found === null) return { status: old.includes(HOOK_MARKERS.start) ? 'unclosed' : 'absent', left: old };
+  if (found === null)
+    return { status: old.includes(HOOK_MARKERS.start) ? 'unclosed' : 'absent', left: old };
   if (!isCopilotBlock(found.inner)) return { status: 'kept', left: old };
   const left = withoutCopilotBlock(old, found);
   return { status: 'removed', left: left.trim() === '' ? null : left };

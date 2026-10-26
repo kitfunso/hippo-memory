@@ -11,6 +11,8 @@ export const entryHost = createHost();
 export const entryInfra = rootInfra(entryHost);
 
 /** `ctx` with the real ports when its builder set none, as EntryContext documents. */
-export function withEntryInfra<C extends { readonly infra?: InfraPorts }>(ctx: C): C & { readonly infra: InfraPorts } {
+export function withEntryInfra<C extends { readonly infra?: InfraPorts }>(
+  ctx: C,
+): C & { readonly infra: InfraPorts } {
   return { ...ctx, infra: ctx.infra ?? entryInfra() };
 }

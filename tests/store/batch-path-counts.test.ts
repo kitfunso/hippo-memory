@@ -16,7 +16,11 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntriesTogether, loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
+import {
+  writeEntriesTogether,
+  loadEveryTenantEntries,
+  writeEntry,
+} from '../_helpers/root-forms.js';
 import { seedRows } from '../_helpers/seed-rows.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
@@ -49,7 +53,10 @@ describe('sleep after consolidation', () => {
     // Every row shares the fake clock's timestamp, so ids in write order keep the merge and survivor picks off random UUIDs.
     let seq = 0;
     const put = (text: string, options: { tags?: string[]; tenantId: string }): void =>
-      writeEntry(root, { ...createMemory(text, options), id: `batch-${String(seq++).padStart(2, '0')}` });
+      writeEntry(root, {
+        ...createMemory(text, options),
+        id: `batch-${String(seq++).padStart(2, '0')}`,
+      });
     for (const tenantId of ['default', 'acme']) {
       for (const text of [
         'the deploy runs on friday at noon',
@@ -108,7 +115,9 @@ describe('sleep after consolidation', () => {
 
   it('never reads the whole store: consolidation reads by id, and dedup, audit and ambient page it once each', async () => {
     const root = seeded();
-    const { statements } = await recordStatementsAsync(() => runSleep(ctxFor(root), { noShare: true }));
+    const { statements } = await recordStatementsAsync(() =>
+      runSleep(ctxFor(root), { noShare: true }),
+    );
     expect(wholeStoreReads(statements)).toBe(0);
     const isPageRead = (sql: string): boolean =>
       sql.startsWith(FULL_ROW) && sql.endsWith('created ASC, id ASC LIMIT ?');
@@ -155,13 +164,18 @@ describe('invalidateMatching with onlyId', () => {
     const pinned = createMemory('pinned row about the zephyrine cache', { pinned: true });
     const plain = createMemory('plain row about the zephyrine cache');
     for (const row of [other, pinned, plain]) writeEntry(root, row);
-    expect((await invalidateMatching(sqliteStore(root), target, 'default', { onlyId: other.id })).targets).toEqual([]);
     expect(
-      (await invalidateMatching(sqliteStore(root), target, 'default', { onlyId: pinned.id })).skippedPinned,
+      (await invalidateMatching(sqliteStore(root), target, 'default', { onlyId: other.id }))
+        .targets,
+    ).toEqual([]);
+    expect(
+      (await invalidateMatching(sqliteStore(root), target, 'default', { onlyId: pinned.id }))
+        .skippedPinned,
     ).toEqual([pinned.id]);
-    expect((await invalidateMatching(sqliteStore(root), target, 'default', { onlyId: 'no-such-id' })).invalidated).toBe(
-      0,
-    );
+    expect(
+      (await invalidateMatching(sqliteStore(root), target, 'default', { onlyId: 'no-such-id' }))
+        .invalidated,
+    ).toBe(0);
     expect(
       (
         await invalidateMatching(sqliteStore(root), target, 'default', {
@@ -170,7 +184,9 @@ describe('invalidateMatching with onlyId', () => {
         })
       ).targets,
     ).toEqual([plain.id]);
-    expect(loadEveryTenantEntries(root).find((e) => e.id === plain.id)!.confidence).toBe(plain.confidence);
+    expect(loadEveryTenantEntries(root).find((e) => e.id === plain.id)!.confidence).toBe(
+      plain.confidence,
+    );
   });
 
   it('reads one memory row however many the tenant holds', async () => {
@@ -196,7 +212,9 @@ describe('syncGlobalToLocal', () => {
   function stores(n: number) {
     const localRoot = makeRoot('batch-sync-local');
     const globalRoot = makeRoot('batch-sync-global');
-    const rows = Array.from({ length: n }, (_, i) => createMemory(`global lesson ${i} about the zephyrine cache`));
+    const rows = Array.from({ length: n }, (_, i) =>
+      createMemory(`global lesson ${i} about the zephyrine cache`),
+    );
     writeEntriesTogether(globalRoot, rows);
     return { localRoot, globalRoot, rows };
   }
@@ -207,8 +225,14 @@ describe('syncGlobalToLocal', () => {
     const sameText = createMemory('local text the global store also holds');
     writeEntry(localRoot, sameText);
     writeEntry(globalRoot, createMemory(sameText.content));
-    writeEntry(globalRoot, createMemory('the deploy key is AKIAIOSFODNN7EXAMPLE', { tags: ['secret'] }));
-    writeEntry(globalRoot, createMemory('an imported agent note about caching', { source: 'agent-memory:claude' }));
+    writeEntry(
+      globalRoot,
+      createMemory('the deploy key is AKIAIOSFODNN7EXAMPLE', { tags: ['secret'] }),
+    );
+    writeEntry(
+      globalRoot,
+      createMemory('an imported agent note about caching', { source: 'agent-memory:claude' }),
+    );
     const rejected = createMemory('a value this local store rejected');
     const twin = createMemory(rejected.content);
     writeEntry(globalRoot, rejected);
@@ -230,11 +254,15 @@ describe('syncGlobalToLocal', () => {
     }
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    expect(await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN })).toBe(3);
+    expect(
+      await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN }),
+    ).toBe(3);
 
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipped 2 rejected value'));
     const local = new Map(loadEveryTenantEntries(localRoot).map((e) => [e.id, e]));
-    expect([...local.keys()].sort()).toEqual([rows[0]!.id, rows[1]!.id, rows[2]!.id, sameText.id, acme.id].sort());
+    expect([...local.keys()].sort()).toEqual(
+      [rows[0]!.id, rows[1]!.id, rows[2]!.id, sameText.id, acme.id].sort(),
+    );
     expect(local.get(acme.id)!.tenantId).toBe('acme');
     const refusals = (() => {
       const handle = openHippoDb(localRoot);

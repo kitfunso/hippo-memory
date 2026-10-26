@@ -47,7 +47,8 @@ const contents = (out: Array<{ entry: { content: string } }>) => out.map((r) => 
 describe('jev reranker', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
   const inputs = () => [asResult('alpha', 1.0), asResult('beta', 0.9), asResult('gamma', 0.8)];
-  const many = (n: number): SearchResult[] => Array.from({ length: n }, (_, i) => asResult(`cand${i}`, 1 - i / 100));
+  const many = (n: number): SearchResult[] =>
+    Array.from({ length: n }, (_, i) => asResult(`cand${i}`, 1 - i / 100));
 
   beforeEach(() => {
     vi.restoreAllMocks();

@@ -18,13 +18,22 @@ const tmp = (): string => {
 afterEach(() => {
   vi.unstubAllEnvs();
   // Retries: a killed git's sleeping hook still holds its repo as cwd for a moment on Windows.
-  for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 40, retryDelay: 100 });
+  for (const dir of made.splice(0))
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 40, retryDelay: 100 });
 });
 
 function git(cwd: string, ...args: string[]): void {
   execFileSync(
     'git',
-    ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false', ...args],
+    [
+      '-c',
+      'user.email=test@example.com',
+      '-c',
+      'user.name=Test',
+      '-c',
+      'commit.gpgsign=false',
+      ...args,
+    ],
     { cwd, stdio: 'ignore' },
   );
 }
@@ -32,7 +41,9 @@ function git(cwd: string, ...args: string[]): void {
 describe('WORKING_STATE_CAPS', () => {
   it('is the longest each derived field can be, the summary counting its trim marker', () => {
     const summaryCap = 2000;
-    expect(truncateKeepNewest('x'.repeat(summaryCap * 3), summaryCap)).toHaveLength(WORKING_STATE_CAPS.summary);
+    expect(truncateKeepNewest('x'.repeat(summaryCap * 3), summaryCap)).toHaveLength(
+      WORKING_STATE_CAPS.summary,
+    );
   });
 
   it('holds every field a long transcript derives', () => {
@@ -41,7 +52,10 @@ describe('WORKING_STATE_CAPS', () => {
       { type: 'user', message: { role: 'user', content: `turn ${i} ${'u'.repeat(400)}` } },
       {
         type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: `reply ${i} ${'a'.repeat(900)}` }] },
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: `reply ${i} ${'a'.repeat(900)}` }],
+        },
       },
     ]).flat();
     fs.writeFileSync(file, turns.map((t) => JSON.stringify(t)).join('\n') + '\n');
@@ -60,7 +74,11 @@ describe('collectHandoffEvidence', () => {
     git(repo, 'commit', '-q', '--allow-empty', '-m', 'init');
     // A wide cap: under the 2 s default a loaded machine turns these reads into nulls.
     const clean = collectHandoffEvidence(repo, 'pass', { timeoutMs: 20_000 });
-    expect(clean).toEqual({ gitRef: expect.stringMatching(/^[0-9a-f]{40}$/), dirtyTree: false, testStatus: 'pass' });
+    expect(clean).toEqual({
+      gitRef: expect.stringMatching(/^[0-9a-f]{40}$/),
+      dirtyTree: false,
+      testStatus: 'pass',
+    });
     fs.writeFileSync(path.join(repo, 'new.txt'), 'x');
     expect(collectHandoffEvidence(repo, 'unknown', { timeoutMs: 20_000 }).dirtyTree).toBe(true);
   });
@@ -68,7 +86,11 @@ describe('collectHandoffEvidence', () => {
   it('gives null fields outside a repo instead of throwing', () => {
     const dir = tmp();
     vi.stubEnv('GIT_CEILING_DIRECTORIES', path.dirname(dir));
-    expect(collectHandoffEvidence(dir, 'unknown')).toEqual({ gitRef: null, dirtyTree: null, testStatus: 'unknown' });
+    expect(collectHandoffEvidence(dir, 'unknown')).toEqual({
+      gitRef: null,
+      dirtyTree: null,
+      testStatus: 'unknown',
+    });
   });
 
   it('caps a slow git call at timeoutMs, not at the 2 s default', () => {

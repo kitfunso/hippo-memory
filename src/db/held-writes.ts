@@ -17,7 +17,10 @@ function runWrite(what: string, write: () => void): void {
   try {
     write();
   } catch (err) {
-    log.warn(`${what} not refreshed (${errorMessage(err)}); the database write succeeded`, errorFields(err));
+    log.warn(
+      `${what} not refreshed (${errorMessage(err)}); the database write succeeded`,
+      errorFields(err),
+    );
   }
 }
 
@@ -72,7 +75,11 @@ export class HeldWrites {
   #dropIdle(): void {
     const now = Date.now();
     for (const [root, state] of this.#roots) {
-      if (state.timer === undefined && state.writes.size === 0 && now - state.lastWrite >= HELD_INTERVAL_MS) {
+      if (
+        state.timer === undefined &&
+        state.writes.size === 0 &&
+        now - state.lastWrite >= HELD_INTERVAL_MS
+      ) {
         this.#roots.delete(root);
       }
     }

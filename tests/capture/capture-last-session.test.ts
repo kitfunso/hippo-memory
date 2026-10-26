@@ -3,7 +3,10 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { summariseTranscript, resolveLastSessionTranscript } from '../../src/surface/capture/transcript.js';
+import {
+  summariseTranscript,
+  resolveLastSessionTranscript,
+} from '../../src/surface/capture/transcript.js';
 import { trySymlink } from '../_helpers/symlink.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
@@ -140,7 +143,11 @@ describe('summariseTranscript', () => {
 
   it('drops promptSource: system lines but keeps queued ones', () => {
     const jsonl = transcriptJsonl([
-      { type: 'user', message: { role: 'user', content: 'please fix the login bug' }, promptSource: 'queued' },
+      {
+        type: 'user',
+        message: { role: 'user', content: 'please fix the login bug' },
+        promptSource: 'queued',
+      },
       {
         type: 'user',
         message: { role: 'user', content: 'Task notification: session idle timeout reached' },
@@ -167,7 +174,10 @@ describe('summariseTranscript', () => {
       },
       {
         type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] },
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }],
+        },
       },
     ]);
 
@@ -211,7 +221,8 @@ describe('resolveLastSessionTranscript', () => {
   it('reads a payload that starts with a byte-order mark', () => {
     const file = path.join(tmp.dir, 'from-bom-stdin.jsonl');
     fs.writeFileSync(file, '{}');
-    const payload = '\uFEFF' + JSON.stringify({ session_id: 'abc', transcript_path: file, cwd: tmp.dir });
+    const payload =
+      '\uFEFF' + JSON.stringify({ session_id: 'abc', transcript_path: file, cwd: tmp.dir });
     expect(resolveLastSessionTranscript(undefined, payload, { mayScan: false })).toBe(file);
   });
 
@@ -271,7 +282,9 @@ describe('resolveLastSessionTranscript', () => {
   });
 
   it('does not throw on non-JSON stdin text', () => {
-    expect(resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true })).toBeNull();
+    expect(
+      resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true }),
+    ).toBeNull();
   });
 
   // Another project's newest transcript, which only a manual run may pick up.
@@ -285,17 +298,26 @@ describe('resolveLastSessionTranscript', () => {
 
   it('a named transcript that is missing returns null instead of scanning every project', () => {
     plantOtherProjectTranscript();
-    expect(resolveLastSessionTranscript(path.join(tmp.dir, 'nope.jsonl'), undefined, { mayScan: true })).toBeNull();
+    expect(
+      resolveLastSessionTranscript(path.join(tmp.dir, 'nope.jsonl'), undefined, { mayScan: true }),
+    ).toBeNull();
   });
 
   it('a payload without a readable transcript_path returns null instead of scanning', () => {
     plantOtherProjectTranscript();
-    const gone = JSON.stringify({ session_id: 'abc', transcript_path: path.join(tmp.dir, 'gone.jsonl') });
+    const gone = JSON.stringify({
+      session_id: 'abc',
+      transcript_path: path.join(tmp.dir, 'gone.jsonl'),
+    });
     expect(resolveLastSessionTranscript(undefined, gone, { mayScan: true })).toBeNull();
     expect(
-      resolveLastSessionTranscript(undefined, JSON.stringify({ session_id: 'abc' }), { mayScan: true }),
+      resolveLastSessionTranscript(undefined, JSON.stringify({ session_id: 'abc' }), {
+        mayScan: true,
+      }),
     ).toBeNull();
-    expect(resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true })).toBeNull();
+    expect(
+      resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true }),
+    ).toBeNull();
   });
 
   it('scans only when the caller allows it: no path, no stdin text, mayScan true', () => {
@@ -323,13 +345,19 @@ describe('session workers never capture a transcript they were not handed', () =
   beforeEach(async () => {
     tmp = withTmpDir();
     const env = { ...process.env, HIPPO_HOME: tmp.dir, HOME: tmp.dir, USERPROFILE: tmp.dir };
-    const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: tmp.dir, env });
+    const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], {
+      cwd: tmp.dir,
+      env,
+    });
     expect(init.status).toBe(0);
     const other = path.join(tmp.dir, '.claude', 'projects', 'other-project');
     fs.mkdirSync(other, { recursive: true });
     fs.writeFileSync(
       path.join(other, 'newest.jsonl'),
-      JSON.stringify({ type: 'user', message: { role: 'user', content: "let's go with PostgreSQL" } }) + '\n',
+      JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: "let's go with PostgreSQL" },
+      }) + '\n',
     );
   });
 
@@ -401,7 +429,10 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
     // on `No .hippo directory found`.
     // HIPPO_HOME isolates the global store: `hippo init` registers the workspace into <globalRoot>/workspaces.json.
     const env = { ...process.env, HIPPO_HOME: tmp.dir };
-    const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: tmp.dir, env });
+    const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], {
+      cwd: tmp.dir,
+      env,
+    });
     expect(init.status).toBe(0);
 
     // --dry-run so no hippo store writes are needed; we only care that the tee wrapper captures stdout.

@@ -60,9 +60,14 @@ export interface ContextOptions {
 /** Budget prices in the text a caller prints, so the budget bounds what reaches the model. */
 export interface ContextCost {
   /** Tokens of one entry as printed. */
-  entry: (item: Pick<ContextResultEntry, 'entry' | 'isGlobal' | 'promptRecall' | 'origin' | 'category'>) => number;
+  entry: (
+    item: Pick<ContextResultEntry, 'entry' | 'isGlobal' | 'promptRecall' | 'origin' | 'category'>,
+  ) => number;
   /** Tokens of the headers and footer the block can print at this budget, reserved before any entry. */
-  fixed: (budget: number, can: { cross: boolean; promptRecall: boolean; ambient: boolean }) => number;
+  fixed: (
+    budget: number,
+    can: { cross: boolean; promptRecall: boolean; ambient: boolean },
+  ) => number;
   /** Tokens of the sections printed ahead of the memories, each as printed. */
   snapshot: (s: TaskSnapshot) => number;
   handoff: (h: SessionHandoff) => number;

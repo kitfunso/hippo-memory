@@ -4,7 +4,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { CODEX_TRUST_LINE } from '../../src/surface/hooks-install/rules/shared.js';
-import { installJsonHooks, uninstallJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
+import {
+  installJsonHooks,
+  uninstallJsonHooks,
+} from '../../src/surface/hooks-install/json-hooks.js';
 import { formatDoctor, runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies } from '../_helpers/cli-stores.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
@@ -28,7 +31,8 @@ const PROMPT_GROUP = {
     {
       type: 'command',
       command: 'hippo context --pinned-only --include-recent 5 --format additional-context',
-      commandWindows: 'hippo.cmd context --pinned-only --include-recent 5 --format additional-context',
+      commandWindows:
+        'hippo.cmd context --pinned-only --include-recent 5 --format additional-context',
       timeout: 5,
     },
   ],
@@ -36,11 +40,19 @@ const PROMPT_GROUP = {
 const COMPACT_GROUP = {
   matcher: 'compact',
   hooks: [
-    { type: 'command', command: 'hippo compact-resume', commandWindows: 'hippo.cmd compact-resume', timeout: 10 },
+    {
+      type: 'command',
+      command: 'hippo compact-resume',
+      commandWindows: 'hippo.cmd compact-resume',
+      timeout: 10,
+    },
   ],
 };
 const HIPPO_ONLY = { hooks: { UserPromptSubmit: [PROMPT_GROUP], SessionStart: [COMPACT_GROUP] } };
-const USER_GROUP = { matcher: 'startup', hooks: [{ type: 'command', command: 'echo my own hook', timeout: 3 }] };
+const USER_GROUP = {
+  matcher: 'startup',
+  hooks: [{ type: 'command', command: 'echo my own hook', timeout: 3 }],
+};
 
 // The AGENTS.md block hippo 0.24.0 to 1.52.6 wrote for Codex, which init refreshes.
 const OLD_CODEX = `
@@ -70,7 +82,8 @@ hippo capture --stdin <<< '<decisions, errors, lessons ${EM_DASH} 2-5 bullets>'
 `.trim();
 
 const readJson = (file: string): JsonValue => JSON.parse(fs.readFileSync(file, 'utf8'));
-const snapshot = (file: string): string | null => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null);
+const snapshot = (file: string): string | null =>
+  fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
 function writeFile(file: string, text: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
@@ -111,19 +124,29 @@ describe('installJsonHooks(codex)', () => {
 
   it('the reminder that install and doctor print says the per-prompt hook sends prompt-matched memories too', () => {
     installJsonHooks('codex');
-    expect(JSON.stringify(readJson(hooksFile))).toContain('hippo context --pinned-only --include-recent 5 ');
+    expect(JSON.stringify(readJson(hooksFile))).toContain(
+      'hippo context --pinned-only --include-recent 5 ',
+    );
     expect(CODEX_TRUST_LINE).toContain('your pinned memories plus up to 5 that match the prompt');
   });
 
   it("keeps the user's description and hooks, and appends hippo's groups after them", () => {
     writeFile(
       hooksFile,
-      JSON.stringify({ description: 'mine', hooks: { SessionStart: [USER_GROUP], Stop: [USER_GROUP] } }, null, 2),
+      JSON.stringify(
+        { description: 'mine', hooks: { SessionStart: [USER_GROUP], Stop: [USER_GROUP] } },
+        null,
+        2,
+      ),
     );
     installJsonHooks('codex');
     expect(readJson(hooksFile)).toEqual({
       description: 'mine',
-      hooks: { SessionStart: [USER_GROUP, COMPACT_GROUP], Stop: [USER_GROUP], UserPromptSubmit: [PROMPT_GROUP] },
+      hooks: {
+        SessionStart: [USER_GROUP, COMPACT_GROUP],
+        Stop: [USER_GROUP],
+        UserPromptSubmit: [PROMPT_GROUP],
+      },
     });
   });
 
@@ -161,12 +184,17 @@ describe('installJsonHooks(codex)', () => {
   it("uninstall takes only hippo's exact handler: a group hippo shares keeps the other handler, and a user's hippo-like command stays", () => {
     const mine = { type: 'command', command: 'echo mine', timeout: 3 };
     const alike = {
-      hooks: [{ type: 'command', command: 'hippo context --pinned-only --budget 300', timeout: 5 }, mine],
+      hooks: [
+        { type: 'command', command: 'hippo context --pinned-only --budget 300', timeout: 5 },
+        mine,
+      ],
     };
     const shared = { matcher: 'compact', hooks: [mine, ...COMPACT_GROUP.hooks] };
     writeFile(
       hooksFile,
-      JSON.stringify({ hooks: { UserPromptSubmit: [alike, PROMPT_GROUP], SessionStart: [shared] } }),
+      JSON.stringify({
+        hooks: { UserPromptSubmit: [alike, PROMPT_GROUP], SessionStart: [shared] },
+      }),
     );
     expect(uninstallJsonHooks('codex')).toBe(true);
     expect(readJson(hooksFile)).toEqual({
@@ -177,7 +205,10 @@ describe('installJsonHooks(codex)', () => {
   it('reads a hooks.json saved with a UTF-8 byte order mark and writes it back without one', () => {
     const BOM = String.fromCodePoint(0xfeff);
     writeFile(hooksFile, BOM + JSON.stringify({ hooks: { SessionStart: [USER_GROUP] } }));
-    expect(installJsonHooks('codex')).toMatchObject({ invalidJson: false, installedUserPromptSubmit: true });
+    expect(installJsonHooks('codex')).toMatchObject({
+      invalidJson: false,
+      installedUserPromptSubmit: true,
+    });
     expect(fs.readFileSync(hooksFile, 'utf8').startsWith(BOM)).toBe(false);
 
     writeFile(hooksFile, BOM + fs.readFileSync(hooksFile, 'utf8'));
@@ -202,16 +233,26 @@ describe('installJsonHooks(codex)', () => {
     expect(fs.existsSync(hooksFile)).toBe(true);
     expect(fs.existsSync(path.join(fake.home, '.codex', 'hooks.json'))).toBe(false);
     vi.stubEnv('CODEX_HOME', undefined);
-    expect(installJsonHooks('codex').settingsPath).toBe(path.join(fake.home, '.codex', 'hooks.json'));
+    expect(installJsonHooks('codex').settingsPath).toBe(
+      path.join(fake.home, '.codex', 'hooks.json'),
+    );
   });
 
   it('leaves a hippo command already in the file as it is, since Codex skips a changed hook until it is trusted again', () => {
     const older = {
-      hooks: [{ type: 'command', command: 'hippo context --pinned-only --format additional-context', timeout: 5 }],
+      hooks: [
+        {
+          type: 'command',
+          command: 'hippo context --pinned-only --format additional-context',
+          timeout: 5,
+        },
+      ],
     };
     writeFile(hooksFile, JSON.stringify({ hooks: { UserPromptSubmit: [older] } }));
     expect(installJsonHooks('codex').migratedPinnedInjectRecent).toBe(false);
-    expect(readJson(hooksFile)).toEqual({ hooks: { UserPromptSubmit: [older], SessionStart: [COMPACT_GROUP] } });
+    expect(readJson(hooksFile)).toEqual({
+      hooks: { UserPromptSubmit: [older], SessionStart: [COMPACT_GROUP] },
+    });
   });
 
   it.each([
@@ -245,7 +286,8 @@ function machine(): Machine {
     repo: path.join(root, 'repo'),
     codexDir: path.join(root, 'home', '.codex'),
   };
-  for (const dir of [m.home, m.repo, path.join(root, 'empty-path')]) fs.mkdirSync(dir, { recursive: true });
+  for (const dir of [m.home, m.repo, path.join(root, 'empty-path')])
+    fs.mkdirSync(dir, { recursive: true });
   return m;
 }
 
@@ -266,7 +308,12 @@ function cliEnv(m: Machine, extraEnv: Record<string, string>): NodeJS.ProcessEnv
   });
 }
 // In process; the first init case and the first hook turn keep a real child as the CLI pin.
-async function hippo(m: Machine, extraEnv: Record<string, string>, cwd: string, ...args: string[]): Promise<string> {
+async function hippo(
+  m: Machine,
+  extraEnv: Record<string, string>,
+  cwd: string,
+  ...args: string[]
+): Promise<string> {
   const r = await runCliAs(args, { cwd, env: cliEnv(m, extraEnv) });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
@@ -318,11 +365,20 @@ describe('hippo init and Codex', () => {
     expect(out).not.toContain(CODEX_TRUST_LINE);
   });
 
-  const writes: Array<{ name: string; setup: (m: Machine) => void; watched: (m: Machine) => string }> = [
-    { name: 'the AGENTS.md block', setup: (m) => fs.writeFileSync(agentsMd(m), '# Agents\n'), watched: agentsMd },
+  const writes: Array<{
+    name: string;
+    setup: (m: Machine) => void;
+    watched: (m: Machine) => string;
+  }> = [
+    {
+      name: 'the AGENTS.md block',
+      setup: (m) => fs.writeFileSync(agentsMd(m), '# Agents\n'),
+      watched: agentsMd,
+    },
     {
       name: 'the refresh of an older AGENTS.md block',
-      setup: (m) => fs.writeFileSync(agentsMd(m), `# Agents\n\n${START}\n\n${OLD_CODEX}\n  \n${END}\n`),
+      setup: (m) =>
+        fs.writeFileSync(agentsMd(m), `# Agents\n\n${START}\n\n${OLD_CODEX}\n  \n${END}\n`),
       watched: agentsMd,
     },
     {
@@ -377,7 +433,16 @@ describe('hippo init and Codex', () => {
         fs.writeFileSync(path.join(m.repo, file), text);
       }
       fs.mkdirSync(m.codexDir);
-      await hippo(m, skip ? SKIP : {}, m.root, 'init', '--scan', m.root, '--no-schedule', '--no-learn');
+      await hippo(
+        m,
+        skip ? SKIP : {},
+        m.root,
+        'init',
+        '--scan',
+        m.root,
+        '--no-schedule',
+        '--no-learn',
+      );
       const written = [
         path.join(m.home, '.claude', 'settings.json'),
         path.join(m.home, '.config', 'opencode', 'plugins', 'hippo.ts'),
@@ -397,7 +462,9 @@ describe('hippo hook install codex and hippo setup', () => {
     expect(readJson(hooksFile)).toEqual(HIPPO_ONLY);
     expect(out).toContain(CODEX_TRUST_LINE);
     expect(out).toContain('No codex launcher on PATH, so session-end capture was not set up');
-    expect(await hippo(m, env, m.repo, 'hook', 'uninstall', 'codex')).toContain("Removed hippo's Codex memory hooks");
+    expect(await hippo(m, env, m.repo, 'hook', 'uninstall', 'codex')).toContain(
+      "Removed hippo's Codex memory hooks",
+    );
     expect(readJson(hooksFile)).toEqual({});
   });
 
@@ -423,7 +490,12 @@ interface CodexPayload {
   source?: string;
 }
 
-async function runCodexHook(m: Machine, command: string, payload: CodexPayload, spawned = false): Promise<string> {
+async function runCodexHook(
+  m: Machine,
+  command: string,
+  payload: CodexPayload,
+  spawned = false,
+): Promise<string> {
   const [bin, ...args] = command.split(' ');
   expect(bin).toBe('hippo');
   const opts = { cwd: payload.cwd, env: cliEnv(m, {}), input: JSON.stringify(payload) };
@@ -473,8 +545,17 @@ describe('the installed Codex hooks, run with the payloads Codex sends', () => {
     expect(context).not.toContain('Foreign project handoff summary');
     expect(context).not.toContain('Resume the unrelated deployment');
     expect(await runCodexHook(m, command, { ...base, turn_id: 't2' })).toBe('');
-    fs.writeFileSync(path.join(globalStore, 'config.json'), JSON.stringify({ pinnedInject: { enabled: false } }));
-    expect(await runCodexHook(m, command, { ...base, session_id: 'projectless-disabled', turn_id: 't1' })).toBe('');
+    fs.writeFileSync(
+      path.join(globalStore, 'config.json'),
+      JSON.stringify({ pinnedInject: { enabled: false } }),
+    );
+    expect(
+      await runCodexHook(m, command, {
+        ...base,
+        session_id: 'projectless-disabled',
+        turn_id: 't1',
+      }),
+    ).toBe('');
     expect(fs.existsSync(path.join(m.repo, '.hippo'))).toBe(false);
   });
 
@@ -515,7 +596,8 @@ describe('the installed Codex hooks, run with the payloads Codex sends', () => {
         turn_id: turn,
         prompt: 'what does the release need?',
       });
-    const context = (stdout: string): string => JSON.parse(stdout).hookSpecificOutput.additionalContext;
+    const context = (stdout: string): string =>
+      JSON.parse(stdout).hookSpecificOutput.additionalContext;
 
     expect(context(await prompt('t1'))).toContain('the release script needs the staging flag');
     expect(await prompt('t2')).toBe('');
@@ -535,7 +617,13 @@ describe('hippo doctor and Codex', () => {
     const fake = withFakeHome('hippo-codex-doctor-');
     try {
       const report = () =>
-        runDoctor({ diagnosticsBodies, tenantId: 'default', cwd: fake.home, home: fake.home, version: 'test' });
+        runDoctor({
+          diagnosticsBodies,
+          tenantId: 'default',
+          cwd: fake.home,
+          home: fake.home,
+          version: 'test',
+        });
       expect((await report()).checks.find((c) => c.id === 'codex')).toBeUndefined();
       fs.mkdirSync(path.join(fake.home, '.codex'));
       const before = await report();
@@ -543,7 +631,9 @@ describe('hippo doctor and Codex', () => {
         status: 'warn',
         detail: "Codex found, but hippo's memory hooks are not installed",
       });
-      expect(formatDoctor(before)).toContain('fix: hippo hook install codex   (then trust the hooks once in /hooks)');
+      expect(formatDoctor(before)).toContain(
+        'fix: hippo hook install codex   (then trust the hooks once in /hooks)',
+      );
       installJsonHooks('codex');
       expect(formatDoctor(await report())).toContain(
         `[ok  ] codex       Codex: hippo memory hooks installed. ${CODEX_TRUST_LINE}`,
@@ -571,7 +661,9 @@ describe('hippo doctor and Codex', () => {
         status: 'warn',
         detail: "Codex's hooks.json is not a JSON object, so Codex runs no hook from it",
       });
-      expect(formatDoctor(report)).toContain('fix: repair hooks.json, then run: hippo hook install codex');
+      expect(formatDoctor(report)).toContain(
+        'fix: repair hooks.json, then run: hippo hook install codex',
+      );
     } finally {
       fake.cleanup();
     }

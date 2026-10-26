@@ -51,24 +51,45 @@ const PLAIN_ROW: Omit<WrittenRow, 'source_session_id'> = {
 
 const REMEMBER_FLAGS: ReadonlyArray<[string, string[], Partial<WrittenRow>]> = [
   ['plain', [], {}],
-  ['--tag twice', ['--tag', 'billing', '--tag', 'retry'], { tags: ['billing', 'retry', ...PATH_TAGS] }],
+  [
+    '--tag twice',
+    ['--tag', 'billing', '--tag', 'retry'],
+    { tags: ['billing', 'retry', ...PATH_TAGS] },
+  ],
   // An error doubles the half-life and marks the row negative.
-  ['--error', ['--error'], { tags: ['error', ...PATH_TAGS], half_life_days: 730, emotional_valence: 'negative' }],
+  [
+    '--error',
+    ['--error'],
+    { tags: ['error', ...PATH_TAGS], half_life_days: 730, emotional_valence: 'negative' },
+  ],
   ['--pin', ['--pin'], { pinned: 1 }],
   ['--observed', ['--observed'], { confidence: 'observed' }],
   ['--inferred', ['--inferred'], { confidence: 'inferred' }],
-  ['--scope', ['--scope', 'team:eng'], { scope: 'team:eng', tags: [...PATH_TAGS, 'scope:team:eng'] }],
+  [
+    '--scope',
+    ['--scope', 'team:eng'],
+    { scope: 'team:eng', tags: [...PATH_TAGS, 'scope:team:eng'] },
+  ],
   ['--owner', ['--owner', 'user:alice'], { owner: 'user:alice' }],
-  ['--artifact-ref', ['--artifact-ref', 'gh://acme/billing/pull/12'], { artifact_ref: 'gh://acme/billing/pull/12' }],
+  [
+    '--artifact-ref',
+    ['--artifact-ref', 'gh://acme/billing/pull/12'],
+    { artifact_ref: 'gh://acme/billing/pull/12' },
+  ],
   ['--kind superseded', ['--kind', 'superseded'], { kind: 'superseded' }],
   [
     'every row flag at once',
-    ['--tag', 'billing', '--error', '--pin', '--inferred', '--scope', 'team:eng', '--owner', 'user:alice'].concat([
-      '--artifact-ref',
-      'gh://acme/billing/pull/12',
-      '--kind',
-      'superseded',
-    ]),
+    [
+      '--tag',
+      'billing',
+      '--error',
+      '--pin',
+      '--inferred',
+      '--scope',
+      'team:eng',
+      '--owner',
+      'user:alice',
+    ].concat(['--artifact-ref', 'gh://acme/billing/pull/12', '--kind', 'superseded']),
     {
       tags: ['billing', 'error', ...PATH_TAGS, 'scope:team:eng'],
       half_life_days: 730,
@@ -91,7 +112,9 @@ describe('hippo remember (built CLI, no server)', () => {
     expect(s.rows()).toEqual([expect.objectContaining({ ...PLAIN_ROW, ...changed })]);
     expect(ran).toEqual(remembered(row!));
     expect(s.audit()).toEqual([`default cli remember ${String(row!['id'])}`]);
-    expect(s.auditMeta()).toEqual([{ kind: changed.kind ?? 'distilled', scope: changed.scope ?? null }]);
+    expect(s.auditMeta()).toEqual([
+      { kind: changed.kind ?? 'distilled', scope: changed.scope ?? null },
+    ]);
     expect(s.counters()['total_remembered']).toBe('1');
   });
 
@@ -99,18 +122,28 @@ describe('hippo remember (built CLI, no server)', () => {
     const s = new Store();
     const ran = await s.run('remember', TEXT, '--global');
     const rows = s.rows('global');
-    expect(rows).toEqual([expect.objectContaining({ ...PLAIN_ROW, source: 'cli-global', origin_project: '' })]);
+    expect(rows).toEqual([
+      expect.objectContaining({ ...PLAIN_ROW, source: 'cli-global', origin_project: '' }),
+    ]);
     expect(ran).toEqual(remembered(rows[0]!, '[global] '));
     expect([s.rows(), s.audit()]).toEqual([[], []]);
     expect(s.audit('global')).toEqual([`default cli remember ${String(rows[0]!['id'])}`]);
-    expect([s.counters()['total_remembered'], s.counters('global')['total_remembered']]).toEqual(['0', '1']);
+    expect([s.counters()['total_remembered'], s.counters('global')['total_remembered']]).toEqual([
+      '0',
+      '1',
+    ]);
   });
 
   it('a second row whose tags the store already holds, and each row counts once', async () => {
     const s = new Store();
     const runs = [
       await s.run('remember', TEXT, '--tag', 'billing'),
-      await s.run('remember', 'the invoice worker sends a receipt after each charge', '--tag', 'billing'),
+      await s.run(
+        'remember',
+        'the invoice worker sends a receipt after each charge',
+        '--tag',
+        'billing',
+      ),
     ];
     const rows = s.rows();
     expect(rows.map((r) => [r['content'], r['tags']])).toEqual([
@@ -138,7 +171,10 @@ describe('hippo remember (built CLI, no server)', () => {
 
   it('a rejected value is refused and not counted', async () => {
     const s = new Store();
-    await reject(apiCtx(s.root, 'default', adminActor('cli')), { value: REJECTED, reason: 'wrong' });
+    await reject(apiCtx(s.root, 'default', adminActor('cli')), {
+      value: REJECTED,
+      reason: 'wrong',
+    });
     s.settle();
     expect(await s.run('remember', REJECTED)).toEqual({ status: 1, stdout: '', stderr: REFUSED });
     expect(s.rows()).toEqual([]);
@@ -154,7 +190,12 @@ const SUPERSEDE_FLAGS: ReadonlyArray<[string, string[], string[], Partial<Writte
   ['--layer', [], ['--layer', 'semantic'], { layer: 'semantic', tags: PATH_TAGS }],
   ['--tag', ['--tag', 'billing'], ['--tag', 'paging'], { tags: ['paging'] }],
   ['--pin', [], ['--pin'], { pinned: 1, tags: PATH_TAGS }],
-  ['a pinned old row', ['--pin', '--tag', 'billing'], [], { pinned: 1, tags: ['billing', ...PATH_TAGS] }],
+  [
+    'a pinned old row',
+    ['--pin', '--tag', 'billing'],
+    [],
+    { pinned: 1, tags: ['billing', ...PATH_TAGS] },
+  ],
   [
     'every flag at once on a tagged, scoped old row',
     ['--tag', 'billing', '--scope', 'team:eng', '--observed'],
@@ -174,7 +215,12 @@ describe('hippo supersede (built CLI, no server)', () => {
     expect(ran).toEqual({ status: 0, stdout: `Superseded ${oldId} → ${newId}\n`, stderr: '' });
     expect(s.rows()).toEqual([
       { ...held, superseded_by: newId },
-      expect.objectContaining({ content: NEWER, confidence: 'verified', superseded_by: null, ...newRow }),
+      expect.objectContaining({
+        content: NEWER,
+        confidence: 'verified',
+        superseded_by: null,
+        ...newRow,
+      }),
     ]);
     expect(s.audit()).toEqual([
       `default cli remember ${oldId}`,
@@ -200,7 +246,9 @@ describe('hippo supersede (built CLI, no server)', () => {
     const oldId = s.lastId();
     await s.run('supersede', oldId, NEWER);
     const newId = s.lastId();
-    expect(await s.run('supersede', oldId, 'the billing service retries a failed charge seven times')).toEqual({
+    expect(
+      await s.run('supersede', oldId, 'the billing service retries a failed charge seven times'),
+    ).toEqual({
       status: 1,
       stdout: '',
       stderr: `Error: memory ${oldId} is already superseded by ${newId}. Supersede that one instead.\n`,
@@ -214,11 +262,18 @@ describe('hippo supersede (built CLI, no server)', () => {
 
   it('new content that is a rejected value', async () => {
     const s = new Store();
-    await reject(apiCtx(s.root, 'default', adminActor('cli')), { value: REJECTED, reason: 'wrong' });
+    await reject(apiCtx(s.root, 'default', adminActor('cli')), {
+      value: REJECTED,
+      reason: 'wrong',
+    });
     s.settle();
     await s.run('remember', TEXT);
     const oldId = s.lastId();
-    expect(await s.run('supersede', oldId, REJECTED)).toEqual({ status: 1, stdout: '', stderr: REFUSED });
+    expect(await s.run('supersede', oldId, REJECTED)).toEqual({
+      status: 1,
+      stdout: '',
+      stderr: REFUSED,
+    });
     expect(s.rows()).toEqual([expect.objectContaining({ id: oldId, superseded_by: null })]);
     expect(s.audit()).toEqual([
       `default cli remember ${oldId}`,
@@ -257,12 +312,26 @@ describe('hippo trace record (built CLI, no server)', () => {
   const RECORD = ['trace', 'record', '--task', 'migrate the billing tables', '--steps', steps];
 
   /** Runs one `trace record` and checks the row it printed, stored and audited. */
-  async function recordsTrace(s: Store, outcome: string, flags: string[], row: Partial<WrittenRow>): Promise<void> {
+  async function recordsTrace(
+    s: Store,
+    outcome: string,
+    flags: string[],
+    row: Partial<WrittenRow>,
+  ): Promise<void> {
     const ran = await s.run(...RECORD, '--outcome', outcome, ...flags);
     const id = s.lastId();
-    expect(ran).toEqual({ status: 0, stdout: `Recorded trace ${id} (outcome=${outcome}, 2 steps)\n`, stderr: '' });
+    expect(ran).toEqual({
+      status: 0,
+      stdout: `Recorded trace ${id} (outcome=${outcome}, 2 steps)\n`,
+      stderr: '',
+    });
     expect(s.rows()).toEqual([
-      expect.objectContaining({ layer: 'trace', content: content(outcome), trace_outcome: outcome, ...row }),
+      expect.objectContaining({
+        layer: 'trace',
+        content: content(outcome),
+        trace_outcome: outcome,
+        ...row,
+      }),
     ]);
     expect(s.audit()).toEqual([`default cli remember ${id}`]);
   }

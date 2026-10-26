@@ -49,7 +49,10 @@ export const RECALL_INPUTS: readonly [string, Record<string, string | number | b
   ['scorer_window abc', { query: 'deploy', scorer_window: 'abc' }],
   ['fresh_tail_count -1', { query: 'deploy', fresh_tail_count: -1 }],
   ['fresh_tail_count abc', { query: 'deploy', fresh_tail_count: 'abc' }],
-  ['fresh_tail_session_id 300 chars', { query: 'deploy', fresh_tail_count: 1, fresh_tail_session_id: 'f'.repeat(300) }],
+  [
+    'fresh_tail_session_id 300 chars',
+    { query: 'deploy', fresh_tail_count: 1, fresh_tail_session_id: 'f'.repeat(300) },
+  ],
   ['session_id 300 chars', { query: 'deploy', session_id: 's'.repeat(300) }],
   ['session_id blank', { query: 'deploy', session_id: '   ' }],
   ['summarize_overflow banana', { query: 'deploy', summarize_overflow: 'banana' }],
@@ -105,7 +108,13 @@ export const RECALL_BRANCHES: readonly {
     reaches: (r) => r.results.length > 0,
   },
   { name: 'no terms', query: '!!', http: {}, mcp: {} },
-  { name: 'LIKE path', query: 'caf', http: {}, mcp: {}, reaches: (r) => r.results.some((x) => x.id === 'mem_x_cafe') },
+  {
+    name: 'LIKE path',
+    query: 'caf',
+    http: {},
+    mcp: {},
+    reaches: (r) => r.results.some((x) => x.id === 'mem_x_cafe'),
+  },
 ];
 
 export function seeded(
@@ -162,7 +171,11 @@ async function seedLocal(root: string): Promise<string> {
     seeded('deploy target was the old staging cluster', 'mem_p_old', '2026-01-02T00:00:00.000Z', {
       supersededBy: 'mem_p_new',
     }),
-    seeded('deploy target is the new staging cluster in eu west', 'mem_p_new', '2026-01-25T00:00:00.000Z'),
+    seeded(
+      'deploy target is the new staging cluster in eu west',
+      'mem_p_new',
+      '2026-01-25T00:00:00.000Z',
+    ),
     seeded(
       'deploy goal work: migrate the rollout scripts to the new runner',
       'mem_p_goal',
@@ -177,13 +190,24 @@ async function seedLocal(root: string): Promise<string> {
       {},
       { layer: Layer.Trace, traceOutcome: 'success' },
     ),
-    seeded('unrelated note about lunch options near the office', 'mem_p_noise', '2026-01-21T00:00:00.000Z'),
+    seeded(
+      'unrelated note about lunch options near the office',
+      'mem_p_noise',
+      '2026-01-21T00:00:00.000Z',
+    ),
   ];
   for (let i = 0; i < 6; i++) {
-    rows.push(seeded(`deploy log line ${i} for the nightly batch`, `mem_p_fill${i}`, `2026-01-1${i}T00:00:00.000Z`));
+    rows.push(
+      seeded(
+        `deploy log line ${i} for the nightly batch`,
+        `mem_p_fill${i}`,
+        `2026-01-1${i}T00:00:00.000Z`,
+      ),
+    );
   }
   for (const row of rows) writeEntry(root, row);
-  return (await pushGoal(root, { sessionId: SESSION, tenantId: TENANT, goalName: 'goal-alpha' })).id;
+  return (await pushGoal(root, { sessionId: SESSION, tenantId: TENANT, goalName: 'goal-alpha' }))
+    .id;
 }
 
 function seedWide(root: string): void {
@@ -191,7 +215,11 @@ function seedWide(root: string): void {
   writeEntriesTogether(
     root,
     Array.from({ length: 230 }, (_, i) =>
-      seeded(`deploy step ${i} of the wide rollout`, `mem_w_${String(i).padStart(3, '0')}`, '2026-01-10T00:00:00.000Z'),
+      seeded(
+        `deploy step ${i} of the wide rollout`,
+        `mem_w_${String(i).padStart(3, '0')}`,
+        '2026-01-10T00:00:00.000Z',
+      ),
     ),
   );
 }
@@ -200,7 +228,11 @@ function seedGlobal(root: string): void {
   initTestStore(root);
   writeEntry(
     root,
-    seeded('deploy notes from the global store about rollbacks', 'mem_p_global', '2026-01-12T00:00:00.000Z'),
+    seeded(
+      'deploy notes from the global store about rollbacks',
+      'mem_p_global',
+      '2026-01-12T00:00:00.000Z',
+    ),
   );
 }
 
@@ -224,10 +256,15 @@ export async function seedPortBranches(root: string): Promise<void> {
       dagParentId: summary.id,
     }),
     seeded('café opening hours for the team lunch', 'mem_x_cafe', '2026-01-06T00:00:00.000Z'),
-    seeded('raw capture of the deploy window from the golden session', 'mem_x_raw', '2026-01-24T00:00:00.000Z', {
-      kind: 'raw',
-      sourceSessionId: SESSION,
-    }),
+    seeded(
+      'raw capture of the deploy window from the golden session',
+      'mem_x_raw',
+      '2026-01-24T00:00:00.000Z',
+      {
+        kind: 'raw',
+        sourceSessionId: SESSION,
+      },
+    ),
   ];
   for (const row of rows) writeEntry(root, row);
   saveActiveTaskSnapshot(root, TENANT, {
@@ -242,7 +279,11 @@ export async function seedPortBranches(root: string): Promise<void> {
     summary: 'handoff after the canary',
     nextAction: 'promote it',
   });
-  await appendSessionEvent(root, TENANT, { sessionId: SESSION, eventType: 'note', content: 'canary passed' });
+  await appendSessionEvent(root, TENANT, {
+    sessionId: SESSION,
+    eventType: 'note',
+    content: 'canary passed',
+  });
   const prediction = await savePrediction(root, TENANT, {
     classTag: 'deploy-duration',
     claimText: 'rollout duration estimate for the eu cluster',
@@ -267,7 +308,9 @@ export interface Templates {
 }
 
 /** Seeds the three template stores once per file; `extendLocal` adds rows to the local store before the stamps are pinned. */
-export async function seedTemplates(extendLocal?: (root: string) => void | Promise<void>): Promise<Templates> {
+export async function seedTemplates(
+  extendLocal?: (root: string) => void | Promise<void>,
+): Promise<Templates> {
   // Rows made by createMemory (the prediction mirror) take evalNow, so a real-clock seed drifts against recall at FAKE_NOW.
   const prior = process.env.HIPPO_FAKE_NOW;
   process.env.HIPPO_FAKE_NOW = FAKE_NOW;
@@ -325,7 +368,9 @@ export function rowsOf(root: string) {
       audit: q(
         "SELECT ts, tenant_id, actor, op, target_id, metadata_json FROM audit_log WHERE op LIKE 'recall%' ORDER BY id",
       ),
-      goalRecallLog: q('SELECT goal_id, memory_id, session_id, score FROM goal_recall_log ORDER BY memory_id'),
+      goalRecallLog: q(
+        'SELECT goal_id, memory_id, session_id, score FROM goal_recall_log ORDER BY memory_id',
+      ),
       stats: q("SELECT key, value FROM meta WHERE key LIKE 'total_%' ORDER BY key"),
       traces: q(
         'SELECT id, tenant_id, session_id, pipeline, result_count, explain_mode FROM recall_traces ORDER BY id',
@@ -333,8 +378,12 @@ export function rowsOf(root: string) {
       traceResults: q(
         'SELECT trace_id, memory_id, result_rank, score FROM recall_trace_results ORDER BY trace_id, result_rank',
       ),
-      ledger: q('SELECT tenant_id, session_id, surface, event, items, tokens FROM token_ledger ORDER BY id'),
-      retrieved: q('SELECT id, retrieval_count, strength FROM memories WHERE retrieval_count > 0 ORDER BY id'),
+      ledger: q(
+        'SELECT tenant_id, session_id, surface, event, items, tokens FROM token_ledger ORDER BY id',
+      ),
+      retrieved: q(
+        'SELECT id, retrieval_count, strength FROM memories WHERE retrieval_count > 0 ORDER BY id',
+      ),
     };
   } finally {
     closeHippoDb(db);
@@ -361,7 +410,12 @@ export async function sendRecall(
     const res = await fetch(`${url}/v1/memories?${params.toString()}`);
     return { status: res.status, body: await res.json() };
   }
-  const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } };
+  const rpc = {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: { name: 'hippo_recall', arguments: args },
+  };
   const headers = { 'content-type': 'application/json', 'x-hippo-project': project };
   const res = await fetch(`${url}/mcp`, { method: 'POST', headers, body: JSON.stringify(rpc) });
   return { status: res.status, body: await res.json() };

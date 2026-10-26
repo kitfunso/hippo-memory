@@ -10,7 +10,12 @@ import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { teeStdStreams } from '../../host/stream-tee.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { extractFromTexts, type ExtractedItem } from './extract.js';
-import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
+import {
+  type SessionTurn,
+  collectSessionTurns,
+  sessionTail,
+  resolveLastSessionTranscript,
+} from './transcript.js';
 import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
 import type { StoreGroups } from '../../base/ports/store.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
@@ -76,7 +81,11 @@ function beginLogTee(logFile: string): () => void {
 function writeLogBanner(logFile: string): boolean {
   try {
     fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
-    fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} capturing session...\n`, 'utf8');
+    fs.appendFileSync(
+      logFile,
+      `[hippo] ${new Date().toISOString()} capturing session...\n`,
+      'utf8',
+    );
   } catch (err) {
     log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`, errorFields(err));
     return false;
@@ -137,7 +146,8 @@ async function captureFromCli(
     dedup: captureDedup(options),
     now: evalClock()(),
   };
-  if (!options.dryRun) return captureExtractedItems({ store, config, embed }, writeOpts, extracted, keys);
+  if (!options.dryRun)
+    return captureExtractedItems({ store, config, embed }, writeOpts, extracted, keys);
   return previewCapture(store, writeOpts, extracted, keys, config.defaultHalfLifeDays);
 }
 
@@ -162,7 +172,10 @@ function captureDedup(options: CaptureOptions): CaptureDedup {
   return { tenantId, everyScope: true, project: projectNames(origin) };
 }
 
-function printCaptureTally(options: CaptureOptions, { captured, skipped, rejected }: CaptureTally): void {
+function printCaptureTally(
+  options: CaptureOptions,
+  { captured, skipped, rejected }: CaptureTally,
+): void {
   const prefix = options.dryRun ? '[dry-run] ' : '';
   const globalPrefix = options.global ? '[global] ' : '';
   console.log(
@@ -207,7 +220,9 @@ function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts
           mayScan: !options.stdinTimedOut,
         });
         if (!resolved) {
-          console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
+          console.log(
+            'No transcript found. Pass --transcript <path> or run from a SessionEnd hook.',
+          );
           return null;
         }
         turns = collectSessionTurns(fs.readFileSync(resolved, 'utf8'));
@@ -285,7 +300,9 @@ export async function captureExtractedItems(
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
 ): Promise<CaptureTally> {
-  const plan = planCapture(extracted, keys, (item) => captureEntry(item, options, config.defaultHalfLifeDays));
+  const plan = planCapture(extracted, keys, (item) =>
+    captureEntry(item, options, config.defaultHalfLifeDays),
+  );
   const { actor, lean, dedup } = options;
   const outcomes = await store.captures.write(plan.entries, { actor, lean, dedup });
   const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
@@ -326,7 +343,9 @@ async function previewCapture(
       tally.skipped++;
       console.log(`  [skip] (${item.category}) ${item.content.slice(0, 80)}`);
     } else if (refused[next++] === true) {
-      console.log(`  [reject] (${item.category}) ${item.content.slice(0, 80)} - matches a rejected value`);
+      console.log(
+        `  [reject] (${item.category}) ${item.content.slice(0, 80)} - matches a rejected value`,
+      );
       tally.rejected++;
     } else {
       console.log(`  [capture] (${item.category}) ${item.content}`);
@@ -336,7 +355,11 @@ async function previewCapture(
   return tally;
 }
 
-function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHalfLifeDays: number): MemoryEntry {
+function captureEntry(
+  item: ExtractedItem,
+  options: CaptureWriteOptions,
+  baseHalfLifeDays: number,
+): MemoryEntry {
   // kind stays 'distilled': these are curated items, not raw transcript (see MEMORY_ENVELOPE.md).
   // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in 'default'.
   // A rule the person stated is pinned, so it injects even when a later prompt shares none of its words.

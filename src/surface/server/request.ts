@@ -26,7 +26,10 @@ export function logRequestFailure<E>(req: IncomingMessage, err: E, status: numbe
   const message = errorMessage(err);
   const line = `${req.method ?? 'GET'} ${accessRouteOf(req)} failed: ${message}`;
   // A 5xx that tells the caller when to retry is back-pressure too.
-  if (isStoreBusy(err) || (status >= 500 && err instanceof HttpError && err.retryAfterSec !== undefined)) {
+  if (
+    isStoreBusy(err) ||
+    (status >= 500 && err instanceof HttpError && err.retryAfterSec !== undefined)
+  ) {
     log.warn(line, { status, ...errorClassFields(err) });
   } else if (status >= 500 && status !== 501) {
     log.error(line, { status, ...errorFields(err) });
@@ -121,7 +124,11 @@ function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, reques
  * The request's id, after stamping the headers every reply carries and starting the slow-request watchdog and the
  * access line.
  */
-export function openRequest(req: IncomingMessage, res: ServerResponse, slowWarnMs?: number): string {
+export function openRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  slowWarnMs?: number,
+): string {
   const requestId = resolveRequestId(req.headers['x-request-id']);
   res.setHeader('X-Request-Id', requestId);
   // Memory text is caller-written, so no browser may guess a reply into HTML or script.

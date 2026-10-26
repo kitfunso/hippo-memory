@@ -21,7 +21,10 @@ const PATTERNS = [
     /\b[Cc]odex[- ](?:[Rr]eview|[Rr]ound|P\d|R\d|catch|finding|flagged|CRITICAL|diff-pass)|\([Cc]odex\b|\b[Cc]odex\)|\b[Cc]ritic\b|\bsenior-review\b|\b[Rr]ound[- ]?\d+\b|\bCRIT\b|\bP[0-3]s?\b/,
   ],
   ['plan', /docs\/plans\/|\bplan v\d|\bTask \d/],
-  ['date', /\b(?!\d{4}-02-3[01]\b|20(?:[02468][1235679]|[13579][01345789])-02-29\b)20\d\d-\d\d-\d\d\b/],
+  [
+    'date',
+    /\b(?!\d{4}-02-3[01]\b|20(?:[02468][1235679]|[13579][01345789])-02-29\b)20\d\d-\d\d-\d\d\b/,
+  ],
   ['pr', /\(#\d{2,4}\)|\bPR ?#?\d+|\bissue #\d+/],
 ];
 
@@ -152,7 +155,9 @@ function findHits() {
   const hits = [];
   for (const file of existsSync('src') ? tsFiles('src') : []) {
     for (const [line, text] of commentLines(readFileSync(file, 'utf8'))) {
-      const kind = LABEL_PATTERN.test(text) ? 'label' : PATTERNS.find(([, re]) => re.test(text))?.[0];
+      const kind = LABEL_PATTERN.test(text)
+        ? 'label'
+        : PATTERNS.find(([, re]) => re.test(text))?.[0];
       if (kind) hits.push({ file, line, kind, text: text.trim() });
     }
   }
@@ -174,13 +179,16 @@ if (args.includes('--update')) {
 if (args.includes('--list')) {
   const only = args.filter((a) => a !== '--list');
   for (const h of hits) {
-    if (only.length === 0 || only.includes(h.file)) console.log(`${h.file}:${h.line} [${h.kind}] ${h.text}`);
+    if (only.length === 0 || only.includes(h.file))
+      console.log(`${h.file}:${h.line} [${h.kind}] ${h.text}`);
   }
   process.exit(0);
 }
 
 if (labels.length > 0) {
-  console.error('Comments that label a section with a feature, wave or plan number (say what the code is):');
+  console.error(
+    'Comments that label a section with a feature, wave or plan number (say what the code is):',
+  );
   for (const h of labels) console.error(`  ${h.file}:${h.line} ${h.text}`);
   process.exit(1);
 }

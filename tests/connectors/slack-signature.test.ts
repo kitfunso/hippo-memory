@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { isWellFormedSlackRequest, verifySlackSignature } from '../../src/surface/connectors/slack/signature.js';
+import {
+  isWellFormedSlackRequest,
+  verifySlackSignature,
+} from '../../src/surface/connectors/slack/signature.js';
 
 const SECRET = 'shhh';
 
@@ -16,16 +19,28 @@ describe('verifySlackSignature', () => {
     const body = '{"hello":"world"}';
     const ts = String(now);
     const sig = sign(ts, body);
-    expect(verifySlackSignature({ rawBody: body, timestamp: ts, signature: sig, signingSecret: SECRET, now })).toBe(
-      true,
-    );
+    expect(
+      verifySlackSignature({
+        rawBody: body,
+        timestamp: ts,
+        signature: sig,
+        signingSecret: SECRET,
+        now,
+      }),
+    ).toBe(true);
   });
 
   it('rejects a tampered body', () => {
     const ts = String(now);
     const sig = sign(ts, '{"hello":"world"}');
     expect(
-      verifySlackSignature({ rawBody: '{"hello":"evil"}', timestamp: ts, signature: sig, signingSecret: SECRET, now }),
+      verifySlackSignature({
+        rawBody: '{"hello":"evil"}',
+        timestamp: ts,
+        signature: sig,
+        signingSecret: SECRET,
+        now,
+      }),
     ).toBe(false);
   });
 
@@ -33,14 +48,26 @@ describe('verifySlackSignature', () => {
     const stale = String(now - 6 * 60);
     const body = '{}';
     const sig = sign(stale, body);
-    expect(verifySlackSignature({ rawBody: body, timestamp: stale, signature: sig, signingSecret: SECRET, now })).toBe(
-      false,
-    );
+    expect(
+      verifySlackSignature({
+        rawBody: body,
+        timestamp: stale,
+        signature: sig,
+        signingSecret: SECRET,
+        now,
+      }),
+    ).toBe(false);
   });
 
   it('rejects a malformed signature header', () => {
     expect(
-      verifySlackSignature({ rawBody: '{}', timestamp: String(now), signature: 'garbage', signingSecret: SECRET, now }),
+      verifySlackSignature({
+        rawBody: '{}',
+        timestamp: String(now),
+        signature: 'garbage',
+        signingSecret: SECRET,
+        now,
+      }),
     ).toBe(false);
   });
 });
@@ -71,15 +98,22 @@ describe('isWellFormedSlackRequest', () => {
       `v0=${digest.toUpperCase()}`,
       '',
     ];
-    for (const signature of bad) expect(isWellFormedSlackRequest(String(now), signature, now), signature).toBe(false);
+    for (const signature of bad)
+      expect(isWellFormedSlackRequest(String(now), signature, now), signature).toBe(false);
   });
 
   it('agrees with verifySlackSignature: a signature it passes is one the verifier can accept', () => {
     const ts = String(now);
     const sig = sign(ts, '{}');
     expect(isWellFormedSlackRequest(ts, sig, now)).toBe(true);
-    expect(verifySlackSignature({ rawBody: '{}', timestamp: ts, signature: sig, signingSecret: SECRET, now })).toBe(
-      true,
-    );
+    expect(
+      verifySlackSignature({
+        rawBody: '{}',
+        timestamp: ts,
+        signature: sig,
+        signingSecret: SECRET,
+        now,
+      }),
+    ).toBe(true);
   });
 });

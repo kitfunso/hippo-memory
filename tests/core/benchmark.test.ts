@@ -159,9 +159,10 @@ describe('Retrieval quality benchmark', () => {
       const p3 = precision3(topIds, expectedIds);
 
       // Something relevant in the top-10: a hit at rank 10 scores 1/10, and the rank is the scorer's to choose.
-      expect(m, `MRR=0 for query "${tc.query}". Top results: ${topIds.slice(0, 3).join(', ')}`).toBeGreaterThanOrEqual(
-        0.1,
-      );
+      expect(
+        m,
+        `MRR=0 for query "${tc.query}". Top results: ${topIds.slice(0, 3).join(', ')}`,
+      ).toBeGreaterThanOrEqual(0.1);
 
       // Log for visibility (doesn't fail)
       console.log(

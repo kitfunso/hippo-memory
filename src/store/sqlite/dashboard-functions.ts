@@ -110,7 +110,8 @@ const ASCII_LOWERED = [
 const asciiFolded = (column: string): string =>
   `lower(${ASCII_LOWERED.reduce((sql, [code, ascii]) => `replace(${sql}, char(${code}), '${ascii}')`, column)})`;
 
-const NOT_ASCII = (column: string): string => `length(CAST(${column} AS BLOB)) <> length(${column})`;
+const NOT_ASCII = (column: string): string =>
+  `length(CAST(${column} AS BLOB)) <> length(${column})`;
 
 // A superset of the rows hippo_holds_text holds :text in: those that hold the probe once folded; for a needle with no
 // ASCII, those with a letter past ASCII; else every row.
@@ -141,7 +142,9 @@ function holdsTextBinds(text: string | null): TextBinds {
   if (text === null) return { text, probe: null, wide: 0 };
   // node:sqlite hands a function text only up to its first NUL, so that is all of the needle the rule tests.
   const seen = text.split('\0', 1)[0];
-  const probe = seen.split(PROBE_BREAK).reduce((long, run) => (run.length > long.length ? run : long), '');
+  const probe = seen
+    .split(PROBE_BREAK)
+    .reduce((long, run) => (run.length > long.length ? run : long), '');
   return { text, probe: probe === '' ? null : probe, wide: ALL_WIDE.test(seen) ? 1 : 0 };
 }
 
@@ -165,9 +168,13 @@ export interface TextFilter {
 export function textFilter(db: DatabaseSyncLike, text: string | null): TextFilter {
   const { probe, wide } = holdsTextBinds(text);
   const binds = { text, probe, wide };
-  if (probe === null || probe.length < MIN_PROBE_CHARS || !isFtsAvailable(db)) return { sql: HOLDS_TEXT, binds };
+  if (probe === null || probe.length < MIN_PROBE_CHARS || !isFtsAvailable(db))
+    return { sql: HOLDS_TEXT, binds };
   // PROBE_BREAK leaves no `"` in a probe, so quoting it makes one FTS5 phrase.
-  return { sql: `(rowid IN (${TEXT_CANDIDATES}) AND ${HOLDS_TEXT})`, binds: { ...binds, phrase: `"${probe}"` } };
+  return {
+    sql: `(rowid IN (${TEXT_CANDIDATES}) AND ${HOLDS_TEXT})`,
+    binds: { ...binds, phrase: `"${probe}"` },
+  };
 }
 
 /** UTF-16 big-endian bytes, so SQLite's byte order sorts text as JavaScript's `<` does. */
@@ -254,7 +261,13 @@ function addGridRow(t: Float64Array, v: readonly SqlValue[], rules: StoreModel):
 
 type Step = (t: Float64Array, v: readonly SqlValue[], rules: StoreModel) => Float64Array;
 
-function tally(db: DatabaseSyncLike, name: string, start: () => Float64Array, step: Step, rules: StoreModel): void {
+function tally(
+  db: DatabaseSyncLike,
+  name: string,
+  start: () => Float64Array,
+  step: Step,
+  rules: StoreModel,
+): void {
   db.aggregate<Float64Array>(name, {
     start,
     step: (t, ...v) => step(t, v, rules),
@@ -271,10 +284,16 @@ export function useDashboardFunctions(db: DatabaseSyncLike, rules: StoreModel): 
   db.function('hippo_strength', many, (...v) =>
     calculateStrength(factsOf(v), new Date(Number(v[FACT_ARGS])), rules.strength),
   );
-  db.function('hippo_band', many, (...v) => bandAt(factsOf(v), Number(v[FACT_ARGS]), rules.strength));
-  db.function('hippo_days', fixed, (iso: SqlValue, nowMs: SqlValue) => daysBetween(text(iso), Number(nowMs)));
+  db.function('hippo_band', many, (...v) =>
+    bandAt(factsOf(v), Number(v[FACT_ARGS]), rules.strength),
+  );
+  db.function('hippo_days', fixed, (iso: SqlValue, nowMs: SqlValue) =>
+    daysBetween(text(iso), Number(nowMs)),
+  );
   db.function('hippo_holds_text', fixed, holdsText);
-  db.function('hippo_head_key', fixed, (content: SqlValue) => utf16Key(listHead(text(content)).head.toLowerCase()));
+  db.function('hippo_head_key', fixed, (content: SqlValue) =>
+    utf16Key(listHead(text(content)).head.toLowerCase()),
+  );
   db.function('hippo_text_key', fixed, utf16Key);
   tally(db, 'hippo_project_tally', newProjectTally, addProjectRow, rules);
   tally(db, 'hippo_filter_tally', () => new Float64Array(F_SIZE), addFilteredRow, rules);

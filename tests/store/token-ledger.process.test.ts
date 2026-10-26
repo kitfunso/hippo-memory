@@ -10,7 +10,11 @@ import { join } from 'node:path';
 import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { recordTokenUse, lastSentState, summarizeTokenUse } from '../../src/store/sqlite/token-ledger.js';
+import {
+  recordTokenUse,
+  lastSentState,
+  summarizeTokenUse,
+} from '../../src/store/sqlite/token-ledger.js';
 import { shouldSkipUnchanged } from '../../src/base/session/skip-unchanged.js';
 import { hookPayloadSessionId } from '../../src/base/util/hook-payload.js';
 import { blockHash } from '../../src/base/util/token-text.js';
@@ -146,10 +150,18 @@ describe('token ledger helpers', () => {
         items: 3,
         tokens: 300,
       });
-      recordTokenUse(db, { tenantId: 'other', surface: 'recall', event: 'inject', items: 3, tokens: 7777 });
+      recordTokenUse(db, {
+        tenantId: 'other',
+        surface: 'recall',
+        event: 'inject',
+        items: 3,
+        tokens: 7777,
+      });
 
       // SAFETY: COUNT(*) aggregate row.
-      const oldRows = db.prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE session_id = 'old'`).get() as {
+      const oldRows = db
+        .prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE session_id = 'old'`)
+        .get() as {
         n: number;
       };
       expect(Number(oldRows.n)).toBe(0);
@@ -158,7 +170,13 @@ describe('token ledger helpers', () => {
       const summary = summarizeTokenUse(db, 'default', since);
       expect(summary.surfaces.map((s) => s.surface)).toEqual(['hook', 'recall']);
       const hook = summary.surfaces[0]!;
-      expect(hook).toMatchObject({ injected: 1, tokens: 100, skipped: 2, tokensAvoided: 200, sessions: 1 });
+      expect(hook).toMatchObject({
+        injected: 1,
+        tokens: 100,
+        skipped: 2,
+        tokensAvoided: 200,
+        sessions: 1,
+      });
       expect(summary.totalTokens).toBe(400);
       expect(summary.totalTokensAvoided).toBe(200);
       expect(summary.meanTokensPerSession).toBe(200);
@@ -167,8 +185,12 @@ describe('token ledger helpers', () => {
 
   it('reads the session id from a hook payload', async () => {
     expect(hookPayloadSessionId(JSON.stringify({ session_id: 'abc' }))).toBe('abc');
-    expect(hookPayloadSessionId(JSON.stringify({ session_id: 'abc', source: 'startup' }), 'compact')).toBeNull();
-    expect(hookPayloadSessionId(JSON.stringify({ session_id: 'abc', source: 'compact' }), 'compact')).toBe('abc');
+    expect(
+      hookPayloadSessionId(JSON.stringify({ session_id: 'abc', source: 'startup' }), 'compact'),
+    ).toBeNull();
+    expect(
+      hookPayloadSessionId(JSON.stringify({ session_id: 'abc', source: 'compact' }), 'compact'),
+    ).toBe('abc');
     expect(hookPayloadSessionId('not json')).toBeNull();
     expect(hookPayloadSessionId(JSON.stringify({ session_id: '  ' }))).toBeNull();
     expect(hookPayloadSessionId(JSON.stringify(['x']))).toBeNull();
@@ -198,8 +220,16 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
     if (r.status !== 0) throw new Error(`hippo ${args.join(' ')} exited ${r.status}: ${r.stderr}`);
     return r.stdout;
   }
-  const HOOK = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
-  const payload = (sessionId: string): string => JSON.stringify({ session_id: sessionId, prompt: 'hi' });
+  const HOOK = [
+    'context',
+    '--pinned-only',
+    '--include-recent',
+    '5',
+    '--format',
+    'additional-context',
+  ];
+  const payload = (sessionId: string): string =>
+    JSON.stringify({ session_id: sessionId, prompt: 'hi' });
 
   it('renders without the live strength percentage', async () => {
     const out = await run(HOOK, payload('s1'), true);
@@ -232,14 +262,21 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
     expect(await run(HOOK, payload('s1'))).toContain('NEVER force-push');
     writeEntry(
       hippoDir,
-      createMemory('ALWAYS run the migration dry-run before deploying', { pinned: true, layer: Layer.Episodic }),
+      createMemory('ALWAYS run the migration dry-run before deploying', {
+        pinned: true,
+        layer: Layer.Episodic,
+      }),
     );
     const out = await run(HOOK, payload('s1'));
     expect(out).toContain('ALWAYS run the migration dry-run');
   });
 
   it('resends an unchanged block every refreshTurns skips', async () => {
-    writeFileSync(join(hippoDir, 'config.json'), JSON.stringify({ pinnedInject: { refreshTurns: 2 } }), 'utf8');
+    writeFileSync(
+      join(hippoDir, 'config.json'),
+      JSON.stringify({ pinnedInject: { refreshTurns: 2 } }),
+      'utf8',
+    );
     const sent: boolean[] = [];
     for (let i = 0; i < 6; i++) sent.push((await run(HOOK, payload('s1'))).trim() !== '');
     expect(sent).toEqual([true, false, false, true, false, false]);
@@ -248,7 +285,11 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
   it('always sends with skipUnchanged off, or without a payload session id', async () => {
     expect(await run(HOOK)).toContain('NEVER force-push');
     expect(await run(HOOK)).toContain('NEVER force-push');
-    writeFileSync(join(hippoDir, 'config.json'), JSON.stringify({ pinnedInject: { skipUnchanged: false } }), 'utf8');
+    writeFileSync(
+      join(hippoDir, 'config.json'),
+      JSON.stringify({ pinnedInject: { skipUnchanged: false } }),
+      'utf8',
+    );
     expect(await run(HOOK, payload('s1'))).toContain('NEVER force-push');
     expect(await run(HOOK, payload('s1'))).toContain('NEVER force-push');
   });
@@ -285,7 +326,9 @@ describe('ledger on the HTTP and MCP surfaces', () => {
   function surfaces(): Record<string, number> {
     return withDb(home, (db) => {
       const since = new Date(Date.now() - 86_400_000).toISOString();
-      return Object.fromEntries(summarizeTokenUse(db, 'default', since).surfaces.map((s) => [s.surface, s.tokens]));
+      return Object.fromEntries(
+        summarizeTokenUse(db, 'default', since).surfaces.map((s) => [s.surface, s.tokens]),
+      );
     });
   }
 

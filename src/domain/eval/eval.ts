@@ -60,7 +60,11 @@ export interface RunEvalOptions {
   source?: VectorSource;
   /** When set, eval runs through searchBothHybrid so global memories are in scope, each store's query embedded by
    * `embedderFor`. Otherwise only the `entries` list is searched. */
-  stores?: { local: ConfiguredFolder<SharingStore>; global: ConfiguredFolder<SharingStore>; embedderFor: EmbedderFor };
+  stores?: {
+    local: ConfiguredFolder<SharingStore>;
+    global: ConfiguredFolder<SharingStore>;
+    embedderFor: EmbedderFor;
+  };
   /** Multiplier for local-over-global results when `stores` is in play. */
   localBump?: number;
   now: Date;

@@ -124,7 +124,10 @@ describe('incidents store (first-class object)', () => {
       expect(rows.length).toBe(1);
       // SAFETY: metadata_json is this test's own audit row, written by
       // saveIncident's incident_open audit call with this exact shape.
-      const meta = JSON.parse(rows[0].metadata_json) as { incident_id: number; has_context: boolean };
+      const meta = JSON.parse(rows[0].metadata_json) as {
+        incident_id: number;
+        has_context: boolean;
+      };
       expect(meta.has_context).toBe(true);
     } finally {
       closeHippoDb(db);
@@ -142,7 +145,11 @@ describe('incidents store (first-class object)', () => {
     expect(inc.context).toBeNull();
     const db = openHippoDb(home);
     try {
-      const memRow = queryOne<{ content: string }>(db, `SELECT content FROM memories WHERE id = ?`, inc.memoryId!);
+      const memRow = queryOne<{ content: string }>(
+        db,
+        `SELECT content FROM memories WHERE id = ?`,
+        inc.memoryId!,
+      );
       expect(memRow!.content).toBe('cron job silently failed');
       const rows = queryAll<{ metadata_json: string }>(
         db,
@@ -151,7 +158,9 @@ describe('incidents store (first-class object)', () => {
       );
       // SAFETY: metadata_json is this test's own audit row, written by
       // saveIncident's incident_open audit call with this exact shape.
-      expect((JSON.parse(rows[0].metadata_json) as { has_context: boolean }).has_context).toBe(false);
+      expect((JSON.parse(rows[0].metadata_json) as { has_context: boolean }).has_context).toBe(
+        false,
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -165,10 +174,16 @@ describe('incidents store (first-class object)', () => {
       { incidentText: 'API 500s' },
       { actor: 'cli', now: evalNow() },
     );
-    const resolved = await resolveOpenIncident(objectsAt(home), 'default', inc.id, 'restarted the worker pool', {
-      actor: 'cli',
-      now: evalNow(),
-    });
+    const resolved = await resolveOpenIncident(
+      objectsAt(home),
+      'default',
+      inc.id,
+      'restarted the worker pool',
+      {
+        actor: 'cli',
+        now: evalNow(),
+      },
+    );
     expect(resolved.status).toBe('resolved');
     expect(resolved.resolutionText).toBe('restarted the worker pool');
     expect(resolved.resolvedAt).not.toBeNull();
@@ -199,11 +214,17 @@ describe('incidents store (first-class object)', () => {
       now: evalNow(),
     });
     await expect(
-      resolveOpenIncident(objectsAt(home), 'default', inc.id, 'second resolution', { actor: 'cli', now: evalNow() }),
+      resolveOpenIncident(objectsAt(home), 'default', inc.id, 'second resolution', {
+        actor: 'cli',
+        now: evalNow(),
+      }),
     ).rejects.toThrow(/not open/);
     // not found when the id does not exist
     await expect(
-      resolveOpenIncident(objectsAt(home), 'default', 88888, 'nope', { actor: 'cli', now: evalNow() }),
+      resolveOpenIncident(objectsAt(home), 'default', 88888, 'nope', {
+        actor: 'cli',
+        now: evalNow(),
+      }),
     ).rejects.toThrow(/not found/);
   });
 
@@ -216,7 +237,10 @@ describe('incidents store (first-class object)', () => {
       { actor: 'cli', now: evalNow() },
     );
     await expect(
-      resolveOpenIncident(objectsAt(home), 'default', inc.id, '   ', { actor: 'cli', now: evalNow() }),
+      resolveOpenIncident(objectsAt(home), 'default', inc.id, '   ', {
+        actor: 'cli',
+        now: evalNow(),
+      }),
     ).rejects.toThrow(/resolutionText must not be blank/);
     // The failed resolve left the incident open.
     expect((await objectById(objectsAt(home), INCIDENT, 'default', inc.id))!.status).toBe('open');
@@ -274,7 +298,10 @@ describe('incidents store (first-class object)', () => {
 
   it('close guard: not-found and already-closed error clearly', async () => {
     await expect(
-      closeObject(objectsAt(home), INCIDENT, 'default', 77777, { actor: CLI_ACTOR, now: evalNow() }),
+      closeObject(objectsAt(home), INCIDENT, 'default', 77777, {
+        actor: CLI_ACTOR,
+        now: evalNow(),
+      }),
     ).rejects.toThrow(/not found/);
 
     const inc = await openIncident(
@@ -284,9 +311,15 @@ describe('incidents store (first-class object)', () => {
       { incidentText: 'close twice' },
       { actor: 'cli', now: evalNow() },
     );
-    await closeObject(objectsAt(home), INCIDENT, 'default', inc.id, { actor: CLI_ACTOR, now: evalNow() });
+    await closeObject(objectsAt(home), INCIDENT, 'default', inc.id, {
+      actor: CLI_ACTOR,
+      now: evalNow(),
+    });
     await expect(
-      closeObject(objectsAt(home), INCIDENT, 'default', inc.id, { actor: CLI_ACTOR, now: evalNow() }),
+      closeObject(objectsAt(home), INCIDENT, 'default', inc.id, {
+        actor: CLI_ACTOR,
+        now: evalNow(),
+      }),
     ).rejects.toThrow(/already closed/);
   });
 
@@ -331,8 +364,14 @@ describe('incidents store (first-class object)', () => {
       { incidentText: 'to-close' },
       { actor: 'cli', now: evalNow() },
     );
-    await resolveOpenIncident(objectsAt(home), 'default', b.id, 'fixed', { actor: 'cli', now: evalNow() });
-    await closeObject(objectsAt(home), INCIDENT, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
+    await resolveOpenIncident(objectsAt(home), 'default', b.id, 'fixed', {
+      actor: 'cli',
+      now: evalNow(),
+    });
+    await closeObject(objectsAt(home), INCIDENT, 'default', c.id, {
+      actor: CLI_ACTOR,
+      now: evalNow(),
+    });
 
     const open = await listObjects(objectsAt(home), INCIDENT, 'default', { status: 'open' });
     expect(open.every((x) => x.status === 'open')).toBe(true);
@@ -340,7 +379,9 @@ describe('incidents store (first-class object)', () => {
     expect(open.some((x) => x.id === b.id)).toBe(false);
     expect(open.some((x) => x.id === c.id)).toBe(false);
 
-    const resolved = await listObjects(objectsAt(home), INCIDENT, 'default', { status: 'resolved' });
+    const resolved = await listObjects(objectsAt(home), INCIDENT, 'default', {
+      status: 'resolved',
+    });
     expect(resolved.length).toBe(1);
     expect(resolved[0].id).toBe(b.id);
 
@@ -406,7 +447,13 @@ describe('incidents store (first-class object)', () => {
 
   it('listObjects by memoryId: row id for an open incident, null for resolved/closed', async () => {
     const openIdOf = async (memoryId: string) =>
-      (await objectsAt(home).listObjects('default', 'incident', { status: 'open', memoryId, limit: 1 }))[0]?.id ?? null;
+      (
+        await objectsAt(home).listObjects('default', 'incident', {
+          status: 'open',
+          memoryId,
+          limit: 1,
+        })
+      )[0]?.id ?? null;
     const inc = await openIncident(
       objectsAt(home),
       loadConfig(home).defaultHalfLifeDays,
@@ -416,7 +463,10 @@ describe('incidents store (first-class object)', () => {
     );
     expect(await openIdOf(inc.memoryId!)).toBe(inc.id);
 
-    await resolveOpenIncident(objectsAt(home), 'default', inc.id, 'fixed', { actor: 'cli', now: evalNow() });
+    await resolveOpenIncident(objectsAt(home), 'default', inc.id, 'fixed', {
+      actor: 'cli',
+      now: evalNow(),
+    });
     expect(await openIdOf(inc.memoryId!)).toBeNull();
   });
 });

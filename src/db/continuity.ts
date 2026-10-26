@@ -234,11 +234,14 @@ export function rebuildTrigramIndex(db: DatabaseSyncLike): void {
 /** Whether an error's `message` says this SQLite lacks FTS5 or the trigram tokenizer: the one failure that turns
  * full-text search off. */
 export function isFtsMissing(message: string): boolean {
-  return (/no such module/i.test(message) && /fts5/i.test(message)) || /no such tokenizer/i.test(message);
+  return (
+    (/no such module/i.test(message) && /fts5/i.test(message)) || /no such tokenizer/i.test(message)
+  );
 }
 
 /** The rows the duplicate read groups: current distilled ones. */
-export const CURRENT_DISTILLED = "COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''";
+export const CURRENT_DISTILLED =
+  "COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''";
 
 // A tag list with a `\`, a digit, an object or a nested list may not hold its tags' text as written: an escape, or a
 // value String() writes another way.
@@ -251,7 +254,8 @@ OR instr(substr(tags_json, 2), '[') > 0`;
 export const TEXT_OUTSIDE_TRIGRAMS = `${TAGS_NOT_AS_WRITTEN} OR instr(content, char(304)) > 0 \
 OR instr(tags_json, char(304)) > 0`;
 
-const CREATED_NAME = /CREATE\s+(?:VIRTUAL\s+|UNIQUE\s+)?(?:TABLE|INDEX|TRIGGER)\s+IF\s+NOT\s+EXISTS\s+(\w+)/gi;
+const CREATED_NAME =
+  /CREATE\s+(?:VIRTUAL\s+|UNIQUE\s+)?(?:TABLE|INDEX|TRIGGER)\s+IF\s+NOT\s+EXISTS\s+(\w+)/gi;
 
 /** Names of every table, index and trigger a `CREATE ... IF NOT EXISTS` in `ddl` makes. */
 export function createdObjectNames(ddl: string): string[] {
@@ -275,5 +279,6 @@ export const REQUIRED_SCHEMA_OBJECTS: readonly string[] = Object.freeze(
 export function ensureContinuityIndexes(db: DatabaseSyncLike): void {
   for (const ddl of CONTINUITY_INDEX_DDL) db.exec(ddl);
   // A store that lost one of these tables still opens, so its hooks can log the failed step and run the rest.
-  for (const [table, ddl] of Object.entries(REQUEST_INDEX_DDL)) if (tableExists(db, table)) db.exec(ddl);
+  for (const [table, ddl] of Object.entries(REQUEST_INDEX_DDL))
+    if (tableExists(db, table)) db.exec(ddl);
 }

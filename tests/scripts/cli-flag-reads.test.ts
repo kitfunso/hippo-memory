@@ -13,7 +13,13 @@ const MINIMAL_LIB = [
 ].join('\n');
 
 const TSCONFIG = {
-  compilerOptions: { noLib: true, noEmit: true, module: 'ES2022', moduleResolution: 'Bundler', types: [] },
+  compilerOptions: {
+    noLib: true,
+    noEmit: true,
+    module: 'ES2022',
+    moduleResolution: 'Bundler',
+    types: [],
+  },
   include: ['lib.d.ts', 'src/**/*'],
 };
 
@@ -87,6 +93,8 @@ describe('cli-flag-reads', { timeout: 30_000 }, () => {
       { verb: 'computed', flags: { text: 'value' } },
     ]);
     // A config member that is no literal is reported, never dropped.
-    expect(found.unfollowed).toEqual([expect.stringMatching(/^src\/surface\/cli\/kinds\.ts:\d+ +computed key: /)]);
+    expect(found.unfollowed).toEqual([
+      expect.stringMatching(/^src\/surface\/cli\/kinds\.ts:\d+ +computed key: /),
+    ]);
   });
 });

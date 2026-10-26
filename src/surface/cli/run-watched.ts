@@ -28,9 +28,15 @@ export function runWatched(
   return watchChild(spawnArgv(argv, WATCHED_SPAWN_OPTIONS), deadlineMs);
 }
 
-const WATCHED_SPAWN_OPTIONS: SpawnOptions = { stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true };
+const WATCHED_SPAWN_OPTIONS: SpawnOptions = {
+  stdio: ['inherit', 'inherit', 'pipe'],
+  windowsHide: true,
+};
 
-function watchChild(child: ChildProcess, deadlineMs: number): Promise<{ exitCode: number; stderr: string }> {
+function watchChild(
+  child: ChildProcess,
+  deadlineMs: number,
+): Promise<{ exitCode: number; stderr: string }> {
   return new Promise((resolve, reject) => {
     let tail = Buffer.alloc(0);
 

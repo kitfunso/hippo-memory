@@ -45,7 +45,9 @@ async function missingRows(local: Sharing, from: Sharing): Promise<EntryTextKey[
   for await (const page of textKeyPages(from, ALL_TENANTS)) {
     const taken = new Set(await local.takenIds(page.map((k) => k.id)));
     // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
-    const open = page.filter((k) => !taken.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX));
+    const open = page.filter(
+      (k) => !taken.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX),
+    );
     if (open.length === 0) continue;
     const held = await local.textKeysHolding(
       { tenantId: ALL_TENANTS },
@@ -128,14 +130,24 @@ async function copyMissingRows(
   // rows never copied. origin_project is preserved on the copy (the write stamps it only when missing).
   const first = copiesOf(candidates, byId, rules);
   const { copies } =
-    first.twins.size === 0 ? first : copiesOf(candidates, byId, rules, await refusedTexts(into.store, first));
+    first.twins.size === 0
+      ? first
+      : copiesOf(candidates, byId, rules, await refusedTexts(into.store, first));
   // A locally rejected value must not come back through sync down: skipped per item, printed as one line.
-  const written = copies.length === 0 ? [] : await into.store.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR);
+  const written =
+    copies.length === 0
+      ? []
+      : await into.store.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR);
   finishSyncDown(into, written.length, copies.length - written.length, embed);
   return written.length;
 }
 
-function finishSyncDown(into: ConfiguredFolder<SharingStore>, count: number, rejected: number, embed: EmbedRun): void {
+function finishSyncDown(
+  into: ConfiguredFolder<SharingStore>,
+  count: number,
+  rejected: number,
+  embed: EmbedRun,
+): void {
   if (rejected > 0) {
     log.warn(
       `syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`,
@@ -145,6 +157,8 @@ function finishSyncDown(into: ConfiguredFolder<SharingStore>, count: number, rej
   // Batch producer: one embedAll() on the destination rather than an embedMemory() per copied row (same batching
   // invariant as autoShare).
   if (count > 0) {
-    void embedAll(folderEmbedTarget(into, embed)).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
+    void embedAll(folderEmbedTarget(into, embed)).catch((err) =>
+      logEmbedAllFailure('syncGlobalToLocal', err),
+    );
   }
 }

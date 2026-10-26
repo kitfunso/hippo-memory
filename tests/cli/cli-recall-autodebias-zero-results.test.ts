@@ -45,7 +45,9 @@ async function seedBaserateWithNoMemories(): Promise<void> {
 }
 
 async function recall(flags: Record<string, boolean> = {}): Promise<string> {
-  const run = await runInProcess(() => handleRecall({ hippoRoot: root, tenantId: 'default', args: [QUERY], flags }));
+  const run = await runInProcess(() =>
+    handleRecall({ hippoRoot: root, tenantId: 'default', args: [QUERY], flags }),
+  );
   expect(run.status, run.stderr).toBe(0);
   return run.stdout;
 }
@@ -73,14 +75,24 @@ describe('hippo recall with no matching memory keeps the planning-fallacy hint',
     const out = await recallJson();
 
     expect(out.results).toEqual([]);
-    expect(out.planningFallacyHint).toMatchObject({ classTag: 'migration-effort', nClosed: 3, meanRatio: 2 });
+    expect(out.planningFallacyHint).toMatchObject({
+      classTag: 'migration-effort',
+      nClosed: 3,
+      meanRatio: 2,
+    });
   });
 
   it('--json prints the keys in the order scripts have always seen them', async () => {
     await seedBaserateWithNoMemories();
     const out = await recallJson();
 
-    expect(Object.keys(out)).toEqual(['query', 'results', 'total', 'suppressionSummary', 'planningFallacyHint']);
+    expect(Object.keys(out)).toEqual([
+      'query',
+      'results',
+      'total',
+      'suppressionSummary',
+      'planningFallacyHint',
+    ]);
   });
 
   it('text prints the hint line, with the detected phrase quoted, above the no-memories line', async () => {

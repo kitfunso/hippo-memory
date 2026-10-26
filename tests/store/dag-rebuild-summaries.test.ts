@@ -14,7 +14,13 @@ import { consolidate } from '../../src/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';
-import { makeOkFetcher, getRow, forceMarkDirty, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
+import {
+  makeOkFetcher,
+  getRow,
+  forceMarkDirty,
+  makeSummary,
+  makeChild,
+} from '../_helpers/dag-rebuild.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
@@ -100,7 +106,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       // FTS row synced — query content column for the rebuilt token
       // We don't expect the dashed string to tokenize cleanly; just verify
       // FTS row was rewritten by reading its content directly.
-      const ftsAll = getRow<{ content: string }>(db, `SELECT content FROM memories_fts WHERE id = ?`, summary.id);
+      const ftsAll = getRow<{ content: string }>(
+        db,
+        `SELECT content FROM memories_fts WHERE id = ?`,
+        summary.id,
+      );
       expect(ftsAll?.content).toBe('newly-generated-summary-content-X');
     } finally {
       closeHippoDb(db);
@@ -167,7 +177,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       const body = init?.body ? JSON.parse(init.body as string) : {};
       const prompt = body?.messages?.[0]?.content ?? '';
       seenPayloads.push(prompt);
-      return new Response(JSON.stringify({ content: [{ text: 'rebuilt-tenant-content-XX' }] }), { status: 200 });
+      return new Response(JSON.stringify({ content: [{ text: 'rebuilt-tenant-content-XX' }] }), {
+        status: 200,
+      });
     });
 
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
@@ -296,7 +308,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     const fetcher = vi.fn<typeof fetch>(async () => {
       call++;
       if (call === 1) throw new Error('network down');
-      return new Response(JSON.stringify({ content: [{ text: 'second-summary-ok-content-XX' }] }), { status: 200 });
+      return new Response(JSON.stringify({ content: [{ text: 'second-summary-ok-content-XX' }] }), {
+        status: 200,
+      });
     });
 
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
@@ -329,7 +343,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       call++;
       // A 400, because fetchWithRetry would retry a 5xx into the second summary's reply.
       if (call === 1) return new Response('bad request', { status: 400 });
-      return new Response(JSON.stringify({ content: [{ text: 'second-ok-content-zz' }] }), { status: 200 });
+      return new Response(JSON.stringify({ content: [{ text: 'second-ok-content-zz' }] }), {
+        status: 200,
+      });
     });
 
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {

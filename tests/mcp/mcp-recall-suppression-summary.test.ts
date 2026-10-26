@@ -26,7 +26,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
+import {
+  handleMcpRequest,
+  type McpContext,
+  type McpResponse,
+} from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -40,7 +44,12 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function callTool(reqId: number, name: string, args: Record<string, string | number | boolean>, ctx: McpContext) {
+function callTool(
+  reqId: number,
+  name: string,
+  args: Record<string, string | number | boolean>,
+  ctx: McpContext,
+) {
   return handleMcpRequest(
     {
       jsonrpc: '2.0',

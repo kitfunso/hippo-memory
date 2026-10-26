@@ -35,7 +35,10 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-async function createNote(body: { customer: string; note: string }, key: CreateApiKeyResult = apiKey) {
+async function createNote(
+  body: { customer: string; note: string },
+  key: CreateApiKeyResult = apiKey,
+) {
   return fetch(`${handle.url}/v1/customer-notes`, {
     method: 'POST',
     headers: authHeaders(key),
@@ -53,15 +56,21 @@ describe('HTTP /v1/customer-notes (entity-scoped first-class object)', () => {
     );
     expect(all.notes.length).toBe(3);
     const acme = await jsonAs<{ notes: CustomerNote[] }>(
-      await fetch(`${handle.url}/v1/customer-notes?customer=Acme`, { headers: authHeaders(apiKey) }),
+      await fetch(`${handle.url}/v1/customer-notes?customer=Acme`, {
+        headers: authHeaders(apiKey),
+      }),
     );
     expect(acme.notes.length).toBe(2); // many per customer
     const acmeActive = await jsonAs<{ notes: CustomerNote[] }>(
-      await fetch(`${handle.url}/v1/customer-notes?customer=Acme&status=active`, { headers: authHeaders(apiKey) }),
+      await fetch(`${handle.url}/v1/customer-notes?customer=Acme&status=active`, {
+        headers: authHeaders(apiKey),
+      }),
     );
     expect(acmeActive.notes.length).toBe(2);
     const padded = await jsonAs<{ notes: CustomerNote[] }>(
-      await fetch(`${handle.url}/v1/customer-notes?customer=%20Acme%20`, { headers: authHeaders(apiKey) }),
+      await fetch(`${handle.url}/v1/customer-notes?customer=%20Acme%20`, {
+        headers: authHeaders(apiKey),
+      }),
     );
     expect(padded.notes.length).toBe(2); // the filter is trimmed before the lookup
   });

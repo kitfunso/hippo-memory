@@ -49,7 +49,10 @@ function proxyTrust(raw: string | undefined): BlockList | undefined {
     const family = isIP(addr) === 6 ? 'ipv6' : 'ipv4';
     const bits = prefix === undefined ? undefined : Number(prefix);
     const maxBits = family === 'ipv6' ? 128 : 32;
-    if (isIP(addr) === 0 || (bits !== undefined && (!Number.isInteger(bits) || bits < 0 || bits > maxBits))) {
+    if (
+      isIP(addr) === 0 ||
+      (bits !== undefined && (!Number.isInteger(bits) || bits < 0 || bits > maxBits))
+    ) {
       log.warn(`HIPPO_TRUSTED_PROXIES: ignoring '${entry}', not an IP address or CIDR`);
       continue;
     }
@@ -111,7 +114,9 @@ function subscriberKey(ip: string): string {
   // A trailing dotted quad holds two groups; isIP has already checked the shape.
   const rightGroups = right.length + (right.at(-1)?.includes('.') ? 1 : 0);
   const groups =
-    tail === undefined ? left : [...left, ...Array<string>(8 - left.length - rightGroups).fill('0'), ...right];
+    tail === undefined
+      ? left
+      : [...left, ...Array<string>(8 - left.length - rightGroups).fill('0'), ...right];
   return `${groups
     .slice(0, IPV6_PREFIX_GROUPS)
     .map((g) => parseInt(g, 16).toString(16))

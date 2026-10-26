@@ -12,7 +12,12 @@ import type {
 import { blockHash } from '../../src/base/util/token-text.js';
 import { realpathOrResolve } from '../../src/host/real-path.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { seed, verdictOf, writeHostTranscript, type ReadOptions } from '../_helpers/host-transcript.js';
+import {
+  seed,
+  verdictOf,
+  writeHostTranscript,
+  type ReadOptions,
+} from '../_helpers/host-transcript.js';
 import { type Project } from '../_helpers/delivery-boundary.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -85,7 +90,10 @@ export function event(session: string, o: Partial<DeliveryEventInput> = {}): Del
   };
 }
 
-export const row = (memoryId: string, o: Partial<DeliveryCandidateInput> = {}): DeliveryCandidateInput => ({
+export const row = (
+  memoryId: string,
+  o: Partial<DeliveryCandidateInput> = {},
+): DeliveryCandidateInput => ({
   memoryId,
   sourceStore: 'local',
   pool: 'pin',

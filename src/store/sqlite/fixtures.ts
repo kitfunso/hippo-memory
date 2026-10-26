@@ -25,7 +25,11 @@ export { recordTokenUse, tokensBySession } from './token-ledger.js';
 
 /** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'. */
 export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
-  onHandle(hippoRoot, (db) => entryWrites.writeEntryOn(db, storeFilesOf(hippoRoot), entry, opts), openStore);
+  onHandle(
+    hippoRoot,
+    (db) => entryWrites.writeEntryOn(db, storeFilesOf(hippoRoot), entry, opts),
+    openStore,
+  );
 }
 
 /** Every tenant's entries, oldest first: an eval reads the whole folder it seeded. */
@@ -53,8 +57,16 @@ export function listRecallEntriesInFolder(
 }
 
 /** The per-prompt tally, timed by scripts/check-request-path-timing.mjs on a folder it seeds. */
-export function countAmbientInFolder(hippoRoot: string, tenantId: string, filter: AmbientStoreFilter): AmbientTallies {
-  return onHandle(hippoRoot, (db) => ambient.countAmbient(db, storeFilesOf(hippoRoot), tenantId, filter), openStore);
+export function countAmbientInFolder(
+  hippoRoot: string,
+  tenantId: string,
+  filter: AmbientStoreFilter,
+): AmbientTallies {
+  return onHandle(
+    hippoRoot,
+    (db) => ambient.countAmbient(db, storeFilesOf(hippoRoot), tenantId, filter),
+    openStore,
+  );
 }
 
 /** `batchWriteAndDelete` on a handle of its own; an empty batch opens no store. */
@@ -64,7 +76,8 @@ export function batchWriteAndDeleteInFolder(
   toDeleteIds: string[],
   opts?: { snapshot?: ReadonlyMap<string, MemoryEntry>; dormant?: DormantMove[] },
 ): string[] {
-  if (toWrite.length === 0 && toDeleteIds.length === 0 && (opts?.dormant ?? []).length === 0) return [];
+  if (toWrite.length === 0 && toDeleteIds.length === 0 && (opts?.dormant ?? []).length === 0)
+    return [];
   return onHandle(
     hippoRoot,
     (db) => batches.batchWriteAndDelete(db, storeFilesOf(hippoRoot), toWrite, toDeleteIds, opts),

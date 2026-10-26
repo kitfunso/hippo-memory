@@ -133,7 +133,10 @@ export function recordPhaseFailure<E>(result: ConsolidationResult, phase: string
   };
   result.phaseFailures.push(failure);
   result.events.push({ kind: 'phaseSkipped', phase, message: failure.message });
-  log.warn(`consolidate: ${phase} pass failed and was skipped: ${failure.message}`, errorFields(error));
+  log.warn(
+    `consolidate: ${phase} pass failed and was skipped: ${failure.message}`,
+    errorFields(error),
+  );
 }
 
 /** Logs each phase failure a consolidation result carries, for a caller that ran it out of sight. */

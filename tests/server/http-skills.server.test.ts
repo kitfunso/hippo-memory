@@ -46,12 +46,18 @@ interface CreateSkillBody {
 }
 
 async function createSkill(body: CreateSkillBody, key: CreateApiKeyResult = apiKey) {
-  return fetch(`${handle.url}/v1/skills`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
+  return fetch(`${handle.url}/v1/skills`, {
+    method: 'POST',
+    headers: authHeaders(key),
+    body: JSON.stringify(body),
+  });
 }
 
 describe('HTTP /v1/skills (executable/exportable first-class object)', () => {
   it('GET /v1/skills lists + filters by status', async () => {
-    const v1 = (await jsonAs<{ skill: Skill }>(await createSkill({ skillName: 'S', instructions: 'a' }))).skill;
+    const v1 = (
+      await jsonAs<{ skill: Skill }>(await createSkill({ skillName: 'S', instructions: 'a' }))
+    ).skill;
     await fetch(`${handle.url}/v1/skills/${v1.id}/supersede`, {
       method: 'POST',
       headers: authHeaders(apiKey),

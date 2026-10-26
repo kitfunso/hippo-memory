@@ -1,13 +1,22 @@
 // What turns a compaction's summary into text the store keeps, and the replay that reads the spool and transcripts
 // for it; the SQL is the adapter's compactions-record.ts.
 import * as fs from 'node:fs';
-import { isObjectLike, isStringValue, type PostCompactPayload } from '../../base/session/capture-contract.js';
+import {
+  isObjectLike,
+  isStringValue,
+  type PostCompactPayload,
+} from '../../base/session/capture-contract.js';
 import {
   COMPACTION_ITEM_MAX_CHARS,
   compactSummaryBody,
   parseCompactionItems,
 } from '../../base/util/compaction-items.js';
-import { importSpool, spool, type Log, type SpooledCompaction } from '../../infra/compaction-spool.js';
+import {
+  importSpool,
+  spool,
+  type Log,
+  type SpooledCompaction,
+} from '../../infra/compaction-spool.js';
 import type {
   CompactionHooks,
   CompactionSaveResult,
@@ -121,7 +130,8 @@ export async function saveCompaction(
     baseHalfLifeDays: defaultHalfLifeDays,
   });
   writeNotes(log, notes);
-  if (spoolReason !== null) spoolSummary({ folder, payload, text, at, reason: spoolReason, result, log });
+  if (spoolReason !== null)
+    spoolSummary({ folder, payload, text, at, reason: spoolReason, result, log });
   return result;
 }
 
@@ -129,7 +139,8 @@ export async function saveCompaction(
 export function postCompactLine(result: CompactionSaveResult): string | null {
   if (result.deferred) return 'Hippo will finish saving this compaction at the next sleep.';
   if (result.written === null) return null;
-  if (result.written === 0) return "Hippo kept this compaction's summary; it listed no new memories.";
+  if (result.written === 0)
+    return "Hippo kept this compaction's summary; it listed no new memories.";
   const noun = result.written === 1 ? 'memory' : 'memories';
   const restored = result.snapshotSaved ? ' and restored your task snapshot' : '';
   return `Hippo saved ${result.written} ${noun} from this compaction${restored}.`;
@@ -142,7 +153,8 @@ interface TranscriptLine {
 }
 
 // Every field is optional and read through a guard, so an object is all a line needs to be.
-const isTranscriptLine = (value: JsonValue | undefined): value is JsonValue & TranscriptLine => isObjectLike(value);
+const isTranscriptLine = (value: JsonValue | undefined): value is JsonValue & TranscriptLine =>
+  isObjectLike(value);
 
 function lineText(line: TranscriptLine): string {
   const content = line.message?.content;
@@ -153,7 +165,11 @@ function lineText(line: TranscriptLine): string {
 
 /** The summary Claude Code wrote into a transcript between two moments; null when it is not (yet) there or the window
  * cannot reach back that far. */
-function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: number): string | null {
+function transcriptSummary(
+  transcriptPath: string,
+  afterMs: number,
+  beforeMs: number,
+): string | null {
   const size = fs.statSync(transcriptPath).size;
   for (const cap of TRANSCRIPT_TAIL_CAPS) {
     const lines: TranscriptLine[] = [];
@@ -165,7 +181,9 @@ function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: nu
     const stamp = (line: TranscriptLine): number =>
       isStringValue(line.timestamp) ? Date.parse(line.timestamp) : Number.NaN;
     const first = lines.map(stamp).find((ms) => !Number.isNaN(ms));
-    const hit = lines.find((line) => line.isCompactSummary === true && stamp(line) > afterMs && stamp(line) < beforeMs);
+    const hit = lines.find(
+      (line) => line.isCompactSummary === true && stamp(line) > afterMs && stamp(line) < beforeMs,
+    );
     if (hit) return lineText(hit);
     if (size <= cap || (first !== undefined && first <= afterMs)) return null;
   }
@@ -189,7 +207,10 @@ interface Replay {
 }
 
 async function replayStalled(run: Replay): Promise<number> {
-  const { saved, notes } = await run.hooks.saveStalled(run.tenantId, { ...run.items, deadline: run.deadline });
+  const { saved, notes } = await run.hooks.saveStalled(run.tenantId, {
+    ...run.items,
+    deadline: run.deadline,
+  });
   writeNotes(run.log, notes);
   return saved;
 }
@@ -226,7 +247,8 @@ async function replaySpool(run: Replay): Promise<number> {
 /** Fills one open record from its transcript; true when it saved items. */
 async function fillFromTranscript(run: Replay, record: OpenCompaction): Promise<boolean> {
   if (record.transcriptPath === null || !fs.existsSync(record.transcriptPath)) return false;
-  const before = record.nextStartedAt === null ? Number.POSITIVE_INFINITY : Date.parse(record.nextStartedAt);
+  const before =
+    record.nextStartedAt === null ? Number.POSITIVE_INFINITY : Date.parse(record.nextStartedAt);
   const found = transcriptSummary(record.transcriptPath, Date.parse(record.startedAt), before);
   let text: CompactionText | null = null;
   if (found !== null) {

@@ -16,6 +16,9 @@ export function buildSyntheticCorpus(): ReturnType<typeof corpusAt> {
 
 /** The feature eval under `switches`, the environment's when the caller names none, at HIPPO_FAKE_NOW or the wall
  * clock. */
-export function runFeatureEval(version: string, switches: EvalSwitches = evalSwitches()): Promise<EvalSuiteResult> {
+export function runFeatureEval(
+  version: string,
+  switches: EvalSwitches = evalSwitches(),
+): Promise<EvalSuiteResult> {
   return featureEvalAt(version, switches, evalNow());
 }

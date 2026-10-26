@@ -12,7 +12,9 @@ const dbPath = path.join(os.homedir(), '.hippo', 'hippo.db');
 const db = new DatabaseSync(dbPath);
 
 const before = db
-  .prepare(`SELECT reason, COUNT(*) as n FROM memory_conflicts WHERE status = 'open' GROUP BY reason`)
+  .prepare(
+    `SELECT reason, COUNT(*) as n FROM memory_conflicts WHERE status = 'open' GROUP BY reason`,
+  )
   .all();
 console.log(`open conflicts before:`, before);
 

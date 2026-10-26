@@ -1,9 +1,20 @@
-import { MemoryEntry, EXTRACTED_TAG, Layer, EmotionalValence, createMemory } from '../../base/memory/entry.js';
+import {
+  MemoryEntry,
+  EXTRACTED_TAG,
+  Layer,
+  EmotionalValence,
+  createMemory,
+} from '../../base/memory/entry.js';
 import type { StoreWith } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { describeLlmFailure, llmFailureFields, type Llm, type LlmFailure } from '../../base/ports/llm.js';
+import {
+  describeLlmFailure,
+  llmFailureFields,
+  type Llm,
+  type LlmFailure,
+} from '../../base/ports/llm.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { isJsonString, type JsonValue } from '../../base/util/json.js';
@@ -95,7 +106,9 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
     // SAFETY: the isJsonString + validValences.has guard below confirms item.valence is one of the four literal strings
     // of EmotionalValence.
     const valence: EmotionalValence =
-      isJsonString(item.valence) && validValences.has(item.valence) ? (item.valence as EmotionalValence) : 'neutral';
+      isJsonString(item.valence) && validValences.has(item.valence)
+        ? (item.valence as EmotionalValence)
+        : 'neutral';
 
     facts.push({ content: item.content, tags, valence });
   }

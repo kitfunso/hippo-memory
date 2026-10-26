@@ -86,7 +86,11 @@ describe('sleep child', () => {
   it('replies to a sleep before it saves the vector graph file, then exits 0', async () => {
     seedVectorRows(
       home,
-      clusteredVectors(1_100, 32, 3).map((vector, i) => ({ id: `v-${i}`, tenantId: 'default', vector })),
+      clusteredVectors(1_100, 32, 3).map((vector, i) => ({
+        id: `v-${i}`,
+        tenantId: 'default',
+        vector,
+      })),
     );
     const graphFile = join(home, 'vector-graph-32.bin');
     const fileAtReply: boolean[] = [];

@@ -45,7 +45,10 @@ export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<Boun
       stdin.off('error', done);
       stdin.pause();
       stdin.unref?.();
-      resolve({ text: chunks.length ? Buffer.concat(chunks).toString('utf8') : undefined, timedOut });
+      resolve({
+        text: chunks.length ? Buffer.concat(chunks).toString('utf8') : undefined,
+        timedOut,
+      });
     };
     const done = (): void => finish(false);
     const onData = (c: Buffer): void => {
@@ -87,7 +90,8 @@ function snakeCaseFields(payload: JsonObject): JsonObject {
   for (const [camel, snake] of CAMEL_TO_SNAKE) {
     if (camel in payload && !(snake in payload)) added[snake] = payload[camel];
   }
-  if ('toolArgs' in payload && !('tool_input' in payload)) added.tool_input = parsedToolArgs(payload.toolArgs);
+  if ('toolArgs' in payload && !('tool_input' in payload))
+    added.tool_input = parsedToolArgs(payload.toolArgs);
   const error = payload.error;
   // An error object gives its message, so readers that expect the documented string still get one.
   if (isJsonObjectLiteral(error) && isJsonString(error.message)) added.error = error.message;

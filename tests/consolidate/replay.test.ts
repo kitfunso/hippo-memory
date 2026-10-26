@@ -67,7 +67,10 @@ describe('sampleForReplay', () => {
     }
     const heroHits = counts.get(hero.id) ?? 0;
     // Most common neutral memory's count
-    const peerHits = Math.max(0, ...[...counts.entries()].filter(([id]) => id !== hero.id).map(([, c]) => c));
+    const peerHits = Math.max(
+      0,
+      ...[...counts.entries()].filter(([id]) => id !== hero.id).map(([, c]) => c),
+    );
     expect(heroHits).toBeGreaterThan(peerHits);
   });
 
@@ -105,12 +108,19 @@ describe('sampleForReplay', () => {
       for (const id of sample) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     const freshHits = counts.get(fresh.id) ?? 0;
-    const peerMax = Math.max(0, ...[...counts.entries()].filter(([id]) => id !== fresh.id).map(([, c]) => c));
+    const peerMax = Math.max(
+      0,
+      ...[...counts.entries()].filter(([id]) => id !== fresh.id).map(([, c]) => c),
+    );
     expect(freshHits).toBeGreaterThan(peerMax);
   });
 
   it('does not sample the same memory twice within one call', async () => {
-    const entries = [fakeEntry({ content: 'a' }), fakeEntry({ content: 'b' }), fakeEntry({ content: 'c' })];
+    const entries = [
+      fakeEntry({ content: 'a' }),
+      fakeEntry({ content: 'b' }),
+      fakeEntry({ content: 'c' }),
+    ];
     const sample = await sampleForReplay(entries, 3, new Date(), 42);
     expect(new Set(sample).size).toBe(sample.length);
   });
@@ -129,7 +139,9 @@ describe('replayPriority', () => {
     const now = new Date();
     const neutral = fakeEntry({ content: 'n' });
     const critical = fakeEntry({ content: 'c', emotionalValence: 'critical' });
-    expect(replayPriority(critical, now, false)).toBeGreaterThan(replayPriority(neutral, now, false));
+    expect(replayPriority(critical, now, false)).toBeGreaterThan(
+      replayPriority(neutral, now, false),
+    );
   });
 
   it('more positive outcomes > fewer', () => {
@@ -151,7 +163,12 @@ describe('replayPriority', () => {
     // clamp, which went negative for neg >> pos. Negative weights broke the
     // weighted-sample-without-replacement picker in sampleForReplay.
     const now = new Date();
-    const doomed = fakeEntry({ content: 'doom', outcomePositive: 0, outcomeNegative: 100, strength: 1 });
+    const doomed = fakeEntry({
+      content: 'doom',
+      outcomePositive: 0,
+      outcomeNegative: 100,
+      strength: 1,
+    });
     // `now` predates the entry, so it has no idle time; the reward sits at its 0.1 floor and every other factor is 1.
     expect(replayPriority(doomed, now, false)).toBe(0.1);
   });

@@ -8,7 +8,9 @@ import type { DatabaseSyncLike } from '../../src/db/sqlite.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; this cast mirrors src/db/sqlite.ts's boundary.
-const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: new (path: string) => DatabaseSyncLike };
+const { DatabaseSync } = require('node:sqlite') as {
+  DatabaseSync: new (path: string) => DatabaseSyncLike;
+};
 
 /** A migrated in-memory store with the flag at '1'; `failFtsWith` makes the next full-text DDL throw, and a deleted meta default forces the slow open path. */
 function healthyStore() {

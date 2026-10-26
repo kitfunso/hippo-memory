@@ -15,7 +15,8 @@ const getReranker = realRerankers();
 /** `model` with the CLEF transport the environment names at each call, as a root reads it into RuntimeSettings. */
 function clefUnderEnv(model: ClefModel): RerankerFn {
   const rerank = createClefReranker(model, processHttp);
-  return (query, results, options) => rerank(query, results, { ...options, clef: envClefSettings() });
+  return (query, results, options) =>
+    rerank(query, results, { ...options, clef: envClefSettings() });
 }
 
 afterEach(() => {
@@ -42,7 +43,10 @@ function answersFor(nouls: number[]) {
 }
 
 function json(body: JsonValue, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
 function workersReply(nouls: number[], model = 'clef-flash'): Response {
@@ -74,7 +78,9 @@ describe('clef rerankers', () => {
   });
 
   it('posts the System One body to Workers AI and orders by the enveloped answers', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.9, 0.5]));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(workersReply([0.1, 0.9, 0.5]));
     const out = await clefUnderEnv('clef-flash')('which one', inputs());
 
     expect(contents(out)).toEqual(['beta', 'gamma', 'alpha']);
@@ -95,17 +101,28 @@ describe('clef rerankers', () => {
   });
 
   it('reads its transport from the settings a root hands down, not the environment', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.9, 0.5]));
-    const handed = { cloudflareAccountId: 'fedcba9876543210fedcba9876543210', cloudflareApiToken: 'handed-down-token' };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(workersReply([0.1, 0.9, 0.5]));
+    const handed = {
+      cloudflareAccountId: 'fedcba9876543210fedcba9876543210',
+      cloudflareApiToken: 'handed-down-token',
+    };
     await createClefReranker('clef-flash', processHttp)('q', inputs(), { clef: handed });
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain(`/accounts/${handed.cloudflareAccountId}/`);
-    expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${handed.cloudflareApiToken}`);
+    expect(new Headers(init?.headers).get('authorization')).toBe(
+      `Bearer ${handed.cloudflareApiToken}`,
+    );
   });
 
   it('makes no network call when no settings are handed down, whatever the environment holds', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
-    expect(contents(await createClefReranker('clef-flash', processHttp)('q', inputs()))).toEqual(NATIVE);
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('unexpected network call'));
+    expect(contents(await createClefReranker('clef-flash', processHttp)('q', inputs()))).toEqual(
+      NATIVE,
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -124,19 +141,26 @@ describe('clef rerankers', () => {
   it('makes no network call and keeps the native order when credentials are missing', async () => {
     vi.stubEnv('CLOUDFLARE_API_TOKEN', undefined);
     vi.stubEnv('TYPESAFE_API_KEY', 'paid-jev-key-must-not-be-used');
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('unexpected network call'));
     const out = await clefUnderEnv('clef-flash')('q', inputs());
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(contents(out)).toEqual(NATIVE);
     expect(out.map((r) => r.rerankScore)).toEqual([1.0, 0.9, 0.8]);
-    expect(out[0].rerankProvenance).toMatchObject({ backend: 'native', requestedModel: 'clef-flash' });
+    expect(out[0].rerankProvenance).toMatchObject({
+      backend: 'native',
+      requestedModel: 'clef-flash',
+    });
     expect(String(warnSpy.mock.calls[0][0])).toContain('CLOUDFLARE_API_TOKEN not set');
   });
 
   it('refuses an account id that is not 32 hex characters without a request', async () => {
     vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', '../../evil');
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('unexpected network call'));
     const out = await clefUnderEnv('clef-flash')('q', inputs());
     expect(fetchMock).not.toHaveBeenCalled();
     expect(contents(out)).toEqual(NATIVE);
@@ -146,19 +170,38 @@ describe('clef rerankers', () => {
     [
       'a missing answer',
       {
-        result: { model: 'clef-flash', answers: { c1: { type: 'noul', noul: 0.9 }, c3: { type: 'noul', noul: 0.1 } } },
+        result: {
+          model: 'clef-flash',
+          answers: { c1: { type: 'noul', noul: 0.9 }, c3: { type: 'noul', noul: 0.1 } },
+        },
       },
     ],
-    ['an out-of-range answer', { result: { model: 'clef-flash', answers: answersFor([0.2, 1.5, 0.1]) } }],
+    [
+      'an out-of-range answer',
+      { result: { model: 'clef-flash', answers: answersFor([0.2, 1.5, 0.1]) } },
+    ],
     [
       'a non-numeric answer',
-      { result: { model: 'clef-flash', answers: { ...answersFor([0.2, 0.3]), c3: { type: 'noul', noul: '0.9' } } } },
+      {
+        result: {
+          model: 'clef-flash',
+          answers: { ...answersFor([0.2, 0.3]), c3: { type: 'noul', noul: '0.9' } },
+        },
+      },
     ],
     [
       'a wrong answer type',
-      { result: { model: 'clef-flash', answers: { ...answersFor([0.2, 0.3]), c3: { type: 'score', noul: 0.9 } } } },
+      {
+        result: {
+          model: 'clef-flash',
+          answers: { ...answersFor([0.2, 0.3]), c3: { type: 'score', noul: 0.9 } },
+        },
+      },
     ],
-    ['an extra answer', { result: { model: 'clef-flash', answers: answersFor([0.2, 0.3, 0.4, 0.5]) } }],
+    [
+      'an extra answer',
+      { result: { model: 'clef-flash', answers: answersFor([0.2, 0.3, 0.4, 0.5]) } },
+    ],
     ['a different model', { result: { model: 'clef', answers: answersFor([0.2, 0.9, 0.1]) } }],
     ['no model name from Workers AI', { result: { answers: answersFor([0.2, 0.9, 0.1]) } }],
     ['success false', { success: false, errors: [{ message: 'quota' }], result: null }],
@@ -183,7 +226,9 @@ describe('clef rerankers', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async (_url, init) =>
         new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          );
         }),
     );
     const out = await rerank('q', inputs());
@@ -203,24 +248,35 @@ describe('clef rerankers', () => {
     vi.stubEnv('CLOUDFLARE_API_TOKEN', undefined);
     vi.stubEnv('HIPPO_CLEF_ENDPOINT', 'http://127.0.0.1:8787/ai/run/clef-flash');
     vi.stubEnv('HIPPO_CLEF_ENDPOINT_TOKEN', 'private-token');
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ answers: answersFor([0.3, 0.2, 0.9]) }));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(json({ answers: answersFor([0.3, 0.2, 0.9]) }));
     const out = await clefUnderEnv('clef-flash')('q', inputs());
 
     expect(String(fetchMock.mock.calls[0][0])).toBe('http://127.0.0.1:8787/ai/run/clef-flash');
-    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('authorization')).toBe('Bearer private-token');
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('authorization')).toBe(
+      'Bearer private-token',
+    );
     expect(contents(out)).toEqual(['gamma', 'alpha', 'beta']);
-    expect(out[0].rerankProvenance).toMatchObject({ backend: 'private-endpoint', requestedModel: 'clef-flash' });
+    expect(out[0].rerankProvenance).toMatchObject({
+      backend: 'private-endpoint',
+      requestedModel: 'clef-flash',
+    });
   });
 
   it('keeps the native order without a request when HIPPO_CLEF_ENDPOINT is not an http URL', async () => {
     vi.stubEnv('HIPPO_CLEF_ENDPOINT', 'file:///etc/passwd');
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('unexpected network call'));
     expect(contents(await clefUnderEnv('clef')('q', inputs()))).toEqual(NATIVE);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('keeps the native order without a request above the 64-question cap', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('unexpected network call'));
     const many = Array.from({ length: 70 }, (_, i) => asResult(`cand${i}`, 1 - i / 100));
     const out = await clefUnderEnv('clef-flash')('q', many, { topK: 65 });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -229,16 +285,22 @@ describe('clef rerankers', () => {
   });
 
   it('sends the default 40 candidates', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply(Array(40).fill(0.5)));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(workersReply(Array(40).fill(0.5)));
     const many = Array.from({ length: 45 }, (_, i) => asResult(`cand${i}`, 1 - i / 100));
     const out = await clefUnderEnv('clef-flash')('q', many);
-    expect(Object.keys(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).questions)).toHaveLength(40);
+    expect(
+      Object.keys(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).questions),
+    ).toHaveLength(40);
     expect(out).toHaveLength(40);
   });
 
   it('prefers HIPPO_CLEF_ENDPOINT over Workers AI and never forwards the Cloudflare token to it', async () => {
     vi.stubEnv('HIPPO_CLEF_ENDPOINT', 'http://localhost:8787/ai/run/clef-flash');
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ answers: answersFor([0.3, 0.2, 0.9]) }));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(json({ answers: answersFor([0.3, 0.2, 0.9]) }));
     await clefUnderEnv('clef-flash')('q', inputs());
     expect(String(fetchMock.mock.calls[0][0])).toBe('http://localhost:8787/ai/run/clef-flash');
     expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('authorization')).toBeNull();
@@ -246,11 +308,21 @@ describe('clef rerankers', () => {
 
   it.each([
     ['an unparseable URL', 'not a url', 'HIPPO_CLEF_ENDPOINT is not a valid URL'],
-    ['embedded credentials', 'https://user:pass@clef.example.com/run', 'must not embed credentials'],
-    ['plain http to another host', 'http://10.0.0.5:8787/run', 'must use https unless it is on this machine'],
+    [
+      'embedded credentials',
+      'https://user:pass@clef.example.com/run',
+      'must not embed credentials',
+    ],
+    [
+      'plain http to another host',
+      'http://10.0.0.5:8787/run',
+      'must use https unless it is on this machine',
+    ],
   ])('refuses %s without a request', async (_label, endpoint, reason) => {
     vi.stubEnv('HIPPO_CLEF_ENDPOINT', endpoint);
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('unexpected network call'));
     const out = await clefUnderEnv('clef-flash')('q', inputs());
     expect(fetchMock).not.toHaveBeenCalled();
     expect(contents(out)).toEqual(NATIVE);
@@ -259,7 +331,10 @@ describe('clef rerankers', () => {
   });
 
   it('keeps only printable ASCII from a hostile cf-ray header, capped at 64 characters', async () => {
-    const res = new Response('{}', { status: 500, headers: { 'cf-ray': `abécd${'z'.repeat(100)}` } });
+    const res = new Response('{}', {
+      status: 500,
+      headers: { 'cf-ray': `abécd${'z'.repeat(100)}` },
+    });
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(res);
     const out = await clefUnderEnv('clef-flash')('q', inputs());
     expect(out[0].rerankProvenance?.fallbackReason).toMatch(/^HTTP 500, ray [\x20-\x7e]{1,64}$/);
@@ -282,7 +357,9 @@ describe('clef rerankers', () => {
 
   it('redacts secrets from the query and the candidates before sending', async () => {
     const secret = `sk-${'a'.repeat(40)}`;
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.2, 0.3]));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(workersReply([0.1, 0.2, 0.3]));
     await clefUnderEnv('clef-flash')(`q ${secret}`, [
       asResult(`key ${secret}`, 1),
       asResult('bravo', 0.9),
@@ -294,7 +371,9 @@ describe('clef rerankers', () => {
   it('strips Bearer, Basic-auth and JWT shapes from the text it sends', async () => {
     const bearer = `Bearer ${'b'.repeat(24)}`;
     const jwt = `eyJ${'h'.repeat(12)}.eyJ${'p'.repeat(12)}.sig`;
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.2, 0.3]));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(workersReply([0.1, 0.2, 0.3]));
     await clefUnderEnv('clef-flash')(`q ${bearer}`, [
       asResult(`tok ${jwt}`, 1),
       asResult('bravo', 0.9),
@@ -308,16 +387,23 @@ describe('clef rerankers', () => {
   it.each([
     ['HIPPO_CLEF_ENDPOINT_TOKEN', 'https://clef.example.com/run'],
     ['CLOUDFLARE_API_TOKEN', undefined],
-  ])('refuses a %s a header cannot carry, without a request or echoing it', async (key, endpoint) => {
-    if (endpoint) vi.stubEnv('HIPPO_CLEF_ENDPOINT', endpoint);
-    vi.stubEnv(key, 'secret-part-one\nsecret-part-two');
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
-    const out = await clefUnderEnv('clef-flash')('q', inputs());
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(contents(out)).toEqual(NATIVE);
-    expect(out[0].rerankProvenance?.fallbackReason).toBe(`${key} has characters a header cannot carry`);
-    expect(String(warnSpy.mock.calls[0][0])).not.toContain('secret-part');
-  });
+  ])(
+    'refuses a %s a header cannot carry, without a request or echoing it',
+    async (key, endpoint) => {
+      if (endpoint) vi.stubEnv('HIPPO_CLEF_ENDPOINT', endpoint);
+      vi.stubEnv(key, 'secret-part-one\nsecret-part-two');
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockRejectedValue(new Error('unexpected network call'));
+      const out = await clefUnderEnv('clef-flash')('q', inputs());
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(contents(out)).toEqual(NATIVE);
+      expect(out[0].rerankProvenance?.fallbackReason).toBe(
+        `${key} has characters a header cannot carry`,
+      );
+      expect(String(warnSpy.mock.calls[0][0])).not.toContain('secret-part');
+    },
+  );
 
   it.each(['15s', '-1', '1.5', '999999999999'])(
     'uses the default 15000 ms timeout for HIPPO_CLEF_TIMEOUT_MS=%s',
@@ -349,7 +435,9 @@ describe('clef rerankers', () => {
   });
 
   it('returns nothing and makes no request for an empty head', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected network call'));
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('unexpected network call'));
     const rerank = clefUnderEnv('clef-flash');
     expect(await rerank('q', [])).toEqual([]);
     expect(await rerank('q', inputs(), { topK: 0 })).toEqual([]);
@@ -358,7 +446,10 @@ describe('clef rerankers', () => {
 
   it('parses a bare reply without a model name only when the model is not required', () => {
     const bare: JsonValue = { answers: answersFor([0.5]) };
-    expect(parseClefReply(bare, 1, 'clef-flash', false)).toMatchObject({ scores: [0.5], actualModel: undefined });
+    expect(parseClefReply(bare, 1, 'clef-flash', false)).toMatchObject({
+      scores: [0.5],
+      actualModel: undefined,
+    });
     expect(parseClefReply(bare, 1, 'clef-flash', true)).toBe('reply does not name its model');
   });
 

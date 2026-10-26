@@ -21,7 +21,9 @@ export interface HandoffEvidence {
 }
 
 /** Narrows an unvalidated value (e.g. CLI input or event content) to a HandoffOutcome. */
-export function isHandoffOutcome(v: string | boolean | string[] | null | undefined): v is HandoffOutcome {
+export function isHandoffOutcome(
+  v: string | boolean | string[] | null | undefined,
+): v is HandoffOutcome {
   return v === 'success' || v === 'failure' || v === 'partial';
 }
 
@@ -62,7 +64,8 @@ export interface SessionHandoffRow {
 /** Renders evidence as one line shared by every renderer (CLI, MCP, token accounting). */
 export function formatHandoffEvidenceLine(evidence: HandoffEvidence): string {
   const gitRef = evidence.gitRef ?? 'unknown';
-  const tree = evidence.dirtyTree === true ? 'dirty' : evidence.dirtyTree === false ? 'clean' : 'unknown';
+  const tree =
+    evidence.dirtyTree === true ? 'dirty' : evidence.dirtyTree === false ? 'clean' : 'unknown';
   const tests = evidence.testStatus ?? 'unknown';
   return `git ${gitRef}, tree ${tree}, tests ${tests}`;
 }
@@ -83,7 +86,10 @@ function isHandoffEvidence(v: JsonValue): v is JsonValue & HandoffEvidence {
 }
 
 /** A stored list column as strings; a damaged one logs and reads as empty instead of hiding the whole handoff. */
-function storedList(row: SessionHandoffRow, column: 'artifacts_json' | 'constraints_json'): string[] {
+function storedList(
+  row: SessionHandoffRow,
+  column: 'artifacts_json' | 'constraints_json',
+): string[] {
   const raw = row[column];
   if (!raw) return [];
   const parsed = parseStoredJson({ table: 'session_handoffs', id: row.id, column }, raw);

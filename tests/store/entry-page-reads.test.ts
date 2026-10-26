@@ -56,7 +56,9 @@ function oneOrStatement(db: DatabaseSyncLike, tenantId: TenantId): string[] {
     `${nonAscii('content')} OR ${nonAscii('tags_json')})${tenant} ORDER BY created, id`;
   const args = tenantId === ALL_TENANTS ? [] : [tenantId];
   // SAFETY: the SELECT names one TEXT column.
-  return (db.prepare(sql).all('"quuxlib" OR tags : "quuxlib"', ...args) as Array<{ id: string }>).map((r) => r.id);
+  return (
+    db.prepare(sql).all('"quuxlib" OR tags : "quuxlib"', ...args) as Array<{ id: string }>
+  ).map((r) => r.id);
 }
 
 function mentionWalk(db: DatabaseSyncLike, tenantId: TenantId, limit: number): string[] {
@@ -71,23 +73,28 @@ function mentionWalk(db: DatabaseSyncLike, tenantId: TenantId, limit: number): s
 }
 
 describe('the mention read over ASCII and non-ASCII rows', () => {
-  it.each([1, 3, 7, 100])('pages, %i rows a page, as the one OR statement ordered them', (limit) => {
-    const db = seeded(60, 3);
-    for (const tenantId of [ALL_TENANTS, 't1'] as const) {
-      const expected = oneOrStatement(db, tenantId);
-      expect(expected.length).toBeGreaterThan(limit === 100 ? 0 : limit);
-      const { result, statements } = recordStatements(() => mentionWalk(db, tenantId, limit));
-      expect(result).toEqual(expected);
-      // The FTS path ran, not the LIKE fallback.
-      expect(countMatching(statements, 'memories_fts MATCH')).toBeGreaterThan(0);
-    }
-  });
+  it.each([1, 3, 7, 100])(
+    'pages, %i rows a page, as the one OR statement ordered them',
+    (limit) => {
+      const db = seeded(60, 3);
+      for (const tenantId of [ALL_TENANTS, 't1'] as const) {
+        const expected = oneOrStatement(db, tenantId);
+        expect(expected.length).toBeGreaterThan(limit === 100 ? 0 : limit);
+        const { result, statements } = recordStatements(() => mentionWalk(db, tenantId, limit));
+        expect(result).toEqual(expected);
+        // The FTS path ran, not the LIKE fallback.
+        expect(countMatching(statements, 'memories_fts MATCH')).toBeGreaterThan(0);
+      }
+    },
+  );
 });
 
 describe('a page over every tenant', () => {
   it.each([1, 6])('is one statement over %i tenants', (tenants) => {
     const db = seeded(30, tenants);
-    const { result, statements } = recordStatements(() => listEntryIdsPage(db, ALL_TENANTS, { limit: 4 }));
+    const { result, statements } = recordStatements(() =>
+      listEntryIdsPage(db, ALL_TENANTS, { limit: 4 }),
+    );
     expect(countMatching(statements, 'FROM memories')).toBe(1);
     expect(result.ids).toHaveLength(4);
   });

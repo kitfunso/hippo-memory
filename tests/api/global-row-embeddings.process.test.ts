@@ -15,7 +15,10 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
-import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
+import {
+  startHashedEmbeddings,
+  type HashedEmbeddings,
+} from '../_helpers/hashed-embedding-server.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -42,7 +45,11 @@ function makeTmpStore(): string {
 }
 
 function disableEmbeddings(root: string): void {
-  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }), 'utf8');
+  fs.writeFileSync(
+    path.join(root, 'config.json'),
+    JSON.stringify({ embeddings: { enabled: false } }),
+    'utf8',
+  );
 }
 
 function cleanUp(...dirs: string[]): void {
@@ -146,7 +153,9 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     });
     writeEntry(globalRoot, entry);
 
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), {
+      embed: TEST_RUN,
+    });
     expect(count).toBe(1);
 
     const index = loadEmbeddingIndex(localRoot);
@@ -179,7 +188,9 @@ describe('global-row-embeddings: awaited batch producers', () => {
     });
     writeEntry(globalRoot, entry);
 
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), {
+      embed: TEST_RUN,
+    });
     expect(count).toBe(1);
 
     // syncGlobalToLocal already fired its own embedAll(localRoot); this call
@@ -261,7 +272,9 @@ describe('global-row-embeddings: the first promote, before any global store exis
     localRoot = makeTmpStore();
     globalRoot = makeRoot('gre-noglobal', { init: false });
     // Only hippo.db marks a store as initialized, so the context's reach has no global store yet.
-    const config = { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } };
+    const config = {
+      embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url },
+    };
     fs.writeFileSync(path.join(globalRoot, 'config.json'), JSON.stringify(config), 'utf8');
     vi.stubEnv('HIPPO_HOME', globalRoot);
     vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
@@ -283,9 +296,12 @@ describe('global-row-embeddings: the first promote, before any global store exis
 
     const promoted = await promote(ctx, entry.id);
 
-    await vi.waitFor(() => expect(loadEmbeddingIndex(globalRoot)[promoted.globalId]).toHaveLength(16), {
-      timeout: 10_000,
-    });
+    await vi.waitFor(
+      () => expect(loadEmbeddingIndex(globalRoot)[promoted.globalId]).toHaveLength(16),
+      {
+        timeout: 10_000,
+      },
+    );
   });
 });
 
@@ -304,7 +320,9 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
       // Seed an unembedded global row directly, bypassing the CLI, so the
       // row predates any embed call.
       initTestStore(globalRoot);
-      const entry = createMemory('cli embed --global test content delta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+      const entry = createMemory('cli embed --global test content delta', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      });
       writeEntry(globalRoot, entry);
 
       // In process, so coverage sees the embed verb; the promote wiring case below keeps the real child.
@@ -365,9 +383,14 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
       // Ensures the local vector exists (deterministic, not racing remember's
       // own fire-and-forget embed) and warms the on-disk model cache before
       // promote runs.
-      if (isEmbeddingAvailable()) execFileSync('node', [HIPPO_BIN, 'embed'], { cwd, env, encoding: 'utf-8' });
+      if (isEmbeddingAvailable())
+        execFileSync('node', [HIPPO_BIN, 'embed'], { cwd, env, encoding: 'utf-8' });
 
-      const promoteOut = execFileSync('node', [HIPPO_BIN, 'promote', localId], { cwd, env, encoding: 'utf-8' });
+      const promoteOut = execFileSync('node', [HIPPO_BIN, 'promote', localId], {
+        cwd,
+        env,
+        encoding: 'utf-8',
+      });
       const promoteMatch = promoteOut.match(/Promoted \S+ to global store as (\S+)/);
       expect(promoteMatch).not.toBeNull();
       const globalId = promoteMatch![1];

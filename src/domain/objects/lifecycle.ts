@@ -15,7 +15,12 @@ import {
 } from '../../base/records/object-types.js';
 import type { ObjectClose, ObjectListQuery, Objects, ObjectSave } from '../../base/ports/store.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
-import type { ObjectDescriptor, ObjectDraft, ObjectListOptions, SavableDescriptor } from './descriptor.js';
+import type {
+  ObjectDescriptor,
+  ObjectDraft,
+  ObjectListOptions,
+  SavableDescriptor,
+} from './descriptor.js';
 
 /** An empty status or filter lists every row, as an absent one does. */
 function listQuery<K extends ObjectKind>(
@@ -25,7 +30,9 @@ function listQuery<K extends ObjectKind>(
 ): ObjectListQuery<K> {
   assertTenantId('listObjects', tenantId);
   if (opts.status && !d.states.has(opts.status)) {
-    throw new BadRequestError(`status must be one of ${Array.from(d.states).join('|')}; got ${opts.status}`);
+    throw new BadRequestError(
+      `status must be one of ${Array.from(d.states).join('|')}; got ${opts.status}`,
+    );
   }
   return {
     status: opts.status || undefined,
@@ -75,7 +82,8 @@ function closed<K extends ObjectKind>(
   if (written.refused === 'missing') {
     throw new NotFoundError(`${d.label} ${id} not found for tenant ${tenantId}`);
   }
-  if (written.refused !== 'status') throw new NotFoundError(`${d.label} ${id} not found after UPDATE`);
+  if (written.refused !== 'status')
+    throw new NotFoundError(`${d.label} ${id} not found after UPDATE`);
   const closable = d.closableFrom.join(' or ');
   throw new ConflictError(
     `${d.label} ${id} is ${d.closeRefusal ?? `not ${closable}`} (status='${written.status}'); only ${closable} ${d.plural} can be closed.`,
@@ -131,7 +139,11 @@ export interface ObjectSaveSite {
   readonly now: Date;
 }
 
-function objectSave<K extends SavableKind>(site: ObjectSaveSite, kind: K, draft: ObjectDraft<K>): ObjectSave<K> {
+function objectSave<K extends SavableKind>(
+  site: ObjectSaveSite,
+  kind: K,
+  draft: ObjectDraft<K>,
+): ObjectSave<K> {
   const mirror = objectMirror(site.baseHalfLifeDays, site.tenantId, kind, draft, site.now);
   return {
     mirror,
@@ -152,13 +164,17 @@ function saved<K extends SavableKind, W>(
   if (!isObjectRefusal(written)) return written;
   switch (written.refused) {
     case 'missing':
-      throw new NotFoundError(`${d.label} ${replaced} to supersede not found for tenant ${tenantId}`);
+      throw new NotFoundError(
+        `${d.label} ${replaced} to supersede not found for tenant ${tenantId}`,
+      );
     case 'status':
       throw new ConflictError(
         `${d.label} ${replaced} is not active (status='${written.status}'); only active ${d.plural} can be superseded.`,
       );
     case 'raced':
-      throw new ConflictError(`${d.label} ${replaced} could not be superseded (no longer active or self-reference).`);
+      throw new ConflictError(
+        `${d.label} ${replaced} could not be superseded (no longer active or self-reference).`,
+      );
     case 'vanished':
       throw new Error(`failed to reload saved ${d.label} row`);
   }

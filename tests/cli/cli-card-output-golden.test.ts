@@ -45,8 +45,12 @@ describe('hippo card output (in process)', () => {
     const transcript: string[] = [];
     const ids: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<string> => {
-      const r = await runInProcess(() => handleCard({ hippoRoot: store, tenantId: 'default', args, flags }));
-      transcript.push(`$ card ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
+      const r = await runInProcess(() =>
+        handleCard({ hippoRoot: store, tenantId: 'default', args, flags }),
+      );
+      transcript.push(
+        `$ card ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`,
+      );
       return r.stdout;
     };
     const created = async (label: string, flags: Flags): Promise<string> => {
@@ -62,8 +66,16 @@ describe('hippo card output (in process)', () => {
     await step('create (bad budget)', ['create'], { title: 't', budget: 'x' });
     await step('create (valueless depends-on)', ['create'], { title: 't', 'depends-on': true });
     await step('create (unknown flag)', ['create'], { title: 't', 'depend-on': 'x' });
-    await step('create (missing parent)', ['create'], { title: 't', 'depends-on': ['card_missing'] });
-    const parent = await created('create parent', { title: 'parent', repo: 'hippo', contract: 'ship it', budget: '3' });
+    await step('create (missing parent)', ['create'], {
+      title: 't',
+      'depends-on': ['card_missing'],
+    });
+    const parent = await created('create parent', {
+      title: 'parent',
+      repo: 'hippo',
+      contract: 'ship it',
+      budget: '3',
+    });
     const child = await created('create child', { title: 'child', 'depends-on': [parent] });
     await step('list', ['list']);
     await step('list --json', ['list'], { json: true });

@@ -1,7 +1,11 @@
 // First-class object, server, goal and auth verbs, in `hippo help` order.
 
 import { DEFAULT_KEY_TTL_DAYS, MAX_TTL_DAYS } from '../../../api/auth/auth.js';
-import { DEFAULT_DASHBOARD_PORT, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../../server/defaults.js';
+import {
+  DEFAULT_DASHBOARD_PORT,
+  DEFAULT_SERVER_HOST,
+  DEFAULT_SERVER_PORT,
+} from '../../server/defaults.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 
 export const OBJECT_VERBS = {
@@ -115,7 +119,11 @@ export const OBJECT_VERBS = {
   brief: verb(() => import('../briefs.js'), 'handleProjectBrief', {
     aliases: ['project-brief'],
     dryRun: { form: 'refresh', honoured: (args) => args[0] === 'refresh' },
-    flags: { switches: ['dry-run'], values: ['change', 'repo', 'status', 'summary'], numbers: ['limit'] },
+    flags: {
+      switches: ['dry-run'],
+      values: ['change', 'repo', 'status', 'summary'],
+      numbers: ['limit'],
+    },
     usage: [
       `
   brief new "<repo>"       Record a repo-scoped project brief
@@ -177,7 +185,11 @@ export const OBJECT_VERBS = {
     ],
   }),
   wm: verb(() => import('../continuity.js'), 'handleWm', {
-    flags: { switches: ['json'], values: ['content', 'importance', 'scope', 'session', 'task'], numbers: ['limit'] },
+    flags: {
+      switches: ['json'],
+      values: ['content', 'importance', 'scope', 'session', 'task'],
+      numbers: ['limit'],
+    },
     usage: [
       `
   wm <sub>                 Working memory — bounded buffer for current state
@@ -216,7 +228,11 @@ export const OBJECT_VERBS = {
     ],
   }),
   serve: verb(() => import('../serve.js'), 'handleServe', {
-    flags: { switches: ['allow-cleartext'], values: ['host', 'tls-cert', 'tls-key'], numbers: ['port'] },
+    flags: {
+      switches: ['allow-cleartext'],
+      values: ['host', 'tls-cert', 'tls-key'],
+      numbers: ['port'],
+    },
     usage: [
       `
   serve                    Start the HTTP API server for this store (Ctrl+C stops it)

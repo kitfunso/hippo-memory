@@ -32,11 +32,20 @@ function mint(role: 'admin' | 'member', ownerSubject?: string): string {
   }
 }
 
-async function callTool(key: string, name: string, args: Record<string, string | boolean>): Promise<RpcReply> {
+async function callTool(
+  key: string,
+  name: string,
+  args: Record<string, string | boolean>,
+): Promise<RpcReply> {
   const res = await fetch(`${handle.url}/mcp`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name, arguments: args },
+    }),
   });
   expect(res.status).toBe(200);
   // SAFETY: handleMcpPost answers a JSON-RPC envelope; the test reads only result and error.
@@ -59,16 +68,19 @@ afterEach(async () => {
 });
 
 describe('hippo_remember personal over HTTP MCP', () => {
-  it.skipIf(needsHippoDb('team'))("an owned key stores the row in its owner's scope with origin ''", async () => {
-    const reply = await callTool(keyA, 'hippo_remember', { text: NOTE, personal: true });
-    expect(reply.error).toBeUndefined();
-    expect(reply.result?.content[0]?.text).toMatch(/^Remembered \[/);
-    const rows = loadAllEntries(root, 'default');
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.scope).toBe('personal:private:oid-a');
-    expect(rows[0]?.originProject).toBe('');
-    expect(rows[0]?.content).toBe(NOTE);
-  });
+  it.skipIf(needsHippoDb('team'))(
+    "an owned key stores the row in its owner's scope with origin ''",
+    async () => {
+      const reply = await callTool(keyA, 'hippo_remember', { text: NOTE, personal: true });
+      expect(reply.error).toBeUndefined();
+      expect(reply.result?.content[0]?.text).toMatch(/^Remembered \[/);
+      const rows = loadAllEntries(root, 'default');
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.scope).toBe('personal:private:oid-a');
+      expect(rows[0]?.originProject).toBe('');
+      expect(rows[0]?.content).toBe(NOTE);
+    },
+  );
 
   it.skipIf(needsHippoDb('team'))(
     'an unowned admin key gets the 400 text and stores nothing, while the same key still writes a team row',
@@ -78,7 +90,9 @@ describe('hippo_remember personal over HTTP MCP', () => {
       expect(refused.error?.message).toBe(NO_OWNER_TEXT);
       expect(loadAllEntries(root, 'default')).toHaveLength(0);
 
-      const team = await callTool(keyAdmin, 'hippo_remember', { text: 'team note from the admin key' });
+      const team = await callTool(keyAdmin, 'hippo_remember', {
+        text: 'team note from the admin key',
+      });
       expect(team.error).toBeUndefined();
       expect(loadAllEntries(root, 'default').map((e) => e.scope)).toEqual([null]);
     },
@@ -89,11 +103,15 @@ describe('hippo_remember personal over HTTP MCP', () => {
     "hippo_recall by the same key finds it, and another owner's key finds only the team row",
     async () => {
       await callTool(keyA, 'hippo_remember', { text: NOTE, personal: true });
-      await callTool(keyB, 'hippo_remember', { text: 'quartzlamp: the team deploy script lives in ops' });
+      await callTool(keyB, 'hippo_remember', {
+        text: 'quartzlamp: the team deploy script lives in ops',
+      });
       const own = await callTool(keyA, 'hippo_recall', { query: 'quartzlamp shell alias deploy' });
       expect(own.result?.content[0]?.text).toContain('my own shell alias');
       for (const key of [keyB, keyAdmin]) {
-        const other = await callTool(key, 'hippo_recall', { query: 'quartzlamp shell alias deploy' });
+        const other = await callTool(key, 'hippo_recall', {
+          query: 'quartzlamp shell alias deploy',
+        });
         expect(other.result?.content[0]?.text).toContain('the team deploy script');
         expect(JSON.stringify(other)).not.toContain('my own shell alias');
       }
@@ -102,9 +120,12 @@ describe('hippo_remember personal over HTTP MCP', () => {
 });
 
 describe('hippo_remember is not salience-gated', () => {
-  it.skipIf(needsHippoDb('team'))('stores a short low-salience text that POST /v1/memories would skip', async () => {
-    const reply = await callTool(keyA, 'hippo_remember', { text: 'yes' });
-    expect(reply.result?.content[0]?.text).toMatch(/^Remembered \[/);
-    expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual(['yes']);
-  });
+  it.skipIf(needsHippoDb('team'))(
+    'stores a short low-salience text that POST /v1/memories would skip',
+    async () => {
+      const reply = await callTool(keyA, 'hippo_remember', { text: 'yes' });
+      expect(reply.result?.content[0]?.text).toMatch(/^Remembered \[/);
+      expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual(['yes']);
+    },
+  );
 });

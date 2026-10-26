@@ -7,7 +7,12 @@ import { consolidate } from '../../src/index.js';
 import { supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadChildrenOfSummary, loadAllL2Summaries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import {
+  loadChildrenOfSummary,
+  loadAllL2Summaries,
+  writeEntry,
+  loadAllEntries,
+} from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 
@@ -33,7 +38,9 @@ afterEach(() => {
 describe('sleep skips superseded rows', () => {
   it('as merge, fact extraction and DAG build input', async () => {
     const root = newRoot();
-    const blamed = createMemory('the march outage postmortem blamed bob for dropping the billing table in production');
+    const blamed = createMemory(
+      'the march outage postmortem blamed bob for dropping the billing table in production',
+    );
     writeEntry(root, blamed);
     for (const text of [
       'the march outage postmortem blamed the dropped billing table',
@@ -46,9 +53,19 @@ describe('sleep skips superseded rows', () => {
       'alice owns the billing service',
       'alice reviews every schema change',
       'alice owns the oldfact payroll service',
-    ].map((text) => createMemory(text, { layer: Layer.Semantic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
+    ].map((text) =>
+      createMemory(text, {
+        layer: Layer.Semantic,
+        dagLevel: 1,
+        tags: ['extracted', 'speaker:alice'],
+      }),
+    );
     for (const f of facts) writeEntry(root, f);
-    await supersede(ctxFor(root), blamed.id, 'the march outage postmortem found no single person at fault');
+    await supersede(
+      ctxFor(root),
+      blamed.id,
+      'the march outage postmortem found no single person at fault',
+    );
     await supersede(ctxFor(root), facts[3]!.id, 'bob owns the payroll service');
     const prompts: string[] = [];
     const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
@@ -70,9 +87,11 @@ describe('sleep skips superseded rows', () => {
     expect(sent).toContain('alice reviews every schema change');
     expect(sent).not.toMatch(/blamed bob|oldfact/);
     const current = loadAllEntries(root, 'default').filter((e) => !e.supersededBy);
-    expect(current.some((e) => e.content.startsWith('[Consolidated from 2 related memories, newest first]'))).toBe(
-      true,
-    );
+    expect(
+      current.some((e) =>
+        e.content.startsWith('[Consolidated from 2 related memories, newest first]'),
+      ),
+    ).toBe(true);
     expect(current.map((e) => e.content).join('\n')).not.toMatch(/blamed bob|oldfact/);
   });
 
@@ -86,13 +105,20 @@ describe('sleep skips superseded rows', () => {
     });
     writeEntry(root, summary);
     const [kept, stale] = ['alice runs billing', 'alice runs payroll'].map((text) =>
-      createMemory(text, { layer: Layer.Semantic, dagLevel: 1, dagParentId: summary.id, tags: ['extracted'] }),
+      createMemory(text, {
+        layer: Layer.Semantic,
+        dagLevel: 1,
+        dagParentId: summary.id,
+        tags: ['extracted'],
+      }),
     );
     writeEntry(root, kept!);
     writeEntry(root, stale!);
     await supersede(ctxFor(root), stale!.id, 'bob runs payroll');
 
-    expect((await loadChildrenOfSummary(root, summary.id, 'default')).map((e) => e.id)).toEqual([kept!.id]);
+    expect((await loadChildrenOfSummary(root, summary.id, 'default')).map((e) => e.id)).toEqual([
+      kept!.id,
+    ]);
     expect((await loadAllL2Summaries(root)).map((e) => e.id)).toEqual([summary.id]);
     await supersede(ctxFor(root), summary.id, 'alice runs billing and bob runs payroll');
     expect(await loadAllL2Summaries(root)).toEqual([]);

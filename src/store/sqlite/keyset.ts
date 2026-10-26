@@ -43,7 +43,8 @@ export function entryRange(after: EntryCursor | undefined, newest = false): SqlF
 }
 
 /** The ORDER BY and LIMIT tail of a page that walks oldest or newest first. */
-export const entryPageOrder = (newest = false): string => (newest ? NEWEST_PAGE_ORDER : ENTRY_PAGE_ORDER);
+export const entryPageOrder = (newest = false): string =>
+  newest ? NEWEST_PAGE_ORDER : ENTRY_PAGE_ORDER;
 
 const entryCursorOf = (row: EntryCursor): EntryCursor => ({ created: row.created, id: row.id });
 
@@ -58,7 +59,9 @@ export function entryPage<R extends EntryCursor>(
   const range = entryRange(page.after, page.newest);
   const order = entryPageOrder(page.newest);
   const rows =
-    tenantId === ALL_TENANTS ? everyTenantRows(range, keep, order) : oneTenantRows(tenantAnd(tenantId), range, order);
+    tenantId === ALL_TENANTS
+      ? everyTenantRows(range, keep, order)
+      : oneTenantRows(tenantAnd(tenantId), range, order);
   return keysetPage(read(rows, keep), page.limit, entryCursorOf);
 }
 
@@ -89,7 +92,9 @@ const TENANT_IDS =
 
 /** The keyset clause that resumes id order after `afterId`; the primary key serves it, so the page sorts nothing. */
 export function afterIdAnd(afterId: string | undefined): SqlFragment {
-  return afterId === undefined ? { sql: '', params: [] } : { sql: ' AND id > ?', params: [afterId] };
+  return afterId === undefined
+    ? { sql: '', params: [] }
+    : { sql: ' AND id > ?', params: [afterId] };
 }
 
 /** The ids of a read in id order that fetched one row past `limit`, and the id the next page starts after. */

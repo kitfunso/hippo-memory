@@ -43,11 +43,11 @@ describe('quoteCmdArg', () => {
   });
 
   it('doubles a backslash run before a quote or the closing quote and no other', () => {
-    expect([quoteCmdArg('a b\\'), quoteCmdArg('a\\"b'), quoteCmdArg('C:\\Program Files\\x')]).toEqual([
-      '"a b\\\\"',
-      '"a\\\\""b"',
-      '"C:\\Program Files\\x"',
-    ]);
+    expect([
+      quoteCmdArg('a b\\'),
+      quoteCmdArg('a\\"b'),
+      quoteCmdArg('C:\\Program Files\\x'),
+    ]).toEqual(['"a b\\\\"', '"a\\\\""b"', '"C:\\Program Files\\x"']);
     expect(quoteCmdArg('a\\')).toBe('a\\');
   });
 

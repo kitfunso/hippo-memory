@@ -7,7 +7,11 @@ const LOSER = { id: 'mem_loser', scope: null };
 
 describe('conflictLoserFate', () => {
   it('weakens by default: half the half-life, never under one day', () => {
-    expect(conflictLoserFate({}, LOSER, null)).toEqual({ kind: 'weaken', halfLifeFactor: 0.5, minHalfLifeDays: 1 });
+    expect(conflictLoserFate({}, LOSER, null)).toEqual({
+      kind: 'weaken',
+      halfLifeFactor: 0.5,
+      minHalfLifeDays: 1,
+    });
   });
 
   it('removes the loser on forget', () => {
@@ -16,7 +20,10 @@ describe('conflictLoserFate', () => {
 
   it('rejects the value on rejectLoser, whatever forget says, sweeping only the scope the caller may touch', () => {
     const own = 'personal:private:alice';
-    expect(conflictLoserFate({ rejectLoser: true }, LOSER, own)).toEqual({ kind: 'reject', ownScope: own });
+    expect(conflictLoserFate({ rejectLoser: true }, LOSER, own)).toEqual({
+      kind: 'reject',
+      ownScope: own,
+    });
     expect(conflictLoserFate({ rejectLoser: true, forget: false }, LOSER, null)).toEqual({
       kind: 'reject',
       ownScope: null,

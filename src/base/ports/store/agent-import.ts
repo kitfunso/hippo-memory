@@ -97,7 +97,12 @@ export type ImportStep =
 
 /** Per step: 'done', 'skipped' (a supersede another writer did first), a write's gate result, 'restored' or which way
  * a set-aside went. A restore whose row was gone answers its fresh write's result. */
-export type StepOutcome = 'done' | 'skipped' | 'restored' | SetAsideResult['kind'] | GatedWriteResult;
+export type StepOutcome =
+  | 'done'
+  | 'skipped'
+  | 'restored'
+  | SetAsideResult['kind']
+  | GatedWriteResult;
 
 export interface MirrorFailure {
   readonly id: string;
@@ -120,4 +125,8 @@ export interface RenameSourceOptions {
   readonly origin: string | null;
 }
 
-export type GatedWriteResult = 'written' | 'skipped:not-worth-storing' | 'skipped:secret' | 'skipped:rejected';
+export type GatedWriteResult =
+  | 'written'
+  | 'skipped:not-worth-storing'
+  | 'skipped:secret'
+  | 'skipped:rejected';

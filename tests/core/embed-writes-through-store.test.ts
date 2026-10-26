@@ -7,17 +7,38 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
-import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embeddings/index-identity.js';
-import { embedAll, embedMemoryInto, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
+import {
+  embeddingIndexIdentity,
+  embeddingInputText,
+} from '../../src/base/embeddings/index-identity.js';
+import {
+  embedAll,
+  embedMemoryInto,
+  type EmbedTarget,
+} from '../../src/domain/search/embed-memories.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { loadAllPhysicsState } from '../../src/db/physics-state.js';
-import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../../src/entry/store-kit.js';
+import {
+  OTHER_STORE_MARKER,
+  sqliteStore,
+  type HippoStore,
+  type PhysicsParticle,
+} from '../../src/entry/store-kit.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
-import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
-import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import {
+  hashedVector,
+  startHashedEmbeddings,
+  type HashedEmbeddings,
+} from '../_helpers/hashed-embedding-server.js';
+import {
+  seedTwoTenants,
+  TENANT_A,
+  TENANT_B,
+  type TwoTenantFixture,
+} from '../_helpers/store-conformance.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -57,7 +78,11 @@ function copyOf(from: string = fixture.dir): string {
 }
 
 interface ConfigFile {
-  readonly embeddings: { readonly provider: string; readonly model: string; readonly apiBaseUrl: string };
+  readonly embeddings: {
+    readonly provider: string;
+    readonly model: string;
+    readonly apiBaseUrl: string;
+  };
 }
 
 /** Everything an embed run leaves in hippo.db's vector index: rows with their model and bytes, the model meta row, and particles. */
@@ -96,7 +121,9 @@ function indexOn(root: string): HippoDbIndex {
   try {
     return {
       vectors: db
-        .prepare('SELECT memory_id, model, dim, hex(vector) AS bytes FROM memory_vectors ORDER BY memory_id')
+        .prepare(
+          'SELECT memory_id, model, dim, hex(vector) AS bytes FROM memory_vectors ORDER BY memory_id',
+        )
         .all(),
       model: getMeta(db, EMBEDDING_MODEL_META_KEY, ''),
       particles: [...loadAllPhysicsState(db)].sort(([a], [b]) => (a < b ? -1 : 1)),
@@ -149,7 +176,9 @@ describe('embedAll with a store', () => {
     const hippoRoot = markedFolder();
     const side = portOnlySide(copyOf());
     const run = (): Promise<number> =>
-      withSqliteBlocked(side.store.kind, () => embedAll(on(hippoRoot, side.store), undefined, provider('fake-a')));
+      withSqliteBlocked(side.store.kind, () =>
+        embedAll(on(hippoRoot, side.store), undefined, provider('fake-a')),
+      );
     expect(await run()).toBe(4);
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     expect(await run()).toBe(0);
@@ -160,9 +189,9 @@ describe('embedAll with a store', () => {
     });
     expect(left.map((e) => e.content)).toEqual(['unembeddable row the provider gives up on']);
     const [a] = seeded;
-    expect(Array.from((await side.store.vectors.stored('vectors', [a.id])).get(a.id) ?? [])).toEqual(
-      hashedVector(`fake-a ${embeddingInputText(a)}`).map(Math.fround),
-    );
+    expect(
+      Array.from((await side.store.vectors.stored('vectors', [a.id])).get(a.id) ?? []),
+    ).toEqual(hashedVector(`fake-a ${embeddingInputText(a)}`).map(Math.fround));
   });
 
   it.each([
@@ -190,7 +219,9 @@ describe('embedAll with a store', () => {
     writeEntriesTogether(
       root,
       Array.from({ length: 70 }, (_, i) =>
-        createMemory(`paged backfill memory number ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+        createMemory(`paged backfill memory number ${i}`, {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        }),
       ),
     );
     let calls = 0;
@@ -199,7 +230,9 @@ describe('embedAll with a store', () => {
       if (calls === 2) throw new Error('provider down');
       return vectorsFor('fake-a', texts);
     });
-    await expect(embedAll(on(root, sqliteStore(root)), undefined, flaky)).rejects.toThrow('provider down');
+    await expect(embedAll(on(root, sqliteStore(root)), undefined, flaky)).rejects.toThrow(
+      'provider down',
+    );
     expect(indexOn(root).vectors).toHaveLength(64);
     expect(await embedAll(on(root, sqliteStore(root)), undefined, flaky)).toBe(6);
     expect(indexOn(root).vectors).toHaveLength(70);
@@ -224,7 +257,10 @@ describe('embedAll with a store', () => {
     await expect(running).rejects.toThrow(
       "the vector index was built by another embedding model; run 'hippo embed' to rebuild it",
     );
-    expect(await side.store.vectors.embeddingIndexState()).toEqual({ storedModel: other, hasVectors: true });
+    expect(await side.store.vectors.embeddingIndexState()).toEqual({
+      storedModel: other,
+      hasVectors: true,
+    });
     const left = await side.store.vectors.stored(
       'vectors',
       seeded.map((e) => e.id),
@@ -238,16 +274,23 @@ describe('embedMemory with a store', () => {
     const hippoRoot = markedFolder(hashedConfig());
     const side = portOnlySide(copyOf());
     const entry = seeded[1];
-    await withSqliteBlocked(side.store.kind, () => embedMemoryInto(on(hippoRoot, side.store), entry));
+    await withSqliteBlocked(side.store.kind, () =>
+      embedMemoryInto(on(hippoRoot, side.store), entry),
+    );
     expect(readdirSync(hippoRoot).sort()).toEqual(['config.json', OTHER_STORE_MARKER]);
     const expected = hashedVector(embeddingInputText(entry)).map(Math.fround);
-    expect(Array.from((await side.store.vectors.stored('vectors', [entry.id])).get(entry.id) ?? [])).toEqual(expected);
+    expect(
+      Array.from((await side.store.vectors.stored('vectors', [entry.id])).get(entry.id) ?? []),
+    ).toEqual(expected);
     expect((await side.store.vectors.stored('particles', [entry.id])).get(entry.id)).toMatchObject({
       memoryId: entry.id,
       position: expected,
       lastSimulation: FAKE_NOW,
     });
-    expect(await side.store.vectors.embeddingIndexState()).toEqual({ storedModel: HASHED_MODEL, hasVectors: true });
+    expect(await side.store.vectors.embeddingIndexState()).toEqual({
+      storedModel: HASHED_MODEL,
+      hasVectors: true,
+    });
   });
 
   it.each([
@@ -263,7 +306,10 @@ describe('embedMemory with a store', () => {
       };
       const store: HippoStore = stale ? { ...side.store, vectors: staleVectors } : side.store;
       const ids = seeded.map((e) => e.id);
-      const [before, requests] = [await side.store.vectors.stored('vectors', ids), embeddings.requests()];
+      const [before, requests] = [
+        await side.store.vectors.stored('vectors', ids),
+        embeddings.requests(),
+      ];
       await withSqliteBlocked(side.store.kind, () =>
         embedMemoryInto(on(markedFolder(hashedConfig()), store), seeded[0]),
       );

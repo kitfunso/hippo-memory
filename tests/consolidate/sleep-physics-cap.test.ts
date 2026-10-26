@@ -87,7 +87,9 @@ describe('sleep physics cap', () => {
     const recent = '2026-01-02T00:00:00.000Z';
     const older = '2026-01-01T00:00:00.000Z';
     const entries: MemoryEntry[] = Array.from({ length: STORED }, (_, i) => ({
-      ...createMemory(`fact number ${i} about service ${i * 7919} in region ${i % 13}`, { layer: Layer.Semantic }),
+      ...createMemory(`fact number ${i} about service ${i * 7919} in region ${i % 13}`, {
+        layer: Layer.Semantic,
+      }),
       lastRetrieved: i < STORED - CAP ? older : recent,
     }));
     writeEntriesTogether(root, entries);
@@ -106,12 +108,16 @@ describe('sleep physics cap', () => {
     await physicsPass(run, CAP);
 
     expect(run.result.physicsSimulated).toBe(CAP);
-    expect(detailLines(run.result).some((d) => d.includes(`the ${CAP} most recently recalled of ${STORED}`))).toBe(
-      true,
-    );
+    expect(
+      detailLines(run.result).some((d) =>
+        d.includes(`the ${CAP} most recently recalled of ${STORED}`),
+      ),
+    ).toBe(true);
     const after = storedParticles(root);
     for (const id of leftOut) expect(after.get(id)).toEqual(seeded.get(id));
-    const moved = entries.filter((e) => !leftOut.has(e.id)).map((e) => after.get(e.id)?.lastSimulation);
+    const moved = entries
+      .filter((e) => !leftOut.has(e.id))
+      .map((e) => after.get(e.id)?.lastSimulation);
     expect(moved).toHaveLength(CAP);
     expect(moved.every((sim) => sim !== undefined && sim !== STALE_SIM)).toBe(true);
   });

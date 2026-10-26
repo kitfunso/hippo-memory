@@ -101,7 +101,9 @@ describe('getHippoRoot ancestor walk', () => {
     const tmp = mkdirs('scratch', 'tmp');
     fs.mkdirSync(path.join(tmpRoot, 'scratch', '.hippo'), PRIVATE_DIR);
     const work = mkdirs('scratch', 'tmp', 'work');
-    expect(findHippoStoreDir(work, { homeDir: home })).toBe(path.join(tmpRoot, 'scratch', '.hippo'));
+    expect(findHippoStoreDir(work, { homeDir: home })).toBe(
+      path.join(tmpRoot, 'scratch', '.hippo'),
+    );
     vi.stubEnv('TMPDIR', tmp);
     vi.stubEnv('TEMP', tmp);
     vi.stubEnv('TMP', tmp);
@@ -157,8 +159,14 @@ describe('CLI end to end', () => {
     expect(recall.suppressionSummary.totalCandidates).toBe(1);
     for (const query of ['projectless-orbit', 'absentxylophonezzq']) {
       const packet = JSON.parse(await runCliOut(['recall', query, '--continuity', '--json'], opts));
-      expect(packet.continuity).toEqual({ activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] });
-      expect(packet.results.map((r: { id: string }) => r.id)).toEqual(query === 'projectless-orbit' ? [entry.id] : []);
+      expect(packet.continuity).toEqual({
+        activeSnapshot: null,
+        sessionHandoff: null,
+        recentSessionEvents: [],
+      });
+      expect(packet.results.map((r: { id: string }) => r.id)).toEqual(
+        query === 'projectless-orbit' ? [entry.id] : [],
+      );
     }
     const autoContext = await runCliOut(['context', '--auto'], opts);
     expect(autoContext).toContain(entry.content);
@@ -169,7 +177,9 @@ describe('CLI end to end', () => {
 
     const before = readEntry(globalStore, entry.id)!.retrievalCount;
     const beforeDb = openHippoDb(globalStore);
-    const priorTraces = beforeDb.prepare("SELECT id FROM recall_traces WHERE pipeline = 'context'").all().length;
+    const priorTraces = beforeDb
+      .prepare("SELECT id FROM recall_traces WHERE pipeline = 'context'")
+      .all().length;
     closeHippoDb(beforeDb);
     const queriedContext = await runCliOut(['context', 'projectless-orbit'], opts);
     expect(queriedContext).toContain(entry.content);
@@ -187,7 +197,9 @@ describe('CLI end to end', () => {
       const traces = db.prepare("SELECT id FROM recall_traces WHERE pipeline = 'context'").all();
       expect(traces).toHaveLength(priorTraces + 1);
       // SAFETY: the query selects only the numeric id column.
-      expect(loadLastRecall(globalStore).last_trace_id).toBe(String((traces.at(-1) as { id: number }).id));
+      expect(loadLastRecall(globalStore).last_trace_id).toBe(
+        String((traces.at(-1) as { id: number }).id),
+      );
     } finally {
       closeHippoDb(db);
     }
@@ -209,9 +221,13 @@ describe('CLI end to end', () => {
     }
     expect(readEntry(globalStore, entry.id)!.retrievalCount).toBe(before + 1);
     expect(fs.existsSync(path.join(work, '.hippo'))).toBe(false);
-    const contextJson = JSON.parse(await runCliOut(['context', 'projectless-orbit', '--format', 'json'], opts));
+    const contextJson = JSON.parse(
+      await runCliOut(['context', 'projectless-orbit', '--format', 'json'], opts),
+    );
     expect(contextJson.memories[0].global).toBe(true);
-    const why = JSON.parse(await runCliOut(['recall', 'projectless-orbit', '--why', '--json'], opts));
+    const why = JSON.parse(
+      await runCliOut(['recall', 'projectless-orbit', '--why', '--json'], opts),
+    );
     expect(why.results[0].source).toBe('global');
     vi.stubEnv('HIPPO_HOME', globalStore);
     const direct = await retrieve(apiCtx(globalStore, 'default', adminActor('test')), {
@@ -235,7 +251,10 @@ describe('CLI end to end', () => {
     expect(out).toContain('walkup-target');
     expect(fs.existsSync(path.join(src, '.hippo'))).toBe(false);
 
-    const again = await runCliOut(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: src, env });
+    const again = await runCliOut(['init', '--no-hooks', '--no-schedule', '--no-learn'], {
+      cwd: src,
+      env,
+    });
     expect(again).toContain('Already initialized at');
     expect(fs.existsSync(path.join(src, '.hippo'))).toBe(false);
   });
@@ -243,7 +262,10 @@ describe('CLI end to end', () => {
   it('a directory with no store anywhere up to home still fails, naming both paths', async () => {
     const globalStore = mkdirs('global-store');
     const lone = mkdirs('lone');
-    const res = await runCliAs(['recall', 'anything'], { cwd: lone, env: { ...process.env, HIPPO_HOME: globalStore } });
+    const res = await runCliAs(['recall', 'anything'], {
+      cwd: lone,
+      env: { ...process.env, HIPPO_HOME: globalStore },
+    });
     expect(res.status).not.toBe(0);
     expect(res.stderr).toContain('No hippo store at');
     expect(res.stderr).toContain(path.join(lone, '.hippo'));
@@ -253,7 +275,10 @@ describe('CLI end to end', () => {
       ['context', '--auto'],
       ['context', 'anything'],
     ]) {
-      const context = await runCliAs(args, { cwd: lone, env: { ...process.env, HIPPO_HOME: globalStore } });
+      const context = await runCliAs(args, {
+        cwd: lone,
+        env: { ...process.env, HIPPO_HOME: globalStore },
+      });
       expect(context.status).not.toBe(0);
       expect(context.stderr).toContain('No hippo store at');
     }

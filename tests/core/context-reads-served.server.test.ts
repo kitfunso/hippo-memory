@@ -7,7 +7,13 @@ import { join } from 'node:path';
 import { shareRoot } from '../_helpers/share-root.js';
 import { serve } from '../../src/server.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
-import { CONTEXT_NOW, contextRowsOf, PROJECT, rounded, seedContextRows } from '../_helpers/context-fixture.js';
+import {
+  CONTEXT_NOW,
+  contextRowsOf,
+  PROJECT,
+  rounded,
+  seedContextRows,
+} from '../_helpers/context-fixture.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
@@ -37,7 +43,12 @@ async function send(url: string, call: Call): Promise<Reply> {
     const res = await fetch(`${url}/v1/context?${call.query}`, { headers: { authorization } });
     return { status: res.status, body: await res.json() };
   }
-  const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_context', arguments: call.args } };
+  const rpc = {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: { name: 'hippo_context', arguments: call.args },
+  };
   const headers = { authorization, 'content-type': 'application/json', 'x-hippo-project': PROJECT };
   const res = await fetch(`${url}/mcp`, { method: 'POST', headers, body: JSON.stringify(rpc) });
   return { status: res.status, body: await res.json() };

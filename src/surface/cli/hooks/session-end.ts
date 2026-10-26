@@ -28,7 +28,11 @@ function runtimeLogFile(flags: CliFlags): string | null {
 
 /** SessionEnd entry: TUI teardown kills children still running, so read stdin inline, spawn a detached child that runs
  * sleep then capture, and exit. The child logs to a file that the next SessionStart reads via `hippo last-sleep`. */
-export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+export async function handleSessionEnd({
+  hippoRoot,
+  tenantId,
+  flags,
+}: CommandContext): Promise<void> {
   const runtime = hookRuntime(flags);
   const turn = boolFlag(flags, 'turn');
   const logFile = stringFlag(flags, 'log-file') ?? runtimeLogFile(flags);
@@ -45,7 +49,9 @@ export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandCo
   const input = stop ?? sessionEndInput(stdinText, raw.timedOut, runtime);
   // Only a host payload ends a session: a manual run and a reply's end (turn mode) are not boundaries.
   const rec =
-    !turn && input !== null && !input.manual ? await startSessionEndRecorder(root, tenantId, stdinText, runtime) : null;
+    !turn && input !== null && !input.manual
+      ? await startSessionEndRecorder(root, tenantId, stdinText, runtime)
+      : null;
   const sessionId = input?.sessionId ?? null;
   // Resolved here because only this process saw the payload; the worker captures just the path it is handed. Always a
   // hook, so never scan: an empty stdin here is not a manual run. The Copilot CLI's sessionEnd names no transcript, so
@@ -59,10 +65,18 @@ export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandCo
   try {
     spawnSessionEndWorker(sessionEndWorkerArgs(worker));
   } catch (err) {
-    log.debug(`session-end: the worker did not spawn, running inline: ${errorMessage(err)}`, errorFields(err));
+    log.debug(
+      `session-end: the worker did not spawn, running inline: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     // Inline is the last resort, handed what the child's argv would have carried.
     try {
-      await handleSessionEndWorker({ hippoRoot: root, tenantId, args: [], flags: inlineWorkerFlags(flags, worker) });
+      await handleSessionEndWorker({
+        hippoRoot: root,
+        tenantId,
+        args: [],
+        flags: inlineWorkerFlags(flags, worker),
+      });
     } finally {
       await cliHookRequest(() => flushDeliveryRecorder(rec));
     }
@@ -88,7 +102,11 @@ async function startSessionEndRecorder(
 
 /** What the session-end payload named; null for one hippo refuses or one that never arrived, and the worker then runs
  * with neither value. */
-function sessionEndInput(stdinText: string | undefined, timedOut: boolean, runtime: HookRuntime): CaptureInput | null {
+function sessionEndInput(
+  stdinText: string | undefined,
+  timedOut: boolean,
+  runtime: HookRuntime,
+): CaptureInput | null {
   const receipt = readSessionEnd(stdinText, timedOut, runtime);
   if (receipt.status === 'received') return receipt.input;
   log.debug(`session-end: ${receipt.reason}`);

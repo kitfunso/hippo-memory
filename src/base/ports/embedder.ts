@@ -37,4 +37,7 @@ export interface EmbedderOptions {
 }
 
 /** The embedding provider `embeddings` names; a root passes the real resolver, a test may pass its own. */
-export type EmbedderFor = (embeddings: EmbeddingsConfig, opts?: EmbedderOptions) => EmbeddingProvider;
+export type EmbedderFor = (
+  embeddings: EmbeddingsConfig,
+  opts?: EmbedderOptions,
+) => EmbeddingProvider;

@@ -37,7 +37,9 @@ function comp(ref: string, dev = false): CdxComponent {
 describe('runtimeComponents', () => {
   it('drops components npm marked development, keeps the rest', () => {
     const bom = { components: [comp('runtime-dep@1.0.0'), comp('dev-dep@2.0.0', true)] };
-    expect(runtimeComponents(bom).map((c: CdxComponent) => c['bom-ref'])).toEqual(['runtime-dep@1.0.0']);
+    expect(runtimeComponents(bom).map((c: CdxComponent) => c['bom-ref'])).toEqual([
+      'runtime-dep@1.0.0',
+    ]);
   });
 });
 
@@ -75,7 +77,9 @@ describe('mergeRuntimeBoms', () => {
   it('drops both dev components, keeps every runtime one', () => {
     expect(refs).not.toContain('dev-dep@2.0.0');
     expect(refs).not.toContain('ui-dev@2.0.0');
-    expect(refs).toEqual(expect.arrayContaining(['runtime-dep@1.0.0', 'ui-runtime@1.0.0', 'shared-dep@3.0.0']));
+    expect(refs).toEqual(
+      expect.arrayContaining(['runtime-dep@1.0.0', 'ui-runtime@1.0.0', 'shared-dep@3.0.0']),
+    );
   });
 
   it('de-dupes the shared bom-ref to one components[] entry', () => {
@@ -97,7 +101,9 @@ describe('mergeRuntimeBoms', () => {
     const uiRoot = merged.components.find((c) => c['bom-ref'] === 'ui-pkg@0.1.0');
     expect(uiRoot?.name).toBe('ui-name');
     expect(dep('root-pkg@1.0.0').dependsOn).toContain('ui-pkg@0.1.0');
-    expect(dep('ui-pkg@0.1.0').dependsOn).toEqual(expect.arrayContaining(['ui-runtime@1.0.0', 'shared-dep@3.0.0']));
+    expect(dep('ui-pkg@0.1.0').dependsOn).toEqual(
+      expect.arrayContaining(['ui-runtime@1.0.0', 'shared-dep@3.0.0']),
+    );
   });
 });
 
@@ -109,15 +115,18 @@ describe('scripts/sbom.mjs CLI (real repo, spawns npm)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'sbom-cli-'));
     try {
       const out = join(dir, 'out.cdx.json');
-      execFileSync(process.execPath, [SBOM_JS, '--dir', REPO_ROOT, '--out', out], { encoding: 'utf8' });
+      execFileSync(process.execPath, [SBOM_JS, '--dir', REPO_ROOT, '--out', out], {
+        encoding: 'utf8',
+      });
       // SAFETY: sbom.mjs's own output; shape matches CdxBom.
       const bom = JSON.parse(readFileSync(out, 'utf8')) as CdxBom;
       const names = bom.components.map((c) => c.name);
 
       for (const want of ['react', 'react-dom']) {
-        expect(names, `expected ${want} in the merged runtime SBOM (npm's sbom output may have changed)`).toContain(
-          want,
-        );
+        expect(
+          names,
+          `expected ${want} in the merged runtime SBOM (npm's sbom output may have changed)`,
+        ).toContain(want);
       }
       expect(names, 'the Living Map is gone, so three must not ship').not.toContain('three');
       const devComponent = bom.components.find((c) =>
@@ -128,7 +137,10 @@ describe('scripts/sbom.mjs CLI (real repo, spawns npm)', () => {
         `found a dev component npm's development property did not filter: ${devComponent?.['bom-ref']}`,
       ).toBeUndefined();
 
-      const validRefs = new Set([bom.metadata.component['bom-ref'], ...bom.components.map((c) => c['bom-ref'])]);
+      const validRefs = new Set([
+        bom.metadata.component['bom-ref'],
+        ...bom.components.map((c) => c['bom-ref']),
+      ]);
       const dangling: string[] = [];
       for (const d of bom.dependencies) {
         if (!validRefs.has(d.ref)) dangling.push(`dependency ref ${d.ref}`);
@@ -141,7 +153,9 @@ describe('scripts/sbom.mjs CLI (real repo, spawns npm)', () => {
 
       const uiRef = bom.components.find((c) => c.name === 'hippo-brain-observatory')?.['bom-ref'];
       const rootEntry = bom.dependencies.find((d) => d.ref === bom.metadata.component['bom-ref']);
-      expect(rootEntry?.dependsOn, 'the package must list the dashboard it bundles').toContain(uiRef);
+      expect(rootEntry?.dependsOn, 'the package must list the dashboard it bundles').toContain(
+        uiRef,
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

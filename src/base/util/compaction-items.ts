@@ -105,9 +105,13 @@ const REDACTED = '[REDACTED]';
 
 /** The items that may become rows, as selectItemRows picks them from those with no secret; `note` hears what was left
  * out. */
-export function writableItemRows(items: readonly string[], note: (message: string) => void): string[] {
+export function writableItemRows(
+  items: readonly string[],
+  note: (message: string) => void,
+): string[] {
   const usable = items.filter((item) => !item.includes(REDACTED));
-  if (usable.length < items.length) note(`skipped ${items.length - usable.length} item(s) as secret`);
+  if (usable.length < items.length)
+    note(`skipped ${items.length - usable.length} item(s) as secret`);
   const { rows, tooLong, capped } = selectItemRows(usable);
   if (tooLong > 0) note(`item too long: ${tooLong} kept in the record only`);
   if (capped > 0) note(`capped: ${capped} more kept in the record only`);

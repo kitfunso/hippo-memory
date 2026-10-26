@@ -13,7 +13,12 @@ import { loadConfig } from '../../host/config-file.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { type ImportResult, type ImportOptions } from './core.js';
-import { splitMarkdownFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles } from './markdown-parse.js';
+import {
+  splitMarkdownFrontmatter,
+  frontmatterList,
+  parseWikilinks,
+  collectMarkdownFiles,
+} from './markdown-parse.js';
 import { realpathOrResolve } from '../../host/real-path.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 
@@ -81,7 +86,15 @@ async function syncVaultFolder(
   const ctx = vaultContext(hippoRoot, tenantId, target);
   const existing = await loadVaultRows(ctx, vaultName);
   const relpaths = collectMarkdownFiles(folderPath, hippoRoot);
-  const tally: VaultTally = { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, redacted: 0, entries: [] };
+  const tally: VaultTally = {
+    total: 0,
+    imported: 0,
+    skipped: 0,
+    rejected: 0,
+    archived: 0,
+    redacted: 0,
+    entries: [],
+  };
   const baseHalfLifeDays = ctx.config.defaultHalfLifeDays;
   const seen = new Set<string>();
 
@@ -110,7 +123,13 @@ async function syncVaultFolder(
   return { total, imported, skipped, rejected, archived, redacted, entries };
 }
 
-async function archiveVanishedNotes({ ctx, existing, seen, dryRun, tally }: VaultImportRun): Promise<void> {
+async function archiveVanishedNotes({
+  ctx,
+  existing,
+  seen,
+  dryRun,
+  tally,
+}: VaultImportRun): Promise<void> {
   // Deletion-sync: an artifactRef in the Map but not seen this run vanished from the source, so archive its raw row.
   // Per-file rawArchive, no outer SAVEPOINT: there is no cross-file idempotency row to commit atomically.
   for (const [artifactRef, rows] of existing) {
@@ -182,7 +201,11 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
 
 async function loadVaultRows(ctx: Context, vaultName: string): Promise<Map<string, MemoryEntry[]>> {
   // One load serves both per-file idempotency and the deletion diff.
-  const under = { tenantId: ctx.tenantId, kinds: ['raw'], artifactRefPrefix: `vault:${vaultName}:` } as const;
+  const under = {
+    tenantId: ctx.tenantId,
+    kinds: ['raw'],
+    artifactRefPrefix: `vault:${vaultName}:`,
+  } as const;
   const rows = await readAll((after?: EntryCursor) =>
     ctx.store.reports.entriesWhere(under, { limit: READ_PAGE_ROWS, after }),
   );
@@ -278,33 +301,60 @@ function readVaultNote(run: VaultImportRun, relpath: string): string | null {
   } catch (err) {
     // One unreadable note (gone since the listing, or a transient
     // IO error) must not abort the import; a re-run picks it up.
-    log.warnThenDebug('vault-note-skipped', `vault note skipped: ${relpath}: ${errorMessage(err)}`, {
-      folder: run.folderPath,
-      ...errorFields(err),
-    });
+    log.warnThenDebug(
+      'vault-note-skipped',
+      `vault note skipped: ${relpath}: ${errorMessage(err)}`,
+      {
+        folder: run.folderPath,
+        ...errorFields(err),
+      },
+    );
     run.tally.skipped++;
     return null;
   }
 }
 
-async function archivePriors(run: VaultImportRun, priors: readonly { id: string }[], reason: string): Promise<void> {
+async function archivePriors(
+  run: VaultImportRun,
+  priors: readonly { id: string }[],
+  reason: string,
+): Promise<void> {
   for (const p of priors) {
     run.tally.archived++; // count the would-be archive even in dryRun (true preview)
     if (!run.dryRun) await rawArchive(run.ctx, p.id, reason);
   }
 }
 
-function vaultNoteTags(run: VaultImportRun, hashTag: string, fm: Record<string, string>, body: string): string[] {
+function vaultNoteTags(
+  run: VaultImportRun,
+  hashTag: string,
+  fm: Record<string, string>,
+  body: string,
+): string[] {
   // Build the FULL tag envelope before the idempotency decision, de-duplicated and order-preserving (createMemory
   // stores tags verbatim).
-  const frontmatterTags = [...frontmatterList(fm['tags']), ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`)];
+  const frontmatterTags = [
+    ...frontmatterList(fm['tags']),
+    ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`),
+  ];
   const wikilinkTags = parseWikilinks(body).map((t) => `wikilink-candidate:${t}`);
   return Array.from(
-    new Set(['source:vault', `vault:${run.vaultName}`, hashTag, ...frontmatterTags, ...wikilinkTags, ...run.extraTags]),
+    new Set([
+      'source:vault',
+      `vault:${run.vaultName}`,
+      hashTag,
+      ...frontmatterTags,
+      ...wikilinkTags,
+      ...run.extraTags,
+    ]),
   );
 }
 
-function vaultEnvelopeUnchanged(priors: MemoryEntry[], tags: string[], scope: string | null): boolean {
+function vaultEnvelopeUnchanged(
+  priors: MemoryEntry[],
+  tags: string[],
+  scope: string | null,
+): boolean {
   // Unchanged iff EVERY live raw row carries the EXACT same tag set AND scope; comparing the complete envelope (not
   // hash plus a subset) catches scope, added and removed tags. `length > 0` guards a never-seen file; archiving all
   // priors on a mismatch also clears concurrent double-inserts.

@@ -15,7 +15,12 @@ import { answerRequest } from './failure-replies.js';
 import { startDashboardReader } from './dashboard-reader.js';
 import { answerDashboard, type DashboardServing } from './dashboard-routes.js';
 import { dashboardTickets } from './dashboard-session.js';
-import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
+import {
+  DEFAULT_SHUTDOWN_DRAIN_MS,
+  drainAndClose,
+  setKeepAliveTimeouts,
+  shutdownBoundMs,
+} from './lifecycle.js';
 import { createListener } from './tls.js';
 import type { ServerHandle } from './types.js';
 import { rootInfra } from '../../infra/ports.js';
@@ -60,7 +65,10 @@ export class DashboardListenError extends Error {
 }
 
 /** What every request shares: the reader thread on its own store connection, and a Context on the store's workers. */
-function servingFor(opts: DashboardOptions, { store, offLoop, host }: ServerRuntime): DashboardServing {
+function servingFor(
+  opts: DashboardOptions,
+  { store, offLoop, host }: ServerRuntime,
+): DashboardServing {
   const { hippoRoot, tenantId } = opts;
   const clock = evalClock();
   const now = opts.now ?? ((): number => clock().getTime());
@@ -68,7 +76,10 @@ function servingFor(opts: DashboardOptions, { store, offLoop, host }: ServerRunt
   const infra = rootInfra(host);
   return {
     access: { token: opts.token, port: opts.port, tickets: dashboardTickets() },
-    reader: startDashboardReader({ hippoRoot, tenantId }, { now, cacheClock: opts.cacheClock ?? Date.now }),
+    reader: startDashboardReader(
+      { hippoRoot, tenantId },
+      { now, cacheClock: opts.cacheClock ?? Date.now },
+    ),
     context: () => ({
       hippoRoot,
       tenantId,
@@ -119,7 +130,10 @@ export async function serveDashboard(opts: DashboardOptions): Promise<DashboardH
     return stopping;
   };
   if (opts.handleSignals) {
-    installSignalHandlers('dashboard', { run: stop, boundMs: shutdownBoundMs(DEFAULT_SHUTDOWN_DRAIN_MS) });
+    installSignalHandlers('dashboard', {
+      run: stop,
+      boundMs: shutdownBoundMs(DEFAULT_SHUTDOWN_DRAIN_MS),
+    });
   }
   // SAFETY: listenOn bound a TCP port, so address() is an AddressInfo.
   const { port } = server.address() as AddressInfo;

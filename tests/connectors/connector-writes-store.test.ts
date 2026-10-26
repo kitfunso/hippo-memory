@@ -110,11 +110,21 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       eventName: 'issues',
     };
     const ids = await withSqliteBlocked('port-only', async () => {
-      const message = await remember(ctx, ingestOpts(slackMessage, { connector: 'slack', eventId: 'Ev_message' }));
-      const redelivered = await remember(ctx, ingestOpts(slackMessage, { connector: 'slack', eventId: 'Ev_message' }));
+      const message = await remember(
+        ctx,
+        ingestOpts(slackMessage, { connector: 'slack', eventId: 'Ev_message' }),
+      );
+      const redelivered = await remember(
+        ctx,
+        ingestOpts(slackMessage, { connector: 'slack', eventId: 'Ev_message' }),
+      );
       expect(redelivered.duplicate).toEqual({ memoryId: message.id });
       const opened = await remember(ctx, ingestOpts(issue, issueEvent));
-      expect([message.duplicate, opened.duplicate, opened.quarantined]).toEqual([undefined, undefined, undefined]);
+      expect([message.duplicate, opened.duplicate, opened.quarantined]).toEqual([
+        undefined,
+        undefined,
+        undefined,
+      ]);
       const deleted = await rawArchive(ctx, message.id, 'source_deleted:slack:T1:C1:1700.000001', {
         event: { connector: 'slack', eventId: 'Ev_deleted' },
       });
@@ -131,7 +141,9 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       ['slack', 'Ev_message', ids.message, null],
       ['github', 'key-issue-42', ids.opened, 'd-1'],
     ]);
-    expect(rowsOf(served, "SELECT value FROM meta WHERE key = 'total_forgotten'")).toEqual([{ value: '1' }]);
+    expect(rowsOf(served, "SELECT value FROM meta WHERE key = 'total_forgotten'")).toEqual([
+      { value: '1' },
+    ]);
     const rows = side
       .auditRows()
       .filter((r) => r.ts === NOW)

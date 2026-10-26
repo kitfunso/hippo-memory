@@ -27,7 +27,11 @@ export interface SqlFragment {
 }
 
 /** An ` AND ...` tail selecting rows strictly after `after` in (key DESC, id DESC) order; empty when it is unset. */
-export function keysetAfter(sortCol: string, idCol: string, after: KeysetPosition | undefined): SqlFragment {
+export function keysetAfter(
+  sortCol: string,
+  idCol: string,
+  after: KeysetPosition | undefined,
+): SqlFragment {
   if (!after) return { sql: '', params: [] };
   return { sql: ` AND (${sortCol}, ${idCol}) < (?, ?)`, params: [after.key, after.id] };
 }

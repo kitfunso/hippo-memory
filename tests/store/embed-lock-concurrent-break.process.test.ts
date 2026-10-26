@@ -13,11 +13,13 @@ const POLLS = 400;
 /** The pid of a process that has already exited. */
 const deadPid = (): number => spawnSync(process.execPath, ['-e', '0']).pid;
 
-const exited = (child: ChildProcess): Promise<void> => new Promise((resolve) => child.once('close', () => resolve()));
+const exited = (child: ChildProcess): Promise<void> =>
+  new Promise((resolve) => child.once('close', () => resolve()));
 
 async function resultOf(root: string, id: string): Promise<{ token: string | null }> {
   const file = join(root, `result-${id}.json`);
-  for (let i = 0; i < POLLS && !existsSync(file); i++) await new Promise((r) => setTimeout(r, POLL_MS));
+  for (let i = 0; i < POLLS && !existsSync(file); i++)
+    await new Promise((r) => setTimeout(r, POLL_MS));
   return JSON.parse(readFileSync(file, 'utf8'));
 }
 
@@ -26,7 +28,9 @@ describe('breaking a dead holder embedding lock from two processes', () => {
     const root = makeRoot('embed-lock-break');
     writeFileSync(join(root, 'embeddings.lock'), `${deadPid()}:gone`);
     const goAt = String(Date.now() + START_DELAY_MS);
-    const children = ['a', 'b'].map((id) => spawn(process.execPath, [CONTENDER, root, id, goAt], { stdio: 'inherit' }));
+    const children = ['a', 'b'].map((id) =>
+      spawn(process.execPath, [CONTENDER, root, id, goAt], { stdio: 'inherit' }),
+    );
 
     const results = [await resultOf(root, 'a'), await resultOf(root, 'b')];
     writeFileSync(join(root, 'done'), '');

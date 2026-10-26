@@ -105,7 +105,10 @@ describe('api.ts:833 DAG substitution ordering', () => {
     // maxSub = max(1, ceil(limit * 0.3)) = 1 at limit=1, so only the WINNING
     // (highest overflow count) summary is substituted — a clean single-slot
     // assertion instead of inspecting relative order in a longer list.
-    const r = await retrieve(ctxFor(root), { query: 'alpha zulu topic event', window: { limit: 1 } });
+    const r = await retrieve(ctxFor(root), {
+      query: 'alpha zulu topic event',
+      window: { limit: 1 },
+    });
     const summaries = r.results.filter((it) => it.isSummary);
     expect(summaries.length).toBe(1);
     expect(summaries[0].id).toBe(summaryB.id); // topic B (6 overflow) beats topic A (2 overflow)
@@ -162,16 +165,30 @@ describe('cli.ts:1167 --evc-adaptive ordering', () => {
 
   it('primary wins: recency desc decides regardless of score or content', () => {
     const older: OnTopicRow = {
-      entry: { created: '2020-01-01T00:00:00.000Z', content: 'zzz older but higher score', id: 'id-older' },
+      entry: {
+        created: '2020-01-01T00:00:00.000Z',
+        content: 'zzz older but higher score',
+        id: 'id-older',
+      },
       score: 9,
     };
     const newer: OnTopicRow = {
-      entry: { created: '2026-01-01T00:00:00.000Z', content: 'aaa newer but lower score', id: 'id-newer' },
+      entry: {
+        created: '2026-01-01T00:00:00.000Z',
+        content: 'aaa newer but lower score',
+        id: 'id-newer',
+      },
       score: 1,
     };
     // Shuffle input order so the result isn't an accidental array-order no-op.
-    expect(sortOnTopic([older, newer]).map((r) => r.entry.id)).toEqual([newer.entry.id, older.entry.id]);
-    expect(sortOnTopic([newer, older]).map((r) => r.entry.id)).toEqual([newer.entry.id, older.entry.id]);
+    expect(sortOnTopic([older, newer]).map((r) => r.entry.id)).toEqual([
+      newer.entry.id,
+      older.entry.id,
+    ]);
+    expect(sortOnTopic([newer, older]).map((r) => r.entry.id)).toEqual([
+      newer.entry.id,
+      older.entry.id,
+    ]);
   });
 
   it('tail decides: entries created at the exact same timestamp fall back to compareEntryIdentity (content ascending)', () => {
@@ -238,12 +255,27 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
     const c = mem(home, T, 'zzz hop one neighbor right of origin');
     const eb = ent(home, T, b, 'B');
     const ec = ent(home, T, c, 'C');
-    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
-    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ec, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, {
+      fromEntityId: ea,
+      toEntityId: eb,
+      relType: 'supersedes',
+      memoryId: a.id,
+    });
+    insertRelationAt(home, T, {
+      fromEntityId: ea,
+      toEntityId: ec,
+      relType: 'supersedes',
+      memoryId: a.id,
+    });
 
     const d = mem(home, T, 'mmm hop two neighbor reached via b');
     const ed = ent(home, T, d, 'D');
-    insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ed, relType: 'supersedes', memoryId: b.id });
+    insertRelationAt(home, T, {
+      fromEntityId: eb,
+      toEntityId: ed,
+      relType: 'supersedes',
+      memoryId: b.id,
+    });
 
     const base = [sr(a, 1.0)];
     const out = await graphExpandRecall(base, {

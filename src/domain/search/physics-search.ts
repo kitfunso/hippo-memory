@@ -3,14 +3,24 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { indexedModel, indexNeedsRebuild } from '../../base/embeddings/index-identity.js';
-import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../../base/rank/physics.js';
+import {
+  physicsScore as computePhysicsScores,
+  computeMass,
+  type PhysicsParticle,
+} from '../../base/rank/physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../../base/rank/physics-config.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import type { HippoStore, VectorReads } from '../../base/ports/store-index.js';
-import { churnStaleFactor, rankStrength, summaryMultipliers, summaryScoring, type SummaryScoring } from './boosts.js';
+import {
+  churnStaleFactor,
+  rankStrength,
+  summaryMultipliers,
+  summaryScoring,
+  type SummaryScoring,
+} from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
 import { fitBudget } from './finalize.js';
 import { hybridSearch } from './hybrid.js';
@@ -102,7 +112,12 @@ export async function rankPhysics(
 
   // Shared with every hybrid ranking below, so a provider that stalls here is not waited on a second time.
   const queryEmbedDeadline = startQueryEmbedDeadline(options.runtime?.queryEmbedTimeoutMs);
-  const queryVector = await physicsQueryVector(query, source, queryEmbedDeadline, options.queryEmbedding);
+  const queryVector = await physicsQueryVector(
+    query,
+    source,
+    queryEmbedDeadline,
+    options.queryEmbedding,
+  );
   if (!queryVector) return hybridSearch(query, entries, { ...hybrid, queryEmbedDeadline });
   const pool = currentEntries(
     await withVectorCandidates(store.vectors, entries, queryVector, options.vectorCandidates),
@@ -126,7 +141,12 @@ export async function rankPhysics(
       : [];
   const merged = mergeScorePools(physicsResults, classicResults);
   merged.sort(compareScoredResults);
-  return fitBudget(merged, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
+  return fitBudget(
+    merged,
+    options.budget ?? DEFAULT_RECALL_BUDGET,
+    options.minResults ?? 1,
+    options.cost,
+  );
 }
 
 /** The caller's vector, else the provider's; null sends the caller to hybridSearch. */
@@ -141,14 +161,19 @@ async function physicsQueryVector(
   try {
     const provider = source.provider();
     if (!provider.isAvailable()) return null;
-    if (indexNeedsRebuild(indexedModel(await source.store.vectors.embeddingIndexState()), provider.id)) {
+    if (
+      indexNeedsRebuild(indexedModel(await source.store.vectors.embeddingIndexState()), provider.id)
+    ) {
       return null;
     }
     const vec = await embedQueryBy(deadline, provider, query);
     return vec && vec.length > 0 ? vec : null;
   } catch (err) {
     rethrowIfStoreBlocked(err);
-    log.warn(`physics search: query embed failed, using hybrid: ${errorMessage(err)}`, errorFields(err));
+    log.warn(
+      `physics search: query embed failed, using hybrid: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return null;
   }
 }
@@ -184,7 +209,10 @@ async function loadCandidateParticles(
     );
   } catch (err) {
     rethrowIfStoreBlocked(err);
-    log.warn(`physics search: state load failed, using hybrid: ${errorMessage(err)}`, errorFields(err));
+    log.warn(
+      `physics search: state load failed, using hybrid: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return null;
   }
 }
@@ -233,7 +261,12 @@ function scorePhysicsPool(
   if (pools.particles.length === 0) return [];
   const entryMap = new Map(pools.entries.map((e) => [e.id, e]));
   // Content tie key: baseScore ties pick the cluster amplification set, so the order must hold across fresh ingests.
-  const scored = computePhysicsScores(pools.particles, queryVector, config, (id) => entryMap.get(id)?.content ?? id);
+  const scored = computePhysicsScores(
+    pools.particles,
+    queryVector,
+    config,
+    (id) => entryMap.get(id)?.content ?? id,
+  );
   const results: SearchResult[] = [];
   for (const s of scored) {
     if (s.finalScore <= 0) continue;

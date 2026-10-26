@@ -21,8 +21,13 @@ afterEach(() => {
 });
 
 /** POST /v1/outcome with no ids as `bearer`, or as the local key, so it lands on that caller's last recall. */
-async function postOutcome(url: string, body: { readonly good: boolean }, bearer?: string): Promise<Response> {
-  const auth: Record<string, string> = bearer === undefined ? {} : { authorization: `Bearer ${bearer}` };
+async function postOutcome(
+  url: string,
+  body: { readonly good: boolean },
+  bearer?: string,
+): Promise<Response> {
+  const auth: Record<string, string> =
+    bearer === undefined ? {} : { authorization: `Bearer ${bearer}` };
   return fetch(`${url}/v1/outcome`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...auth },
@@ -32,7 +37,8 @@ async function postOutcome(url: string, body: { readonly good: boolean }, bearer
 
 /** The ids a REST recall for `q` showed `bearer`, or the local key. */
 async function recalledIds(url: string, q: string, bearer?: string): Promise<string[]> {
-  const headers: Record<string, string> = bearer === undefined ? {} : { authorization: `Bearer ${bearer}` };
+  const headers: Record<string, string> =
+    bearer === undefined ? {} : { authorization: `Bearer ${bearer}` };
   const res = await fetch(`${url}/v1/memories?q=${encodeURIComponent(q)}`, { headers });
   expect(res.status).toBe(200);
   return (await jsonAs<{ results: { id: string }[] }>(res)).results.map((r) => r.id);
@@ -82,7 +88,10 @@ describe('POST /v1/outcome', () => {
 
       const res = await postOutcome(handle.url, { good: true });
       expect(res.status).toBe(200);
-      expect(await jsonAs<{ applied: number; ids: string[] }>(res)).toEqual({ applied: 2, ids: shown });
+      expect(await jsonAs<{ applied: number; ids: string[] }>(res)).toEqual({
+        applied: 2,
+        ids: shown,
+      });
     },
   );
 
@@ -145,7 +154,10 @@ describe('POST /v1/outcome', () => {
     // ctx.tenantId resolves to 'default' (the unauthenticated localhost
     // default). default cannot read tenant_b's memory -> readEntry returns
     // null -> applied stays 0, no audit row written.
-    const tenantBCtx: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
+    const tenantBCtx: FullContext = apiCtx(home, 'tenant_b', {
+      subject: 'localhost:cli',
+      role: 'admin',
+    });
     const tenantBMem = await remember(tenantBCtx, { content: 'belongs-to-tenant-b' });
 
     const res = await fetch(`${handle.url}/v1/outcome`, {
@@ -171,7 +183,10 @@ describe('POST /v1/outcome', () => {
   it('cross-tenant last-recall path: response ids field does NOT leak other-tenant ids', async () => {
     // v1.11.4 regression: the store's last_retrieval_ids is per folder, not per tenant, so it must never answer a
     // local-key 'default' caller with a tenant_b id.
-    const tenantBCtx: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
+    const tenantBCtx: FullContext = apiCtx(home, 'tenant_b', {
+      subject: 'localhost:cli',
+      role: 'admin',
+    });
     const tenantBMem = await remember(tenantBCtx, { content: 'tenant-b-secret-id' });
     const idx = loadLastRecall(home);
     idx.last_retrieval_ids = [tenantBMem.id];
@@ -280,21 +295,24 @@ describe('POST /v1/outcome without ids, one client beside another', () => {
     }
   };
 
-  it.skipIf(needsHippoDb('db'))("lands on the ids each client last recalled, never on another client's", async () => {
-    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
-    const zebra = await remember(ctx, { content: 'zebrafish feeding schedule' });
-    const quokka = await remember(ctx, { content: 'quokka habitat survey' });
-    const [a, b, idle] = [memberKey('a'), memberKey('b'), memberKey('idle')];
-    expect(await recalledIds(handle.url, 'zebrafish', a)).toEqual([zebra.id]);
-    expect(await recalledIds(handle.url, 'quokka', b)).toEqual([quokka.id]);
+  it.skipIf(needsHippoDb('db'))(
+    "lands on the ids each client last recalled, never on another client's",
+    async () => {
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+      const zebra = await remember(ctx, { content: 'zebrafish feeding schedule' });
+      const quokka = await remember(ctx, { content: 'quokka habitat survey' });
+      const [a, b, idle] = [memberKey('a'), memberKey('b'), memberKey('idle')];
+      expect(await recalledIds(handle.url, 'zebrafish', a)).toEqual([zebra.id]);
+      expect(await recalledIds(handle.url, 'quokka', b)).toEqual([quokka.id]);
 
-    const outA = await postOutcome(handle.url, { good: true }, a);
-    const outB = await postOutcome(handle.url, { good: false }, b);
-    const outIdle = await postOutcome(handle.url, { good: true }, idle);
-    expect(await jsonAs<{ ids: string[] }>(outA)).toEqual({ applied: 1, ids: [zebra.id] });
-    expect(await jsonAs<{ ids: string[] }>(outB)).toEqual({ applied: 1, ids: [quokka.id] });
-    expect(await jsonAs<{ ids: string[] }>(outIdle)).toEqual({ applied: 0, ids: [] });
-    expect(readEntry(home, zebra.id)).toMatchObject({ outcomePositive: 1, outcomeNegative: 0 });
-    expect(readEntry(home, quokka.id)).toMatchObject({ outcomePositive: 0, outcomeNegative: 1 });
-  });
+      const outA = await postOutcome(handle.url, { good: true }, a);
+      const outB = await postOutcome(handle.url, { good: false }, b);
+      const outIdle = await postOutcome(handle.url, { good: true }, idle);
+      expect(await jsonAs<{ ids: string[] }>(outA)).toEqual({ applied: 1, ids: [zebra.id] });
+      expect(await jsonAs<{ ids: string[] }>(outB)).toEqual({ applied: 1, ids: [quokka.id] });
+      expect(await jsonAs<{ ids: string[] }>(outIdle)).toEqual({ applied: 0, ids: [] });
+      expect(readEntry(home, zebra.id)).toMatchObject({ outcomePositive: 1, outcomeNegative: 0 });
+      expect(readEntry(home, quokka.id)).toMatchObject({ outcomePositive: 0, outcomeNegative: 1 });
+    },
+  );
 });

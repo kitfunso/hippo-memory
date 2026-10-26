@@ -25,7 +25,8 @@ export function readMigrationVersions(dir = MIGRATIONS_DIR) {
 export function findMigrationGaps(versions) {
   const gaps = [];
   for (let i = 1; i < versions.length; i++) {
-    if (versions[i] !== versions[i - 1] + 1) gaps.push({ after: versions[i - 1], next: versions[i] });
+    if (versions[i] !== versions[i - 1] + 1)
+      gaps.push({ after: versions[i - 1], next: versions[i] });
   }
   return gaps;
 }

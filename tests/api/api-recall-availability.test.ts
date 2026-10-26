@@ -38,7 +38,9 @@ function countAuditOps(root: string, op: string): number {
   const db = openHippoDb(root);
   try {
     // SAFETY: SELECT COUNT(*) AS n always returns exactly one row with a numeric n column.
-    const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = ?`).get(op) as { n: number };
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = ?`).get(op) as {
+      n: number;
+    };
     return row.n;
   } finally {
     closeHippoDb(db);
@@ -115,7 +117,8 @@ describe('api.recall availabilityHint', () => {
   it('counts only scope-eligible olds: private rows excluded from the pool (HIGH-2 guard)', async () => {
     for (let i = 0; i < 4; i++) seedAged(root, `zephyr quasar nimbus recent ${i}`, 0);
     for (let i = 0; i < 6; i++) seedAged(root, `zephyr older weak public ${i}`, 40);
-    for (let i = 0; i < 3; i++) seedAged(root, `zephyr older weak private ${i}`, 40, 'slack:private:x');
+    for (let i = 0; i < 3; i++)
+      seedAged(root, `zephyr older weak private ${i}`, 40, 'slack:private:x');
     // No scope on the recall = default-deny private rows. With the fix (pool=entries)
     // only the 6 public olds count; the buggy pool=all would have counted 9.
     const result = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });

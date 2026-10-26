@@ -31,7 +31,11 @@ function noteLongWait(db: DatabaseSyncLike, sql: string, startedAt: number): voi
 
 // busy_timeout covers neither contended statement here: SQLite skips the busy handler for `PRAGMA journal_mode` and for
 // a write that upgrades a deferred read snapshot, so both need an explicit wait.
-export function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs = DEFAULT_BUSY_WAIT_MS): void {
+export function execWithBusyRetry(
+  db: DatabaseSyncLike,
+  sql: string,
+  timeoutMs = DEFAULT_BUSY_WAIT_MS,
+): void {
   const startedAt = Date.now();
   const deadline = startedAt + timeoutMs;
   const idle = new Int32Array(new SharedArrayBuffer(4));
@@ -57,7 +61,9 @@ const SAVEPOINT_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function assertSavepointName(name: string): void {
   if (!SAVEPOINT_NAME_RE.test(name)) {
-    throw new Error(`invalid savepoint name ${JSON.stringify(name)}: use letters, digits and _ only`);
+    throw new Error(
+      `invalid savepoint name ${JSON.stringify(name)}: use letters, digits and _ only`,
+    );
   }
 }
 
@@ -79,7 +85,10 @@ function undoAfterFailure(db: DatabaseSyncLike, top: boolean, name: string): voi
   try {
     undoScope(db, top, name);
   } catch (undoError) {
-    log.error(`rollback of write scope ${name} failed: ${errorMessage(undoError)}`, errorFields(undoError));
+    log.error(
+      `rollback of write scope ${name} failed: ${errorMessage(undoError)}`,
+      errorFields(undoError),
+    );
   }
 }
 
@@ -92,7 +101,12 @@ export interface WriteScopeOptions {
  * A deferred scope that reads first cannot wait out another writer, while BEGIN IMMEDIATE waits the open's
  * busy_timeout.
  */
-export function withWriteScope<T>(db: DatabaseSyncLike, name: string, fn: () => T, opts?: WriteScopeOptions): T {
+export function withWriteScope<T>(
+  db: DatabaseSyncLike,
+  name: string,
+  fn: () => T,
+  opts?: WriteScopeOptions,
+): T {
   assertSavepointName(name);
   const top = db.isTransaction === false;
   if (top && opts) execWithBusyRetry(db, 'BEGIN IMMEDIATE', opts.busyWaitMs);

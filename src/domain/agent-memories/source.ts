@@ -16,7 +16,12 @@ export type ContainerMachine = Pick<Machine, 'platform' | 'files'>;
  * `p-`/`u-` and 12 hex of the real path, so no user path reaches a row; `origin` parts projects sharing a folder in the
  * global store.
  */
-export function containerId(dir: string, scope: Scope, { platform, files }: ContainerMachine, origin = ''): string {
+export function containerId(
+  dir: string,
+  scope: Scope,
+  { platform, files }: ContainerMachine,
+  origin = '',
+): string {
   const real = files.realPath(dir).replace(/\\/g, '/');
   const folder = platform === 'win32' ? real.toLowerCase() : real;
   const prefix = scope === 'project' ? 'p' : 'u';
@@ -33,7 +38,10 @@ export function itemSource(prefix: string, key: string, text: string): string {
 }
 
 /** The key and hash of a source under `prefix`; the hash follows the last `#`, since a file name may hold one too. */
-export function splitSource(source: string, prefix: string): { readonly key: string; readonly hash: string } {
+export function splitSource(
+  source: string,
+  prefix: string,
+): { readonly key: string; readonly hash: string } {
   const rest = source.slice(prefix.length);
   const cut = rest.lastIndexOf('#');
   return cut < 0 ? { key: rest, hash: '' } : { key: rest.slice(0, cut), hash: rest.slice(cut + 1) };
@@ -45,5 +53,7 @@ export function splitSource(source: string, prefix: string): { readonly key: str
  */
 export function storedText(text: string): string {
   const masked = maskEmails(text);
-  return masked.length > CONTENT_CAP ? `${truncateCodePointSafe(masked, CONTENT_CAP)} [truncated]` : masked;
+  return masked.length > CONTENT_CAP
+    ? `${truncateCodePointSafe(masked, CONTENT_CAP)} [truncated]`
+    : masked;
 }

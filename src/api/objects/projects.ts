@@ -58,7 +58,10 @@ export function projectNameMerge(
 }
 
 /** Sets aside stray imports, folds renamed projects and re-tags sleep's user-global merges; a dry run only plans. */
-export async function projectNameRepair(ctx: RepairContext, opts: { dryRun: boolean }): Promise<RepairResult> {
+export async function projectNameRepair(
+  ctx: RepairContext,
+  opts: { dryRun: boolean },
+): Promise<RepairResult> {
   return repairProjects(ctx.store, scopeOf(ctx), await folderOf(ctx), opts);
 }
 

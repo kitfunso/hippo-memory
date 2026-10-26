@@ -2,4 +2,5 @@
 // refusal also keeps one owner from reading or finishing another's record.
 import { ConflictError } from '../../base/errors/api-errors.js';
 
-export const otherSessionsRequest = (): ConflictError => new ConflictError('request id belongs to another session');
+export const otherSessionsRequest = (): ConflictError =>
+  new ConflictError('request id belongs to another session');

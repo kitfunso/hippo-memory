@@ -235,7 +235,9 @@ describe.each(CASES)('Objects, the $kind kind', (c) => {
     const every = [8, 7, 6, 4, 3, 2, 1];
     const active = [8, 7, 6, 4, 3];
     // A kind with no filter column ignores the filter.
-    const filtered = c.filtered ? [[7, 3, 1], [8, 6, 4, 2], [7, 3], [], [5]] : [every, every, active, every, [5]];
+    const filtered = c.filtered
+      ? [[7, 3, 1], [8, 6, 4, 2], [7, 3], [], [5]]
+      : [every, every, active, every, [5]];
     expect(side.outcomes.slice(SEEDED)).toEqual([
       { value: every },
       { value: every },

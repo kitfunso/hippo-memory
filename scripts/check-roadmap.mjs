@@ -44,7 +44,9 @@ for (const [index, line] of lines.entries()) {
   const item = title.match(/^([A-Z][A-Z0-9]*\d[a-z]?(?:\.\d+)*)\.\s/);
   if (item) {
     if (initiatives.has(item[1])) {
-      issues.push(`line ${index + 1}: duplicate initiative ${item[1]} (first at line ${initiatives.get(item[1])})`);
+      issues.push(
+        `line ${index + 1}: duplicate initiative ${item[1]} (first at line ${initiatives.get(item[1])})`,
+      );
     } else initiatives.set(item[1], index + 1);
   }
 }
@@ -59,7 +61,8 @@ for (const [line, text] of content) {
   const items = text.split('|')[2] ?? '';
   for (const ref of items.matchAll(/\b([A-Z][A-Z0-9]*\d[a-z]?(?:\.\d+)*)\b/g)) {
     references++;
-    if (!initiatives.has(ref[1])) issues.push(`line ${line}: unknown execution-index initiative ${ref[1]}`);
+    if (!initiatives.has(ref[1]))
+      issues.push(`line ${line}: unknown execution-index initiative ${ref[1]}`);
   }
 }
 for (const [line, title] of headings) {
@@ -94,4 +97,6 @@ if (issues.length) {
   for (const issue of issues) console.error(`  - ${issue}`);
   process.exit(1);
 }
-console.log(`[roadmap] OK: ${initiatives.size} unique initiatives; ${references} explicit references checked.`);
+console.log(
+  `[roadmap] OK: ${initiatives.size} unique initiatives; ${references} explicit references checked.`,
+);

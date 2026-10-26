@@ -13,7 +13,11 @@ import { keysetPage } from '../../base/util/keyset.js';
 import { recordAuditEventsRowByRow } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import type { DirtySummaries, SummarySettle, SummarySettled } from '../../base/ports/store/consolidation.js';
+import type {
+  DirtySummaries,
+  SummarySettle,
+  SummarySettled,
+} from '../../base/ports/store/consolidation.js';
 import type { AppendAuditOptions, EntryCursor, EntryPage } from '../../base/ports/store/types.js';
 
 /** One keyset page of the L2 topic summaries without an L3 parent, across all tenants; a SQL filter, since sleep's
@@ -58,7 +62,10 @@ export function dirtySummaries(db: DatabaseSyncLike, limit: number): DirtySummar
   ).all(limit + 1) as MemoryRow[];
   const summaries = rows.slice(0, limit).map(rowToEntry);
   const children = childrenOfSummaries(db, summaries);
-  return { summaries: summaries.map((summary, i) => ({ summary, children: children[i]! })), more: rows.length > limit };
+  return {
+    summaries: summaries.map((summary, i) => ({ summary, children: children[i]! })),
+    more: rows.length > limit,
+  };
 }
 
 /** The live children of each summary in one IN query per tenant chunk: one list per summary in the order given, each
@@ -143,7 +150,9 @@ export function settleSummary(db: DatabaseSyncLike, settle: SummarySettle): Summ
 }
 
 function settleClean(db: DatabaseSyncLike, settle: SummarySettle): SummarySettled {
-  const row = cachedStatement(db, SETTLE_CLEAN_SQL).get(settle.id, settle.tenantId) as SettledRow | undefined;
+  const row = cachedStatement(db, SETTLE_CLEAN_SQL).get(settle.id, settle.tenantId) as
+    | SettledRow
+    | undefined;
   if (row) auditRows(db, settle.audit);
   return { changed: row !== undefined, refused: false };
 }
@@ -160,9 +169,13 @@ function settleFields(
   const at = [descendantCount, earliestAt, latestAt] as const;
   const row =
     content && !tombstone
-      ? (cachedStatement(db, SETTLE_CONTENT_SQL).get(content.text, ...at, content.rebuiltAt, id, tenantId) as
-          | SettledRow
-          | undefined)
+      ? (cachedStatement(db, SETTLE_CONTENT_SQL).get(
+          content.text,
+          ...at,
+          content.rebuiltAt,
+          id,
+          tenantId,
+        ) as SettledRow | undefined)
       : (cachedStatement(db, SETTLE_FIELDS_SQL).get(...at, id, tenantId) as SettledRow | undefined);
   if (!row) return { changed: false, refused: false };
   // A bare UPDATE leaves memories_fts behind, so the row's text is indexed again.

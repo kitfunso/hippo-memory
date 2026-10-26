@@ -19,7 +19,8 @@ export const SOLO_TENANT = 'solo';
 export const BULK_TENANT = 'bulk';
 /** One over a batch of 400 plus a few, so a walk from the name crosses a batch boundary. */
 export const MANY = 405;
-export const seededAt = (second: number): string => `2020-03-01T00:00:${String(second).padStart(2, '0')}.000Z`;
+export const seededAt = (second: number): string =>
+  `2020-03-01T00:00:${String(second).padStart(2, '0')}.000Z`;
 
 type InTenantA =
   | 'hub'
@@ -47,12 +48,22 @@ type Db = DatabaseSyncLike;
 function seeder(db: Db, dir: string) {
   const memory = (tenantId: string, id: string, scope: string | null): string => {
     writeEntry(dir, {
-      ...createMemory(`source of ${id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId, scope }),
+      ...createMemory(`source of ${id}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        tenantId,
+        scope,
+      }),
       id,
     });
     return id;
   };
-  const entity = (tenantId: string, second: number, name: string, entityType: EntityType, memoryId: string): number => {
+  const entity = (
+    tenantId: string,
+    second: number,
+    name: string,
+    entityType: EntityType,
+    memoryId: string,
+  ): number => {
     vi.setSystemTime(new Date(seededAt(second)));
     return insertEntityRow(db, tenantId, { entityType, name, memoryId }).id;
   };
@@ -64,7 +75,12 @@ function seeder(db: Db, dir: string) {
     memoryId: string,
   ): number => {
     vi.setSystemTime(new Date(seededAt(second)));
-    return insertRelationRow(db, tenantId, { fromEntityId, toEntityId, relType: 'references', memoryId }).id;
+    return insertRelationRow(db, tenantId, {
+      fromEntityId,
+      toEntityId,
+      relType: 'references',
+      memoryId,
+    }).id;
   };
   return { memory, entity, relation };
 }
@@ -103,7 +119,10 @@ function seedTenantA(db: Db, dir: string, policyId: number): SeededTenantA {
   relation(TENANT_A, 10, hub, secret, memories.team);
   relation(TENANT_A, 11, secret, mine, memories.held);
   relation(TENANT_A, 12, shared, hub, memories.team);
-  return { memories, e: { hub, spoke1, spoke2, secret, mine, twinHeld, twinOpen, lone, shared, anchored } };
+  return {
+    memories,
+    e: { hub, spoke1, spoke2, secret, mine, twinHeld, twinOpen, lone, shared, anchored },
+  };
 }
 
 /** Adds a graph to each of four tenants: A with rows under three scopes, B sharing one name with A, one entity under `solo`, and 405 same-named entities under `bulk`. */
@@ -123,11 +142,19 @@ export async function seedGraphRows(dir: string): Promise<SeededGraph> {
     const sharedB = entity(TENANT_B, 1, 'Shared', 'project', memB);
     const otherB = entity(TENANT_B, 2, 'Other', 'system', memB);
     relation(TENANT_B, 3, sharedB, otherB, memB);
-    const solo = entity(SOLO_TENANT, 1, 'Only', 'project', memory(SOLO_TENANT, 'mem_gsolo', TEAM_SCOPE));
+    const solo = entity(
+      SOLO_TENANT,
+      1,
+      'Only',
+      'project',
+      memory(SOLO_TENANT, 'mem_gsolo', TEAM_SCOPE),
+    );
     const memBulk = memory(BULK_TENANT, 'mem_gbulk', TEAM_SCOPE);
     const tailA = entity(BULK_TENANT, 1, 'TailA', 'system', memBulk);
     const tailB = entity(BULK_TENANT, 1, 'TailB', 'system', memBulk);
-    const many = Array.from({ length: MANY }, () => entity(BULK_TENANT, 2, 'Many', 'project', memBulk));
+    const many = Array.from({ length: MANY }, () =>
+      entity(BULK_TENANT, 2, 'Many', 'project', memBulk),
+    );
     // The older relation hangs off the first batch of 400 and the newer off the second.
     relation(BULK_TENANT, 3, many[0]!, tailA, memBulk);
     relation(BULK_TENANT, 4, many[MANY - 1]!, tailB, memBulk);

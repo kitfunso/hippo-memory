@@ -11,7 +11,9 @@ import { loadRelations } from '../_helpers/root-forms.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; prepare takes SQL text and returns a statement.
-const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: { prototype: { prepare(sql: string): object } } };
+const { DatabaseSync } = require('node:sqlite') as {
+  DatabaseSync: { prototype: { prepare(sql: string): object } };
+};
 
 /** Two entities and one relation per decision: the ops a rebuild of `count` new decisions applies. */
 function rebuildOps(decisionIds: readonly number[]): GraphOp[] {
@@ -21,8 +23,14 @@ function rebuildOps(decisionIds: readonly number[]): GraphOp[] {
   });
   return [
     ...decisionIds.flatMap((id): GraphOp[] => [
-      { op: 'insertEntity', entity: { ...keyOf(id, 'decision'), name: `decision ${id}`, memoryId: null } },
-      { op: 'insertEntity', entity: { ...keyOf(id, 'person'), name: `owner ${id}`, memoryId: null } },
+      {
+        op: 'insertEntity',
+        entity: { ...keyOf(id, 'decision'), name: `decision ${id}`, memoryId: null },
+      },
+      {
+        op: 'insertEntity',
+        entity: { ...keyOf(id, 'person'), name: `owner ${id}`, memoryId: null },
+      },
     ]),
     ...decisionIds.map((id): GraphOp => ({
       op: 'insertRelation',
@@ -42,7 +50,9 @@ async function applyFresh(count: number) {
   const root = makeRoot(`graph-apply-${count}`);
   const db = openHippoDb(root);
   try {
-    const insert = db.prepare(`INSERT INTO decisions(tenant_id, decision_text, created_at) VALUES ('default', ?, ?)`);
+    const insert = db.prepare(
+      `INSERT INTO decisions(tenant_id, decision_text, created_at) VALUES ('default', ?, ?)`,
+    );
     const ids = Array.from({ length: count }, (_, i) =>
       Number(insert.run(`decision ${i}`, '2026-01-01T00:00:00.000Z').lastInsertRowid),
     );

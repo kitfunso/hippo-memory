@@ -3,7 +3,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COMPACTION_MEMORY_TAG, DAG_LEVEL, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { isWorthSurfacing } from '../../src/base/memory/memory-quality.js';
-import { classifyOriginProject, projectNames, type ProjectRef } from '../../src/base/scope/project-identity.js';
+import {
+  classifyOriginProject,
+  projectNames,
+  type ProjectRef,
+} from '../../src/base/scope/project-identity.js';
 import {
   ambientRefusal,
   descendantAdmits,
@@ -11,10 +15,18 @@ import {
   type DescendantAdmission,
 } from '../../src/base/scope/read-admission.js';
 import { passesScopeFilterForRecall } from '../../src/base/scope/recall-scope.js';
-import { isSessionDigestRow, SESSION_DIGEST_TAG } from '../../src/base/session/session-digest-row.js';
+import {
+  isSessionDigestRow,
+  SESSION_DIGEST_TAG,
+} from '../../src/base/session/session-digest-row.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { listAmbientCandidates } from '../../src/store/sqlite/candidates.js';
-import type { AmbientRefusal, HippoStore, StoreGroups, SummaryDescendants } from '../../src/base/ports/store.js';
+import type {
+  AmbientRefusal,
+  HippoStore,
+  StoreGroups,
+  SummaryDescendants,
+} from '../../src/base/ports/store.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
@@ -37,7 +49,12 @@ const ORIGINS = ['proj', 'other', '', null];
 const PROJECT: ProjectRef = { name: 'proj', legacyName: 'proj-folder', aliases: ['proj-alias'] };
 
 let minute = 0;
-function row(tenantId: string, id: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
+function row(
+  tenantId: string,
+  id: string,
+  content: string,
+  extra: Partial<MemoryEntry> = {},
+): MemoryEntry {
   minute += 1;
   const created = new Date(Date.UTC(2026, 2, 1, 0, minute)).toISOString();
   return seeded(content, id, created, { tenantId: tenantId, originProject: 'proj', ...extra });
@@ -56,12 +73,17 @@ function ambientRows(tenantId: string, p: string): MemoryEntry[] {
   return [
     ...rows,
     ...SCOPES.map((scope, s) =>
-      row(tenantId, `${p}_pin_s${s}`, `pinned rule ${s} about the billing deploy window`, { scope, pinned: true }),
+      row(tenantId, `${p}_pin_s${s}`, `pinned rule ${s} about the billing deploy window`, {
+        scope,
+        pinned: true,
+      }),
     ),
     row(tenantId, `${p}_pin_junk`, 'okay', { pinned: true }),
     row(tenantId, `${p}_junk`, 'wip'),
     row(tenantId, `${p}_junk_other`, 'done', { originProject: 'other' }),
-    row(tenantId, `${p}_old`, 'rollout target was the old staging cluster', { supersededBy: `${p}_s0_o0` }),
+    row(tenantId, `${p}_old`, 'rollout target was the old staging cluster', {
+      supersededBy: `${p}_s0_o0`,
+    }),
     ...ORIGINS.map((origin, o) =>
       row(tenantId, `${p}_secret_o${o}`, `vault path ${o} lives in the ops runbook`, {
         originProject: origin,
@@ -99,7 +121,11 @@ function ambientRows(tenantId: string, p: string): MemoryEntry[] {
   ];
 }
 
-const under = (parent: string, level: number, extra: Partial<MemoryEntry> = {}): Partial<MemoryEntry> => ({
+const under = (
+  parent: string,
+  level: number,
+  extra: Partial<MemoryEntry> = {},
+): Partial<MemoryEntry> => ({
   dagParentId: parent,
   dagLevel: level,
   ...extra,
@@ -127,16 +153,34 @@ function dagRows(tenantId: string, p: string): MemoryEntry[] {
       ),
     ),
     ...SCOPES.map((scope, s) =>
-      row(tenantId, `${p}_leaf_s${s}`, `leaf under the private fact ${s}`, under(`${p}_fact_s4_o0`, 0, { scope })),
+      row(
+        tenantId,
+        `${p}_leaf_s${s}`,
+        `leaf under the private fact ${s}`,
+        under(`${p}_fact_s4_o0`, 0, { scope }),
+      ),
     ),
-    row(tenantId, `${p}_leaf_cross`, 'leaf under the other project fact', under(`${p}_fact_s0_o1`, 0)),
+    row(
+      tenantId,
+      `${p}_leaf_cross`,
+      'leaf under the other project fact',
+      under(`${p}_fact_s0_o1`, 0),
+    ),
     row(tenantId, `${p}_leaf_open`, 'leaf under the open fact', under(`${p}_fact_s0_o0`, 0)),
-    row(tenantId, `${p}_under_private_sum`, 'fact under the private summary', under(`${p}_sum_private`, 1)),
+    row(
+      tenantId,
+      `${p}_under_private_sum`,
+      'fact under the private summary',
+      under(`${p}_sum_private`, 1),
+    ),
   ];
 }
 
 /** contextGet's pinned-only admit and quality floor before 3.0, as api/context.ts composed them. */
-function oldLoaderAdmit(a: AmbientAdmission, refused: AmbientRefusal[]): (e: MemoryEntry) => boolean {
+function oldLoaderAdmit(
+  a: AmbientAdmission,
+  refused: AmbientRefusal[],
+): (e: MemoryEntry) => boolean {
   const secretAdmit = (e: MemoryEntry): boolean => {
     if (!detectSecret(e).flagged) return true;
     const origin = e.originProject;
@@ -144,7 +188,11 @@ function oldLoaderAdmit(a: AmbientAdmission, refused: AmbientRefusal[]): (e: Mem
     return projectNames(a.currentProject).includes(origin);
   };
   const ambientAdmit = (e: MemoryEntry): boolean => {
-    if (a.handoffSessionId !== undefined && e.sourceSessionId === a.handoffSessionId && isSessionDigestRow(e)) {
+    if (
+      a.handoffSessionId !== undefined &&
+      e.sourceSessionId === a.handoffSessionId &&
+      isSessionDigestRow(e)
+    ) {
       return false;
     }
     if (!secretAdmit(e)) return false;
@@ -154,8 +202,11 @@ function oldLoaderAdmit(a: AmbientAdmission, refused: AmbientRefusal[]): (e: Mem
   };
   const ownSessionId = a.ownSessionId || '';
   const isOwnCompactionItem = (e: MemoryEntry): boolean =>
-    ownSessionId !== '' && e.sourceSessionId === ownSessionId && e.tags.includes(COMPACTION_MEMORY_TAG);
-  const admit = (e: MemoryEntry): boolean => !e.supersededBy && !isOwnCompactionItem(e) && ambientAdmit(e);
+    ownSessionId !== '' &&
+    e.sourceSessionId === ownSessionId &&
+    e.tags.includes(COMPACTION_MEMORY_TAG);
+  const admit = (e: MemoryEntry): boolean =>
+    !e.supersededBy && !isOwnCompactionItem(e) && ambientAdmit(e);
   return (e) => {
     if (!admit(e)) {
       refused.push({ id: e.id, reason: 'admission' });
@@ -187,8 +238,18 @@ const AMBIENT: readonly AmbientAdmission[] = [
     ownScope: 'personal:private:bob',
   },
   { currentProject: '', includeCrossProject: false },
-  { currentProject: 'proj', includeCrossProject: false, ownSessionId: 'sess-own', handoffSessionId: 'sess-handoff' },
-  { currentProject: 'other', includeCrossProject: false, ownSessionId: 'sess-else', handoffSessionId: 'sess-else' },
+  {
+    currentProject: 'proj',
+    includeCrossProject: false,
+    ownSessionId: 'sess-own',
+    handoffSessionId: 'sess-handoff',
+  },
+  {
+    currentProject: 'other',
+    includeCrossProject: false,
+    ownSessionId: 'sess-else',
+    handoffSessionId: 'sess-else',
+  },
 ];
 
 const DESCENDANT: readonly DescendantAdmission[] = [
@@ -215,7 +276,12 @@ function onDb<T>(run: (db: DatabaseSyncLike) => T): T {
 }
 
 /** The walk summaryWithDescendants documents, with the old callback as its admit. */
-function oldWalk(tenantId: string, id: string, depth: number, admit: (row: MemoryEntry) => boolean): string[][] | null {
+function oldWalk(
+  tenantId: string,
+  id: string,
+  depth: number,
+  admit: (row: MemoryEntry) => boolean,
+): string[][] | null {
   const mine = rows.filter((r) => r.tenantId === tenantId);
   const summary = mine.find((r) => r.id === id);
   if (!summary) return null;
@@ -251,7 +317,9 @@ beforeAll(() => {
   }
   // SAFETY: the SELECT names exactly MemoryRow's columns.
   rows = onDb((db) =>
-    (db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`).all() as MemoryRow[]).map(rowToEntry),
+    (db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`).all() as MemoryRow[]).map(
+      rowToEntry,
+    ),
   );
   inProcess = sqliteStore(root);
   onWorkers = workerSqliteStore(root);
@@ -286,11 +354,17 @@ describe('ambient admission as data', () => {
           const refused: AmbientRefusal[] = [];
           const oldAdmit = oldLoaderAdmit(admission, refused);
           const old = onDb((db) =>
-            listAmbientCandidates(db, tenantId, { recentNeeded, judge: (e) => (oldAdmit(e) ? null : 'admission') }),
+            listAmbientCandidates(db, tenantId, {
+              recentNeeded,
+              judge: (e) => (oldAdmit(e) ? null : 'admission'),
+            }),
           );
           const want = { entries: old.entries.map((e) => e.id), refused };
           for (const store of [inProcess, onWorkers]) {
-            const got = await store.contextReads.ambientCandidates(tenantId, { recentNeeded, admit: admission });
+            const got = await store.contextReads.ambientCandidates(tenantId, {
+              recentNeeded,
+              admit: admission,
+            });
             expect({ entries: got.entries.map((e) => e.id), refused: got.refused }).toEqual(want);
           }
         }
@@ -316,12 +390,20 @@ describe('descendant admission as data', () => {
         [ACME, 'a'],
         [GLOBEX, 'b'],
       ] as const) {
-        for (const id of [`${p}_profile`, `${p}_sum`, `${p}_sum_private`, `${p}_fact_s4_o0`, 'missing']) {
+        for (const id of [
+          `${p}_profile`,
+          `${p}_sum`,
+          `${p}_sum_private`,
+          `${p}_fact_s4_o0`,
+          'missing',
+        ]) {
           for (const depth of [1, 2, 3]) {
             const want = oldWalk(tenantId, id, depth, oldDrillAdmit(admission, id));
             for (const store of [inProcess, onWorkers]) {
               const walk = { depth, admit: admission, minSummaryLevel: DAG_LEVEL.topic };
-              expect(levelIds(await store.dagReads.summaryWithDescendants(tenantId, id, walk))).toEqual(want);
+              expect(
+                levelIds(await store.dagReads.summaryWithDescendants(tenantId, id, walk)),
+              ).toEqual(want);
               const paged = await store.dagReads.summaryWithDescendants(tenantId, id, {
                 ...walk,
                 page: { rows: 1_000 },

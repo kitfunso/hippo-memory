@@ -28,7 +28,15 @@ describe('loadRecallEntries', () => {
       explicitScopeMode: 'additive',
       includeSuperseded: false,
     });
-    const positional = loadRecallSearchEntries(root, 'quokka', undefined, 'default', undefined, 'additive', false);
+    const positional = loadRecallSearchEntries(
+      root,
+      'quokka',
+      undefined,
+      'default',
+      undefined,
+      'additive',
+      false,
+    );
 
     expect(byOptions.map((e) => e.id)).toEqual(positional.map((e) => e.id));
     expect(byOptions.map((e) => e.content)).toEqual(['quokka habitat survey notes']);

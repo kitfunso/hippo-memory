@@ -37,7 +37,10 @@ function goalBoostMultiplier(
   policiesByGoalId: ReadonlyMap<string, RetrievalPolicy>,
 ): number {
   // First match boosts by FIRST_MATCH_BOOST, each further one adds EXTRA_MATCH_BOOST, capped at MAX_FINAL_MULTIPLIER.
-  let multiplier = Math.min(FIRST_MATCH_BOOST + EXTRA_MATCH_BOOST * (matches.length - 1), MAX_FINAL_MULTIPLIER);
+  let multiplier = Math.min(
+    FIRST_MATCH_BOOST + EXTRA_MATCH_BOOST * (matches.length - 1),
+    MAX_FINAL_MULTIPLIER,
+  );
   // Compose per-policy multipliers per matched tag.
   for (const tag of matches) {
     const goal = goalsByTag.get(tag)!;
@@ -48,7 +51,8 @@ function goalBoostMultiplier(
     } else if (policy.policyType === 'schema-fit-biased') {
       // Linearly weight schema_fit in [0,1] up to (weightSchemaFit)x.
       // Default 1.0 is a no-op.
-      multiplier *= 1.0 + Math.max(0, policy.weightSchemaFit - 1.0) * (entry.schemaFit ?? DEFAULT_SCHEMA_FIT);
+      multiplier *=
+        1.0 + Math.max(0, policy.weightSchemaFit - 1.0) * (entry.schemaFit ?? DEFAULT_SCHEMA_FIT);
     } else if (policy.policyType === 'recency-first') {
       multiplier *= policy.weightRecency;
     } else if (policy.policyType === 'hybrid') {
@@ -75,7 +79,14 @@ function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
     for (const tag of matches) {
       const goal = goalsByTag.get(tag);
       if (!goal) continue;
-      log.push({ goalId: goal.id, memoryId: r.entry.id, tenantId, sessionId, recalledAt, score: r.score });
+      log.push({
+        goalId: goal.id,
+        memoryId: r.entry.id,
+        tenantId,
+        sessionId,
+        recalledAt,
+        score: r.score,
+      });
     }
   }
   return log;

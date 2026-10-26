@@ -33,7 +33,8 @@ function readSections() {
   const sections = new Map();
   for (const file of fragments) {
     const text = readFileSync(join(DIR, file), 'utf8').replace(/\r\n/g, '\n');
-    if (/^## /m.test(text)) fail(`changelog.d/${file}: a fragment takes ### headings only, no ## heading.`);
+    if (/^## /m.test(text))
+      fail(`changelog.d/${file}: a fragment takes ### headings only, no ## heading.`);
     const [before, ...parts] = text.split(/^### /m);
     if (before.trim()) fail(`changelog.d/${file}: text before its first ### heading.`);
     for (const part of parts) {
@@ -65,7 +66,9 @@ function fold(date) {
   const at = changelog.search(/^## /m);
   writeFileSync(
     'CHANGELOG.md',
-    at < 0 ? `${changelog.trimEnd()}\n\n${entry}` : changelog.slice(0, at) + entry + changelog.slice(at),
+    at < 0
+      ? `${changelog.trimEnd()}\n\n${entry}`
+      : changelog.slice(0, at) + entry + changelog.slice(at),
   );
   for (const file of fragments) rmSync(join(DIR, file));
   console.log(`Folded ${fragments.length} fragment(s) into ## ${version} - ${date}.`);

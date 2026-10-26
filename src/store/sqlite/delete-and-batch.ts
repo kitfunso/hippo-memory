@@ -22,7 +22,12 @@ import { chunked, ID_CHUNK } from '../../base/util/chunked.js';
 import { placeholders } from '../../db/sql.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import type { FlushComponent, LoadedRows, DormantMove, StrengthRefresh } from '../../base/ports/store/consolidation.js';
+import type {
+  FlushComponent,
+  LoadedRows,
+  DormantMove,
+  StrengthRefresh,
+} from '../../base/ports/store/consolidation.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL);
  * tests/store/dormant-memories.test.ts pins it to the schema. */
@@ -55,13 +60,16 @@ export function memoriesBackingAmong(db: DatabaseSyncLike, ids: readonly string[
   // The NOT NULL term lets each table's partial memory_id index answer the IN.
   const sql = tables
     .map(
-      (t) => `SELECT memory_id FROM ${t} WHERE memory_id IS NOT NULL AND memory_id IN (SELECT value FROM json_each(?))`,
+      (t) =>
+        `SELECT memory_id FROM ${t} WHERE memory_id IS NOT NULL AND memory_id IN (SELECT value FROM json_each(?))`,
     )
     .join(' UNION ');
   for (const chunk of chunked([...new Set(ids)])) {
     const list = JSON.stringify(chunk);
     // SAFETY: every arm selects memory_id under IS NOT NULL.
-    const rows = cachedStatement(db, sql).all(...tables.map(() => list)) as Array<{ memory_id: string }>;
+    const rows = cachedStatement(db, sql).all(...tables.map(() => list)) as Array<{
+      memory_id: string;
+    }>;
     for (const row of rows) backed.add(row.memory_id);
   }
   return backed;
@@ -85,7 +93,11 @@ function isRawTriggerAbort(cause: unknown): cause is Error {
 }
 
 /** Runs the DELETE and returns the rows it removed; the raw-row trigger's abort becomes RawAppendOnlyError. */
-function deleteMemoryRow(db: ReturnType<typeof openHippoDb>, sql: string, params: SqlFragment['params']): number {
+function deleteMemoryRow(
+  db: ReturnType<typeof openHippoDb>,
+  sql: string,
+  params: SqlFragment['params'],
+): number {
   try {
     return Number(cachedStatement(db, sql).run(...params).changes ?? 0);
   } catch (cause) {
@@ -102,10 +114,10 @@ export function deleteEntryCore(
   tenantId: string,
   opts?: { actor?: string; suppressForgetAudit?: boolean; reason?: string; automatic?: boolean },
 ): { tenantId: string; dagParentId: string | null } | null {
-  const row = cachedStatement(db, `SELECT ${DELETE_TARGET_COLUMNS} FROM memories WHERE id = ? AND tenant_id = ?`).get(
-    id,
-    tenantId,
-  ) as DeleteTarget | undefined;
+  const row = cachedStatement(
+    db,
+    `SELECT ${DELETE_TARGET_COLUMNS} FROM memories WHERE id = ? AND tenant_id = ?`,
+  ).get(id, tenantId) as DeleteTarget | undefined;
   return row?.id ? deleteTargetRow(db, row, opts) : null;
 }
 
@@ -175,7 +187,10 @@ export function deleteEntriesInBatches(
   return targets.map((target) => gone.delete(target.id));
 }
 
-function readDeleteTargets(db: DatabaseSyncLike, ids: readonly string[]): Map<string, DeleteTarget> {
+function readDeleteTargets(
+  db: DatabaseSyncLike,
+  ids: readonly string[],
+): Map<string, DeleteTarget> {
   const rows = new Map<string, DeleteTarget>();
   for (const chunk of chunked([...new Set(ids)])) {
     const found = cachedStatement(
@@ -194,7 +209,8 @@ function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry
   const row: MemoryEntry = { ...live };
   const loaded = new Map(Object.entries(base));
   for (const [key, value] of Object.entries(ours)) {
-    if (JSON.stringify(value) !== JSON.stringify(loaded.get(key))) Object.assign(row, { [key]: value });
+    if (JSON.stringify(value) !== JSON.stringify(loaded.get(key)))
+      Object.assign(row, { [key]: value });
   }
   return row;
 }
@@ -210,8 +226,14 @@ export function batchWriteAndDelete(
   opts?: { snapshot?: ReadonlyMap<string, MemoryEntry>; dormant?: DormantMove[] },
 ): string[] {
   // One component, so every op keeps the statement order this call has always had.
-  const all: FlushComponent = { refreshes: [], writes: toWrite, deletes: toDeleteIds, dormant: opts?.dormant ?? [] };
-  return batchWriteAndDeleteOn(db, files, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity }).removedIds;
+  const all: FlushComponent = {
+    refreshes: [],
+    writes: toWrite,
+    deletes: toDeleteIds,
+    dormant: opts?.dormant ?? [],
+  };
+  return batchWriteAndDeleteOn(db, files, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity })
+    .removedIds;
 }
 
 /** Tags a flush error with the ids of the component it stopped at, for the partial sleep audit row. */
@@ -257,7 +279,12 @@ function batchWriteAndDeleteOn(
     // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the dirty flag commits atomically with the writes
     // and deletes.
     for (const parentId of out.dirty.parents) {
-      markSummaryDirtyInTx(db, parentId, out.dirty.tenantById.get(parentId) ?? DEFAULT_TENANT_ID, 'batch');
+      markSummaryDirtyInTx(
+        db,
+        parentId,
+        out.dirty.tenantById.get(parentId) ?? DEFAULT_TENANT_ID,
+        'batch',
+      );
     }
   });
   reportChunk(files.hippoRoot, out);
@@ -284,7 +311,11 @@ function applyUntilHold(
     const at = next++;
     try {
       if (window === undefined || at >= window.until) {
-        window = planWindow(db, files, components, { from: at, maxOps: windowOps, snapshot: opts.snapshot });
+        window = planWindow(db, files, components, {
+          from: at,
+          maxOps: windowOps,
+          snapshot: opts.snapshot,
+        });
         windowOps = Math.min(windowOps * 2, ID_CHUNK);
       }
       applyComponent(db, components[at]!, window.writes[at - window.from]!, window.refused, out);
@@ -325,7 +356,8 @@ function applyComponent(
   const deletableIds: string[] = [];
   if (component.deletes.length > 0) {
     // A row pinned after the caller decided to delete it survives.
-    for (const row of readAutoDeletableRows(db, component.deletes, out.dirty)) deletableIds.push(row.id);
+    for (const row of readAutoDeletableRows(db, component.deletes, out.dirty))
+      deletableIds.push(row.id);
   }
   applyPlannedWrites(db, writes, refused, out);
   moveDormantAndDelete(db, component.dormant, deletableIds, out);
@@ -333,10 +365,15 @@ function applyComponent(
 
 /** A component's writes, one a row: v39 batch writers bypass writeEntry, so store-derived origins are stamped here (a
  * NULL origin hides new memories from ambient context). */
-function componentOps(files: StoreFiles, component: FlushComponent): Array<MemoryEntry | StrengthRefresh> {
+function componentOps(
+  files: StoreFiles,
+  component: FlushComponent,
+): Array<MemoryEntry | StrengthRefresh> {
   // A row queued twice keeps its first place and its last version, the one the merge compares; refreshes come first,
   // so a later write of the same row replaces its refresh.
-  const ops = new Map<string, MemoryEntry | StrengthRefresh>(component.refreshes.map((r) => [r.id, r]));
+  const ops = new Map<string, MemoryEntry | StrengthRefresh>(
+    component.refreshes.map((r) => [r.id, r]),
+  );
   for (const entry of component.writes) ops.set(entry.id, stampOriginProject(files, entry));
   return [...ops.values()];
 }
@@ -351,7 +388,8 @@ function reportChunk(hippoRoot: string, out: ChunkLog): void {
   }
   // A skipped write never landed, so mirroring it would resurrect the text the skip kept out of the DB.
   writeMarkdownMirrors(hippoRoot, out.written);
-  for (const id of out.removedIds) purgeMirrorBestEffort(hippoRoot, id, false, 'batchWriteAndDelete');
+  for (const id of out.removedIds)
+    purgeMirrorBestEffort(hippoRoot, id, false, 'batchWriteAndDelete');
 }
 
 /** Moves eligible dormant rows out, then deletes them with the doomed rows, recording every removed id. */
@@ -365,7 +403,8 @@ function moveDormantAndDelete(
   const movable: DormantMove[] = [];
   if (dormantMoves.length > 0) {
     const byId = new Map(dormantMoves.map((m) => [m.entry.id, m]));
-    for (const row of readAutoDeletableRows(db, [...byId.keys()], out.dirty)) movable.push(byId.get(row.id)!);
+    for (const row of readAutoDeletableRows(db, [...byId.keys()], out.dirty))
+      movable.push(byId.get(row.id)!);
   }
   for (const move of movable) {
     insertDormantRow(db, move);
@@ -445,8 +484,15 @@ function planWindow(
     db,
     ops.flat().map((op) => op.id),
   );
-  const writes = ops.map((list) => list.flatMap((op) => plannedWrite(op, at.snapshot?.get(op.id), liveRows)));
-  return { from: at.from, until: at.from + ops.length, writes, refused: refusedWrites(db, writes.flat()) };
+  const writes = ops.map((list) =>
+    list.flatMap((op) => plannedWrite(op, at.snapshot?.get(op.id), liveRows)),
+  );
+  return {
+    from: at.from,
+    until: at.from + ops.length,
+    writes,
+    refused: refusedWrites(db, writes.flat()),
+  };
 }
 
 function plannedWrite(
@@ -503,7 +549,10 @@ function liveRowsById(db: DatabaseSyncLike, ids: readonly string[]): Map<string,
 
 /** The tombstone each refused write matched, by row id, in one read per tenant. checkRejectionGuard's rule, not a bare
  * probe: a live same-content row a tombstone matches still takes decay and replay updates. */
-function refusedWrites(db: DatabaseSyncLike, planned: readonly PlannedWrite[]): Map<string, RejectedValueRow> {
+function refusedWrites(
+  db: DatabaseSyncLike,
+  planned: readonly PlannedWrite[],
+): Map<string, RejectedValueRow> {
   const byTenant = new Map<string, PlannedWrite[]>();
   for (const write of planned) {
     const tenantId = write.row.tenantId ?? DEFAULT_TENANT_ID;
@@ -517,7 +566,8 @@ function refusedWrites(db: DatabaseSyncLike, planned: readonly PlannedWrite[]): 
     const tombstones = rejectedValues(db, tenantId, digests);
     writes.forEach((write, i) => {
       const tombstone = tombstones.get(digests[i]!);
-      if (tombstone && introducesContent(write.liveRow, tenantId, digests[i]!)) refused.set(write.row.id, tombstone);
+      if (tombstone && introducesContent(write.liveRow, tenantId, digests[i]!))
+        refused.set(write.row.id, tombstone);
     });
   }
   return refused;
@@ -529,7 +579,12 @@ function auditRefusal(db: DatabaseSyncLike, row: MemoryEntry, tombstone: Rejecte
 }
 
 /** Lands one batch row with its full-text and dirty-parent bookkeeping. */
-function writeBatchRow(db: DatabaseSyncLike, row: MemoryEntry, live: MemoryEntry | undefined, out: ChunkLog): void {
+function writeBatchRow(
+  db: DatabaseSyncLike,
+  row: MemoryEntry,
+  live: MemoryEntry | undefined,
+  out: ChunkLog,
+): void {
   const { written, fts, dirty } = out;
   written.push(row);
   // Bypass the guard: merges concatenate already-guarded facts, the merge pass checks merged content, and the probe

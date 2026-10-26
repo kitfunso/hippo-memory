@@ -1,9 +1,17 @@
 import type { MemoryEntry } from '../base/memory/entry.js';
 import { entryAfterOutcome as outcomeAt } from '../base/memory/keep-rules.js';
 import { PRODUCTION_STRENGTH, withLossAversion } from '../base/memory/strength.js';
-import { tallyAmbientEntries as tallyAmbientAt, type AmbientTallies } from '../base/memory/ambient.js';
+import {
+  tallyAmbientEntries as tallyAmbientAt,
+  type AmbientTallies,
+} from '../base/memory/ambient.js';
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
-export type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOptions, NewApiKey } from '../base/ports/store/keys.js';
+export type {
+  ApiKeyListItem,
+  ApiKeyListRow,
+  ListApiKeysOptions,
+  NewApiKey,
+} from '../base/ports/store/keys.js';
 export type {
   ApiKeyRecord,
   AppendAuditOptions,
@@ -21,7 +29,11 @@ export type {
   EntryCursor,
   EntryPage,
 } from '../base/ports/store/types.js';
-export type { GoalRecallLogRow, RecallTraceInput, StrengthenOptions } from '../base/ports/store/recall-writes.js';
+export type {
+  GoalRecallLogRow,
+  RecallTraceInput,
+  StrengthenOptions,
+} from '../base/ports/store/recall-writes.js';
 export type {
   RecallScopeFilter,
   VectorCandidateSpec,
@@ -118,7 +130,12 @@ export function entryAfterOutcome(
   good: boolean,
   rules: { lossAversionRatio?: number } = {},
 ): MemoryEntry {
-  return outcomeAt(entry, good, evalNow(), withLossAversion(PRODUCTION_STRENGTH, rules.lossAversionRatio));
+  return outcomeAt(
+    entry,
+    good,
+    evalNow(),
+    withLossAversion(PRODUCTION_STRENGTH, rules.lossAversionRatio),
+  );
 }
 export { normalizeValueForRejection, rejectionDigest } from '../base/records/rejection-digest.js';
 // An add-on's rejections find the texts a sleep-merged row holds with hippo.db's rule.
@@ -165,7 +182,11 @@ export type {
   LoserFate,
   MemoryConflict,
 } from '../base/ports/store/conflicts.js';
-export type { DormantMemory, DormantRestoreOutcome, ListDormantOptions } from '../base/ports/store/dormant.js';
+export type {
+  DormantMemory,
+  DormantRestoreOutcome,
+  ListDormantOptions,
+} from '../base/ports/store/dormant.js';
 export type { CallerItems, CompactionStart } from '../base/ports/store/capture.js';
 export type {
   CorrectionLink,

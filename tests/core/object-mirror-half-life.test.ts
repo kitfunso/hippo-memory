@@ -16,7 +16,12 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { META_KEY } from '../../src/db/meta.js';
-import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import {
+  saveCustomerNote,
+  saveDecision,
+  savePolicy,
+  saveProjectBrief,
+} from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
@@ -65,7 +70,12 @@ async function saveOneOfEach(root: string): Promise<void> {
   await saveObject(
     objectsAt(root),
     PROCESS,
-    { now: evalNow(), baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, tenantId: TENANT, actor: ACTOR },
+    {
+      now: evalNow(),
+      baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
+      tenantId: TENANT,
+      actor: ACTOR,
+    },
     { processName: 'deploy', steps: ['build', 'ship'], description: 'weekly' },
   );
   await savePolicy(
@@ -78,7 +88,12 @@ async function saveOneOfEach(root: string): Promise<void> {
   await saveObject(
     objectsAt(root),
     SKILL,
-    { now: evalNow(), baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, tenantId: TENANT, actor: ACTOR },
+    {
+      now: evalNow(),
+      baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
+      tenantId: TENANT,
+      actor: ACTOR,
+    },
     { skillName: 'triage', instructions: 'read the log first', trigger: 'on page' },
   );
   await saveProjectBrief(
@@ -104,7 +119,10 @@ function mirrorRows(root: string): Record<string, Column>[] {
   const db = openHippoDb(root);
   try {
     // SAFETY: a memories row holds only text, numbers and NULL.
-    const rows = db.prepare(`SELECT * FROM memories ORDER BY source`).all() as Record<string, Column>[];
+    const rows = db.prepare(`SELECT * FROM memories ORDER BY source`).all() as Record<
+      string,
+      Column
+    >[];
     return rows.map(({ id: _id, updated_at: _stamped, ...columns }) => columns);
   } finally {
     closeHippoDb(db);
@@ -242,7 +260,10 @@ interface TickedSave {
   readonly reads: readonly number[];
 }
 
-async function ticked(ticks: readonly number[], save: () => Promise<{ memoryId: string | null }>): Promise<TickedSave> {
+async function ticked(
+  ticks: readonly number[],
+  save: () => Promise<{ memoryId: string | null }>,
+): Promise<TickedSave> {
   const from = ticks.length;
   const { memoryId } = await save();
   return { memoryId, reads: ticks.slice(from) };
@@ -304,7 +325,9 @@ describe.each([
     const mirrors = saves.map((save) => storedMirror(root, save));
     expect(mirrors.map((m) => m.halfLifeDays)).toEqual([base, base, base * 2]);
     const readsGiving = (i: number): number[] =>
-      saves[i].reads.filter((at) => calculateStrength(mirrors[i], new Date(at)) === mirrors[i].strength);
+      saves[i].reads.filter(
+        (at) => calculateStrength(mirrors[i], new Date(at)) === mirrors[i].strength,
+      );
     for (const [i, stored] of mirrors.entries()) {
       expect(stored.halfLifeDays).toBe(deriveHalfLife(base, stored));
       // The row's stamp is one of the save's own reads, so the exact counts below never pass on an empty list.

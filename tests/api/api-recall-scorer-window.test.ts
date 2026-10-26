@@ -90,7 +90,9 @@ describe('RecallOptions.scorerWindow', () => {
       expect((thrown as { code?: string })?.code).toBe('invalid_scorer_window');
       // SAFETY: see above — RecallContractError is the only error type this
       // call path can throw.
-      expect(String((thrown as { message?: string })?.message)).toMatch(/scorerWindow must be a positive integer/);
+      expect(String((thrown as { message?: string })?.message)).toMatch(
+        /scorerWindow must be a positive integer/,
+      );
     },
   );
 

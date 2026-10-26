@@ -24,7 +24,10 @@ const kept = (): string[] =>
 
 beforeEach(() => {
   root = makeRoot('entry-target-no-role', { config: { embeddings: { enabled: false } } });
-  restricted = createMemory('the ops rota sits in the locked channel', { tenantId: 'default', scope: OPS });
+  restricted = createMemory('the ops rota sits in the locked channel', {
+    tenantId: 'default',
+    scope: OPS,
+  });
   open = createMemory('deploys go out on tuesdays', { tenantId: 'default', owner: OWNER });
   unowned = createMemory('the release train leaves on thursdays', { tenantId: 'default' });
   for (const entry of [restricted, open, unowned]) writeEntry(root, entry, { actor: 'cli' });
@@ -35,7 +38,9 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 describe('an EntryTarget with no role', () => {
   it('cannot forget or archive a restricted row, and the row survives', async () => {
     const { entryWrites } = sqliteStore(root);
-    await expect(entryWrites.forget({ ...target, id: restricted.id })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(entryWrites.forget({ ...target, id: restricted.id })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
     await expect(
       entryWrites.archiveRaw({ ...target, id: restricted.id, reason: 'source deleted' }),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -46,7 +51,9 @@ describe('an EntryTarget with no role', () => {
     const { entryWrites } = sqliteStore(root);
     const refusal = entryWrites.forget({ ...target, owner: OWNER, id: unowned.id });
     await expect(refusal).rejects.toBeInstanceOf(ForbiddenError);
-    await expect(refusal).rejects.toThrow(`memory ${unowned.id} records no writer: change it with an admin key`);
+    await expect(refusal).rejects.toThrow(
+      `memory ${unowned.id} records no writer: change it with an admin key`,
+    );
     await entryWrites.forget({ ...target, owner: OWNER, id: open.id });
     expect(kept()).toEqual([restricted.id, unowned.id].sort());
   });

@@ -153,6 +153,8 @@ for (const d of drifts) {
     console.error(`    | ${d.content}`);
   }
 }
-console.error(`\nFix: replace with imports from ui/src/tokens.ts or var(--*) from ui/src/tokens.css.`);
+console.error(
+  `\nFix: replace with imports from ui/src/tokens.ts or var(--*) from ui/src/tokens.css.`,
+);
 console.error(`Migration map: docs/plans/2026-05-24-ui-token-migration-map.md`);
 process.exit(1);

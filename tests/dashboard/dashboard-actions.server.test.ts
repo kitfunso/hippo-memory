@@ -20,7 +20,11 @@ import {
   type RunningDashboard,
   type TmpStore,
 } from '../_helpers/dashboard-fixture.js';
-import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from '../_helpers/root-forms.js';
+import {
+  replaceDetectedConflicts,
+  listMemoryConflicts,
+  readEntry,
+} from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -43,9 +47,18 @@ afterEach(async () => {
 
 const row = (id: string) => readEntry(store.hippoRoot, id)!;
 
-async function openConflict(aId: string, bId: string, reason: string, tenantId = 'default'): Promise<number> {
-  replaceDetectedConflicts(store.hippoRoot, [{ memory_a_id: aId, memory_b_id: bId, reason, score: 0.9 }]);
-  return (await listMemoryConflicts(store.hippoRoot, '*', tenantId)).find((c) => c.reason === reason)!.id;
+async function openConflict(
+  aId: string,
+  bId: string,
+  reason: string,
+  tenantId = 'default',
+): Promise<number> {
+  replaceDetectedConflicts(store.hippoRoot, [
+    { memory_a_id: aId, memory_b_id: bId, reason, score: 0.9 },
+  ]);
+  return (await listMemoryConflicts(store.hippoRoot, '*', tenantId)).find(
+    (c) => c.reason === reason,
+  )!.id;
 }
 
 function lastAudit(): { actor: string; op: string } {
@@ -107,7 +120,12 @@ describe('resolve conflict', () => {
     const reply = await postJson(dash.port, `/api/conflicts/${id}/resolve`, { keep: keep.id });
 
     expect(reply.status).toBe(200);
-    expect(parse<ResolveResult>(reply)).toEqual({ ok: true, conflictId: id, keptId: keep.id, weakenedId: lose.id });
+    expect(parse<ResolveResult>(reply)).toEqual({
+      ok: true,
+      conflictId: id,
+      keptId: keep.id,
+      weakenedId: lose.id,
+    });
     expect(row(keep.id).halfLifeDays).toBe(keep.halfLifeDays);
     expect(row(lose.id).halfLifeDays).toBe(lose.halfLifeDays / 2);
     expect((await listMemoryConflicts(store.hippoRoot, '*', 'default'))[0].status).toBe('resolved');
@@ -123,13 +141,19 @@ describe('resolve conflict', () => {
     expect(outside.status).toBe(400);
     expect(row(b.id).halfLifeDays).toBe(b.halfLifeDays);
 
-    expect((await postJson(dash.port, `/api/conflicts/${id}/resolve`, { keep: a.id })).status).toBe(200);
+    expect((await postJson(dash.port, `/api/conflicts/${id}/resolve`, { keep: a.id })).status).toBe(
+      200,
+    );
     const again = await postJson(dash.port, `/api/conflicts/${id}/resolve`, { keep: a.id });
     expect(again.status).toBe(409);
     expect(parse<{ error: string }>(again).error).toBe('This conflict is already resolved');
 
-    expect((await postJson(dash.port, '/api/conflicts/9999/resolve', { keep: a.id })).status).toBe(404);
-    expect((await postJson(dash.port, '/api/conflicts/0/resolve', { keep: a.id })).status).toBe(400);
+    expect((await postJson(dash.port, '/api/conflicts/9999/resolve', { keep: a.id })).status).toBe(
+      404,
+    );
+    expect((await postJson(dash.port, '/api/conflicts/0/resolve', { keep: a.id })).status).toBe(
+      400,
+    );
   });
 });
 
@@ -149,7 +173,9 @@ describe('forget', () => {
     const reply = await postJson(dash.port, `/api/memory/${target.id}/forget`);
 
     expect(reply.status).toBe(409);
-    expect(parse<{ error: string }>(reply).error).toContain(`hippo forget ${target.id} --archive --reason`);
+    expect(parse<{ error: string }>(reply).error).toContain(
+      `hippo forget ${target.id} --archive --reason`,
+    );
     expect(readEntry(store.hippoRoot, target.id)).not.toBeNull();
   });
 });
@@ -161,10 +187,15 @@ describe('another tenant and not-live rows', () => {
     const conflictId = await openConflict(foreign.id, foreign2.id, 'tenant b conflict', 'tenant_b');
 
     expect((await get(dash.port, `/api/memory/${foreign.id}`)).status).toBe(404);
-    expect((await postJson(dash.port, `/api/memory/${foreign.id}/pin`, { pinned: true })).status).toBe(404);
+    expect(
+      (await postJson(dash.port, `/api/memory/${foreign.id}/pin`, { pinned: true })).status,
+    ).toBe(404);
     expect((await postJson(dash.port, `/api/memory/${foreign.id}/wrong`)).status).toBe(404);
     expect((await postJson(dash.port, `/api/memory/${foreign.id}/forget`)).status).toBe(404);
-    expect((await postJson(dash.port, `/api/conflicts/${conflictId}/resolve`, { keep: foreign.id })).status).toBe(404);
+    expect(
+      (await postJson(dash.port, `/api/conflicts/${conflictId}/resolve`, { keep: foreign.id }))
+        .status,
+    ).toBe(404);
 
     const after = row(foreign.id);
     expect(after.pinned).toBe(false);
@@ -174,12 +205,19 @@ describe('another tenant and not-live rows', () => {
 
   it('answers 404 and changes nothing on a quarantined and on a superseded id', async () => {
     const successor = seed(store.hippoRoot, 'the replacement');
-    const quarantined = seed(store.hippoRoot, 'pending review', { scope: quarantineScopeFor(null) });
-    const superseded = seed(store.hippoRoot, 'replaced', { kind: 'superseded', supersededBy: successor.id });
+    const quarantined = seed(store.hippoRoot, 'pending review', {
+      scope: quarantineScopeFor(null),
+    });
+    const superseded = seed(store.hippoRoot, 'replaced', {
+      kind: 'superseded',
+      supersededBy: successor.id,
+    });
 
     for (const target of [quarantined, superseded]) {
       expect((await get(dash.port, `/api/memory/${target.id}`)).status).toBe(404);
-      expect((await postJson(dash.port, `/api/memory/${target.id}/pin`, { pinned: true })).status).toBe(404);
+      expect(
+        (await postJson(dash.port, `/api/memory/${target.id}/pin`, { pinned: true })).status,
+      ).toBe(404);
       expect((await postJson(dash.port, `/api/memory/${target.id}/wrong`)).status).toBe(404);
       expect((await postJson(dash.port, `/api/memory/${target.id}/forget`)).status).toBe(404);
       const after = row(target.id);
@@ -190,7 +228,9 @@ describe('another tenant and not-live rows', () => {
 
   it('hides a quarantined conflict partner from the detail and refuses to resolve it', async () => {
     const live = seed(store.hippoRoot, 'visible claim');
-    const secret = seed(store.hippoRoot, 'hidden quarantined claim', { scope: quarantineScopeFor(null) });
+    const secret = seed(store.hippoRoot, 'hidden quarantined claim', {
+      scope: quarantineScopeFor(null),
+    });
     const id = await openConflict(live.id, secret.id, 'with a quarantined member');
 
     const detail = await get(dash.port, `/api/memory/${live.id}`);
@@ -198,7 +238,9 @@ describe('another tenant and not-live rows', () => {
     expect(parse<MemoryDetail>(detail).conflicts).toEqual([]);
     expect(detail.body).not.toContain('hidden quarantined claim');
 
-    expect((await postJson(dash.port, `/api/conflicts/${id}/resolve`, { keep: live.id })).status).toBe(404);
+    expect(
+      (await postJson(dash.port, `/api/conflicts/${id}/resolve`, { keep: live.id })).status,
+    ).toBe(404);
     expect(row(live.id).halfLifeDays).toBe(live.halfLifeDays);
     expect(row(secret.id).halfLifeDays).toBe(secret.halfLifeDays);
   });
@@ -221,7 +263,10 @@ describe('request guards', () => {
     const target = seed(store.hippoRoot, 'content type row');
     const path = `/api/memory/${target.id}/forget`;
 
-    const plain = await call(dash.port, 'POST', path, { headers: { 'Content-Type': 'text/plain' }, body: '{}' });
+    const plain = await call(dash.port, 'POST', path, {
+      headers: { 'Content-Type': 'text/plain' },
+      body: '{}',
+    });
     const none = await call(dash.port, 'POST', path, { body: '{}' });
 
     expect(plain.status).toBe(415);
@@ -242,7 +287,10 @@ describe('request guards', () => {
     });
 
     expect(broken.status).toBe(400);
-    expect([big.status, JSON.parse(big.body)]).toEqual([413, { error: 'request body exceeds 4KB' }]);
+    expect([big.status, JSON.parse(big.body)]).toEqual([
+      413,
+      { error: 'request body exceeds 4KB' },
+    ]);
     expect(row(target.id).pinned).toBe(false);
   });
 
@@ -250,37 +298,43 @@ describe('request guards', () => {
     const target = seed(store.hippoRoot, 'drain row');
     const chunk = Buffer.alloc(8 * 1024, 'x');
 
-    const reply = await new Promise<{ status: number; closed: Promise<void> }>((resolve, reject) => {
-      const req = httpRequest({
-        host: '127.0.0.1',
-        port: dash.port,
-        path: `/api/memory/${target.id}/pin`,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', cookie: sessionCookie(dash.port) },
-      });
-      let answered = false;
-      req.on('response', (res) => {
-        answered = true;
-        res.resume();
-        const socket = req.socket;
-        const closed =
-          socket === null || socket.destroyed
-            ? Promise.resolve()
-            : new Promise<void>((done) => socket.once('close', () => done()));
-        resolve({ status: res.statusCode ?? 0, closed });
-      });
-      // A reset before the reply is the bug this guards: the server closed with request bytes unread.
-      req.on('error', (err) => {
-        if (!answered) reject(err);
-      });
-      // Unpaced and never ended, as a large upload is, so only the server can close the connection.
-      const send = async (): Promise<void> => {
-        for (let sent = 0; sent < 1024 * 1024 && !req.destroyed && !answered; sent += chunk.length) {
-          await new Promise<void>((done) => req.write(chunk, () => done()));
-        }
-      };
-      void send();
-    });
+    const reply = await new Promise<{ status: number; closed: Promise<void> }>(
+      (resolve, reject) => {
+        const req = httpRequest({
+          host: '127.0.0.1',
+          port: dash.port,
+          path: `/api/memory/${target.id}/pin`,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', cookie: sessionCookie(dash.port) },
+        });
+        let answered = false;
+        req.on('response', (res) => {
+          answered = true;
+          res.resume();
+          const socket = req.socket;
+          const closed =
+            socket === null || socket.destroyed
+              ? Promise.resolve()
+              : new Promise<void>((done) => socket.once('close', () => done()));
+          resolve({ status: res.statusCode ?? 0, closed });
+        });
+        // A reset before the reply is the bug this guards: the server closed with request bytes unread.
+        req.on('error', (err) => {
+          if (!answered) reject(err);
+        });
+        // Unpaced and never ended, as a large upload is, so only the server can close the connection.
+        const send = async (): Promise<void> => {
+          for (
+            let sent = 0;
+            sent < 1024 * 1024 && !req.destroyed && !answered;
+            sent += chunk.length
+          ) {
+            await new Promise<void>((done) => req.write(chunk, () => done()));
+          }
+        };
+        void send();
+      },
+    );
 
     expect(reply.status).toBe(413);
     await reply.closed;
@@ -299,7 +353,11 @@ describe('request guards', () => {
           port: dash.port,
           path: `/api/memory/${target.id}/pin`,
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Content-Length': 100, cookie: sessionCookie(dash.port) },
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': 100,
+            cookie: sessionCookie(dash.port),
+          },
         },
         (res) => {
           res.resume();
@@ -316,7 +374,9 @@ describe('request guards', () => {
 
   it('answers 400 for a malformed percent sequence in a path, and keeps serving', async () => {
     expect((await get(dash.port, '/api/memory/%E0%A4%A')).status).toBe(400);
-    expect((await postJson(dash.port, '/api/memory/%E0%A4%A/pin', { pinned: true })).status).toBe(400);
+    expect((await postJson(dash.port, '/api/memory/%E0%A4%A/pin', { pinned: true })).status).toBe(
+      400,
+    );
     expect((await get(dash.port, '/api/overview')).status).toBe(200);
   });
 });

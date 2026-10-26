@@ -47,9 +47,12 @@ describe('api domain — recall/forget/promote/supersede', () => {
       content: 'unrelated content for noise',
     });
 
-    const result = await retrieve(apiCtx(home, 'default', { subject: 'api_key:hk_recall', role: 'admin' }), {
-      query: 'alpha-token',
-    });
+    const result = await retrieve(
+      apiCtx(home, 'default', { subject: 'api_key:hk_recall', role: 'admin' }),
+      {
+        query: 'alpha-token',
+      },
+    );
 
     // The noise row shares no term with the query, so only the canary is a candidate.
     expect(result.results).toHaveLength(1);
@@ -75,7 +78,10 @@ describe('api domain — recall/forget/promote/supersede', () => {
     });
     expect(readEntry(home, id)?.id).toBe(id);
 
-    const result = await forget(apiCtx(home, 'default', { subject: 'api_key:hk_forget', role: 'admin' }), id);
+    const result = await forget(
+      apiCtx(home, 'default', { subject: 'api_key:hk_forget', role: 'admin' }),
+      id,
+    );
     expect(result).toEqual({ ok: true, id });
     expect(readEntry(home, id)).toBeNull();
 
@@ -96,7 +102,10 @@ describe('api domain — recall/forget/promote/supersede', () => {
       content: 'promote-me-to-global',
     });
 
-    const result = await promote(apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin' }), id);
+    const result = await promote(
+      apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin' }),
+      id,
+    );
     expect(result.ok).toBe(true);
     expect(result.sourceId).toBe(id);
     expect(result.globalId).toMatch(/^g_/);
@@ -130,7 +139,8 @@ describe('api domain — recall/forget/promote/supersede', () => {
       'personal',
       { scope: 'personal:private:alice' },
       'promote-veto personal row',
-      (id: string) => `Refusing to promote ${id}: it is a personal memory and stays with its owner on this server.`,
+      (id: string) =>
+        `Refusing to promote ${id}: it is a personal memory and stays with its owner on this server.`,
     ],
     [
       'secret',
@@ -145,7 +155,11 @@ describe('api domain — recall/forget/promote/supersede', () => {
     async (_kind, scope, content, text) => {
       const row = createMemory(content, { tenantId: 'default', ...scope });
       writeEntry(home, row);
-      const ctx = apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin', owner: 'alice' });
+      const ctx = apiCtx(home, 'default', {
+        subject: 'api_key:hk_promote',
+        role: 'admin',
+        owner: 'alice',
+      });
 
       const err = await promote(ctx, row.id).catch((e: Error) => e);
 
@@ -162,9 +176,12 @@ describe('api domain — recall/forget/promote/supersede', () => {
   );
 
   it('supersede chains old -> new and audits with the supplied actor', async () => {
-    const { id: oldId } = await remember(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), {
-      content: 'original-belief',
-    });
+    const { id: oldId } = await remember(
+      apiCtx(home, 'default', { subject: 'cli', role: 'admin' }),
+      {
+        content: 'original-belief',
+      },
+    );
 
     const result = await supersede(
       apiCtx(home, 'default', { subject: 'api_key:hk_supersede', role: 'admin' }),
@@ -321,9 +338,13 @@ describe('api domain — archive_raw / auth / audit', () => {
     // Seed events directly so the test is independent of remember/recall.
     const db = openHippoDb(home);
     try {
-      appendAuditEvents(db, [{ tenantId: 'tenant-a', actor: 'cli', op: 'remember', targetId: 'a1' }]);
+      appendAuditEvents(db, [
+        { tenantId: 'tenant-a', actor: 'cli', op: 'remember', targetId: 'a1' },
+      ]);
       appendAuditEvents(db, [{ tenantId: 'tenant-a', actor: 'cli', op: 'forget', targetId: 'a2' }]);
-      appendAuditEvents(db, [{ tenantId: 'tenant-b', actor: 'cli', op: 'remember', targetId: 'b1' }]);
+      appendAuditEvents(db, [
+        { tenantId: 'tenant-b', actor: 'cli', op: 'remember', targetId: 'b1' },
+      ]);
     } finally {
       closeHippoDb(db);
     }
@@ -332,7 +353,9 @@ describe('api domain — archive_raw / auth / audit', () => {
     expect(aAll.length).toBe(2);
     expect(aAll.every((e) => e.tenantId === 'tenant-a')).toBe(true);
 
-    const aRemember = await auditList(apiCtx(home, 'tenant-a', { subject: 'cli', role: 'admin' }), { op: 'remember' });
+    const aRemember = await auditList(apiCtx(home, 'tenant-a', { subject: 'cli', role: 'admin' }), {
+      op: 'remember',
+    });
     expect(aRemember.length).toBe(1);
     expect(aRemember[0]!.targetId).toBe('a1');
 

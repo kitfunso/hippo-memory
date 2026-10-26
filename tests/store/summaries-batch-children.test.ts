@@ -16,7 +16,12 @@ describe('dirtySummaries children', () => {
   it('matches the per-summary read for more parents than one chunk', async () => {
     const at = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS };
     const parents = Array.from({ length: 520 }, (_, i) => ({
-      ...createMemory(`parent ${i}`, { ...at, layer: Layer.Semantic, dagLevel: 2, tags: ['dag-summary'] }),
+      ...createMemory(`parent ${i}`, {
+        ...at,
+        layer: Layer.Semantic,
+        dagLevel: 2,
+        tags: ['dag-summary'],
+      }),
       id: `parent_${i}`,
     }));
     const entries = parents
@@ -32,7 +37,9 @@ describe('dirtySummaries children', () => {
     const dirty = await sqliteStore(root).consolidation.dirtySummaries(parents.length);
     expect(dirty.summaries).toHaveLength(parents.length);
     expect(dirty.more).toBe(false);
-    const childrenOf = new Map(dirty.summaries.map((s) => [s.summary.id, s.children.map((c) => c.id)]));
+    const childrenOf = new Map(
+      dirty.summaries.map((s) => [s.summary.id, s.children.map((c) => c.id)]),
+    );
     for (const index of [0, 2, 510, 519]) {
       const p = parents[index]!;
       const single = (await loadChildrenOfSummary(root, p.id, p.tenantId)).map((c) => c.id);

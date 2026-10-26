@@ -18,7 +18,14 @@ describe('eval-suite scoring', () => {
     const b = await runFeatureEval('t');
 
     expect(a.features.map((f) => f.category).sort()).toEqual(
-      ['direct-recall', 'dag-drilldown', 'extraction-preference', 'multi-hop', 'noise-resistance', 'temporal'].sort(),
+      [
+        'direct-recall',
+        'dag-drilldown',
+        'extraction-preference',
+        'multi-hop',
+        'noise-resistance',
+        'temporal',
+      ].sort(),
     );
     expect(a.totalCases).toBe(a.features.reduce((s, f) => s + f.cases, 0));
     expect(a.overall).toEqual(b.overall);
@@ -32,11 +39,15 @@ describe('eval-suite scoring', () => {
 
     const degraded = {
       ...result,
-      features: result.features.map((f) => (f.category === 'temporal' ? { ...f, ndcgAt5: f.ndcgAt5 - 0.2 } : f)),
+      features: result.features.map((f) =>
+        f.category === 'temporal' ? { ...f, ndcgAt5: f.ndcgAt5 - 0.2 } : f,
+      ),
     };
     const report = detectRegressions(baseline, degraded);
     expect(report.verdict).toBe('REGRESSION');
-    expect(report.regressions.map((r) => `${r.category}.${r.metric}`)).toEqual(['temporal.ndcgAt5']);
+    expect(report.regressions.map((r) => `${r.category}.${r.metric}`)).toEqual([
+      'temporal.ndcgAt5',
+    ]);
     expect(formatResult(degraded, baseline)).toContain('Verdict: REGRESSION (1 regressions)');
   });
 });

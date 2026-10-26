@@ -5,7 +5,11 @@
 
 import { MemoryEntry } from '../../base/memory/entry.js';
 import { canAutoDelete } from '../../base/memory/keep-rules.js';
-import { LEGACY_TYPED_HALF_LIFE, type DecayBasis, type StrengthModel } from '../../base/memory/strength.js';
+import {
+  LEGACY_TYPED_HALF_LIFE,
+  type DecayBasis,
+  type StrengthModel,
+} from '../../base/memory/strength.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { Llm } from '../../base/ports/llm.js';
 import { migrateDefaultHalfLife } from './half-life-migration.js';
@@ -15,13 +19,23 @@ import { type DecayOutcome, decayPass, sessionDecayContext } from './decay.js';
 import { familyUnits, groupFlush } from './flush-units.js';
 import { retireHeldTexts, mergePass } from './merge.js';
 import { detectConflicts } from './conflicts.js';
-import { type ConsolidationResult, type ConsolidationStore, type SleepRun, newConsolidationResult } from './run.js';
+import {
+  type ConsolidationResult,
+  type ConsolidationStore,
+  type SleepRun,
+  newConsolidationResult,
+} from './run.js';
 import { promoteSessionTraces, replayPass, traceWindow } from './traces.js';
 import { llmPasses } from './llm-passes.js';
 import { physicsPass } from './physics-pass.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type { AppendAuditOptions } from '../../base/ports/store/types.js';
-import type { FlushComponent, SleepBegin, SleepStart, UntracedSession } from '../../base/ports/store/consolidation.js';
+import type {
+  FlushComponent,
+  SleepBegin,
+  SleepStart,
+  UntracedSession,
+} from '../../base/ports/store/consolidation.js';
 import { SleepRows, Survivors } from './survivors.js';
 import { tombstoneChecks } from './tombstones.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
@@ -48,21 +62,28 @@ export interface SleepRules {
 /** A full consolidation pass whose store work goes through `store.consolidation`. */
 export async function runConsolidation(
   store: ConsolidationStore,
-  options: ConsolidateOptions & SleepRules & { config: HippoConfig; tenantId: string; pageRows?: number },
+  options: ConsolidateOptions &
+    SleepRules & { config: HippoConfig; tenantId: string; pageRows?: number },
 ): Promise<ConsolidationResult> {
   const { now } = options;
   const dryRun = options.dryRun ?? false;
   const { config, tenantId } = options;
   const result = newConsolidationResult(dryRun);
   const traces = traceWindow({ tenantId, now, dryRun, config });
-  const { halfLives, start } = await migrateHalfLives(store, config.defaultHalfLifeDays, { dryRun, traces }, result);
+  const { halfLives, start } = await migrateHalfLives(
+    store,
+    config.defaultHalfLifeDays,
+    { dryRun, traces },
+    result,
+  );
   reportFtsDrift(start.fts, result);
 
   // One run for every tenant: physics, the run log and the sleep count are host-wide; rows are read a page at a time.
   const preview = dryRun ? halfLives : new Map<string, number>();
   const rows = new SleepRows(store, preview, options.pageRows ?? READ_PAGE_ROWS);
   // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class object.
-  const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !rows.backsObject(entry.id);
+  const retirable = (entry: MemoryEntry): boolean =>
+    canAutoDelete(entry) && !rows.backsObject(entry.id);
 
   const run: SleepRun = {
     tenantId,
@@ -131,7 +152,9 @@ async function runPassesAfterDecay(
   const mergesSkippedRejected = await mergePass(run);
 
   if (mergesSkippedRejected > 0) {
-    log.warn(`consolidate: skipped ${mergesSkippedRejected} merge(s) whose content matches a rejected value`);
+    log.warn(
+      `consolidate: skipped ${mergesSkippedRejected} merge(s) whose content matches a rejected value`,
+    );
   }
 }
 
@@ -145,10 +168,20 @@ async function migrateHalfLives(
 ): ReturnType<typeof migrateDefaultHalfLife> {
   const halfLife = await migrateDefaultHalfLife(store, to, { dryRun, traces });
   if (halfLife.rescaled > 0) {
-    result.events.push({ kind: 'halfLifeRescaled', count: halfLife.rescaled, from: halfLife.from, to: halfLife.to });
+    result.events.push({
+      kind: 'halfLifeRescaled',
+      count: halfLife.rescaled,
+      from: halfLife.from,
+      to: halfLife.to,
+    });
   }
   if (halfLife.typed > 0) {
-    result.events.push({ kind: 'halfLifeTyped', count: halfLife.typed, from: LEGACY_TYPED_HALF_LIFE, to: halfLife.to });
+    result.events.push({
+      kind: 'halfLifeTyped',
+      count: halfLife.typed,
+      from: LEGACY_TYPED_HALF_LIFE,
+      to: halfLife.to,
+    });
   }
   return halfLife;
 }
@@ -231,7 +264,10 @@ async function logRun(run: SleepRun, decay: DecayOutcome): Promise<void> {
 
 // One audit row per rescue, written only after the last flush chunk commits, so a run stopped mid-flush asserts no
 // rescue.
-async function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome): Promise<void> {
+async function auditRescues(
+  run: SleepRun,
+  { rescuedEntries, rankById }: DecayOutcome,
+): Promise<void> {
   const { result } = run;
   const rescueEvent = (entry: Pick<MemoryEntry, 'id' | 'tenantId'>): AppendAuditOptions => {
     const rank = rankById.get(entry.id);
@@ -241,13 +277,20 @@ async function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOu
       op: 'mv_rescue',
       targetId: entry.id,
       metadata: rank
-        ? { rank: rank.rank, totalNonPinned: rank.totalNonPinned, keepN: rank.keepN, score: rank.score }
+        ? {
+            rank: rank.rank,
+            totalNonPinned: rank.totalNonPinned,
+            keepN: rank.keepN,
+            score: rank.score,
+          }
         : {},
     };
   };
   try {
     // Row by row: one failed audit write must not silently drop every remaining row.
-    const auditFailures = await run.store.consolidation.auditEachRow(rescuedEntries.map(rescueEvent));
+    const auditFailures = await run.store.consolidation.auditEachRow(
+      rescuedEntries.map(rescueEvent),
+    );
     if (auditFailures > 0) {
       result.events.push({ kind: 'rescueAuditFailed', failures: auditFailures });
     }

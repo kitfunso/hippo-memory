@@ -62,11 +62,15 @@ export interface HalfLifeOutcome {
   halfLives: ReadonlyMap<string, number>;
 }
 
-type HalfLifeFields = Pick<MemoryEntry, 'halfLifeDays' | 'tags' | 'schemaFit' | 'retrievalCount' | 'supersededBy'>;
+type HalfLifeFields = Pick<
+  MemoryEntry,
+  'halfLifeDays' | 'tags' | 'schemaFit' | 'retrievalCount' | 'supersededBy'
+>;
 
 /** Recall bonus over `written`, the half-life `entry` got at write, or null when off it; each recall added 2 days. */
 export function halfLifeRecallBonus(entry: HalfLifeFields, written: number): number | null {
-  if (entry.supersededBy || entry.tags.includes('invalidated') || entry.tags.includes('superseded')) return null;
+  if (entry.supersededBy || entry.tags.includes('invalidated') || entry.tags.includes('superseded'))
+    return null;
   const bonus = entry.halfLifeDays - written;
   const k = Math.round(bonus / 2);
   return Math.abs(bonus - 2 * k) < 1e-9 && k >= 0 && k <= entry.retrievalCount ? bonus : null;
@@ -145,7 +149,8 @@ function planMoves(rows: HalfLifeRows, to: number) {
   }
   // Provenance before shape: an object's memory came from its writer, a supersede copy from the base (it keeps the
   // source). Shape decides the rest.
-  const objectWritten = (m: Movable) => m.object !== null || (!copies.has(m.change.id) && m.typedBase);
+  const objectWritten = (m: Movable) =>
+    m.object !== null || (!copies.has(m.change.id) && m.typedBase);
   const basePlan: HalfLifeChange[] = [];
   const typedPlan: HalfLifeChange[] = [];
   for (const m of movable) {

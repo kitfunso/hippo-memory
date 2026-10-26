@@ -133,7 +133,9 @@ async function drainStream(
     for (const item of page.items) {
       // Track updated_at on EVERY item, before the toIngestEvent filter, so PR-only pages don't loop forever.
       // SAFETY: updated_at is GitHub's ISO-timestamp field on every item shape this stream returns.
-      const updatedAt = isJsonObject(item) ? ((item.updated_at as string | undefined) ?? null) : null;
+      const updatedAt = isJsonObject(item)
+        ? ((item.updated_at as string | undefined) ?? null)
+        : null;
       if (updatedAt && (!maxUpdatedAt || updatedAt > maxUpdatedAt)) {
         maxUpdatedAt = updatedAt;
       }
@@ -164,7 +166,10 @@ async function drainStream(
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
 const MAX_RATE_LIMIT_WAIT_MS = 10 * MINUTE_MS;
 
-async function fetchPagePastRateLimit(options: DrainStreamOptions, url: string): Promise<GitHubBackfillPage> {
+async function fetchPagePastRateLimit(
+  options: DrainStreamOptions,
+  url: string,
+): Promise<GitHubBackfillPage> {
   const { fetcher, token, sleep } = options;
   let waitedMs = 0;
   for (let attempt = 1; ; attempt++) {
@@ -200,7 +205,10 @@ function issueItemToEvent(item: JsonValue, repository: GitHubRepository): Ingest
   return { eventName: 'issues', payload };
 }
 
-function issueCommentItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
+function issueCommentItemToEvent(
+  item: JsonValue,
+  repository: GitHubRepository,
+): IngestEvent | null {
   if (!isCommentItem(item)) return null;
   // SAFETY: this closure only runs against the /issues/comments stream, so every item isCommentItem validates is an
   // IssueCommentItem; a missing issue_url is handled below.
@@ -221,7 +229,10 @@ function issueCommentItemToEvent(item: JsonValue, repository: GitHubRepository):
   return { eventName: 'issue_comment', payload };
 }
 
-function prReviewCommentItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
+function prReviewCommentItemToEvent(
+  item: JsonValue,
+  repository: GitHubRepository,
+): IngestEvent | null {
   if (!isCommentItem(item)) return null;
   // SAFETY: this closure only runs against the /pulls/comments stream, so every item isCommentItem validates is a
   // PrReviewCommentItem; a missing pull_request_url is handled below.
@@ -252,7 +263,10 @@ const hwmOf = (ctx: Context, opts: BackfillOptions, stream: GitHubStream): Curso
 });
 
 /** Each stream's HWM, after a first run's `--since` seeds the ones no run saved. */
-async function resumeFrom(ctx: Context, opts: BackfillOptions): Promise<Record<GitHubStream, string | null>> {
+async function resumeFrom(
+  ctx: Context,
+  opts: BackfillOptions,
+): Promise<Record<GitHubStream, string | null>> {
   const events = ctx.store.connectorEvents;
   const { sinceIso } = opts;
   if (sinceIso) {
@@ -273,7 +287,11 @@ async function backfillStream(
   ctx: Context,
   opts: BackfillOptions,
   sleep: (ms: number) => Promise<void>,
-  stream: { url: string; name: GitHubStream; toIngestEvent: (item: JsonValue) => IngestEvent | null },
+  stream: {
+    url: string;
+    name: GitHubStream;
+    toIngestEvent: (item: JsonValue) => IngestEvent | null;
+  },
 ): Promise<{ ingested: number; pages: number }> {
   const res = await drainStream(ctx, stream.url, {
     toIngestEvent: stream.toIngestEvent,

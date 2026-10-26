@@ -73,7 +73,14 @@ describe('cli forget: raw memory archive', () => {
   it('--archive --reason archives the raw memory and emits an archive_raw audit', async () => {
     const home = makeWorkspaceWithRaw('mem_rawa3b');
     try {
-      const run = await runCli(home, 'forget', 'mem_rawa3b', '--archive', '--reason', 'A3 test cleanup');
+      const run = await runCli(
+        home,
+        'forget',
+        'mem_rawa3b',
+        '--archive',
+        '--reason',
+        'A3 test cleanup',
+      );
       expect(run.status, run.out).toBe(0);
       expect(run.out).toMatch(/Archived mem_rawa3b/);
       const db = openHippoDb(join(home, '.hippo'));
@@ -128,13 +135,23 @@ describe('cli forget --dry-run', () => {
   it('previews an archive without archiving or auditing', async () => {
     const home = makeWorkspaceWithRaw('mem_rawdry2');
     try {
-      const run = await runCli(home, 'forget', 'mem_rawdry2', '--archive', '--reason', 'preview', '--dry-run');
+      const run = await runCli(
+        home,
+        'forget',
+        'mem_rawdry2',
+        '--archive',
+        '--reason',
+        'preview',
+        '--dry-run',
+      );
       expect(run.status, run.out).toBe(0);
       expect(run.out).toMatch(/Would archive mem_rawdry2/);
       expect(hasRow(home, 'mem_rawdry2')).toBe(true);
       const db = openHippoDb(join(home, '.hippo'));
       try {
-        expect(listAuditEvents(db, { tenantId: 'default', op: 'archive_raw', limit: 10 })).toHaveLength(0);
+        expect(
+          listAuditEvents(db, { tenantId: 'default', op: 'archive_raw', limit: 10 }),
+        ).toHaveLength(0);
       } finally {
         closeHippoDb(db);
       }

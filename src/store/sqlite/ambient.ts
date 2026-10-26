@@ -35,7 +35,11 @@ function secretTaggedSql(): SqlFragment {
 
 /** How many times each tag occurs across the rows `scope` admits, grouped in SQL and returned as one row in first-seen
  * order; an item reads as its String() form, as parseJsonArray maps it. */
-function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string | number)[]): Map<string, number> {
+function countTags(
+  db: DatabaseSyncLike,
+  scope: string,
+  params: readonly (string | number)[],
+): Map<string, number> {
   // One row of [tag, count] pairs in first-seen order: an array, since an object would reorder integer-like keys. The
   // aggregate ORDER BY needs SQLite 3.44; Node 22.5 and later bundle 3.46.
   // SAFETY: an aggregate with no GROUP BY always answers one row.
@@ -49,7 +53,8 @@ function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string
   const pairs = parseJson(row.pairs ?? '[]');
   const tallies = new Map<string, number>();
   for (const pair of Array.isArray(pairs) ? pairs : []) {
-    if (Array.isArray(pair) && isJsonString(pair[0]) && isJsonNumber(pair[1])) tallies.set(pair[0], pair[1]);
+    if (Array.isArray(pair) && isJsonString(pair[0]) && isJsonNumber(pair[1]))
+      tallies.set(pair[0], pair[1]);
   }
   return tallies;
 }

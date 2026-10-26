@@ -34,7 +34,8 @@ async function post(handle: ServerHandle, content: string): Promise<number> {
 function inlineCheckpointPages(root: string): number {
   const db = openHippoDb(root);
   try {
-    return (db.prepare('PRAGMA wal_autocheckpoint').get() as { wal_autocheckpoint: number }).wal_autocheckpoint;
+    return (db.prepare('PRAGMA wal_autocheckpoint').get() as { wal_autocheckpoint: number })
+      .wal_autocheckpoint;
   } finally {
     closeHippoDb(db);
   }
@@ -79,11 +80,16 @@ describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
     const inlineLimit = inlineCheckpointPages(root);
     // Sized so 16 posts, each also indexed by the trigram table, write over twice the inline limit's pages and under 4,000.
     const filler = 'x'.repeat(inlineLimit * 160);
-    const handle = await serveKeyed({ hippoRoot: root, port: 0, rateLimits: { perAddress: 'off' } });
+    const handle = await serveKeyed({
+      hippoRoot: root,
+      port: 0,
+      rateLimits: { perAddress: 'off' },
+    });
     try {
       const before = readFileSync(db);
       // Too few responses for a background checkpoint to be due, so a changed hippo.db could only come from a request's own commit.
-      for (let n = 0; n < 16; n++) expect(await post(handle, `runbook step ${n} ${filler}`)).toBe(200);
+      for (let n = 0; n < 16; n++)
+        expect(await post(handle, `runbook step ${n} ${filler}`)).toBe(200);
       expect(statSync(`${db}-wal`).size / 4096).toBeGreaterThan(2 * inlineLimit);
       expect(readFileSync(db).equals(before)).toBe(true);
       for (let n = 16; n < 80; n++) expect(await post(handle, `runbook step ${n}`)).toBe(200);
@@ -136,7 +142,10 @@ describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
 });
 
 describe('GET /ready', () => {
-  async function ready(handle: ServerHandle, method = 'GET'): Promise<{ status: number; body: string }> {
+  async function ready(
+    handle: ServerHandle,
+    method = 'GET',
+  ): Promise<{ status: number; body: string }> {
     const res = await fetch(`${handle.url}/ready`, { method, headers: { connection: 'close' } });
     return { status: res.status, body: await res.text() };
   }
@@ -219,8 +228,13 @@ describe('GET /ready', () => {
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const handle = await serveKeyed({ hippoRoot: root, port: 0 });
       try {
-        expect(await ready(handle)).toEqual({ status: 503, body: '{"ok":false,"error":"store_unavailable"}' });
-        const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('GET /ready'));
+        expect(await ready(handle)).toEqual({
+          status: 503,
+          body: '{"ok":false,"error":"store_unavailable"}',
+        });
+        const warned = stderrSpy.mock.calls
+          .map((c) => String(c[0]))
+          .filter((l) => l.includes('GET /ready'));
         expect(warned).toHaveLength(1);
         expect(warned[0]).toMatch(
           /^\[hippo\] warn: GET \/ready: the store did not answer: .* ts=\S+ requestId=\S+ errorClass=\w+ stack=\S/,

@@ -49,7 +49,9 @@ export const v14: Migration = {
     }
     if (!tableHasColumn(db, 'memories', 'scope')) {
       db.exec(`ALTER TABLE memories ADD COLUMN scope TEXT`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope) WHERE scope IS NOT NULL`);
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope) WHERE scope IS NOT NULL`,
+      );
     }
     if (!tableHasColumn(db, 'memories', 'owner')) {
       db.exec(`ALTER TABLE memories ADD COLUMN owner TEXT`);
@@ -60,7 +62,9 @@ export const v14: Migration = {
       db.exec(`ALTER TABLE memories ADD COLUMN artifact_ref TEXT`);
     }
     // Backfill kind for any rows where it's NULL (pre-migration data).
-    db.exec(`UPDATE memories SET kind = 'superseded' WHERE kind IS NULL AND superseded_by IS NOT NULL`);
+    db.exec(
+      `UPDATE memories SET kind = 'superseded' WHERE kind IS NULL AND superseded_by IS NOT NULL`,
+    );
     db.exec(`UPDATE memories SET kind = 'distilled' WHERE kind IS NULL`);
     // raw_archive: legitimate path for kind='raw' removal (used by archiveRawMemory).
     db.exec(CREATE_TABLE_RAW_ARCHIVE_SQL);

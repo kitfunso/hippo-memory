@@ -66,7 +66,10 @@ function fileStamp(file: string): string | null {
       );
     }
     // ENOTDIR and ELOOP mean the path is simply not there.
-    log.debug(`config: ${file} is not reachable, read as missing: ${errorMessage(err)}`, errorFields(err));
+    log.debug(
+      `config: ${file} is not reachable, read as missing: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return null;
   }
 }
@@ -84,7 +87,9 @@ function readConfigFile(configPath: string): ConfigFile {
     );
   }
   if (!isJsonObject(raw)) {
-    throw new Error(`${configPath} must hold a JSON object. Fix the file or delete it to use the defaults.`);
+    throw new Error(
+      `${configPath} must hold a JSON object. Fix the file or delete it to use the defaults.`,
+    );
   }
   return raw;
 }

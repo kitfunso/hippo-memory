@@ -36,7 +36,8 @@ function assertSessionCapture(req: SessionCaptureRequest): void {
   assertCallerProject(req.project);
   if (req.texts.length > MAX_TEXTS) throw new BadRequestError(`texts: at most ${MAX_TEXTS}`);
   const sizes = req.texts.map((t) => Buffer.byteLength(t, 'utf8'));
-  if (sizes.some((n) => n > MAX_TEXT_BYTES)) throw new BadRequestError(`each text: at most ${MAX_TEXT_BYTES} bytes`);
+  if (sizes.some((n) => n > MAX_TEXT_BYTES))
+    throw new BadRequestError(`each text: at most ${MAX_TEXT_BYTES} bytes`);
   if (sizes.reduce((a, b) => a + b, 0) > MAX_TOTAL_BYTES) {
     throw new BadRequestError(`texts: at most ${MAX_TOTAL_BYTES} bytes in all`);
   }
@@ -67,7 +68,11 @@ export async function captureSessionTexts(
   );
   const { store, config } = ctx;
   const tally = await captureExtractedItems(
-    { store, config, embed: detachedEmbedder({ store, config, embedderFor: ctx.infra.embedderFor }, ctx.infra) },
+    {
+      store,
+      config,
+      embed: detachedEmbedder({ store, config, embedderFor: ctx.infra.embedderFor }, ctx.infra),
+    },
     {
       tenantId: ctx.tenantId,
       originProject: req.project,

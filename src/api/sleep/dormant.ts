@@ -28,7 +28,9 @@ export async function dormantRestore(ctx: Context, id: string): Promise<MemoryEn
   });
   if (outcome.status === 'missing') throw new NotFoundError(`dormant memory not found: ${id}`);
   if (outcome.status === 'active') {
-    throw new ConflictError(`memory ${id} is already active; forget it before restoring its dormant copy`);
+    throw new ConflictError(
+      `memory ${id} is already active; forget it before restoring its dormant copy`,
+    );
   }
   return outcome.entry;
 }
@@ -38,11 +40,19 @@ export async function dormantRestore(ctx: Context, id: string): Promise<MemoryEn
  * with that id.
  */
 export async function dormantForget(ctx: Context, id: string): Promise<void> {
-  const forgotten = await ctx.store.dormant.forget(ctx.tenantId, personalScopeOf(ctx.actor), id, ctx.actor.subject);
+  const forgotten = await ctx.store.dormant.forget(
+    ctx.tenantId,
+    personalScopeOf(ctx.actor),
+    id,
+    ctx.actor.subject,
+  );
   if (!forgotten) throw new NotFoundError(`dormant memory not found: ${id}`);
 }
 
 /** Whether the tenant holds a dormant memory with this id that the caller may touch (for "not found" hints). */
 export async function isDormant(ctx: Context, id: string): Promise<boolean> {
-  return (await ctx.store.dormant.list(ctx.tenantId, personalScopeOf(ctx.actor), { id, limit: 1 })).length > 0;
+  return (
+    (await ctx.store.dormant.list(ctx.tenantId, personalScopeOf(ctx.actor), { id, limit: 1 }))
+      .length > 0
+  );
 }

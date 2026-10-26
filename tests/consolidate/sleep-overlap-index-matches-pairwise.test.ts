@@ -4,7 +4,10 @@ import { mergePartners } from '../../src/domain/consolidate/merge.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { tokenize } from '../../src/base/util/tokenize.js';
-import { pairwiseDetectConflicts, pairwiseMergePartners } from '../_helpers/pairwise-sleep-oracle.js';
+import {
+  pairwiseDetectConflicts,
+  pairwiseMergePartners,
+} from '../_helpers/pairwise-sleep-oracle.js';
 import { mulberry32 } from '../_helpers/property.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
@@ -118,18 +121,21 @@ function randomEntries(rnd: () => number, n: number): MemoryEntry[] {
 }
 
 /** The merge pass's partners over each text's token set, as sleep builds them. */
-const mergePartnersOf = (texts: readonly string[]) => mergePartners(texts.map((t) => new Set(tokenize(t))));
+const mergePartnersOf = (texts: readonly string[]) =>
+  mergePartners(texts.map((t) => new Set(tokenize(t))));
 
-const cases = SIZES.flatMap((n) => Array.from({ length: SEEDS_PER_SIZE }, (_, s) => ({ n, seed: n * 101 + s })));
+const cases = SIZES.flatMap((n) =>
+  Array.from({ length: SEEDS_PER_SIZE }, (_, s) => ({ n, seed: n * 101 + s })),
+);
 
 describe('sleep overlap index matches the pairwise passes', () => {
   it.each(cases)('conflicts match for $n memories (seed $seed)', async ({ n, seed }) => {
     const rnd = mulberry32(seed);
     const entries = randomEntries(rnd, n);
     const rescued = new Set(entries.filter(() => rnd() < 0.1).map((e) => e.id));
-    expect(await detectConflicts(entries, NOW, { strength: PRODUCTION_STRENGTH, rescuedIds: rescued })).toEqual(
-      pairwiseDetectConflicts(entries, NOW, {}, rescued),
-    );
+    expect(
+      await detectConflicts(entries, NOW, { strength: PRODUCTION_STRENGTH, rescuedIds: rescued }),
+    ).toEqual(pairwiseDetectConflicts(entries, NOW, {}, rescued));
   });
 
   it.each(cases)('merge partners match for $n memories (seed $seed)', ({ n, seed }) => {

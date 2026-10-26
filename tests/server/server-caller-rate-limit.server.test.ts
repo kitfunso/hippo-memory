@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createApiKey, revokeApiKey, type CreateApiKeyOptions } from '../../src/store/sqlite/auth.js';
+import {
+  createApiKey,
+  revokeApiKey,
+  type CreateApiKeyOptions,
+} from '../../src/store/sqlite/auth.js';
 import type { AddonRoute, ServeOptions } from '../../src/server.js';
 import { sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/store-kit.js';
 import { IncomingMessage } from 'node:http';
@@ -52,7 +56,10 @@ afterEach(async () => {
   rmSync(root, { recursive: true, force: true });
 });
 
-async function start(rateLimits?: ServeOptions['rateLimits'], extra: Partial<ServeOptions> = {}): Promise<void> {
+async function start(
+  rateLimits?: ServeOptions['rateLimits'],
+  extra: Partial<ServeOptions> = {},
+): Promise<void> {
   const handle = await serve({ hippoRoot: root, port: 0, rateLimits, ...extra });
   url = handle.url;
   stop = handle.stop;
@@ -78,10 +85,14 @@ async function send(path: string, init: RequestInit = {}): Promise<Reply> {
   return { status: res.status, retryAfter: res.headers.get('retry-after') };
 }
 
-const bearer = (token: string, extra: Record<string, string> = {}) => ({ authorization: `Bearer ${token}`, ...extra });
+const bearer = (token: string, extra: Record<string, string> = {}) => ({
+  authorization: `Bearer ${token}`,
+  ...extra,
+});
 /** The local key the running server wrote, as the CLI on this machine sends it. */
 const localKey = (): Record<string, string> => bearer(readLocalKey(root)!);
-const recall = (headers: Record<string, string> = localKey()): Promise<Reply> => send('/v1/memories?q=x', { headers });
+const recall = (headers: Record<string, string> = localKey()): Promise<Reply> =>
+  send('/v1/memories?q=x', { headers });
 const addonRoute = (onRun: () => void): AddonRoute => ({
   path: '/v1/x-addon',
   handler: async () => {
@@ -116,10 +127,17 @@ describe('per-caller buckets', () => {
     freezeClock();
     const a = mint({ ownerSubject: 'oid-a' });
     const b = mint({ ownerSubject: 'oid-b' });
-    await start({ perCaller: { ratePerSec: 1, burst: 2 }, perAddress: { ratePerSec: 0.1, burst: 4 } });
+    await start({
+      perCaller: { ratePerSec: 1, burst: 2 },
+      perAddress: { ratePerSec: 0.1, burst: 4 },
+    });
     const via = (token: string, address: string): Promise<Reply> =>
       recall(bearer(token, { 'x-forwarded-for': address }));
-    expect(await replies(() => via(a, '203.0.113.7'), 3)).toEqual([OK, OK, { status: 429, retryAfter: '1' }]);
+    expect(await replies(() => via(a, '203.0.113.7'), 3)).toEqual([
+      OK,
+      OK,
+      { status: 429, retryAfter: '1' },
+    ]);
     expect(await via(b, '203.0.113.7')).toEqual(OK);
     // A and B together spent the office address's four tokens; another address still has its own.
     expect(await via(b, '203.0.113.7')).toEqual({ status: 429, retryAfter: '10' });
@@ -130,7 +148,9 @@ describe('per-caller buckets', () => {
     const a1 = mint({ ownerSubject: 'oid-a' });
     const a2 = mint({ ownerSubject: 'oid-a' });
     await start({ perCaller: SLOW, perAddress: WIDE });
-    expect([(await recall(bearer(a1))).status, (await recall(bearer(a2))).status]).toEqual([200, 200]);
+    expect([(await recall(bearer(a1))).status, (await recall(bearer(a2))).status]).toEqual([
+      200, 200,
+    ]);
     expect(await recall(bearer(a1))).toEqual({ status: 429, retryAfter: '10' });
     expect((await recall(bearer(a2))).status).toBe(429);
   });
@@ -155,7 +175,9 @@ describe('per-caller buckets', () => {
     const a = mint({ ownerSubject: 'oid-health' });
     await start({ perCaller: { ratePerSec: 0.1, burst: 1 }, perAddress: WIDE });
     expect(await statuses(() => recall(), 3)).toEqual([200, 429, 429]);
-    expect(await statuses(() => send('/health', { headers: bearer(a) }), 5)).toEqual([200, 200, 200, 200, 200]);
+    expect(await statuses(() => send('/health', { headers: bearer(a) }), 5)).toEqual([
+      200, 200, 200, 200, 200,
+    ]);
     expect((await recall(bearer(a))).status).toBe(200);
   });
 
@@ -175,27 +197,31 @@ describe('per-caller buckets', () => {
     expect(await broken()).toEqual({ status: 429, retryAfter: '10' });
   });
 
-  it.skipIf(needsHippoDb('addon'))('charges an add-on route call and a POST /mcp call once each', async () => {
-    let runs = 0;
-    const a = mint({ ownerSubject: 'oid-addon' });
-    const m = mint({ ownerSubject: 'oid-mcp' });
-    await start(
-      { perCaller: SLOW, perAddress: WIDE },
-      {
-        routes: [
-          addonRoute(() => {
-            runs += 1;
-          }),
-        ],
-      },
-    );
-    const addon = (): Promise<Reply> =>
-      send('/v1/x-addon', { method: 'POST', headers: bearer(a, JSON_BODY), body: '{}' });
-    const mcp = (): Promise<Reply> => send('/mcp', { method: 'POST', headers: bearer(m, JSON_BODY), body: TOOLS_LIST });
-    expect(await replies(addon, 3)).toEqual([OK, OK, { status: 429, retryAfter: '10' }]);
-    expect(runs).toBe(2);
-    expect(await replies(mcp, 3)).toEqual([OK, OK, { status: 429, retryAfter: '10' }]);
-  });
+  it.skipIf(needsHippoDb('addon'))(
+    'charges an add-on route call and a POST /mcp call once each',
+    async () => {
+      let runs = 0;
+      const a = mint({ ownerSubject: 'oid-addon' });
+      const m = mint({ ownerSubject: 'oid-mcp' });
+      await start(
+        { perCaller: SLOW, perAddress: WIDE },
+        {
+          routes: [
+            addonRoute(() => {
+              runs += 1;
+            }),
+          ],
+        },
+      );
+      const addon = (): Promise<Reply> =>
+        send('/v1/x-addon', { method: 'POST', headers: bearer(a, JSON_BODY), body: '{}' });
+      const mcp = (): Promise<Reply> =>
+        send('/mcp', { method: 'POST', headers: bearer(m, JSON_BODY), body: TOOLS_LIST });
+      expect(await replies(addon, 3)).toEqual([OK, OK, { status: 429, retryAfter: '10' }]);
+      expect(runs).toBe(2);
+      expect(await replies(mcp, 3)).toEqual([OK, OK, { status: 429, retryAfter: '10' }]);
+    },
+  );
 });
 
 describe('per-caller buckets under a store that is not hippo.db', () => {
@@ -272,9 +298,10 @@ describe('the MCP stream heartbeat', () => {
       }
       expect(text).not.toContain('event: closed');
       expect(text.split(': ping').length - 1).toBeGreaterThanOrEqual(11);
-      expect((await send('/mcp', { method: 'POST', headers: bearer(a, JSON_BODY), body: TOOLS_LIST })).status).toBe(
-        200,
-      );
+      expect(
+        (await send('/mcp', { method: 'POST', headers: bearer(a, JSON_BODY), body: TOOLS_LIST }))
+          .status,
+      ).toBe(200);
     } finally {
       ac.abort();
     }
@@ -299,7 +326,8 @@ describe('the MCP stream heartbeat', () => {
   });
 });
 
-const wrongSecretOf = (key: string): string => `${key.slice(0, key.indexOf('.'))}.${'a'.repeat(32)}`;
+const wrongSecretOf = (key: string): string =>
+  `${key.slice(0, key.indexOf('.'))}.${'a'.repeat(32)}`;
 const scryptRunsSince = (before: number): number => scryptRuns() - before;
 const mintMany = (n: number): string[] => Array.from({ length: n }, () => mint());
 
@@ -363,7 +391,8 @@ describe('the per-address scrypt bucket', () => {
       { perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.005, burst: 40 } },
       { authResolver: () => null },
     );
-    const office = (token: string): Promise<Reply> => recall(bearer(token, { 'x-forwarded-for': '203.0.113.50' }));
+    const office = (token: string): Promise<Reply> =>
+      recall(bearer(token, { 'x-forwarded-for': '203.0.113.50' }));
     expect(await office(dev)).toEqual(OK);
     const before = scryptRuns();
     // A junk shape names no key id, so 60 of them past the burst charge nothing and run no scrypt.
@@ -423,7 +452,12 @@ describe('clientLimitKey on a direct peer', () => {
   });
 
   it('gives a client rotating through 1,000 /64s of one /48 one bucket, so it cannot push a throttled client out', () => {
-    const limiter = createRateLimiter({ ratePerSec: 0.001, burst: 1, idleEvictMs: 60_000, maxKeys: 4 });
+    const limiter = createRateLimiter({
+      ratePerSec: 0.001,
+      burst: 1,
+      idleEvictMs: 60_000,
+      maxKeys: 4,
+    });
     const pass = (ip: string): boolean => limiter.check(clientLimitKey(fromSocket(ip)), 1_000);
     expect([pass('198.51.100.7'), pass('198.51.100.7')]).toEqual([true, false]);
     const rotated = Array.from({ length: 1000 }, (_, i) => pass(`2001:db8:1:${i.toString(16)}::1`));
@@ -439,7 +473,8 @@ describe('the per-address bucket', () => {
     freezeClock();
     const key = mint();
     await start({ perCaller: WIDE, perAddress: SLOW });
-    const from = (address: string): Promise<Reply> => recall(bearer(key, { 'x-forwarded-for': address }));
+    const from = (address: string): Promise<Reply> =>
+      recall(bearer(key, { 'x-forwarded-for': address }));
     const drained = { status: 429, retryAfter: '10' };
     expect([
       await from('2001:db8:1:2::a'),
@@ -447,11 +482,11 @@ describe('the per-address bucket', () => {
       await from('2001:0db8:0001:0004::b'),
     ]).toEqual([OK, OK, drained]);
     expect(await from('2001:db8:2:2::a')).toEqual(OK);
-    expect([await from('::ffff:198.51.100.1'), await from('198.51.100.1'), await from('198.51.100.1')]).toEqual([
-      OK,
-      OK,
-      drained,
-    ]);
+    expect([
+      await from('::ffff:198.51.100.1'),
+      await from('198.51.100.1'),
+      await from('198.51.100.1'),
+    ]).toEqual([OK, OK, drained]);
     expect(await from('198.51.100.2')).toEqual(OK);
   });
 
@@ -515,10 +550,13 @@ describe('the per-caller default', () => {
     expect(await statuses(() => recall(bearer(key)), 3)).toEqual([200, 200, 429]);
   });
 
-  it.each(['-1', 'fast', 'NaN'])('refuses HIPPO_V1_RPS=%s at boot instead of turning the limit off', async (value) => {
-    vi.stubEnv('HIPPO_V1_RPS', value);
-    await expect(serve({ hippoRoot: root, port: 0 })).rejects.toThrow(/HIPPO_V1_RPS/);
-  });
+  it.each(['-1', 'fast', 'NaN'])(
+    'refuses HIPPO_V1_RPS=%s at boot instead of turning the limit off',
+    async (value) => {
+      vi.stubEnv('HIPPO_V1_RPS', value);
+      await expect(serve({ hippoRoot: root, port: 0 })).rejects.toThrow(/HIPPO_V1_RPS/);
+    },
+  );
 
   it('turns the per-address limit off with HIPPO_V1_RPS=0', async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
@@ -537,10 +575,19 @@ describe('boot and the other Retry-After replies', () => {
   const BAD: Array<[ServeOptions['rateLimits'], RegExp]> = [
     [{ perCaller: { ratePerSec: 0, burst: 1 } }, /rateLimits\.perCaller\.ratePerSec/],
     [{ perCaller: { ratePerSec: -1, burst: 2 } }, /rateLimits\.perCaller\.ratePerSec/],
-    [{ perCaller: { ratePerSec: 1, burst: Number.POSITIVE_INFINITY } }, /rateLimits\.perCaller\.burst/],
+    [
+      { perCaller: { ratePerSec: 1, burst: Number.POSITIVE_INFINITY } },
+      /rateLimits\.perCaller\.burst/,
+    ],
     [{ perAddress: { ratePerSec: Number.NaN, burst: 2 } }, /rateLimits\.perAddress\.ratePerSec/],
-    [{ perAddress: { ratePerSec: Number.POSITIVE_INFINITY, burst: 2 } }, /rateLimits\.perAddress\.ratePerSec/],
-    [{ failedAuthPerAddress: { ratePerSec: 1, burst: 0.5 } }, /rateLimits\.failedAuthPerAddress\.burst/],
+    [
+      { perAddress: { ratePerSec: Number.POSITIVE_INFINITY, burst: 2 } },
+      /rateLimits\.perAddress\.ratePerSec/,
+    ],
+    [
+      { failedAuthPerAddress: { ratePerSec: 1, burst: 0.5 } },
+      /rateLimits\.failedAuthPerAddress\.burst/,
+    ],
   ];
 
   it.each(BAD)('refuses %o at boot', async (rateLimits, message) => {

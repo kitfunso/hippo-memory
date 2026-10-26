@@ -24,7 +24,10 @@ beforeEach(() => {
     JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }),
     'utf8',
   );
-  writeEntry(root, createMemory('embed lock test memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+  writeEntry(
+    root,
+    createMemory('embed lock test memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+  );
   vi.stubEnv(KEY_ENV, ['sk', 'test'].join('-'));
   fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] })));
   vi.stubGlobal('fetch', fetchMock);
@@ -110,7 +113,10 @@ describe('embeddings.json cross-process lock', () => {
     expect(await embedAll(localIndex(root))).toBe(1);
     expect(held).toMatch(new RegExp(`^${process.pid}:.+`));
     fs.writeFileSync(lockPath, held);
-    writeEntry(root, createMemory('a second memory to embed', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      root,
+      createMemory('a second memory to embed', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     expect(await embedAll(localIndex(root))).toBe(1);
     expect(fs.existsSync(lockPath)).toBe(false);
   });

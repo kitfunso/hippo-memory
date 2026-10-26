@@ -1,6 +1,11 @@
 // Opens hippo.db by its folder. Only the SQLite adapter holds a folder; every layer above takes the store it is given.
 
-import { closeHippoDb, currentRequestStores, type DatabaseSyncLike, openHippoDb } from '../../db/index.js';
+import {
+  closeHippoDb,
+  currentRequestStores,
+  type DatabaseSyncLike,
+  openHippoDb,
+} from '../../db/index.js';
 import { reproveStoreSchema } from '../../db/connect.js';
 import { openHippoDbWithFacts } from '../../db/open.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -96,8 +101,10 @@ export function storeFilesOf(hippoRoot: string, rules: StoreRules = {}): StoreFi
 export function handlesOf(hippoRoot: string, rules: StoreRules = {}): Handles {
   const files = storeFilesOf(hippoRoot, rules);
   return {
-    on: (fn, open) => onHandle(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), open),
-    onAsync: (fn, open) => onHandleAsync(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), open),
+    on: (fn, open) =>
+      onHandle(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), open),
+    onAsync: (fn, open) =>
+      onHandleAsync(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), open),
     open: () => bindHandleClock(openHippoDb(hippoRoot), files.clock),
     files,
   };

@@ -9,9 +9,18 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { autoShare, neverAutoShareTags } from '../../src/domain/sharing/share.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
-import { listMemoryConflicts, writeEntry, loadAllEntries, saveSessionHandoff } from '../_helpers/root-forms.js';
+import {
+  listMemoryConflicts,
+  writeEntry,
+  loadAllEntries,
+  saveSessionHandoff,
+} from '../_helpers/root-forms.js';
 import { recordSessionDigest, type SessionScan } from '../../src/surface/capture/session-digest.js';
-import { sessionDigestId, SESSION_DIGEST_TAG, isSessionDigestRow } from '../../src/base/session/session-digest-row.js';
+import {
+  sessionDigestId,
+  SESSION_DIGEST_TAG,
+  isSessionDigestRow,
+} from '../../src/base/session/session-digest-row.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
@@ -68,7 +77,8 @@ async function write(key: string, s: SessionScan): Promise<string> {
 }
 const WROTE = /^digest: wrote /;
 const LEFT_NOTHING = 'digest: skip: nothing left after the filters';
-const digests = (): MemoryEntry[] => loadAllEntries(hippoRoot, 'default').filter(isSessionDigestRow);
+const digests = (): MemoryEntry[] =>
+  loadAllEntries(hippoRoot, 'default').filter(isSessionDigestRow);
 
 describe('writing the digest row', () => {
   it('writes one observed Episodic row tagged session-digest, keyed on the session', async () => {
@@ -121,7 +131,9 @@ describe('writing the digest row', () => {
       memoryId: sessionDigestId('default', 's1'),
       reason: 'not useful',
     });
-    expect(await write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.'))).toMatch(WROTE);
+    expect(
+      await write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.')),
+    ).toMatch(WROTE);
     expect(digests()).toHaveLength(1);
   });
 });
@@ -180,10 +192,17 @@ describe('sharing', () => {
     await write('s1', scan(REPLY));
     writeEntry(
       hippoRoot,
-      createMemory('gotcha: powershell 5.1 has no pipeline chain operators', { tenantId: 'default' }),
+      createMemory('gotcha: powershell 5.1 has no pipeline chain operators', {
+        tenantId: 'default',
+      }),
     );
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
-    await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0, stats });
+    await autoShare(...sharingStores(hippoRoot), {
+      embed: TEST_RUN,
+      tenantId: ALL_TENANTS,
+      minScore: 0,
+      stats,
+    });
     expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual([
       'gotcha: powershell 5.1 has no pipeline chain operators',
     ]);
@@ -209,7 +228,11 @@ describe('sharing', () => {
     );
     expect(fact.tags).toContain(SESSION_DIGEST_TAG);
     expect(isSessionDigestRow(fact)).toBe(false);
-    await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0 });
+    await autoShare(...sharingStores(hippoRoot), {
+      embed: TEST_RUN,
+      tenantId: ALL_TENANTS,
+      minScore: 0,
+    });
     expect(loadAllEntries(getGlobalRoot(), 'default')).toEqual([]);
   });
 });

@@ -10,7 +10,11 @@ import type { Objects } from '../../base/ports/store.js';
 
 export type { Skill, SkillStatus } from '../../base/records/object-types.js';
 
-export const VALID_SKILL_STATES: ReadonlySet<SkillStatus> = new Set<SkillStatus>(['active', 'superseded', 'closed']);
+export const VALID_SKILL_STATES: ReadonlySet<SkillStatus> = new Set<SkillStatus>([
+  'active',
+  'superseded',
+  'closed',
+]);
 
 /** Field caps (untrusted at the HTTP/SDK boundary). instructions is a body, so a larger cap than the 4096 short-field
  *  convention. */
@@ -42,7 +46,11 @@ function checkTrigger(trigger: string | undefined): string | null {
 }
 
 /** Recall-surface content for the memory mirror: name, optional trigger, instructions. */
-function buildSkillContent(skillName: string, instructions: string, trigger: string | null): string {
+function buildSkillContent(
+  skillName: string,
+  instructions: string,
+  trigger: string | null,
+): string {
   let content = skillName;
   if (trigger) content += `\n\nWhen: ${trigger}`;
   content += `\n\n${instructions}`;

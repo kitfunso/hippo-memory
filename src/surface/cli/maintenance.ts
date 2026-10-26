@@ -5,12 +5,23 @@ import { dedupWholeStore, type DedupResult } from '../../api/sleep/dedup.js';
 import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
-import { embedCoverage, memoryEmbedMissing, resetPhysicsFromVectors, storedVectorCount } from '../../api/embeddings.js';
+import {
+  embedCoverage,
+  memoryEmbedMissing,
+  resetPhysicsFromVectors,
+  storedVectorCount,
+} from '../../api/embeddings.js';
 import { memoryCountAll } from '../../api/memories/memories.js';
 import { cliConfig, cliApiContext, type CliContext } from './api-context.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
-import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext, hasFlag } from './flag-values.js';
+import {
+  boolFlag,
+  numberFlag,
+  stringFlagOrExit,
+  type CommandContext,
+  hasFlag,
+} from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
@@ -53,7 +64,9 @@ export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContex
   console.log(`Failed:   ${result.failed}`);
   if (result.failed > 0) {
     console.log('\nFailures:');
-    for (const d of result.details.filter((x) => x.status === 'failed').slice(0, MAX_FAILED_SHOWN)) {
+    for (const d of result.details
+      .filter((x) => x.status === 'failed')
+      .slice(0, MAX_FAILED_SHOWN)) {
       console.log(`  ${d.id}: ${d.reason}`);
     }
   }
@@ -64,7 +77,9 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
 
   const dryRun = boolFlag(flags, 'dry-run');
   if (hasFlag(flags, 'threshold')) {
-    printError('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
+    printError(
+      'hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.',
+    );
   }
 
   const total = await memoryCountAll(cliApiContext(hippoRoot, tenantId));
@@ -85,7 +100,11 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
 
 function printDedupGroups(result: DedupResult, dryRun: boolean): void {
   // Group by reason
-  const { semantic: sameLayerSem, episodic: sameLayerEpi, cross: crossLayer } = groupDedupPairs(result.pairs);
+  const {
+    semantic: sameLayerSem,
+    episodic: sameLayerEpi,
+    cross: crossLayer,
+  } = groupDedupPairs(result.pairs);
 
   console.log(`${dryRun ? 'Would remove' : 'Removed'} ${result.removed} duplicates:`);
   if (sameLayerSem.length > 0) {
@@ -94,10 +113,14 @@ function printDedupGroups(result: DedupResult, dryRun: boolean): void {
     );
   }
   if (sameLayerEpi.length > 0) {
-    console.log(`  ${sameLayerEpi.length} duplicate episodic memories (same lesson learned from multiple sources)`);
+    console.log(
+      `  ${sameLayerEpi.length} duplicate episodic memories (same lesson learned from multiple sources)`,
+    );
   }
   if (crossLayer.length > 0) {
-    console.log(`  ${crossLayer.length} cross-layer duplicates (episodic content already consolidated into semantic)`);
+    console.log(
+      `  ${crossLayer.length} cross-layer duplicates (episodic content already consolidated into semantic)`,
+    );
   }
 }
 
@@ -107,7 +130,9 @@ function printDedupPairs(result: DedupResult, dryRun: boolean): void {
   for (const pair of shown) {
     const simPct = (pair.similarity * 100).toFixed(0);
     const action = dryRun ? 'Would remove' : 'Removed';
-    console.log(`  ${simPct}% similar | kept [${pair.keptLayer}] strength=${pair.keptStrength.toFixed(2)}`);
+    console.log(
+      `  ${simPct}% similar | kept [${pair.keptLayer}] strength=${pair.keptStrength.toFixed(2)}`,
+    );
     console.log(`    ${pair.keptContent.slice(0, PAIR_PREVIEW_CHARS)}`);
     console.log(`  ${action} [${pair.removedLayer}] strength=${pair.removedStrength.toFixed(2)}`);
     console.log(`    ${pair.removedContent.slice(0, PAIR_PREVIEW_CHARS)}`);
@@ -202,7 +227,9 @@ function readyEmbedProvider(root: string, given?: EmbeddingProvider): EmbeddingP
   }
   if (embedProvider.isAvailable()) return embedProvider;
   if (cliConfig(root).embeddings.enabled === false) {
-    console.log('Embeddings are disabled in config (embeddings.enabled = false). Set it to true or "auto" to enable.');
+    console.log(
+      'Embeddings are disabled in config (embeddings.enabled = false). Set it to true or "auto" to enable.',
+    );
     return null;
   }
   if (embedProvider.kind === 'local') {
@@ -210,8 +237,12 @@ function readyEmbedProvider(root: string, given?: EmbeddingProvider): EmbeddingP
     console.log('  npm install @huggingface/transformers');
     process.exitCode = 1;
   } else {
-    printError(`Embedding provider '${embedProvider.kind}' is configured but ${embedProvider.keyEnv} is not set.`);
-    printError(`Export ${embedProvider.keyEnv}, or set config.embeddings.provider back to 'local'.`);
+    printError(
+      `Embedding provider '${embedProvider.kind}' is configured but ${embedProvider.keyEnv} is not set.`,
+    );
+    printError(
+      `Export ${embedProvider.keyEnv}, or set config.embeddings.provider back to 'local'.`,
+    );
     process.exitCode = 1;
   }
   return null;

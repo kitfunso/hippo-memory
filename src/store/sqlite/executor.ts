@@ -15,19 +15,31 @@ import { portError } from './port-errors.js';
 import { workerCounts } from './executor-counts.js';
 import { markAllTenants } from './tenant-wire.js';
 import { currentStoreRuntime } from '../../db/store-runtime.js';
-import { type Job, type OpMode, type OpRoute, type Reply, STORE_SETUP_OP, type WorkerInit } from './worker-ops.js';
+import {
+  type Job,
+  type OpMode,
+  type OpRoute,
+  type Reply,
+  STORE_SETUP_OP,
+  type WorkerInit,
+} from './worker-ops.js';
 
 // Resolved from the package root, so a server run from TypeScript source starts the same built file.
-const WORKER_ENTRY = fileURLToPath(new URL('../../../dist/store/sqlite/worker-entry.js', import.meta.url));
+const WORKER_ENTRY = fileURLToPath(
+  new URL('../../../dist/store/sqlite/worker-entry.js', import.meta.url),
+);
 
-const WORKER_GONE = 'the store worker stopped before it answered; a write it was running may or may not be saved';
+const WORKER_GONE =
+  'the store worker stopped before it answered; a write it was running may or may not be saved';
 const EXECUTOR_CLOSED = 'the store is closed';
 const QUEUE_FULL = 'the store worker has a full queue, so the call was refused before it ran';
-const EXPIRED_WAITING = "the call was still waiting for a store worker at its request's deadline, so it never ran";
+const EXPIRED_WAITING =
+  "the call was still waiting for a store worker at its request's deadline, so it never ran";
 const READ_LATE = "the store did not answer the read by the request's deadline";
 const WRITE_NOT_SAVED =
   "the store did not finish the write by the request's deadline; the write was stopped and nothing was saved";
-const WRITE_UNKNOWN = "the store did not confirm the write by the request's deadline; it may or may not be saved";
+const WRITE_UNKNOWN =
+  "the store did not confirm the write by the request's deadline; it may or may not be saved";
 
 // Far above any burst a healthy thread clears, small enough that a stuck thread refuses new work in bounded memory.
 const DEFAULT_QUEUE_MAX = 256;
@@ -102,12 +114,22 @@ interface Lane {
 }
 
 function laneOf(mode: OpMode, pinned = false): Lane {
-  return { mode, pinned, queue: [], running: undefined, worker: undefined, stopping: undefined, commitFlag: undefined };
+  return {
+    mode,
+    pinned,
+    queue: [],
+    running: undefined,
+    worker: undefined,
+    stopping: undefined,
+    commitFlag: undefined,
+  };
 }
 
 // A thread that will not stop leaves a live worker behind, so the rejection is logged rather than dropped.
 function terminateLogged(worker: Worker): void {
-  worker.terminate().catch(<E>(err: E) => log.warn('the store worker did not terminate cleanly', errorFields(err)));
+  worker
+    .terminate()
+    .catch(<E>(err: E) => log.warn('the store worker did not terminate cleanly', errorFields(err)));
 }
 
 /** Gives `pending`'s caller its one answer; a second call does nothing. */
@@ -156,7 +178,11 @@ class WorkerPool implements SqliteExecutor {
     this.#rules = { strength: opts.strength, fakeNowMs: opts.fakeNowMs };
   }
 
-  call<T>(op: string, args: readonly unknown[], { mode, requestId, deadlineAt, signal }: CallOptions): Promise<T> {
+  call<T>(
+    op: string,
+    args: readonly unknown[],
+    { mode, requestId, deadlineAt, signal }: CallOptions,
+  ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       if (this.#closed) {
         reject(new StoreBusyError(EXECUTOR_CLOSED));
@@ -206,8 +232,15 @@ class WorkerPool implements SqliteExecutor {
     if (this.#setup !== 'none') return;
     this.#setup = 'running';
     const pending: Pending = {
-      job: { id: this.#nextId++, op: STORE_SETUP_OP, args: [], allTenants: [], requestId: undefined },
-      settle: (reply) => this.#setupEnded(reply.ok ? undefined : portError(decodeError(reply.error))),
+      job: {
+        id: this.#nextId++,
+        op: STORE_SETUP_OP,
+        args: [],
+        allTenants: [],
+        requestId: undefined,
+      },
+      settle: (reply) =>
+        this.#setupEnded(reply.ok ? undefined : portError(decodeError(reply.error))),
       fail: (err) => this.#setupEnded(err),
       deadlineAt: undefined,
       timer: undefined,
@@ -258,9 +291,12 @@ class WorkerPool implements SqliteExecutor {
       return;
     }
     if (lane.running !== pending || lane.worker === undefined) return;
-    log.warn(`the store's ${lane.mode} worker ran '${pending.job.op}' past its request's deadline`, {
-      requestId: pending.job.requestId,
-    });
+    log.warn(
+      `the store's ${lane.mode} worker ran '${pending.job.op}' past its request's deadline`,
+      {
+        requestId: pending.job.requestId,
+      },
+    );
     if (lane.mode === 'read') this.#stopReader(lane, lane.worker, pending);
     else this.#stopWriter(lane, lane.worker, pending);
   }
@@ -380,7 +416,11 @@ class WorkerPool implements SqliteExecutor {
     };
     // An explicit execArgv keeps the parent's loaders out of the thread and silences its repeat of the node:sqlite
     // warning.
-    const worker = new Worker(WORKER_ENTRY, { env: SHARE_ENV, execArgv: ['--no-warnings'], workerData: init });
+    const worker = new Worker(WORKER_ENTRY, {
+      env: SHARE_ENV,
+      execArgv: ['--no-warnings'],
+      workerData: init,
+    });
     worker.unref();
     worker.on('message', (reply: Reply) => this.#settle(lane, worker, reply));
     worker.on('error', (err) => this.#retire(lane, worker, err));
@@ -417,7 +457,8 @@ class WorkerPool implements SqliteExecutor {
       this.#replaceStopped(lane);
       return;
     }
-    const lost = lane.running === undefined ? lane.queue.splice(0) : [lane.running, ...lane.queue.splice(0)];
+    const lost =
+      lane.running === undefined ? lane.queue.splice(0) : [lane.running, ...lane.queue.splice(0)];
     lane.running = undefined;
     if (lost.length > 0 || cause !== undefined) {
       log.warn(
@@ -427,12 +468,16 @@ class WorkerPool implements SqliteExecutor {
       );
     }
     // The server answers this class as its retryable 503.
-    for (const pending of lost) finish(pending, () => pending.fail(new StoreBusyError(WORKER_GONE, { cause })));
+    for (const pending of lost)
+      finish(pending, () => pending.fail(new StoreBusyError(WORKER_GONE, { cause })));
   }
 }
 
 /** Threads for the hippo.db under `hippoRoot`: one writer and two readers. The first call starts the writer for the
  * store's setup; a reader starts at its own first call. */
-export function createSqliteExecutor(hippoRoot: string, opts: ExecutorOptions = {}): SqliteExecutor {
+export function createSqliteExecutor(
+  hippoRoot: string,
+  opts: ExecutorOptions = {},
+): SqliteExecutor {
   return new WorkerPool(hippoRoot, opts);
 }

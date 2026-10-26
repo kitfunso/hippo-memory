@@ -133,7 +133,11 @@ async function judge(content: string, opts: JudgeOptions): Promise<Judgment | nu
   try {
     data = await readCappedJson(res, MAX_REPLY_BYTES);
   } catch (err) {
-    log.warnThenDebug('judge-unreadable', `judge: unreadable response: ${errorMessage(err)}`, errorFields(err));
+    log.warnThenDebug(
+      'judge-unreadable',
+      `judge: unreadable response: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return null;
   }
 
@@ -148,7 +152,10 @@ async function judge(content: string, opts: JudgeOptions): Promise<Judgment | nu
 }
 
 /** Judge many candidates under a bounded concurrency pool, order preserved. */
-export async function judgeOver(contents: readonly string[], opts: JudgeOptions): Promise<(Judgment | null)[]> {
+export async function judgeOver(
+  contents: readonly string[],
+  opts: JudgeOptions,
+): Promise<(Judgment | null)[]> {
   const out: (Judgment | null)[] = Array.from({ length: contents.length }, () => null);
   const limit = Math.max(1, opts.concurrency ?? MAX_CONCURRENCY);
   let cursor = 0;

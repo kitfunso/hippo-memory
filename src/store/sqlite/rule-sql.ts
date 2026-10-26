@@ -12,7 +12,10 @@ import {
 } from '../../base/memory/strength.js';
 import { KEEP_PAIRS, type KeepPair } from '../../base/memory/keep-rules.js';
 import type { EmotionalValence } from '../../base/memory/entry.js';
-import { PERSONAL_SCOPE_PREFIX, RECALL_DEFAULT_DENY_SCOPES } from '../../base/scope/recall-scope.js';
+import {
+  PERSONAL_SCOPE_PREFIX,
+  RECALL_DEFAULT_DENY_SCOPES,
+} from '../../base/scope/recall-scope.js';
 import { placeholders, type SqlFragment } from '../../db/sql.js';
 import { rewardFactorAt } from '../../db/decay-key.js';
 import { SPACE_CODES } from '../rules/copies.js';
@@ -47,7 +50,9 @@ export function strengthSqlAt(julianNow: string, model: StrengthModel): string {
   const wrong = `MIN(MAX(0, ${neg} - ${pos}), ${model.maxWrongHalvings})`;
   const halfLife = `(COALESCE(half_life_days, ${FALLBACK_HALF_LIFE_DAYS}) * ${rewardFactorSql(model)})`;
   const anchor = model.recallStrengthens ? 'last_retrieved' : 'created';
-  const decay = model.decays ? `pow(${model.decayBase}, (${julianNow} - julianday(${anchor})) / ${halfLife})` : '1.0';
+  const decay = model.decays
+    ? `pow(${model.decayBase}, (${julianNow} - julianday(${anchor})) / ${halfLife})`
+    : '1.0';
   const boost = model.recallStrengthens
     ? `(CASE WHEN ${wrong} > 0 THEN 1.0 ELSE 1.0 + ${model.retrievalBoostSlope} * ` +
       `log2(COALESCE(retrieval_count, 0) + 1) END)`
@@ -56,7 +61,10 @@ export function strengthSqlAt(julianNow: string, model: StrengthModel): string {
     EMOTIONAL_MULTIPLIERS,
   ) as EmotionalValence[];
   const emotion = `(CASE COALESCE(emotional_valence, 'neutral') ${valences
-    .map((v) => `WHEN '${v}' THEN ${num(applyLossAversionRatio(v, EMOTIONAL_MULTIPLIERS[v], model.lossAversionRatio))}`)
+    .map(
+      (v) =>
+        `WHEN '${v}' THEN ${num(applyLossAversionRatio(v, EMOTIONAL_MULTIPLIERS[v], model.lossAversionRatio))}`,
+    )
     .join(' ')} ELSE 1.0 END)`;
   const penalty = `pow(${model.decayBase}, ${wrong})`;
   return `(CASE WHEN pinned THEN ${penalty} WHEN ${halfLife} <= 0 THEN 0.0
@@ -64,7 +72,8 @@ export function strengthSqlAt(julianNow: string, model: StrengthModel): string {
 }
 
 /** The Julian day of the epoch milliseconds a statement binds as `msParam`, as strengthSqlAt reads the time. */
-export const julianDayOfMs = (msParam: string): string => `(${msParam} / ${DAY_MS}.0 + ${UNIX_EPOCH_JULIAN_DAY})`;
+export const julianDayOfMs = (msParam: string): string =>
+  `(${msParam} / ${DAY_MS}.0 + ${UNIX_EPOCH_JULIAN_DAY})`;
 
 // json_each matches the tag as a whole element; substr, not LIKE, keeps the prefix case-sensitive like startsWith.
 const keepPairSql = (p: KeepPair): SqlFragment => ({
@@ -89,7 +98,10 @@ export function scopeAdmitSql(col: '' | 'm.', ownScope?: string | null): SqlFrag
   const admitted = `${col}scope IS NULL OR (${col}scope NOT IN (${marks}) AND ${col}scope NOT LIKE '%:private:%')`;
   if (ownScope == null) return { sql: `(${admitted})`, params: [...RECALL_DEFAULT_DENY_SCOPES] };
   // The own arm sits inside the outer parentheses so a caller's `AND ${sql}` cannot split it off.
-  return { sql: `(${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, ownScope] };
+  return {
+    sql: `(${admitted} OR ${col}scope = ?)`,
+    params: [...RECALL_DEFAULT_DENY_SCOPES, ownScope],
+  };
 }
 
 /** `origin_project IN (?, ...)` with one placeholder per name, the SQL twin of an origin filter; an empty list matches

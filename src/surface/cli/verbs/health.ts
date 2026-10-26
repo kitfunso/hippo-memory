@@ -102,7 +102,10 @@ export const HEALTH_VERBS = {
   }),
   assemble: verb(() => import('../dag.js'), 'handleAssemble', {
     scoped: true,
-    flags: { switches: ['json', 'no-summarize-older'], values: ['budget', 'fresh-tail', 'scope', 'session'] },
+    flags: {
+      switches: ['json', 'no-summarize-older'],
+      values: ['budget', 'fresh-tail', 'scope', 'session'],
+    },
     usage: [
       `
   assemble --session <id>  Build a session's chronological context window

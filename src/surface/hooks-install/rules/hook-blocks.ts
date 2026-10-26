@@ -19,7 +19,8 @@ export interface HookTable {
 }
 
 // Shared by the agents that differ only in the noun, a recall paragraph, the capture lead-in and a footer.
-const PI_FOOTER = 'For full integration, copy the hippo-memory Pi extension to `~/.pi/agent/extensions/hippo-memory/`.';
+const PI_FOOTER =
+  'For full integration, copy the hippo-memory Pi extension to `~/.pi/agent/extensions/hippo-memory/`.';
 const CODEX_CAPTURE = `When Hippo's Codex wrapper is installed, session-end capture runs automatically.
 If the wrapper is not installed, capture a brief summary manually:`;
 
@@ -99,8 +100,16 @@ ends, so there is nothing to run before you finish.
   },
   cursor: { file: 'AGENTS.md', description: 'Cursor', content: agentsBlock('task') },
   openclaw: { file: 'AGENTS.md', description: 'OpenClaw', content: agentsBlock('session') },
-  opencode: { file: 'AGENTS.md', description: 'OpenCode', content: agentsBlock('task', { recall: true }) },
-  pi: { file: 'AGENTS.md', description: 'Pi', content: agentsBlock('session', { footer: PI_FOOTER }) },
+  opencode: {
+    file: 'AGENTS.md',
+    description: 'OpenCode',
+    content: agentsBlock('task', { recall: true }),
+  },
+  pi: {
+    file: 'AGENTS.md',
+    description: 'Pi',
+    content: agentsBlock('session', { footer: PI_FOOTER }),
+  },
 };
 
 // sha256 of each trimmed block an earlier hippo wrote, so init refreshes only blocks nobody edited. Add the old hash
@@ -150,7 +159,10 @@ export function hippoBlock(
 
 /** `text` with every hippo block and its markers removed, trimmed. */
 export function withoutHookBlock(text: string): string {
-  const re = new RegExp(`\\n?${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}\\n?`, 'g');
+  const re = new RegExp(
+    `\\n?${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}\\n?`,
+    'g',
+  );
   return text
     .replace(re, '\n')
     .replace(/\n{3,}/g, '\n\n')

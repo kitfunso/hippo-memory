@@ -14,7 +14,12 @@ import {
   type WriteOrigin,
 } from '../../api/objects/objects.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, stringFlag, type CliFlags, type CommandContext } from './flag-values.js';
+import {
+  nonEmptyStringFlag,
+  stringFlag,
+  type CliFlags,
+  type CommandContext,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
 import {
@@ -81,7 +86,8 @@ export function versionedVerbs<K extends VersionedKindName, B>(
     const sub = args[0] ?? '';
     if (sub === kind.extra?.sub) return kind.extra.run(ctx, args, flags);
     if (sub === 'list') {
-      const filter = kind.filterFlag === undefined ? undefined : stringFlag(flags, kind.filterFlag)?.trim();
+      const filter =
+        kind.filterFlag === undefined ? undefined : stringFlag(flags, kind.filterFlag)?.trim();
       return listObjectsVerb(flags, {
         plural: kind.plural,
         states: objectStates(kind.kind),
@@ -91,7 +97,8 @@ export function versionedVerbs<K extends VersionedKindName, B>(
     }
     if (sub === 'get') return getVersion(ctx, kind, args);
     if (sub === 'supersede') return supersedeVersion(ctx, kind, args, flags);
-    if (sub === 'close') return closeObjectVerb(args, kind.names, (id) => objectClose(ctx, kind.kind, id));
+    if (sub === 'close')
+      return closeObjectVerb(args, kind.names, (id) => objectClose(ctx, kind.kind, id));
     // Both `<cmd> new "<key>"` and the bare `<cmd> "<key>"` create.
     await createVersion(ctx, kind, sub === 'new' ? (args[1] ?? '') : sub, flags);
   };
@@ -120,7 +127,9 @@ async function createVersion<K extends VersionedKindName, B>(
     for (const line of kind.usage) printError(line);
     throw new CliExit(1);
   }
-  const created = await refusalExits(() => objectCreate(ctx, kind.kind, kind.write(key, body), shellFolder()));
+  const created = await refusalExits(() =>
+    objectCreate(ctx, kind.kind, kind.write(key, body), shellFolder()),
+  );
   printSaved(kind.recorded(created), created);
 }
 
@@ -142,7 +151,10 @@ async function supersedeVersion<K extends VersionedKindName, B>(
   const created = await refusalExits(() =>
     objectCreate(ctx, kind.kind, kind.write(kind.keyOf(existing), body, from), shellFolder()),
   );
-  printSaved(`${kind.names.noun} #${created.id} recorded (v${created.version}), superseding #${id}.`, created);
+  printSaved(
+    `${kind.names.noun} #${created.id} recorded (v${created.version}), superseding #${id}.`,
+    created,
+  );
 }
 
 /** A CLI write is made in the shell's folder, whose path segments tag its mirror memory. */

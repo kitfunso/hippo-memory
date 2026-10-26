@@ -65,9 +65,9 @@ describe('predictions store (first-class object)', () => {
     try {
       // SAFETY: the query selects the id/content/tags_json columns from memories,
       // whose schema types those as TEXT/TEXT/TEXT (JSON-encoded array) respectively.
-      const memRow = db.prepare(`SELECT id, content, tags_json FROM memories WHERE id = ?`).get(pred.memoryId!) as
-        | { id: string; content: string; tags_json: string }
-        | undefined;
+      const memRow = db
+        .prepare(`SELECT id, content, tags_json FROM memories WHERE id = ?`)
+        .get(pred.memoryId!) as { id: string; content: string; tags_json: string } | undefined;
       expect(memRow?.content).toBe('migration takes 2 days');
       // SAFETY: memories.tags_json is always a JSON-encoded string array, written by
       // writeEntry/savePrediction in this codebase.
@@ -104,7 +104,9 @@ describe('predictions store (first-class object)', () => {
       // SAFETY: the query selects op/target_id/metadata_json from audit_log, whose
       // schema types those columns TEXT/TEXT/TEXT.
       const auditRows = db
-        .prepare(`SELECT op, target_id, metadata_json FROM audit_log WHERE op = 'predict_close' AND target_id = ?`)
+        .prepare(
+          `SELECT op, target_id, metadata_json FROM audit_log WHERE op = 'predict_close' AND target_id = ?`,
+        )
         .all(String(pred.id)) as Array<{ op: string; target_id: string; metadata_json: string }>;
       expect(auditRows.length).toBe(1);
       // SAFETY: predict_close audit metadata is always the flat object built at the
@@ -157,7 +159,10 @@ describe('predictions store (first-class object)', () => {
   });
 
   it('loadOpenPredictions excludes closed', async () => {
-    const p1 = await savePrediction(home, 'default', { classTag: 'x', claimText: 'first prediction' });
+    const p1 = await savePrediction(home, 'default', {
+      classTag: 'x',
+      claimText: 'first prediction',
+    });
     await savePrediction(home, 'default', { classTag: 'x', claimText: 'second prediction' });
     await closePrediction(home, 'default', p1.id, { closureState: 'closed', actualValue: 1 });
 
@@ -168,7 +173,10 @@ describe('predictions store (first-class object)', () => {
   });
 
   it('VALID_CLOSURE_STATES rejection: invalid state throws at closePrediction', async () => {
-    const pred = await savePrediction(home, 'default', { classTag: 'x', claimText: 'open prediction text' });
+    const pred = await savePrediction(home, 'default', {
+      classTag: 'x',
+      claimText: 'open prediction text',
+    });
     await expect(
       closePrediction(home, 'default', pred.id, {
         // @ts-expect-error — runtime validation test
@@ -221,7 +229,9 @@ describe('predictions store (first-class object)', () => {
       // Pre-fix: trigger only fired when memory_id changed; this would silently land.
       // Post-fix: WHEN clause covers tenant_id changes too, trigger ABORTs.
       expect(() => {
-        db.prepare(`UPDATE predictions SET tenant_id = 'tenant-b' WHERE memory_id = ?`).run(memA.id);
+        db.prepare(`UPDATE predictions SET tenant_id = 'tenant-b' WHERE memory_id = ?`).run(
+          memA.id,
+        );
       }).toThrow(/tenant_id must match memories\.tenant_id/);
     } finally {
       closeHippoDb(db);

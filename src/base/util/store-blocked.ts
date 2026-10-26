@@ -18,7 +18,10 @@ export class StoreNotPortedError extends StoreBlockedError {
     storeKind: string,
     readonly group: string,
   ) {
-    super(storeKind, `the '${storeKind}' store has no '${group}' group; this code path is not ported to the store yet`);
+    super(
+      storeKind,
+      `the '${storeKind}' store has no '${group}' group; this code path is not ported to the store yet`,
+    );
     this.name = 'StoreNotPortedError';
   }
 }
@@ -28,7 +31,8 @@ export function rethrowIfStoreBlocked<E>(err: E): void {
   if (err instanceof StoreBlockedError) throw err;
 }
 
-export const STORE_BUSY_MESSAGE = 'store busy (another hippo process holds the write lock); retry shortly';
+export const STORE_BUSY_MESSAGE =
+  'store busy (another hippo process holds the write lock); retry shortly';
 
 /** A store behind the port throws this when its lock wait runs out, so the server answers 503 as it does for a busy
  * hippo.db; a store maps its driver's own busy errors to it, with the driver's error as the cause. */

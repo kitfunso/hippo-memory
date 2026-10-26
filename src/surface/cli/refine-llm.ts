@@ -52,7 +52,9 @@ async function refineSemanticMemory(
 ): Promise<string | null> {
   const sourceBlock = sources
     .slice(0, MAX_REFINE_SOURCES)
-    .map((s, i) => `[source ${i + 1}] ${redactSecretsStrict(s.content).slice(0, REFINE_SOURCE_CHARS)}`)
+    .map(
+      (s, i) => `[source ${i + 1}] ${redactSecretsStrict(s.content).slice(0, REFINE_SOURCE_CHARS)}`,
+    )
     .join('\n\n');
 
   const prompt =

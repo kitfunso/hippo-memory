@@ -4,7 +4,12 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { retrieve } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
+import {
+  writeEntry,
+  saveActiveTaskSnapshot,
+  appendSessionEvent,
+  saveSessionHandoff,
+} from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 
@@ -18,16 +23,24 @@ beforeEach(() => {
 describe('api.recall continuity flag', () => {
   it('defaults to no continuity block (hot path)', async () => {
     initTestStore(tmpDir);
-    writeEntry(tmpDir, createMemory('test memory about widgets', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      tmpDir,
+      createMemory('test memory about widgets', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
 
-    const result = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), { query: 'widgets' });
+    const result = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), {
+      query: 'widgets',
+    });
     expect(result.continuity).toBeUndefined();
     expect(result.continuityTokens).toBeUndefined();
   });
 
   it('includes snapshot, handoff, and recent events when includeContinuity=true', async () => {
     initTestStore(tmpDir);
-    writeEntry(tmpDir, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(
+      tmpDir,
+      createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    );
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Ship the recall continuity slice',
       summary: 'Plan reviewed, implementation in progress.',
@@ -138,17 +151,23 @@ describe('api.recall continuity flag', () => {
       scope: 'slack:private:Csecret',
     });
 
-    const noScopeResult = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), {
-      query: 'anything',
-      window: { includeContinuity: true },
-    });
+    const noScopeResult = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
+      {
+        query: 'anything',
+        window: { includeContinuity: true },
+      },
+    );
     expect(noScopeResult.continuity!.activeSnapshot).toBeNull();
 
-    const scopedResult = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), {
-      query: 'anything',
-      window: { includeContinuity: true },
-      filter: { scope: 'slack:private:Csecret' },
-    });
+    const scopedResult = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
+      {
+        query: 'anything',
+        window: { includeContinuity: true },
+        filter: { scope: 'slack:private:Csecret' },
+      },
+    );
     expect(scopedResult.continuity!.activeSnapshot?.task).toBe('private task');
   });
 
@@ -173,20 +192,26 @@ describe('api.recall continuity flag', () => {
       scope: 'slack:private:Csecret',
     });
 
-    const noScopeResult = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), {
-      query: 'anything',
-      window: { includeContinuity: true },
-    });
+    const noScopeResult = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
+      {
+        query: 'anything',
+        window: { includeContinuity: true },
+      },
+    );
     // Snapshot is public-scope (null) so it surfaces. Handoff is private,
     // must NOT surface.
     expect(noScopeResult.continuity!.activeSnapshot?.task).toBe('Public anchor');
     expect(noScopeResult.continuity!.sessionHandoff).toBeNull();
 
-    const scopedResult = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), {
-      query: 'anything',
-      window: { includeContinuity: true },
-      filter: { scope: 'slack:private:Csecret' },
-    });
+    const scopedResult = await retrieve(
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
+      {
+        query: 'anything',
+        window: { includeContinuity: true },
+        filter: { scope: 'slack:private:Csecret' },
+      },
+    );
     // Note: snapshot has scope=null and won't match 'slack:private:Csecret'
     // exactly. Handoff has matching scope and DOES surface.
     expect(scopedResult.continuity!.sessionHandoff?.summary).toBe('PRIVATE handoff content');

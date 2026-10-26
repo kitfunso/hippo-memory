@@ -75,7 +75,9 @@ function compactionProject({ host, hippoRoot }: StoreFiles, cwd: string | null):
 /** The record column cannot hold NULL, but an item from an unknown folder on a shared store must not read as
  * user-global. */
 function itemOrigin({ host, hippoRoot }: StoreFiles, ctx: ItemContext): string | null {
-  return ctx.cwd === null && host.isSharedStore(hippoRoot) ? fallbackOrigin(host, hippoRoot) : ctx.originProject;
+  return ctx.cwd === null && host.isSharedStore(hippoRoot)
+    ? fallbackOrigin(host, hippoRoot)
+    : ctx.originProject;
 }
 
 export function compactionOrigin(files: StoreFiles, cwd: string | null): string {
@@ -83,7 +85,11 @@ export function compactionOrigin(files: StoreFiles, cwd: string | null): string 
 }
 
 /** The names a record's held rows may carry: its origin, plus the folder name rows saved before project ids used. */
-function heldOrigins(files: StoreFiles, cwd: string | null, originProject: string): readonly string[] {
+function heldOrigins(
+  files: StoreFiles,
+  cwd: string | null,
+  originProject: string,
+): readonly string[] {
   const names = projectNames(compactionProject(files, cwd));
   return names.includes(originProject) ? names : [originProject];
 }
@@ -152,7 +158,12 @@ export function compactionByRequest(
 
 /** Pre-compact's record for the compaction that is ending: the session's newest `started` one within REPLAY_AFTER_MS
  * before `at`. An older one is left for the transcript fill. */
-function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string, at: Date): CompactionRecord | null {
+function latestStarted(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sessionId: string,
+  at: Date,
+): CompactionRecord | null {
   return (
     latestStartedRows(
       db,
@@ -219,7 +230,13 @@ export function recordSummary(
   const { requestId } = caller;
   const started = latestStarted(db, tenantId, meta.sessionId, at);
   if (started && markSummarized(db, tenantId, started.id, { text, summarizedAt: now, requestId })) {
-    return { ...started, summary: text.summary, items: text.items, summarizedAt: now, status: 'summarised' };
+    return {
+      ...started,
+      summary: text.summary,
+      items: text.items,
+      summarizedAt: now,
+      status: 'summarised',
+    };
   }
   const originProject = caller.originProject ?? compactionOrigin(files, meta.cwd);
   const id = generateId('cmp');
@@ -320,7 +337,11 @@ function writeItemRows(
   baseHalfLifeDays: number,
 ): ItemWrites {
   const out: ItemWrites = { written: [], repeats: 0, refused: 0, restated: [] };
-  const held = heldRows(db, ctx.tenantId, ctx.caller?.origins ?? heldOrigins(files, ctx.cwd, ctx.originProject));
+  const held = heldRows(
+    db,
+    ctx.tenantId,
+    ctx.caller?.origins ?? heldOrigins(files, ctx.cwd, ctx.originProject),
+  );
   const origin = ctx.caller === undefined ? itemOrigin(files, ctx) : ctx.originProject;
   const restated = new Set<string>();
   for (const text of rows) {
@@ -337,7 +358,9 @@ function writeItemRows(
       continue;
     }
     const entry = compactionEntry(text, ctx, origin, baseHalfLifeDays, files.clock());
-    if (gatedWrite(db, files, entry, { actor: ctx.caller?.actor ?? 'post-compact' }) === 'written') {
+    if (
+      gatedWrite(db, files, entry, { actor: ctx.caller?.actor ?? 'post-compact' }) === 'written'
+    ) {
       out.written.push(entry);
       held.push({ id: null, sessionId: ctx.sessionId, words: textWords });
     } else {
@@ -349,7 +372,12 @@ function writeItemRows(
 }
 
 /** After commit: report skips, mirror the new rows, bump the counter. */
-function finishItemWrites(db: DatabaseSyncLike, files: StoreFiles, writes: ItemWrites, log: Log): void {
+function finishItemWrites(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  writes: ItemWrites,
+  log: Log,
+): void {
   if (writes.repeats > 0) log(`skipped ${writes.repeats} item(s) the store already holds`);
   if (writes.refused > 0) log(`skipped ${writes.refused} item(s) the write gate refused`);
   for (const entry of writes.written) writeEntryMirrors(files.hippoRoot, entry);
@@ -386,7 +414,10 @@ export function saveItems(
     }
     const written = writeItemRows(db, files, ctx, rows, baseHalfLifeDays);
     // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
-    const strengthen = { tenantId: ctx.tenantId, recallBoostAblated: !files.strength.recallStrengthens };
+    const strengthen = {
+      tenantId: ctx.tenantId,
+      recallBoostAblated: !files.strength.recallStrengthens,
+    };
     strengthenRetrievedOn(db, written.restated, strengthen, files);
     if (ctx.recordId !== null) {
       markCompactionDone(db, ctx.tenantId, ctx.recordId, written.written.length);

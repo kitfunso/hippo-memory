@@ -145,7 +145,8 @@ async function run(c: Case): Promise<RunOutput> {
     stdout: normalize(res.stdout, home),
     stderr: normalize(res.stderr, home),
   };
-  if (c.logFile) out.log = existsSync(logPath) ? normalize(readFileSync(logPath, 'utf8'), home) : '<missing>';
+  if (c.logFile)
+    out.log = existsSync(logPath) ? normalize(readFileSync(logPath, 'utf8'), home) : '<missing>';
   return out;
 }
 

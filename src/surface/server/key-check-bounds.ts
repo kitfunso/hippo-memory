@@ -98,7 +98,11 @@ export function keyCheckBounds(maxKeys: number): KeyCheckBounds {
         throw new HttpError(429, 'rate limit exceeded', 1);
       }
       if (!perKeyAddress.check(`${keyId}\u0000${address}`)) {
-        throw new HttpError(429, 'too many key checks from this address', perKeyAddress.retryAfterSec);
+        throw new HttpError(
+          429,
+          'too many key checks from this address',
+          perKeyAddress.retryAfterSec,
+        );
       }
     },
     async run(keyId, address, derive) {

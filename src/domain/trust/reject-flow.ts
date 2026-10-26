@@ -48,7 +48,10 @@ function assertRejectOpts(opts: RejectFlowOptions): void {
  * `hippo reject` and `api.reject`: refuses a bad request, then tombstones the value and removes every row in reach that
  * holds it.
  */
-export async function rejectValue(store: HippoStore, opts: RejectFlowOptions): Promise<RejectFlowResult> {
+export async function rejectValue(
+  store: HippoStore,
+  opts: RejectFlowOptions,
+): Promise<RejectFlowResult> {
   assertRejectOpts(opts);
   return store.rejections.apply({
     tenantId: opts.tenantId,
@@ -80,6 +83,9 @@ export async function unrejectValue(
 }
 
 /** `hippo rejections` / `api.listRejections` — list tombstones for a tenant. */
-export function listRejectionsForTenant(store: HippoStore, tenantId: string): Promise<RejectedValueRow[]> {
+export function listRejectionsForTenant(
+  store: HippoStore,
+  tenantId: string,
+): Promise<RejectedValueRow[]> {
   return store.rejections.list(tenantId);
 }

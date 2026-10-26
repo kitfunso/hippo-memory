@@ -32,7 +32,12 @@ interface ScoredRow {
 }
 
 /** Boosts, then writes the log rows the boost earned on the same handle. */
-function boostAndLog(root: string, db: DatabaseSyncLike, rows: ScoredRow[], opts: GoalStackBoostOptions): ScoredRow[] {
+function boostAndLog(
+  root: string,
+  db: DatabaseSyncLike,
+  rows: ScoredRow[],
+  opts: GoalStackBoostOptions,
+): ScoredRow[] {
   const boost = sessionGoalBoost(root, db, rows, opts);
   writeGoalRecallLog(db, boost.log);
   return boost.results;
@@ -99,7 +104,12 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
     const rows = [makeRow('m1', ['fix-auth'], 0.5), makeRow('m2', ['ui'], 0.6)];
     const db = openHippoDb(hippoRoot);
     try {
-      const out = boostAndLog(hippoRoot, db, rows, { now: evalNow(), sessionId, tenantId, limit: 10 });
+      const out = boostAndLog(hippoRoot, db, rows, {
+        now: evalNow(),
+        sessionId,
+        tenantId,
+        limit: 10,
+      });
       // Boosted (m1: 0.5 * 2.0x = 1.0) ranks above unboosted (m2: 0.6).
       expect(out[0]?.entry.id).toBe('m1');
     } finally {
@@ -140,7 +150,9 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
       boostAndLog(hippoRoot, db, rows, { now: evalNow(), sessionId, tenantId, limit: 10 });
       // SAFETY: `SELECT COUNT(*) AS c` always returns exactly one row shaped { c: number }.
       const count = (
-        db.prepare(`SELECT COUNT(*) AS c FROM goal_recall_log WHERE memory_id = 'm-global'`).get() as { c: number }
+        db
+          .prepare(`SELECT COUNT(*) AS c FROM goal_recall_log WHERE memory_id = 'm-global'`)
+          .get() as { c: number }
       ).c;
       expect(count).toBe(0); // global-only id filtered before INSERT
     } finally {
@@ -154,11 +166,21 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
     const rows = [makeRow('m2', ['ui'], 0.6), makeRow('m1', ['fix-auth'], 0.5)];
     const db = openHippoDb(hippoRoot);
     try {
-      const out = boostAndLog(hippoRoot, db, rows, { now: evalNow(), sessionId, tenantId: 'B', limit: 10 });
+      const out = boostAndLog(hippoRoot, db, rows, {
+        now: evalNow(),
+        sessionId,
+        tenantId: 'B',
+        limit: 10,
+      });
       // No active goals in tenant B -> no boost, no reorder -> m2 stays first.
       expect(out[0]?.entry.id).toBe('m2');
       // Sanity: m1 would have ranked first under tenant A (0.5 * 2.0x = 1.0 > 0.6).
-      const outA = boostAndLog(hippoRoot, db, rows, { now: evalNow(), sessionId, tenantId: 'A', limit: 10 });
+      const outA = boostAndLog(hippoRoot, db, rows, {
+        now: evalNow(),
+        sessionId,
+        tenantId: 'A',
+        limit: 10,
+      });
       expect(outA[0]?.entry.id).toBe('m1');
     } finally {
       closeHippoDb(db);
@@ -225,8 +247,15 @@ describe('the session goal boost policy branches', () => {
     const trace = new Map<string, RerankStep>();
     const db = openHippoDb(root);
     try {
-      const a = sessionGoalBoost(root, db, rows, { now: evalNow(), sessionId, tenantId, limit: 4, trace });
-      expect(a.results.map((r) => [r.entry.content, Number(r.score.toFixed(6))])).toMatchInlineSnapshot(`
+      const a = sessionGoalBoost(root, db, rows, {
+        now: evalNow(),
+        sessionId,
+        tenantId,
+        limit: 4,
+        trace,
+      });
+      expect(a.results.map((r) => [r.entry.content, Number(r.score.toFixed(6))]))
+        .toMatchInlineSnapshot(`
         [
           [
             "capped row",
@@ -297,7 +326,8 @@ describe('the session goal boost policy branches', () => {
           ],
         ]
       `);
-      expect([...trace.values()].map((t) => [t.note, Number(t.multiplier?.toFixed(6))])).toMatchInlineSnapshot(`
+      expect([...trace.values()].map((t) => [t.note, Number(t.multiplier?.toFixed(6))]))
+        .toMatchInlineSnapshot(`
         [
           [
             "g-err",
@@ -335,7 +365,12 @@ describe('the session goal boost policy branches', () => {
       expect(b.results[0]!.score).toBeCloseTo(2.6, 10);
       expect(b.log).toHaveLength(1);
 
-      const none = sessionGoalBoost(root, db, rows, { now: evalNow(), sessionId: 's-none', tenantId, limit: 5 });
+      const none = sessionGoalBoost(root, db, rows, {
+        now: evalNow(),
+        sessionId: 's-none',
+        tenantId,
+        limit: 5,
+      });
       expect(none.results).toBe(rows);
       expect(none.log).toEqual([]);
     } finally {

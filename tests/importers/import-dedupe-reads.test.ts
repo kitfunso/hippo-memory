@@ -2,7 +2,12 @@
 // syntax answer as the whole-store key set did, with the full-text index in sync or not, reading only rows that match.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
-import { closeHippoDb, openHippoDb, setFtsInSync, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  openHippoDb,
+  setFtsInSync,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { importEntries } from '../../src/entry/importers.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { mergedText } from '../../src/base/util/same-text.js';
@@ -84,7 +89,10 @@ function seed(): void {
   write([
     ...STORED.map((text) => row(text)),
     row(mergedText('[Consolidated from 2 related memories, newest first]', parts), merge),
-    row('[Consolidated from 2 related memories]\n\nUse the staging bucket for large uploads only', merge),
+    row(
+      '[Consolidated from 2 related memories]\n\nUse the staging bucket for large uploads only',
+      merge,
+    ),
     row('The acme deploy key rotates every ninety days', { tenantId: 'acme' }),
     row('Old advice: restart the worker on every deploy', { supersededBy: 'mem_newer' }),
   ]);
@@ -104,7 +112,11 @@ describe('import duplicate check', () => {
     // The symbol and emoji chunks name no letter or digit the index is sure to hold, so they take the word scan.
     expect(countMatching(statements, 'memories_fts MATCH')).toBe(inSync ? CHUNKS.length - 1 : 0);
     expect(result.entries.map((e) => e.content)).toEqual([...NEW, REPEAT]);
-    expect([result.total, result.imported, result.skipped]).toEqual([CHUNKS.length + 1, NEW.length + 1, 13]);
+    expect([result.total, result.imported, result.skipped]).toEqual([
+      CHUNKS.length + 1,
+      NEW.length + 1,
+      13,
+    ]);
   });
 
   it('a real run also skips a chunk it imported a moment ago, and a host-wide one sees every tenant', () => {

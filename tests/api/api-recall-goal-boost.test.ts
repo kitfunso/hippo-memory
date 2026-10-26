@@ -48,7 +48,11 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
     const unrelated = await remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
     await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
 
-    const result = await retrieve(ctx, { query: 'auth', window: { limit: 10 }, boost: { sessionId } });
+    const result = await retrieve(ctx, {
+      query: 'auth',
+      window: { limit: 10 },
+      boost: { sessionId },
+    });
     const ids = result.results.map((r) => r.id);
     expect(ids).toContain(goalMatch.id);
     expect(ids).toContain(unrelated.id);
@@ -91,7 +95,11 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
     // No goal_recall_log row written (boost suppressed).
     const db = openHippoDb(hippoRoot);
     try {
-      const count = countRows(db, `SELECT COUNT(*) AS c FROM goal_recall_log WHERE goal_id = ?`, goal.id);
+      const count = countRows(
+        db,
+        `SELECT COUNT(*) AS c FROM goal_recall_log WHERE goal_id = ?`,
+        goal.id,
+      );
       expect(count).toBe(0);
     } finally {
       closeHippoDb(db);
