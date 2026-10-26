@@ -24,7 +24,8 @@ export function cleanup() {
     try {
       process.kill(pid, 'SIGKILL');
     } catch (err) {
-      if (!(err instanceof Error && 'code' in err && err.code === 'ESRCH')) throw err;
+      // Windows reports EPERM for a process that is already exiting; either code means nothing is left to kill.
+      if (!(err instanceof Error && 'code' in err && (err.code === 'ESRCH' || err.code === 'EPERM'))) throw err;
     }
   }
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true, maxRetries: 5 });
