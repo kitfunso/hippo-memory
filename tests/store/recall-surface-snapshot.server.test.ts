@@ -189,7 +189,7 @@ describe('recall surface snapshot', () => {
   // A store per surface: a recall rewrites the rows it returns, and that write would move the next surface's ranks.
   // One file per case and surface, so a moved ranking shows as a small diff in the one place it moved.
   it.each(CASE_SURFACES)('%s via %s', async (name, surface, c) => {
-    const got = await onFreshStore((s) => SURFACES[surface](s, c));
+    const got = await onFreshStore<unknown>((s) => SURFACES[surface](s, c));
     await expect(got).toMatchFileSnapshot(`./__snapshots__/recall-surface/${fileStem(name)}.${surface}.txt`);
   });
 });

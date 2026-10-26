@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../src/host/config-file.js';
 import { NotFoundError } from '../../src/base/errors/api-errors.js';
-import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../src/base/util/http-util.js';
+import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../src/base/errors/http-errors.js';
 import { log } from '../../src/base/util/log.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext } from '../../src/surface/mcp/server.js';

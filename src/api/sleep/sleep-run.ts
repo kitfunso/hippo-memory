@@ -160,7 +160,7 @@ function sleepResultFrom(consolidateResult: ConsolidateOutcome, dryRun: boolean)
     mergedEpisodic: consolidateResult.merged,
     newSemantic: consolidateResult.semanticCreated,
     dryRun,
-    details: consolidateResult.details,
+    events: consolidateResult.events,
   };
   // Set only when non-zero, so a store without dormant memories gets a byte-identical result (HTTP /v1/sleep, the CLI
   // render snapshot).
@@ -287,11 +287,8 @@ async function drainGraphQueue(
 ): Promise<void> {
   try {
     if (snapshot.error) {
-      // Core sleep already succeeded; surface the skipped graph refresh as a detail.
-      result.details = [
-        ...(result.details ?? []),
-        `graph: dirty-tenant snapshot failed (skipped graph refresh): ${snapshot.error}`,
-      ];
+      // Core sleep already succeeded; surface the skipped graph refresh as an event.
+      result.events = [...(result.events ?? []), { kind: 'graphSnapshotFailed', message: snapshot.error }];
     }
     const rebuilt: GraphTotals = { tenants: 0, entities: 0, relations: 0 };
     // dirtyTenants was snapshotted before the memory-deleting phases above.
@@ -303,13 +300,13 @@ async function drainGraphQueue(
     }
   } catch (graphErr) {
     log.warn(`sleep: graph drain phase failed: ${errorMessage(graphErr)}`, errorFields(graphErr));
-    result.details = [...(result.details ?? []), `graph: drain phase failed (skipped): ${errorMessage(graphErr)}`];
+    result.events = [...(result.events ?? []), { kind: 'graphDrainFailed', message: errorMessage(graphErr) }];
   }
 }
 
 type GraphTotals = NonNullable<SleepResult['graph']>;
 
-/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure is a detail line and the tenant
+/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure is an event and the tenant
  * stays pending. */
 async function rebuildDirtyTenant(
   ctx: SleepContext,
@@ -325,10 +322,7 @@ async function rebuildDirtyTenant(
     rebuilt.entities += ext.entities;
     rebuilt.relations += ext.relations;
     if (ext.skipped) {
-      result.details = [
-        ...(result.details ?? []),
-        `graph: ${ext.skipped} stale op(s) skipped for a tenant; the next sleep redoes them`,
-      ];
+      result.events = [...(result.events ?? []), { kind: 'graphStaleOpsSkipped', count: ext.skipped }];
     }
     // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals stay pending.
     // Marked only after the last chunk, so a run stopped between chunks leaves the tenant for the next one.
@@ -338,10 +332,7 @@ async function rebuildDirtyTenant(
       `sleep: graph extract failed for tenant ${dirty.tenantId}, left pending: ${errorMessage(tenantErr)}`,
       errorFields(tenantErr),
     );
-    result.details = [
-      ...(result.details ?? []),
-      `graph: extract failed for a dirty tenant (left pending): ${errorMessage(tenantErr)}`,
-    ];
+    result.events = [...(result.events ?? []), { kind: 'graphExtractFailed', message: errorMessage(tenantErr) }];
   }
 }
 

@@ -13,7 +13,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { initGitRepo, commit, ANCHOR, BEFORE_ANCHOR, AFTER_ANCHOR } from '../_helpers/churn-git-repo.js';
 import { processGit } from '../../src/infra/git-runner.js';
-import { markChurnStale } from '../../src/api/sleep/churn.js';
+import { markChurnStaleInReach } from '../../src/api/sleep/churn.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 
 // ---------------------------------------------------------------------------
@@ -564,7 +564,7 @@ describe('detectChurnStale', () => {
   });
 });
 
-describe('markChurnStale', () => {
+describe('markChurnStaleInReach', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -586,11 +586,16 @@ describe('markChurnStale', () => {
     const broken = sqliteStore(brokenRoot);
     vi.spyOn(broken.reports, 'entriesWhere').mockRejectedValue(new Error('disk gone'));
 
-    const stores = [
-      { root: brokenRoot, store: broken },
-      { root: okRoot, store: ctx.store },
-    ];
-    const results = await markChurnStale(ctx, stores, { repoDir, dryRun: false });
+    const reach = {
+      hasLocal: true,
+      isGlobal: false,
+      shared: false,
+      global: { root: okRoot, store: ctx.store, config: ctx.config },
+    };
+    const results = await markChurnStaleInReach(
+      { ...ctx, store: broken, reach },
+      { root: brokenRoot, repoDir, dryRun: false },
+    );
 
     expect(results.map((r) => r.root)).toEqual([brokenRoot, okRoot]);
     expect(results[0].result).toMatchObject({ marked: 0, dryRun: false, error: 'disk gone' });

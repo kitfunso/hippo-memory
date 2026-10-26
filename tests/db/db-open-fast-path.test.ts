@@ -23,6 +23,7 @@ import { reproveStoreSchema } from '../../src/db/connect.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -246,7 +247,7 @@ describe('full-text drift repair moved off the open path', () => {
       expect(ftsRowCounts(db)).toEqual({ memories: 1, fts: 1 });
       expect(db.prepare(`SELECT id FROM memories_fts WHERE memories_fts MATCH 'quokka'`).all()).toHaveLength(1);
     });
-    expect(result.details.some((line) => line.includes('re-synced the full-text index'))).toBe(true);
+    expect(detailLines(result).some((line) => line.includes('re-synced the full-text index'))).toBe(true);
   });
 
   it('doctor warns on drift and points at sleep', async () => {

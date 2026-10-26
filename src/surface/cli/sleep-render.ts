@@ -3,6 +3,7 @@
 import type * as api from '../../api/index.js';
 import { renderAmbientSummary } from '../../base/memory/ambient.js';
 import { plural } from '../../base/util/format.js';
+import { sleepEventLines } from '../render/sleep-events.js';
 
 /**
  * The lines `hippo sleep` prints for an api.sleep result; pure, so the snapshot tests read them without a console spy.
@@ -31,7 +32,9 @@ function sleepCountLines(result: api.SleepResult): string[] {
     lines.push(`   Expired dormant:   ${result.dormantExpired}  (past dormant.retentionDays)`);
   }
   lines.push(`   Merged episodic:   ${result.mergedEpisodic}`, `   New semantic:      ${result.newSemantic}`);
-  if (result.details && result.details.length > 0) lines.push('\nDetails:', ...result.details);
+  if (result.events && result.events.length > 0) {
+    lines.push('\nDetails:', ...sleepEventLines(result.events, result.dryRun));
+  }
   return lines;
 }
 

@@ -2,7 +2,7 @@
 // skills as one markdown block for AGENTS.md or CLAUDE.md.
 import { OBJECT_CAPS, skillsExport } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
-import { sendJson } from '../../../base/util/http-util.js';
+import { sendJson } from '../../http/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { getString, requiredString, type RequiredStringRule } from '../validation.js';
 import { MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';

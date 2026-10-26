@@ -1,7 +1,7 @@
 // Graceful shutdown and the socket deadlines for hippo's HTTP listeners: the API server and the dashboard.
 import type { Server, ServerResponse } from 'node:http';
 import { envBodyTimeoutMs } from '../../base/util/env.js';
-import { bodyDeadlineMs } from '../../base/util/http-util.js';
+import { bodyDeadlineMs } from '../http/http-util.js';
 import { log } from '../../base/util/log.js';
 
 // Node's own default, named so the three socket deadlines read together. It times the request arriving, never the

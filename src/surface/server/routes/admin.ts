@@ -9,7 +9,8 @@ import {
   quarantineList,
   quarantineReject,
 } from '../../../api/index.js';
-import { HttpError, readBody, sendJson } from '../../../base/util/http-util.js';
+import { HttpError } from '../../../base/errors/http-errors.js';
+import { readBody, sendJson } from '../../http/http-util.js';
 import { assertCrossTenantAdmin, recheckContextWithAuth } from '../auth.js';
 import { parseCursor } from '../../../api/cursor.js';
 import { pageOf, setNextCursorHeader } from '../cursor.js';

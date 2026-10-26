@@ -119,13 +119,17 @@ entry/session-text.d.ts: scrubForSharing re-export
 entry/session-text.d.ts: sessionTail re-export
 entry/session-text.d.ts: transcriptWorkingState re-export
 entry/sleep.d.ts: ConsolidationResult re-export
+entry/sleep.d.ts: RescueRank re-export
 entry/sleep.d.ts: SleepContext re-export
+entry/sleep.d.ts: SleepEvent re-export
 entry/sleep.d.ts: SleepOptions re-export
 entry/sleep.d.ts: SleepResult re-export
 entry/sleep.d.ts: SleepStore re-export
 entry/sleep.d.ts: consolidate function
 entry/sleep.d.ts: sleep function
 entry/sleep.d.ts: strengthBucket re-export
+entry/store-conformance.d.ts: ConformanceRunner interface
+entry/store-conformance.d.ts: runStoreConformance function
 entry/store-kit.d.ts: ALL_TENANTS re-export
 entry/store-kit.d.ts: ActiveGoals re-export
 entry/store-kit.d.ts: AmbientAdmission re-export
@@ -163,6 +167,7 @@ entry/store-kit.d.ts: ConflictRow re-export
 entry/store-kit.d.ts: ConflictRowPage re-export
 entry/store-kit.d.ts: ConflictSide re-export
 entry/store-kit.d.ts: Conflicts re-export
+entry/store-kit.d.ts: ConformanceRunner re-export
 entry/store-kit.d.ts: ContextCandidateFilter re-export
 entry/store-kit.d.ts: ContextReads re-export
 entry/store-kit.d.ts: ContinuityBlock re-export
@@ -236,6 +241,7 @@ entry/store-kit.d.ts: RejectionSource re-export
 entry/store-kit.d.ts: Rejections re-export
 entry/store-kit.d.ts: RepairProtection re-export
 entry/store-kit.d.ts: Reports re-export
+entry/store-kit.d.ts: RequiredStore re-export
 entry/store-kit.d.ts: RetrievalPolicy re-export
 entry/store-kit.d.ts: SECRET_TAGS re-export
 entry/store-kit.d.ts: ScopeReader re-export
@@ -299,6 +305,7 @@ entry/store-kit.d.ts: rejectionDigest re-export
 entry/store-kit.d.ts: repairKeeps re-export
 entry/store-kit.d.ts: replacesIndex re-export
 entry/store-kit.d.ts: requireGroup re-export
+entry/store-kit.d.ts: runStoreConformance re-export
 entry/store-kit.d.ts: sqliteStore re-export
 entry/store-kit.d.ts: tallyAmbientEntries re-export
 entry/store-kit.d.ts: targetReader re-export
@@ -357,11 +364,13 @@ index.d.ts: HandoffEvidence re-export
 index.d.ts: HandoffOutcome re-export
 index.d.ts: Layer re-export
 index.d.ts: MemoryEntry re-export
+index.d.ts: RescueRank re-export
 index.d.ts: SalienceDecision re-export
 index.d.ts: SalienceOptions re-export
 index.d.ts: SalienceResult re-export
 index.d.ts: SessionHandoff re-export
 index.d.ts: SleepContext re-export
+index.d.ts: SleepEvent re-export
 index.d.ts: SleepOptions re-export
 index.d.ts: SleepResult re-export
 index.d.ts: SleepStore re-export

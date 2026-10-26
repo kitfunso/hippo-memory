@@ -5,7 +5,7 @@ import { flagKind, type VerbFlags } from '../../src/surface/cli/flags.js';
 import { COMMANDS } from '../../src/surface/cli/verbs.js';
 import { parsePositiveId, type CliFlags } from '../../src/surface/cli/flag-values.js';
 import { CliExit } from '../../src/surface/cli/exit.js';
-import { HttpError } from '../../src/base/util/http-util.js';
+import { ApiError } from '../../src/base/errors/api-errors.js';
 import type { KeysetPosition } from '../../src/base/util/keyset.js';
 import { parseCursor } from '../../src/api/cursor.js';
 import { pageOf } from '../../src/surface/server/cursor.js';
@@ -74,12 +74,12 @@ function minted(pos: KeysetPosition): string {
   return pageOf([pos, pos], 1, (row) => row).nextCursor ?? '';
 }
 
-/** The position the parser returned, or the status of the HttpError it refused with; any other throw escapes. */
+/** The position the parser returned, or the status of the ApiError it refused with; any other throw escapes. */
 function positionOrStatus(raw: string, key: Part, id: Part) {
   try {
     return { pos: parseCursor(raw, key, id) };
   } catch (thrown) {
-    if (thrown instanceof HttpError) return { status: thrown.status };
+    if (thrown instanceof ApiError) return { status: thrown.status };
     throw thrown;
   }
 }

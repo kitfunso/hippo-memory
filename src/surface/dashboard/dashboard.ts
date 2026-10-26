@@ -3,7 +3,7 @@
 import type * as http from 'node:http';
 import type { Context } from '../../api/index.js';
 import type { DashboardRouteRequest } from '../server/dashboard-types.js';
-import { readBody, sendJson } from '../../base/util/http-util.js';
+import { readBody, sendJson } from '../http/http-util.js';
 import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
 import { encodeCursor, parseCursor } from '../../api/cursor.js';
 import { forgetMemory, markWrong, pinMemory, resolveOpenConflict, type ActionResult } from './dashboard-actions.js';

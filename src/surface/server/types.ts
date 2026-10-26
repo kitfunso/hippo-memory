@@ -1,8 +1,11 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context, EntryContext } from '../../api/index.js';
+import type { ContextWith } from '../../api/types.js';
 import type { JsonValue } from '../../base/util/json.js';
 import type { RateLimiter } from './rate-limit.js';
+import type { RouteLookup } from './route-lookup.js';
+import type { BoundAddonRoute } from './route-table.js';
 import type { HippoStore, OptionalGroup, StoreGroup } from '../../base/ports/store-index.js';
 import type { StoreReach } from '../../base/ports/store.js';
 import type { ConfigReader } from '../../host/config-file.js';
@@ -120,6 +123,10 @@ export type ResolvedServeOptions = ServeOptions & {
   /** Fences a loop-off route's work from hippo.db on the server thread when the store has workers. */
   offLoop: <T>(run: () => T) => T;
   publicJsonBodies: ReadonlyMap<string, string>;
+  /** The /v1 rows for this store, each row's store need settled at boot. */
+  v1Routes: RouteLookup<BoundRoute>;
+  /** The add-on routes by path, each with its store need settled at boot. */
+  addonRoutes: ReadonlyMap<string, BoundAddonRoute>;
   callerLimiter?: RateLimiter;
   failedAuthLimiter: RateLimiter;
   /** This server's per-caller state, handed to every request's Context. */
@@ -145,7 +152,9 @@ export interface AuthedRouteRequest extends RouteRequest {
 
 /** A route's store status: the optional group it needs, a `hippoDbOnly` reason, or neither for a route that runs on any
  * store; never both. */
-type StoreStatus = { storeReady?: OptionalGroup; hippoDbOnly?: never } | { hippoDbOnly: string; storeReady?: never };
+type StoreStatus =
+  | { storeReady?: Exclude<OptionalGroup, 'folderFiles'>; hippoDbOnly?: never }
+  | { hippoDbOnly: string; storeReady?: never };
 
 /** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, nothing, for a
  * route whose handler checks the sender's signature itself, or the dashboard's session, which only its rows take. */
@@ -164,10 +173,22 @@ export type RouteEndpoint<R> =
   | PathEndpoint<R>
   | { regex: RegExp; handler: (r: R, match: RegExpMatchArray) => Promise<void> };
 
+/** A route as the gate runs it, its store need already settled at boot. */
+export type BoundRoute = { method: string; unported?: true } & (
+  | ({ auth: Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'> } & PathEndpoint<AuthedRouteRequest>)
+  | ({ auth: 'webhook-signature' } & PathEndpoint<RouteRequest>)
+);
+
+/** A route that needs a folder store; boot hands its handler the store it proved. */
+export interface FolderRoute {
+  method: string;
+  auth: Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'>;
+  storeReady: 'folderFiles';
+  hippoDbOnly?: never;
+  pattern: string;
+  handler: (r: AuthedRouteRequest & { ctx: ContextWith<'folderFiles'> }, params: RouteParams) => Promise<void>;
+}
+
 /** One /v1 route: an exact path or a matchPath pattern, paired with one method's handler. Under another store it runs
  * only with its `storeReady` group; its hippo.db work runs on a worker thread when the store has one. */
-export type Route = { method: string } & StoreStatus &
-  (
-    | ({ auth: Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'> } & PathEndpoint<AuthedRouteRequest>)
-    | ({ auth: 'webhook-signature' } & PathEndpoint<RouteRequest>)
-  );
+export type Route = (BoundRoute & StoreStatus) | FolderRoute;

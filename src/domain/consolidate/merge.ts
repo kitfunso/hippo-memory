@@ -57,7 +57,7 @@ function retireHeldText(
   const digests = rejected.get(row.tenantId);
   const successor = successorAfterRetirement(row, sources, (text) => digests?.has(rejectionDigest(text)) === true);
   if (successor === undefined) return;
-  run.result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
+  run.result.events.push({ kind: 'retiredText', id: row.id, successorId: successor ? successor.id : null });
   if (run.dryRun) return;
   run.pendingDeletes.push(row.id);
   run.units.push(successor ? [row.id, successor.id] : [row.id]);
@@ -192,10 +192,11 @@ async function mergeCluster(
   for (const e of cluster) used.add(e.id);
   result.merged += cluster.length;
 
-  result.details.push(
-    `  🔀 merged ${cluster.length} episodic entries into semantic: ` +
-      `"${mergedContent.slice(0, MERGE_DETAIL_PREVIEW_CHARS)}..."`,
-  );
+  result.events.push({
+    kind: 'merged',
+    count: cluster.length,
+    preview: mergedContent.slice(0, MERGE_DETAIL_PREVIEW_CHARS),
+  });
 
   if (!dryRun && semantic) {
     run.pendingWrites.push(semantic);

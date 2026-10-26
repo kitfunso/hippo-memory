@@ -8,6 +8,7 @@ import { openHippoDb, closeHippoDb, ftsRowCounts, type DatabaseSyncLike } from '
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 oneRequestPerTest();
 
@@ -51,7 +52,7 @@ describe('consolidate on an integrator store with the sleep groups', () => {
 
     const result = await consolidate(store);
 
-    expect(result.details.some((line) => line.includes('re-synced the full-text index'))).toBe(true);
+    expect(detailLines(result).some((line) => line.includes('re-synced the full-text index'))).toBe(true);
     expect(withDb(b, ftsRowCounts)).toEqual({ memories: 1, fts: 1 });
     expect(withDb(a, ftsRowCounts)).toEqual({ memories: 1, fts: 0 });
   });

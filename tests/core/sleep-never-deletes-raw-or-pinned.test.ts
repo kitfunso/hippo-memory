@@ -25,6 +25,7 @@ import {
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 
 oneRequestPerTest();
@@ -173,7 +174,7 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
       mergedEpisodic: 0,
       newSemantic: 0,
       dryRun: true,
-      details: [],
+      events: [],
       deduped: { removed: 1, semDups: 0, epiDups: 1, crossDups: 0 },
       audit: { errorsRemoved: 1, warningCount: 0 },
     }).join('\n');
@@ -216,7 +217,9 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
     expect(readEntry(root, replaced.id)?.supersededBy).toMatch(/^mem_[0-9a-f]+$/);
     expect(result.removed).toBe(0);
     expect(result.removedIds).toEqual([]);
-    expect(result.details).toContain(`  ↩  ${condemned.id} not removed: pinned or already gone before sleep saved`);
+    expect(detailLines(result)).toContain(
+      `  ↩  ${condemned.id} not removed: pinned or already gone before sleep saved`,
+    );
   });
 
   it('facts linked to a new summary keep the link, so the next sleep pays for no duplicate or rebuild', async () => {

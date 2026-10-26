@@ -13,6 +13,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 
 oneRequestPerTest();
@@ -78,7 +79,7 @@ describe('the sleep LLM gate', () => {
 
     const result = await consolidate(root, { fetcher });
 
-    expect(result.details.join('\n')).toMatch(/extraction.*HTTP 500/);
+    expect(detailLines(result).join('\n')).toMatch(/extraction.*HTTP 500/);
     expect(errSpy).toHaveBeenCalled();
   });
 
@@ -106,7 +107,7 @@ describe('the sleep LLM gate', () => {
 
       // The failure stops the launches; calls already in flight, at most three, still land.
       expect(fetcher.mock.calls.length).toBeLessThanOrEqual(1 + 3);
-      const details = result.details.join('\n');
+      const details = detailLines(result).join('\n');
       expect(details).toMatch(/extraction: HTTP 401: .*authentication_error/);
       expect(details).toContain(`2 of ${TOPICS.length} candidates skipped`);
     });
@@ -122,7 +123,7 @@ describe('the sleep LLM gate', () => {
 
       // Three attempts per candidate: the retry policy's own, and no candidate skipped.
       expect(fetcher).toHaveBeenCalledTimes(3 * TOPICS.length);
-      expect(result.details.join('\n')).not.toContain('candidates skipped');
+      expect(detailLines(result).join('\n')).not.toContain('candidates skipped');
     });
   });
 
@@ -176,7 +177,7 @@ describe('the sleep LLM gate', () => {
 
       expect(seen.launched).toBeGreaterThan(FAIL_AT);
       expect(seen.launched).toBeLessThanOrEqual(FAIL_AT + 1 + 3);
-      expect(result.details.join('\n')).toContain(`${COUNT - FAIL_AT - 1} of ${COUNT} candidates skipped`);
+      expect(detailLines(result).join('\n')).toContain(`${COUNT - FAIL_AT - 1} of ${COUNT} candidates skipped`);
     });
   });
 

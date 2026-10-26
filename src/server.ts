@@ -30,7 +30,7 @@ export {
   type Context,
   type Actor,
 };
-export { isCrossSite, LOOPBACK_HOST_HEADER } from './base/util/http-util.js';
+export { isCrossSite, LOOPBACK_HOST_HEADER } from './surface/http/http-util.js';
 export { clientIpForRateLimit } from './surface/server/client-ip.js';
 export { isLoopback, isReservedActor } from './surface/server/auth.js';
 export type {
@@ -46,7 +46,7 @@ export type {
 export type { HippoStore } from './base/ports/store-index.js';
 // An add-on route replies 4xx with HttpError, renders the prompt hook elsewhere with promptHookContext, and types its
 // body as JsonValue.
-export { HttpError } from './base/util/http-util.js';
+export { HttpError } from './base/errors/http-errors.js';
 export type { CallerProject } from './api/prompt-hook.js';
 export type { JsonValue } from './base/util/json.js';
 // A session-end route stores the turns its caller read from a transcript on the caller's own machine; it narrows its

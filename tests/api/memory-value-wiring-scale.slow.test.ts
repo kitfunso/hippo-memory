@@ -21,6 +21,7 @@ import {
   hasStringTargetId,
   auditRescueRows,
 } from '../_helpers/memory-value-wiring.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 useMemoryValueScratch();
 oneRequestPerTest();
@@ -341,13 +342,13 @@ describe('(i) dry-run parity', () => {
 
     // F7: parity by IDS, not just counts — parse the rescued/removed
     // entry ids out of both runs' details and assert set equality.
-    const dryRescuedIds = parseRescuedIds(dryResult.details);
-    const realRescuedIds = parseRescuedIds(realResult.details);
+    const dryRescuedIds = parseRescuedIds(detailLines(dryResult));
+    const realRescuedIds = parseRescuedIds(detailLines(realResult));
     expect(dryRescuedIds).toEqual(realRescuedIds);
     expect(dryRescuedIds).toEqual(expectedRescued);
 
-    const dryRemovedIds = parseRemovedIds(dryResult.details);
-    const realRemovedIds = parseRemovedIds(realResult.details);
+    const dryRemovedIds = parseRemovedIds(detailLines(dryResult));
+    const realRemovedIds = parseRemovedIds(detailLines(realResult));
     expect(dryRemovedIds).toEqual(realRemovedIds);
     expect(dryRemovedIds).toEqual(expectedDeleted);
 
@@ -360,7 +361,7 @@ describe('(i) dry-run parity', () => {
     for (const id of expectedRescued) expect(realIds.has(id)).toBe(true);
     for (const id of expectedDeleted) expect(realIds.has(id)).toBe(false);
 
-    const rescueLines = realResult.details.filter((l) => l.includes('🛟'));
+    const rescueLines = detailLines(realResult).filter((l) => l.includes('🛟'));
     expect(rescueLines).toHaveLength(3);
     for (const l of rescueLines) expect(l).toMatch(/ - rescued \(rank [123]\/10 in tenant ti, top 3\)$/);
 

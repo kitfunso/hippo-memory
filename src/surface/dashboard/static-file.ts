@@ -6,7 +6,7 @@ import type * as http from 'node:http';
 import * as path from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { PACKAGE_ROOT } from '../../base/config/package-root.js';
-import { HttpError } from '../../base/util/http-util.js';
+import { HttpError } from '../../base/errors/http-errors.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 
 /** Where the build puts the React app. */

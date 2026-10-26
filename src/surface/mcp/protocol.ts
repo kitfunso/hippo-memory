@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { mapApiError } from '../../api/error-reply.js';
-import { INTERNAL_ERROR_MESSAGE } from '../../base/util/http-util.js';
+import { INTERNAL_ERROR_MESSAGE } from '../../base/errors/http-errors.js';
 import { errorClassFields, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { currentRequestId } from '../../base/util/request-scope.js';
 import type { HippoConfig } from '../../base/config/config.js';

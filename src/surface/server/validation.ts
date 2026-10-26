@@ -2,7 +2,8 @@
 import type { IncomingMessage } from 'node:http';
 import type { Context, RememberOptions } from '../../api/index.js';
 import { envBodyTimeoutMs } from '../../base/util/env.js';
-import { bodyDeadlineMs, HttpError, readBody } from '../../base/util/http-util.js';
+import { HttpError } from '../../base/errors/http-errors.js';
+import { bodyDeadlineMs, readBody } from '../http/http-util.js';
 import {
   DEFAULT_LIST_LIMIT,
   MAX_ARRAY_ITEMS,

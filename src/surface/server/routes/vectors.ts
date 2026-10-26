@@ -2,7 +2,8 @@
 // asks the daemon instead of scanning every stored vector itself.
 import { nearestMemoryIds } from '../../../api/recall/nearest.js';
 import type { RecallScopeFilter } from '../../../base/scope/recall-scope.js';
-import { HttpError, sendJson } from '../../../base/util/http-util.js';
+import { HttpError } from '../../../base/errors/http-errors.js';
+import { sendJson } from '../../http/http-util.js';
 import { isJsonBoolean, isJsonObject, isJsonString, type JsonValue } from '../../../base/util/json.js';
 import { MAX_ID_LEN, MAX_LIST_LIMIT } from '../../../base/util/limits.js';
 import type { VectorCandidateSpec } from '../../../base/ports/store/vectors.js';

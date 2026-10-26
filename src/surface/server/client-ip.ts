@@ -4,7 +4,7 @@ import type { IncomingMessage } from 'node:http';
 import { BlockList, isIP } from 'node:net';
 import { log } from '../../base/util/log.js';
 import type { RateLimiter } from './rate-limit.js';
-import { HttpError } from '../../base/util/http-util.js';
+import { HttpError } from '../../base/errors/http-errors.js';
 import { blockHash } from '../../base/util/token-text.js';
 
 const IPV6_PREFIX_GROUPS = 3;

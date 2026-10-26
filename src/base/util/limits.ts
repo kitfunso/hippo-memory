@@ -1,4 +1,6 @@
-import { MAX_BODY_BYTES } from './http-util.js';
+// 1 MB body cap. The CLI never sends payloads near this; anything bigger is almost certainly a misconfigured client or
+// a deliberate memory-blowup attempt.
+export const MAX_BODY_BYTES = 1024 * 1024;
 
 // Cap for id-shaped request fields (ids, tenant, session, scope, class): far above real values, small enough to bound
 // logs and indexes.

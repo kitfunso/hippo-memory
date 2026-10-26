@@ -2,6 +2,7 @@
 
 import type { AmbientState } from '../../base/memory/ambient.js';
 import type { SleepContext } from '../types.js';
+import type { SleepEvent } from './events.js';
 import { runSleep } from './sleep-run.js';
 
 /** Options for `sleep`, one consolidation cycle on a store with the sleep groups that returns counts; unlike
@@ -45,7 +46,8 @@ export interface SleepResult {
   /** Graph re-extraction totals across tenants rebuilt this sleep; absent when none was dirty or under dryRun.
    * Cross-tenant aggregate: one reason /v1/sleep stays loopback-only. */
   graph?: { tenants: number; entities: number; relations: number };
-  details?: string[];
+  /** What the sleep did, in order. */
+  events?: SleepEvent[];
 }
 
 /** Sleeps the WHOLE store, every tenant, so /v1/sleep stays loopback-only; never auto-deletes pinned, raw, kept or

@@ -3,7 +3,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { TLSSocket } from 'node:tls';
-import { HttpError } from '../../base/util/http-util.js';
+import { HttpError } from '../../base/errors/http-errors.js';
 import { DAY_MS, MINUTE_MS } from '../../base/util/time.js';
 import { isForeignPage } from './auth.js';
 
