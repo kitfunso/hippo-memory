@@ -19,6 +19,7 @@ import { type VectorPack, vectorViewsOf } from './vector-pack.js';
 import { type OpPlaces, type OpRoute, type WorkerBase, type WorkerGroup, WORKER_OPS } from './worker-ops.js';
 import { asHippoDb } from './hippo-db-stores.js';
 import { handlesOf } from './handles.js';
+import { asViewOf } from '../../base/util/store-view.js';
 
 /** The worker a call goes to and the request it answers. */
 interface Sender {
@@ -165,7 +166,7 @@ export function storeForRequest<S extends HippoStore>(store: S, limits: RequestL
   // SAFETY: every own key of `store` was copied above, and its symbols with the spread.
   const view = bound as S;
   offLoopStores.add(view);
-  return view;
+  return asViewOf(view, store);
 }
 
 /** The operator's global stores a server opens beside its own, closed with it. */

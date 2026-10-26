@@ -41,6 +41,7 @@ import {
   start,
   undoAll,
   watched,
+  serverThreadPart,
 } from '../_helpers/store-worker-server.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
@@ -534,8 +535,8 @@ describe("the server-thread block of a moved `loop: 'off'` route", () => {
     const spare = keyFor(root, 'default');
     const before = [auditRows(root, []), storedRows(root, [])];
     const info = vi.spyOn(log, 'info');
-    // The worker-backed store with one group or method swapped back to the in-process one: the defect the block exists to catch.
-    const store = Object.assign(workerSqliteStore(root), swapped(sqliteStore(root)));
+    // The worker-backed store with one group or method run on its server-thread part, as a method the op table missed runs: the defect the grant exists to catch.
+    const store = Object.assign(workerSqliteStore(root), swapped(serverThreadPart(root)));
     const server = await start(root, store);
 
     const res = await send(server, { memoryId, keyId: spare.keyId, token: caller.plaintext });

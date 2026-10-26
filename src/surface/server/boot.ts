@@ -68,6 +68,8 @@ interface HandleRequestOptions {
   readonly limiter?: RateLimiter;
   readonly counts: ServerCounts;
   readonly workerCounts: ServerRuntime['workerCounts'];
+  /** The store as booted, so /ready keeps one probe for the server's life, not one per request's view. */
+  readonly servedStore: HippoStore;
 }
 
 async function handleRequest(
@@ -90,7 +92,7 @@ async function handleRequest(
   const request = { method, path };
   const { health, ready, mcpStream } = HOST_ROUTES;
   if (await dispatchHostRoute(routeRequest, request, health, async () => sendHealth(req, res, options))) return;
-  if (await dispatchHostRoute(routeRequest, request, ready, () => sendReady(res, opts.store))) return;
+  if (await dispatchHostRoute(routeRequest, request, ready, () => sendReady(res, options.servedStore))) return;
 
   enforceRateLimit(req, path, limiter);
 
@@ -250,7 +252,14 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
 
   const inflight = new Set<ServerResponse>();
   const { workerCounts } = runtime;
-  const options = { startedAt, streamSlots, limiter: limiters.perAddress, counts: served.counts, workerCounts };
+  const options = {
+    startedAt,
+    streamSlots,
+    limiter: limiters.perAddress,
+    counts: served.counts,
+    workerCounts,
+    servedStore: served.store,
+  };
   const server = acceptingServer(served, runtime, inflight, options);
 
   setKeepAliveTimeouts(server);

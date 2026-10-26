@@ -1,11 +1,11 @@
 // Each person gets one bucket across their keys, an address's scrypt runs are capped, and every 429 says when to come back.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyOptions } from '../../src/store/sqlite/auth.js';
 import type { AddonRoute, ServeOptions } from '../../src/server.js';
-import { sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/store-kit.js';
+import { OTHER_STORE_MARKER, sqliteStore, StoreBusyError, type HippoStore } from '../../src/entry/store-kit.js';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { clientLimitKey } from '../../src/surface/server/client-ip.js';
@@ -202,6 +202,8 @@ describe('per-caller buckets under a store that is not hippo.db', () => {
   it('charges a V1 route and an add-on route once each, though both answer 501', async () => {
     const key = mint({ ownerSubject: 'oid-stub' });
     const record = await sqliteStore(root).findApiKey(key.slice(0, key.indexOf('.')));
+    // As a store-kit adapter marks its folder, so any hippo.db open on it throws.
+    writeFileSync(join(root, OTHER_STORE_MARKER), 'stub');
     // Stands in for a store method that still opens hippo.db, so the V1 route's 501 is the blocked open, not an accident.
     const unported = async (): Promise<never> => {
       closeHippoDb(openHippoDb(root));

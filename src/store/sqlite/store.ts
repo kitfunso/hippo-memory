@@ -75,6 +75,7 @@ import { readActiveTaskSnapshot } from './task-snapshots.js';
 import { entriesWithoutVector, writeVectors } from './vector-index.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
+import { asViewOf } from '../../base/util/store-view.js';
 
 /** The groups that read and write hippo.db's own files beside its rows, and the rest of sleep's and capture's. */
 function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & MaintenanceGroups {
@@ -261,7 +262,7 @@ export function sqliteStore(hippoRoot: string, opts: SqliteStoreOptions = {}): H
 export function inSqliteSession<S extends HippoStore>(store: S, session: RequestStores): S {
   const reopen = reopeners.get(store);
   // SAFETY: only sqliteStore's own result is a key, and the reopener builds that same store on another session.
-  return reopen === undefined ? store : (reopen(session) as S);
+  return reopen === undefined ? store : asViewOf(reopen(session) as S, store);
 }
 
 const contextReadsBodies: Bodies<Omit<ContextReads, 'ambientTallies' | 'contextCandidates'>> = {

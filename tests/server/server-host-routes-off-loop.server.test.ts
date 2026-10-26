@@ -22,6 +22,7 @@ import {
   scrub,
   seen,
   undoAll,
+  serverThreadPart,
 } from '../_helpers/store-worker-server.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
@@ -384,8 +385,8 @@ describe('the server-thread block of the routes this file covers', () => {
     async (_route, swapped, send, status) => {
       const { root } = await copy();
       const info = vi.spyOn(log, 'info');
-      // The worker-backed store with one group or method swapped back to the in-process one: the defect the block exists to catch.
-      const store = Object.assign(workerSqliteStore(root), swapped(sqliteStore(root)));
+      // The worker-backed store with one group or method run on its server-thread part, as a method the op table missed runs: the defect the grant exists to catch.
+      const store = Object.assign(workerSqliteStore(root), swapped(serverThreadPart(root)));
 
       const res = await onServer(root, store, async (server) => seen('blocked', await send(server)));
 

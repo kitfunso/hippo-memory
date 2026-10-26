@@ -29,6 +29,7 @@ import {
   seen,
   start,
   undoAll,
+  serverThreadPart,
 } from '../_helpers/store-worker-server.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
@@ -433,8 +434,8 @@ describe('the server-thread block of the object routes', () => {
     const before = [auditRows(root, keyIds), storedRows(root), mirrorFiles(root)];
     const info = vi.spyOn(log, 'info');
     const steps = routeSteps(objectRoutes());
-    // The worker-backed store with the objects group swapped back to the in-process one: the defect the block exists to catch.
-    const store = Object.assign(workerSqliteStore(root), { objects: sqliteStore(root).objects });
+    // The worker-backed store with the objects group run on its server-thread part, as a group the op table missed runs: the defect the grant exists to catch.
+    const store = Object.assign(workerSqliteStore(root), { objects: serverThreadPart(root).objects });
     const run: Run = { server: await start(root, store), ...seeded, newest: new Map() };
 
     const answered: Array<[string, number]> = [];

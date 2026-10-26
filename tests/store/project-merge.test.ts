@@ -296,6 +296,7 @@ describe('hippo projects list', () => {
     open();
     setMeta(db, 'schema_version', String(older));
     db.exec(`PRAGMA user_version = ${older}`);
+    closeHippoDb(db);
     // The rows already have the last migration's shape, so only its run is counted.
     const up = vi.spyOn(MIGRATIONS[MIGRATIONS.length - 1]!, 'up').mockImplementation(() => undefined);
     try {
