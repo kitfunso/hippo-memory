@@ -1,9 +1,8 @@
 /** Recall eval harness: runs recall over (query, expected_memory_ids) cases and reports MRR, Recall@K and NDCG@K.
  *  It exists so MMR lambda, embedding weights and scoring tweaks are tuned against evidence instead of intuition. */
 
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
-import { evalSwitches } from '../../base/memory/ablation.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
 import { hybridSearch } from '../search/hybrid.js';
@@ -64,13 +63,13 @@ export interface RunEvalOptions {
   stores?: { local: ConfiguredFolder<SharingStore>; global: ConfiguredFolder<SharingStore>; embedderFor: EmbedderFor };
   /** Multiplier for local-over-global results when `stores` is in play. */
   localBump?: number;
-  now?: Date;
+  now: Date;
   /** The root's environment settings, which ranking reads as recall does. */
   runtime?: RuntimeSettings;
   /** The folder whose path segments boost a memory, as recall's are. */
   cwd?: string;
-  /** The eval switches and fake clock the cases rank under; absent, the environment's. */
-  switches?: EvalSwitches;
+  /** The strength model and rank switches the cases rank under. */
+  switches: EvalSwitches;
 }
 
 /** Mean Reciprocal Rank for a single ranking given expected ids. */
@@ -118,7 +117,7 @@ export function ndcgAtK(returned: string[], expected: string[], k: number): numb
 export async function runEval(
   cases: EvalCase[],
   entries: MemoryEntry[],
-  options: RunEvalOptions = {},
+  options: RunEvalOptions,
 ): Promise<EvalSummary> {
   const start = Date.now();
   const results: EvalCaseResult[] = [];
@@ -156,7 +155,7 @@ export async function runEval(
 function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOptions) {
   const budget = options.budget ?? DEFAULT_EVAL_BUDGET;
   const { stores } = options;
-  const switches = options.switches ?? evalSwitches();
+  const { switches } = options;
   return stores
     ? searchBothHybrid(query, stores.local, stores.global, {
         tenantId: ALL_TENANTS,

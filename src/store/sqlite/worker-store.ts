@@ -13,7 +13,7 @@ import type {
 } from '../../base/ports/store.js';
 import { createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from './executor.js';
 import { sqliteStore } from './store.js';
-import type { LossAversion } from '../../base/memory/memory.js';
+import type { StoreRules } from '../../base/ports/infra.js';
 import { type VectorPack, vectorViewsOf } from './vector-pack.js';
 import { type OpPlaces, type OpRoute, type WorkerBase, type WorkerGroup, WORKER_OPS } from './worker-ops.js';
 import { asHippoDb } from './hippo-db-stores.js';
@@ -103,7 +103,7 @@ function plainGroups(executor: SqliteExecutor, inProcess: StoreGroups): Pick<Sto
 export function workerSqliteStore(
   hippoRoot: string,
   executor: SqliteExecutor = createSqliteExecutor(hippoRoot),
-  rules: LossAversion = {},
+  rules: StoreRules = {},
 ): HippoStore & StoreGroups {
   const inProcess = sqliteStore(hippoRoot, rules);
   const store: HippoStore & StoreGroups = {

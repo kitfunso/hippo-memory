@@ -12,13 +12,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { consolidate } from '../../src/index.js';
-import {
-  Layer,
-  calculateStrength,
-  strengthOptionsOf,
-  type MemoryEntry,
-  type DecayOptions,
-} from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { calculateStrength, type DecayOptions } from '../../src/entry/memory.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { toWire } from '../../src/base/memory/memory-wire.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -46,8 +42,7 @@ oneRequestPerTest();
 useMemoryValueScratch();
 
 /** The features the decay pass scores an entry by, at the default loss-aversion rules. */
-const featuresOf = (entry: MemoryEntry): MvFeatureVector =>
-  mvCandidate(entry, NOW, strengthOptionsOf(undefined)).features;
+const featuresOf = (entry: MemoryEntry): MvFeatureVector => mvCandidate(entry, NOW, PRODUCTION_STRENGTH).features;
 // SAFETY: the frozen weights' keys; test (c) checks they are exactly the scorer's feature keys.
 const FEATURE_NAMES = Object.keys(MEMORY_VALUE_WEIGHTS) as ReadonlyArray<keyof MvFeatureVector>;
 

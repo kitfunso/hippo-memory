@@ -30,7 +30,8 @@ import type {
 } from '../../src/api/index.js';
 import type { ConsolidationResult } from '../../src/domain/consolidate/run.js';
 import type { HippoStore } from '../../src/entry/store-kit.js';
-import type { LossAversion } from '../../src/base/memory/memory.js';
+import type { DecayOptions } from '../../src/entry/memory.js';
+type LossAversion = Pick<DecayOptions, 'lossAversionRatio'>;
 
 // Declared, not callback parameters: typeOnly takes a callback with none, so a parameter would be the error.
 declare const plainStore: HippoStore;

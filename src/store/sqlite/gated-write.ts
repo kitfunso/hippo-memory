@@ -1,7 +1,7 @@
 // The one write path for text no person typed into hippo: capture, compaction items and imported agent memories.
 import { isContentWorthStoring } from '../../base/memory/memory-quality.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { auditRejectionRefusal } from './audit-event.js';

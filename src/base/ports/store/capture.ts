@@ -1,6 +1,6 @@
 // Capture and compaction: `hippo capture`'s rows, the compaction hooks' record work and the Compactions group.
 import type { HeldText } from './types.js';
-import type { MemoryEntry } from '../../memory/memory.js';
+import type { MemoryEntry } from '../../memory/entry.js';
 import type { TenantId } from '../../util/tenant.js';
 
 // `hippo capture`'s reads and writes: each row is mirrored beside the folder, and the caller embeds what was captured.

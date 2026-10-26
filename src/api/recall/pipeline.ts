@@ -1,13 +1,13 @@
 // The one recall ranker: every recall loads, searches, expands, re-ranks and filters here under the profile its caller
 // picks, with no writes and no direct output. Callers own parsing, printing, budget fitting and persistence.
 
-import { switchedNow, type EvalSwitches } from '../../base/memory/eval-switches.js';
+import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { oneCopyPerMemory } from '../context-select.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import { boostByGoals } from '../../domain/search/goal-boost.js';
 import { graphExpandRecall } from '../../domain/graph/recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../domain/graph/stream.js';
-import { Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { rankMultihop } from '../../domain/search/multihop.js';
 import type { PhysicsConfig } from '../../base/rank/physics-config.js';
 import {
@@ -67,9 +67,10 @@ export interface RankRecallCtx extends RankSource {
   embedderFor: EmbedderFor;
   /** The folder whose path segments boost a memory. Without it, no path boost applies. */
   cwd?: string;
-  /** The eval switches and fake clock that the context's root reads. Without it, no switch applies and the real clock
-   * runs. */
+  /** The strength model and rank switches the context's root read; absent, production ranking. */
   switches?: EvalSwitches;
+  /** The instant every memory is scored at. */
+  now: Date;
   /** Receives each operator note when the pipeline reaches it, so it interleaves with other stderr in order. */
   note?: (line: string) => void;
 }
@@ -214,6 +215,7 @@ export function rankCtxOf(ctx: Context): RankRecallCtx {
     embedderFor: ctx.infra.embedderFor,
     cwd: ctx.infra.machine.cwd,
     switches: ctx.infra.evalSwitches,
+    now: ctx.infra.clock(),
   };
 }
 
@@ -346,6 +348,7 @@ function graphStreamSearch(
     runtime: ctx.config.runtime,
     cwd: ctx.cwd,
     switches: ctx.switches,
+    now: ctx.now,
     source: vectorSourceOf(ctx),
     mmr,
     mmrLambda,
@@ -368,7 +371,7 @@ function multihopPoolSearch(ctx: RankRecallCtx, opts: SettledOptions, pool: Reca
   const { minResults } = search;
   // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
   const strength = rankStrength({ switches: ctx.switches, runtime: ctx.config.runtime });
-  const allEntries = oneCopyPerMemory(pool.local, pool.global, switchedNow(undefined, ctx.switches), strength).flat();
+  const allEntries = oneCopyPerMemory(pool.local, pool.global, ctx.now, strength).flat();
   const globalIds = new Set(pool.global.map((e) => e.id));
   const localIds = new Set(pool.local.map((e) => e.id));
   const fromGlobal = (id: string): boolean => globalIds.has(id) && !localIds.has(id);
@@ -382,6 +385,7 @@ function multihopPoolSearch(ctx: RankRecallCtx, opts: SettledOptions, pool: Reca
     runtime: ctx.config.runtime,
     cwd: ctx.cwd,
     switches: ctx.switches,
+    now: ctx.now,
   });
   return results.map((r) => ({ ...r, isGlobal: fromGlobal(r.entry.id) }));
 }
@@ -439,7 +443,16 @@ async function engineSearch(ctx: RankRecallCtx, opts: SettledOptions, poolSearch
   if (search.graphStream) return graphStreamSearch(ctx, opts, search.graphStream, poolSearch);
   if (search.multihop) return multihopPoolSearch(ctx, opts, pool);
   const vectorCandidates = poolVectorCandidates(ctx, opts);
-  const shared = { budget, cost, explain, scope, runtime: ctx.config.runtime, cwd: ctx.cwd, switches: ctx.switches };
+  const shared = {
+    budget,
+    cost,
+    explain,
+    scope,
+    runtime: ctx.config.runtime,
+    cwd: ctx.cwd,
+    switches: ctx.switches,
+    now: ctx.now,
+  };
   if (ctx.global && pool.global.length > 0) {
     // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it rather than read both
     // stores again.
@@ -647,6 +660,7 @@ async function applyGoalBoosts(ctx: RankRecallCtx, opts: SettledOptions, state: 
   const boost = boostByGoals(state.results, state.goals, {
     ...session,
     limit: opts.limit,
+    now: ctx.now,
     trace: goalBoostTrace,
   });
   state.results = boost.results;

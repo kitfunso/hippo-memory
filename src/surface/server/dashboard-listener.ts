@@ -4,7 +4,7 @@ import type { ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { adminActor } from '../../api/index.js';
 import { configReader } from '../../host/config-file.js';
-import { evalNow } from '../../base/memory/ablation.js';
+import { evalClock, evalStoreRules } from '../../infra/eval-switches.js';
 import { loadStaticFiles } from '../dashboard/static-file.js';
 import { defaultServerRuntime, type ServerRuntime } from '../open-store.js';
 import { installSignalHandlers } from '../../base/util/crash-handlers.js';
@@ -62,7 +62,8 @@ export class DashboardListenError extends Error {
 /** What every request shares: the reader thread on its own store connection, and a Context on the store's workers. */
 function servingFor(opts: DashboardOptions, { store, offLoop, host }: ServerRuntime): DashboardServing {
   const { hippoRoot, tenantId } = opts;
-  const now = opts.now ?? ((): number => evalNow().getTime());
+  const clock = evalClock();
+  const now = opts.now ?? ((): number => clock().getTime());
   const configAt = configReader(envRuntimeSettings);
   const infra = rootInfra(host);
   return {
@@ -85,7 +86,7 @@ function servingFor(opts: DashboardOptions, { store, offLoop, host }: ServerRunt
 /** Serves the dashboard on 127.0.0.1 behind its tickets and the cookies they buy; it never claims the API server's
  * pidfile, so both can serve one store. */
 export async function serveDashboard(opts: DashboardOptions): Promise<DashboardHandle> {
-  const runtime = defaultServerRuntime(opts.hippoRoot, { lossAversionRatio: envLossAversionRatio() });
+  const runtime = defaultServerRuntime(opts.hippoRoot, evalStoreRules(envLossAversionRatio()));
   const serving = servingFor(opts, runtime);
   const inflight = new Set<ServerResponse>();
   // Its own count: the dashboard serves no /health, so its late handlers never mix into the API server's.

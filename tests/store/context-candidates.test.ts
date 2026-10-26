@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
-import { calculateStrength, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { calculateStrength } from '../../src/entry/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
+import { calculateStrength as strengthUnder } from '../../src/base/memory/strength.js';
+import { evalSwitches } from '../../src/infra/eval-switches.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
-import { strengthAblation } from '../../src/base/memory/ablation.js';
 import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadContextCandidates, tallySources, loadTextsHolding, writeEntry } from '../_helpers/root-forms.js';
@@ -130,10 +132,8 @@ describe('loadContextCandidates reward factor', () => {
       for (const e of rows) writeEntry(root, e);
     });
     const got = loadContextCandidates(root, 'default', { cap: 1, now: NOW });
-    const options = { ablation: strengthAblation() };
-    const strongest = [...rows].sort(
-      (a, b) => calculateStrength(b, NOW, options) - calculateStrength(a, NOW, options),
-    )[0].id;
+    const model = evalSwitches().strength;
+    const strongest = [...rows].sort((a, b) => strengthUnder(b, NOW, model) - strengthUnder(a, NOW, model))[0].id;
     return { id: got[0].id, strongest };
   }
 

@@ -7,7 +7,6 @@ import { join } from 'node:path';
 import { sleepWholeStore } from '../../src/api/index.js';
 import { auditMemories } from '../../src/base/memory/memory-audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { saveDecision } from '../../src/domain/objects/decisions.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
 import { openIncident } from '../../src/domain/objects/incidents.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -25,6 +24,8 @@ import {
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { saveDecision } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -82,7 +83,7 @@ const SAVERS = [
         loadConfig(root).defaultHalfLifeDays,
         'default',
         { incidentText: 'the billing cron charged twice on the 1st' },
-        'cli',
+        { actor: 'cli', now: evalNow() },
       ),
   ],
 ] as const;

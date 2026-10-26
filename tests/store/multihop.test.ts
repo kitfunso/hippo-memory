@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { rankMultihop } from '../../src/domain/search/multihop.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -47,6 +48,7 @@ describe('multihopSearch', () => {
 
     const entries = loadAllEntries(hippoRoot, 'default');
     const results = rankMultihop('In which month did John achieve career-high and then get an endorsement?', entries, {
+      now: evalNow(),
       budget: 4000,
     });
 
@@ -65,7 +67,7 @@ describe('multihopSearch', () => {
     );
 
     const entries = loadAllEntries(hippoRoot, 'default');
-    const results = rankMultihop('Alice hiking', entries, { budget: 4000 });
+    const results = rankMultihop('Alice hiking', entries, { now: evalNow(), budget: 4000 });
 
     expect(results).toHaveLength(1);
     expect(results[0].entry.content).toContain('Alice');
@@ -95,12 +97,17 @@ describe('multihopSearch', () => {
     });
 
     it('spends no more than the budget under a cost', () => {
-      const results = rankMultihop(query, loadAllEntries(hippoRoot, 'default'), { budget: 250, cost: flat });
+      const results = rankMultihop(query, loadAllEntries(hippoRoot, 'default'), {
+        now: evalNow(),
+        budget: 250,
+        cost: flat,
+      });
       expect(results).toHaveLength(2);
     });
 
     it('keeps the minResults floor whatever it costs', () => {
       const results = rankMultihop(query, loadAllEntries(hippoRoot, 'default'), {
+        now: evalNow(),
         budget: 50,
         cost: flat,
         minResults: 3,
@@ -110,6 +117,7 @@ describe('multihopSearch', () => {
 
     it('returns nothing that misses the budget when minResults is 0', () => {
       const results = rankMultihop(query, loadAllEntries(hippoRoot, 'default'), {
+        now: evalNow(),
         budget: 50,
         cost: flat,
         minResults: 0,
@@ -120,7 +128,7 @@ describe('multihopSearch', () => {
     it('fits to the memory text when no cost is given', () => {
       const entries = loadAllEntries(hippoRoot, 'default');
       const one = entries[0].content.length / 4;
-      const results = rankMultihop(query, entries, { budget: Math.ceil(one * 2.5) });
+      const results = rankMultihop(query, entries, { now: evalNow(), budget: Math.ceil(one * 2.5) });
       expect(results.reduce((s, r) => s + r.tokens, 0)).toBeLessThanOrEqual(Math.ceil(one * 2.5));
     });
   });

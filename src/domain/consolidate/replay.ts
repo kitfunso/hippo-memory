@@ -7,8 +7,8 @@
 
 import { HOUR_MS } from '../../base/util/time.js';
 import { mulberry32 } from '../../base/util/prng.js';
-import { isOutcomeSlowAblated } from '../../base/memory/ablation.js';
-import { resolveConfidence, type MemoryEntry, type EmotionalValence } from '../../base/memory/memory.js';
+import { PRODUCTION_STRENGTH, resolveConfidence, type StrengthModel } from '../../base/memory/strength.js';
+import type { MemoryEntry, EmotionalValence } from '../../base/memory/entry.js';
 
 const VALENCE_WEIGHT = {
   neutral: 1.0,
@@ -62,9 +62,10 @@ export async function sampleForReplay(
   count: number,
   now: Date,
   seed: number = Date.now() >>> 0,
+  model: StrengthModel = PRODUCTION_STRENGTH,
 ): Promise<string[]> {
   if (count <= 0) return [];
-  const outcomeAblated = isOutcomeSlowAblated();
+  const outcomeAblated = model.rewardSlope === 0;
   const ids: string[] = [];
   const weights: number[] = [];
   for await (const entry of survivors) {

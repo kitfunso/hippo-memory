@@ -7,6 +7,7 @@ import type { AuditOp } from '../../base/records/audit-ops.js';
 import { auditRowsRead, type QueryAuditOptions } from '../../base/ports/store/audit.js';
 import type { AuditPrune } from '../../base/ports/store/audit.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { handleStamp } from './handle-clock.js';
 
 // node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot serialize without a
 // replacer. `JsonValueWithBigInt` keeps `any` out of this boundary and stays assignable as a JSON.stringify replacer.
@@ -35,10 +36,10 @@ export function appendAuditEvents(db: DatabaseSyncLike, events: readonly AppendA
   if (only === undefined) return;
   // The plain INSERT for the common single row skips json_each.
   if (events.length === 1) {
-    cachedStatement(db, INSERT_AUDIT_ROW_SQL).run(new Date().toISOString(), ...auditRowValues(only));
+    cachedStatement(db, INSERT_AUDIT_ROW_SQL).run(handleStamp(db), ...auditRowValues(only));
     return;
   }
-  cachedStatement(db, INSERT_AUDIT_ROWS_SQL).run(new Date().toISOString(), JSON.stringify(events.map(auditRowValues)));
+  cachedStatement(db, INSERT_AUDIT_ROWS_SQL).run(handleStamp(db), JSON.stringify(events.map(auditRowValues)));
 }
 
 function auditRowValues(opts: AppendAuditOptions): [string, string, string, string | null, string] {

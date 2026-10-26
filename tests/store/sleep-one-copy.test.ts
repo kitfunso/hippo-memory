@@ -11,6 +11,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { escapeRegex } from '../../src/base/util/escape.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -53,7 +55,13 @@ describe('sleep after consolidation', () => {
     expect(result.audit?.errorsRemoved).toBe(1);
     const after = loadAllEntries(root, 'default');
     expect(after.some((e) => e.id === junk.id)).toBe(false);
-    expect(result.ambient).toEqual(computeAmbientState(after.filter((e) => !e.supersededBy)));
+    expect(result.ambient).toEqual(
+      computeAmbientState(
+        after.filter((e) => !e.supersededBy),
+        evalNow(),
+        PRODUCTION_STRENGTH,
+      ),
+    );
   });
 
   it('adds no whole-store read for the share phase', async () => {

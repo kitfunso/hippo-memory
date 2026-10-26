@@ -2,10 +2,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { AMBIENT_FRESH_WINDOW_MS, tallyAmbientEntries } from '../../src/base/memory/ambient.js';
-import { HIGH_SCHEMA_FIT } from '../../src/base/memory/memory.js';
+import { HIGH_SCHEMA_FIT } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries, countAmbientInFolder } from '../_helpers/root-forms.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 const NOW = new Date('2026-06-15T12:00:00.000Z');
 let root = '';
@@ -31,7 +32,7 @@ describe('ambient tallies at the window and threshold edges', () => {
     });
 
     const sql = countAmbientInFolder(root, 'default', { currentProject: [], now: NOW });
-    const js = tallyAmbientEntries(loadAllEntries(root, 'default'), NOW);
+    const js = tallyAmbientEntries(loadAllEntries(root, 'default'), NOW, PRODUCTION_STRENGTH);
 
     expect(js.fresh).toBe(1);
     expect(js.highSchemaFit).toBe(1);

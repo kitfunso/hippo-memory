@@ -6,9 +6,9 @@ import { consolidate } from '../../src/index.js';
 import { storeExtractedFacts } from '../../src/domain/learn/extract.js';
 import { generateDagSummary } from '../../src/domain/consolidate/dag-summary.js';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { assessAutomaticMemory } from '../../src/base/memory/memory-quality.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
@@ -80,6 +80,7 @@ describe('quality at automatic derivation boundaries', () => {
         { content: 'succeeds (inserts or updates)', tags: [], valence: 'neutral' },
       ],
       DEFAULT_HALF_LIFE_DAYS,
+      new Date(),
     );
     expect(facts).toHaveLength(1);
     expect(facts[0].content).toContain('must exclude test schema setup');

@@ -1,7 +1,7 @@
 // One container's planned steps on the caller's write scope: the rows they name are re-read first, and a plan whose
 // rows moved on since the sync read them writes nothing.
 import { SYNC_ACTOR } from '../../base/memory/agent-memory-tools.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { chunked } from '../../base/util/chunked.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import type { DatabaseSyncLike } from '../../db/index.js';

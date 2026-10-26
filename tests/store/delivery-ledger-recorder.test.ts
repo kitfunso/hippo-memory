@@ -3,7 +3,9 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { contextGet, type ContextOptions } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { type HippoConfig } from '../../src/base/config/config.js';
@@ -19,6 +21,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -57,6 +60,7 @@ function configure(pinnedInject: Partial<HippoConfig['pinnedInject']>): void {
 
 function recorder(fault?: DeliveryFault, ledger: Ledger = sqliteStore(local).ledger): DeliveryRecorder {
   return createDeliveryRecorder({
+    now: evalNow(),
     fault,
     ledger,
     storeHash: 'aaaaaaaaaaaaaaaa',
@@ -290,6 +294,7 @@ describe('rejection reasons', () => {
 describe('the event type of a recorder', () => {
   it('takes eventType over a UserPromptSubmit payload', () => {
     const rec = createDeliveryRecorder({
+      now: evalNow(),
       ledger: sqliteStore(local).ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
@@ -303,6 +308,7 @@ describe('the event type of a recorder', () => {
   it('without eventType keeps the payload inference', () => {
     expect(eventOf(recorder()).eventType).toBe('prompt-submit');
     const manual = createDeliveryRecorder({
+      now: evalNow(),
       ledger: sqliteStore(local).ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
@@ -316,6 +322,7 @@ describe('the event type of a recorder', () => {
 describe('prompt facts on a boundary or context row', () => {
   const withPrompt = (eventType?: DeliveryEventType) =>
     createDeliveryRecorder({
+      now: evalNow(),
       ledger: sqliteStore(local).ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',
       writeStore: 'local',
@@ -352,6 +359,7 @@ describe('prompt facts on a boundary or context row', () => {
 describe('the tool-failure recorder', () => {
   const failureRecorder = (eventType: DeliveryEventType, payload: Record<string, string>, fault?: DeliveryFault) =>
     createDeliveryRecorder({
+      now: evalNow(),
       fault,
       ledger: sqliteStore(local).ledger,
       storeHash: 'aaaaaaaaaaaaaaaa',

@@ -3,7 +3,9 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { DEFAULT_HALF_LIFE_DAYS, type LossAversion, type MemoryEntry, Layer } from '../../base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS, type StrengthModel } from '../../base/memory/strength.js';
+import type { Clock } from '../../base/ports/infra.js';
+import { type MemoryEntry, Layer } from '../../base/memory/entry.js';
 import {
   type DatabaseSyncLike,
   openHippoDb,
@@ -24,10 +26,17 @@ import { isJsonObject, type JsonValue } from '../../base/util/json.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { createHost, type Host } from '../../host/host.js';
 import { META_KEY } from '../../db/meta.js';
+import { handleNow, handleStamp } from './handle-clock.js';
 
-/** The folder a store keeps its mirror files in, beside hippo.db, with the ratio its root built it with; an adapter
+/** The strength model a store scores by and the clock its writes stamp by, both fixed when it opens. */
+export interface StoreModel {
+  readonly strength: StrengthModel;
+  readonly clock: Clock;
+}
+
+/** The folder a store keeps its mirror files in, beside hippo.db, with the model its root opened it with; an adapter
  * hands it on and never reads it. `host` keeps the folder's project walk and shared flag for the store's life. */
-export interface StoreFiles extends LossAversion {
+export interface StoreFiles extends StoreModel {
   readonly hippoRoot: string;
   readonly host: Host;
 }
@@ -81,7 +90,7 @@ export function bootstrapLegacyStore(db: DatabaseSyncLike, hippoRoot: string): b
   // and duplicate consolidation_runs; this meta flag settles it.
   if (getMeta(db, META_KEY.legacyBootstrapCompleted, '0') === '1') return false;
 
-  const legacyEntries = readLegacyMarkdownEntries(hippoRoot);
+  const legacyEntries = readLegacyMarkdownEntries(hippoRoot, handleNow(db));
   if (legacyEntries.length === 0) return false;
 
   withWriteScope(db, 'bootstrap_legacy_store', () => {
@@ -150,7 +159,7 @@ function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): voi
     if (!isJsonObject(run)) continue;
     const row = run;
     insertRun.run(
-      String(row.timestamp ?? new Date().toISOString()),
+      String(row.timestamp ?? handleStamp(db)),
       Number(row.decayed ?? 0),
       Number(row.merged ?? 0),
       Number(row.removed ?? 0),
@@ -160,7 +169,7 @@ function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): voi
   pruneConsolidationRuns(db);
 }
 
-function readLegacyMarkdownEntries(hippoRoot: string): MemoryEntry[] {
+function readLegacyMarkdownEntries(hippoRoot: string, now: Date): MemoryEntry[] {
   const entries: MemoryEntry[] = [];
   for (const layer of [Layer.Buffer, Layer.Episodic, Layer.Semantic]) {
     const dir = layerDir(hippoRoot, layer);
@@ -169,7 +178,7 @@ function readLegacyMarkdownEntries(hippoRoot: string): MemoryEntry[] {
     for (const file of fs.readdirSync(dir)) {
       if (!file.endsWith('.md')) continue;
       try {
-        const entry = deserializeEntry(fs.readFileSync(path.join(dir, file), 'utf8'));
+        const entry = deserializeEntry(fs.readFileSync(path.join(dir, file), 'utf8'), now);
         if (entry) entries.push(entry);
       } catch (err) {
         log.warn(`store: skipped unreadable legacy file ${file}: ${errorMessage(err)}`, errorFields(err));

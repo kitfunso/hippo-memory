@@ -1,4 +1,5 @@
-import { MemoryEntry, calculateStrength, clockBasisOf, type DecayOptions } from '../../base/memory/memory.js';
+import { MemoryEntry } from '../../base/memory/entry.js';
+import { calculateStrength, type DecayBasis } from '../../base/memory/strength.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { chunked } from '../../base/util/chunked.js';
 import {
@@ -20,9 +21,7 @@ export const DECAY_THRESHOLD = 0.05;
 export function sessionDecayContext({
   sleepCount,
   recentRuns,
-}: Pick<SleepStart, 'sleepCount' | 'recentRuns'>): Required<
-  Pick<DecayOptions, 'sleepCount' | 'avgSessionIntervalDays'>
-> {
+}: Pick<SleepStart, 'sleepCount' | 'recentRuns'>): Required<Pick<DecayBasis, 'sleepCount' | 'avgSessionIntervalDays'>> {
   const count = sleepCount || recentRuns.length;
   if (recentRuns.length < 2) return { sleepCount: count, avgSessionIntervalDays: 0 };
   const timestamps = recentRuns.map((at) => new Date(at).getTime()).reverse();
@@ -73,7 +72,7 @@ function keepSurvivor(run: SleepRun, entry: Pick<MemoryEntry, 'id' | 'strength'>
 /** Notes the row's DAG parent for the flush's family units, then returns its live strength. */
 function liveStrength(run: SleepRun, entry: MemoryEntry): number {
   if (entry.dagParentId) run.parentOf.set(entry.id, entry.dagParentId);
-  return calculateStrength(entry, run.now, run.decayOpts);
+  return calculateStrength(entry, run.now, run.strength, run.decayOpts);
 }
 
 // Memory-value flag OFF runs the single-phase loop below; ON classifies every entry with zero commits, runs rescueSet
@@ -116,8 +115,8 @@ interface Verdict {
 async function classifyByStrength(run: SleepRun) {
   const verdicts: Verdict[] = [];
   const candidates: MvCandidate[] = [];
-  // The weights were trained on clock-basis strength, so only the switches and the ratio carry over.
-  const mvRules = clockBasisOf(run.decayOpts);
+  // The weights were trained on clock-basis strength, so only the model carries over, never the decay basis.
+  const mvRules = run.strength;
   for await (const page of run.rows.pages()) {
     for (const entry of page) {
       const live = liveStrength(run, entry);

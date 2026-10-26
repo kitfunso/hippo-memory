@@ -18,7 +18,7 @@ import {
   summaryWith,
   type Scratch,
 } from '../_helpers/compaction-hooks.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { compactionFolder } from '../_helpers/cli-stores.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { log as hippoLog } from '../../src/base/util/log.js';

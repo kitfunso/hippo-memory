@@ -1,7 +1,7 @@
 // Sync down asks the local store about each global row's id and text: the same copies as the whole local key set
 // gave, with the local full-text index in sync or not, and no local row read that holds none of those texts.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb, setFtsInSync } from '../../src/db/index.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
@@ -12,6 +12,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -85,7 +86,7 @@ describe('sync down from the global store', () => {
       const g = seed();
       localFtsInSync(inSync);
 
-      expect(await syncGlobalToLocal(...sharingStores(localRoot, globalRoot))).toBe(4);
+      expect(await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN })).toBe(4);
 
       const local = new Map(
         [...loadAllEntries(localRoot, 'default'), ...loadAllEntries(localRoot, 'acme')].map((e) => [e.id, e]),
@@ -105,7 +106,11 @@ describe('sync down from the global store', () => {
         localRoot,
         Array.from({ length: bystanders }, (_, k) => row(`xyzzy plugh ${k}`, 100 + k)),
       );
-      return (await recordStatementsAsync(() => syncGlobalToLocal(...sharingStores(localRoot, globalRoot)))).rowsRead;
+      return (
+        await recordStatementsAsync(() =>
+          syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN }),
+        )
+      ).rowsRead;
     };
 
     expect(await rowsRead(300)).toBe(await rowsRead(0));

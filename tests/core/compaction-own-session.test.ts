@@ -4,13 +4,9 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  COMPACTION_MEMORY_TAG,
-  COMPACTION_SOURCE_PREFIX,
-  createMemory,
-  DEFAULT_HALF_LIFE_DAYS,
-  type MemoryEntry,
-} from '../../src/base/memory/memory.js';
+import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { contextGet, retrieve } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';

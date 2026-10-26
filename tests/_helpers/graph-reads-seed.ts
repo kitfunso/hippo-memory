@@ -2,14 +2,15 @@
 // batch-crossing run of same-named entities, written straight to hippo.db.
 import { vi } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { savePolicy } from '../../src/domain/objects/policies.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { EntityType } from '../../src/base/ports/store/graph.js';
 import { insertEntityRow, insertRelationRow } from '../../src/store/sqlite/graph-writes.js';
 import { TENANT_A, TENANT_B } from './store-conformance.js';
 import { objectsAt } from './objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from './root-forms.js';
+import { savePolicy } from '../../src/entry/testing.js';
 
 const TEAM_SCOPE = null;
 export const HELD_SCOPE = 'slack:private:Csecret';

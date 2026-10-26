@@ -36,15 +36,15 @@ export async function recordTokens(
 /** Token ledger totals for the tenant over the last `days` days (default 30): tokens sent, skipped as unchanged and
  * re-read, per surface, with session counts and mean tokens per session. */
 export function tokenSummary(ctx: Context, opts: { days?: number } = {}): Promise<TokenSummary> {
-  return ctx.store.reports.tokenUse(ctx.tenantId, reportWindowStart(opts.days));
+  return ctx.store.reports.tokenUse(ctx.tenantId, reportWindowStart(opts.days, ctx.infra.clock()));
 }
 
 /** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default 30). */
 export function failureSummary(ctx: Context, opts: { days?: number } = {}): Promise<FailureSummary> {
-  return ctx.store.reports.failures(ctx.tenantId, reportWindowStart(opts.days));
+  return ctx.store.reports.failures(ctx.tenantId, reportWindowStart(opts.days, ctx.infra.clock()));
 }
 
-function reportWindowStart(days: number | undefined): string {
+function reportWindowStart(days: number | undefined, now: Date): string {
   const span = days !== undefined && Number.isFinite(days) && days > 0 ? days : 30;
-  return new Date(Date.now() - span * DAY_MS).toISOString();
+  return new Date(now.getTime() - span * DAY_MS).toISOString();
 }

@@ -1,4 +1,5 @@
-import { MemoryEntry, Layer, calculateStrength, createMemory } from '../../base/memory/memory.js';
+import { MemoryEntry, Layer, createMemory } from '../../base/memory/entry.js';
+import { calculateStrength } from '../../base/memory/strength.js';
 import { jaccardSets, tokenize } from '../../base/util/tokenize.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
@@ -185,7 +186,7 @@ async function mergeCluster(
 
   // Build the semantic entry FIRST (createMemory is cheap and pure) so the tombstone check below runs under the
   // partition's tenant, the one every cluster member shares and the row will land in.
-  const semantic = dryRun ? null : semanticSummary(mergedContent, cluster, partition, run.config.defaultHalfLifeDays);
+  const semantic = dryRun ? null : semanticSummary(mergedContent, cluster, partition, run);
 
   if (semantic && (await mergeRejected(run, semantic, cluster, related, used))) return false;
 
@@ -214,22 +215,26 @@ function semanticSummary(
   mergedContent: string,
   cluster: MemoryEntry[],
   partition: MergePartition,
-  baseHalfLifeDays: number,
+  run: Pick<SleepRun, 'config' | 'now'>,
 ): MemoryEntry {
   const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
   const maxValence = pickStrongestValence(cluster);
   return {
-    ...createMemory(mergedContent, {
-      layer: Layer.Semantic,
-      tags: allTags,
-      emotionalValence: maxValence,
-      schemaFit: MERGED_SCHEMA_FIT,
-      source: 'consolidation',
-      confidence: 'inferred',
-      tenantId: partition.tenantId,
-      scope: partition.scope,
-      baseHalfLifeDays,
-    }),
+    ...createMemory(
+      mergedContent,
+      {
+        layer: Layer.Semantic,
+        tags: allTags,
+        emotionalValence: maxValence,
+        schemaFit: MERGED_SCHEMA_FIT,
+        source: 'consolidation',
+        confidence: 'inferred',
+        tenantId: partition.tenantId,
+        scope: partition.scope,
+        baseHalfLifeDays: run.config.defaultHalfLifeDays,
+      },
+      run.now,
+    ),
     originProject: partition.origin,
     parents: cluster.map((e) => e.id),
   };
@@ -239,7 +244,7 @@ function semanticSummary(
 async function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): Promise<void> {
   const demoted = cluster.map((e) => {
     const row = { ...e, halfLifeDays: Math.max(1, Math.floor(e.halfLifeDays * MERGE_SOURCE_HALF_LIFE_FACTOR)) };
-    return { ...row, strength: calculateStrength(row, run.now, run.decayOpts) };
+    return { ...row, strength: calculateStrength(row, run.now, run.strength, run.decayOpts) };
   });
   await run.survivors.set(demoted);
   for (const e of demoted) run.pendingWrites.push(e);

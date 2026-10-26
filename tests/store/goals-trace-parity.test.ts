@@ -11,13 +11,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { sessionGoalBoost } from '../_helpers/session-goal-boost.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { RerankStep } from '../../src/base/rank/search-types.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 describe('session goal boost trace parity (side-channel)', () => {
   let hippoRoot: string;
@@ -53,11 +55,7 @@ describe('session goal boost trace parity (side-channel)', () => {
         hippoRoot,
         db1,
         rows.map((r) => ({ ...r })),
-        {
-          sessionId,
-          tenantId,
-          limit: 10,
-        },
+        { now: evalNow(), sessionId, tenantId, limit: 10 },
       ).results;
     } finally {
       closeHippoDb(db1);
@@ -72,12 +70,7 @@ describe('session goal boost trace parity (side-channel)', () => {
         hippoRoot,
         db2,
         rows.map((r) => ({ ...r })),
-        {
-          sessionId,
-          tenantId,
-          limit: 10,
-          trace,
-        },
+        { now: evalNow(), sessionId, tenantId, limit: 10, trace },
       ).results;
     } finally {
       closeHippoDb(db2);

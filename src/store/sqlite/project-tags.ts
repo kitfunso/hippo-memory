@@ -2,7 +2,8 @@
 // backed up first.
 import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { withBackup } from '../../db/backup.js';
-import { calculateStrength, type MemoryEntry } from '../../base/memory/memory.js';
+import { calculateStrength } from '../../base/memory/strength.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, isImport, noteKey, toolTag } from '../../base/memory/agent-memory-tools.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { appendAuditEvents } from './audit.js';
@@ -143,7 +144,7 @@ function userGlobalMerges(db: DatabaseSyncLike, tenantId: string, ids: readonly 
 function retire(db: DatabaseSyncLike, files: StoreFiles, row: MemoryEntry, actor: string, now: Date): void {
   insertDormantRow(db, {
     entry: row,
-    strength: calculateStrength(row, now, files),
+    strength: calculateStrength(row, now, files.strength),
     reason: 'project-repair',
     dormantAt: now.toISOString(),
   });
@@ -160,7 +161,7 @@ function repair(db: DatabaseSyncLike, files: StoreFiles, scope: ProjectTagScope,
     const toProject = plan.toProject.filter((r) => merges.has(r.id));
     stampOriginProjects(db, tenantId, toProject);
     const retired = plan.setAside.flatMap((id) => merges.get(id) ?? []);
-    const now = new Date();
+    const now = files.clock();
     for (const row of retired) retire(db, files, row, actor, now);
     const setAside = retired.map((row) => row.id);
     const metadata = { backup, copies, folds, folded, toProject, setAside, untraced };

@@ -1,7 +1,8 @@
 // A host-built reach.globalTarget of { store, config } embeds the global copy through the context's embedder.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { promote } from '../../src/api/memories/promote.js';
 import { shareToGlobal } from '../../src/api/sharing.js';

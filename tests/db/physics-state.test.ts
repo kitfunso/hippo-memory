@@ -10,7 +10,7 @@ import { refreshParticleProperties } from '../../src/base/rank/particle-refresh.
 import { float32ToBuffer, bufferToFloat32 } from '../../src/base/util/vector-codec.js';
 import { initializeParticle } from '../../src/base/rank/physics.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import {
@@ -20,6 +20,7 @@ import {
   seedStoredParticle,
 } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 oneRequestPerTest();
 
@@ -451,7 +452,7 @@ describe('initializeParticle', () => {
     });
     const embedding = [0.5, -0.5, 0.7071];
 
-    const particle = initializeParticle(entry, embedding, {}, NOW);
+    const particle = initializeParticle(entry, embedding, PRODUCTION_STRENGTH, NOW);
 
     expect(particle.memoryId).toBe('mem_init');
     // Position should be a copy of the embedding
@@ -478,14 +479,14 @@ describe('initializeParticle', () => {
   it('handles positive emotional valence', () => {
     const entry = makeMemoryEntry('mem_pos', { emotionalValence: 'positive' });
     const embedding = [1, 0, 0];
-    const particle = initializeParticle(entry, embedding, {}, NOW);
+    const particle = initializeParticle(entry, embedding, PRODUCTION_STRENGTH, NOW);
     expect(particle.charge).toBeCloseTo(0.3, 10);
   });
 
   it('handles critical emotional valence', () => {
     const entry = makeMemoryEntry('mem_crit', { emotionalValence: 'critical' });
     const embedding = [1, 0, 0];
-    const particle = initializeParticle(entry, embedding, {}, NOW);
+    const particle = initializeParticle(entry, embedding, PRODUCTION_STRENGTH, NOW);
     expect(particle.charge).toBeCloseTo(-1.0, 10);
   });
 
@@ -494,7 +495,7 @@ describe('initializeParticle', () => {
     const entry = makeMemoryEntry('mem_old', { created: threeDaysAgo.toISOString() });
     const embedding = [1, 0, 0];
 
-    const particle = initializeParticle(entry, embedding, {}, NOW);
+    const particle = initializeParticle(entry, embedding, PRODUCTION_STRENGTH, NOW);
     // temperature = 1 / (ageDays * 1.0 + 1) = 1 / (3 + 1) = 0.25
     expect(particle.temperature).toBeCloseTo(0.25, 5);
   });
@@ -610,7 +611,7 @@ describe('refreshParticleProperties', () => {
     const entries = new Map<string, MemoryEntry>();
     entries.set('mem_refresh', entry);
 
-    refreshParticleProperties([particle], entries, NOW);
+    refreshParticleProperties([particle], entries, NOW, PRODUCTION_STRENGTH);
 
     // Mass should be recomputed (not 999)
     expect(particle.mass).not.toBe(999);
@@ -633,7 +634,7 @@ describe('refreshParticleProperties', () => {
     const entries = new Map<string, MemoryEntry>();
     // No entry for 'mem_orphan'
 
-    refreshParticleProperties([particle], entries, NOW);
+    refreshParticleProperties([particle], entries, NOW, PRODUCTION_STRENGTH);
 
     // Should remain unchanged
     expect(particle.mass).toBe(42);
@@ -655,7 +656,7 @@ describe('refreshParticleProperties', () => {
     const entries = new Map<string, MemoryEntry>();
     entries.set('mem_matched', entry);
 
-    refreshParticleProperties([matched, unmatched], entries, NOW);
+    refreshParticleProperties([matched, unmatched], entries, NOW, PRODUCTION_STRENGTH);
 
     // Matched should be updated
     expect(matched.mass).not.toBe(999);
@@ -672,7 +673,7 @@ describe('refreshParticleProperties', () => {
     const entry = makeMemoryEntry('mem_mut', { emotionalValence: 'critical' });
     const entries = new Map<string, MemoryEntry>([['mem_mut', entry]]);
 
-    refreshParticleProperties(particles, entries, NOW);
+    refreshParticleProperties(particles, entries, NOW, PRODUCTION_STRENGTH);
 
     // Same reference, mutated
     expect(particles[0]).toBe(originalRef);

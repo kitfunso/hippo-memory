@@ -6,12 +6,13 @@ import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { type GraphQueueItem, type QueueRow, rowToQueueItem, QUEUE_COLS } from './graph-rows.js';
 import { resolveConsolidatedSource } from './graph-writes.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { handleStamp } from './handle-clock.js';
 
 /** Enqueue a consolidated memory for later graph extraction; rejects a raw / missing / cross-tenant memory (the DB
  * trigger is the backstop). */
 function enqueueExtraction(db: DatabaseSyncLike, tenantId: string, memoryId: string): GraphQueueItem {
   assertTenantId('enqueueExtraction', tenantId);
-  const now = new Date().toISOString();
+  const now = handleStamp(db);
   // enqueue is memory-keyed (no source object), so a missing memory still throws (correct - you cannot enqueue a
   // forgotten mirror); memoryId is non-null here by construction.
   const { sourceKind } = resolveConsolidatedSource(db, tenantId, memoryId, null, 'enqueueExtraction');
@@ -52,7 +53,7 @@ export function markGraphDirty(db: DatabaseSyncLike, tenantId: string, memoryId:
  * count marked. */
 export function markPendingProcessedUpTo(db: DatabaseSyncLike, tenantId: string, maxId: number): number {
   assertTenantId('markPendingProcessedUpTo', tenantId);
-  const now = new Date().toISOString();
+  const now = handleStamp(db);
   const res = cachedStatement(
     db,
     `

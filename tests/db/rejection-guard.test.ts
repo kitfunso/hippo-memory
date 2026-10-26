@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
@@ -16,6 +16,7 @@ import {
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -178,6 +179,7 @@ describe('rejection guard', () => {
 
     const loaded = readEntry(home, summary.id)!;
     const result1 = await applyRebuildResult(home, loaded, {
+      now: evalNow(),
       content: rejectedContent,
       descendantCount: 3,
       earliestAt: '2026-08-01T00:00:00Z',
@@ -212,6 +214,7 @@ describe('rejection guard', () => {
     // now-current row (summary_dirty=1 no longer matches) is a race-loser
     // no-op — no second refusal audit.
     const result2 = await applyRebuildResult(home, after, {
+      now: evalNow(),
       content: rejectedContent,
       descendantCount: 3,
       earliestAt: '2026-08-01T00:00:00Z',

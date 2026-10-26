@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';

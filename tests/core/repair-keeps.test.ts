@@ -6,7 +6,7 @@ import {
   type RepairProtection,
 } from '../../src/base/memory/memory-audit.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 
 const NONE: RepairProtection = { pinned: false, raw: false, trusted: false, objectBacked: false };
 const row = (extra: Partial<MemoryEntry> = {}): MemoryEntry => ({

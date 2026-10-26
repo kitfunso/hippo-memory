@@ -1,7 +1,7 @@
 // Admission sent as data admits the rows the callbacks contextGet and drillDown passed before 3.0 admitted, on a store
 // that mixes tenants, scopes, origins, secrets, compaction items and digests, in process and from a store worker.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { COMPACTION_MEMORY_TAG, DAG_LEVEL, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { COMPACTION_MEMORY_TAG, DAG_LEVEL, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { isWorthSurfacing } from '../../src/base/memory/memory-quality.js';
 import { classifyOriginProject, projectNames, type ProjectRef } from '../../src/base/scope/project-identity.js';
 import {

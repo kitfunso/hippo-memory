@@ -15,13 +15,15 @@ import {
   type StoreGroups,
   type SupersedeWrite,
 } from '../../src/entry/store-kit.js';
-import type { LossAversion } from '../../src/base/memory/memory.js';
+import type { DecayOptions } from '../../src/entry/memory.js';
+import type { StoreRules } from '../../src/base/ports/infra.js';
+type LossAversion = Pick<DecayOptions, 'lossAversionRatio'>;
 
 declare const store: HippoStore;
 
 describe('hippo-memory/store-kit entry types', () => {
   it('sqliteStore takes a root path and the ratio its root read, and returns a store with every group', () => {
-    expectTypeOf(sqliteStore).parameters.toEqualTypeOf<[hippoRoot: string, rules?: LossAversion]>();
+    expectTypeOf(sqliteStore).parameters.toEqualTypeOf<[hippoRoot: string, rules?: StoreRules]>();
     expectTypeOf(sqliteStore).returns.toEqualTypeOf<HippoStore & StoreGroups>();
     // @ts-expect-error the root is a path string
     typeOnly(() => sqliteStore({ hippoRoot: '/tmp/root' }));

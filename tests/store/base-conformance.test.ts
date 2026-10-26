@@ -2,7 +2,7 @@
 // search and writes, id and raw reads, continuity, the planning-fallacy read, audit appends, counters and the ledger.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { ID_CHUNK } from '../../src/base/util/chunked.js';
 import { predictionMirror } from '../../src/base/records/prediction.js';
 import type { RecallSearchArgs } from '../../src/base/ports/store/recall-writes.js';
@@ -20,6 +20,7 @@ import {
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -173,7 +174,7 @@ describe('HippoStore continuity', () => {
 describe('HippoStore base writes', () => {
   const claim = (classTag: string, tenantId = TENANT_A): PredictionSave => {
     const opts = { classTag, claimText: `the ${classTag} lands on time`, estimateValue: 2, estimateUnit: 'days' };
-    return { ...opts, mirror: predictionMirror(tenantId, opts, 30), actor: 'cli' };
+    return { ...opts, mirror: predictionMirror(tenantId, opts, 30, evalNow()), actor: 'cli' };
   };
 
   it('resolves a claim to its class baserate, appends audit rows, finishes a recall and counts it', async () => {

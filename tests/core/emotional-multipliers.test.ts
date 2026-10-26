@@ -4,16 +4,14 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
+import { calculateStrength, createMemory } from '../../src/entry/memory.js';
+import { Layer, type EmotionalValence, type MemoryEntry } from '../../src/base/memory/entry.js';
 import {
-  calculateStrength,
-  createMemory,
-  Layer,
-  strengthOptionsOf,
-  type EmotionalValence,
-  type MemoryEntry,
-  type StrengthOptions,
+  PRODUCTION_STRENGTH,
+  withLossAversion,
+  type StrengthModel,
   DEFAULT_HALF_LIFE_DAYS,
-} from '../../src/base/memory/memory.js';
+} from '../../src/base/memory/strength.js';
 import { outcome, retrieve } from '../../src/api/index.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { envRuntimeSettings } from '../../src/base/util/env.js';
@@ -38,9 +36,9 @@ function safeRmSync(p: string): void {
 }
 
 /** The strength options a root builds once HIPPO_LOSS_AVERSION_RATIO reads `raw`. */
-function underEnv(raw: string): StrengthOptions {
+function underEnv(raw: string): StrengthModel {
   vi.stubEnv(RATIO_ENV, raw);
-  return strengthOptionsOf(envRuntimeSettings());
+  return withLossAversion(PRODUCTION_STRENGTH, envRuntimeSettings().lossAversionRatio);
 }
 
 /** An entry 5 days past its last recall with a 3-day half-life: decay ~0.315 keeps every multiplier under the clamp. */
@@ -81,7 +79,11 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
   it('3. env var off (no env set): defaults to 1.0 ratio (negative multiplier intact)', () => {
     const e = makeEntry('negative');
     vi.stubEnv(RATIO_ENV, undefined);
-    const unset = calculateStrength(e, NOW, strengthOptionsOf(envRuntimeSettings()));
+    const unset = calculateStrength(
+      e,
+      NOW,
+      withLossAversion(PRODUCTION_STRENGTH, envRuntimeSettings().lossAversionRatio),
+    );
     expect(unset).toBeCloseTo(calculateStrength(e, NOW, underEnv('1.0')), 6);
   });
 
@@ -181,7 +183,7 @@ describe('behavioral: env=0 ranking effect', () => {
   });
 
   /** Recall's strength for the `negative` variant after seeding `valences` scored under `rules`. */
-  async function recalledNegative(at: string, valences: EmotionalValence[], rules: StrengthOptions): Promise<number> {
+  async function recalledNegative(at: string, valences: EmotionalValence[], rules: StrengthModel): Promise<number> {
     for (const valence of valences) {
       const e = makeEntry(valence, `shared ranking keyword variant ${valence} test`);
       e.strength = calculateStrength(e, NOW, rules);

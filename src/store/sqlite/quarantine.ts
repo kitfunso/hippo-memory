@@ -25,6 +25,7 @@ import { openStore } from './handles.js';
 import { bound } from './bound.js';
 import { writeEntryMirrors } from './entry-writes.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { handleStamp } from './handle-clock.js';
 
 export { QUARANTINE_SCOPE_PREFIX };
 
@@ -108,7 +109,7 @@ export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOpt
     db,
     `INSERT INTO memory_quarantine (tenant_id, memory_id, original_scope, reason, status, quarantined_at)
      VALUES (?, ?, ?, ?, 'pending', ?)`,
-  ).run(opts.tenantId, opts.memoryId, opts.originalScope, opts.reason, new Date().toISOString());
+  ).run(opts.tenantId, opts.memoryId, opts.originalScope, opts.reason, handleStamp(db));
   appendAuditEvents(db, [
     {
       tenantId: opts.tenantId,
@@ -125,7 +126,7 @@ function approveQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: 
     db,
     `UPDATE memory_quarantine SET status = 'approved', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND ` +
       `memory_id = ?`,
-  ).run(new Date().toISOString(), decidedBy, tenantId, memoryId);
+  ).run(handleStamp(db), decidedBy, tenantId, memoryId);
 }
 
 function rejectQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, decidedBy: string): void {
@@ -133,7 +134,7 @@ function rejectQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: s
     db,
     `UPDATE memory_quarantine SET status = 'rejected', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND ` +
       `memory_id = ?`,
-  ).run(new Date().toISOString(), decidedBy, tenantId, memoryId);
+  ).run(handleStamp(db), decidedBy, tenantId, memoryId);
 }
 
 /** A page of the tenant's records, each with its memory's content read in the same query batch. */

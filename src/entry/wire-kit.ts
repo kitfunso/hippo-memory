@@ -3,12 +3,12 @@
 
 import { ambientSecretAdmit } from '../base/scope/read-admission.js';
 import { isWorthSurfacing } from '../base/memory/memory-quality.js';
-import { calculateStrength, type CreateMemoryOptions, type DecayOptions } from '../base/memory/memory.js';
-import { createMemory } from './memory.js';
+import { calculateStrength, createMemory, type DecayOptions } from './memory.js';
+import type { CreateMemoryOptions } from '../base/memory/entry.js';
 import { fromWire, toWire, type MemoryWire } from '../base/memory/memory-wire.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';
 import type { SearchResult } from '../base/rank/search-types.js';
-import { evalNow } from '../base/memory/ablation.js';
+import { evalNow } from '../infra/eval-switches.js';
 import type { HybridSearchOptions } from '../domain/search/hybrid.js';
 import type { EmbedOutcome } from '../domain/search/embed-memories.js';
 import { embedMemory, hybridSearch } from './folder-search.js';

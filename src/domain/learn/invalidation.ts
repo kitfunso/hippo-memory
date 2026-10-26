@@ -3,7 +3,7 @@ import type { StoreWith } from '../../base/ports/store.js';
 import type { Learning } from '../../base/ports/store/learning.js';
 import { INVALIDATION_STOPWORDS } from '../../base/util/stopwords.js';
 import { MINUTE_MS } from '../../base/util/time.js';
-import { CHURN_STALE_TAG, type MemoryEntry } from '../../base/memory/memory.js';
+import { CHURN_STALE_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 import {
   GitReadError,
   gitLsFilesAtHead,

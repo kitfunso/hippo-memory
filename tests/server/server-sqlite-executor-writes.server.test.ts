@@ -9,7 +9,9 @@ import { getHippoDbPath } from '../../src/db/index.js';
 import { autoCheckpointPages, startWalCheckpointer } from '../../src/db/wal-checkpointer.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { log } from '../../src/base/util/log.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import type { ServerHandle } from '../../src/server.js';
@@ -42,6 +44,7 @@ import {
 } from '../_helpers/store-worker-server.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -673,7 +676,7 @@ describe("a store worker's wal_autocheckpoint", () => {
       const saved = { classTag: 'release', claimText: `claim ${n}` };
       return store.objects.saveObject('default', 'prediction', {
         ...saved,
-        mirror: predictionMirror('default', saved, 30),
+        mirror: predictionMirror('default', saved, 30, evalNow()),
         actor: 'test',
       });
     };

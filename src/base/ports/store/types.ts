@@ -1,7 +1,7 @@
 // Port types that two or more groups, or the store itself, share.
 import type { AuditOp } from '../../records/audit-ops.js';
 import type { JsonObject } from '../../util/json.js';
-import type { MemoryEntry } from '../../memory/memory.js';
+import type { MemoryEntry } from '../../memory/entry.js';
 
 /** One api_keys row and its scope grants as a store returns it, revoked or not; the core checks the secret, the role
  * and the expiry. */

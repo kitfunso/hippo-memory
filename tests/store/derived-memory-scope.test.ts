@@ -5,12 +5,14 @@ import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { consolidate } from '../../src/index.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
 import { buildDag, buildEntityProfiles } from '../../src/domain/consolidate/dag.js';
 import { storeExtractedFacts, type ExtractedFact } from '../../src/domain/learn/extract.js';
-import { saveProjectBrief, briefFromReceipts } from '../../src/domain/objects/project-briefs.js';
+import { briefFromReceipts } from '../../src/domain/objects/project-briefs.js';
 import { derivationScope, commonDerivationScope } from '../../src/base/scope/recall-scope.js';
 import { placeholders } from '../../src/db/sql.js';
 import { objectsAt } from '../_helpers/objects-at.js';
@@ -20,6 +22,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries, appendSessionEvent } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { saveProjectBrief } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 pinClock();
 
@@ -219,6 +223,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
 
     const fetcher = makeOkFetcher('synthetic-scope-partitioned-summary');
     const result = await buildDag(sqliteStore(home), [...privFacts, ...pubFacts], {
+      now: evalNow(),
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
     });
@@ -282,6 +287,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
 
     const fetcher = makeOkFetcher('synthetic-scope-partitioned-profile');
     const result = await buildEntityProfiles(sqliteStore(home), [...privL2s, ...pubL2s], {
+      now: evalNow(),
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       llm: anthropicLlm({ apiKey: 'k', fetcher }),
     });
@@ -327,7 +333,7 @@ describe('extract.ts storeExtractedFacts copies the source scope', () => {
     const facts: ExtractedFact[] = [
       { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
     ];
-    const stored = await storeExtractedFacts(sqliteStore(home), source, facts, DEFAULT_HALF_LIFE_DAYS);
+    const stored = await storeExtractedFacts(sqliteStore(home), source, facts, DEFAULT_HALF_LIFE_DAYS, evalNow());
 
     expect(stored).toHaveLength(1);
     expect(stored[0]!.scope).toBe('slack:private:C1');

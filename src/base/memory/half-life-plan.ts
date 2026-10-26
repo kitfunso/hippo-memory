@@ -1,6 +1,7 @@
 // The plan of a default half-life move: which memories still sit on an old base and where each one goes. Pure, so the
 // store runs it inside the move's own write scope and plan, write and audit stay one transaction.
-import { deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from './memory.js';
+import { deriveHalfLife, type MemoryEntry } from './entry.js';
+import { LEGACY_TYPED_HALF_LIFE } from './strength.js';
 
 const TYPED_SOURCES: ReadonlySet<string> = new Set([
   'decision',

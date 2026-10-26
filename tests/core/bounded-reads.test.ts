@@ -4,7 +4,9 @@ import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { memoryRows } from '../_helpers/seed-rows.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
@@ -15,6 +17,7 @@ import { writeEntriesTogether, loadAllDirtySummaries, loadAllEntries } from '../
 import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -125,7 +128,11 @@ describe('rebuildDirtySummaries', () => {
       const newest = (await loadAllDirtySummaries(root)).slice(0, 3).map((e) => e.id);
       expect((await loadAllDirtySummaries(root, 3)).map((e) => e.id)).toEqual(newest);
       const { result, rowsRead } = await recordStatementsAsync(() =>
-        rebuildDirtySummaries(sqliteStore(root), { llm: anthropicLlm({ apiKey: 'k', fetcher }), cap: 2 }),
+        rebuildDirtySummaries(sqliteStore(root), {
+          now: evalNow(),
+          llm: anthropicLlm({ apiKey: 'k', fetcher }),
+          cap: 2,
+        }),
       );
       expect(result).toMatchObject({ attempted: 2, capped: true });
       read.push(rowsRead);

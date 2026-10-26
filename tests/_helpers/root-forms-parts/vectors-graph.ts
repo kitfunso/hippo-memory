@@ -1,6 +1,6 @@
 // Root-keyed vectors and graph forms tests call; production code goes through the port or the handle-first forms.
 
-import type { MemoryEntry } from '../../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import { READ_PAGE_ROWS } from '../../../src/base/util/pages.js';
 import type { EntryCursor } from '../../../src/base/ports/store/types.js';
 import { sqliteStore } from '../../../src/store/sqlite/store.js';
@@ -34,6 +34,7 @@ import * as vectorIndexSql from '../../../src/store/sqlite/vector-index.js';
 import { applyRebuild, type RebuildPatch } from '../../../src/domain/consolidate/summary-settle.js';
 import { loadEveryTenantEntries } from './entries.js';
 import type { VectorCandidateSpec, StoredVectorSummary } from '../../../src/base/ports/store/vectors.js';
+import { evalNow, evalSwitches } from '../../../src/infra/eval-switches.js';
 
 /** The tenant's newest entities, `entityType` only when named. */
 export function loadEntities(
@@ -147,11 +148,15 @@ export function loadStoredParticles(hippoRoot: string): PhysicsParticle[] {
 }
 
 export function resetStoredParticles(hippoRoot: string): number {
-  return onHandle(hippoRoot, (db) => vectorIndexSql.resetStoredParticles(db, {}));
+  return onHandle(hippoRoot, (db) =>
+    vectorIndexSql.resetStoredParticles(db, { strength: evalSwitches().strength, clock: evalNow }),
+  );
 }
 
 export function seedStoredParticle(hippoRoot: string, entry: MemoryEntry, vector: number[]): void {
-  return onHandle(hippoRoot, (db) => vectorIndexSql.seedStoredParticle(db, {}, entry, vector));
+  return onHandle(hippoRoot, (db) =>
+    vectorIndexSql.seedStoredParticle(db, { strength: evalSwitches().strength, clock: evalNow }, entry, vector),
+  );
 }
 
 export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: string | null): void {

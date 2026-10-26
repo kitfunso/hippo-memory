@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import { sharedLocalEmbedder } from '../../src/infra/local-embedder.js';
 import { localIndex } from '../_helpers/cli-stores.js';

@@ -2,7 +2,7 @@ import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import { createMemory, MemoryEntry } from '../../base/memory/memory.js';
+import { createMemory, MemoryEntry } from '../../base/memory/entry.js';
 import { remember, rawArchive, isPrivateScope, type Context } from '../../api/index.js';
 import type { HippoStore } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
@@ -250,15 +250,19 @@ async function writeChangedNote(
   // remember() owns the write; the `echo` from createMemory only fills the ImportResult, with its id reconciled to the
   // row that landed.
   const content = vetSecrets(body).content;
-  const echo = createMemory(content, {
-    kind: 'raw',
-    tags,
-    scope: run.scope,
-    owner: 'agent:vault-import',
-    artifactRef: artifactRef,
-    tenantId: ctx.tenantId,
-    baseHalfLifeDays: run.baseHalfLifeDays,
-  });
+  const echo = createMemory(
+    content,
+    {
+      kind: 'raw',
+      tags,
+      scope: run.scope,
+      owner: 'agent:vault-import',
+      artifactRef: artifactRef,
+      tenantId: ctx.tenantId,
+      baseHalfLifeDays: run.baseHalfLifeDays,
+    },
+    ctx.infra.clock(),
+  );
   if (!(await storeVaultNote(run, echo, content, tags, artifactRef))) {
     tally.rejected++;
     return;

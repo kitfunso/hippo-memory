@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { familyUnits, groupFlush } from '../../src/domain/consolidate/flush-units.js';
 import { SLEEP_DB_WAIT_MS, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { WriteBudget } from '../../src/base/util/write-budget.js';

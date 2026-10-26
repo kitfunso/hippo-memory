@@ -1,6 +1,6 @@
 // The reads and the tag write of the learn passes, kept apart from port.ts; their row writes go through entryWrites and
 // lessonWrites.
-import type { MemoryEntry } from '../../memory/memory.js';
+import type { MemoryEntry } from '../../memory/entry.js';
 import type { EntryCursor, EntryPage } from './types.js';
 
 /** What auto-learn, extraction and invalidation read and write on hippo.db. */

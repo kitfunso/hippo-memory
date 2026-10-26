@@ -5,7 +5,8 @@ import * as path from 'node:path';
 import { execSync, execFileSync } from 'node:child_process';
 import { captureError, extractLessons, partitionLessons, fetchGitLog } from '../../src/domain/learn/autolearn.js';
 import { isGitRepo } from '../../src/base/ports/git.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { extractInvalidationTarget, invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -14,6 +15,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, readEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { processGit } from '../../src/infra/git-runner.js';
 import { testInfra } from '../_helpers/infra.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 // ---------------------------------------------------------------------------
 // captureError
@@ -21,7 +23,7 @@ import { testInfra } from '../_helpers/infra.js';
 
 describe('captureError', () => {
   it('creates a memory entry with error tags', () => {
-    const entry = captureError(1, 'TypeError: Cannot read property x', 'npm test');
+    const entry = captureError(1, 'TypeError: Cannot read property x', 'npm test', undefined, evalNow());
     expect(entry.tags).toContain('error');
     expect(entry.tags).toContain('autolearn');
     expect(entry.content).toContain('npm test');
@@ -30,29 +32,29 @@ describe('captureError', () => {
 
   it('truncates stderr to 500 chars', () => {
     const longStderr = 'x'.repeat(600);
-    const entry = captureError(2, longStderr, 'cmd');
+    const entry = captureError(2, longStderr, 'cmd', undefined, evalNow());
     expect(entry.content.length).toBeLessThan(700);
     expect(entry.content).toContain('truncated');
   });
 
   it('includes exit code in content', () => {
-    const entry = captureError(127, 'command not found', 'badcmd');
+    const entry = captureError(127, 'command not found', 'badcmd', undefined, evalNow());
     expect(entry.content).toContain('exit 127');
   });
 
   it('sets emotional_valence to negative', () => {
-    const entry = captureError(1, 'err', 'cmd');
+    const entry = captureError(1, 'err', 'cmd', undefined, evalNow());
     expect(entry.emotionalValence).toBe('negative');
   });
 
   it('writes into the tenant it is given, else default', () => {
-    expect(captureError(1, 'err', 'cmd', 'tenant_b').tenantId).toBe('tenant_b');
-    expect(captureError(1, 'err', 'cmd').tenantId).toBe('default');
+    expect(captureError(1, 'err', 'cmd', 'tenant_b', evalNow()).tenantId).toBe('tenant_b');
+    expect(captureError(1, 'err', 'cmd', undefined, evalNow()).tenantId).toBe('default');
   });
 
   it('short stderr passes through unchanged', () => {
     const stderr = 'short error';
-    const entry = captureError(1, stderr, 'cmd');
+    const entry = captureError(1, stderr, 'cmd', undefined, evalNow());
     expect(entry.content).toContain('short error');
     expect(entry.content).not.toContain('truncated');
   });

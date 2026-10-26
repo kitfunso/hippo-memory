@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { runCli } from '../../src/cli.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import { deserializeEntry } from '../../src/base/memory/markdown.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
@@ -18,6 +18,7 @@ import { CLEARED_ENV, FAKE_NOW } from '../_helpers/recall-golden-seed.js';
 import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -84,7 +85,7 @@ describe('memory wire goldens', () => {
       rebuildCount: undefined,
       dagLevel3BuiltAt: undefined,
     };
-    expect(deserializeEntry(file)).toEqual(expected);
+    expect(deserializeEntry(file, evalNow())).toEqual(expected);
   });
 
   it('dormant snapshot: entry_json bytes, and the entry it restores', () => {

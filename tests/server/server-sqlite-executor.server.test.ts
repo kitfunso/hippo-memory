@@ -29,6 +29,7 @@ import {
 } from '../_helpers/store-worker-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
 
@@ -233,7 +234,11 @@ describe('a reader thread', () => {
     const executor = createSqliteExecutor(root);
     cleanups.push(() => executor.close());
     const saved = { classTag: 'release', claimText: 'written on a reader' };
-    const args = ['default', 'prediction', { ...saved, mirror: predictionMirror('default', saved, 30), actor: 'test' }];
+    const args = [
+      'default',
+      'prediction',
+      { ...saved, mirror: predictionMirror('default', saved, 30, evalNow()), actor: 'test' },
+    ];
 
     const write = executor.call(SAVE, args, { mode: 'read', requestId: undefined });
 

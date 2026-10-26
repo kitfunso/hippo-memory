@@ -12,6 +12,7 @@ import type {
   SlackWorkspace,
 } from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { handleStamp } from '../handle-clock.js';
 
 // Backfill cursors
 
@@ -37,7 +38,7 @@ export function saveSlackCursor(
     `INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?,?,?,?)
        ON CONFLICT(tenant_id, channel_id) DO UPDATE SET latest_ts = ${kept}, updated_at =
        excluded.updated_at`,
-  ).run(tenantId, channelId, latestTs, new Date().toISOString());
+  ).run(tenantId, channelId, latestTs, handleStamp(db));
 }
 
 // Event log
@@ -88,7 +89,7 @@ export function slackTeamRoute(db: DatabaseSyncLike, teamId: string): TenantRout
 
 /** Upserts on team_id: operators move a workspace between tenants without a delete first. */
 export function upsertSlackWorkspace(db: DatabaseSyncLike, teamId: string, tenantId: string): SlackWorkspace {
-  const addedAt = new Date().toISOString();
+  const addedAt = handleStamp(db);
   cachedStatement(
     db,
     `INSERT INTO slack_workspaces (team_id, tenant_id, added_at)

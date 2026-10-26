@@ -19,6 +19,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -117,7 +118,7 @@ describe('skills store (executable/exportable first-class object)', () => {
       instructions: 'x2',
       supersedesSkillId: b.id,
     });
-    await closeObject(objectsAt(home), SKILL, 'default', c.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), SKILL, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
     const active = await listObjects(objectsAt(home), SKILL, 'default', { status: 'active' });
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
@@ -177,7 +178,7 @@ describe('skills store (executable/exportable first-class object)', () => {
       skillName: 'Zulu',
       instructions: 'old',
     });
-    await closeObject(objectsAt(home), SKILL, 'default', closed.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), SKILL, 'default', closed.id, { actor: CLI_ACTOR, now: evalNow() });
     const sup = await cliSave(home, 'default', SKILL, {
       skillName: 'Yankee',
       instructions: 'v1',

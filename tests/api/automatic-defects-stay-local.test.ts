@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { consolidate } from '../../src/index.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { autoShare, transferScore } from '../../src/domain/sharing/share.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
@@ -12,6 +12,7 @@ import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -43,7 +44,9 @@ describe('automatic rows with a certain defect stay local', () => {
     for (const entry of [captured, typed]) writeEntry(root, entry);
     expect(transferScore(captured)).toBeGreaterThanOrEqual(0.6);
     expect(
-      (await autoShare(...sharingStores(root), { tenantId: ALL_TENANTS, dryRun: true })).map((entry) => entry.id),
+      (await autoShare(...sharingStores(root), { embed: TEST_RUN, tenantId: ALL_TENANTS, dryRun: true })).map(
+        (entry) => entry.id,
+      ),
     ).toEqual([typed.id]);
   });
 

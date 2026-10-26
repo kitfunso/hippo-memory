@@ -93,7 +93,7 @@ export interface PruneAuditResult {
 }
 
 /** Cutoff ISO timestamp for N days ago; exported so tests can pin "now" without mocking Date. */
-export function computeCutoff(days: number, now: Date = new Date()): string {
+export function computeCutoff(days: number, now: Date): string {
   const cutoff = new Date(now.getTime() - days * DAY_MS);
   return cutoff.toISOString();
 }
@@ -109,7 +109,7 @@ export async function auditPrune(ctx: Context, opts: PruneAuditOptions): Promise
     throw new Error('auditPrune: tenantId is required');
   }
   const dryRun = opts.dryRun === true;
-  const cutoff = computeCutoff(opts.olderThanDays);
+  const cutoff = computeCutoff(opts.olderThanDays, ctx.infra.clock());
   const prune = { tenantId: ctx.tenantId, cutoff, actor: ctx.actor.subject, olderThanDays: opts.olderThanDays, dryRun };
   const count = await maintenanceOf(ctx).pruneAuditRows(prune);
   return { cutoff, count, dryRun };

@@ -1,7 +1,9 @@
 // E10 lane A: a personal row never reaches the global store, by hand or by autoShare. Real stores, temp HIPPO_HOME.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
-import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { autoShare, shareMemory, transferScore } from '../../src/domain/sharing/share.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
@@ -11,6 +13,7 @@ import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -64,21 +67,25 @@ describe('share and promote refuse personal rows', () => {
   });
 
   it('share refuses a personal row with a 400 and the exact text; a team row still shares', async () => {
-    const err = await refusal(() => shareMemory(...sharingStores(hippoRoot), mine.id, { tenantId: 'default' }));
+    const err = await refusal(() =>
+      shareMemory(...sharingStores(hippoRoot), mine.id, { embed: TEST_RUN, tenantId: 'default' }),
+    );
     expect(err.status).toBe(400);
     expect(err.message).toBe(
       `Refusing to share ${mine.id}: it is a personal memory and stays with its owner on this server.`,
     );
-    expect((await shareMemory(...sharingStores(hippoRoot), team.id, { tenantId: 'default' }))?.content).toBe(TEAM);
+    expect(
+      (await shareMemory(...sharingStores(hippoRoot), team.id, { embed: TEST_RUN, tenantId: 'default' }))?.content,
+    ).toBe(TEAM);
     expect(globalContents()).toEqual([TEAM]);
   });
 
   it('autoShare skips the personal row and shares the team row in the same run', async () => {
     expect(transferScore(mine)).toBeGreaterThanOrEqual(0.6);
     expect(transferScore(team)).toBeGreaterThanOrEqual(0.6);
-    expect((await autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS })).map((e) => e.content)).toEqual([
-      TEAM,
-    ]);
+    expect(
+      (await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS })).map((e) => e.content),
+    ).toEqual([TEAM]);
     expect(globalContents()).toEqual([TEAM]);
   });
 });

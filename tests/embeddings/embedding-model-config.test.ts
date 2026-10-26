@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -111,7 +111,7 @@ describe('embedding model configuration', () => {
       const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vector-index.js');
       const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
-      const { createMemory } = await import('../../src/base/memory/memory.js');
+      const { createMemory } = await import('../../src/entry/memory.js');
 
       // The provider is built from the configured model (real resolver, no
       // interception): 'voyage:custom/model' proves 'custom/model' flowed
@@ -157,7 +157,7 @@ describe('embedding model configuration', () => {
       const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vector-index.js');
       const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
-      const { createMemory } = await import('../../src/base/memory/memory.js');
+      const { createMemory } = await import('../../src/entry/memory.js');
 
       // Real staleness: the cached index was built under a DIFFERENT model
       // identity than the one config.json now selects, so
@@ -184,7 +184,7 @@ describe('embedding model configuration', () => {
       const { resolveEmbeddingProvider } = await import('../../src/infra/embedding-provider.js');
       const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vector-index.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
-      const { createMemory } = await import('../../src/base/memory/memory.js');
+      const { createMemory } = await import('../../src/entry/memory.js');
 
       // In sync (no reindex needed) but genuinely empty: no embeddings.json
       // was ever written for this store, so no candidate has a cached vector.

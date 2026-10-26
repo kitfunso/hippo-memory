@@ -518,6 +518,7 @@ describe('mcp tenant + client-key isolation', () => {
         store,
         config: loadConfig(home),
         callers,
+        infra: testInfra(),
       } as McpContext,
     );
     expect(extractText(res)).toMatch(/Remembered \[mem_/);

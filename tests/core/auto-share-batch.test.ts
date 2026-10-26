@@ -3,7 +3,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { autoShare } from '../../src/domain/sharing/share.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
@@ -12,6 +13,7 @@ import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -46,7 +48,7 @@ describe('autoShare batching', () => {
       );
     }
     const { result, statements } = await recordStatementsAsync(() =>
-      autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS }),
+      autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS }),
     );
     expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual(
       expect.arrayContaining(result.map((e) => e.content)),

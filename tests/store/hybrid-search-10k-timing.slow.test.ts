@@ -1,7 +1,8 @@
 // One hybrid recall over a 10k-row store with 384-dim vectors does a bounded amount of work; prints the measured time.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
@@ -14,6 +15,7 @@ import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -50,6 +52,7 @@ describe('hybrid recall at 10k rows', () => {
 
   const recall = (store: string): ReturnType<typeof searchBothHybrid> =>
     searchBothHybrid('deploy pipeline', ...sharingStores(store, global), {
+      now: evalNow(),
       embedderFor: resolveEmbeddingProvider,
       budget: 4000,
       tenantId: 'default',

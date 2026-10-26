@@ -3,13 +3,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { consolidate } from '../../src/index.js';
 import { listMemoryConflicts, writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
-import {
-  createMemory,
-  Layer,
-  calculateStrength,
-  resolveConfidence,
-  DEFAULT_HALF_LIFE_DAYS,
-} from '../../src/base/memory/memory.js';
+import { createMemory, calculateStrength, resolveConfidence } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { loadAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
@@ -525,7 +521,7 @@ describe('Physics pass', () => {
 
     // The same steps the pass must take, on the same particles in the same order.
     const expected = seeded.map((p) => ({ ...p, position: [...p.position], velocity: [...p.velocity] }));
-    refreshParticleProperties(expected, new Map(entries.map((e) => [e.id, e])), now);
+    refreshParticleProperties(expected, new Map(entries.map((e) => [e.id, e])), now, PRODUCTION_STRENGTH);
     const stats = simulate(expected, {
       conflictPairs: new Map(
         entries.filter((e) => e.conflictsWith.length > 0).map((e) => [e.id, new Set(e.conflictsWith)]),

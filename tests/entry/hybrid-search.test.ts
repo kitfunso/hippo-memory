@@ -8,7 +8,9 @@ import { hybridSearch } from '../../src/entry/folder-search.js';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { mmrRerank } from '../../src/domain/search/rerank.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
-import { createMemory, applyOutcome, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory, applyOutcome } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
@@ -21,6 +23,7 @@ import {
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -187,7 +190,7 @@ describe('hybridSearch with embeddings', () => {
       createMemory('Python dict ordering is guaranteed in 3.7+', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     ];
 
-    const bm25Results = rankBm25('cache failure', entries, { budget: 10000 });
+    const bm25Results = rankBm25('cache failure', entries, { now: evalNow(), budget: 10000 });
     const hybridResults = await hybridSearch('cache failure', entries, {
       budget: 10000,
       embeddingWeight: 0,
@@ -306,7 +309,7 @@ describe('SearchResult cosine field', () => {
     const entries = [
       createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     ];
-    const results = rankBm25('FRED cache', entries, { budget: 10000 });
+    const results = rankBm25('FRED cache', entries, { now: evalNow(), budget: 10000 });
     expect(results.length).toBe(1);
     expect(results[0].cosine).toBe(0);
   });

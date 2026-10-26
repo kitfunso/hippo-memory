@@ -19,7 +19,8 @@ import {
 import { projectNameRepair } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import type { ImportReport } from '../../src/base/memory/agent-memory-report.js';
-import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { deriveOriginProject, isInitialized } from '../../src/host/project-identity.js';
 import { autoShare } from '../../src/domain/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
@@ -47,6 +48,7 @@ import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.j
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const USER_NOTE = 'Prefers short replies with the command first.';
@@ -67,6 +69,7 @@ const opts = () => ({
   tenantId: 'default',
   stores: sqliteImportStores({}),
   machine: w.machine,
+  run: TEST_RUN,
 });
 
 function plainRow(root: string, content: string, origin: string): MemoryEntry {
@@ -253,7 +256,7 @@ describe('agent memory sync: routing and sharing', () => {
     await dormantRestore(ctxFor(w.global), goneId);
     plainRow(w.global, CONTROL, '');
 
-    expect(await syncGlobalToLocal(...sharingStores(w.local, w.global))).toBe(1);
+    expect(await syncGlobalToLocal(...sharingStores(w.local, w.global), { embed: TEST_RUN })).toBe(1);
     expect(agentRows(w.local)).toEqual([]);
     expect(loadAllEntries(w.local, 'default').map((e) => e.content)).toEqual([CONTROL]);
   });
@@ -271,7 +274,12 @@ describe('agent memory sync: routing and sharing', () => {
     plainRow(w.local, CONTROL, 'proj');
 
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
-    const shared = await autoShare(...sharingStores(w.local), { tenantId: ALL_TENANTS, minScore: 0, stats });
+    const shared = await autoShare(...sharingStores(w.local), {
+      embed: TEST_RUN,
+      tenantId: ALL_TENANTS,
+      minScore: 0,
+      stats,
+    });
     expect(shared.map((e) => e.content)).toEqual([CONTROL]);
     expect(stats.neverAutoShareSkipped).toBe(2);
   });

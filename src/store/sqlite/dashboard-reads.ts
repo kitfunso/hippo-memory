@@ -13,7 +13,9 @@ import { withReadSnapshot } from '../../db/busy.js';
 import { pragmaDataVersion } from '../../db/meta.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { tableExists } from '../../db/tables.js';
-import type { Layer, LossAversion } from '../../base/memory/memory.js';
+import type { Layer } from '../../base/memory/entry.js';
+import type { StoreRules } from '../../base/ports/infra.js';
+import type { StoreModel } from './open.js';
 import { layerIndex, LAYER_ORDER } from '../../base/memory/memory-facts.js';
 import {
   SCATTER_POINTS_MAX,
@@ -215,7 +217,7 @@ function hasVector(db: DatabaseSyncLike, id: string): boolean {
 }
 
 /** Opens the store writable with the dashboard's functions scored by `rules`. */
-function dashboardOpener(rules: LossAversion): (root: string) => DatabaseSyncLike {
+function dashboardOpener(rules: StoreModel): (root: string) => DatabaseSyncLike {
   return (root) => {
     const db = openStore(root);
     useDashboardFunctions(db, rules);
@@ -230,7 +232,7 @@ interface HeldReader {
 }
 
 /** One read-only connection, opened once hippo.db exists, and the sorted lists kept on it. */
-function heldReader(hippoRoot: string, rules: LossAversion, migrate: () => void): HeldReader {
+function heldReader(hippoRoot: string, rules: StoreModel, migrate: () => void): HeldReader {
   let held: DatabaseSyncLike | null = null;
   let lists: MemoryLists | null = null;
   return {
@@ -257,13 +259,13 @@ function heldReader(hippoRoot: string, rules: LossAversion, migrate: () => void)
 /** Reads run on a fresh writable open, which runs any pending migration and legacy import first and carries the
  * dashboard's functions scored by `rules`; memory pages run on the held reader, whose sorted lists outlive a read.
  * While no hippo.db exists they answer empty and create none. */
-export function sqliteDashboardReads(hippoRoot: string, rules: LossAversion = {}): DashboardReads {
-  const { on } = handlesOf(hippoRoot, rules);
-  const open = dashboardOpener(rules);
+export function sqliteDashboardReads(hippoRoot: string, rules: StoreRules = {}): DashboardReads {
+  const { on, files } = handlesOf(hippoRoot, rules);
+  const open = dashboardOpener(files);
   type Scans = Pick<DashboardReads, 'totals' | 'project' | 'search' | 'openConflictsOf'>;
   const scans = bound<Scans>(on, { totals, project, search, openConflictsOf: openConflictsNaming }, open);
   const stored = (): boolean => fs.existsSync(getHippoDbPath(hippoRoot));
-  const { reader, listsOn, close } = heldReader(hippoRoot, rules, () => on(() => undefined, open));
+  const { reader, listsOn, close } = heldReader(hippoRoot, files, () => on(() => undefined, open));
   return {
     commitCount: () =>
       answered(() => {

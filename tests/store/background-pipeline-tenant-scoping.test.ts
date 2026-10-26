@@ -7,7 +7,8 @@
  */
 import { describe, it, expect, expectTypeOf, beforeEach, vi, afterEach } from 'vitest';
 import { join } from 'node:path';
-import { createMemory, Layer } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { refineStore } from '../../src/surface/cli/refine-llm.js';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
@@ -25,6 +26,7 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -277,6 +279,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
 
     // dryRun returns the candidate list without writing
     const candidates = await autoShare(...sharingStores(hippoRoot), {
+      embed: TEST_RUN,
       tenantId: 'tenant-a',
       minScore: 0,
       dryRun: true,
@@ -422,12 +425,15 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     seedFor(globalRoot, 'tenant-a', 'global memory from tenant-a', {});
     seedFor(globalRoot, 'tenant-b', 'global memory from tenant-b', {});
 
-    expect(await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot))).toBe(0);
+    expect(await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { embed: TEST_RUN })).toBe(0);
 
     // Under v39 the seeded rows carry the seed store's own project origin, so the default sync gates them above; this case's
     // original guarantee - the global read is host-wide across TENANTS - still holds once the origin gate is explicitly
     // lifted: both tenants' rows copy.
-    const copied = await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { includeCrossProject: true });
+    const copied = await syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), {
+      embed: TEST_RUN,
+      includeCrossProject: true,
+    });
     expect(copied).toBe(2);
   });
 });

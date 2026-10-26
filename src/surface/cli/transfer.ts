@@ -188,7 +188,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
     extraTags,
     hippoRoot,
     tenantId,
-    target: { root: targetRoot, files: cliImportFiles(targetRoot), batch: cliBatch },
+    target: { root: targetRoot, files: cliImportFiles(targetRoot), batch: cliBatch, clock: cliInfra().clock },
   };
 
   // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through

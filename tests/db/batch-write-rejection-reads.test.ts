@@ -1,7 +1,7 @@
 // A sleep flush reads the live rows and tombstones of a window of writes at once, one tombstone read per tenant, so its
 // reads stay flat as a batch grows; it still refuses each write that would bring a rejected text back, and audits it.
 import { describe, expect, it } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { closeHippoDb, openHippoDb, SLEEP_DB_WAIT_MS } from '../../src/db/index.js';
 import type { FlushComponent } from '../../src/base/ports/store/consolidation.js';

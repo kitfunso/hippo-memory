@@ -9,10 +9,9 @@ import type { KeysetPosition } from '../../base/util/keyset.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { requireText } from './fields.js';
-import { listObjects, saveObject } from './lifecycle.js';
+import { listObjects } from './lifecycle.js';
 import type { Policy, PolicyStatus } from '../../base/records/object-types.js';
 import type { Objects, PoliciesInForceQuery } from '../../base/ports/store.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export type { Policy, PolicyStatus } from '../../base/records/object-types.js';
 
@@ -72,10 +71,10 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOptions> = {
   plural: 'policies',
   states: VALID_POLICY_STATES,
   closableFrom: ['active'],
-  draft(opts) {
+  draft(opts, now) {
     const policyName = requireText(opts.policyName, MAX_SHORT_FIELD_LEN, 'policyName');
     const policyText = requireText(opts.policyText, MAX_SHORT_FIELD_LEN, 'policyText');
-    const at = new Date().toISOString();
+    const at = now.toISOString();
     // valid_from defaults to the creation instant. A date-only as-of is widened to end-of-day on the read side, because
     // backdating valid_from to midnight would report the policy in force earlier that day.
     const { validFrom, validTo } = validatePolicyDates(opts.validFrom, opts.validTo, at);
@@ -89,18 +88,6 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOptions> = {
     };
   },
 };
-
-/** Create a policy, or a new version superseding an existing one, in the `objects` store group's one transaction.
- *  valid_from defaults to now; valid_to must be > valid_from (validatePolicyDates). */
-export function savePolicy(
-  objects: Objects,
-  baseHalfLifeDays: number,
-  tenantId: string,
-  opts: SavePolicyOptions,
-  actor: string = CLI_ACTOR,
-): Promise<Policy> {
-  return saveObject(objects, POLICY, { baseHalfLifeDays, tenantId, actor }, opts);
-}
 
 export function loadPolicies(objects: Objects, tenantId: string, opts: ListPoliciesOptions = {}): Promise<Policy[]> {
   return listObjects(objects, POLICY, tenantId, opts);

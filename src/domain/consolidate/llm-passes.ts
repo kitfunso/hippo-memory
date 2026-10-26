@@ -1,4 +1,4 @@
-import { DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { buildDag, buildEntityProfiles, rebuildDirtySummaries } from './dag.js';
@@ -105,6 +105,11 @@ async function pooled<T>(
   return results;
 }
 
+/** Stores one source's extracted facts as semantic memories stamped at the run's instant. */
+function keepFacts(run: SleepRun, source: MemoryEntry, facts: Extraction['facts']): Promise<MemoryEntry[]> {
+  return storeExtractedFacts(run.store, source, facts, run.config.defaultHalfLifeDays, run.now);
+}
+
 /**
  * Extracts facts from each candidate, up to four model calls at once; every write, count and report then runs in input
  * order. True when it stopped on a failure every later call would repeat (bad key, no credit, unknown model).
@@ -139,7 +144,7 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
     try {
       if (out.threw !== undefined) throw out.threw;
       if (out.facts.length > 0) {
-        const stored = await storeExtractedFacts(run.store, candidate, out.facts, run.config.defaultHalfLifeDays);
+        const stored = await keepFacts(run, candidate, out.facts);
         extractedCount += stored.length;
       }
     } catch (err) {
@@ -177,6 +182,7 @@ async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Pro
       ...llmOpts,
       onError: llmError('dag'),
       baseHalfLifeDays: run.config.defaultHalfLifeDays,
+      now: run.now,
     });
     run.result.dagCandidateClusters = dagResult.candidateClusters;
     run.result.dagSummariesCreated = dagResult.summariesCreated;
@@ -205,6 +211,7 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
       ...llmOpts,
       onError: llmError('dag rebuild'),
       cap,
+      now: run.now,
     });
     result.summariesRebuilt = rebuildResult.rebuilt;
     result.summariesRebuildFailed = rebuildResult.failed;
@@ -254,6 +261,7 @@ async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm)
         ...llmOpts,
         onError: llmError('dag profiles'),
         baseHalfLifeDays: run.config.defaultHalfLifeDays,
+        now: run.now,
       });
       run.result.entityProfilesCreated = profileResult.profilesCreated;
       if (profileResult.profilesCreated > 0) {

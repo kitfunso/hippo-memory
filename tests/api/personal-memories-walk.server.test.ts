@@ -12,7 +12,7 @@ import { handleRecall } from '../../src/surface/cli/recall.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { Layer, generateId, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, generateId, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { AuthResolver } from '../../src/surface/server/types.js';

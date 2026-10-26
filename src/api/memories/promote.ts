@@ -2,7 +2,7 @@
 
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import type { ConnectorEvent, StoreHome } from '../../base/ports/store.js';
-import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { createSuccessor, generateId, type Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';
 import { globalTargetOf } from '../infra.js';
@@ -33,24 +33,24 @@ export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Prom
 
   // The 'promote' row commits with the global copy, so no write follows the commit and a busy store fails the whole
   // promote.
-  const globalEntry = globalCopyOf(await ctx.store.folderFiles.home(), entry, sharedStoreOf(ctx));
+  const globalEntry = globalCopyOf(await ctx.store.folderFiles.home(), entry, sharedStoreOf(ctx), ctx.infra.clock());
   await target.store.promotion.writeCopy(globalEntry, {
     actor: ctx.actor.subject,
     sourceId: id,
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
   // A promote may create the global store, which only the write target names before it exists.
-  embedMemoryDetached(folderEmbedTarget(target, ctx.infra.evalSwitches), globalEntry);
+  embedMemoryDetached(folderEmbedTarget(target, ctx.infra), globalEntry);
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 
 /** The copy of a local memory, with a new `g_` id so it cannot collide. A project store's NULL row gets its folder
  * back; a shared store's folder is no caller's project, so NULL stays and the label names no path. */
-function globalCopyOf(local: StoreHome, entry: MemoryEntry, shared: boolean): MemoryEntry {
+function globalCopyOf(local: StoreHome, entry: MemoryEntry, shared: boolean, now: Date): MemoryEntry {
   return {
     ...entry,
     id: generateId('g'),
-    source: shared ? `shared::${new Date().toISOString()}` : `promoted:${local.folder}`,
+    source: shared ? `shared::${now.toISOString()}` : `promoted:${local.folder}`,
     originProject: entry.originProject ?? (shared ? null : local.project.name),
   };
 }
@@ -102,13 +102,18 @@ export async function supersede(
   const store = ctx.store;
   const entryWrites = store.entryWrites;
   const [old] = await store.entriesByIds([oldId], ctx.tenantId);
-  const successor = createSuccessor(assertSupersedable(ctx, oldId, old ?? null), newContent, {
-    tenantId: ctx.tenantId,
-    baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
-    layer: overrides.layer,
-    tags: overrides.tags,
-    pinned: overrides.pinned,
-  });
+  const successor = createSuccessor(
+    assertSupersedable(ctx, oldId, old ?? null),
+    newContent,
+    {
+      tenantId: ctx.tenantId,
+      baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
+      layer: overrides.layer,
+      tags: overrides.tags,
+      pinned: overrides.pinned,
+    },
+    ctx.infra.clock(),
+  );
   await entryWrites.supersede({
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,

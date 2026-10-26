@@ -29,7 +29,7 @@ import type { SharedRecallOptions } from '../../api/recall/request.js';
 import {
   formatContinuityBlock,
   formatMemories,
-  memoryCost,
+  memoryCostAt,
   memoriesReserve,
   planningSection,
   tailSection,
@@ -48,6 +48,8 @@ interface RecallPresenterOptions {
   readonly queryHash: number;
   readonly out: RenderSlot;
   readonly hintRows: (rendered: RenderedRecall) => AppendAuditOptions[];
+  /** The instant each confidence label prints at. */
+  readonly now: Date;
 }
 
 // Candidate pool the tool ranks before the token budget trims what is shown.
@@ -102,7 +104,7 @@ function unshownTail(list: SearchResult[], tailRows: RecallResultItem[]): Recall
 }
 
 function recallPresenter(budget: number, options: RecallPresenterOptions): ShowRanking {
-  const { config, includeContinuity, anchorRing, queryHash, out, hintRows } = options;
+  const { config, includeContinuity, anchorRing, queryHash, out, hintRows, now } = options;
   return ({ ranked, pool, droppedByScope }, apiResult) => {
     // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped
     // whole.
@@ -131,10 +133,10 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): ShowR
       if (showPlan) text += planPiece;
       text += cutoffSection(s, list.length);
       // The window band's fresh-tail and summary rows follow the ranked list, or the tool's fields go unanswered.
-      text += formatMemories(list) + tailSection(tail) + (showContinuity ? continuityPiece : '');
+      text += formatMemories(list, now) + tailSection(tail) + (showContinuity ? continuityPiece : '');
       return { anchoring, availability, text, list };
     };
-    const fit = { room: Math.max(0, purse.left()), budget, floor: 1, cost: memoryCost };
+    const fit = { room: Math.max(0, purse.left()), budget, floor: 1, cost: memoryCostAt(now) };
     const rendered = fitRecall(ranked, { ...fit, render, textOf: (r) => r.text });
     out.rendered = rendered;
     return {
@@ -185,6 +187,7 @@ export async function toolRecallText(ctx: Context, req: ToolRecallRequest): Prom
       anchorRing,
       queryHash,
       out,
+      now: ctx.infra.clock(),
       hintRows: ({ list, anchoring, availability }) =>
         shownRecallRows(ctx.config, who, {
           query,

@@ -28,6 +28,7 @@ import type {
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
+import { handleStamp } from './handle-clock.js';
 
 // The JOIN with both members' memories rows needs each conflict column qualified, or `id` would be ambiguous.
 const CONFLICT_COLS_MC = MEMORY_CONFLICT_COLUMNS.split(', ')
@@ -151,7 +152,7 @@ export function replaceDetectedConflicts(
   db: DatabaseSyncLike,
   files: StoreFiles,
   detected: Array<DetectedConflict>,
-  detectedAt: string = new Date().toISOString(),
+  detectedAt: string = handleStamp(db),
 ): void {
   const changedIds = writeConflictRefresh(db, readConflictRefresh(db, detected), detected, detectedAt);
   const changed = [...readEntriesByIds(db, changedIds, ALL_TENANTS).values()];
@@ -573,7 +574,7 @@ function purgeRemovedLoserMirrors(
     const mirrorOk = purgeMirrorBestEffort(hippoRoot, removedId, isRaw, 'resolveConflict');
     if (mirrorOk && isRaw) {
       cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
-        new Date().toISOString(),
+        handleStamp(db),
         removedId,
       );
     }

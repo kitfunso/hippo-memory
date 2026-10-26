@@ -1,12 +1,13 @@
 // The dashboard drawer's detail of one memory, read fresh through the api and stamped with the id the client holds.
-import { calculateStrength, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
+import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { memoryFacts } from '../../base/memory/memory-facts.js';
 import { round1 } from '../../base/util/format.js';
 import type { HippoStore } from '../../base/ports/store.js';
 import type { MemoryConflict } from '../../base/ports/store/conflicts.js';
 import type { DashboardReads } from '../../base/ports/store/dashboard-reads.js';
 import { memoryGet } from '../memories/memories.js';
-import type { Context } from '../types.js';
+import { strengthOf, type Context } from '../types.js';
 import { BANDS, isLiveMemory, LAYERS, projectIdentity, round3 } from './live.js';
 import type { SnapshotClock } from './snapshot-clock.js';
 import type { MemoryConflictDetail, MemoryDetail } from './types.js';
@@ -19,7 +20,7 @@ async function openConflictsOf(
   reads: DetailReads,
   tenantId: string,
   entry: MemoryEntry,
-  at: { readonly nowMs: number; readonly lossAversion: LossAversion },
+  at: { readonly nowMs: number; readonly strength: StrengthModel },
 ): Promise<MemoryConflictDetail[]> {
   const conflicts = (await reads.openConflictsOf(tenantId, entry.id)).map((row) => row.conflict);
   const otherId = (c: MemoryConflict): string => (c.memoryAId === entry.id ? c.memoryBId : c.memoryAId);
@@ -31,7 +32,7 @@ async function openConflictsOf(
   for (const c of conflicts) {
     const other = others.get(otherId(c));
     if (!other || !isLiveMemory(other)) continue;
-    const strength = round3(calculateStrength(other, new Date(at.nowMs), at.lossAversion));
+    const strength = round3(calculateStrength(other, new Date(at.nowMs), at.strength));
     out.push({
       id: c.id,
       reason: c.reason,
@@ -45,7 +46,7 @@ async function openConflictsOf(
 interface MemoryDetailOptions {
   readonly snapshotId: number;
   readonly nowMs: number;
-  readonly lossAversion: LossAversion;
+  readonly strength: StrengthModel;
 }
 
 /** Full detail read fresh from the store, so the drawer is current inside the coalescing window. */
@@ -56,8 +57,8 @@ async function buildMemoryDetail(
   entry: MemoryEntry,
   options: MemoryDetailOptions,
 ): Promise<MemoryDetail> {
-  const { snapshotId, nowMs, lossAversion } = options;
-  const f = memoryFacts(entry, nowMs, lossAversion);
+  const { snapshotId, nowMs, strength } = options;
+  const f = memoryFacts(entry, nowMs, strength);
   const project = projectIdentity(entry.originProject);
   return {
     snapshotId,
@@ -86,11 +87,9 @@ async function buildMemoryDetail(
     tenant: entry.tenantId,
     kind: entry.kind,
     embedded: await reads.hasVector(entry.id),
-    conflicts: await openConflictsOf(store, reads, tenantId, entry, { nowMs, lossAversion }),
+    conflicts: await openConflictsOf(store, reads, tenantId, entry, { nowMs, strength }),
   };
 }
-
-const lossAversionOf = (ctx: Context): LossAversion => ({ lossAversionRatio: ctx.config.runtime?.lossAversionRatio });
 
 /** The detail of a live memory of the Context's tenant, or null when the tenant holds no live row with that id. */
 export async function dashboardMemoryDetail(
@@ -102,7 +101,7 @@ export async function dashboardMemoryDetail(
   const entry = await memoryGet(ctx, id);
   if (entry === null || !isLiveMemory(entry)) return null;
   const { id: snapshotId } = await view.clock.at(ctx.tenantId, at.fresh);
-  const options = { snapshotId, nowMs: at.nowMs, lossAversion: lossAversionOf(ctx) };
+  const options = { snapshotId, nowMs: at.nowMs, strength: strengthOf(ctx) };
   return buildMemoryDetail(ctx.store, view.reads, ctx.tenantId, entry, options);
 }
 
@@ -122,6 +121,6 @@ export async function dashboardDetailAfterWrite(
 ): Promise<MemoryDetail | null> {
   if (write.changed) view.clock.invalidate();
   if (write.entry === undefined) return null;
-  const options = { snapshotId: view.clock.currentId(), nowMs, lossAversion: lossAversionOf(ctx) };
+  const options = { snapshotId: view.clock.currentId(), nowMs, strength: strengthOf(ctx) };
   return buildMemoryDetail(ctx.store, view.reads, ctx.tenantId, write.entry, options);
 }

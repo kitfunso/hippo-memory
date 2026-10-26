@@ -30,7 +30,7 @@ function writeCallerItems(
     recordSummary(db, files, tenantId, {
       meta,
       text,
-      at: new Date(),
+      at: files.clock(),
       caller: { originProject: req.project, requestId: req.requestId },
     });
   return saveItems(

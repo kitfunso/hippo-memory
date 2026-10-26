@@ -11,10 +11,11 @@ import { importMarkdownInto } from '../surface/importers/markdown.js';
 import { importVaultInto } from '../surface/importers/vault.js';
 import { defaultImportFiles, defaultStore, runStoreBatch, runStoreRequest } from '../surface/open-store.js';
 import { entryInfra } from '../surface/entry-infra.js';
+import { evalClock } from '../infra/eval-switches.js';
 
 function targeted(options: ImportOptions): TargetedImport {
   const root = importRoot(options);
-  return { ...options, target: { root, files: defaultImportFiles(root), batch: runStoreBatch } };
+  return { ...options, target: { root, files: defaultImportFiles(root), batch: runStoreBatch, clock: evalClock() } };
 }
 
 /** Given an array of raw text chunks, deduplicate against existing memories, create MemoryEntry objects, write them

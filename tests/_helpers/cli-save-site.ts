@@ -4,10 +4,11 @@ import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import type { SavableDescriptor } from '../../src/domain/objects/descriptor.js';
 import { saveObject, type ObjectSaveSite } from '../../src/domain/objects/lifecycle.js';
 import { objectsAt } from './objects-at.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 /** Where a CLI save on `root` records an object: that root's half-life, under the CLI actor. */
 function cliSaveSite(root: string, tenantId: string): ObjectSaveSite {
-  return { baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, tenantId, actor: CLI_ACTOR };
+  return { now: evalNow(), baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, tenantId, actor: CLI_ACTOR };
 }
 
 /** Saves one object of kind `d` on the hippo.db under `root` as the CLI would. */

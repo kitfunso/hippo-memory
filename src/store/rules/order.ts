@@ -1,7 +1,7 @@
 // The row orders the adapter keeps, each written once: hippo.db sorts by its ORDER BY text, JS callers with the
 // comparator built from the same keys.
 import type { KeysetPosition } from '../../base/util/keyset.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 
 /** Byte order, as hippo.db compares text; JavaScript's own string order differs above the basic plane. */
 export const byBytes = (a: string, b: string): number => Buffer.compare(Buffer.from(a), Buffer.from(b));

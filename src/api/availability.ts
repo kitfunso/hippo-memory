@@ -6,7 +6,7 @@ import { median } from '../base/util/stats.js';
 // callers.
 
 /** A minimal age reference: a memory id plus its ISO-8601 creation timestamp (MemoryEntry.created, canonical ISO per
- *  the src/base/memory/memory.ts invariant). */
+ *  the src/base/memory/entry.ts invariant). */
 export interface AgeRef {
   id: string;
   created: string;

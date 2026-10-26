@@ -55,7 +55,7 @@ export const SKILL: SavableDescriptor<'skill', SaveSkillOptions> = {
   plural: 'skills',
   states: VALID_SKILL_STATES,
   closableFrom: ['active'],
-  draft(opts) {
+  draft(opts, now) {
     // The name becomes an H2 header in the export, so it must be one line.
     const name = requireLine(opts.skillName, MAX_SKILL_NAME_LEN, 'skillName');
     const instructions = requireText(opts.instructions, MAX_SKILL_INSTRUCTIONS_LEN, 'instructions');
@@ -66,7 +66,7 @@ export const SKILL: SavableDescriptor<'skill', SaveSkillOptions> = {
       tags: opts.extraTags ?? [],
       supersedesId: opts.supersedesSkillId,
       changeSummary: opts.changeSummary,
-      at: new Date().toISOString(),
+      at: now.toISOString(),
     };
   },
 };

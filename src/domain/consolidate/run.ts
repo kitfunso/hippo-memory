@@ -1,4 +1,5 @@
-import { MemoryEntry, type DecayOptions } from '../../base/memory/memory.js';
+import { MemoryEntry } from '../../base/memory/entry.js';
+import type { DecayBasis, StrengthModel } from '../../base/memory/strength.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { errorFields, errorMessage, log, type LogFields } from '../../base/util/log.js';
 import { NO_MERGE_TAGS } from '../sharing/share.js';
@@ -73,7 +74,9 @@ export interface SleepRun {
   now: Date;
   dryRun: boolean;
   config: HippoConfig;
-  decayOpts: DecayOptions;
+  decayOpts: DecayBasis;
+  /** The model every strength this run reads is scored by. */
+  strength: StrengthModel;
   result: ConsolidationResult;
   rows: SleepRows;
   retirable: (entry: MemoryEntry) => boolean;

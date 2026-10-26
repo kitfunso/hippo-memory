@@ -9,6 +9,7 @@ import { countMatching, recordStatementsAsync } from '../_helpers/count-statemen
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { log } from '../../src/base/util/log.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 const HASH = 'aaaaaaaaaaaaaaaa';
 // Run once per connection open; the delivery writer resets busy_timeout, so that pragma would overcount.
@@ -58,6 +59,7 @@ function deliveryCount(): number {
 
 function recorder(): DeliveryRecorder {
   return createDeliveryRecorder({
+    now: evalNow(),
     ledger: sqliteStore(root).ledger,
     storeHash: HASH,
     writeStore: 'local',

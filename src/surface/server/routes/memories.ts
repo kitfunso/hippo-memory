@@ -1,7 +1,7 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
 import { graphEntityOf, graphView } from '../../../api/objects/graph.js';
 import { rawArchive, forget, outcome, promote, remember, supersede } from '../../../api/index.js';
-import { MEMORY_KINDS, type MemoryKind } from '../../../base/memory/memory.js';
+import { MEMORY_KINDS, type MemoryKind } from '../../../base/memory/entry.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import { sendJson } from '../../http/http-util.js';
 import { keptShownIds } from '../../../api/recall/last-recalled.js';

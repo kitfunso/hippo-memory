@@ -14,7 +14,7 @@ export async function predictionSave(ctx: Context, input: Omit<PredictionSave, '
 export async function predictionRecord(ctx: Context, claim: SavePredictionOptions): Promise<Prediction> {
   return predictionSave(ctx, {
     ...claim,
-    mirror: predictionMirror(ctx.tenantId, claim, ctx.config.defaultHalfLifeDays),
+    mirror: predictionMirror(ctx.tenantId, claim, ctx.config.defaultHalfLifeDays, ctx.infra.clock()),
   });
 }
 

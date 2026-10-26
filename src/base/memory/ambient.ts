@@ -3,10 +3,10 @@
  * retrieving specific memories.
  */
 
-import { evalNow } from './ablation.js';
-import type { MemoryEntry } from './memory.js';
-import { Layer } from './memory.js';
-import { calculateStrength, ERROR_TAG, HIGH_SCHEMA_FIT, strengthOptionsOf, type StrengthOptions } from './memory.js';
+import type { MemoryEntry } from './entry.js';
+import { Layer } from './entry.js';
+import { calculateStrength, type StrengthModel } from './strength.js';
+import { ERROR_TAG, HIGH_SCHEMA_FIT } from './entry.js';
 import { DAY_MS } from '../util/time.js';
 
 const STATE_DECIMALS = 3;
@@ -91,7 +91,7 @@ export function isErrorTagged(tags: readonly string[]): boolean {
 }
 
 /** Tallies over loaded entries; superseded rows count toward the total only, as they always have here. */
-export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
+export function tallyAmbientEntries(entries: readonly MemoryEntry[], now: Date, model: StrengthModel): AmbientTallies {
   const t: AmbientTallies = {
     total: 0,
     strengthSum: 0,
@@ -106,7 +106,7 @@ export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date)
     maxDagLevel: 0,
     tagCounts: new Map(),
   };
-  foldAmbientRows(t, entries, now ?? evalNow()); // honors HIPPO_FAKE_NOW (eval-only)
+  foldAmbientRows(t, entries, now, model);
   return t;
 }
 
@@ -115,14 +115,14 @@ export function foldAmbientRows(
   t: AmbientTallies,
   entries: readonly MemoryEntry[],
   currentTime: Date,
-  rules: StrengthOptions = strengthOptionsOf(undefined),
+  model: StrengthModel,
 ): void {
   const freshAfter = currentTime.getTime() - AMBIENT_FRESH_WINDOW_MS;
   t.total += entries.length;
   for (const entry of entries) {
     if (entry.supersededBy) continue;
     for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
-    t.strengthSum += calculateStrength(entry, currentTime, rules);
+    t.strengthSum += calculateStrength(entry, currentTime, model);
     if (new Date(entry.created).getTime() > freshAfter) t.fresh++;
     if (entry.emotionalValence === 'negative' || entry.emotionalValence === 'critical') t.negative++;
     if (isErrorTagged(entry.tags)) t.errors++;
@@ -135,8 +135,8 @@ export function foldAmbientRows(
   }
 }
 
-export function computeAmbientState(entries: MemoryEntry[], now?: Date): AmbientState {
-  return ambientStateFromTallies(tallyAmbientEntries(entries, now));
+export function computeAmbientState(entries: MemoryEntry[], now: Date, model: StrengthModel): AmbientState {
+  return ambientStateFromTallies(tallyAmbientEntries(entries, now, model));
 }
 
 /** The ambient state of a row set from its tallies, however they were counted. */

@@ -10,6 +10,11 @@ import {
   updateStats,
   saveActiveTaskSnapshot,
   appendSessionEvent,
+  deleteEntry,
+  loadLastRecall,
+  loadActiveTaskSnapshot,
+  clearActiveTaskSnapshot,
+  listSessionEvents,
 } from '../_helpers/root-forms.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -20,17 +25,10 @@ import {
   getSchemaVersion,
   getCurrentSchemaVersion,
 } from '../../src/db/index.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { consolidate } from '../../src/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import {
-  deleteEntry,
-  loadLastRecall,
-  loadActiveTaskSnapshot,
-  clearActiveTaskSnapshot,
-  listSessionEvents,
-} from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 

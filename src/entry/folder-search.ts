@@ -2,7 +2,7 @@
 // defaults, then calls the domain ranker of that name. The eval kit's embedMemory and loadRecallSearchEntries take a
 // folder the same way.
 
-import type { MemoryEntry } from '../base/memory/memory.js';
+import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
 import type { OriginFilter } from '../base/ports/store/types.js';
 import { defaultStore } from '../surface/open-store.js';
@@ -14,12 +14,14 @@ import { loadConfig } from '../host/config-file.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { rankPhysics, type PhysicsSearchOptions } from '../domain/search/physics-search.js';
 import type { VectorSource } from '../domain/search/vector.js';
-import { evalSwitches } from '../base/memory/ablation.js';
+import { evalNow, evalRun, evalSwitches } from '../infra/eval-switches.js';
 import type { EvalSwitches } from '../base/memory/eval-switches.js';
 
-/** A published ranker's options under the eval switches the environment holds, unless the caller names its own. */
-export function withEvalSwitches<O extends { readonly switches?: EvalSwitches }>(options: O): O {
-  return { ...options, switches: options.switches ?? evalSwitches() };
+/** A published ranker's options under the environment's eval switches and clock, unless the caller names its own. */
+export function withEvalSwitches<O extends { readonly switches?: EvalSwitches; readonly now?: Date }>(
+  options: O,
+): O & { now: Date } {
+  return { ...options, switches: options.switches ?? evalSwitches(), now: options.now ?? evalNow() };
 }
 
 /** hippo.db under `hippoRoot` when the caller passed no store. */
@@ -75,7 +77,7 @@ export async function embedMemory(hippoRoot: string, entry: MemoryEntry): Promis
   const store = defaultStore(hippoRoot);
   try {
     const config = loadConfig(hippoRoot);
-    const target = folderEmbedTarget({ store, config, embedderFor: resolveEmbeddingProvider }, evalSwitches());
+    const target = folderEmbedTarget({ store, config, embedderFor: resolveEmbeddingProvider }, evalRun());
     return await embedMemoryInto(target, entry);
   } finally {
     await store.close();

@@ -16,12 +16,14 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
-import { markRetrieved } from '../../src/base/memory/memory.js';
+import { markRetrieved } from '../../src/entry/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 // ---------------------------------------------------------------------------
 // Trap categories — each has a lesson and 2-3 task instances
@@ -240,7 +242,7 @@ function simulateIn(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult
 
     // Search memory for relevant guidance
     const entries = loadAllEntries(tmpDir, 'default');
-    const searchResults = rankBm25(task.recallQuery, entries, { budget: 4000 });
+    const searchResults = rankBm25(task.recallQuery, entries, { now: evalNow(), budget: 4000 });
     const topIds = searchResults.slice(0, 5);
 
     // Check if any top result is relevant to this trap category

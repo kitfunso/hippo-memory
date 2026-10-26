@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { ServerResponse } from 'node:http';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   authRevoke,
@@ -736,7 +736,7 @@ describe('package surface', () => {
     (name) => {
       // The built d.ts text is what a consumer's compiler reads, so text is the contract here.
       const dts = readFileSync(join(root, 'dist', 'server.d.ts'), 'utf-8');
-      expect(dts).toMatch(new RegExp(`^export \\{[^}]*\\b${name}\\b`, 'm'));
+      expect(dts).toMatch(new RegExp(`^export (?:\\{[^}]*\\b|declare function )${name}\\b`, 'm'));
     },
   );
 });

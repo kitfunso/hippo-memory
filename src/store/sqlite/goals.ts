@@ -12,7 +12,8 @@ import type { CompleteGoalOptions, PushGoalOptions, Goals } from '../../base/por
 import type { OnHandle } from './open.js';
 import { bound, type Bodies } from './bound.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import { generateId } from '../../base/memory/memory.js';
+import { generateId } from '../../base/memory/entry.js';
+import { handleStamp } from './handle-clock.js';
 
 // The goal stack's rules: its ids, its depth cap, the parent check, a new goal and policy, and
 // the strength a completed goal passes to the memories recalled under it.
@@ -155,7 +156,7 @@ function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, session
 function pushGoal(db: DatabaseSyncLike, tenantId: string, goal: Omit<PushGoalOptions, 'tenantId'>): Goal {
   const opts: PushGoalOptions = { ...goal, tenantId };
   const id = newGoalId();
-  const createdAt = new Date().toISOString();
+  const createdAt = handleStamp(db);
   const policy = opts.policy ? retrievalPolicyOf(id, opts.policy) : undefined;
 
   withWriteScope(db, 'push_goal', () => {
@@ -311,7 +312,7 @@ export function writeGoalRecallLog(db: DatabaseSyncLike, rows: readonly GoalReca
 }
 
 function completeGoal(db: DatabaseSyncLike, tenantId: string, goalId: string, opts: CompleteGoalOptions): void {
-  const completedAt = new Date().toISOString();
+  const completedAt = handleStamp(db);
   const score = opts.outcomeScore ?? null;
 
   withWriteScope(db, 'complete_goal', () => {

@@ -1,6 +1,6 @@
 /** Hand-written memories and builders for the synthetic feature corpus in eval-suite.ts. */
 
-import { createMemory, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { createMemory, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { DAY_MS } from '../../base/util/time.js';
 
 const BASE_DATE = new Date('2026-01-15T10:00:00Z');
@@ -11,6 +11,7 @@ export function dateOffset(days: number): string {
 }
 
 export function mem(
+  now: Date,
   id: string,
   content: string,
   opts: {
@@ -22,22 +23,27 @@ export function mem(
     dagParentId?: string;
   } = {},
 ): MemoryEntry {
-  const entry = createMemory(content, {
-    layer: opts.layer ?? Layer.Episodic,
-    tags: opts.tags ?? [],
-    baseHalfLifeDays: 30,
-    extractedFrom: opts.extractedFrom,
-    dagLevel: opts.dagLevel,
-    dagParentId: opts.dagParentId,
-  });
+  const entry = createMemory(
+    content,
+    {
+      layer: opts.layer ?? Layer.Episodic,
+      tags: opts.tags ?? [],
+      baseHalfLifeDays: 30,
+      extractedFrom: opts.extractedFrom,
+      dagLevel: opts.dagLevel,
+      dagParentId: opts.dagParentId,
+    },
+    now,
+  );
   entry.id = id;
   if (opts.created) entry.created = opts.created;
   return entry;
 }
 
-export function infrastructureMeetingEntries(): MemoryEntry[] {
+export function infrastructureMeetingEntries(now: Date): MemoryEntry[] {
   return [
     mem(
+      now,
       'ep-src-1',
       'speaker:Alice: So we had this big meeting yesterday about the deployment pipeline and Bob mentioned that the ' +
         'staging environment is using Kubernetes 1.28 and we should upgrade to 1.30 before the end of Q2 because of ' +
@@ -48,6 +54,7 @@ export function infrastructureMeetingEntries(): MemoryEntry[] {
       },
     ),
     mem(
+      now,
       'ep-ext-1',
       'The staging environment runs Kubernetes 1.28 and needs to be upgraded to 1.30 before end of Q2 for security ' +
         'patches',
@@ -61,9 +68,10 @@ export function infrastructureMeetingEntries(): MemoryEntry[] {
   ];
 }
 
-export function monitoringMeetingEntries(): MemoryEntry[] {
+export function monitoringMeetingEntries(now: Date): MemoryEntry[] {
   return [
     mem(
+      now,
       'ep-src-2',
       'speaker:Bob: Yeah and the thing about the monitoring is that we switched from Datadog to Grafana last month ' +
         'and the alerting rules still need to be migrated, Carol was supposed to handle that but she has been busy ' +
@@ -74,6 +82,7 @@ export function monitoringMeetingEntries(): MemoryEntry[] {
       },
     ),
     mem(
+      now,
       'ep-ext-2',
       'The team switched from Datadog to Grafana last month but alerting rules have not been migrated yet. Carol is ' +
         'responsible but blocked by the frontend rewrite.',
@@ -87,9 +96,10 @@ export function monitoringMeetingEntries(): MemoryEntry[] {
   ];
 }
 
-export function authMeetingEntries(): MemoryEntry[] {
+export function authMeetingEntries(now: Date): MemoryEntry[] {
   return [
     mem(
+      now,
       'ep-src-3',
       'speaker:Carol: The login page redesign is almost done, I just need to wire up the OAuth2 PKCE flow with the ' +
         'new identity provider and write the integration tests',
@@ -99,6 +109,7 @@ export function authMeetingEntries(): MemoryEntry[] {
       },
     ),
     mem(
+      now,
       'ep-ext-3',
       'Carol is nearly done with the login page redesign. Remaining work: wire up OAuth2 PKCE flow with the new ' +
         'identity provider and write integration tests.',
@@ -113,9 +124,10 @@ export function authMeetingEntries(): MemoryEntry[] {
 }
 
 /** Multi-hop: entity chaining across sessions. */
-export function multiHopEntries(): MemoryEntry[] {
+export function multiHopEntries(now: Date): MemoryEntry[] {
   return [
     mem(
+      now,
       'mh-1',
       'speaker:Alice works on the payment gateway integration with Stripe. She found a webhook signature validation ' +
         'bug.',
@@ -125,6 +137,7 @@ export function multiHopEntries(): MemoryEntry[] {
       },
     ),
     mem(
+      now,
       'mh-2',
       'speaker:Bob reviewed the Stripe webhook code and confirmed the signature validation uses the wrong secret key ' +
         'from the test environment.',
@@ -134,6 +147,7 @@ export function multiHopEntries(): MemoryEntry[] {
       },
     ),
     mem(
+      now,
       'mh-3',
       'speaker:Alice fixed the Stripe webhook by switching to the production secret key. Payment confirmations now ' +
         'arrive within 2 seconds.',
@@ -143,6 +157,7 @@ export function multiHopEntries(): MemoryEntry[] {
       },
     ),
     mem(
+      now,
       'mh-4',
       'speaker:Carol reported that the billing dashboard shows incorrect revenue numbers because it reads from the ' +
         'payments_raw table instead of payments_reconciled.',
@@ -154,9 +169,10 @@ export function multiHopEntries(): MemoryEntry[] {
   ];
 }
 
-function directRecallLateEntries(): MemoryEntry[] {
+function directRecallLateEntries(now: Date): MemoryEntry[] {
   return [
     mem(
+      now,
       'dr-5',
       'The JWT token expiration was set to 24 hours but should be reduced to 1 hour for security compliance',
       {
@@ -164,15 +180,25 @@ function directRecallLateEntries(): MemoryEntry[] {
         tags: ['topic:security'],
       },
     ),
-    mem('dr-6', 'Webpack bundle size grew to 2.3MB because lodash was imported as a whole instead of cherry-picking', {
-      created: dateOffset(6),
-      tags: ['topic:frontend'],
-    }),
-    mem('dr-7', 'The Redis cache TTL for user sessions should match the JWT expiration to prevent stale sessions', {
-      created: dateOffset(7),
-      tags: ['topic:caching'],
-    }),
-    mem('dr-8', 'GraphQL resolver for nested comments has N+1 query problem solved by DataLoader batching', {
+    mem(
+      now,
+      'dr-6',
+      'Webpack bundle size grew to 2.3MB because lodash was imported as a whole instead of cherry-picking',
+      {
+        created: dateOffset(6),
+        tags: ['topic:frontend'],
+      },
+    ),
+    mem(
+      now,
+      'dr-7',
+      'The Redis cache TTL for user sessions should match the JWT expiration to prevent stale sessions',
+      {
+        created: dateOffset(7),
+        tags: ['topic:caching'],
+      },
+    ),
+    mem(now, 'dr-8', 'GraphQL resolver for nested comments has N+1 query problem solved by DataLoader batching', {
       created: dateOffset(8),
       tags: ['topic:api'],
     }),
@@ -180,9 +206,10 @@ function directRecallLateEntries(): MemoryEntry[] {
 }
 
 /** Direct recall: basic keyword matching. */
-export function directRecallEntries(): MemoryEntry[] {
+export function directRecallEntries(now: Date): MemoryEntry[] {
   return [
     mem(
+      now,
       'dr-1',
       'The PostgreSQL database migration failed because the users table had a NOT NULL constraint on the email column',
       {
@@ -191,6 +218,7 @@ export function directRecallEntries(): MemoryEntry[] {
       },
     ),
     mem(
+      now,
       'dr-2',
       'React component rendering performance improved by 40% after memoizing the expensive computation in useMemo',
       {
@@ -199,6 +227,7 @@ export function directRecallEntries(): MemoryEntry[] {
       },
     ),
     mem(
+      now,
       'dr-3',
       'The API rate limiter should use a sliding window algorithm instead of fixed window to prevent burst traffic',
       {
@@ -206,10 +235,15 @@ export function directRecallEntries(): MemoryEntry[] {
         tags: ['topic:api'],
       },
     ),
-    mem('dr-4', 'Docker container memory limits need to be set to 512MB for the worker service to prevent OOM kills', {
-      created: dateOffset(4),
-      tags: ['topic:devops'],
-    }),
-    ...directRecallLateEntries(),
+    mem(
+      now,
+      'dr-4',
+      'Docker container memory limits need to be set to 512MB for the worker service to prevent OOM kills',
+      {
+        created: dateOffset(4),
+        tags: ['topic:devops'],
+      },
+    ),
+    ...directRecallLateEntries(now),
   ];
 }

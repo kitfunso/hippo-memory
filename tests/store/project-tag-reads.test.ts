@@ -1,7 +1,7 @@
 // `hippo projects` list, merge and repair plan on a store of several projects, imports, sleep-merged rows and dormant
 // snapshots: the answers the whole-tenant read gave, from reads that skip the rows each one does not touch.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';

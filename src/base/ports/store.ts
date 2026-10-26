@@ -2,7 +2,7 @@
 // serve it from any thread, and hippo.db is one adapter. Type-only apart from the group probes and the store errors.
 import { StoreNotPortedError } from '../util/store-blocked.js';
 import type { SessionAndAdminGroups } from './store-groups.js';
-import type { MemoryEntry } from '../memory/memory.js';
+import type { MemoryEntry } from '../memory/entry.js';
 import type { TenantId } from '../util/tenant.js';
 import type { TokenUse, Ledger } from './store/ledger.js';
 import type { SessionEvent, TaskSnapshot } from './store/sessions.js';

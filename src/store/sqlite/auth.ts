@@ -18,6 +18,7 @@ import { EXPIRING_KEYS_MIN_BINARY } from '../../base/util/version.js';
 import type { ApiKeyRecord } from '../../base/ports/store/types.js';
 import type { ApiKeyListRow, ListApiKeysOptions, NewApiKey } from '../../base/ports/store/keys.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { handleNow, handleStamp } from './handle-clock.js';
 
 function verifyKey(plaintext: string, stored: string): boolean {
   const parsed = storedScrypt(stored);
@@ -60,9 +61,9 @@ export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOptions): C
     tenantId: opts.tenantId,
     label: opts.label ?? null,
     role: opts.role ?? 'member',
-    createdAt: new Date().toISOString(),
+    createdAt: handleStamp(db),
     ownerSubject: opts.ownerSubject ?? null,
-    expiresAt: opts.expiresAt ?? new Date(Date.now() + DEFAULT_KEY_TTL_DAYS * DAY_MS).toISOString(),
+    expiresAt: opts.expiresAt ?? new Date(handleNow(db).getTime() + DEFAULT_KEY_TTL_DAYS * DAY_MS).toISOString(),
   });
   return { keyId, plaintext };
 }
@@ -113,11 +114,11 @@ function verifyApiKey(db: DatabaseSyncLike, plaintext: string, now: number): Ver
 }
 
 export function validateApiKey(db: DatabaseSyncLike, plaintext: string): ValidateResult {
-  const found = verifyApiKey(db, plaintext, Date.now());
+  const found = verifyApiKey(db, plaintext, handleNow(db).getTime());
   return found ? { valid: true, ...found } : { valid: false };
 }
 
-export function revokeApiKey(db: DatabaseSyncLike, keyId: string, at: string = new Date().toISOString()): void {
+export function revokeApiKey(db: DatabaseSyncLike, keyId: string, at: string = handleStamp(db)): void {
   cachedStatement(db, `UPDATE api_keys SET revoked_at = ? WHERE key_id = ? AND revoked_at IS NULL`).run(at, keyId);
 }
 
@@ -127,7 +128,7 @@ export function grantScope(db: DatabaseSyncLike, keyId: string, scope: string): 
     db,
     `INSERT INTO api_key_scope_grants (key_id, scope, granted_at) VALUES (?, ?, ?)
      ON CONFLICT(key_id, scope) DO NOTHING`,
-  ).run(keyId, scope, new Date().toISOString());
+  ).run(keyId, scope, handleStamp(db));
 }
 
 /** Revoke `keyId`'s grant on `scope`. Not an error when no such grant exists. */
@@ -148,13 +149,13 @@ interface ApiKeyFilter {
   params: Array<string | number>;
 }
 
-function apiKeyFilter(opts: ListApiKeysOptions): ApiKeyFilter {
+function apiKeyFilter(opts: ListApiKeysOptions, now: string): ApiKeyFilter {
   const where: string[] = ['1 = 1'];
   const params: Array<string | number> = [];
   if (opts.active) {
     // In SQL so a page holds `limit` usable keys; toISOString stamps compare correctly as strings.
     where.push('revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)');
-    params.push(new Date().toISOString());
+    params.push(now);
   }
   if (opts.tenantId !== ALL_TENANTS) {
     where.push('tenant_id = ?');
@@ -173,7 +174,7 @@ function apiKeyFilter(opts: ListApiKeysOptions): ApiKeyFilter {
 
 /** Keys newest first, with their row ids, filtered and limited in SQL. */
 export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOptions): ApiKeyListRow[] {
-  const { where, params } = apiKeyFilter(opts);
+  const { where, params } = apiKeyFilter(opts, handleStamp(db));
   const after = keysetAfter('id', 'id', opts.after);
   params.push(...after.params);
   const limitSql = opts.limit === undefined ? '' : ' LIMIT ?';

@@ -1,6 +1,7 @@
-import { calculateStrength, type MemoryEntry, type StrengthOptions } from '../../base/memory/memory.js';
+import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { estimateTokens } from '../../base/util/token-text.js';
-import { switchedNow, type EvalSwitches } from '../../base/memory/eval-switches.js';
+import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { indexedModel, indexNeedsRebuild } from '../../base/embeddings/index-identity.js';
 import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../../base/rank/physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../../base/rank/physics-config.js';
@@ -23,6 +24,8 @@ import {
 } from './vector.js';
 import {
   DEFAULT_RECALL_BUDGET,
+  rankNow,
+  type RankTime,
   type ResultCost,
   type ScoreBreakdown,
   type SearchResult,
@@ -54,7 +57,7 @@ export interface PhysicsSearchOptions {
   store?: HippoStore;
   /** The root's environment settings, as hybridSearch takes them. */
   runtime?: RuntimeSettings;
-  /** The eval switches and fake clock the caller runs under; absent, none of them, on the real clock. */
+  /** The strength model and rank switches the caller runs under; absent, production ranking. */
   switches?: EvalSwitches;
   /** The folder whose path segments boost a memory, as hybridSearch takes it. */
   cwd?: string;
@@ -85,9 +88,9 @@ interface PhysicsScoring {
 export async function rankPhysics(
   query: string,
   entries: MemoryEntry[],
-  options: PhysicsRankOptions = {},
+  options: PhysicsRankOptions & RankTime,
 ): Promise<SearchResult[]> {
-  const now = switchedNow(options.now, options.switches);
+  const now = rankNow(options);
   const explain = options.explain ?? false;
   const scoring: PhysicsScoring = { now, explain, summary: summaryScoring(options) };
   const { source } = options;
@@ -191,10 +194,10 @@ function splitByParticle(
   physicsMap: Map<string, PhysicsParticle>,
   queryVector: number[],
   now: Date,
-  rules: StrengthOptions,
+  model: StrengthModel,
 ): PhysicsPools {
   const pools: PhysicsPools = { entries: [], particles: [], classic: [] };
-  const liveMass = rules.ablation?.recallBoost === true;
+  const liveMass = !model.recallStrengthens;
   for (const entry of pool) {
     const particle = physicsMap.get(entry.id);
     const usable =
@@ -213,7 +216,7 @@ function splitByParticle(
       liveMass
         ? {
             ...particle,
-            mass: computeMass(calculateStrength(entry, now, rules), entry.retrievalCount, rules.ablation),
+            mass: computeMass(calculateStrength(entry, now, model), entry.retrievalCount, model),
           }
         : particle,
     );

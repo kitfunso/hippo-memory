@@ -1,18 +1,15 @@
 // A trace: the ordered steps of one agent task and how it ended, stored as one trace-layer memory.
 
-import { evalNow } from '../../base/memory/ablation.js';
 import {
   calculateRewardFactor,
   calculateStrength,
   confidenceFacets,
   confidenceLabel,
-  Layer,
-  type MemoryEntry,
-  type StrengthOptions,
-} from '../../base/memory/memory.js';
+} from '../../base/memory/strength.js';
+import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { DAY_MS } from '../../base/util/time.js';
 import { renderTraceContent, type TraceRecord } from '../../domain/consolidate/trace.js';
-import type { Context } from '../types.js';
+import { strengthOf, type Context } from '../types.js';
 import { remember } from './remember.js';
 
 export { parseSteps } from '../../domain/consolidate/trace.js';
@@ -37,11 +34,12 @@ export async function traceRecord(ctx: Context, input: TraceInput): Promise<{ id
 
 /** What `hippo trace <id>` shows of one row now: strength, half-life with and without its reward factor, ages, the
  * confidence reading and a projection of strength to later days. */
-export function traceStats(entry: MemoryEntry, rules: StrengthOptions) {
-  const now = evalNow();
-  const strength = calculateStrength(entry, now, rules);
+export function traceStats(entry: MemoryEntry, ctx: Pick<Context, 'infra' | 'config'>) {
+  const now = ctx.infra.clock();
+  const model = strengthOf(ctx);
+  const strength = calculateStrength(entry, now, model);
   const halfLife = entry.halfLifeDays;
-  const rewardFactor = calculateRewardFactor(entry, rules.ablation);
+  const rewardFactor = calculateRewardFactor(entry, model);
   const effHalfLife = halfLife * rewardFactor;
   const createdMs = new Date(entry.created).getTime();
   const ageDays = (now.getTime() - createdMs) / DAY_MS;
@@ -52,6 +50,6 @@ export function traceStats(entry: MemoryEntry, rules: StrengthOptions) {
 
   // Projected strength: same decay curve, just push `now` out.
   const projectedAt = (days: number): number =>
-    calculateStrength(entry, new Date(now.getTime() + days * DAY_MS), rules);
+    calculateStrength(entry, new Date(now.getTime() + days * DAY_MS), model);
   return { strength, halfLife, rewardFactor, effHalfLife, ageDays, sinceLast, facets, conf, projectedAt };
 }

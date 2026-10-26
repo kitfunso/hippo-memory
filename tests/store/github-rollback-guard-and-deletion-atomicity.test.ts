@@ -10,7 +10,9 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta } from '../../src/db/index.js';
 import { compareSemver, PACKAGE_VERSION } from '../../src/base/util/version.js';
 import { handleCommentDeleted } from '../../src/surface/connectors/github/deletion.js';

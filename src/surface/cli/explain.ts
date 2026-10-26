@@ -1,7 +1,7 @@
 // The `hippo explain` verb; main() loads it lazily from the command table.
 
 import { envActiveScope } from '../../base/util/env.js';
-import { confidenceFacets } from '../../base/memory/memory.js';
+import { confidenceFacets } from '../../base/memory/strength.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../../base/rank/search-types.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
@@ -70,7 +70,8 @@ async function explainQuery(hippoRoot: string, tenantId: string, query: string, 
   const config = cliConfig(hippoRoot);
   const engine = engineFlags(flags, config);
   // Priced as recall prints each result, so explain returns what recall's engines would.
-  const cost = (r: SearchResult): number => printedTokens(recallEntryText(r, query, false, origin.isGlobal(r)));
+  const now = ctx.infra.clock();
+  const cost = (r: SearchResult): number => printedTokens(recallEntryText(r, query, false, origin.isGlobal(r), now));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
   const slot: InspectedSlot = {};
@@ -96,10 +97,16 @@ async function explainQuery(hippoRoot: string, tenantId: string, query: string, 
   );
   const rank = slot.rank;
   if (!rank) throw new Error('explain ranked but inspected nothing');
-  printExplainResults(rank, engine.usePhysics, query, asJson);
+  printExplainResults(rank, engine.usePhysics, query, asJson, now);
 }
 
-function printExplainResults(rank: RankRecallResult, usePhysics: boolean, query: string, asJson: boolean): void {
+function printExplainResults(
+  rank: RankRecallResult,
+  usePhysics: boolean,
+  query: string,
+  asJson: boolean,
+  now: Date,
+): void {
   const hasGlobal = rank.globalEntries.length > 0;
   const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' =
     usePhysics && !hasGlobal ? 'physics' : hasGlobal ? 'searchBothHybrid' : 'hybrid';
@@ -108,7 +115,7 @@ function printExplainResults(rank: RankRecallResult, usePhysics: boolean, query:
   const candidates = rank.localEntries.length + rank.globalEntries.length;
 
   if (asJson) {
-    printExplainJson(results, query, modeUsed, candidates);
+    printExplainJson(results, query, modeUsed, candidates, now);
     return;
   }
 
@@ -123,13 +130,19 @@ function printExplainResults(rank: RankRecallResult, usePhysics: boolean, query:
   console.log('Note: explain does not mark memories as retrieved (read-only).');
 }
 
-function printExplainJson(results: SearchResult[], query: string, modeUsed: string, candidates: number): void {
+function printExplainJson(
+  results: SearchResult[],
+  query: string,
+  modeUsed: string,
+  candidates: number,
+  now: Date,
+): void {
   const output = results.map((r, rank) => ({
     rank: rank + 1,
     id: r.entry.id,
     layer: r.entry.layer,
-    confidence: confidenceFacets(r.entry).tier,
-    aged_out: confidenceFacets(r.entry).agedOut,
+    confidence: confidenceFacets(r.entry, now).tier,
+    aged_out: confidenceFacets(r.entry, now).agedOut,
     score: r.score,
     tokens: r.tokens,
     tags: r.entry.tags,

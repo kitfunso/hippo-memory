@@ -1,7 +1,6 @@
 // The passes that must not delete an object's memory ask about the rows they hold, never for every linked id.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { saveDecision } from '../../src/domain/objects/decisions.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { iterateRowsWithObjects } from '../../src/store/sqlite/entry-reads.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -9,6 +8,7 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { memoriesBackingAmong, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { recordStatements } from '../_helpers/count-statements.js';
+import { saveDecision } from '../../src/entry/testing.js';
 
 function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);

@@ -183,7 +183,7 @@ describe('GET /v1/context', () => {
     await remember(ctx, { content: 'unpinned-2' });
     // Use store-level write for pinned to keep the test simple.
     const { writeEntry } = await import('../_helpers/root-forms.js');
-    const { Layer } = await import('../../src/base/memory/memory.js');
+    const { Layer } = await import('../../src/base/memory/entry.js');
     const pinnedEntry = createMemory('pinned-canary', {
       layer: Layer.Episodic,
       tags: ['ctx-route-test'],

@@ -16,6 +16,7 @@ import { cachedStatement } from '../../db/statement-cache.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../../base/records/failure-log-retention.js';
 import { MAX_HOOK_FIELD_LEN } from '../../base/util/limits.js';
 import { DAY_MS } from '../../base/util/time.js';
+import { handleNow } from './handle-clock.js';
 
 // The failure log's row and totals: what a failure stores, how long it stays, and how a
 // window's outcomes and repeats add up.
@@ -39,9 +40,9 @@ interface FailureRow {
 }
 
 /** The row `event` stores, stamped in toISOString form since the window and prune compare stamps as text. */
-function failureRow(event: FailureEvent): FailureRow {
+function failureRow(event: FailureEvent, fallbackNow: Date): FailureRow {
   return {
-    ts: new Date(event.now ?? Date.now()).toISOString(),
+    ts: new Date(event.now ?? fallbackNow.getTime()).toISOString(),
     tenantId: event.tenantId,
     sessionId: event.sessionId?.slice(0, MAX_HOOK_FIELD_LEN) ?? null,
     tool: event.tool?.slice(0, MAX_HOOK_FIELD_LEN) ?? null,
@@ -90,7 +91,7 @@ function failureTotals(
 
 /** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the new row's id. */
 function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
-  const row = failureRow(event);
+  const row = failureRow(event, handleNow(db));
   // Prune first: nothing after the insert can throw, so a returned id always means a committed row.
   cachedStatement(db, `DELETE FROM failure_log WHERE ts < ?`).run(retentionCutoff(row.ts));
   const inserted = cachedStatement(

@@ -6,8 +6,10 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, writeEntriesTogether, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
 import { recordStatements } from '../_helpers/count-statements.js';
-import { calculateStrength } from '../../src/base/memory/memory.js';
+import { calculateStrength } from '../../src/entry/memory.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -36,7 +38,7 @@ describe('strengthenRetrieved', () => {
       root,
       [e.id, 'no-such-id'],
       { tenantId: 'default', recallBoostAblated: false },
-      {},
+      { strength: PRODUCTION_STRENGTH, clock: evalNow },
     );
 
     expect([...found]).toEqual([e.id]);
@@ -62,7 +64,7 @@ describe('strengthenRetrieved', () => {
           root,
           batch.map((e) => e.id),
           opts,
-          {},
+          { strength: PRODUCTION_STRENGTH, clock: evalNow },
         ),
       ),
     );
@@ -85,7 +87,12 @@ describe('strengthenRetrieved', () => {
     writeEntry(root, e);
 
     expect(
-      strengthenRetrieved(root, [e.id], { tenantId: 'some-other-tenant', recallBoostAblated: false }, {}).size,
+      strengthenRetrieved(
+        root,
+        [e.id],
+        { tenantId: 'some-other-tenant', recallBoostAblated: false },
+        { strength: PRODUCTION_STRENGTH, clock: evalNow },
+      ).size,
     ).toBe(0);
     expect(readEntry(root, e.id)!.retrievalCount).toBe(0);
   });
@@ -95,7 +102,14 @@ describe('strengthenRetrieved', () => {
     const e = createMemory('the release train leaves on tuesdays');
     writeEntry(root, e);
 
-    expect(strengthenRetrieved(root, [e.id], { tenantId: 'default', recallBoostAblated: true }, {}).size).toBe(0);
+    expect(
+      strengthenRetrieved(
+        root,
+        [e.id],
+        { tenantId: 'default', recallBoostAblated: true },
+        { strength: PRODUCTION_STRENGTH, clock: evalNow },
+      ).size,
+    ).toBe(0);
     expect(readEntry(root, e.id)!.retrievalCount).toBe(0);
   });
 
@@ -105,7 +119,12 @@ describe('strengthenRetrieved', () => {
     const errors = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     expect(
-      strengthenRetrieved(notAStore, ['any-id'], { tenantId: 'default', recallBoostAblated: false }, {}).size,
+      strengthenRetrieved(
+        notAStore,
+        ['any-id'],
+        { tenantId: 'default', recallBoostAblated: false },
+        { strength: PRODUCTION_STRENGTH, clock: evalNow },
+      ).size,
     ).toBe(0);
     expect(errors).toHaveBeenCalledTimes(1);
     expect(String(errors.mock.calls[0]![0])).toMatch(/^\[hippo\] warn: retrieval stats not saved \(/);

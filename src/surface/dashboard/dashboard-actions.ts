@@ -3,7 +3,7 @@
 import * as api from '../../api/index.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { ParamError, parseMemoryId, type ActionBody } from './dashboard-params.js';
 import { isLiveMemory } from '../../api/dashboard/live.js';

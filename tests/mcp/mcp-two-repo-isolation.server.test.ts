@@ -9,7 +9,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/entry.js';
 import type { ServerHandle } from '../../src/server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

@@ -13,7 +13,7 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import { remember, retrieve } from '../../src/api/index.js';
 import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/github/ingest.js';
 import type { IngestResult } from '../../src/surface/connectors/ingest.js';
@@ -32,7 +32,6 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { envTenant } from '../../src/base/util/env.js';
-import { withSharedStoreHandles } from '../../src/db/index.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();

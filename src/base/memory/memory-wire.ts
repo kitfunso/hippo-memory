@@ -1,6 +1,6 @@
 // The snake_case keys a memory carries in every file and wire format: export JSON, markdown mirrors, dormant snapshots
 // and the eval kit. MemoryEntry renames its fields freely; these names are published and stay.
-import type { ConfidenceLevel, EmotionalValence, Layer, MemoryEntry, MemoryKind, TraceOutcome } from './memory.js';
+import type { ConfidenceLevel, EmotionalValence, Layer, MemoryEntry, MemoryKind, TraceOutcome } from './entry.js';
 
 /** A memory as files and wire formats name it. Optional keys are the ones a stored entry may lack. */
 export interface MemoryWire {

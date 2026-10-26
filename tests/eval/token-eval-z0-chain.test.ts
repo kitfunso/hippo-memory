@@ -1,11 +1,13 @@
 // Z0 failure chain (prereg 179-182) and injected-row sources (93) with the fake Claude Code.
 import { describe, it, expect, afterEach } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { contextBlockLines } from '../../src/api/context-render.js';
 import { injectedRows } from '../../scripts/token-eval/surfaces.mjs';
 import {
   cleanup, isolate, makeRepo, task, teach, apply, plain, lesson, family, spec, run, readRecords, readLedger, find,
 } from '../fixtures/z0-harness.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 /** Teach t1 with `t1`, two plain tasks, then applies a1 (passes its check) and a2; the arms run in one lockstep. */
 function chainSpec(r: ReturnType<typeof makeRepo>, t1: string) {
@@ -77,7 +79,7 @@ describe('injected-row sources', () => {
     const imported = createMemory('the build   needs node 22', { source: 'agent-memory:claude-code:p/n.md#ab12', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const cut = createMemory(`${'long imported note '.repeat(10)}[truncated]`, { source: 'agent-memory:codex:m/x.md#cd34', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const native = createMemory('run the tests with vitest', { source: 'cli', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    const bullet = (entry: typeof native, isGlobal: boolean) => contextBlockLines([{ entry, isGlobal }], 0, 'observe').slice(1).join('\n');
+    const bullet = (entry: typeof native, isGlobal: boolean) => contextBlockLines([{ entry, isGlobal }], 0, 'observe', { now: evalNow() }).slice(1).join('\n');
     const text = ['## Project Memory (3 entries, 40 tokens)\n', bullet(imported, true), bullet(cut, false), bullet(native, false)].join('\n');
     const got = injectedRows([text], [{ ...imported, global: true }, { ...cut, global: false }, { ...native, global: false }]);
     expect(got.counts).toMatchObject({ rows: 3, importedRows: 2, unmatched: 0, ambiguous: 0 });

@@ -1,8 +1,8 @@
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { tokenize } from '../../base/util/tokenize.js';
-import { switchedNow, type EvalSwitches } from '../../base/memory/eval-switches.js';
+import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { pathTagsOf } from './path-context.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { bm25Score, buildCorpus, entryText } from './bm25.js';
@@ -17,7 +17,13 @@ import {
 } from './boosts.js';
 import { temporalContext } from './temporal.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
-import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../../base/rank/search-types.js';
+import {
+  DEFAULT_RECALL_BUDGET,
+  rankNow,
+  type RankTime,
+  type ResultCost,
+  type SearchResult,
+} from '../../base/rank/search-types.js';
 
 export interface SearchOptions {
   budget?: number;
@@ -31,7 +37,7 @@ export interface SearchOptions {
   scope?: string | null;
   /** The root's settings; `lossAversionRatio` scales an error memory's strength. */
   runtime?: RuntimeSettings;
-  /** The eval switches and fake clock the caller runs under; absent, none of them, on the real clock. */
+  /** The strength model and rank switches the caller runs under; absent, production ranking. */
   switches?: EvalSwitches;
   /** The folder the caller runs in: memories tagged with its path segments rank higher. Absent, no path boost. */
   cwd?: string;
@@ -54,8 +60,8 @@ function corpusFor(entries: MemoryEntry[], pool: MemoryEntry[]): Corpus {
 /**
  * Synchronous BM25 search: relevance * strength * recency and the rank boosts, without embeddings or the outcome nudge.
  */
-export function rankBm25(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {
-  const now = switchedNow(options.now, options.switches);
+export function rankBm25(query: string, entries: MemoryEntry[], options: SearchOptions & RankTime): SearchResult[] {
+  const now = rankNow(options);
   const pool = currentEntries(entries, options);
   if (pool.length === 0) return [];
   const queryTerms = tokenize(query);

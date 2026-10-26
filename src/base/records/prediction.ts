@@ -1,5 +1,5 @@
 // A prediction's closure states, shared by the store, the routes and the CLI flag checks.
-import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../memory/memory.js';
+import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../memory/entry.js';
 
 export type ClosureState = 'open' | 'closed' | 'closed-unknown';
 
@@ -14,15 +14,20 @@ export function predictionMirror(
   tenantId: string,
   claim: { readonly claimText: string; readonly classTag: string },
   baseHalfLifeDays: number,
+  now: Date,
 ): MemoryEntry {
-  return createMemory(claim.claimText, {
-    tags: ['prediction', claim.classTag],
-    layer: Layer.Semantic,
-    confidence: 'observed',
-    source: 'prediction',
-    // SAFETY: 'distilled' is a valid MemoryKind literal (see memory.ts).
-    kind: 'distilled' as MemoryKind,
-    baseHalfLifeDays,
-    tenantId,
-  });
+  return createMemory(
+    claim.claimText,
+    {
+      tags: ['prediction', claim.classTag],
+      layer: Layer.Semantic,
+      confidence: 'observed',
+      source: 'prediction',
+      // SAFETY: 'distilled' is a valid MemoryKind literal (see entry.ts).
+      kind: 'distilled' as MemoryKind,
+      baseHalfLifeDays,
+      tenantId,
+    },
+    now,
+  );
 }

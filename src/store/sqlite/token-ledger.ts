@@ -19,6 +19,7 @@ import type { TokenSummary, TokenSurface, TokenSurfaceSummary, TokenUse } from '
 import type { LastSent } from '../../base/session/skip-unchanged.js';
 import type { ApiCall } from '../../base/session/transcript-calls.js';
 import { DAY_MS } from '../../base/util/time.js';
+import { handleStamp } from './handle-clock.js';
 
 // The token ledger's surfaces and retention.
 
@@ -49,7 +50,7 @@ const ledgerCutoff = (ts: string): string =>
 
 /** Append one ledger row and prune rows past the retention window. */
 export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
-  const now = use.now ?? new Date().toISOString();
+  const now = use.now ?? handleStamp(db);
   insertTokenRow(db, {
     ts: now,
     tenantId: use.tenantId,

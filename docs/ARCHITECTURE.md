@@ -43,11 +43,13 @@ The port-only run is the proof that `serve()` holds for any store. `tests/_helpe
 
 A production export that no other `src/` file names but a test does is a seam added for the test. `scripts/check-test-only-exports.mjs` finds them and fails CI on any of them, with no baseline; exports in a package entry file (derived from `package.json` `exports` and `bin`) are exempt. A test asserts through the path src uses, the helper moves to `tests/_helpers`, or the export gets a production caller.
 
-## src/base/memory/ablation.ts
+## src/infra/eval-switches.ts
 
 EVAL-ONLY lifecycle ablation switches. These env flags exist for controlled experiments on hippo's memory-lifecycle mechanisms (the "lifecycle, ablated" paper protocol): each switch neutralizes exactly ONE mechanism so its causal contribution can be measured in isolation.
 
 They are NOT a production configuration surface: there are no config-file equivalents, deliberately (config implies support), they are undocumented in user-facing help, and their semantics may change with the experiment design. With all flags unset, production behavior is unchanged.
+
+Each strength flag becomes a `StrengthModel` value (`src/base/memory/strength.ts`), so `calculateStrength`, `rewardFactor` and the store SQL have no flag branch: decay cuts `decays` and the wrong-mark halvings, recall boost cuts `recallStrengthens`, and the slow outcome channel sets `rewardSlope` and the halvings to 0.
 
 Flags (set to `1` or `true`):
 
@@ -102,7 +104,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/api/assemble.ts
 - `AssembleResult.truncated`: With v1.6.2's NEWEST-cap semantics, the items[] array represents the freshest tail of the session
-- `assemble`: F4 (v1.6.5): byte compare canonical UTC ISO timestamps. ~50× faster than localeCompare and chronological by virtue of the timestamp invariant documented in src/base/memory/memory.ts above MemoryEntry.
+- `assemble`: F4 (v1.6.5): byte compare canonical UTC ISO timestamps. ~50× faster than localeCompare and chronological by virtue of the timestamp invariant documented in src/base/memory/entry.ts above MemoryEntry.
 
 ### src/api/auth/audit.ts
 - `auditList`: Read-only — no audit emit (matches A5: cmdAuditList does not record a 'recall'-style read event).
@@ -719,7 +721,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `rescueSet`: D1 rescue decision: a condemned entry is rescued iff it ranks in the top 30% of its tenant's non-pinned candidate set by learned score.
 - `rescueSet`: validateWeights(weights, digest); // fail loud before any rescue computation (constraint 5)
 
-### src/base/memory/memory.ts
+### src/base/memory/entry.ts
 - `MemoryEntry`: semantic gain. F4 (v1.6.5) uses byte compare on `assemble`; if a future import path admits non-canonical timestamps, the F4 sort and any
 - `MemoryEntry`: Cached DAG metadata (schema v25). Populated for level-2+ summary rows so
 - `MemoryEntry`: DAG live-coupling (schema v28, E1 of 5-episode arc).

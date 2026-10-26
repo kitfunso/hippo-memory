@@ -9,7 +9,7 @@ import { importForStore } from '../../src/api/agent-memories.js';
 import type { Machine } from '../../src/base/util/agent-homes.js';
 import type { ImportReport } from '../../src/base/memory/agent-memory-report.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createMemory } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
 import { isContentWorthStoring } from '../../src/base/memory/memory-quality.js';
 import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js';
 import { isInitialized } from '../../src/host/project-identity.js';
@@ -34,6 +34,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -59,6 +60,7 @@ afterEach(() => {
 const withEnv = (env: Machine['env']): Machine => ({ ...w.machine, env });
 const sync = (extra: Partial<SyncOptions> = {}): Promise<ImportReport> =>
   importForStore(w.local, {
+    run: TEST_RUN,
     configAt: loadConfig,
     tenantId: 'default',
     stores: sqliteImportStores({}),
@@ -77,6 +79,7 @@ describe('agent memory sync: options, time and reporting', () => {
       expect(
         tally(
           await importForStore(w.local, {
+            run: TEST_RUN,
             configAt: loadConfig,
             tenantId: 'default',
             stores: sqliteImportStores({}),
@@ -87,6 +90,7 @@ describe('agent memory sync: options, time and reporting', () => {
     }
     expect(tally(await sync()).imported).toBe(0);
     const report = await importForStore(w.local, {
+      run: TEST_RUN,
       configAt: loadConfig,
       tenantId: 'default',
       stores: sqliteImportStores({}),
@@ -109,6 +113,7 @@ describe('agent memory sync: options, time and reporting', () => {
     expect(
       tally(
         await importForStore(w.global, {
+          run: TEST_RUN,
           configAt: loadConfig,
           tenantId: 'default',
           stores: sqliteImportStores({}),
@@ -171,6 +176,7 @@ describe('agent memory sync: options, time and reporting', () => {
     const altMachine = withEnv({ CLAUDE_CONFIG_DIR: alt });
     note(join(alt, 'projects', claudeFolderName(w.project), 'memory'), 'alt.md', B);
     await importForStore(w.local, {
+      run: TEST_RUN,
       configAt: loadConfig,
       tenantId: 'default',
       stores: sqliteImportStores({}),
@@ -183,6 +189,7 @@ describe('agent memory sync: options, time and reporting', () => {
     expect(
       (
         await importForStore(w.local, {
+          run: TEST_RUN,
           configAt: loadConfig,
           tenantId: 'default',
           stores: sqliteImportStores({}),

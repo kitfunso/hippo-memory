@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { closeHippoDb } from '../../src/db/index.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { cliRequest } from '../../src/surface/cli/api-context.js';
 import { learn, CLI_LEARN } from '../../src/api/sleep/learn.js';
 import { importEntries, importVault } from '../../src/entry/importers.js';
@@ -34,6 +34,7 @@ import {
   useQueryCountRoots,
 } from '../_helpers/query-count-seeds.js';
 import { processGit } from '../../src/infra/git-runner.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 useQueryCountRoots();
 
@@ -306,6 +307,7 @@ describe('buildDag', () => {
         );
       const { result, statements } = await recordStatementsAsync(() =>
         buildDag(sqliteStore(root), facts, {
+          now: evalNow(),
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
           llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
         }),

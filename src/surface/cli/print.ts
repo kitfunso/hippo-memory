@@ -1,6 +1,6 @@
 // Text printers for recall results, agent imports, task snapshots, session trails and handoffs.
 
-import { confidenceLabel } from '../../base/memory/memory.js';
+import { confidenceLabel } from '../../base/memory/strength.js';
 import type { TaskSnapshot, SessionEvent } from '../../base/ports/store/sessions.js';
 import type { SessionHandoff } from '../../base/session/handoff.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
@@ -14,9 +14,15 @@ export function fmt(n: number, digits = 2): string {
 }
 
 // What `hippo recall` prints for one result; the budget prices this same text.
-export function recallEntryText(r: SearchResult, query: string, showWhy: boolean, isGlobal: boolean): string {
+export function recallEntryText(
+  r: SearchResult,
+  query: string,
+  showWhy: boolean,
+  isGlobal: boolean,
+  now: Date,
+): string {
   const e = r.entry;
-  const label = confidenceLabel(e);
+  const label = confidenceLabel(e, now);
   const confLabel = label.warn ? `[${label.text}] ⚠️` : `[${label.text}]`;
   const bars = Math.round(e.strength * 10);
   const graphMark = r.graphVia ? ` [graph: ${r.graphVia.hops}hop ${r.graphVia.relType}]` : '';
@@ -29,7 +35,7 @@ export function recallEntryText(r: SearchResult, query: string, showWhy: boolean
   ];
   if (showWhy) {
     // The row --json prints carries the same reason and envelope, so the two outputs never explain a match apart.
-    const { reason, envelope: env } = recallJsonRow(r, query, true, isGlobal);
+    const { reason, envelope: env } = recallJsonRow(r, query, true, isGlobal, now);
     lines.push(
       `    source:${isGlobal ? ' [global]' : ' [local]'} | layer: [${e.layer}] | confidence: [${label.text}]`,
       `    reason: ${reason}`,

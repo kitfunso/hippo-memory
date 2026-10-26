@@ -1,7 +1,7 @@
 // Sleep never builds a new memory from a superseded one, so an old claim cannot come back as a current row.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { supersede } from '../../src/api/index.js';

@@ -1,13 +1,15 @@
 // The domain rankers take the eval switches as input; the `./search` and `./testing` entries fill them from the
 // environment, so frozen evals that set HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS or HIPPO_FAKE_NOW still see each one.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyOutcome, createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { applyOutcome, createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { hybridSearch, search } from '../../src/entry/search.js';
 import { hybridSearchWire } from '../../src/entry/testing.js';
 import { toWire } from '../../src/base/memory/memory-wire.js';
 import { hybridSearch as rankHybrid } from '../../src/domain/search/hybrid.js';
-import { evalSwitches } from '../../src/base/memory/ablation.js';
 import { DAY_MS } from '../../src/base/util/time.js';
+import { evalSwitches } from '../../src/infra/eval-switches.js';
 
 const SWITCHES = [
   'HIPPO_ABLATE_DECAY',

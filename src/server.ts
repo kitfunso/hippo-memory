@@ -1,25 +1,38 @@
 import {
   type Actor,
-  authCreate,
+  authCreate as authCreateIn,
   type AuthCreateOptions,
   type AuthCreateResult,
-  authCreateSelf,
+  authCreateSelf as authCreateSelfIn,
   type AuthCreateSelfOptions,
   type AuthCreateSelfResult,
-  authRevoke,
+  authRevoke as authRevokeIn,
   type AuthRevokeResult,
   type EntryContext as Context,
 } from './api/index.js';
+import { withEntryInfra } from './surface/entry-infra.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './base/errors/api-errors.js';
+
+/** Mints a key stamped by the caller's clock, else the host's. */
+export function authCreate(ctx: Context, opts: AuthCreateOptions): Promise<AuthCreateResult> {
+  return authCreateIn(withEntryInfra(ctx), opts);
+}
+
+/** Mints the signed-in caller's own key, stamped by the caller's clock, else the host's. */
+export function authCreateSelf(ctx: Context, opts: AuthCreateSelfOptions): Promise<AuthCreateSelfResult> {
+  return authCreateSelfIn(withEntryInfra(ctx), opts);
+}
+
+/** Revokes a key, stamped by the caller's clock, else the host's. */
+export function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResult> {
+  return authRevokeIn(withEntryInfra(ctx), keyId);
+}
 
 export { serve } from './surface/server/boot.js';
 export { promptHookContext } from './surface/server/prompt-hook-context.js';
 
 // Add-on packages mint and revoke keys through these without importing the whole api surface.
 export {
-  authCreate,
-  authCreateSelf,
-  authRevoke,
   BadRequestError,
   ConflictError,
   ForbiddenError,

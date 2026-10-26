@@ -3,7 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import { initializeParticle } from '../../src/base/rank/physics.js';
 import type {
@@ -26,6 +28,7 @@ import {
 } from '../_helpers/store-conformance.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 oneRequestPerTest();
 
@@ -86,7 +89,7 @@ function seedMemories(dir: string): void {
     );
     upsertVectors(db, [['mem_3', [0, 1, 0]]], OLD);
     setMeta(db, EMBEDDING_MODEL_META_KEY, MODEL);
-    savePhysicsState(db, [initializeParticle(rows[0], [1, 0, 0], {}, SEEDED_AT)]);
+    savePhysicsState(db, [initializeParticle(rows[0], [1, 0, 0], PRODUCTION_STRENGTH, SEEDED_AT)]);
   } finally {
     closeHippoDb(db);
   }
@@ -112,7 +115,7 @@ const stored: Call = async (_g, store) =>
   sorted(await store.vectors?.stored('vectors', ALL_IDS)).map(([id, v]): [string, number[]] => [id, Array.from(v)]);
 const particles: Call = async (_g, store) => sorted(await store.vectors?.stored('particles', ALL_IDS));
 const particleFor = (id: string, vector: number[]): PhysicsParticle =>
-  initializeParticle(entries.get(id) ?? memory(id, TENANT_A, 9), vector, {}, SEEDED_AT);
+  initializeParticle(entries.get(id) ?? memory(id, TENANT_A, 9), vector, PRODUCTION_STRENGTH, SEEDED_AT);
 
 type Row = MemoryEntry | [string, number[]] | [string, PhysicsParticle];
 const isEntry = (row: Row): row is MemoryEntry => !Array.isArray(row);

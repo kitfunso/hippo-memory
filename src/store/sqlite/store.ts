@@ -1,6 +1,6 @@
 // The built-in SQLite adapter behind the store port.
 import { countAmbient } from './ambient.js';
-import type { LossAversion } from '../../base/memory/memory.js';
+import type { StoreRules } from '../../base/ports/infra.js';
 import { ambientRefusal } from '../../base/scope/read-admission.js';
 import { readApiKeyRecord } from './auth.js';
 import { existsSync } from 'node:fs';
@@ -173,7 +173,7 @@ function sqliteBaseMethods({ on, files }: Handles): BaseMethods {
     ...bound(on, storeFilesBodies(files), openStore),
     ...writes,
     appendAuditEvents: skipEmpty(writes.appendAuditEvents, () => undefined),
-    // It strengthens, so it scores by the store's loss-aversion rules.
+    // It strengthens, so it scores by the store's strength model.
     ...bound<Pick<BaseMethods, 'finishRecall'>>(on, {
       finishRecall: (db, recall) => {
         finishRecall(db, files, recall);
@@ -243,23 +243,25 @@ export function sqliteDiagnosticsStore(hippoRoot: string): Pick<StoreGroups, 'di
 }
 
 /** The built-in store on hippo.db under `hippoRoot`, scored by `rules`. */
-export function sqliteStore(hippoRoot: string, rules: LossAversion = {}): HippoStore & StoreGroups {
+export function sqliteStore(hippoRoot: string, rules: StoreRules = {}): HippoStore & StoreGroups {
   return asHippoDb(sqliteStoreOn(handlesOf(hippoRoot, rules)));
 }
 
-const contextReadsBodies: Bodies<Omit<ContextReads, 'ambientTallies'>> = {
+const contextReadsBodies: Bodies<Omit<ContextReads, 'ambientTallies' | 'contextCandidates'>> = {
   ambientCandidates: (db, tenantId, { admit, ...request }) =>
     listAmbientCandidates(db, tenantId, { ...request, judge: (e) => ambientRefusal(e, admit) }),
-  contextCandidates: listContextCandidates,
   schemaFit: schemaFit,
 };
 
 function sqliteContextReads({ on, files }: Handles): ContextReads {
   return {
     ...bound(on, contextReadsBodies, openStore),
-    ...bound<Pick<ContextReads, 'ambientTallies'>>(
+    ...bound<Pick<ContextReads, 'ambientTallies' | 'contextCandidates'>>(
       on,
-      { ambientTallies: (db, ...args) => countAmbient(db, files, ...args) },
+      {
+        ambientTallies: (db, ...args) => countAmbient(db, files, ...args),
+        contextCandidates: (db, ...args) => listContextCandidates(db, files.strength, ...args),
+      },
       openStore,
     ),
   };

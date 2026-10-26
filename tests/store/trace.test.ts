@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'node:path';
-import { createMemory } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
 import { renderTraceContent, parseSteps } from '../../src/domain/consolidate/trace.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';

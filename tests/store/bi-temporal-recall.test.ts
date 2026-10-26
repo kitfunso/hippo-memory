@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { markRetrieved } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { markRetrieved } from '../../src/entry/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';

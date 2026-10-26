@@ -5,13 +5,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
-import {
-  createMemory,
-  confidenceFacets,
-  resolveConfidence,
-  type MemoryEntry,
-  DEFAULT_HALF_LIFE_DAYS,
-} from '../../src/base/memory/memory.js';
+import { createMemory, confidenceFacets, resolveConfidence } from '../../src/entry/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { serveDashboard } from '../../src/surface/server/dashboard-listener.js';
 import type { ServerHandle } from '../../src/surface/server/types.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';

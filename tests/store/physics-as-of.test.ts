@@ -1,7 +1,8 @@
 // Physics ranking under asOf on a real store: no row, and no physics state, from after the cut may reach the results.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { makeRoot } from '../_helpers/make-root.js';
-import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -15,6 +16,7 @@ import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -163,7 +165,13 @@ describe('rankRecall in physics mode with asOf', () => {
   const rank = async (explain: boolean, usePhysics: boolean): Promise<string[]> =>
     (
       await rankRecall(
-        { store: sqliteStore(root), config: loadConfig(root), tenantId: TENANT, embedderFor: resolveEmbeddingProvider },
+        {
+          now: evalNow(),
+          store: sqliteStore(root),
+          config: loadConfig(root),
+          tenantId: TENANT,
+          embedderFor: resolveEmbeddingProvider,
+        },
         opts(explain, usePhysics),
         BUDGET_RANKED,
       )

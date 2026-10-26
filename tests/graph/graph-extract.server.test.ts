@@ -13,10 +13,7 @@ import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { Worker } from 'node:worker_threads';
-import { DECISION, saveDecision } from '../../src/domain/objects/decisions.js';
-import { savePolicy } from '../../src/domain/objects/policies.js';
-import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
-import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
+import { DECISION } from '../../src/domain/objects/decisions.js';
 import type { Entity } from '../../src/base/ports/store/graph.js';
 import { extractGraph, extractGraphChunked } from '../../src/domain/graph/extract.js';
 import {
@@ -34,6 +31,8 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, loadNeighborRelations, loadEntities, loadRelations } from '../_helpers/root-forms.js';
 import { copyTree } from '../_helpers/copy-tree.js';
+import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -160,7 +159,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     const dc = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'Retired idea',
     });
-    await closeObject(objectsAt(home), DECISION, 'default', dc.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), DECISION, 'default', dc.id, { actor: CLI_ACTOR, now: evalNow() });
     // one of each other type
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       policyName: 'Data retention',
@@ -238,7 +237,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
       decisionText: 'replacement',
       supersedesDecisionId: d1.id,
     });
-    await closeObject(objectsAt(home), DECISION, 'default', d2.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), DECISION, 'default', d2.id, { actor: CLI_ACTOR, now: evalNow() });
     const r = await extractGraph(sqliteStore(home), 'default');
     // d1 (superseded) extracted; d2 (closed) excluded -> no relation (successor missing)
     expect(r.byType.decision).toBe(1);
@@ -252,7 +251,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     await extractGraph(sqliteStore(home), 'default');
     expect(entityCount(home)).toBe(1);
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'second' });
-    await closeObject(objectsAt(home), DECISION, 'default', d.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), DECISION, 'default', d.id, { actor: CLI_ACTOR, now: evalNow() });
     const r = await extractGraph(sqliteStore(home), 'default');
     expect(r.byType.decision).toBe(1); // 'second' present, 'first' (now closed) gone
     expect(loadEntities(home, 'default', { limit: 100 }).map((e) => e.name)).toEqual(['second']);
@@ -407,7 +406,9 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     });
     let pauses = 0;
     const closeOlderOnce = async (): Promise<void> => {
-      if (pauses++ === 0) await closeObject(objectsAt(home), DECISION, 'default', older.id, CLI_ACTOR);
+      if (pauses++ === 0) {
+        await closeObject(objectsAt(home), DECISION, 'default', older.id, { actor: CLI_ACTOR, now: evalNow() });
+      }
       await yieldOnce();
     };
 

@@ -13,8 +13,8 @@ import {
   isCodexWrapperInstalled,
   repairCodexWrapperIfInstalled,
   uninstallCodexWrapper,
+  resolveCodexWrapperPaths,
 } from '../../src/surface/hooks-install/codex-wrapper.js';
-import { resolveCodexWrapperPaths } from '../../src/surface/hooks-install/codex-wrapper.js';
 import { resolveCodexSessionTranscript } from '../../src/surface/capture/codex-session.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';

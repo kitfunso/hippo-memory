@@ -1,5 +1,5 @@
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
-import { type MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { AUTO_DELETABLE } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';

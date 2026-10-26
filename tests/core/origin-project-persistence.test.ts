@@ -10,6 +10,7 @@ import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -92,7 +93,7 @@ describe('markdown mirror round-trip', () => {
     const base = createMemory('round trip content here');
     for (const origin of ['proj-a', '']) {
       const raw = serializeEntry({ ...base, originProject: origin });
-      const back = deserializeEntry(raw);
+      const back = deserializeEntry(raw, evalNow());
       expect(back?.originProject).toBe(origin);
     }
   });
@@ -100,13 +101,13 @@ describe('markdown mirror round-trip', () => {
   it('round-trips an unknown (null) origin, so a rebuild never stamps it user-global', () => {
     const raw = serializeEntry({ ...createMemory('unknown-origin row content here'), originProject: null });
     expect(raw).toContain('origin_project: null');
-    expect(deserializeEntry(raw)?.originProject).toBeNull();
+    expect(deserializeEntry(raw, evalNow())?.originProject).toBeNull();
   });
 
   it('omits an unstamped origin and reads a mirror with no origin field as unstamped', () => {
     const raw = serializeEntry(createMemory('unstamped row content here'));
     expect(raw).not.toContain('origin_project');
-    expect(deserializeEntry(raw)?.originProject).toBeUndefined();
+    expect(deserializeEntry(raw, evalNow())?.originProject).toBeUndefined();
   });
 
   it('a rebuild keeps an explicit null and stamps only a mirror with no origin field', () => {

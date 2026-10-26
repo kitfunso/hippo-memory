@@ -5,13 +5,8 @@ import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index
 import { escapeLike } from '../../base/util/escape.js';
 import { keysetAfter, placeholders } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
-import {
-  calculateStrength,
-  deriveHalfLife,
-  LEGACY_TYPED_HALF_LIFE,
-  type LossAversion,
-  type MemoryEntry,
-} from '../../base/memory/memory.js';
+import { calculateStrength, LEGACY_TYPED_HALF_LIFE } from '../../base/memory/strength.js';
+import { deriveHalfLife, type MemoryEntry } from '../../base/memory/entry.js';
 import { scopeAdmitSql } from './rule-sql.js';
 import { stampOriginProject, upsertEntryRow } from './entry-row.js';
 import { auditEntryWrite, writeEntryMirrors, auditingRefusal } from './entry-writes.js';
@@ -30,7 +25,7 @@ import {
   type IncidentFields,
   type ObjectFields,
 } from '../../base/records/object-types.js';
-import type { Handles, OnHandle, StoreFiles } from './open.js';
+import type { Handles, OnHandle, StoreFiles, StoreModel } from './open.js';
 import { openStore } from './handles.js';
 import { answered, bound, type Bodies } from './bound.js';
 import type {
@@ -412,10 +407,10 @@ interface MirroredWrite {
 
 /** Until the typed migration has run, a mirror goes in on the flat half-life that migration moves; the flag is read
  * under the save's write lock, so the two cannot interleave. */
-function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry, rules: LossAversion): MemoryEntry {
+function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry, rules: StoreModel): MemoryEntry {
   if (getMeta(db, META_KEY.typedHalfLife, '') !== '') return mirror;
   const legacy = { ...mirror, halfLifeDays: deriveHalfLife(LEGACY_TYPED_HALF_LIFE, mirror) };
-  return { ...legacy, strength: calculateStrength(legacy, undefined, rules) };
+  return { ...legacy, strength: calculateStrength(legacy, rules.clock(), rules.strength) };
 }
 
 /** One write scope on one handle holds the mirror, the row `writeRow` adds, the successor link and every audit row, the

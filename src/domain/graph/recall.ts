@@ -6,7 +6,7 @@
  * Hits inherit their seed's score minus a per-hop discount; both stores are expanded; no writes, so check-graph-writes
  * permits it outside graph.ts.
  */
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';

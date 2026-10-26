@@ -1,26 +1,20 @@
-// The SQL twins of the model's rules in src/base: strength and keep (memory.ts), recall scope (recall-scope.ts), and
+// The SQL twins of the model's rules in src/base: strength.ts, keep-rules.ts, recall scope (recall-scope.ts), and
 // the bare text of src/store/rules/copies.ts. Each is held equal to its JS half over seeded rows by a test: strength in
 // tests/core/memory.test.ts and tests/store/rule-sql-parity.test.ts, keep in tests/core/keep-rule.test.ts, scope in
 // tests/db/scope-admit-parity.test.ts and tests/api/personal-read-sites.process.test.ts, bare text in
 // tests/store/rule-sql-parity.test.ts.
 import { DAY_MS } from '../../base/util/time.js';
-import { isDecayAblated, isOutcomeSlowAblated, isRecallBoostAblated } from '../../base/memory/ablation.js';
 import {
-  DECAY_BASE,
   EMOTIONAL_MULTIPLIERS,
   FALLBACK_HALF_LIFE_DAYS,
-  KEEP_PAIRS,
-  MAX_WRONG_HALVINGS,
-  RETRIEVAL_BOOST_SLOPE,
   applyLossAversionRatio,
-  parseLossAversionRatio,
-  type EmotionalValence,
-  type KeepPair,
-  type LossAversion,
-} from '../../base/memory/memory.js';
+  type StrengthModel,
+} from '../../base/memory/strength.js';
+import { KEEP_PAIRS, type KeepPair } from '../../base/memory/keep-rules.js';
+import type { EmotionalValence } from '../../base/memory/entry.js';
 import { PERSONAL_SCOPE_PREFIX, RECALL_DEFAULT_DENY_SCOPES } from '../../base/scope/recall-scope.js';
 import { placeholders, type SqlFragment } from '../../db/sql.js';
-import { REWARD_FACTOR_SQL } from '../../db/decay-key.js';
+import { rewardFactorAt } from '../../db/decay-key.js';
 import { SPACE_CODES } from '../rules/copies.js';
 
 const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
@@ -31,41 +25,40 @@ export const bareTextSql = (column: string): string =>
 
 /** calculateRewardFactor as SQL over `memories` columns; strengthSql and the context-candidate rank both build on it,
  * so the slope has one source. */
-export function rewardFactorSql(): string {
-  return isOutcomeSlowAblated() ? '1.0' : REWARD_FACTOR_SQL;
+export function rewardFactorSql(model: StrengthModel): string {
+  return rewardFactorAt(model.rewardSlope);
 }
 
-/** calculateStrength's clock-basis formula as SQL over `memories` columns, flags and multipliers baked in; keep in
+/** calculateStrength's clock-basis formula under `model` as SQL over `memories` columns; keep in
  * step. An unparseable date scores NULL here and 0 in JS, so sums agree. `now` is bound, so the text, and the statement
  * cached for it, stay the same at every call. */
-export function strengthSql(now: Date, rules: LossAversion): SqlFragment {
+export function strengthSql(now: Date, model: StrengthModel): SqlFragment {
   return {
-    sql: strengthSqlAt('?', rules),
-    params: isDecayAblated() ? [] : [now.getTime() / DAY_MS + UNIX_EPOCH_JULIAN_DAY],
+    sql: strengthSqlAt('?', model),
+    params: model.decays ? [now.getTime() / DAY_MS + UNIX_EPOCH_JULIAN_DAY] : [],
   };
 }
 
 /** strengthSql with the current time as the Julian day `julianNow` names, for a statement that binds by name. */
-export function strengthSqlAt(julianNow: string, rules: LossAversion): string {
-  const ratio = parseLossAversionRatio(rules.lossAversionRatio);
+export function strengthSqlAt(julianNow: string, model: StrengthModel): string {
   const num = (n: number): string => (Number.isInteger(n) ? n.toFixed(1) : String(n));
   const pos = 'COALESCE(outcome_positive, 0)';
   const neg = 'COALESCE(outcome_negative, 0)';
-  const wrong = isOutcomeSlowAblated() || isDecayAblated() ? '0' : `MAX(0, ${neg} - ${pos})`;
-  const halfLife = `(COALESCE(half_life_days, ${FALLBACK_HALF_LIFE_DAYS}) * ${rewardFactorSql()})`;
-  const anchor = isRecallBoostAblated() ? 'created' : 'last_retrieved';
-  const decay = isDecayAblated() ? '1.0' : `pow(${DECAY_BASE}, (${julianNow} - julianday(${anchor})) / ${halfLife})`;
-  const boost = isRecallBoostAblated()
-    ? '1.0'
-    : `(CASE WHEN ${wrong} > 0 THEN 1.0 ELSE 1.0 + ${RETRIEVAL_BOOST_SLOPE} * log2(COALESCE(retrieval_count, 0) + 1) ` +
-      `END)`;
+  const wrong = `MIN(MAX(0, ${neg} - ${pos}), ${model.maxWrongHalvings})`;
+  const halfLife = `(COALESCE(half_life_days, ${FALLBACK_HALF_LIFE_DAYS}) * ${rewardFactorSql(model)})`;
+  const anchor = model.recallStrengthens ? 'last_retrieved' : 'created';
+  const decay = model.decays ? `pow(${model.decayBase}, (${julianNow} - julianday(${anchor})) / ${halfLife})` : '1.0';
+  const boost = model.recallStrengthens
+    ? `(CASE WHEN ${wrong} > 0 THEN 1.0 ELSE 1.0 + ${model.retrievalBoostSlope} * ` +
+      `log2(COALESCE(retrieval_count, 0) + 1) END)`
+    : '1.0';
   const valences = /* SAFETY: a Record keyed by EmotionalValence */ Object.keys(
     EMOTIONAL_MULTIPLIERS,
   ) as EmotionalValence[];
   const emotion = `(CASE COALESCE(emotional_valence, 'neutral') ${valences
-    .map((v) => `WHEN '${v}' THEN ${num(applyLossAversionRatio(v, EMOTIONAL_MULTIPLIERS[v], ratio))}`)
+    .map((v) => `WHEN '${v}' THEN ${num(applyLossAversionRatio(v, EMOTIONAL_MULTIPLIERS[v], model.lossAversionRatio))}`)
     .join(' ')} ELSE 1.0 END)`;
-  const penalty = `pow(${DECAY_BASE}, MIN(${wrong}, ${MAX_WRONG_HALVINGS}))`;
+  const penalty = `pow(${model.decayBase}, ${wrong})`;
   return `(CASE WHEN pinned THEN ${penalty} WHEN ${halfLife} <= 0 THEN 0.0
     ELSE MIN(1.0, MAX(0.0, ${decay} * ${boost} * ${emotion})) * ${penalty} END)`;
 }

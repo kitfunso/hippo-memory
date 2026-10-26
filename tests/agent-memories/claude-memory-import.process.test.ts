@@ -10,10 +10,12 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { REAL_IO } from '../_helpers/real-io.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 const learnFromClaude = async (hippoRoot: string, home: string): Promise<number> =>
   totalTally(
     await importProjectMemories(hippoRoot, {
+      run: TEST_RUN,
       configAt: loadConfig,
       tenantId: 'default',
       stores: sqliteImportStores({}),

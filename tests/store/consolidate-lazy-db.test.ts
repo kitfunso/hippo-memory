@@ -18,7 +18,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { consolidate } from '../../src/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';

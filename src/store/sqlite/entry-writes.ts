@@ -1,12 +1,7 @@
 // hippo.db's EntryWrites group: the writes remember, outcome, supersede, archive and forget run, and the shared entry
 // write path.
-import {
-  type LossAversion,
-  type MemoryEntry,
-  markRetrieved,
-  entryAfterOutcome,
-  strengthOptionsOf,
-} from '../../base/memory/memory.js';
+import { type MemoryEntry, markRetrieved } from '../../base/memory/entry.js';
+import { entryAfterOutcome } from '../../base/memory/keep-rules.js';
 import { closeHippoDb, type DatabaseSyncLike, openHippoDb, withWriteScope, isSqliteBusy } from '../../db/index.js';
 import { rethrowIfStoreBlocked } from '../../base/util/store-blocked.js';
 import { RejectedValueError, ConflictError, CrossTenantIdError, NotFoundError } from '../../base/errors/api-errors.js';
@@ -26,7 +21,8 @@ import {
 } from './entry-row.js';
 import { mirrorBestEffort, writeMarkdownMirror, purgeMirrorBestEffort, removeEntryMirrors } from './mirrors.js';
 import { deferDueMirrors, markMirrorsDue } from './due-mirrors.js';
-import type { Handles, StoreFiles } from './open.js';
+import type { Handles, StoreFiles, StoreModel } from './open.js';
+import { bindHandleClock } from './handle-clock.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { RenameSourceOptions } from '../../base/ports/store/agent-import.js';
 import type { StrengthenOptions } from '../../base/ports/store/recall-writes.js';
@@ -225,7 +221,7 @@ export function strengthenRetrievedInOwnTx(
   db: DatabaseSyncLike,
   ids: readonly string[],
   opts: StrengthenOptions,
-  rules: LossAversion,
+  rules: StoreModel,
 ): Set<string> {
   if (ids.length === 0 || opts.recallBoostAblated) return new Set();
   try {
@@ -246,12 +242,12 @@ export function strengthenRetrieved(
   hippoRoot: string,
   ids: readonly string[],
   opts: StrengthenOptions,
-  rules: LossAversion,
+  rules: StoreModel,
 ): Set<string> {
   if (ids.length === 0 || opts.recallBoostAblated) return new Set();
   let db: DatabaseSyncLike;
   try {
-    db = openHippoDb(hippoRoot);
+    db = bindHandleClock(openHippoDb(hippoRoot), rules.clock);
   } catch (error) {
     rethrowIfStoreBlocked(error);
     warnStrengthenFailed(error);
@@ -277,13 +273,13 @@ export function strengthenRetrievedOn(
   db: DatabaseSyncLike,
   ids: readonly string[],
   opts: StrengthenOptions,
-  rules: LossAversion,
+  rules: StoreModel,
 ): Set<string> {
   const found = new Set<string>();
   if (ids.length === 0 || opts.recallBoostAblated) return found;
   const byId = readEntriesByIds(db, ids, opts.tenantId);
   const live = [...new Set(ids)].flatMap((id) => byId.get(id) ?? []);
-  const updated = markRetrieved(live, undefined, strengthOptionsOf(rules));
+  const updated = markRetrieved(live, rules.clock(), rules.strength);
   if (updated.length === 0) return found;
   const rows = updated.map((e) => [e.id, e.retrievalCount, e.lastRetrieved, e.halfLifeDays, e.strength]);
   cachedStatement(db, RETRIEVAL_UPDATE_SQL).run(JSON.stringify(rows));
@@ -510,7 +506,7 @@ export function writeInOwnTenant(
 /** The read, row rewrites, audit rows and mirror marks share one BEGIN IMMEDIATE transaction, hippo.db's form of the
  * port's row lock, each a set statement whatever the id count. Returns one entry per applied id with repeats, as
  * callers count them. An outcome never changes content, so the rejected-value guard has nothing to check. */
-function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite, rules: LossAversion): readonly MemoryEntry[] {
+function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite, rules: StoreModel): readonly MemoryEntry[] {
   return withWriteScope(db, 'apply_outcome', () => {
     const read = readEntriesByIds(db, outcome.ids, outcome.tenantId);
     const latest = new Map<string, MemoryEntry>();
@@ -518,7 +514,7 @@ function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite, rules: Loss
     for (const id of outcome.ids) {
       const entry = latest.get(id) ?? read.get(id);
       if (!entry || !readerReaches(targetReader(outcome), entry.scope)) continue;
-      const updated = entryAfterOutcome(entry, outcome.good, rules);
+      const updated = entryAfterOutcome(entry, outcome.good, rules.clock(), rules.strength);
       latest.set(id, updated);
       applied.push(updated);
     }
@@ -620,7 +616,7 @@ function cleanArchivedMirrors(db: DatabaseSyncLike, files: StoreFiles, id: strin
   }
   try {
     cachedStatement(db, `UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
-      new Date().toISOString(),
+      files.clock().toISOString(),
       id,
     );
   } catch (err) {

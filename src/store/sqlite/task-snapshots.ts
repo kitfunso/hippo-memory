@@ -12,6 +12,7 @@ import type { StoreFiles } from './open.js';
 import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../../base/ports/store/types.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import type { SqlFragment } from '../../db/sql.js';
+import { handleStamp } from './handle-clock.js';
 
 // The continuity key's match: all or nothing, so a key missing its owner or every project name
 // matches no row, never the tenant's newest.
@@ -83,7 +84,7 @@ export function saveActiveTaskSnapshot(
   assertKeyedOnSharedStore('saveActiveTaskSnapshot', files, key);
   const stamp = key ? continuityStamp(key) : null;
   const owned = key ? continuityWhere(key) : null;
-  const now = new Date().toISOString();
+  const now = handleStamp(db);
   const id = withWriteScope(db, 'save_active_task', () => {
     cachedStatement(
       db,

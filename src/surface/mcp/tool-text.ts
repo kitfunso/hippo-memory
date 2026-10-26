@@ -3,7 +3,7 @@
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
-import { confidenceLabel } from '../../base/memory/memory.js';
+import { confidenceLabel } from '../../base/memory/strength.js';
 import type { ContextCost } from '../../api/context-types.js';
 import type { ContinuityBlock, RecallResult, RecallResultItem } from '../../api/recall/types.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../../base/session/handoff.js';
@@ -67,15 +67,15 @@ function memoriesHeading(count: number): string {
   return `Found ${count} memories:\n`;
 }
 
-function formatMemory(r: Pick<SearchResult, 'entry'>): string {
-  const conf = confidenceLabel(r.entry).text;
+function formatMemory(r: Pick<SearchResult, 'entry'>, now: Date): string {
+  const conf = confidenceLabel(r.entry, now).text;
   const tags = r.entry.tags.length > 0 ? ` tags: ${r.entry.tags.join(', ')}` : '';
   return `[${conf}]${tags} (strength=${r.entry.strength.toFixed(2)})\n${r.entry.content}\n`;
 }
 
-export function formatMemories(results: ReadonlyArray<Pick<SearchResult, 'entry'>>): string {
+export function formatMemories(results: ReadonlyArray<Pick<SearchResult, 'entry'>>, now: Date): string {
   if (results.length === 0) return NO_MEMORIES;
-  return [memoriesHeading(results.length), ...results.map(formatMemory)].join('\n');
+  return [memoriesHeading(results.length), ...results.map((r) => formatMemory(r, now))].join('\n');
 }
 
 export interface RenderedRecall {
@@ -90,8 +90,11 @@ export interface RenderSlot {
   rendered?: RenderedRecall;
 }
 
-/** What a memory costs the budget: the text formatMemories prints for it. */
-export const memoryCost = (r: Pick<SearchResult, 'entry'>): number => printedTokens(formatMemory(r));
+/** What a memory costs the budget at `now`: the text formatMemories prints for it. */
+export const memoryCostAt =
+  (now: Date) =>
+  (r: Pick<SearchResult, 'entry'>): number =>
+    printedTokens(formatMemory(r, now));
 
 // The widest heading or the empty-list line, whichever costs more, so either prints inside the budget.
 export function memoriesReserve(budget: number): number {
@@ -124,13 +127,13 @@ export function trailPiece(events: readonly SessionEvent[]): string {
 }
 
 // Sections print ahead of the memories in hippo_context, so contextGet pays for each as printed before any memory.
-export const contextCost: ContextCost = {
-  entry: memoryCost,
+export const contextCostAt = (now: Date): ContextCost => ({
+  entry: memoryCostAt(now),
   fixed: (budget) => memoriesReserve(budget),
   snapshot: (s) => estimateTokens(snapshotPiece(s)),
   handoff: (h) => estimateTokens(handoffPiece(h)),
   trail: (events) => estimateTokens(trailPiece(events)),
-};
+});
 
 // Rows the ranked list already shows drop out of this section, so pricing every row bounds what it prints.
 export function tailSection(rows: RecallResultItem[]): string {

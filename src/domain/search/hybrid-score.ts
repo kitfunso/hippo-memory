@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { matchedQueryTerms } from './bm25.js';
 import { applyRankBoosts, strengthRecencyMultipliers, type AppliedBoosts, type BoostContext } from './boosts.js';

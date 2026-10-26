@@ -3,18 +3,17 @@
 import { envActiveScope } from '../../base/util/env.js';
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import * as fs from 'node:fs';
-import { ERROR_TAG, Layer, ConfidenceLevel, strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
+import { ERROR_TAG, Layer, ConfidenceLevel, type MemoryEntry } from '../../base/memory/entry.js';
 import * as api from '../../api/index.js';
 import { memoryGet, memoryListByIds } from '../../api/memories/memories.js';
-import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
+import { ConflictError, NotFoundError, RejectedValueError } from '../../base/errors/api-errors.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
-import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { parseSteps, traceRecord, traceStats } from '../../api/memories/trace.js';
 import { extractPathTags } from '../../api/memories/remember-local.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
 import { type MemoryWrites, type RememberRequest, type Remembered, localWrites, pickWrites } from './memory-writes.js';
-import { cliApiContext, cliConfig, cliInitGlobal } from './api-context.js';
+import { cliApiContext, cliInitGlobal } from './api-context.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
@@ -269,7 +268,8 @@ async function printTrace(hippoRoot: string, tenantId: string, id: string, flags
   const asJson = boolFlag(flags, 'json');
 
   // Look in local store first, then global.
-  let entry = await memoryGet(cliApiContext(hippoRoot, tenantId), id);
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  let entry = await memoryGet(ctx, id);
   let sourceLabel: 'local' | 'global' = 'local';
   const globalRoot = hippoHomeDir();
   if (!entry && isInitialized(globalRoot)) {
@@ -284,7 +284,7 @@ async function printTrace(hippoRoot: string, tenantId: string, id: string, flags
     entry,
     id,
     sourceLabel,
-    ...traceStats(entry, strengthOptionsOf(cliConfig(hippoRoot).runtime)),
+    ...traceStats(entry, ctx),
     ...(await traceLineage(hippoRoot, globalRoot, entry, id, tenantId)),
   };
   if (asJson) {

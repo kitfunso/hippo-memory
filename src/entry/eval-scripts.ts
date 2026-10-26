@@ -3,8 +3,10 @@
 import { folderEmbedTarget, type EmbedTarget } from '../domain/search/embed-memories.js';
 import { hybridSearch as rankHybrid, type HybridRankOptions } from '../domain/search/hybrid.js';
 import { outcomeMultiplier as outcomeNudge } from '../domain/search/boosts.js';
-import { evalSwitches, isOutcomeFastAblated } from '../base/memory/ablation.js';
-import type { MemoryEntry } from '../base/memory/memory.js';
+import { evalNow, evalRun, evalSwitches, isOutcomeFastAblated } from '../infra/eval-switches.js';
+// Frozen eval scripts set HIPPO_FAKE_NOW per simulated session and read the clock and the recall-boost switch here.
+export { evalNow, isRecallBoostAblated } from '../infra/eval-switches.js';
+import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { HippoStore } from '../base/ports/store.js';
@@ -34,16 +36,16 @@ export { scriptRerankers as getReranker };
 
 /** A folder's embedding target, embedding with the real provider its config names. */
 export function folderIndex(folder: Omit<ConfiguredFolder<HippoStore>, 'embedderFor'>): EmbedTarget {
-  return folderEmbedTarget({ ...folder, embedderFor: resolveEmbeddingProvider }, evalSwitches());
+  return folderEmbedTarget({ ...folder, embedderFor: resolveEmbeddingProvider }, evalRun());
 }
 
-/** The domain hybridSearch under the environment's eval switches, with no folder or working-folder defaults filled. */
+/** The domain hybridSearch under the environment's eval switches and clock, with no folder defaults filled. */
 export function hybridSearch(
   query: string,
   entries: MemoryEntry[],
   options: HybridRankOptions = {},
 ): Promise<SearchResult[]> {
-  return rankHybrid(query, entries, { switches: evalSwitches(), ...options });
+  return rankHybrid(query, entries, { switches: evalSwitches(), ...options, now: options.now ?? evalNow() });
 }
 
 /** The outcome nudge, off when HIPPO_ABLATE_OUTCOME or _OUTCOME_FAST is set and the caller passes no `ablated`. */

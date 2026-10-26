@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { LossAversion } from '../../base/memory/memory.js';
+import type { StoreRules } from '../../base/ports/infra.js';
 import { outsideRequestStores } from '../../db/index.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { isStoreBusy, type StoreWith } from '../../base/ports/store.js';
@@ -23,7 +23,7 @@ interface SqliteImportStores {
 }
 
 /** The opener a CLI verb hands the sync; `rules` are the invoking root's, which every store it opens scores by. */
-export function sqliteImportStores(rules: LossAversion): SqliteImportStores {
+export function sqliteImportStores(rules: StoreRules): SqliteImportStores {
   return {
     open: (root, { busyWaitMs }) => ({
       ...sqliteStore(root, rules),
@@ -36,7 +36,7 @@ export function sqliteImportStores(rules: LossAversion): SqliteImportStores {
   };
 }
 
-function standIn(rules: LossAversion): SqliteImportStore {
+function standIn(rules: StoreRules): SqliteImportStore {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
   // Its folder is deleted at close, so a request scope must not keep one of its handles open past that.
   outsideRequestStores(() => initStore(root));

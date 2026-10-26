@@ -1,6 +1,6 @@
 // What a dirty DAG summary settles to after a rebuild or a fresh build, with the audit rows and log line each writes;
 // the store lands it in one write while the summary is still dirty.
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { log } from '../../base/util/log.js';
 import { DIGEST_DISPLAY_CHARS } from '../../base/util/token-text.js';
@@ -17,6 +17,7 @@ export interface RebuildPatch {
   bumpRebuildCount: boolean;
   zeroChildren: boolean;
   actor: string;
+  now: Date;
 }
 
 /** Lands `patch` on the summary while it is still dirty: `changed` false means another sleep settled it first, and
@@ -27,7 +28,7 @@ export async function applyRebuild(
   patch: RebuildPatch,
 ): Promise<SummarySettled> {
   const { id, tenantId } = summary;
-  const content = patch.bumpRebuildCount ? { text: patch.content, rebuiltAt: new Date().toISOString() } : undefined;
+  const content = patch.bumpRebuildCount ? { text: patch.content, rebuiltAt: patch.now.toISOString() } : undefined;
   const settled = await store.consolidation.settleSummary({
     id,
     tenantId,

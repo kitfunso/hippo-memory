@@ -1,5 +1,5 @@
 /**
- * EVAL-ONLY lifecycle ablation flags (src/base/memory/ablation.ts).
+ * EVAL-ONLY lifecycle ablation flags (src/infra/eval-switches.ts).
  *
  * Pre-registered design rev #10 requirement: each flag must neutralize ONLY
  * its intended mechanism. Every block therefore asserts BOTH the ablation
@@ -13,18 +13,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import * as path from 'node:path';
-import {
-  calculateStrength,
-  calculateRewardFactor,
-  createMemory,
-  applyOutcome,
-  type MemoryEntry,
-  DEFAULT_HALF_LIFE_DAYS,
-} from '../../src/base/memory/memory.js';
+import { calculateStrength, createMemory, applyOutcome, markRetrieved } from '../../src/entry/memory.js';
+import { calculateRewardFactor, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { outcomeMultiplier } from '../../src/domain/search/boosts.js';
-import { markRetrieved } from '../../src/base/memory/memory.js';
-import { evalNow, isOutcomeSlowAblated, strengthAblation } from '../../src/base/memory/ablation.js';
+import { evalNow, evalSwitches, type StrengthAblation } from '../../src/infra/eval-switches.js';
+import {
+  envAblateDecay,
+  envAblateOutcome,
+  envAblateOutcomeSlow,
+  envAblateRecallBoost,
+} from '../../src/base/util/env.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
@@ -34,7 +34,13 @@ afterEach(() => {
 });
 
 // Core no longer reads the environment: each call hands it the flags the test just set.
-const abl = () => ({ ablation: strengthAblation() });
+// The cuts the stubbed env names, as the entry functions take them.
+const ablation = (): StrengthAblation => ({
+  decay: envAblateDecay(),
+  recallBoost: envAblateRecallBoost(),
+  outcomeSlow: envAblateOutcome() || envAblateOutcomeSlow(),
+});
+const abl = () => ({ ablation: ablation() });
 
 const ABLATION_ENV_VARS = [
   'HIPPO_ABLATE_DECAY',
@@ -85,7 +91,7 @@ describe('defaults (no flags set)', () => {
     // Slow outcome channel live.
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
-    expect(calculateRewardFactor(m, strengthAblation())).toBeGreaterThan(1);
+    expect(calculateRewardFactor(m, evalSwitches().strength)).toBeGreaterThan(1);
     // Fast outcome channel live.
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
     expect(results[0].breakdown?.outcomeBoost).toBeGreaterThan(1);
@@ -156,7 +162,7 @@ describe('HIPPO_ABLATE_DECAY', () => {
   it('isolation: slow outcome channel still runs', () => {
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, false);
-    expect(calculateRewardFactor(m, strengthAblation())).toBeLessThan(1);
+    expect(calculateRewardFactor(m, evalSwitches().strength)).toBeLessThan(1);
   });
 
   it('documents the clamp interaction: read-side retrieval boost saturates at 1', () => {
@@ -226,8 +232,8 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     hot.lastRetrieved = new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString();
     const cold = agedMemory(10);
     cold.created = created;
-    expect(computeMass(calculateStrength(hot, NOW, abl()), hot.retrievalCount, abl().ablation)).toBe(
-      computeMass(calculateStrength(cold, NOW, abl()), cold.retrievalCount, abl().ablation),
+    expect(computeMass(calculateStrength(hot, NOW, abl()), hot.retrievalCount, evalSwitches().strength)).toBe(
+      computeMass(calculateStrength(cold, NOW, abl()), cold.retrievalCount, evalSwitches().strength),
     );
   });
 
@@ -249,10 +255,10 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     // retrieval_count; under the flag, mass must ignore retrieval history in
     // both the init and refresh paths (computeMass is the single shared site).
     const { computeMass } = await import('../../src/base/rank/physics.js');
-    expect(computeMass(0.8, 16, abl().ablation)).toBe(computeMass(0.8, 0, abl().ablation));
+    expect(computeMass(0.8, 16, evalSwitches().strength)).toBe(computeMass(0.8, 0, evalSwitches().strength));
     // Sanity: WITHOUT the flag, history raises mass.
     clearAblationEnv();
-    expect(computeMass(0.8, 16, abl().ablation)).toBeGreaterThan(computeMass(0.8, 0, abl().ablation));
+    expect(computeMass(0.8, 16, evalSwitches().strength)).toBeGreaterThan(computeMass(0.8, 0, evalSwitches().strength));
   });
 
   it('anchors decay at created: prior clock resets cannot leak in', () => {
@@ -277,7 +283,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
   it('isolation: both outcome channels still run', async () => {
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
-    expect(calculateRewardFactor(m, strengthAblation())).toBeGreaterThan(1);
+    expect(calculateRewardFactor(m, evalSwitches().strength)).toBeGreaterThan(1);
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
     expect(results[0].breakdown?.outcomeBoost).toBeGreaterThan(1);
   });
@@ -296,7 +302,7 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
     m = applyOutcome(m, true);
-    expect(calculateRewardFactor(m, strengthAblation())).toBe(1.0);
+    expect(calculateRewardFactor(m, evalSwitches().strength)).toBe(1.0);
   });
 
   it('neutralizes the fast channel (outcomeBoost = 1 despite outcomes)', async () => {
@@ -327,15 +333,15 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
     // otherwise differ from plain's initial cache purely by fixture timing.
     rewarded.strength = calculateStrength(rewarded, NOW, abl());
     plain.strength = calculateStrength(plain, NOW, abl());
-    expect(replayPriority(rewarded, NOW, isOutcomeSlowAblated())).toBe(
-      replayPriority(plain, NOW, isOutcomeSlowAblated()),
+    expect(replayPriority(rewarded, NOW, evalSwitches().strength.rewardSlope === 0)).toBe(
+      replayPriority(plain, NOW, evalSwitches().strength.rewardSlope === 0),
     );
     // Sanity: WITHOUT the flag the rewarded memory is prioritized.
     clearAblationEnv();
     rewarded.strength = calculateStrength(rewarded, NOW, abl());
     plain.strength = calculateStrength(plain, NOW, abl());
-    expect(replayPriority(rewarded, NOW, isOutcomeSlowAblated())).toBeGreaterThan(
-      replayPriority(plain, NOW, isOutcomeSlowAblated()),
+    expect(replayPriority(rewarded, NOW, evalSwitches().strength.rewardSlope === 0)).toBeGreaterThan(
+      replayPriority(plain, NOW, evalSwitches().strength.rewardSlope === 0),
     );
   });
 });
@@ -348,7 +354,7 @@ describe('HIPPO_ABLATE_OUTCOME_SLOW (decomposition arm)', () => {
   it('slow off, fast still live', async () => {
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
-    expect(calculateRewardFactor(m, strengthAblation())).toBe(1.0); // slow off
+    expect(calculateRewardFactor(m, evalSwitches().strength)).toBe(1.0); // slow off
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
     expect(results[0].breakdown?.outcomeBoost).toBeGreaterThan(1); // fast on
   });
@@ -362,7 +368,7 @@ describe('HIPPO_ABLATE_OUTCOME_FAST (decomposition arm)', () => {
   it('fast off, slow still live', async () => {
     let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
-    expect(calculateRewardFactor(m, strengthAblation())).toBeGreaterThan(1); // slow on
+    expect(calculateRewardFactor(m, evalSwitches().strength)).toBeGreaterThan(1); // slow on
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
     expect(results[0].breakdown?.outcomeBoost).toBe(1); // fast off
   });
@@ -460,7 +466,7 @@ describe('HIPPO_FAKE_NOW', () => {
     const results = await searchBothHybrid(
       'wrapper clock consistency check',
       ...sharingStores(tmp, path.join(tmp, 'no-global')),
-      { tenantId: ALL_TENANTS, embedderFor: resolveEmbeddingProvider, budget: 10000, explain: true },
+      { now: evalNow(), tenantId: ALL_TENANTS, embedderFor: resolveEmbeddingProvider, budget: 10000, explain: true },
     );
     expect(results).toHaveLength(1);
     expect(results[0].breakdown?.strengthMultiplier).toBeLessThan(0.51);

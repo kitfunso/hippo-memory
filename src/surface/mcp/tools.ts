@@ -1,11 +1,10 @@
 // Tool definitions and input schemas served by tools/list.
 
 import type { ToolInputSchema } from './tool-args.js';
-import { DEFAULT_RECALL_BUDGET } from '../../base/rank/search-types.js';
+import { DEFAULT_RECALL_BUDGET, DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
 import { DEFAULT_ASSEMBLE_BUDGET, DEFAULT_FRESH_TAIL_COUNT } from '../../api/assemble.js';
 import { DEFAULT_DRILL_DOWN_LIMIT, MAX_DRILL_DOWN_DEPTH } from '../../api/objects/drill-down.js';
 import { DEFAULT_LEARN_DAYS, MAX_ID_LEN, MAX_LIST_LIMIT } from '../../base/util/limits.js';
-import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../base/rank/search-types.js';
 import { DEFAULT_CONFIG } from '../../base/config/config.js';
 
 // ── Tool definitions ──

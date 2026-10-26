@@ -1,5 +1,5 @@
 import type { Migration } from './types.js';
-import { DAG_LEVEL } from '../../base/memory/memory.js';
+import { DAG_LEVEL } from '../../base/memory/entry.js';
 
 const DIRTY_SUMMARIES = 'idx_memories_summary_dirty ON memories(latest_at DESC, id) WHERE summary_dirty = 1';
 const OPEN_L2 =

@@ -1,7 +1,7 @@
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { dumpFrontmatter } from '../../base/util/yaml.js';
 import { type DatabaseSyncLike, CONSOLIDATION_RUNS_KEPT } from '../../db/index.js';
 import { oncePerStore } from '../../db/connect.js';

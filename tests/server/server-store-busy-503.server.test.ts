@@ -5,7 +5,8 @@ import { MessageChannel } from 'node:worker_threads';
 import { getHippoDbPath, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { ServerHandle } from '../../src/server.js';
 import { log } from '../../src/base/util/log.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { serveJobs } from '../../src/store/sqlite/worker-jobs.js';
 import type { Job, Reply } from '../../src/store/sqlite/worker-ops.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from '../_helpers/count-statements.js';
@@ -90,7 +91,7 @@ describe('server under a held write lock', () => {
     holder.exec('BEGIN IMMEDIATE');
     // The worker's own job loop, run on this thread so its statements can be read; 7 is a wait no default has.
     const { result: reply, statements } = await recordStatementsAsync(() => {
-      serveJobs(port1, { hippoRoot: home, mode: 'write', busyWaitMs: 7 });
+      serveJobs(port1, { rules: {}, hippoRoot: home, mode: 'write', busyWaitMs: 7 });
       port2.postMessage(job);
       return replied;
     });

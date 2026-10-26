@@ -1,10 +1,10 @@
 // The dashboard's memory lists. One scan sorts a project's kept ids into a TEMP table on the held reader, so the next
 // page of the same stamp reads its rows by position and the project is not scanned again until a commit.
 import type { DatabaseSyncLike, SqlValue } from '../../db/index.js';
+import type { StoreModel } from './open.js';
 import { withReadSnapshot } from '../../db/busy.js';
 import { pragmaDataVersion } from '../../db/meta.js';
 import { cachedStatement } from '../../db/statement-cache.js';
-import type { LossAversion } from '../../base/memory/memory.js';
 import { BAND_AT_RISK, CONFIDENCE_ORDER, LAYER_ORDER, listHead, memoryFacts } from '../../base/memory/memory-facts.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type {
@@ -105,8 +105,8 @@ interface ScanPlan {
 
 // LIMIT -1 makes `listed` a co-routine, so each function runs once per row; strength is native SQL, unparseable dates
 // at 0 as calculateStrength scores them.
-function scanSql({ sort, descending, byStrength, holds }: ScanPlan, rules: LossAversion): string {
-  const strength = `COALESCE(${strengthSqlAt(julianDayOfMs(':now'), rules)}, 0.0)`;
+function scanSql({ sort, descending, byStrength, holds }: ScanPlan, rules: StoreModel): string {
+  const strength = `COALESCE(${strengthSqlAt(julianDayOfMs(':now'), rules.strength)}, 0.0)`;
   const extra = [
     sort === 'content' ? `substr(content, 1, ${HEAD_READ}) AS head, ` : '',
     sort === 'age' ? 'hippo_days(created, :now) AS age, ' : '',
@@ -130,7 +130,7 @@ function scanSql({ sort, descending, byStrength, holds }: ScanPlan, rules: LossA
 /** The page query with the tenant and the time the scan dates its facts at. */
 type ScanQuery = DashboardPageQuery & { readonly tenantId: string; readonly nowMs: number };
 
-function listScan(db: DatabaseSyncLike, rules: LossAversion, query: ScanQuery, list: number): ListScan {
+function listScan(db: DatabaseSyncLike, rules: StoreModel, query: ScanQuery, list: number): ListScan {
   const { tenantId, nowMs } = query;
   const holds = textFilter(db, query.text);
   const byStrength = query.minStrength !== Number.NEGATIVE_INFINITY || query.maxStrength !== Number.POSITIVE_INFINITY;
@@ -179,7 +179,7 @@ function filterTally(tally: SqlValue): FilterTally {
   };
 }
 
-function listedRow(row: PageRow, nowMs: number, rules: LossAversion): ListedRow {
+function listedRow(row: PageRow, nowMs: number, rules: StoreModel): ListedRow {
   const inputs = factInputs(row);
   const { head, truncated } = listHead(row.head);
   return {
@@ -190,7 +190,7 @@ function listedRow(row: PageRow, nowMs: number, rules: LossAversion): ListedRow 
     scope: row.scope ?? null,
     pinned: inputs.pinned,
     inConflict: Boolean(row.in_conflict),
-    facts: memoryFacts(inputs, nowMs, rules),
+    facts: memoryFacts(inputs, nowMs, rules.strength),
   };
 }
 
@@ -210,12 +210,12 @@ function listKey(tenantId: string, query: DashboardPageQuery, nowMs: number): st
 /** The sorted lists one held reader keeps, scored by `rules`; a commit to the store drops them all. */
 export class MemoryLists {
   readonly #db: DatabaseSyncLike;
-  readonly #rules: LossAversion;
+  readonly #rules: StoreModel;
   readonly #lists = new Map<string, SortedList>();
   #version: number | null = null;
   #next = 1;
 
-  constructor(db: DatabaseSyncLike, rules: LossAversion) {
+  constructor(db: DatabaseSyncLike, rules: StoreModel) {
     this.#db = db;
     this.#rules = rules;
     db.exec(

@@ -20,7 +20,7 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { detectPlanningClaim } from '../../src/domain/predictions/planning-fallacy.js';
 import { savePrediction } from '../_helpers/save-prediction.js';

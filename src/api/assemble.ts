@@ -2,7 +2,7 @@
 
 import { estimateTokens } from '../base/util/token-text.js';
 import { READ_PAGE_ROWS, readAll } from '../base/util/pages.js';
-import type { MemoryEntry } from '../base/memory/memory.js';
+import type { MemoryEntry } from '../base/memory/entry.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall-scope.js';
 import { projectNames } from '../base/scope/project-identity.js';
 import { eligibleSummaryParents } from './summary-parents.js';
@@ -98,7 +98,7 @@ export async function assemble(ctx: Context, sessionId: string, opts: AssembleOp
   const tailItems = tailRows.map(freshTailItem);
 
   // Byte compare is chronological for the fixed-form UTC ISO timestamps (invariant documented in
-  // src/base/memory/memory.ts above MemoryEntry).
+  // src/base/memory/entry.ts above MemoryEntry).
   const cmpIso = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
   olderItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));

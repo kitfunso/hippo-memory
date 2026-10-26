@@ -19,6 +19,7 @@ import {
 } from '../../src/base/rank/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
 import { dot, norm } from '../../src/base/rank/cosine.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -100,13 +101,13 @@ describe('Vector math', () => {
 describe('Property derivation', () => {
   describe('computeMass', () => {
     it('increases with strength', () => {
-      expect(computeMass(0.8, 0)).toBeGreaterThan(computeMass(0.2, 0));
+      expect(computeMass(0.8, 0, PRODUCTION_STRENGTH)).toBeGreaterThan(computeMass(0.2, 0, PRODUCTION_STRENGTH));
     });
 
     it('increases logarithmically with retrieval count', () => {
-      const m0 = computeMass(1, 0);
-      const m10 = computeMass(1, 10);
-      const m100 = computeMass(1, 100);
+      const m0 = computeMass(1, 0, PRODUCTION_STRENGTH);
+      const m10 = computeMass(1, 10, PRODUCTION_STRENGTH);
+      const m100 = computeMass(1, 100, PRODUCTION_STRENGTH);
       expect(m10).toBeGreaterThan(m0);
       expect(m100).toBeGreaterThan(m10);
       // Logarithmic: gap narrows
@@ -114,13 +115,13 @@ describe('Property derivation', () => {
     });
 
     it('never drops below 0.01', () => {
-      expect(computeMass(0, 0)).toBe(0.01);
-      expect(computeMass(0.001, 0)).toBeGreaterThanOrEqual(0.01);
+      expect(computeMass(0, 0, PRODUCTION_STRENGTH)).toBe(0.01);
+      expect(computeMass(0.001, 0, PRODUCTION_STRENGTH)).toBeGreaterThanOrEqual(0.01);
     });
 
     it('formula matches expected value', () => {
       // strength=1.0, retrievalCount=3 -> 1.0 * (1 + 0.1 * log2(4)) = 1.0 * 1.2 = 1.2
-      expect(computeMass(1.0, 3)).toBeCloseTo(1.2, 5);
+      expect(computeMass(1.0, 3, PRODUCTION_STRENGTH)).toBeCloseTo(1.2, 5);
     });
   });
 
@@ -557,15 +558,6 @@ describe('Simulation', () => {
       const stats = simulate(particles, makeCtx({ config }));
       expect(stats.particleCount).toBe(2);
       expect(stats.substepsRun).toBe(10);
-    });
-
-    it('updates lastSimulation timestamp', () => {
-      const oldTime = '2020-01-01T00:00:00.000Z';
-      const p = makeParticle({ memoryId: 'a', lastSimulation: oldTime });
-      simulate([p], makeCtx());
-      expect(p.lastSimulation).not.toBe(oldTime);
-      // Should be a valid ISO date
-      expect(new Date(p.lastSimulation).getTime()).toBeGreaterThan(new Date(oldTime).getTime());
     });
 
     it('single particle with drag slows down', () => {

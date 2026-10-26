@@ -5,7 +5,9 @@ import { reject, remember, supersede, type Actor, type RejectResult } from '../.
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
 import { mapApiError } from '../../src/api/error-reply.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, generateId, type MemoryKind } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { generateId, type MemoryKind } from '../../src/base/memory/entry.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { listRejectionsForTenant, rejectValue } from '../../src/domain/trust/reject-flow.js';
 import { makeRoot } from '../_helpers/make-root.js';

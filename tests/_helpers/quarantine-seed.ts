@@ -3,7 +3,8 @@
 import { vi } from 'vitest';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb } from '../../src/db/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
 import { TENANT_A, TENANT_B } from './store-conformance.js';
 import { writeEntry } from './root-forms.js';

@@ -9,8 +9,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { folderStore } from '../_helpers/sharing-stores.js';
 import { listPeers } from '../../src/domain/sharing/share.js';
-import { Layer } from '../../src/base/memory/memory.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';

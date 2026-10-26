@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isFtsAvailable, type DatabaseSyncLike } from '../../db/index.js';
 import { tokenize } from '../../base/util/tokenize.js';
 import { recallScopeFilter, type RecallScopeFilter } from '../../base/scope/recall-scope.js';

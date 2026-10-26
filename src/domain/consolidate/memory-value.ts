@@ -6,12 +6,8 @@
  */
 
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
-import {
-  type MemoryEntry,
-  type StrengthOptions,
-  calculateStrength,
-  strengthOptionsOf,
-} from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
+import { PRODUCTION_STRENGTH, type StrengthModel, calculateStrength } from '../../base/memory/strength.js';
 import { compareEntryIdentity, compareScoresDesc, type EntryIdentity } from '../../base/rank/compare.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
 import { DAY_MS } from '../../base/util/time.js';
@@ -55,11 +51,7 @@ export interface MvFeatureVector {
  * DecayOptions, as in the weights' training; passing the production decay basis would silently break parity with the
  * frozen weights.
  */
-function computeMvFeatures(
-  entry: MemoryEntry,
-  now: Date,
-  rules: StrengthOptions = strengthOptionsOf(undefined),
-): MvFeatureVector {
+function computeMvFeatures(entry: MemoryEntry, now: Date, rules: StrengthModel): MvFeatureVector {
   const ageDays = (now.getTime() - Date.parse(entry.created)) / DAY_MS;
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
@@ -119,9 +111,10 @@ export function scoreEntries(
   entries: MemoryEntry[],
   now: Date,
   weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
+  model: StrengthModel = PRODUCTION_STRENGTH,
 ): Map<string, number> {
   return scoreFeatures(
-    entries.map((e) => [e.id, computeMvFeatures(e, now)] as const),
+    entries.map((e) => [e.id, computeMvFeatures(e, now, model)] as const),
     weights,
   );
 }
@@ -194,10 +187,11 @@ export function rankNonPinnedByTenant(
   now: Date,
   weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
   digest: string = SOURCE_ARTIFACT_SHA256,
+  model: StrengthModel = PRODUCTION_STRENGTH,
 ): Map<string, MvRankInfo> {
   validateWeights(weights, digest);
   const byId = new Map(entries.map((e) => [e.id, e]));
-  const candidates = entries.filter((e) => !e.pinned).map((e) => mvCandidate(e, now, strengthOptionsOf(undefined)));
+  const candidates = entries.filter((e) => !e.pinned).map((e) => mvCandidate(e, now, model));
   const result = new Map<string, MvRankInfo>();
   for (const group of tieGroups(candidates, () => true, weights)) {
     const held = group.tied.map((id) => identityOf(byId.get(id)!)).sort(compareEntryIdentity);
@@ -218,7 +212,7 @@ export interface MvCandidate {
 }
 
 /** The candidate `entry` ranks as; pinned entries never compete for rescue (never condemned). */
-export function mvCandidate(entry: MemoryEntry, now: Date, rules: StrengthOptions): MvCandidate {
+export function mvCandidate(entry: MemoryEntry, now: Date, rules: StrengthModel): MvCandidate {
   // Default an undefined tenantId as dag.ts:341 does: keying it "undefined" would split it into its own tenant.
   return {
     id: entry.id,
@@ -341,6 +335,8 @@ export interface RescueSetOptions {
   readonly weights?: Readonly<Record<string, number>>;
   readonly digest?: string;
   readonly precomputedRanks?: Map<string, MvRankInfo>;
+  /** The model the ranking scores strength by; production when absent. */
+  readonly strength?: StrengthModel;
 }
 
 /**
@@ -354,9 +350,9 @@ export function rescueSet(
   now: Date,
   options: RescueSetOptions = {},
 ): Set<string> {
-  const { weights = MEMORY_VALUE_WEIGHTS, digest = SOURCE_ARTIFACT_SHA256, precomputedRanks } = options;
+  const { weights = MEMORY_VALUE_WEIGHTS, digest = SOURCE_ARTIFACT_SHA256, precomputedRanks, strength } = options;
   validateWeights(weights, digest); // fail loud before any rescue computation
-  const ranked = precomputedRanks ?? rankNonPinnedByTenant(entries, now, weights, digest);
+  const ranked = precomputedRanks ?? rankNonPinnedByTenant(entries, now, weights, digest, strength);
   const rescued = new Set<string>();
   for (const id of condemnedIds) {
     const info = ranked.get(id);

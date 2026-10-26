@@ -4,15 +4,15 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../dist/base/memory/memory.js';
+import { createMemory } from '../dist/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../dist/base/memory/strength.js';
 import { initStore } from '../dist/entry/testing.js';
 import { upsertEntryRow } from '../dist/entry/testing.js';
 import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
 import { loadConfig } from '../dist/host/config-file.js';
-import { saveDecision } from '../dist/domain/objects/decisions.js';
-import { savePolicy } from '../dist/domain/objects/policies.js';
 import { extractGraphChunked } from '../dist/domain/graph/extract.js';
 import { sqliteStore } from '../dist/store/sqlite/store.js';
+import { saveDecision, savePolicy } from '../dist/entry/testing.js';
 
 const LIMIT_MS = 150;
 const TENANT = 'default';

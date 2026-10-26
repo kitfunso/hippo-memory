@@ -13,7 +13,7 @@ import {
 } from '../../src/api/index.js';
 import { graphViewOnHost } from '../../src/api/objects/graph.js';
 import { traceRecord } from '../../src/api/memories/trace.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import type { Actor } from '../../src/api/types.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';

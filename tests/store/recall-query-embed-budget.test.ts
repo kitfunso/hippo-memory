@@ -2,7 +2,9 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { embedMemoryInto } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
@@ -21,6 +23,7 @@ import { saveEmbeddingIndex, writeEntry, loadAllEntries, loadEmbeddingIndex } fr
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { onceKeysPerCase } from '../_helpers/once-keys-per-case.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -188,6 +191,7 @@ describe("a recall's query embedding", () => {
     const before = embeddings.requests();
 
     const ranked = await searchBothHybrid(QUERY, ...sharingStores(local, global), {
+      now: evalNow(),
       embedderFor: resolveEmbeddingProvider,
       budget: 1_000_000,
       tenantId: TENANT,

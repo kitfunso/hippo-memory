@@ -20,16 +20,15 @@ import {
   ERROR_TAG,
   Layer,
   schemaFitFrom,
-  strengthOptionsOf,
   type MemoryEntry,
   type SchemaFitSource,
-} from '../../base/memory/memory.js';
+} from '../../base/memory/entry.js';
 import { extractPathTags } from '../../domain/search/path-context.js';
 import { canReadScope, personalScopeOf } from '../../base/scope/recall-scope.js';
 import { duplicateKey, heldTextKeys, storedTextKeys } from '../../base/util/same-text.js';
 import type { LessonWrites } from '../../base/ports/store.js';
 import { memoryPages } from '../memories/memories.js';
-import type { Context, ContextWith } from '../types.js';
+import { strengthOf, type Context, type ContextWith } from '../types.js';
 
 /** How a surface writes what it learns. */
 export interface LearnProfile {
@@ -135,9 +134,8 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   counts.added += landed.length;
   if (!batch.full) return;
   if (landed.length > 0) await writes.bumpRemembered(landed.length);
-  const strength = strengthOptionsOf(ctx.config.runtime);
-  const { embedderFor } = ctx.infra;
-  const target = { store: ctx.store, embeddings: ctx.config.embeddings, embedderFor, strength };
+  const { embedderFor, clock } = ctx.infra;
+  const target = { store: ctx.store, embeddings: ctx.config.embeddings, embedderFor, strength: strengthOf(ctx), clock };
   for (const entry of landed) embedMemoryDetached(target, entry);
 }
 
@@ -152,19 +150,24 @@ interface LessonMemoryInputs {
   readonly config: HippoConfig;
   readonly fitSource: SchemaFitSource | undefined;
   readonly pathTags: readonly string[];
+  readonly now: Date;
 }
 
 function newLessonMemory(lesson: string, profile: LearnProfile, inputs: LessonMemoryInputs): MemoryEntry {
-  const { tenantId, config, fitSource, pathTags } = inputs;
-  const entry = createMemory(lesson, {
-    layer: Layer.Episodic,
-    tags: [...profile.tags],
-    source: profile.source,
-    confidence: 'observed',
-    schemaFit: fitSource && schemaFitFrom(lesson, [...profile.tags], fitSource),
-    tenantId,
-    baseHalfLifeDays: config.defaultHalfLifeDays,
-  });
+  const { tenantId, config, fitSource, pathTags, now } = inputs;
+  const entry = createMemory(
+    lesson,
+    {
+      layer: Layer.Episodic,
+      tags: [...profile.tags],
+      source: profile.source,
+      confidence: 'observed',
+      schemaFit: fitSource && schemaFitFrom(lesson, [...profile.tags], fitSource),
+      tenantId,
+      baseHalfLifeDays: config.defaultHalfLifeDays,
+    },
+    now,
+  );
   for (const tag of pathTags) if (!entry.tags.includes(tag)) entry.tags.push(tag);
   return entry;
 }
@@ -237,7 +240,7 @@ async function writeLessons(
       const { invalidated } = await invalidateMatchingAmong(store, live, target, tenantId);
       if (invalidated > 0) batch.counts.invalidations.push({ from: target.from, count: invalidated });
     }
-    const entry = newLessonMemory(lesson, profile, { tenantId, config, fitSource, pathTags });
+    const entry = newLessonMemory(lesson, profile, { tenantId, config, fitSource, pathTags, now: ctx.infra.clock() });
     queue.push({ entry, key });
     if (profile.full) live.push(entry);
     batch.keys.add(key);

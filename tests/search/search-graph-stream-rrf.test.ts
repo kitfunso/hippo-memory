@@ -14,7 +14,7 @@
  * seedCount; the CLI/library default (10) targets realistic large pools.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { rrfFuse } from '../../src/domain/search/rrf.js';

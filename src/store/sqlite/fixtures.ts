@@ -1,7 +1,7 @@
 // The ./testing entry's hippo.db seams, its one door into the adapter: evals seed and read a store folder, and
 // benchmarks a handle they open themselves. The kit is synchronous and the port is not, so each seam runs on a handle.
 import type { AmbientTallies } from '../../base/memory/ambient.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import type { DormantMove } from '../../base/ports/store/consolidation.js';
 import type { AmbientStoreFilter } from '../../base/ports/store/context-reads.js';
@@ -54,7 +54,7 @@ export function listRecallEntriesInFolder(
 
 /** The per-prompt tally, timed by scripts/check-request-path-timing.mjs on a folder it seeds. */
 export function countAmbientInFolder(hippoRoot: string, tenantId: string, filter: AmbientStoreFilter): AmbientTallies {
-  return onHandle(hippoRoot, (db) => ambient.countAmbient(db, {}, tenantId, filter), openStore);
+  return onHandle(hippoRoot, (db) => ambient.countAmbient(db, storeFilesOf(hippoRoot), tenantId, filter), openStore);
 }
 
 /** `batchWriteAndDelete` on a handle of its own; an empty batch opens no store. */

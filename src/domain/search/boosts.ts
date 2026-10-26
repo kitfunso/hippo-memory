@@ -1,15 +1,9 @@
-import {
-  calculateStrength,
-  CHURN_STALE_TAG,
-  DAG_LEVEL,
-  EXTRACTED_TAG,
-  type MemoryEntry,
-  type StrengthOptions,
-} from '../../base/memory/memory.js';
+import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
+import { CHURN_STALE_TAG, DAG_LEVEL, EXTRACTED_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import {
   NO_RANK_ABLATION,
-  NO_STRENGTH_ABLATION,
+  strengthModelFor,
   type EvalSwitches,
   type RankAblation,
 } from '../../base/memory/eval-switches.js';
@@ -130,8 +124,8 @@ export interface RankRun {
 }
 
 /** Strength scoring under the caller's switches and the root's loss-aversion ratio. */
-export function rankStrength({ switches, runtime }: RankRun): StrengthOptions {
-  return { ablation: switches?.strength ?? NO_STRENGTH_ABLATION, lossAversionRatio: runtime?.lossAversionRatio };
+export function rankStrength({ switches, runtime }: RankRun): StrengthModel {
+  return strengthModelFor(switches, runtime);
 }
 
 /** The rank boosts' switches under the caller's run. */
@@ -152,7 +146,7 @@ export interface BoostContext {
   /** The sync BM25 path never applied the outcome nudge. */
   outcome: boolean;
   summary: SummaryScoring;
-  strength: StrengthOptions;
+  strength: StrengthModel;
   ablation: RankAblation;
 }
 

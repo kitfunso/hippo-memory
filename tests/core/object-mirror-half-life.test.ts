@@ -3,19 +3,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { saveObject } from '../../src/domain/objects/lifecycle.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { saveDecision } from '../../src/domain/objects/decisions.js';
 import { openIncident } from '../../src/domain/objects/incidents.js';
-import {
-  calculateStrength,
-  deriveHalfLife,
-  LEGACY_TYPED_HALF_LIFE,
-  type MemoryEntry,
-} from '../../src/base/memory/memory.js';
-import { savePolicy } from '../../src/domain/objects/policies.js';
+import { calculateStrength } from '../../src/entry/memory.js';
+import { deriveHalfLife, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { LEGACY_TYPED_HALF_LIFE } from '../../src/base/memory/strength.js';
 import { PROCESS } from '../../src/domain/objects/processes.js';
-import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
 import { duplicateHash } from '../../src/base/util/same-text.js';
 import { objectsAt } from '../_helpers/objects-at.js';
@@ -23,6 +16,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { META_KEY } from '../../src/db/meta.js';
+import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -65,12 +60,12 @@ async function saveOneOfEach(root: string): Promise<void> {
     loadConfig(root).defaultHalfLifeDays,
     TENANT,
     { incidentText: 'checkout latency', context: 'eu-west', extraTags: ['error'] },
-    ACTOR,
+    { actor: ACTOR, now: evalNow() },
   );
   await saveObject(
     objectsAt(root),
     PROCESS,
-    { baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, tenantId: TENANT, actor: ACTOR },
+    { now: evalNow(), baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, tenantId: TENANT, actor: ACTOR },
     { processName: 'deploy', steps: ['build', 'ship'], description: 'weekly' },
   );
   await savePolicy(
@@ -83,7 +78,7 @@ async function saveOneOfEach(root: string): Promise<void> {
   await saveObject(
     objectsAt(root),
     SKILL,
-    { baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, tenantId: TENANT, actor: ACTOR },
+    { now: evalNow(), baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, tenantId: TENANT, actor: ACTOR },
     { skillName: 'triage', instructions: 'read the log first', trigger: 'on page' },
   );
   await saveProjectBrief(
@@ -281,7 +276,7 @@ describe.each([
           loadConfig(root).defaultHalfLifeDays,
           TENANT,
           { incidentText: 'checkout latency' },
-          ACTOR,
+          { actor: ACTOR, now: evalNow() },
         ),
       ),
       await ticked(ticks, () =>
@@ -299,7 +294,7 @@ describe.each([
           loadConfig(root).defaultHalfLifeDays,
           TENANT,
           { incidentText: 'login errors', extraTags: ['error'] },
-          ACTOR,
+          { actor: ACTOR, now: evalNow() },
         ),
       ),
     ];
@@ -316,10 +311,10 @@ describe.each([
       expect(saves[i].reads).toContain(Date.parse(stored.created));
     }
     for (const i of [0, 1]) {
-      // One read, later than the one that stamped the row: the clock did tick inside the save, so the strength is not the 1.0 of a frozen clock.
+      // One read, no earlier than the stamp: a passed `now` scores at the stamp, the store's own clock a tick later.
+      expect(saves[i].reads.length).toBeGreaterThan(1);
       expect(readsGiving(i)).toHaveLength(1);
-      expect(readsGiving(i)[0]).toBeGreaterThan(Date.parse(mirrors[i].created));
-      expect(mirrors[i].strength).toBeLessThan(1);
+      expect(readsGiving(i)[0]).toBeGreaterThanOrEqual(Date.parse(mirrors[i].created));
     }
     // An error tag lifts the strength over the cap of 1, so every read gives that mirror the same value.
     expect(readsGiving(2)).toEqual(saves[2].reads);

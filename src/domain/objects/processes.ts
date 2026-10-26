@@ -69,7 +69,7 @@ export const PROCESS: SavableDescriptor<'process', SaveProcessOptions> = {
   plural: 'processes',
   states: VALID_PROCESS_STATES,
   closableFrom: ['active'],
-  draft(opts) {
+  draft(opts, now) {
     const processName = requireText(opts.processName, MAX_SHORT_FIELD_LEN, 'processName');
     const steps = validateProcessSteps(opts.steps);
     return {
@@ -78,7 +78,7 @@ export const PROCESS: SavableDescriptor<'process', SaveProcessOptions> = {
       tags: opts.extraTags ?? [],
       supersedesId: opts.supersedesProcessId,
       changeSummary: opts.changeSummary,
-      at: new Date().toISOString(),
+      at: now.toISOString(),
     };
   },
 };

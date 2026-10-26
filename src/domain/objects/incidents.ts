@@ -7,7 +7,7 @@ import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import type { ObjectDescriptor } from './descriptor.js';
 import { requireText } from './fields.js';
-import { objectMirror } from './lifecycle.js';
+import { objectMirror, type ActedBy } from './lifecycle.js';
 import {
   isObjectRefusal,
   type Incident,
@@ -50,12 +50,13 @@ function incidentOpen(
   tenantId: string,
   opts: SaveIncidentOptions,
   actor: string,
+  now: Date,
 ): IncidentOpen {
   assertTenantId('openIncident', tenantId);
   const incidentText = requireText(opts.incidentText, MAX_SHORT_FIELD_LEN, 'incidentText');
-  const at = new Date().toISOString();
+  const at = now.toISOString();
   const content = opts.context ? `${incidentText}\n\nContext: ${opts.context}` : incidentText;
-  const mirror = objectMirror(baseHalfLifeDays, tenantId, 'incident', { content, tags: opts.extraTags ?? [] });
+  const mirror = objectMirror(baseHalfLifeDays, tenantId, 'incident', { content, tags: opts.extraTags ?? [] }, now);
   const fields = {
     incidentText,
     context: opts.context ?? undefined,
@@ -81,16 +82,16 @@ export async function openIncident(
   baseHalfLifeDays: number,
   tenantId: string,
   opts: SaveIncidentOptions,
-  actor: string,
+  by: ActedBy,
 ): Promise<Incident> {
-  const open = incidentOpen(baseHalfLifeDays, tenantId, opts, actor);
+  const open = incidentOpen(baseHalfLifeDays, tenantId, opts, by.actor, by.now);
   return opened(tenantId, await objects.saveObject(tenantId, 'incident', open));
 }
 
-function resolving(tenantId: string, resolutionText: string, actor: string): IncidentResolve {
+function resolving(tenantId: string, resolutionText: string, actor: string, now: Date): IncidentResolve {
   assertTenantId('resolveOpenIncident', tenantId);
   const text = requireText(resolutionText, MAX_SHORT_FIELD_LEN, 'resolutionText');
-  return { text, actor, at: new Date().toISOString() };
+  return { text, actor, at: now.toISOString() };
 }
 
 function resolved(tenantId: string, id: number, written: Incident | ObjectRefusal): Incident {
@@ -111,11 +112,11 @@ export async function resolveOpenIncident(
   tenantId: string,
   id: number,
   resolutionText: string,
-  actor: string,
+  by: ActedBy,
 ): Promise<Incident> {
   return resolved(
     tenantId,
     id,
-    await objects.closeObject(tenantId, 'incident', id, resolving(tenantId, resolutionText, actor)),
+    await objects.closeObject(tenantId, 'incident', id, resolving(tenantId, resolutionText, by.actor, by.now)),
   );
 }

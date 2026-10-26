@@ -1,5 +1,6 @@
 // The all-pairs conflict and merge-partner passes sleep ran before the inverted index; kept as the oracle the indexed versions must match.
-import { calculateStrength, Layer, type DecayOptions, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { calculateStrength, type DecayOptions } from '../../src/entry/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { isQuarantineScope } from '../../src/domain/trust/quarantine.js';
 import { textOverlap } from '../../src/base/util/tokenize.js';
 import { CONFLICT_STOPWORDS } from '../../src/base/util/stopwords.js';

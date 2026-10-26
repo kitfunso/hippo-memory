@@ -16,6 +16,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';
 import { makeOkFetcher, getRow, forceMarkDirty, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -44,6 +45,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     const fetcher = makeOkFetcher('newly-generated-summary-content-X');
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: evalNow(),
       llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
       cap: 20,
     });
@@ -113,10 +115,15 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, summary.id);
 
     const fetcher = makeOkFetcher();
-    await rebuildDirtySummaries(sqliteStore(hippoRoot), { llm: anthropicLlm({ apiKey: 'k', fetcher }), cap: 20 });
+    await rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: evalNow(),
+      llm: anthropicLlm({ apiKey: 'k', fetcher }),
+      cap: 20,
+    });
 
     // Second call — should be no-op
     const result2 = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: evalNow(),
       llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
@@ -164,6 +171,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     });
 
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: evalNow(),
       llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
@@ -190,6 +198,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         forceMarkDirty(hippoRoot, sum.id);
       }
       return rebuildDirtySummaries(sqliteStore(hippoRoot), {
+        now: evalNow(),
         llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher() }),
         cap: 20,
       });
@@ -219,6 +228,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     const fetcher = makeOkFetcher();
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: evalNow(),
       llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
@@ -290,6 +300,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     });
 
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: evalNow(),
       llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
@@ -322,6 +333,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     });
 
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: evalNow(),
       llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
@@ -367,6 +379,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     // Smoke test the function actually applies the patch in one round-trip
     const result = await applyRebuildResult(hippoRoot, summary, {
+      now: evalNow(),
       content: 'one-shot-content-xyzabc',
       descendantCount: 0,
       earliestAt: null,

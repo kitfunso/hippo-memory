@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { promote } from '../../src/api/memories/promote.js';
 import { shareMemory, autoShare } from '../../src/domain/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
 import { isEmbeddingAvailable } from '../../src/base/embeddings/local.js';
 import { skipWithoutEmbeddings } from '../_helpers/embedding-backend.js';
@@ -21,6 +22,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -108,7 +110,11 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     });
     writeEntry(localRoot, entry);
 
-    const shared = await shareMemory(...sharingStores(localRoot), entry.id, { tenantId: 'default', force: true });
+    const shared = await shareMemory(...sharingStores(localRoot), entry.id, {
+      embed: TEST_RUN,
+      tenantId: 'default',
+      force: true,
+    });
     expect(shared).not.toBeNull();
     expect(shared!.id).toMatch(/^g_/);
 
@@ -122,7 +128,11 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     });
     writeEntry(localRoot, entry);
 
-    const shared = await autoShare(...sharingStores(localRoot), { tenantId: ALL_TENANTS, minScore: 0 });
+    const shared = await autoShare(...sharingStores(localRoot), {
+      embed: TEST_RUN,
+      tenantId: ALL_TENANTS,
+      minScore: 0,
+    });
     expect(shared.length).toBe(1);
 
     const index = loadEmbeddingIndex(globalRoot);
@@ -136,7 +146,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     });
     writeEntry(globalRoot, entry);
 
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
     expect(count).toBe(1);
 
     const index = loadEmbeddingIndex(localRoot);
@@ -169,7 +179,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
     });
     writeEntry(globalRoot, entry);
 
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
     expect(count).toBe(1);
 
     // syncGlobalToLocal already fired its own embedAll(localRoot); this call
@@ -189,7 +199,11 @@ describe('global-row-embeddings: awaited batch producers', () => {
     });
     writeEntry(localRoot, entry);
 
-    const shared = await autoShare(...sharingStores(localRoot), { tenantId: ALL_TENANTS, minScore: 0 });
+    const shared = await autoShare(...sharingStores(localRoot), {
+      embed: TEST_RUN,
+      tenantId: ALL_TENANTS,
+      minScore: 0,
+    });
     expect(shared.length).toBe(1);
 
     await embedAll(localIndex(globalRoot));

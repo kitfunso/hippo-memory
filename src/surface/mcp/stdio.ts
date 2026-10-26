@@ -3,7 +3,7 @@
 import { exitAfterFlush, installCrashHandlers } from '../../base/util/crash-handlers.js';
 import { envRequestDeadlineMs, envTenant } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
-import { requestDeadlineMs } from '../../base/util/request-scope.js';
+import { requestDeadlineMs, currentRequestId, runWithRequestId } from '../../base/util/request-scope.js';
 import { MAX_BODY_BYTES } from '../../base/util/limits.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
 import {
@@ -20,7 +20,6 @@ import { errorReply, INVALID_REQUEST, PARSE_ERROR, REQUEST_TIMEOUT } from './jso
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../../base/util/json.js';
 import { randomUUID } from 'node:crypto';
 import { AsyncResource } from 'node:async_hooks';
-import { currentRequestId, runWithRequestId } from '../../base/util/request-scope.js';
 
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
 // https://modelcontextprotocol.io/specification/.../basic/transports#stdio

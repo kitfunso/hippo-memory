@@ -1,8 +1,8 @@
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { EmbeddingsConfig, HippoConfig, RuntimeSettings } from '../../base/config/config.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
 import { tokenize } from '../../base/util/tokenize.js';
-import { switchedNow, type EvalSwitches } from '../../base/memory/eval-switches.js';
+import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { pathTagsOf } from './path-context.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { DEFAULT_EMBEDDING_WEIGHT } from '../../base/rank/recall-defaults.js';
@@ -25,6 +25,8 @@ import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
 import {
   DEFAULT_MMR_LAMBDA,
   DEFAULT_RECALL_BUDGET,
+  rankNow,
+  type RankTime,
   type ResultCost,
   type SearchResult,
 } from '../../base/rank/search-types.js';
@@ -106,7 +108,7 @@ export interface HybridSettings {
   now?: Date;
   /** The root's environment settings: the scope, summary deboost and query-embedding budget a call names none of. */
   runtime?: RuntimeSettings;
-  /** The eval switches and fake clock the caller runs under; absent, none of them, on the real clock. */
+  /** The strength model and rank switches the caller runs under; absent, production ranking. */
   switches?: EvalSwitches;
   /** The folder the caller runs in: memories tagged with its path segments rank higher. Absent, no path boost. */
   cwd?: string;
@@ -146,9 +148,9 @@ export type HybridRankOptions = HybridRanking & {
 export async function hybridSearch(
   query: string,
   entries: MemoryEntry[],
-  options: HybridRankOptions = {},
+  options: HybridRankOptions & RankTime,
 ): Promise<SearchResult[]> {
-  const now = switchedNow(options.now, options.switches);
+  const now = rankNow(options);
   const embeddingWeight = options.embeddingWeight ?? DEFAULT_EMBEDDING_WEIGHT;
   const pool = currentEntries(entries, options);
   if (pool.length === 0) return [];

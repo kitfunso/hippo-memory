@@ -10,7 +10,14 @@ import type { Machine } from '../../base/util/agent-homes.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../../api/context-render.js';
 import { mcpApiContext, ownsServerCwd, type ToolCall } from './protocol.js';
 import { toolRecallText } from './tool-recall.js';
-import { formatMemories, memoriesReserve, snapshotPiece, handoffPiece, trailPiece, contextCost } from './tool-text.js';
+import {
+  formatMemories,
+  memoriesReserve,
+  snapshotPiece,
+  handoffPiece,
+  trailPiece,
+  contextCostAt,
+} from './tool-text.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { boolArg, numberArg, stringArg } from './tool-args.js';
 import { parseContextRequest, parseRecallRequest, toolParams } from '../../api/recall/request.js';
@@ -104,6 +111,7 @@ export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall)
   if (budget === 0) return '';
   if (budget < memoriesReserve(budget)) return ''; // not even the heading fits, so nothing prints, as at budget 0
   const ownsCwd = ownsServerCwd(ctx);
+  const now = ctx.infra.clock();
   const result = await apiGetContext(mcpApiContext(ctx), {
     // The server's git state is no remote caller's, so a project or remote caller gets rows by strength without a
     // query.
@@ -111,12 +119,12 @@ export async function runContextTool({ args, ctx, hippoRoot, config }: ToolCall)
     budget,
     exactScope,
     currentProject: ctx?.project ?? localProject(hippoRoot, ownsCwd, ctx.infra.machine),
-    cost: contextCost,
+    cost: contextCostAt(now),
   });
   return (
     (result.activeSnapshot ? snapshotPiece(result.activeSnapshot) : '') +
     (result.sessionHandoff ? handoffPiece(result.sessionHandoff) : '') +
     (result.recentEvents ? trailPiece(result.recentEvents) : '') +
-    formatMemories(result.entries)
+    formatMemories(result.entries, now)
   );
 }

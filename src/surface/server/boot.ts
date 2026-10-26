@@ -1,3 +1,4 @@
+import { evalStoreRules } from '../../infra/eval-switches.js';
 import {
   envAllowCleartext,
   envLossAversionRatio,
@@ -237,7 +238,7 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
   const runtime = defaultServerRuntime(opts.hippoRoot, {
     store: opts.store,
     queueMax: envStoreQueueMax(),
-    lossAversionRatio: envLossAversionRatio(),
+    ...evalStoreRules(envLossAversionRatio()),
     vectorGraphMaxVectors: loadConfig(opts.hippoRoot).vectorGraph.maxVectors,
   });
   const served = servedOptsFor(opts, plan, runtime);

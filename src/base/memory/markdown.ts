@@ -1,12 +1,6 @@
 import { DEFAULT_TENANT_ID } from '../util/tenant.js';
-import {
-  type MemoryEntry,
-  Layer,
-  FALLBACK_HALF_LIFE_DAYS,
-  DEFAULT_SCHEMA_FIT,
-  type ConfidenceLevel,
-  type MemoryKind,
-} from './memory.js';
+import { type MemoryEntry, Layer, DEFAULT_SCHEMA_FIT, type ConfidenceLevel, type MemoryKind } from './entry.js';
+import { FALLBACK_HALF_LIFE_DAYS } from './strength.js';
 import { fromWire, toWire, type MemoryWire } from './memory-wire.js';
 import { dumpFrontmatter, parseFrontmatter } from '../util/yaml.js';
 
@@ -109,8 +103,8 @@ export function serializeEntry(entry: MemoryEntry): string {
   return `${fm}\n\n${wire.content}\n`;
 }
 
-/** Deserialize a markdown file to a MemoryEntry. */
-export function deserializeEntry(raw: string): MemoryEntry | null {
+/** Deserialize a markdown file to a MemoryEntry; `now` stamps a file that names no creation time. */
+export function deserializeEntry(raw: string, now: Date): MemoryEntry | null {
   const { data, content } = parseFrontmatter(raw);
 
   if (!data['id'] || !data['layer']) return null;
@@ -119,8 +113,8 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
   // serializeEntry, so out-of-range values mean hand-edited files, which this parser may accept (permissive parse).
   return fromWire({
     id: String(data['id']),
-    created: String(data['created'] ?? new Date().toISOString()),
-    last_retrieved: String(data['last_retrieved'] ?? new Date().toISOString()),
+    created: String(data['created'] ?? now.toISOString()),
+    last_retrieved: String(data['last_retrieved'] ?? now.toISOString()),
     retrieval_count: Number(data['retrieval_count'] ?? 0),
     strength: Number(data['strength'] ?? 1.0),
     half_life_days: Number(data['half_life_days'] ?? FALLBACK_HALF_LIFE_DAYS),
@@ -141,7 +135,7 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     starred: Boolean(data['starred'] ?? false),
     trace_outcome: (data['trace_outcome'] as MemoryWire['trace_outcome']) ?? null,
     source_session_id: nullableString(data['source_session_id']),
-    valid_from: data['valid_from'] ? String(data['valid_from']) : String(data['created'] ?? new Date().toISOString()),
+    valid_from: data['valid_from'] ? String(data['valid_from']) : String(data['created'] ?? now.toISOString()),
     superseded_by: nullableString(data['superseded_by']),
     extracted_from: (data['extracted_from'] as string) ?? null,
     dag_level: Number(data['dag_level'] ?? 0),

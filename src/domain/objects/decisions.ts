@@ -4,14 +4,14 @@
  * one `objects` transaction.
  */
 
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import type { EntryWrites, Objects } from '../../base/ports/store.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { requireText } from './fields.js';
-import { listObjects, saveObject } from './lifecycle.js';
+import { listObjects } from './lifecycle.js';
 import type { Decision, DecisionStatus } from '../../base/records/object-types.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 
@@ -48,29 +48,17 @@ export const DECISION: SavableDescriptor<'decision', SaveDecisionOptions> = {
   plural: 'decisions',
   states: VALID_DECISION_STATES,
   closableFrom: ['active'],
-  draft(opts) {
+  draft(opts, now) {
     const decisionText = requireText(opts.decisionText, MAX_SHORT_FIELD_LEN, 'decisionText');
     return {
       fields: { decisionText, context: opts.context },
       content: opts.context ? `${decisionText}\n\nContext: ${opts.context}` : decisionText,
       tags: opts.extraTags ?? [],
       supersedesId: opts.supersedesDecisionId,
-      at: new Date().toISOString(),
+      at: now.toISOString(),
     };
   },
 };
-
-/** Create a decision; the memory mirror and the row commit in one transaction.
- *  Superseding CASes the old row (WHERE status='active'), so a duplicate supersede aborts the whole write. */
-export function saveDecision(
-  objects: Objects,
-  baseHalfLifeDays: number,
-  tenantId: string,
-  opts: SaveDecisionOptions,
-  actor: string = CLI_ACTOR,
-): Promise<Decision> {
-  return saveObject(objects, DECISION, { baseHalfLifeDays, tenantId, actor }, opts);
-}
 
 /**
  * Weaken the memory a new decision replaces, once the save has committed: half-life halved to a day at least, marked

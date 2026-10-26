@@ -1,6 +1,5 @@
 // Store health and admin tool handlers: base rates, status, conflicts, resolve, share and peers.
 
-import { evalNow } from '../../base/memory/ablation.js';
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
 import { conflictListOpen, conflictPages, conflictResolve } from '../../api/memories/conflicts.js';
@@ -44,9 +43,8 @@ export async function runPredictBaserateTool({ args, ctx }: ToolCall): Promise<s
 }
 
 export async function runStatusTool({ ctx, config }: ToolCall): Promise<string> {
-  // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const api = mcpApiContext(ctx);
-  const tallies = await api.store.reports.memoryStatus(api.tenantId, evalNow(), AT_RISK_BELOW);
+  const tallies = await api.store.reports.memoryStatus(api.tenantId, api.infra.clock(), AT_RISK_BELOW);
   const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
   return [
     `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,

@@ -1,9 +1,6 @@
-import {
-  DEFAULT_HALF_LIFE_DAYS,
-  createMemory as createMemoryWithHalfLife,
-  type CreateMemoryOptions,
-  type MemoryEntry,
-} from '../../src/base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { createMemory as createMemoryWithHalfLife } from '../../src/entry/memory.js';
+import type { CreateMemoryOptions, MemoryEntry } from '../../src/base/memory/entry.js';
 
 /** createMemory for tests that do not care about the half-life: the compiled default stands in for the store config the writers pass. */
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {

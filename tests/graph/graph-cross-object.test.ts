@@ -7,10 +7,6 @@
  * ambiguity-guarded, self-skipped, per-source capped, supersedes-pair-skipped). Real DB.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { saveDecision } from '../../src/domain/objects/decisions.js';
-import { savePolicy } from '../../src/domain/objects/policies.js';
-import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
-import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
 import { extractGraph } from '../../src/domain/graph/extract.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -19,6 +15,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, loadEntities, loadRelations } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 
 oneRequestPerTest();
 

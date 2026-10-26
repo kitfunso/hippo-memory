@@ -8,7 +8,9 @@ import {
   isWorthSurfacing,
 } from '../../src/base/memory/memory-quality.js';
 import { auditMemory } from '../../src/base/memory/memory-audit.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { CreateMemoryOptions } from '../../src/base/memory/entry.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 
 const make = (content: string, options: Partial<CreateMemoryOptions> = {}) =>

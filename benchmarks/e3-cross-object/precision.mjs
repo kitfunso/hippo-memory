@@ -6,12 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../../dist/entry/testing.js';
 import { loadConfig } from '../../dist/host/config-file.js';
-import { saveDecision } from '../../dist/domain/objects/decisions.js';
-import { savePolicy } from '../../dist/domain/objects/policies.js';
-import { saveCustomerNote } from '../../dist/domain/objects/customer-notes.js';
-import { saveProjectBrief } from '../../dist/domain/objects/project-briefs.js';
 import { extractGraph } from '../../dist/domain/graph/extract.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
+import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../dist/entry/testing.js';
 
 const home = mkdtempSync(join(tmpdir(), 'hippo-e3-xobj-'));
 mkdirSync(join(home, '.hippo'), { recursive: true });

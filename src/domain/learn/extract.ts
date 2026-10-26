@@ -1,4 +1,4 @@
-import { MemoryEntry, EXTRACTED_TAG, Layer, EmotionalValence, createMemory } from '../../base/memory/memory.js';
+import { MemoryEntry, EXTRACTED_TAG, Layer, EmotionalValence, createMemory } from '../../base/memory/entry.js';
 import type { StoreWith } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
@@ -110,6 +110,7 @@ export async function storeExtractedFacts(
   source: MemoryEntry,
   facts: ExtractedFact[],
   baseHalfLifeDays: number,
+  now: Date,
 ): Promise<MemoryEntry[]> {
   const inheritedTags = [
     ...source.tags.filter((t) => INHERITABLE_PREFIXES.some((p) => t.startsWith(p))),
@@ -125,7 +126,7 @@ export async function storeExtractedFacts(
       log.warn(`storeExtractedFacts: skipped automatic quality defect (${defect})`);
       continue;
     }
-    const entry = buildExtractedEntry(fact, source, inheritedTags, baseHalfLifeDays);
+    const entry = buildExtractedEntry(fact, source, inheritedTags, { baseHalfLifeDays, now });
 
     // A refusal is per-VALUE: one rejected fact must not drop the rest of the batch; writeEntry already audited it
     // (reject_refusal), so skip and count.
@@ -152,23 +153,27 @@ function buildExtractedEntry(
   fact: ExtractedFact,
   source: MemoryEntry,
   inheritedTags: string[],
-  baseHalfLifeDays: number,
+  { baseHalfLifeDays, now }: { readonly baseHalfLifeDays: number; readonly now: Date },
 ): MemoryEntry {
   const tags = [EXTRACTED_TAG, ...inheritedTags, ...fact.tags];
   return {
-    ...createMemory(fact.content, {
-      layer: Layer.Semantic,
-      tags,
-      emotionalValence: fact.valence,
-      confidence: 'inferred',
-      source: source.source,
-      extractedFrom: source.id,
-      scope: source.scope,
-      // Without it createMemory stamps 'default', and extracted facts leave the tenant of the episodic memory they were
-      // extracted from.
-      tenantId: source.tenantId,
-      baseHalfLifeDays,
-    }),
+    ...createMemory(
+      fact.content,
+      {
+        layer: Layer.Semantic,
+        tags,
+        emotionalValence: fact.valence,
+        confidence: 'inferred',
+        source: source.source,
+        extractedFrom: source.id,
+        scope: source.scope,
+        // Without it createMemory stamps 'default', and extracted facts leave the tenant of the episodic memory
+        // they were extracted from.
+        tenantId: source.tenantId,
+        baseHalfLifeDays,
+      },
+      now,
+    ),
     originProject: source.originProject,
   };
 }

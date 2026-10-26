@@ -6,7 +6,7 @@ import { containerId, containerPrefix } from '../agent-memories/source.js';
 import { foldEdges, foldedInto, projectAudit } from '../agent-memories/project-folds.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, toolSourcePrefix, toolTag } from '../../base/memory/agent-memory-tools.js';
 import type { Machine } from '../../base/util/agent-homes.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { READ_PAGE_ROWS, readPages } from '../../base/util/pages.js';
 import { projectNames, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { duplicateKey } from '../../base/util/same-text.js';

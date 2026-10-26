@@ -13,7 +13,7 @@ import {
 } from '../../src/base/rank/physics.js';
 import { vecAdd, vecClampMagnitude } from '../_helpers/physics-vec.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
-import { FALLBACK_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { FALLBACK_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { mulberry32 } from '../_helpers/property.js';
 
 function netForce(i: number, particles: PhysicsParticle[], ctx: ForceContext): number[] {

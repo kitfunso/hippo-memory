@@ -8,11 +8,17 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import type { DoctorStore } from '../../src/surface/cli/doctor.js';
 import type { StoreGroups } from '../../src/base/ports/store.js';
+import { TEST_RUN } from './test-run.js';
 
 export function captureTarget(root: string): CaptureTarget {
   const config = loadConfig(root);
   const store = cliStore(root);
-  return { root, store, config, embed: detachedEmbedder({ store, config, embedderFor: resolveEmbeddingProvider }) };
+  return {
+    root,
+    store,
+    config,
+    embed: detachedEmbedder({ store, config, embedderFor: resolveEmbeddingProvider }, TEST_RUN),
+  };
 }
 
 export function diagnosticsBodies(root: string): DoctorStore {

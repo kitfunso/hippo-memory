@@ -17,7 +17,9 @@
 import { describe, it, expect } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { consolidate } from '../../src/index.js';
 import { storeExtractedFacts, type ExtractedFact } from '../../src/domain/learn/extract.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -25,6 +27,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntry, appendSessionEvent } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 pinClock();
 
@@ -159,7 +162,7 @@ describe('extract.ts storeExtractedFacts has the same defect, folded in', () => 
     const facts: ExtractedFact[] = [
       { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
     ];
-    const stored = await storeExtractedFacts(sqliteStore(home), source, facts, DEFAULT_HALF_LIFE_DAYS);
+    const stored = await storeExtractedFacts(sqliteStore(home), source, facts, DEFAULT_HALF_LIFE_DAYS, evalNow());
 
     expect(stored).toHaveLength(1);
     expect(stored[0]!.tenantId).toBe('tenant-extract');

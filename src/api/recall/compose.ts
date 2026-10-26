@@ -2,7 +2,7 @@
 
 import { estimateTokens } from '../../base/util/token-text.js';
 import { formatHandoffEvidenceLine } from '../../base/session/handoff.js';
-import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/memory.js';
+import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { boostByGoals, type GoalStackBoostOptions } from '../../domain/search/goal-boost.js';
 import type { ForwardClaimMatch } from '../../domain/learn/forward-claim-detector.js';
 import type { RecallWrites } from '../../base/ports/store.js';
@@ -122,7 +122,10 @@ export function planRecall(
     limit,
     window,
     personalScope,
-    goalBoost: profile.goalBoost.band && sessionId && !goalTag ? { sessionId, tenantId: ctx.tenantId, limit } : null,
+    goalBoost:
+      profile.goalBoost.band && sessionId && !goalTag
+        ? { sessionId, tenantId: ctx.tenantId, limit, now: ctx.infra.clock() }
+        : null,
     overflow:
       (opts.window?.summarizeOverflow ?? true) && window.entries.length > limit
         ? overflowGroups(window, limit)

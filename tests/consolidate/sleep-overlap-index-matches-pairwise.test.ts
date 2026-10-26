@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { detectConflicts } from '../../src/domain/consolidate/conflicts.js';
 import { mergePartners } from '../../src/domain/consolidate/merge.js';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { tokenize } from '../../src/base/util/tokenize.js';
 import { pairwiseDetectConflicts, pairwiseMergePartners } from '../_helpers/pairwise-sleep-oracle.js';
 import { mulberry32 } from '../_helpers/property.js';
 import { DAY_MS } from '../../src/base/util/time.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 const NOW = new Date('2026-10-01T00:00:00.000Z');
 const SIZES = [0, 1, 2, 3, 8, 30, 120, 300];
@@ -126,7 +127,7 @@ describe('sleep overlap index matches the pairwise passes', () => {
     const rnd = mulberry32(seed);
     const entries = randomEntries(rnd, n);
     const rescued = new Set(entries.filter(() => rnd() < 0.1).map((e) => e.id));
-    expect(await detectConflicts(entries, NOW, { rescuedIds: rescued })).toEqual(
+    expect(await detectConflicts(entries, NOW, { strength: PRODUCTION_STRENGTH, rescuedIds: rescued })).toEqual(
       pairwiseDetectConflicts(entries, NOW, {}, rescued),
     );
   });
@@ -162,7 +163,7 @@ describe('sleep overlap index matches the pairwise passes', () => {
       created: NOW.toISOString(),
       lastRetrieved: NOW.toISOString(),
     }));
-    const got = await detectConflicts(onConflict, NOW);
+    const got = await detectConflicts(onConflict, NOW, { strength: PRODUCTION_STRENGTH });
     expect(got).toEqual(pairwiseDetectConflicts(onConflict, NOW));
     expect(got.map((c) => [c.memory_a_id, c.memory_b_id])).toEqual([['c0', 'c1']]);
   });

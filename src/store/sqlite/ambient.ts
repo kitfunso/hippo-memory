@@ -1,4 +1,5 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
+import type { StoreModel } from './open.js';
 import { originInSql, strengthSql } from './rule-sql.js';
 import { SECRET_TAGS } from '../../base/util/secret-detect.js';
 import { contextRowsWhere, jsonList } from './candidates.js';
@@ -8,7 +9,7 @@ import {
   ERROR_TAG_PREFIX,
   type AmbientTallies,
 } from '../../base/memory/ambient.js';
-import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT, type LossAversion } from '../../base/memory/memory.js';
+import { DEFAULT_SCHEMA_FIT, HIGH_SCHEMA_FIT } from '../../base/memory/entry.js';
 import { placeholders, type SqlFragment } from '../../db/sql.js';
 import type { AmbientStoreFilter } from '../../base/ports/store/context-reads.js';
 import { cachedStatement } from '../../db/statement-cache.js';
@@ -57,7 +58,7 @@ function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string
  *  (own compaction items, a printed handoff's digest) still count: only injection drops them. */
 export function countAmbient(
   db: DatabaseSyncLike,
-  rules: LossAversion,
+  rules: StoreModel,
   tenantId: string,
   filter: AmbientStoreFilter,
 ): AmbientTallies {
@@ -67,7 +68,7 @@ export function countAmbient(
   const scope = `${rows.sql}
       AND ((${originInSql(filter.currentProject)} AND origin_project != '') OR NOT ${secret.sql})`;
   const scopeParams = [...rows.params, ...filter.currentProject, ...secret.params];
-  const strength = strengthSql(filter.now, rules);
+  const strength = strengthSql(filter.now, rules.strength);
   const args = [...strength.params, freshAfter, HIGH_SCHEMA_FIT, ...scopeParams];
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = cachedStatement(

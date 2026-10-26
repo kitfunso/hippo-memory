@@ -2,6 +2,7 @@
 // and through hippo.db's own store they leave the same index, model and particles as the path without a store.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { PRODUCTION_STRENGTH, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
@@ -10,7 +11,8 @@ import { embeddingIndexIdentity, embeddingInputText } from '../../src/base/embed
 import { embedAll, embedMemoryInto, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { loadAllPhysicsState } from '../../src/db/physics-state.js';
 import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../../src/entry/store-kit.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
@@ -23,6 +25,7 @@ import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
 import { copyTree } from '../_helpers/copy-tree.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -67,7 +70,13 @@ interface HippoDbIndex {
 /** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 /** The embed target for `store`, with the provider the folder's config.json names, as a root loads it. */
 function on(hippoRoot: string, store: HippoStore): EmbedTarget {
-  return { store, embeddings: loadConfig(hippoRoot).embeddings, embedderFor: resolveEmbeddingProvider, strength: {} };
+  return {
+    store,
+    embeddings: loadConfig(hippoRoot).embeddings,
+    embedderFor: resolveEmbeddingProvider,
+    strength: PRODUCTION_STRENGTH,
+    clock: evalNow,
+  };
 }
 
 function markedFolder(config?: ConfigFile): string {

@@ -1,7 +1,8 @@
 // Sleep's retired-text check asks the store which held texts each tenant rejected once per tenant per page, so a
 // store of many merged rows costs the same few reads as one of a few, and a tenant's rejection still binds only it.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMemory, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { mergedText } from '../../src/base/util/same-text.js';
@@ -12,6 +13,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 
 oneRequestPerTest();
@@ -95,7 +97,12 @@ async function sleepCountingAsks(perTenant: number): Promise<SleepAsks> {
       },
     },
   };
-  const result = await runConsolidation(store, { now: NOW, config: loadConfig(root), tenantId: 'default' });
+  const result = await runConsolidation(store, {
+    strength: PRODUCTION_STRENGTH,
+    now: NOW,
+    config: loadConfig(root),
+    tenantId: 'default',
+  });
   const retired = detailLines(result).flatMap((line) => RETIRED.exec(line)?.[1] ?? []);
   return { root, asks: asks.sort(), retired: retired.sort(), acmeMerged };
 }

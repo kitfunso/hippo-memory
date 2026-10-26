@@ -1,8 +1,9 @@
 // E10 lane A: buildGraphModel hides graph rows whose source memory the caller may not read. Real SQLite, no mocks.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
-import { savePolicy } from '../../src/domain/objects/policies.js';
 import { buildGraphModel } from '../../src/domain/graph/view.js';
 import type { ScopeActor } from '../../src/base/scope/recall-scope.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -11,6 +12,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { savePolicy } from '../../src/entry/testing.js';
 
 oneRequestPerTest();
 

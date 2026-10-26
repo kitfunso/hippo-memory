@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createMemory, Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { HippoConfig } from '../../base/config/config.js';
@@ -14,6 +14,7 @@ import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionT
 import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
 import type { StoreGroups } from '../../base/ports/store.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
+import { evalClock } from '../../infra/eval-switches.js';
 
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
@@ -134,6 +135,7 @@ async function captureFromCli(
     originProject: options.originProject,
     lean: false,
     dedup: captureDedup(options),
+    now: evalClock()(),
   };
   if (!options.dryRun) return captureExtractedItems({ store, config, embed }, writeOpts, extracted, keys);
   return previewCapture(store, writeOpts, extracted, keys, config.defaultHalfLifeDays);
@@ -237,6 +239,8 @@ export interface CaptureWriteOptions {
   readonly lean: boolean;
   /** The rows the dedup read; the store's write reads them again before it writes. */
   readonly dedup: CaptureDedup;
+  /** The instant each captured memory is stamped with. */
+  readonly now: Date;
 }
 
 /** A folder's store with the config its root loaded for this capture, and where its rows' vectors go. */
@@ -337,16 +341,20 @@ function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHal
   // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in 'default'.
   // A rule the person stated is pinned, so it injects even when a later prompt shares none of its words.
   // SHORTCUT: every stated rule pins; cap or age these pins if a store's pins outgrow the hook budget.
-  const created = createMemory(item.content, {
-    layer: Layer.Episodic,
-    tags: item.tags,
-    source: 'capture',
-    confidence: 'observed',
-    pinned: item.fromUser === true && item.category === 'rule',
-    tenantId: options.tenantId,
-    sourceSessionId: options.sessionId,
-    baseHalfLifeDays,
-  });
+  const created = createMemory(
+    item.content,
+    {
+      layer: Layer.Episodic,
+      tags: item.tags,
+      source: 'capture',
+      confidence: 'observed',
+      pinned: item.fromUser === true && item.category === 'rule',
+      tenantId: options.tenantId,
+      sourceSessionId: options.sessionId,
+      baseHalfLifeDays,
+    },
+    options.now,
+  );
   if (options.originProject === undefined) return created;
   return { ...created, originProject: projectId(options.originProject) };
 }

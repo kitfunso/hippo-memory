@@ -1,7 +1,7 @@
 // DAG summary verbs: `hippo dag`, `hippo assemble` and `hippo drill`.
 
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
-import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/memory.js';
+import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import * as api from '../../api/index.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../../api/context-render.js';
 import { memoryList } from '../../api/memories/memories.js';

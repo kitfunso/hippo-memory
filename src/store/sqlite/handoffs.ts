@@ -14,6 +14,7 @@ import { continuityWhere, readActiveTaskSnapshot } from './task-snapshots.js';
 import { continuityStamp, type ContinuityKey, type ContinuityStamp } from '../../base/ports/store/types.js';
 import type { HandoffFilter, SessionEndHandoffRequest, TaskSnapshot } from '../../base/ports/store/sessions.js';
 import { cachedStatement } from '../../db/statement-cache.js';
+import { handleNow, handleStamp } from './handle-clock.js';
 
 // What a session end writes: the snapshot or transcript read it writes from, and the handoff it builds; the store
 // loads the rows these read and stores the result.
@@ -149,7 +150,7 @@ export function saveSessionHandoff(
 ): SessionHandoff {
   assertTenantId('saveSessionHandoff', tenantId);
   const stamp = key ? continuityStamp(key) : null;
-  const now = new Date().toISOString();
+  const now = handleStamp(db);
 
   // Scope is stored as given, since reads deny by default.
   // api.recall and printRecall continuity exclude slack:private:* and 'unknown:legacy'.
@@ -171,6 +172,7 @@ function handoffConditions(
   sessionId: string | null | undefined,
   opts: HandoffFilter,
   key: ContinuityKey | null | undefined,
+  now: Date,
 ) {
   const owned = key ? continuityWhere(key) : null;
   const conditions: string[] = ['tenant_id = ?'];
@@ -200,7 +202,7 @@ function handoffConditions(
   }
   if (opts.maxAgeMs != null) {
     conditions.push('created_at >= ?');
-    params.push(new Date(Date.now() - opts.maxAgeMs).toISOString());
+    params.push(new Date(now.getTime() - opts.maxAgeMs).toISOString());
   }
   if (opts.scopeFilter === 'default-deny') {
     // Admit scope before LIMIT 1, else a newer denied row hides an older eligible one.
@@ -220,7 +222,7 @@ export function readLatestHandoff(
   key?: ContinuityKey | null,
 ): SessionHandoff | null {
   assertTenantId('readLatestHandoff', tenantId);
-  const { conditions, params } = handoffConditions(tenantId, sessionId, opts, key);
+  const { conditions, params } = handoffConditions(tenantId, sessionId, opts, key, handleNow(db));
   const row = cachedStatement(
     db,
     `
@@ -281,10 +283,10 @@ function replaceTranscriptHandoff(
   handoff: Omit<SessionHandoff, 'updatedAt'>,
   key: ContinuityKey | null | undefined,
 ): SessionHandoff | null {
-  const { conditions, params } = handoffConditions(tenantId, handoff.sessionId, {}, key);
+  const { conditions, params } = handoffConditions(tenantId, handoff.sessionId, {}, key, handleNow(db));
   const newest = `SELECT id FROM session_handoffs WHERE ${conditions.join(' AND ')}
     ORDER BY created_at DESC, id DESC LIMIT 1`;
-  const columns: HandoffColumn[] = [['created_at', new Date().toISOString()], ...handoffContentColumns(handoff)];
+  const columns: HandoffColumn[] = [['created_at', handleStamp(db)], ...handoffContentColumns(handoff)];
   const assignments = columns.map(([column]) => `${column} = ?`).join(', ');
   const result = cachedStatement(
     db,

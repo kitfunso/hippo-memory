@@ -1,7 +1,7 @@
 // Search across the local and global stores, merged into one ranked, budgeted list.
 
 import { compareScoresDesc } from '../../base/rank/compare.js';
-import { MemoryEntry } from '../../base/memory/memory.js';
+import { MemoryEntry } from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import type { EmbedderFor } from '../../base/ports/embedder.js';
 import {
@@ -15,12 +15,12 @@ import { fitBudget } from '../search/finalize.js';
 import {
   DEFAULT_LOCAL_BUMP,
   DEFAULT_RECALL_BUDGET,
+  type RankTime,
   type SearchResult,
   type ResultCost,
 } from '../../base/rank/search-types.js';
 import { startQueryEmbedDeadline, type HybridVectorCandidates, type VectorSource } from '../search/vector.js';
-import { evalSwitches } from '../../base/memory/ablation.js';
-import { switchedNow, type EvalSwitches } from '../../base/memory/eval-switches.js';
+import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -56,7 +56,7 @@ export interface HybridSearchOptions extends SearchOptions {
   runtime?: RuntimeSettings;
   /** The folder the caller runs in, whose path segments boost a memory in both stores; absent, no path boost. */
   cwd?: string;
-  /** The eval switches and fake clock both stores rank under; absent, the environment's. */
+  /** The strength model and rank switches both stores rank under; absent, production ranking. */
   switches?: EvalSwitches;
   /** Include superseded memories in results. Default false. */
   includeSuperseded?: boolean;
@@ -84,7 +84,8 @@ export interface HybridSearchOptions extends SearchOptions {
 
 /** `HybridSearchOptions` with the tenant both stores are read as (the eval harness reads every tenant's) and the
  * embedder each store's vector arm uses. */
-export type BothStoresSearch = HybridSearchOptions & { readonly tenantId: TenantId; readonly embedderFor: EmbedderFor };
+export type BothStoresSearch = HybridSearchOptions &
+  RankTime & { readonly tenantId: TenantId; readonly embedderFor: EmbedderFor };
 
 /** Hybrid search across both local and global stores, using embeddings when available.
  *  Each store ranks through hybridSearch, then the local bump, one copy per text and the shared budget apply. */
@@ -188,11 +189,11 @@ export async function rankBothStores(
   sources: { local: VectorSource | undefined; global: VectorSource | undefined },
   entries: { local: MemoryEntry[]; global: MemoryEntry[] },
   vectorCandidates: HybridVectorCandidates,
-  options: HybridSearchOptions = {},
+  options: HybridSearchOptions & RankTime,
 ): Promise<SearchResult[]> {
   const {
     budget = DEFAULT_RECALL_BUDGET,
-    switches = evalSwitches(),
+    switches,
     embeddingWeight,
     explain,
     mmr,
@@ -210,7 +211,7 @@ export async function rankBothStores(
   // One deadline for both stores, so a provider that stalls on the first is not waited on again for the second.
   const shared = {
     budget,
-    now: switchedNow(options.now, switches),
+    now: options.now,
     switches,
     embeddingWeight,
     explain,

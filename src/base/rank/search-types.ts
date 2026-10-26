@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../memory/memory.js';
+import type { MemoryEntry } from '../memory/entry.js';
 
 /** Default candidate-pool size for `listSearchEntries` when `limit` is undefined; `api.recall` imports it for
  * `RecallResult.windowSize` so the two cannot drift. */
@@ -114,4 +114,15 @@ export interface ScoreBreakdown {
   summaryDeboost?: number;
   /** 1.05 if a summary was rebuilt within 7 days; 1.0 otherwise. */
   summaryFreshnessBoost?: number;
+}
+
+/** The instant a ranking scores at: its caller reads it from the clock its root gave it. */
+export interface RankTime {
+  readonly now: Date;
+}
+
+/** The instant a ranking scores at: the caller's, else the wall clock, kept for frozen dist scripts that
+ *  pass no `now`. */
+export function rankNow(time: Partial<RankTime>): Date {
+  return time.now ?? new Date();
 }

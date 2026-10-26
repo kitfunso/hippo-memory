@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_INDEX } from '../../src/db/decay-key.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { contextRowsWhere } from '../../src/store/sqlite/candidates.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { rewardFactorSql } from '../../src/store/sqlite/rule-sql.js';
@@ -13,6 +13,8 @@ import { loadContextCandidates } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { mulberry32 } from '../_helpers/property.js';
 import { DAY_MS } from '../../src/base/util/time.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalSwitches } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -64,7 +66,7 @@ function scanIds(cap: number, now: Date, tenant = 'default'): string[] {
   const { sql: where, params } = contextRowsWhere(tenant, {});
   const sql = `SELECT id FROM memories WHERE id IN (SELECT id FROM memories WHERE ${where}
     ORDER BY pinned DESC, CASE WHEN half_life_days > 0 THEN (julianday(?) - julianday(last_retrieved))
-    / (half_life_days * ${rewardFactorSql()}) END ASC NULLS LAST, id ASC LIMIT ?) ORDER BY created ASC, id ASC`;
+    / (half_life_days * ${rewardFactorSql(evalSwitches().strength)}) END ASC NULLS LAST, id ASC LIMIT ?) ORDER BY created ASC, id ASC`;
   // SAFETY: one TEXT `id` column.
   return withDb((db) =>
     (db.prepare(sql).all(...params, now.toISOString(), cap) as Array<{ id: string }>).map((r) => r.id),
@@ -77,7 +79,7 @@ function plainKeyCaps(now: Date): number[] {
   const { sql: where, params } = contextRowsWhere('default', {});
   const plain = '(julianday(?) - julianday(last_retrieved)) / half_life_days';
   const sql = `SELECT COUNT(*) AS n FROM memories WHERE ${where} AND (pinned > 0 OR (half_life_days > 0
-    AND ${plain} <= ? AND ${plain} / ${rewardFactorSql()} <= ?))`;
+    AND ${plain} <= ? AND ${plain} / ${rewardFactorSql(PRODUCTION_STRENGTH)} <= ?))`;
   const iso = now.toISOString();
   // SAFETY: one INTEGER `n` column.
   const n = withDb(

@@ -1,7 +1,7 @@
 // autoShare above the neutral score reads only rows that carry a score signal or a never-share mark, and picks the same rows.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { autoShare } from '../../src/domain/sharing/share.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
@@ -16,6 +16,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -146,7 +147,13 @@ describe('autoShare prefilter', () => {
         const wanted = new Set(labels.map((l) => ids.get(l)!));
         if (tenantId === ALL_TENANTS && minScore <= 0.6) wanted.add(ids.get('other error 0.6')!);
         const stats: AutoShareStats = { secretSkipped: 0 };
-        const picked = await autoShare(...sharingStores(root), { minScore, dryRun: true, tenantId, stats });
+        const picked = await autoShare(...sharingStores(root), {
+          embed: TEST_RUN,
+          minScore,
+          dryRun: true,
+          tenantId,
+          stats,
+        });
         const inOrder = (
           tenantId === ALL_TENANTS ? loadEveryTenantEntries(root) : loadAllEntries(root, tenantId)
         ).filter((e) => wanted.has(e.id));
@@ -167,7 +174,7 @@ describe('autoShare prefilter', () => {
     });
     for (const tenantId of ['default', ALL_TENANTS] as const) {
       const { result, statements, rowsRead } = await recordStatementsAsync(() =>
-        autoShare(...sharingStores(root), { dryRun: true, tenantId }),
+        autoShare(...sharingStores(root), { embed: TEST_RUN, dryRun: true, tenantId }),
       );
       expect(result.map((e) => e.id)).toEqual([errorId]);
       expect(countMatching(statements, WHOLE_READ)).toBe(0);

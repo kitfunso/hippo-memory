@@ -27,8 +27,8 @@ import {
 
 /** Every method the op table can name, on the thread's store, each run to its end on the thread's one connection;
  * stored vectors answer as a pack, which worker-store.ts turns back into the port's Map. */
-function workerOps({ hippoRoot, lossAversionRatio }: WorkerInit, graphs: VectorGraphs | undefined) {
-  const handles = handlesOf(hippoRoot, { lossAversionRatio });
+function workerOps({ hippoRoot, rules }: WorkerInit, graphs: VectorGraphs | undefined) {
+  const handles = handlesOf(hippoRoot, rules);
   const store = sqliteStoreOn(handles);
   const vectors = sqliteVectorReads(handles, graphs);
   const stored = async (part: StoredPart, ids: readonly string[]) =>

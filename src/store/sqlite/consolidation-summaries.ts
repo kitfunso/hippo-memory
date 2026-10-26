@@ -1,6 +1,6 @@
 // hippo.db's DAG summary reads and the one write that settles a dirty summary; what a summary settles to is decided in
 // src/domain/consolidate/dag.ts.
-import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/memory.js';
+import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { type DatabaseSyncLike, withWriteScope } from '../../db/index.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';

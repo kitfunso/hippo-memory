@@ -7,6 +7,7 @@ import type { HippoStore, OptionalGroup } from '../../src/base/ports/store.js';
 import { sqliteReach, sqliteStore } from '../../src/store/sqlite/store.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { testInfra } from './infra.js';
+import { evalStoreRules } from '../../src/infra/eval-switches.js';
 
 /** A test Context whose store holds every group and its local files, as the CLI's composition root hands it; the
  * folder rides beside it for the tests that reopen it. */
@@ -17,9 +18,9 @@ export function testReach(hippoRoot: string, store: HippoStore): ContextReach {
   return contextReach(sqliteReach(hippoRoot, store), loadConfig, resolveEmbeddingProvider);
 }
 
-/** A Context on hippo.db under `hippoRoot` with its store built, as the CLI's composition root hands it. */
+/** A Context on hippo.db under `hippoRoot` with its store built at the eval rules and clock, as the CLI root hands it. */
 export function apiCtx(hippoRoot: string, tenantId = 'default', actor: Actor = adminActor('test')): FullContext {
-  const store = sqliteStore(hippoRoot);
+  const store = sqliteStore(hippoRoot, evalStoreRules(undefined));
   const reach = testReach(hippoRoot, store);
   return { hippoRoot, tenantId, actor, store, reach, config: loadConfig(hippoRoot), infra: testInfra() };
 }

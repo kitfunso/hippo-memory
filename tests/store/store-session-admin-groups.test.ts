@@ -1,6 +1,7 @@
 // The Sessions, Cards, Goals, Conflicts, Dormant and Reports groups answer alike as sqliteX (sync) and served (async), on a real store.
 import { afterEach, describe, expect, it } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, strengthOptionsOf } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -155,7 +156,7 @@ describe('dormant group', () => {
       id: row.id,
       actor: 'me',
       ownScope: null,
-      revival: { halfLifeDays: DEFAULT_HALF_LIFE_DAYS, strength: strengthOptionsOf(undefined) },
+      revival: { halfLifeDays: DEFAULT_HALF_LIFE_DAYS, strength: PRODUCTION_STRENGTH },
     });
     expect(outcome.status).toBe('restored');
     expect(await served.list(T, null, {})).toEqual([]);

@@ -14,6 +14,7 @@ import { captureExtractedItems } from '../../src/surface/capture/command.js';
 import type { ExtractedItem } from '../../src/surface/capture/extract.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -130,7 +131,13 @@ describe('captures.write', () => {
 
 describe('captureExtractedItems', () => {
   const item = (content: string): ExtractedItem => ({ content, category: 'decision', tags: [] });
-  const options = { tenantId: undefined, originProject: undefined, lean: true, dedup: { tenantId: 'default' } };
+  const options = {
+    tenantId: undefined,
+    originProject: undefined,
+    lean: true,
+    dedup: { tenantId: 'default' },
+    now: evalNow(),
+  };
   const capture = (items: ExtractedItem[], keys: Set<string>) =>
     captureExtractedItems(captureTarget(root), options, items, keys);
 

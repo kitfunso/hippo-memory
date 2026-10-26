@@ -2,7 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { adminActor, ConflictError, NotFoundError, conflictResolve } from '../../src/api/index.js';
 import { handleResolve } from '../../src/surface/cli/curate.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';

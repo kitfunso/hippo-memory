@@ -1,8 +1,8 @@
 // The memory writes four CLI verbs make (remember, forget, archive, promote), behind one interface with two
 // implementations: the store itself, or the `hippo serve` that answers for the folder. Each command picks one, once.
 
-import type { ConfidenceLevel, MemoryEntry, MemoryKind } from '../../base/memory/memory.js';
-import { Layer } from '../../base/memory/memory.js';
+import type { ConfidenceLevel, MemoryEntry, MemoryKind } from '../../base/memory/entry.js';
+import { Layer } from '../../base/memory/entry.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { envRequireServer } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';

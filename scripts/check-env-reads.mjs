@@ -23,7 +23,6 @@ export const ENV_READERS = [
     /^surface\/connectors\/[^/]+\/webhook\.ts$/,
     'webhook adapters: their own signing secrets and unknown-tenant escape hatch',
   ],
-  [/^base\/memory\/ablation\.ts$/, 'the eval-only HIPPO_ABLATE_* and HIPPO_FAKE_NOW switches'],
   [/^infra\//, 'the outside-service adapters: the model key and timeout, and the machine'],
   [/^base\/util\/log\.ts$/, 'the log sink: its own level and format'],
   [/^host\/spawn-argv\.ts$/, 'the process adapter: PATH and PATHEXT'],

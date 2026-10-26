@@ -1,5 +1,6 @@
 // Entry of the process that runs one POST /v1/sleep or MCP auto-sleep; sleep-offload.ts starts it and nothing imports
 // it. The sleep modules alone: the api barrel loads far more than one sleep needs, and every sleep pays for the start.
+import { evalStoreRules } from '../../infra/eval-switches.js';
 import { sleepWholeStore } from '../../api/sleep/sleep.js';
 import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
 import { rootInfra } from '../../infra/ports.js';
@@ -20,7 +21,7 @@ type JobResult = SleepResult | Awaited<ReturnType<typeof autoSleepConsolidate>>;
 const EXIT_MARGIN_MS = 5_000;
 
 const loadConfig = configReader(envRuntimeSettings);
-const storeAt = (root: string) => defaultStore(root, { lossAversionRatio: envLossAversionRatio() });
+const storeAt = (root: string) => defaultStore(root, evalStoreRules(envLossAversionRatio()));
 // The child runs one job, so its one root builds the ports and its Host once.
 const childHost = createHost();
 const childInfra = rootInfra(childHost);

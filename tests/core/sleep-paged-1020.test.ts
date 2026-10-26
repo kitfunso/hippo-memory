@@ -1,7 +1,7 @@
 // Sleep's dedup, audit and ambient read the store in keyset pages; a run on small pages must match a run on one page.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';

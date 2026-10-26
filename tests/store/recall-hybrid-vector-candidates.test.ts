@@ -5,7 +5,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
-import { createMemory, type CreateMemoryOptions } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import type { CreateMemoryOptions } from '../../src/base/memory/entry.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
@@ -19,6 +20,7 @@ import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -111,6 +113,7 @@ describe('hybrid recall candidates with stored vectors', () => {
     const s = track(seed());
     withEmbeddings(s);
     const res = await searchBothHybrid(QUERY, ...sharingStores(s.home, s.global), {
+      now: evalNow(),
       embedderFor: resolveEmbeddingProvider,
       budget: 100000,
       tenantId: TENANT,
@@ -129,6 +132,7 @@ describe('hybrid recall candidates with stored vectors', () => {
     const s = track(seed());
     withEmbeddings(s);
     const res = await searchBothHybrid(QUERY, ...sharingStores(s.home, s.global), {
+      now: evalNow(),
       embedderFor: resolveEmbeddingProvider,
       budget: 100000,
       tenantId: TENANT,

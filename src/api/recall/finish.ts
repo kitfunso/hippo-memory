@@ -1,13 +1,12 @@
 // What a recall remembers and records: the anchoring detector and query history, the session rings and audit rows, then
 // the write around one recall (history, ring, recalled counter, token ledger row and the client's shown list).
-import { isRecallBoostAblated } from '../../base/memory/ablation.js';
 import { auditQueryFields } from '../../base/records/audit-report.js';
 import type { HippoStore, RecallWrites } from '../../base/ports/store.js';
 import type { TokenSurface } from '../../base/ports/store/ledger.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { AvailabilityHint } from '../availability.js';
 import { recordTokens } from '../tokens.js';
-import type { Context } from '../types.js';
+import { strengthOf, type Context } from '../types.js';
 import type { CallerState } from '../callers.js';
 import { keepShownIds } from './last-recalled.js';
 import type { AppendAuditOptions } from '../../base/ports/store/types.js';
@@ -251,12 +250,13 @@ export function appendRecall(
   ring: RingBuffer,
   queryHash: number,
   topMemoryId: string | null,
+  now: Date,
   anchoredOn?: string,
 ): void {
   const entry: RecallHistoryEntry = {
     queryHash,
     topMemoryId,
-    ts: new Date().toISOString(),
+    ts: now.toISOString(),
   };
   if (anchoredOn !== undefined) entry.anchoredOn = anchoredOn;
   ring.append(entry);
@@ -320,8 +320,9 @@ export function noteRecall(
   query: string,
   topId: string | null,
   anchoredOn: string | undefined,
+  now: Date,
 ): void {
-  appendRecall(ring, hashQueryText(query), topId, anchoredOn);
+  appendRecall(ring, hashQueryText(query), topId, now, anchoredOn);
 }
 
 /** Whom a recall audit row names. */
@@ -336,7 +337,7 @@ export function callerOf(ctx: Context): RecallAuditCaller {
 
 /** The strengthen every ranker of `retrieve` hands to the recall's write: the shown ids, in the caller's tenant. */
 export function strengthenOf(ctx: Context, ids: readonly string[]): NonNullable<RecallWrites['strengthen']> {
-  return { ids, opts: { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() } };
+  return { ids, opts: { tenantId: ctx.tenantId, recallBoostAblated: !strengthOf(ctx).recallStrengthens } };
 }
 
 type RecallAuditMetadata = Readonly<Record<string, string | number | null>>;
@@ -477,7 +478,7 @@ export async function recordShownRecall(
   // A surface that only peeked has its ring created here, after the write, so a recall that fails cannot LRU-evict a
   // live session.
   const ring = sessionRing(ctx, how.ring, shown.sessionId);
-  if (ring) noteRecall(ring, shown.query, shown.ids[0] ?? null, shown.anchoredOn);
+  if (ring) noteRecall(ring, shown.query, shown.ids[0] ?? null, shown.anchoredOn, ctx.infra.clock());
   const items = how.counts === 'none' ? 0 : shown.ids.length;
   // A recall with no audit row counts nothing, as it strengthens and traces nothing.
   if (shown.written && (how.counts === 'every' || items > 0)) await store.bumpRecallStats(items);

@@ -2,7 +2,7 @@
  *  Regex picks WHAT is a candidate; it cannot say what is worth keeping, so every captured memory currently lands on a
  *  flat schema_fit of 0.5. */
 
-import { ConfidenceLevel, EmotionalValence } from '../base/memory/memory.js';
+import { ConfidenceLevel, EmotionalValence } from '../base/memory/entry.js';
 import type { Http } from '../base/ports/http.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { readCappedJson, readCappedText } from '../base/util/capped-json.js';

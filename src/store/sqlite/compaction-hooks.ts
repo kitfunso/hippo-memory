@@ -42,6 +42,7 @@ import type {
   StalledOptions,
   StalledSaved,
 } from '../../base/ports/store/capture.js';
+import { handleNow } from './handle-clock.js';
 
 // A note leaves the store only as the port's answer, so a caught error also goes to the shared logger with its stack.
 const noteTo =
@@ -144,7 +145,7 @@ function saveStalled(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, 
   const notes: string[] = [];
   const log = noteTo(notes);
   let saved = 0;
-  for (const row of stalledSummarizedRows(db, tenantId, iso(Date.now() - REPLAY_AFTER_MS))) {
+  for (const row of stalledSummarizedRows(db, tenantId, iso(files.clock().getTime() - REPLAY_AFTER_MS))) {
     if (Date.now() > opts.deadline) break;
     try {
       const record = toRecord(row);
@@ -189,7 +190,7 @@ function saveRecordItems(
 
 /** Old enough that their PostCompact will not come, young enough that the transcript may still reach back to them. */
 function openRecords(db: DatabaseSyncLike, tenantId: string): OpenCompaction[] {
-  const now = Date.now();
+  const now = handleNow(db).getTime();
   const rows = openTranscriptRows(db, tenantId, iso(now - REPLAY_AFTER_MS), iso(now - TRANSCRIPT_FILL_WINDOW_MS));
   return rows.flatMap((row) => {
     const record = toRecord(row);
@@ -216,7 +217,7 @@ function fillRecord(db: DatabaseSyncLike, files: StoreFiles, fill: Fill, baseHal
     }
     return false;
   }
-  if (!markSummarized(db, tenantId, record.id, { text, summarizedAt: new Date().toISOString() })) {
+  if (!markSummarized(db, tenantId, record.id, { text, summarizedAt: files.clock().toISOString() })) {
     log(`${record.id} was filled by another process`);
     return false;
   }

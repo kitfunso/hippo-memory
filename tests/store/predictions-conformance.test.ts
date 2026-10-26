@@ -16,6 +16,7 @@ import {
 import type { AuditEvent, PredictionBaserate } from '../../src/base/ports/store/types.js';
 import type { Prediction, SavePredictionOptions } from '../../src/base/ports/store/objects.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -51,7 +52,7 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
 /** Built once per call list, so every call is handed the same mirror id. */
 function claim(classTag: string, fields: Partial<SavePredictionOptions> = {}, tenantId = TENANT_A): PredictionSave {
   const opts: SavePredictionOptions = { classTag, claimText: `the ${classTag} work lands on time`, ...fields };
-  return { ...opts, mirror: predictionMirror(tenantId, opts, 30), actor: ACTOR };
+  return { ...opts, mirror: predictionMirror(tenantId, opts, 30, evalNow()), actor: ACTOR };
 }
 
 /** Sets the clock inside the call, so each step reads a time the test names. */

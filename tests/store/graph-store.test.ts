@@ -8,7 +8,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { openHippoDb, closeHippoDb, withWriteScope } from '../../src/db/index.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { insertEntityRow, insertRelationRow, updateEntityRow } from '../../src/store/sqlite/graph-writes.js';

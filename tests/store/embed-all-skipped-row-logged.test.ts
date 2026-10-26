@@ -1,6 +1,7 @@
 // A provider's empty row is a per-item failure it already swallowed; embedAll must name the memory it left out.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { embedAll } from '../../src/domain/search/embed-memories.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
 import { localIndex } from '../_helpers/cli-stores.js';

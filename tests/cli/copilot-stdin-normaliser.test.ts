@@ -11,6 +11,7 @@ import { lessonFromFailure, payloadString } from '../../src/surface/capture/fail
 import type { JsonValue } from '../../src/base/util/json.js';
 import { claudeCodePayload, copilotPayload } from '../_helpers/copilot-hooks.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 const CWD = 'C:\\Users\\user\\proj';
 const TRANSCRIPT = 'C:\\Users\\user\\.copilot\\session-state\\copilot-sess-1\\events.jsonl';
@@ -25,6 +26,7 @@ function normalized(text: string): JsonValue {
 
 function deliveryEvent(stdinText: string | undefined, runtime?: DeliveryRuntime): DeliveryEventInput {
   const rec = createDeliveryRecorder({
+    now: evalNow(),
     ledger: sqliteStore(CWD).ledger,
     storeHash: 'aaaaaaaaaaaaaaaa',
     writeStore: 'local',

@@ -1,8 +1,11 @@
 // A memory marked wrong more often than right fades, whatever shields it: pinning, error tags, heavy recall.
 import { describe, expect, it } from 'vitest';
-import { applyOutcome, calculateStrength, netWrong, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { applyOutcome, calculateStrength } from '../../src/entry/memory.js';
+import { netWrong } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { markRetrieved } from '../../src/base/memory/memory.js';
+import { markRetrieved } from '../../src/entry/memory.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 const now = new Date('2026-09-25T00:00:00Z');
 
@@ -20,8 +23,8 @@ function marked(e: MemoryEntry, bad: number, good = 0): MemoryEntry {
 
 describe('wrong memories fade', () => {
   it('netWrong counts bad marks past good ones, never below zero', () => {
-    expect(netWrong(marked(fresh(), 3, 1))).toBe(2);
-    expect(netWrong(marked(fresh(), 1, 4))).toBe(0);
+    expect(netWrong(marked(fresh(), 3, 1), PRODUCTION_STRENGTH)).toBe(2);
+    expect(netWrong(marked(fresh(), 1, 4), PRODUCTION_STRENGTH)).toBe(0);
   });
 
   it('halves strength per net bad mark, capped at three', () => {

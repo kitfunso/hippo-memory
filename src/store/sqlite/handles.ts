@@ -13,7 +13,10 @@ import {
   recordHalfLifeBaseForNewStore,
   type StoreFiles,
 } from './open.js';
-import type { LossAversion } from '../../base/memory/memory.js';
+import { PRODUCTION_STRENGTH, withLossAversion } from '../../base/memory/strength.js';
+import type { StoreRules } from '../../base/ports/infra.js';
+import { hostClock } from '../../host/clock.js';
+import { bindHandleClock } from './handle-clock.js';
 import { createHost } from '../../host/host.js';
 
 export function initStore(hippoRoot: string): void {
@@ -84,17 +87,18 @@ export async function onHandleAsync<T>(
 }
 
 /** The files of the store under `hippoRoot`, with a Host of their own: a store object keeps its folder's walk. */
-export function storeFilesOf(hippoRoot: string, rules: LossAversion = {}): StoreFiles {
-  return { hippoRoot, lossAversionRatio: rules.lossAversionRatio, host: createHost() };
+export function storeFilesOf(hippoRoot: string, rules: StoreRules = {}): StoreFiles {
+  const strength = withLossAversion(rules.strength ?? PRODUCTION_STRENGTH, rules.lossAversionRatio);
+  return { hippoRoot, strength, clock: hostClock(rules.fakeNowMs ?? null), host: createHost() };
 }
 
 /** The handles of the store under `hippoRoot`, which only the adapter's composition root builds. */
-export function handlesOf(hippoRoot: string, rules: LossAversion = {}): Handles {
+export function handlesOf(hippoRoot: string, rules: StoreRules = {}): Handles {
   const files = storeFilesOf(hippoRoot, rules);
   return {
-    on: (fn, open) => onHandle(hippoRoot, (db) => fn(db, files), open),
-    onAsync: (fn, open) => onHandleAsync(hippoRoot, (db) => fn(db, files), open),
-    open: () => openHippoDb(hippoRoot),
+    on: (fn, open) => onHandle(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), open),
+    onAsync: (fn, open) => onHandleAsync(hippoRoot, (db) => fn(bindHandleClock(db, files.clock), files), open),
+    open: () => bindHandleClock(openHippoDb(hippoRoot), files.clock),
     files,
   };
 }

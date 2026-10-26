@@ -2,7 +2,7 @@
 // the rows are walked cannot bring the value back.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertDormantRow, readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';

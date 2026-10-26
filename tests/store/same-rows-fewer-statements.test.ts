@@ -1,5 +1,6 @@
 // Reads and writes that once spent more statements or a wider scan now answer the same rows. Real store.
 import { describe, expect, it } from 'vitest';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { listEntriesWhere, prefixUpperBound } from '../../src/store/sqlite/entry-filter.js';
@@ -11,6 +12,7 @@ import { countMatching, recordStatements } from '../_helpers/count-statements.js
 import { makeRoot } from '../_helpers/make-root.js';
 import { seedRows } from '../_helpers/seed-rows.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -112,7 +114,7 @@ describe('finishRecall audit rows', () => {
         targetId: `t${i}`,
       }));
       const writes: RecallWrites = { goalLog: [], audit };
-      const log = recordStatements(() => finishRecall(db, { lossAversionRatio: undefined }, writes));
+      const log = recordStatements(() => finishRecall(db, { strength: PRODUCTION_STRENGTH, clock: evalNow }, writes));
       expect(countMatching(log.statements, 'INSERT INTO audit_log')).toBe(1);
       const rows = listAuditEvents(db, { tenantId: 'default', limit: 10 });
       expect(rows.map((r) => r.targetId)).toEqual(['t2', 't1', 't0']);
