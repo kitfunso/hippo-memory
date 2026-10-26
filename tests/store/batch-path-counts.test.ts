@@ -17,7 +17,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether, loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
-import { seedRows } from '../_helpers/seed-rows.js';
+import { memoryRows } from '../_helpers/seed-rows.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
@@ -121,7 +121,8 @@ describe('invalidateMatching with onlyId', () => {
 
   function seeded(n: number) {
     const root = makeRoot('batch-invalidate');
-    const rows = seedRows(root, n, (i) => `row ${i} about the zephyrine cache`);
+    const rows = memoryRows(n, (i) => `row ${i} about the zephyrine cache`);
+    writeEntriesTogether(root, rows);
     return { root, rows };
   }
 

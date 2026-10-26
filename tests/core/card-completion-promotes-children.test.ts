@@ -1,12 +1,13 @@
 // Completing a card promotes exactly its backlog children whose parents are all done, in card_deps order, and touches no other child.
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import type { Card } from '../../src/base/records/card.js';
-import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb, RequestStores } from '../../src/db/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { cardDetailOf } from '../_helpers/card-detail.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { claimCard, completeCard, createCard, loadCard, reviewCard } from '../_helpers/root-forms.js';
+import { completeCard, createCard } from '../_helpers/root-forms.js';
 
 const TENANT = 'default';
 interface Preparer {
@@ -15,23 +16,32 @@ interface Preparer {
 // SAFETY: node:sqlite has no bundled types; prepare takes SQL text and returns a statement object.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: Preparer } };
 let root: string;
+// One handle per test for the seeding and reads, as one CLI command shares it.
+let session: RequestStores;
+let store: ReturnType<typeof sqliteStore>;
 
 beforeEach(() => {
   root = makeRoot('card-promotion');
+  session = new RequestStores();
+  store = sqliteStore(root, { session });
+});
+
+afterEach(() => {
+  session.close();
 });
 
 async function toReview(id: string): Promise<void> {
-  await claimCard(root, TENANT, id, 'test-runtime');
-  await reviewCard(root, TENANT, id);
+  await store.cards.claim(TENANT, id, 'test-runtime');
+  await store.cards.review(TENANT, id);
 }
 
 async function finish(id: string): Promise<void> {
   await toReview(id);
-  await completeCard(root, TENANT, id, 'success');
+  await store.cards.complete(TENANT, id, 'success');
 }
 
 async function card(id: string): Promise<Card> {
-  const found = await loadCard(root, TENANT, id);
+  const found = (await store.cards.detail(TENANT, id))?.card;
   if (!found) throw new Error(`card ${id} is missing`);
   return found;
 }
@@ -45,15 +55,15 @@ interface Family {
 
 /** A parent in review with `children` children: every fourth waits on an open second parent, every fifth already left backlog, the rest are promotable. */
 async function seedFamily(children: number): Promise<Family> {
-  const parent = (await createCard(root, TENANT, { title: 'parent' })).id;
-  const doneParent = (await createCard(root, TENANT, { title: 'done parent' })).id;
-  const openParent = (await createCard(root, TENANT, { title: 'open parent' })).id;
+  const parent = (await store.cards.create(TENANT, { title: 'parent' })).id;
+  const doneParent = (await store.cards.create(TENANT, { title: 'done parent' })).id;
+  const openParent = (await store.cards.create(TENANT, { title: 'open parent' })).id;
   const promotable = new Set<string>();
   const otherIds: string[] = [];
   const ids: string[] = [];
   for (let i = 0; i < children; i++) {
     const second = i % 4 === 3 ? [openParent] : i % 3 === 1 ? [doneParent] : [];
-    ids.push((await createCard(root, TENANT, { title: `child ${i}`, dependsOn: [parent, ...second] })).id);
+    ids.push((await store.cards.create(TENANT, { title: `child ${i}`, dependsOn: [parent, ...second] })).id);
   }
   await finish(doneParent);
   const db = openHippoDb(root);
@@ -79,7 +89,7 @@ describe('completeCard child promotion', () => {
     'promotes the unblocked backlog children of a parent with %i children, in card_deps order',
     async (children) => {
       const family = await seedFamily(children);
-      const result = await completeCard(root, TENANT, family.parent, 'success');
+      const result = await store.cards.complete(TENANT, family.parent, 'success');
 
       const deps = (await cardDetailOf(root, TENANT, family.parent))?.deps;
       const inDepsOrder = (deps?.children ?? []).filter((id) => family.promotable.has(id));
@@ -100,7 +110,7 @@ describe('completeCard child promotion', () => {
 
   it('promotes nothing when the parent is shelved', async () => {
     const family = await seedFamily(10);
-    const result = await completeCard(root, TENANT, family.parent, 'failure');
+    const result = await store.cards.complete(TENANT, family.parent, 'failure');
     expect(result?.promotedChildren).toEqual([]);
     const promotable = await Promise.all([...family.promotable].map((id) => card(id)));
     expect(promotable.map((child) => child.status)).toEqual([...family.promotable].map(() => 'backlog'));
@@ -119,9 +129,9 @@ describe('completeCard child promotion', () => {
     } finally {
       closeHippoDb(db);
     }
-    const result = await completeCard(root, TENANT, family.parent, 'success');
+    const result = await store.cards.complete(TENANT, family.parent, 'success');
     expect(result?.promotedChildren).toHaveLength(family.promotable.size);
-    expect((await loadCard(root, 'tenant-b', 'card_other'))?.status).toBe('backlog');
+    expect((await store.cards.detail('tenant-b', 'card_other'))?.card.status).toBe('backlog');
   });
 });
 
@@ -164,7 +174,7 @@ describe('statements one completion prepares and runs', () => {
 
   it('prepares the dependency insert of a new card once for 20 parents', async () => {
     const parents: string[] = [];
-    for (let i = 0; i < 20; i++) parents.push((await createCard(root, TENANT, { title: `parent ${i}` })).id);
+    for (let i = 0; i < 20; i++) parents.push((await store.cards.create(TENANT, { title: `parent ${i}` })).id);
     const log = recordStatements(() =>
       recordPrepares(() => createCard(root, TENANT, { title: 'child', dependsOn: parents })),
     );
