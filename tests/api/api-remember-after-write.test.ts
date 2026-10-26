@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { remember } from '../../src/api/index.js';
+import { rememberUntrusted } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
@@ -15,7 +15,7 @@ function breakEventLog(root: string): void {
   }
 }
 
-describe('remember with a connector event is transactional', () => {
+describe('rememberUntrusted with a connector event is transactional', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('after');
@@ -24,7 +24,7 @@ describe('remember with a connector event is transactional', () => {
   it('rolls back the memory row when the event log write throws', async () => {
     breakEventLog(root);
     await expect(
-      remember(apiCtx(root, 'default', { subject: 'test', role: 'admin' }), {
+      rememberUntrusted(apiCtx(root, 'default', { subject: 'test', role: 'admin' }), {
         content: 'doomed',
         event: { connector: 'slack', eventId: 'Ev_doomed' },
       }),

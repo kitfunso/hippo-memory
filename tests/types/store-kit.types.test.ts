@@ -6,6 +6,7 @@ import {
   RejectedValueError,
   entryAfterOutcome,
   hasGroup,
+  OPTIONAL_GROUPS,
   requireGroup,
   sqliteStore,
   type HippoStore,
@@ -42,7 +43,7 @@ describe('hippo-memory/store-kit entry types', () => {
     typeOnly(() => requireGroup(store, 'base'));
   });
 
-  it('the optional groups are a closed set of names, and no localFiles group is left', () => {
+  it('the optional groups are a closed set of names that OPTIONAL_GROUPS lists once each, and no localFiles group is left', () => {
     expectTypeOf<OptionalGroup>().toEqualTypeOf<
       | 'readiness'
       | 'lastRecall'
@@ -53,13 +54,27 @@ describe('hippo-memory/store-kit entry types', () => {
       | 'sharing'
       | 'consolidation'
       | 'learning'
+      | 'graphRebuild'
+      | 'lessonWrites'
+      | 'auditMaintenance'
+      | 'dormant'
       | 'captures'
       | 'compactionHooks'
+      | 'compactions'
+      | 'failureLog'
       | 'projectTags'
       | 'diagnostics'
-      | 'graphRebuild'
       | 'agentImport'
+      | 'connectorWrites'
+      | 'connectorEvents'
+      | 'quarantine'
+      | 'objects'
+      | 'cards'
+      | 'conflicts'
+      | 'rejections'
     >();
+    expectTypeOf<(typeof OPTIONAL_GROUPS)[number]>().toEqualTypeOf<OptionalGroup>();
+    expect(new Set(OPTIONAL_GROUPS).size).toBe(OPTIONAL_GROUPS.length);
     expectTypeOf<'localFiles' extends StoreGroup ? true : false>().toEqualTypeOf<false>();
     // @ts-expect-error hippo.db's folder work is the optional groups above, not one localFiles group
     typeOnly(() => hasGroup(store, 'localFiles'));

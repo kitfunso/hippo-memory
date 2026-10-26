@@ -36,4 +36,11 @@ export type { Reports } from './store/reports.js';
 export type { Sessions, WorkingMemoryFilter, WorkingMemoryPush } from './store/sessions.js';
 export type { RejectionCheck, Rejections, FailureLog } from './store/rejections.js';
 export type { CallerItemsSaved, Compactions } from './store/capture.js';
-export { hasGroup, requireGroup, type OptionalGroup, type RequiredStore } from './store.js';
+export {
+  hasGroup,
+  OPTIONAL_GROUPS,
+  requireGroup,
+  type OptionalGroup,
+  type RequiredStore,
+  type StoreWith,
+} from './store.js';

@@ -53,7 +53,7 @@ function deadline(ms: string): void {
 
 async function start(root: string, opts: Partial<ServeOptions> = {}): Promise<ServerHandle> {
   vi.stubEnv('HIPPO_V1_RPS', '0');
-  const server = await serveKeyed({ hippoRoot: root, port: 0, ...opts });
+  const server = await serveKeyed({ hippoRoot: root, port: 0, keep: ['objects'], ...opts });
   cleanups.push(async () => {
     await server.stop();
     await opts.store?.close();

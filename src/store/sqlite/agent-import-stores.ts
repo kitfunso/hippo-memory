@@ -11,7 +11,7 @@ import { inPortTerms } from './port-errors.js';
 import { sqliteStore } from './store.js';
 import { grantFor, type SqliteStoreOptions } from './grant.js';
 
-type SqliteImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing'>;
+type SqliteImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing' | 'rejections'>;
 
 interface SqliteImportStores {
   open(root: string, opts: { readonly busyWaitMs?: number }): SqliteImportStore;

@@ -39,7 +39,7 @@ beforeAll(async () => {
   }
   vi.stubEnv('HIPPO_V1_RPS', '0');
   vi.stubEnv('HIPPO_CALLER_RPS', '0');
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects'] });
   vi.unstubAllEnvs();
 });
 

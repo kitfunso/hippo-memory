@@ -23,7 +23,6 @@ import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenant } from '../tenant-route.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
-import type { Context } from '../../../api/index.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import {
   JSON_HEADERS,
@@ -34,7 +33,7 @@ import {
   type WebhookRequest,
 } from '../../http/http-util.js';
 import { type JsonValue, tryParseJson } from '../../../base/util/json.js';
-import type { WebhookPorts } from '../ingest.js';
+import type { ConnectorContext, WebhookPorts } from '../ingest.js';
 import { errorFields, log } from '../../../base/util/log.js';
 
 /** GITHUB_WEBHOOK_SECRET_PREVIOUS while its rotation window is open, for the webhook and the DLQ replay alike. */
@@ -193,7 +192,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     return;
   }
 
-  const ctx: Context = {
+  const ctx: ConnectorContext = {
     tenantId: resolvedTenant,
     actor: { subject: 'connector:github', role: 'admin' },
     store: d.store,
@@ -259,7 +258,7 @@ async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | 
 /** Ingests, archives or parks by event header; false when no guard matched the body. */
 async function dispatchGitHubEvent(
   d: SignedDelivery,
-  ctx: Context,
+  ctx: ConnectorContext,
   body: SignedEnvelope,
   deliveryId: string,
   routing: DlqRouting,

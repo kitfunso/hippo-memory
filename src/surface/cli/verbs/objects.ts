@@ -9,6 +9,7 @@ import { type VerbSpec, verb } from '../verb-row.js';
 
 export const OBJECT_VERBS = {
   predict: verb(() => import('../predictions.js'), 'handlePredict', {
+    needs: ['objects'],
     flags: {
       values: ['actual', 'class', 'estimate', 'note', 'state', 'status', 'target', 'unit'],
       numbers: ['limit'],
@@ -32,6 +33,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   decide: verb(() => import('../decisions.js'), 'handleDecide', {
+    needs: ['objects'],
     flags: { values: ['context', 'status', 'supersedes'], numbers: ['limit'] },
     usage: [
       `
@@ -45,6 +47,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   incident: verb(() => import('../incidents.js'), 'handleIncident', {
+    needs: ['objects'],
     flags: { values: ['context', 'resolution', 'status'], numbers: ['limit'], lists: ['link'] },
     usage: [
       `
@@ -60,6 +63,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   process: verb(() => import('../playbooks.js'), 'handleProcess', {
+    needs: ['objects'],
     flags: { values: ['change', 'description', 'status'], numbers: ['limit'], lists: ['step'] },
     usage: [
       `
@@ -77,6 +81,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   policy: verb(() => import('../playbooks.js'), 'handlePolicy', {
+    needs: ['objects'],
     flags: { values: ['change', 'from', 'name', 'status', 'text', 'to'], numbers: ['limit'] },
     usage: [
       `
@@ -98,6 +103,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   skill: verb(() => import('../playbooks.js'), 'handleSkill', {
+    needs: ['objects'],
     flags: { values: ['change', 'instructions', 'status', 'trigger'], numbers: ['limit'] },
     usage: [
       `
@@ -116,6 +122,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   brief: verb(() => import('../briefs.js'), 'handleProjectBrief', {
+    needs: ['objects'],
     aliases: ['project-brief'],
     dryRun: { form: 'refresh', honoured: (args) => args[0] === 'refresh' },
     flags: { switches: ['dry-run'], values: ['change', 'repo', 'status', 'summary'], numbers: ['limit'] },
@@ -135,6 +142,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   note: verb(() => import('../notes.js'), 'handleCustomerNote', {
+    needs: ['objects'],
     aliases: ['customer-note'],
     flags: { values: ['change', 'customer', 'status', 'text'], numbers: ['limit'] },
     usage: [
@@ -204,6 +212,7 @@ export const OBJECT_VERBS = {
     ],
   }),
   dashboard: verb(() => import('../serve.js'), 'handleDashboard', {
+    needs: ['cards', 'conflicts'],
     flags: { numbers: ['port'] },
     usage: [
       `

@@ -77,7 +77,7 @@ export interface LearnResult {
 type LessonCounts = Pick<LearnResult, 'added' | 'skipped' | 'rejected' | 'invalidations'>;
 
 /** Learn from `repoPath`'s last `days` of commits into the caller's tenant. Host admin only. */
-export async function learn(ctx: Context, opts: LearnOptions): Promise<LearnResult> {
+export async function learn(ctx: ContextWith<'lessonWrites'>, opts: LearnOptions): Promise<LearnResult> {
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
@@ -133,7 +133,7 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   }
   counts.added += landed.length;
   if (!batch.full) return;
-  if (landed.length > 0) await writes.bumpRemembered(landed.length);
+  if (landed.length > 0) await ctx.store.bumpRemembered(landed.length);
   const { embedderFor, clock, failureNotices } = ctx.infra;
   const { store, config } = ctx;
   const target = {
@@ -210,7 +210,7 @@ async function scanTenant(ctx: Context, targets: readonly InvalidationTarget[], 
 }
 
 async function writeLessons(
-  ctx: Context,
+  ctx: ContextWith<'lessonWrites'>,
   lessons: readonly string[],
   opts: LearnOptions,
   config: HippoConfig,
@@ -262,7 +262,7 @@ export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
 /** `hippo invalidate`: weakens the caller's tenant's memories that reference `target.from`, or only the one
  * `options.onlyId` names. */
 export async function memoryInvalidate(
-  ctx: ContextWith<'learning'>,
+  ctx: ContextWith<'learning' | 'lessonWrites'>,
   target: InvalidationTarget,
   options: InvalidationOptions,
 ): Promise<InvalidationResult> {

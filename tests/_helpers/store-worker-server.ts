@@ -8,7 +8,7 @@ import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from
 import type { JsonValue } from '../../src/base/util/json.js';
 import type { ServeOptions, ServerHandle } from '../../src/server.js';
 import { serveKeyed } from './keyed-server.js';
-import type { HippoStore } from '../../src/base/ports/store-index.js';
+import type { HippoStore, OptionalGroup } from '../../src/base/ports/store-index.js';
 import {
   type CallOptions,
   createSqliteExecutor,
@@ -45,6 +45,9 @@ export function newRoot(label = 'sqlite-executor'): string {
   return removeLater(makeRoot(label));
 }
 
+// The worker-backed routes are the object routes, so a port-only store keeps that group.
+const OBJECT_GROUPS: readonly OptionalGroup[] = ['objects'];
+
 /** A server on `root`, sent its local key by any call naming no token: on the default store when `store` is absent, which is the worker-backed one. */
 export async function start(
   root: string,
@@ -53,7 +56,7 @@ export async function start(
 ): Promise<ServerHandle> {
   vi.stubEnv('HIPPO_V1_RPS', '0');
   // These runs compare route output, so neither limiter may answer first.
-  const base = { hippoRoot: root, port: 0, rateLimits: { perCaller: 'off' as const }, ...extra };
+  const base = { hippoRoot: root, port: 0, rateLimits: { perCaller: 'off' as const }, keep: OBJECT_GROUPS, ...extra };
   const server = await serveKeyed(store ? { ...base, store } : base);
   cleanups.push(async () => {
     await server.stop();

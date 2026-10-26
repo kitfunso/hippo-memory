@@ -24,6 +24,7 @@ import {
   type GroupCall,
   type Outcome,
   type TwoTenantFixture,
+  type FixtureStore,
 } from '../_helpers/store-conformance.js';
 import { markGitHubEventSeen, markSlackEventSeen, writeEntry } from '../_helpers/root-forms.js';
 import type { CursorKey, GitHubStream, SlackWorkspace, TenantRoute } from '../../src/base/ports/store/connectors.js';
@@ -154,7 +155,7 @@ async function copyOfFixture(prepare: (root: string) => void | Promise<void>): P
   return root;
 }
 
-async function runSide(side: ConnectorEventsSide, calls: readonly Call[]): Promise<Side> {
+async function runSide(side: ConnectorEventsSide<FixtureStore>, calls: readonly Call[]): Promise<Side> {
   const group = side.store.connectorEvents;
   const outcomes: Outcome<Value>[] = [];
   for (const call of calls) outcomes.push(await outcomeOf(() => call(group, side.store)));

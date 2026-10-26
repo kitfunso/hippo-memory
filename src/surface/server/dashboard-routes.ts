@@ -1,6 +1,5 @@
 // The dashboard's route table and its dispatch: the /v1 rows' shape and lookup, behind the dashboard session.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Context } from '../../api/index.js';
 import type { RequestLimits } from '../../base/util/request-scope.js';
 import {
   cardRoute,
@@ -19,7 +18,7 @@ import { pageRoute, SECURITY_HEADERS } from '../dashboard/dashboard-page.js';
 import type { StaticFiles } from '../dashboard/static-file.js';
 import type { DashboardReader } from './dashboard-reader.js';
 import { passDashboardSession, type DashboardAccess, type DashboardSession } from './dashboard-session.js';
-import type { DashboardRoute, DashboardRouteRequest } from './dashboard-types.js';
+import type { DashboardContext, DashboardRoute, DashboardRouteRequest } from './dashboard-types.js';
 import { noteAccess, parseRequest, sendError } from './request.js';
 import { routeLookup } from './route-lookup.js';
 import { bindPath, routeLabel } from './route-table.js';
@@ -49,7 +48,7 @@ export interface DashboardServing {
   readonly access: DashboardAccess;
   readonly reader: DashboardReader;
   /** A fresh Context per request, so a config edit shows on the next one, on the request's deadline and signal. */
-  readonly context: (limits: RequestLimits) => Context;
+  readonly context: (limits: RequestLimits) => DashboardContext;
   readonly bodyDeadlineMs: number;
   readonly staticFiles: StaticFiles | null;
 }

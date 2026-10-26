@@ -28,7 +28,10 @@ export interface SleepPhases {
   autoShare: typeof autoShare;
   computeAmbientState: typeof ambientStateFromTallies;
   loadPendingExtractionTenants: (store: StoreWith<'consolidation'>) => Promise<DirtyTenantSnapshot['dirtyTenants']>;
-  extractGraph: (store: StoreWith<'graphRebuild'>, tenantId: string) => ExtractResult | Promise<ExtractResult>;
+  extractGraph: (
+    store: StoreWith<'graphRebuild' | 'objects'>,
+    tenantId: string,
+  ) => ExtractResult | Promise<ExtractResult>;
   pageSize: number;
 }
 

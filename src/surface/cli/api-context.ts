@@ -123,7 +123,9 @@ export function cliSyncOptions(
 }
 
 /** A vault import's batch on `hippoRoot`: one handle per store for its run of guard probes. */
-export function cliStoreBatch(hippoRoot: string): <T>(run: (store: HippoStore) => Promise<T>) => Promise<T> {
+export function cliStoreBatch(
+  hippoRoot: string,
+): <T>(run: (store: HippoStore & StoreGroups) => Promise<T>) => Promise<T> {
   return (run) => runStoreRequest((session) => run(cliStore(hippoRoot, session)), 'cli', cliRuntime);
 }
 

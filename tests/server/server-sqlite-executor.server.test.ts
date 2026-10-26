@@ -284,6 +284,7 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
       const server = await serveKeyed({
         hippoRoot: root,
         port: 0,
+        keep: ['objects'],
         authResolver: (token) => {
           closeHippoDb(openHippoDb(root));
           return token === 'idp-token' ? { tenantId: 'default', subject: 'idp:alice', role: 'admin' } : null;

@@ -374,12 +374,12 @@ const rowLabel = (row, sf) => {
 const KIND_ROWS = 'src/surface/server/routes/kind-routes.ts';
 const builtRows = (row) => /^\.\.\.(kindRows|objectRoutes|versionedRoutes)\(/.test(row.getText());
 
-/** Reads the V1_ROUTES array literal: rows that need hippo.db (storeReady 'localFiles' or a non-empty string-literal hippoDbOnly) and the sorted `METHOD path` of the hippoDbOnly rows. A spread of one kind's built rows needs none, as kind-routes.ts builds them all and names no status. */
+/** Reads the V1_ROUTES array literal: rows that need hippo.db (storeReady 'localFiles' or a non-empty string-literal hippoDbOnly) and the sorted `METHOD path` of the hippoDbOnly rows. A spread of one kind's built rows needs none, as kind-routes.ts builds them all and names no status but the objects group. */
 function readRoutes(sf) {
   const array = declaredValue(sf, 'V1_ROUTES');
   if (!array || !ts.isArrayLiteralExpression(array)) return routeFail('V1_ROUTES is not declared as an array literal');
-  if (array.elements.some(builtRows) && /storeReady|hippoDbOnly/.test(readFileSync(KIND_ROWS, 'utf8'))) {
-    return routeFail('builds rows that name a storeReady or hippoDbOnly', KIND_ROWS);
+  if (array.elements.some(builtRows) && /hippoDbOnly|storeReady(?!: 'objects')/.test(readFileSync(KIND_ROWS, 'utf8'))) {
+    return routeFail("builds rows that name a hippoDbOnly or a storeReady other than 'objects'", KIND_ROWS);
   }
   let needsHippoDb = 0;
   const hippoDbOnly = [];

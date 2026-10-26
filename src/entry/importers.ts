@@ -9,9 +9,8 @@ import {
 } from '../surface/importers/core.js';
 import * as sources from '../surface/importers/sources.js';
 import { importMarkdownInto } from '../surface/importers/markdown.js';
-import { importVaultInto } from '../surface/importers/vault.js';
+import { importVaultInto, type VaultTarget } from '../surface/importers/vault.js';
 import { defaultImportFiles, defaultStore, runStoreBatch, runStoreRequest } from '../surface/open-store.js';
-import type { HippoStore } from '../base/ports/store.js';
 import { entryInfra } from '../surface/entry-infra.js';
 import { evalClock } from '../infra/eval-switches.js';
 
@@ -52,7 +51,7 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
 /** Import a markdown vault FOLDER as `kind='raw'` memories. NOT re-entrant: idempotency rests on the in-memory
  * `existing` Map loaded once, so two concurrent runs over one vault can double-insert. */
 export function importVault(folderPath: string, options: ImportOptions): Promise<ImportResult> {
-  const batch = <T>(run: (store: HippoStore) => Promise<T>): Promise<T> =>
+  const batch: VaultTarget['batch'] = (run) =>
     runStoreRequest((session) => run(defaultStore(options.hippoRoot, { session })), 'cli');
   return importVaultInto(folderPath, options, { store: defaultStore(options.hippoRoot), batch, infra: entryInfra() });
 }

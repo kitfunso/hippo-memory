@@ -3,7 +3,7 @@
 
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { DLQ_REDACTED_NOTE, redactPayload } from '../../base/util/secret-detect.js';
-import type { HippoStore } from '../../base/ports/store-index.js';
+import type { ConnectorStore } from './ingest.js';
 import type { ConnectorDeadLetter, DeadLetterConnector, DeadLetterRows } from '../../base/ports/store.js';
 import type { JsonValue } from '../../base/util/json.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -41,7 +41,7 @@ export interface ConnectorDlq<C extends DeadLetterConnector, Own, Bucket extends
 
 export async function parkInDlq<Own, Bucket extends string>(
   dlq: ConnectorDlq<DeadLetterConnector, Own, Bucket>,
-  store: HippoStore,
+  store: ConnectorStore,
   opts: ParkOptions<Bucket> & NoInfer<Own>,
 ): Promise<number> {
   const rawPayload = redactPayload(opts.rawPayload);
@@ -60,7 +60,7 @@ export async function parkInDlq<Own, Bucket extends string>(
 
 export function listDlq<C extends DeadLetterConnector>(
   dlq: ConnectorDlq<C, never, never>,
-  store: HippoStore,
+  store: ConnectorStore,
   opts: { tenantId: string; limit?: number },
 ): Promise<DeadLetterRows[C][]> {
   return store.connectorEvents.deadLetters(dlq.connector, opts.tenantId, { limit: opts.limit ?? DEFAULT_LIST_LIMIT });
@@ -97,7 +97,7 @@ function replayFailed(status: ReplayStatus, retryCount: number, reason: string):
 /** A replay that failed after the row was read: counts it exactly once, then reports the new count. */
 async function failAndBump(
   dlq: ConnectorDlq<DeadLetterConnector, never, never>,
-  store: HippoStore,
+  store: ConnectorStore,
   row: { id: number; tenantId: string; retryCount: number },
   failure: { status: ReplayStatus; reason: string },
 ): Promise<ReplayResult> {
@@ -108,7 +108,7 @@ async function failAndBump(
 /** The caller's row by id, else an unroutable one: that row belongs to no tenant until a replay routes it. Another
  * tenant's row reads as absent. */
 async function replayableRow<C extends DeadLetterConnector>(
-  store: HippoStore,
+  store: ConnectorStore,
   connector: C,
   tenantId: string,
   id: number,
@@ -153,7 +153,7 @@ export interface ReplaySteps<C extends DeadLetterConnector, Envelope extends Jso
  * signature. */
 export async function replayParked<C extends DeadLetterConnector, Envelope extends JsonValue>(
   steps: ReplaySteps<C, Envelope>,
-  store: HippoStore,
+  store: ConnectorStore,
   tenantId: string,
   id: number,
   force: boolean,

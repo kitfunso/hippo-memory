@@ -3,7 +3,7 @@
 import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN } from '../../api/index.js';
 import { processGit } from '../../infra/git-runner.js';
 import { ERROR_TAG } from '../../base/memory/entry.js';
-import { mcpApiContext, type ToolCall } from './protocol.js';
+import { mcpApiContext, type GroupToolCall, type ToolCall } from './protocol.js';
 import { keptShownIds } from '../../api/recall/last-recalled.js';
 import { DEFAULT_LEARN_DAYS, MAX_CONTENT_LEN, MAX_ID_LEN } from '../../base/util/limits.js';
 import { boolArg, numberArg, stringArg } from './tool-args.js';
@@ -41,12 +41,12 @@ export async function runOutcomeTool({ args, ctx }: ToolCall): Promise<string> {
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
 }
 
-export async function runLearnTool({ args, ctx }: ToolCall): Promise<string> {
+export async function runLearnTool({ args, api }: GroupToolCall<'lessonWrites'>): Promise<string> {
   // 0 reads as unset, as it always has.
   const days = numberArg(args, 'days') || DEFAULT_LEARN_DAYS;
   // process.cwd() is the server's repo, not a remote caller's, so api learn refuses all but stdio and a host admin
   // (mcpActor fails closed).
-  const result = await apiLearn(mcpApiContext(ctx), {
+  const result = await apiLearn(api, {
     repoPath: process.cwd(),
     days,
     profile: MCP_LEARN,

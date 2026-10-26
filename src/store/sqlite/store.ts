@@ -76,7 +76,7 @@ import { entriesWithoutVector, writeVectors } from './vector-index.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
 
-/** The groups that read and write hippo.db's own files beside its rows. */
+/** The groups that read and write hippo.db's own files beside its rows, and the rest of sleep's and capture's. */
 function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & MaintenanceGroups {
   const { on } = handles;
   return {
@@ -88,6 +88,11 @@ function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & Main
     diagnostics: sqliteDiagnostics(on),
     graphRebuild: sqliteGraphRebuild(on),
     agentImport: sqliteAgentImport(handles),
+    lessonWrites: sqliteLessonWrites(handles),
+    auditMaintenance: sqliteAuditMaintenance(handles),
+    dormant: sqliteDormant(handles),
+    compactions: sqliteCompactions(handles),
+    failureLog: sqliteFailureLog(on),
   };
 }
 
@@ -114,17 +119,12 @@ export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
     readiness: sqliteReadiness(files.hippoRoot, on),
     vectors: sqliteVectorReads(handles),
     lastRecall: sqliteLastRecall(handles),
-    auditMaintenance: sqliteAuditMaintenance(handles),
-    lessonWrites: sqliteLessonWrites(handles),
     sessions: sqliteSessions(handles),
     cards: sqliteCards(on),
     goals: sqliteGoals(on),
     conflicts: sqliteConflicts(handles),
-    dormant: sqliteDormant(handles),
     reports: sqliteReports(handles),
     rejections: sqliteRejections(handles),
-    failureLog: sqliteFailureLog(on),
-    compactions: sqliteCompactions(handles),
     ...sqliteFolderGroups(handles),
     close: () => answered(() => files.runtime?.held.flush(files.hippoRoot)),
   };
@@ -153,10 +153,13 @@ const entryReadsBodies: Bodies<Pick<BaseMethods, 'searchRecallEntries' | 'entrie
   freshRawEntries: listFreshRawMemories,
 };
 
-function storeFilesBodies(files: StoreFiles): Bodies<Pick<BaseMethods, 'continuity' | 'bumpRecallStats'>> {
+function storeFilesBodies(
+  files: StoreFiles,
+): Bodies<Pick<BaseMethods, 'continuity' | 'bumpRecallStats' | 'bumpRemembered'>> {
   return {
     continuity: (db, ...args) => continuity(db, files, ...args),
     bumpRecallStats: (db, recalled) => updateStats(db, files, { recalled }),
+    bumpRemembered: (db, count) => updateStats(db, files, { remembered: count }),
   };
 }
 

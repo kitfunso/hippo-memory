@@ -1,4 +1,3 @@
-import type { HippoStore } from '../../base/ports/store-index.js';
 import type { StoreWith } from '../../base/ports/store.js';
 import type { Learning } from '../../base/ports/store/learning.js';
 import { INVALIDATION_STOPWORDS } from '../../base/util/stopwords.js';
@@ -100,7 +99,7 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
  * Tag matching is EXACT: the FULL pattern must equal a tag, so a pattern merely containing a common tag word cannot
  * mass-weaken every memory with that tag. */
 export async function invalidateMatching(
-  store: StoreWith<'learning'>,
+  store: StoreWith<'learning' | 'lessonWrites'>,
   target: InvalidationTarget,
   tenantId: string,
   options?: InvalidationOptions,
@@ -138,7 +137,7 @@ export async function invalidateMatching(
  * Each match is read again before it is weakened, so a row another writer changed since the list was read is never
  * written back stale. */
 export async function invalidateMatchingAmong(
-  store: HippoStore,
+  store: StoreWith<'lessonWrites'>,
   live: MemoryEntry[],
   target: InvalidationTarget,
   tenantId: string,

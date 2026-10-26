@@ -3,14 +3,14 @@
 import { OBJECT_CAPS, skillsExport } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
 import { sendJson } from '../../http/http-util.js';
-import type { AuthedRouteRequest } from '../types.js';
 import { getString, requiredString, type RequiredStringRule } from '../validation.js';
 import { MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import type { VersionedRouteConfig } from './object-routes.js';
+import type { ObjectRequest } from './kind-routes.js';
 
 const INSTRUCTIONS: RequiredStringRule = { max: OBJECT_CAPS.skillInstructions, plural: true };
 
-async function handleExportSkills({ res, ctx }: AuthedRouteRequest): Promise<void> {
+async function handleExportSkills({ res, ctx }: ObjectRequest): Promise<void> {
   sendJson(res, 200, { markdown: await skillsExport(ctx) });
 }
 

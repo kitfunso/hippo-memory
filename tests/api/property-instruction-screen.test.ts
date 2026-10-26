@@ -141,7 +141,7 @@ describe('injection screening leaves the stored text alone', () => {
     // Each run is a real write and read, so this one property runs fewer times than the others, on one connection.
     await withSharedStoreHandles(() =>
       forAll(0x570e, 100, sent, async (content) => {
-        const { id } = await api.remember(ctx, { content, untrusted: true });
+        const { id } = await api.rememberUntrusted(ctx, { content });
         expect(readEntry(root, id, 'default')?.content).toBe(content);
       }),
     );

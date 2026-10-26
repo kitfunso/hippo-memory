@@ -8,12 +8,7 @@ import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { auditRowsOn } from './audit-rows.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import {
-  requireGroup,
-  type HippoStore,
-  type OptionalGroup,
-  type StoreGroups,
-} from '../../src/base/ports/store-index.js';
+import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { runStoreConformance } from '../../src/entry/store-kit.js';
 import { portOnlyStore } from './port-only-store.js';
@@ -105,26 +100,22 @@ export async function outcomeOf<R>(run: () => Promise<R>): Promise<Outcome<R>> {
   }
 }
 
-export type RequiredGroup = Exclude<keyof StoreGroups, OptionalGroup>;
+/** The store the calls run on: sqliteStore, which sets every group. */
+export type FixtureStore = HippoStore & StoreGroups;
 
-/** A required group, the optional consolidation group, or 'base' for the methods HippoStore declares itself. */
-export type ConformanceGroup = RequiredGroup | 'consolidation' | 'base';
+/** A store group, or 'base' for the methods HippoStore declares itself. */
+export type ConformanceGroup = keyof StoreGroups | 'base';
 
 /** What a call on `G` is handed: the group's methods, or the store itself for 'base'. */
-export type GroupOf<G extends ConformanceGroup> = G extends 'base' ? HippoStore : StoreGroups[Exclude<G, 'base'>];
+export type GroupOf<G extends ConformanceGroup> = G extends 'base' ? FixtureStore : StoreGroups[Exclude<G, 'base'>];
 
 /** One call on a store group; R is every value the calls in one run resolve to. */
-export type GroupCall<G extends ConformanceGroup, R> = (group: GroupOf<G>, store: HippoStore) => Promise<R>;
+export type GroupCall<G extends ConformanceGroup, R> = (group: GroupOf<G>, store: FixtureStore) => Promise<R>;
 
-function groupOf<G extends ConformanceGroup>(store: HippoStore, group: G): GroupOf<G> {
-  // SAFETY: GroupOf<G> is HippoStore for 'base' and StoreGroups[G] for every other G, as each branch reads.
-  return (
-    group === 'base'
-      ? store
-      : group === 'consolidation'
-        ? requireGroup(store, 'consolidation')
-        : store[group as RequiredGroup]
-  ) as GroupOf<G>;
+function groupOf<G extends ConformanceGroup>(store: FixtureStore, group: G): GroupOf<G> {
+  const name: ConformanceGroup = group;
+  // SAFETY: GroupOf<G> is the store for 'base' and StoreGroups[G] for every other G, as each branch reads.
+  return (name === 'base' ? store : store[name]) as GroupOf<G>;
 }
 
 export interface SideResult<R> {

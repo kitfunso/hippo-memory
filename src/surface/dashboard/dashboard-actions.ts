@@ -1,6 +1,7 @@
 // The four dashboard writes, each the api call the CLI makes; the router owns HTTP and the cache.
 
 import * as api from '../../api/index.js';
+import type { ContextWith } from '../../api/types.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
@@ -71,7 +72,7 @@ export async function forgetMemory(ctx: api.Context, rawId: string): Promise<Act
 
 /** Keeps one side of an open conflict and weakens the other; the api's refusals keep their old statuses and texts. */
 export async function resolveOpenConflict(
-  ctx: api.Context,
+  ctx: ContextWith<'conflicts'>,
   conflictId: number,
   body: ActionBody,
 ): Promise<ActionResult> {

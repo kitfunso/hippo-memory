@@ -13,7 +13,10 @@ export class SleepRows {
   private readonly backed = new Set<string>();
 
   constructor(
-    private readonly store: Pick<StoreWith<'consolidation'>, 'entriesByIds' | 'consolidation' | 'auditMaintenance'>,
+    private readonly store: Pick<
+      StoreWith<'consolidation' | 'auditMaintenance'>,
+      'entriesByIds' | 'consolidation' | 'auditMaintenance'
+    >,
     private readonly preview: ReadonlyMap<string, number>,
     readonly pageRows: number,
   ) {

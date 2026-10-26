@@ -127,7 +127,7 @@ describe('a disguised instruction from a connector is held like the plain one', 
       'pattern:bidi-control',
     ],
   ])('%s', async (_how, content, reason) => {
-    const result = await api.remember(adminCtx(home), { content, untrusted: true, scope: 'github:public:acme/demo' });
+    const result = await api.rememberUntrusted(adminCtx(home), { content, scope: 'github:public:acme/demo' });
     expect(result.quarantined).toEqual({ reason });
     // The row keeps the bytes that arrived: the screening form is for matching only.
     expect(readEntry(home, result.id, 'default')).toMatchObject({
@@ -207,7 +207,7 @@ describe('recall visibility and the approve/reject lifecycle', () => {
 
   it('an unscoped untrusted remember quarantines under quarantine:private:unscoped and approve restores scope null', async () => {
     const ctx = adminCtx(home);
-    const result = await api.remember(ctx, { content: INJECTION, untrusted: true });
+    const result = await api.rememberUntrusted(ctx, { content: INJECTION });
     const entry = readEntry(home, result.id, 'default');
     expect(entry?.scope).toBe('quarantine:private:unscoped');
     expect(quarantineRow(home, result.id)?.original_scope ?? null).toBeNull();
@@ -262,9 +262,8 @@ describe('atomicity: a connector event log write that throws leaves no memory an
         closeHippoDb(setup);
       }
       await expect(
-        api.remember(ctx, {
+        api.rememberUntrusted(ctx, {
           content: INJECTION,
-          untrusted: true,
           scope: 'github:public:acme/demo',
           event: {
             connector: 'github',

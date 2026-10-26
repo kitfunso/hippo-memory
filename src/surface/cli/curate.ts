@@ -8,6 +8,7 @@ import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { isGitRepo } from '../../base/ports/git.js';
 import { processGit } from '../../infra/git-runner.js';
 import * as api from '../../api/index.js';
+import type { ContextWith } from '../../api/types.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import { archiveRefusal, forgetRefusal, pickWrites } from './memory-writes.js';
 import { cliConfig, cliApiContext } from './api-context.js';
@@ -318,7 +319,7 @@ export async function handleDormant({ hippoRoot, tenantId, args, flags }: Comman
   printDormantRows(rows, queryArgs.length > 0, root);
 }
 
-async function changeDormant(ctx: api.Context, sub: 'restore' | 'forget', id: string): Promise<void> {
+async function changeDormant(ctx: ContextWith<'dormant'>, sub: 'restore' | 'forget', id: string): Promise<void> {
   if (!id) {
     fail(`Usage: hippo dormant ${sub} <id>`);
   }
@@ -396,7 +397,7 @@ export async function handleQuarantine({ hippoRoot, tenantId, args, flags }: Com
   printQuarantineRows(rows);
 }
 
-async function decideQuarantined(ctx: api.Context, sub: 'approve' | 'reject', id: string): Promise<void> {
+async function decideQuarantined(ctx: ContextWith<'quarantine'>, sub: 'approve' | 'reject', id: string): Promise<void> {
   if (!id) {
     fail(`Usage: hippo quarantine ${sub} <id>`);
   }

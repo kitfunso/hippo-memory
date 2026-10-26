@@ -10,7 +10,7 @@ import { type PortOnlySide, portOnlySide } from '../_helpers/port-only-store.js'
 
 describe('serve() under a store that has the objects group', () => {
   let fixture: TwoTenantFixture;
-  let side: PortOnlySide;
+  let side: PortOnlySide<'objects'>;
   let handle: ServerHandle;
 
   type RouteBody = Readonly<Record<string, string | boolean | readonly string[]>>;
@@ -80,7 +80,7 @@ describe('serve() under a store that has the objects group', () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     fixture = seedTwoTenants();
-    side = portOnlySide(fixture.dir);
+    side = portOnlySide(fixture.dir, ['objects']);
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store: side.store });
   });
 

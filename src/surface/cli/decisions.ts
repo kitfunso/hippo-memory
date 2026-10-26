@@ -9,7 +9,7 @@ import { printError } from './output.js';
 import { type CliFlags, type CommandContext, flagValueless, nonEmptyStringFlag, stringFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
-import type { Context } from '../../api/index.js';
+import type { ContextWith } from '../../api/types.js';
 import {
   closeObjectVerb,
   foundOrExit,
@@ -31,7 +31,7 @@ function printDecisionRow(d: Decision): void {
   if (d.context) console.log(`    context: ${d.context}`);
 }
 
-function decideList(ctx: Context, flags: CliFlags): Promise<void> {
+function decideList(ctx: ContextWith<'objects'>, flags: CliFlags): Promise<void> {
   return listObjectsVerb(flags, {
     plural: 'decisions',
     states: objectStates('decision'),
@@ -40,7 +40,7 @@ function decideList(ctx: Context, flags: CliFlags): Promise<void> {
   });
 }
 
-async function decideGet(ctx: Context, args: string[]): Promise<void> {
+async function decideGet(ctx: ContextWith<'objects'>, args: string[]): Promise<void> {
   const id = idArgOrExit(args, 'Usage: hippo decide get <id>', DECISION.idLabel);
   const decision = foundOrExit(await objectGet(ctx, 'decision', id), DECISION.noun, id);
   console.log(`Decision #${decision.id}`);
@@ -50,7 +50,7 @@ async function decideGet(ctx: Context, args: string[]): Promise<void> {
   printLifecycleTail(decision);
 }
 
-function decideClose(ctx: Context, args: string[]): Promise<void> {
+function decideClose(ctx: ContextWith<'objects'>, args: string[]): Promise<void> {
   return closeObjectVerb(args, DECISION, (id) => objectClose(ctx, 'decision', id));
 }
 
@@ -65,7 +65,7 @@ export async function handleDecide({ hippoRoot, tenantId, args, flags }: Command
   await decideCreate(ctx, subcommand, flags);
 }
 
-async function decideCreate(ctx: Context, decisionText: string, flags: CliFlags): Promise<void> {
+async function decideCreate(ctx: ContextWith<'objects'>, decisionText: string, flags: CliFlags): Promise<void> {
   if (!decisionText) exitWithDecideUsage();
   const context = nonEmptyStringFlag(flags, 'context');
   // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather than silently creating a
@@ -104,7 +104,11 @@ function exitWithDecideUsage(): never {
   fail('       hippo decide close <id>');
 }
 
-async function weakenOrWarn(ctx: Context, oldEntry: MemoryEntry, supersedesMemId: string | null): Promise<void> {
+async function weakenOrWarn(
+  ctx: ContextWith<'objects'>,
+  oldEntry: MemoryEntry,
+  supersedesMemId: string | null,
+): Promise<void> {
   // Best-effort and last: the decision already committed. Failing here would make a retry find no active decision for
   // the old memory and create a duplicate active successor, so warn instead.
   try {

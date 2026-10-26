@@ -12,8 +12,8 @@ import {
   preCompactForCaller,
   saveCompactionItemsForCaller,
   sessionEndHandoffForCaller,
-  type Context,
 } from '../../src/server.js';
+import type { CallerContext } from '../_helpers/compaction-callers.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
@@ -90,7 +90,7 @@ function origins(db: DatabaseSyncLike, table: string): string[] {
 
 describe('caller calls under a foreign environment', () => {
   it("each of the five calls writes only to ctx.tenantId and the body's project", async () => {
-    const ctx: Context = {
+    const ctx: CallerContext = {
       store: sqliteStore(root),
       config: loadConfig(root),
       tenantId: TENANT,

@@ -67,6 +67,7 @@ export {
 export { runStoreConformance, type ConformanceRunner } from './store-conformance.js';
 export {
   hasGroup,
+  OPTIONAL_GROUPS,
   requireGroup,
   type RequiredStore,
   type AmbientCandidateRequest,

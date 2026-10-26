@@ -116,7 +116,7 @@ beforeAll(async () => {
   // Paging every route makes well over the per-IP and per-caller bursts; both limiters are read once, at serve().
   vi.stubEnv('HIPPO_V1_RPS', '0');
   vi.stubEnv('HIPPO_CALLER_RPS', '0');
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serve({ hippoRoot: home, port: 0, keep: ['objects', 'quarantine'] });
   vi.unstubAllEnvs();
 });
 
