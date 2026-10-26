@@ -15,7 +15,7 @@ import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { CLEARED_ENV, FAKE_NOW, pinUpdatedAt, seeded, TENANT } from '../_helpers/recall-golden-seed.js';
 import { loadEntriesByIds, loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
-import type { AppendAuditOptions, AuditEvent } from '../../src/base/ports/store/types.js';
+import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 
 const ROWS = [
