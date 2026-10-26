@@ -8,14 +8,10 @@ import { request as httpsRequest } from 'node:https';
 import { join } from 'node:path';
 import { log } from '../../src/base/util/log.js';
 import type { ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { DAY_MS } from '../../src/base/util/time.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -164,9 +160,8 @@ describe('hippo serve over TLS', () => {
   });
 
   it('answers HTTPS with the given certificate on a network bind, takes no cleartext request and logs no cleartext warning', async () => {
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
-    handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0, tls: pair });
+    handle = await serveKeyed({ hippoRoot, host: '0.0.0.0', port: 0, tls: pair });
     expect(handle.url).toBe(`https://0.0.0.0:${handle.port}`);
     expect(await healthOverTls(handle.port, pair.cert)).toBe(200);
     await expect(healthInCleartext(handle.port)).rejects.toThrow();
@@ -174,15 +169,15 @@ describe('hippo serve over TLS', () => {
   });
 
   it('sends HSTS when it terminates TLS, and none in cleartext, where a proxy in front decides', async () => {
-    handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0, tls: pair });
+    handle = await serveKeyed({ hippoRoot, host: '127.0.0.1', port: 0, tls: pair });
     expect(await hstsOf(handle.port, pair.cert)).toBe('max-age=31536000');
     await handle.stop();
-    handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0 });
+    handle = await serveKeyed({ hippoRoot, host: '127.0.0.1', port: 0 });
     expect(await hstsOf(handle.port)).toBeUndefined();
   });
 
   it('refuses to start on certificate text that is not a certificate, naming TLS as the cause', async () => {
-    await expect(serve({ hippoRoot, port: 0, tls: { cert: 'not a certificate', key: pair.key } })).rejects.toThrow(
+    await expect(serveKeyed({ hippoRoot, port: 0, tls: { cert: 'not a certificate', key: pair.key } })).rejects.toThrow(
       /TLS certificate or key was refused/,
     );
   });
@@ -225,13 +220,13 @@ describe('hippo serve over TLS', () => {
       'HIPPO_TLS_CERT and HIPPO_TLS_KEY',
       (cert: string, key: string) => ({ args: [], env: { HIPPO_TLS_CERT: cert, HIPPO_TLS_KEY: key } }),
     ],
-  ])('the command serves HTTPS from %s, and says at start that local requests need no key', async (_source, given) => {
+  ])('the command serves HTTPS from %s, and says at start where the local key is', async (_source, given) => {
     const { args, env } = given(certPath, keyPath);
     const stdout = await startServe(args, env);
     const port = Number(/listening on https:\/\/127\.0\.0\.1:(\d+) /.exec(stdout)?.[1]);
     expect(await healthOverTls(port, pair.cert)).toBe(200);
     expect(stdout).toContain(
-      'requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1); unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request',
+      'every request needs an API key: the hippo CLI here sends HIPPO_API_KEY, else the member key in ',
     );
   });
 

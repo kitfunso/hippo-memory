@@ -34,7 +34,7 @@ import { commitInChunks } from './delete-and-batch.js';
 import { expireDormantBefore } from './dormant.js';
 import { listPendingExtractionTenants, markPendingProcessedUpTo } from './graph-queue.js';
 import { appendConsolidationRun, incrementSleepCount, readSleepHistory } from './index-and-stats.js';
-import { listPromotableSessions, traceExistsForSession } from './sessions.js';
+import { listUntracedSessions } from './sessions.js';
 import { saveStoredParticles, storedParticleIds } from './vector-index.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
@@ -89,17 +89,10 @@ function moveHalfLives(
   return opts.dryRun ? run() : withWriteScope(db, 'migrate_half_life', run);
 }
 
-/** The tenant's sessions completed since `sinceMs` that hold no trace yet. */
-function untracedSessions(db: DatabaseSyncLike, { tenantId, sinceMs }: NonNullable<SleepBegin['traces']>): string[] {
-  return listPromotableSessions(db, tenantId, sinceMs)
-    .map((row) => row.session_id)
-    .filter((sessionId) => !traceExistsForSession(db, tenantId, sessionId));
-}
-
 function begin(db: DatabaseSyncLike, to: number, opts: SleepBegin): SleepStart {
   const { from, outcome } = moveHalfLives(db, to, opts);
   const fts = ftsDrift(db, !opts.dryRun);
-  const sessions = opts.traces ? untracedSessions(db, opts.traces) : [];
+  const sessions = opts.traces ? listUntracedSessions(db, opts.traces.tenantId, opts.traces.sinceMs) : [];
   return { from, outcome, fts, ...readSleepHistory(db), sessions };
 }
 

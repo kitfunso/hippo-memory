@@ -4,6 +4,7 @@ import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { isJsonObject, isJsonString, parseJson } from '../../base/util/json.js';
 import { HIPPO_DIR } from '../../base/util/agent-homes.js';
+import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 export const DAILY_TASK_NAME = 'hippo-daily-runner';
 
@@ -82,7 +83,7 @@ function setAsideCorruptRegistry<E>(registryPath: string, err: E): void {
 }
 
 export function saveWorkspaceRegistry(globalRoot: string, registry: WorkspaceRegistry): void {
-  fs.mkdirSync(globalRoot, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(globalRoot, PRIVATE_DIR);
   writeFileAtomic(
     workspaceRegistryPath(globalRoot),
     JSON.stringify(

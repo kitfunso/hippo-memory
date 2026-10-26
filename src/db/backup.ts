@@ -2,11 +2,12 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { log, errorFields } from '../base/util/log.js';
+import { PRIVATE_DIR } from '../host/private-dir.js';
 
 /** Copies the database before a repair writes, so the audit ids plus this file are the way back. */
 export function backupStore(db: DatabaseSyncLike, hippoRoot: string, label: string, now = new Date()): string {
   const dir = path.join(hippoRoot, 'backups');
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, PRIVATE_DIR);
   const file = path.join(dir, `hippo-${label}-${now.toISOString().replace(/[:.]/g, '-')}.db`);
   db.prepare('VACUUM INTO ?').run(file);
   return file;

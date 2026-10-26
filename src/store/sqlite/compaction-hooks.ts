@@ -4,7 +4,7 @@ import {
   REPLAY_AFTER_MS,
   TRANSCRIPT_FILL_WINDOW_MS,
 } from '../../base/session/compaction-timing.js';
-import { errorMessage, reportCompactionFailure } from '../../base/util/log.js';
+import { errorFields, errorMessage, log as hippoLog, reportCompactionFailure } from '../../base/util/log.js';
 import { isSqliteBusy, type DatabaseSyncLike } from '../../db/index.js';
 import {
   closeStartedWithoutSummary,
@@ -43,10 +43,16 @@ import type {
   StalledSaved,
 } from '../../base/ports/store/capture.js';
 
+// A note leaves the store only as the port's answer, so a caught error also goes to the shared logger with its stack.
 const noteTo =
   (notes: string[]): Log =>
-  (message) => {
-    notes.push(message);
+  (message, err) => {
+    if (err === undefined) {
+      notes.push(message);
+      return;
+    }
+    notes.push(`${message}: ${errorMessage(err)}`);
+    hippoLog.warn(`compaction: ${message}`, errorFields(err));
   };
 
 const iso = (ms: number): string => new Date(ms).toISOString();
@@ -81,7 +87,7 @@ function recordStep(step: SaveStep): CompactionRecord | null {
     return record;
   } catch (err) {
     if (isSqliteBusy(err)) throw err;
-    reportCompactionFailure(step.log, 'record step', errorMessage(err));
+    reportCompactionFailure(step.log, 'record step', errorMessage(err), errorFields(err));
     return null;
   }
 }
@@ -108,7 +114,7 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
     if (!isSqliteBusy(err) || record === null) throw err;
     // The record already holds the items; sleep finishes them.
     step.result.deferred = true;
-    log(`store busy, items left for the next sleep: ${errorMessage(err)}`);
+    log('store busy, items left for the next sleep', err);
   }
 }
 
@@ -127,12 +133,13 @@ function saveCompaction(on: OnHandle, save: CompactionSave): CompactionSaveOutco
     }, waitingOpener(COMPACTION_DB_WAIT_MS));
   } catch (err) {
     if (isSqliteBusy(err) || !opened) return { result, spoolReason: errorMessage(err), notes };
-    reportCompactionFailure(log, 'items step', errorMessage(err));
+    reportCompactionFailure(log, 'items step', errorMessage(err), errorFields(err));
   }
   return { result, spoolReason: null, notes };
 }
 
-/** A row that will not map is skipped and a record that throws is noted, so the rest still run until the deadline. */
+/** A row that will not map is skipped and a record that throws is noted, so the rest still run until the deadline; a
+ * held lock stops the run, as every later row would wait on it too. */
 function saveStalled(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, opts: StalledOptions): StalledSaved {
   const notes: string[] = [];
   const log = noteTo(notes);
@@ -145,7 +152,11 @@ function saveStalled(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, 
       saveItems(db, files, itemContext(tenantId, record, record.items), log, opts.baseHalfLifeDays);
       saved++;
     } catch (err) {
-      log(`replay of ${row.id} failed: ${errorMessage(err)}`);
+      if (isSqliteBusy(err)) {
+        log(`store busy, replay stopped at ${row.id}; the next sleep resumes it`, err);
+        break;
+      }
+      log(`replay of ${row.id} failed`, err);
     }
   }
   return { saved, notes };
@@ -226,7 +237,7 @@ function fill(db: DatabaseSyncLike, files: StoreFiles, { tenantId, record, text,
   try {
     return { saved: fillRecord(db, files, { tenantId, record, text, log }, opts.baseHalfLifeDays), notes };
   } catch (err) {
-    log(`transcript fill of ${record.id} failed: ${errorMessage(err)}`);
+    log(`transcript fill of ${record.id} failed`, err);
     return { saved: false, notes };
   }
 }

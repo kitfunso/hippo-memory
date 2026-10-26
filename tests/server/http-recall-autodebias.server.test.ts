@@ -15,12 +15,9 @@ import { savePrediction } from '../_helpers/save-prediction.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction } from '../_helpers/root-forms.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -47,7 +44,7 @@ let handle: ServerHandle;
 beforeEach(async () => {
   home = makeRoot('http-j32');
   vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serveKeyed({ hippoRoot: home, port: 0 });
 });
 
 afterEach(async () => {

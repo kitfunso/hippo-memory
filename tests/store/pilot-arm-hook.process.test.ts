@@ -11,6 +11,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
@@ -159,7 +160,7 @@ describe('the per-prompt hook', () => {
   it('hippo arm prints exactly what rate 0 prints', async () => {
     const id = sessionFor('hippo', 5000);
     const off = path.join(tmp, 'off', 'proj');
-    fs.cpSync(proj, off, { recursive: true });
+    copyTree(proj, off);
     setRate(0, store(off));
     setRate(5000);
     const expected = (await run(HOOK_ARGS, prompt(id), off)).stdout;

@@ -11,6 +11,7 @@ import type { SessionTurn } from './transcript.js';
 import { blockHash } from '../../base/util/token-text.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { HIPPO_DIR } from '../../base/util/agent-homes.js';
+import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 /** A turn close runs after each reply; a full close runs once, when the session ends. */
 export type WorkerMode = 'turn' | 'full';
@@ -112,7 +113,7 @@ function releaseSessionLock(lock: string): void {
  * live one. */
 function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
   try {
-    fs.mkdirSync(path.dirname(files.queued), { recursive: true });
+    fs.mkdirSync(path.dirname(files.queued), PRIVATE_DIR);
   } catch (err) {
     logger.warn(
       `session worker: cannot create ${path.dirname(files.queued)}, ` +
@@ -243,7 +244,7 @@ export function saveTurnPosition(
   };
   const tmp = `${file}.${process.pid}.tmp`;
   try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.mkdirSync(path.dirname(file), PRIVATE_DIR);
     fs.writeFileSync(tmp, JSON.stringify(cursor));
     fs.renameSync(tmp, file);
   } catch (err) {

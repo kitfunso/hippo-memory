@@ -1,5 +1,6 @@
 // A busy store never fails a routed write that already committed, and a busy 503 always means nothing landed, so the thin client may replay it.
-import { afterAll, beforeAll, describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -18,14 +19,11 @@ import { mintAdminKey } from '../_helpers/admin-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { updateStatsUnlessBusy, copyToGlobal } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
-});
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
 });
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
@@ -118,9 +116,9 @@ describe('routed writes under a busy store', () => {
     vi.stubEnv('HIPPO_HOME', globalHome);
     initTestStore(globalHome);
     busyErr = realBusyError(home);
-    // A keyless caller is a member, which may not change a row it does not own, so forget and archive send an admin key.
+    // The local key is a member, which may not change a row it does not own, so forget and archive send an admin key.
     adminKey = mintAdminKey(home);
-    const handle = await serve({ hippoRoot: home, port: 0 });
+    const handle = await serveKeyed({ hippoRoot: home, port: 0 });
     url = handle.url;
     stop = handle.stop;
   });
@@ -209,24 +207,30 @@ describe('routed writes under a busy store', () => {
   });
 
   it('a stats increment a busy store refused is added to the next update for that root', async () => {
-    // An earlier test left its refused increment pending; land it so this one counts only its own.
-    updateStatsUnlessBusy(home, {}, 'drain');
-    const before = await forgottenTotal(home);
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    // The store runtime holds the refused increment, as a CLI or server process's does.
+    const runtime = new StoreRuntime();
     try {
-      await withLockHeld(home, async () => {
-        await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 2 }, 'removed m2'), {
-          busyWaitMs: 50,
-        });
+      await runtime.run(async () => {
+        const before = await forgottenTotal(home);
+        const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        try {
+          await withLockHeld(home, async () => {
+            await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 2 }, 'removed m2'), {
+              busyWaitMs: 50,
+            });
+          });
+        } finally {
+          stderr.mockRestore();
+        }
+        expect(await forgottenTotal(home)).toBe(before);
+        updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m3');
+        expect(await forgottenTotal(home)).toBe(before + 3);
+        updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m4');
+        expect(await forgottenTotal(home)).toBe(before + 4);
       });
     } finally {
-      stderr.mockRestore();
+      runtime.dispose();
     }
-    expect(await forgottenTotal(home)).toBe(before);
-    updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m3');
-    expect(await forgottenTotal(home)).toBe(before + 3);
-    updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m4');
-    expect(await forgottenTotal(home)).toBe(before + 4);
   });
 
   it.skipIf(needsHippoDb('lock'))(

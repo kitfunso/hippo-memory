@@ -2,7 +2,7 @@
 // sleep verb out of cli.ts, or any later refactor of it, that changes a byte fails here.
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { cpSync, existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
@@ -11,6 +11,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { seeded } from '../_helpers/recall-golden-seed.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 oneRequestPerTest();
 
@@ -123,7 +124,7 @@ interface RunOutput {
 async function run(c: Case): Promise<RunOutput> {
   // Real path: the CLI prints resolved paths, and macOS spells the temp root through the /var symlink.
   const home = realpathSync.native(makeRoot('sleep-golden', { init: false }));
-  if (!c.uninitialised) cpSync(template, join(home, '.hippo'), { recursive: true });
+  if (!c.uninitialised) copyTree(template, join(home, '.hippo'));
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const k of DROP_ENV) delete env[k];
   // The agent-memory import reads the home dir, so every home a run could see is the temp dir.

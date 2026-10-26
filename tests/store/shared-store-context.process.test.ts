@@ -10,16 +10,13 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { log } from '../../src/base/util/log.js';
 import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -57,7 +54,7 @@ async function start(flagged: boolean, extra: Record<string, boolean> = {}): Pro
   writeEntry(home, { ...createMemory(ROWS.none), originProject: null });
   initTestStore(globalHome);
   writeEntry(globalHome, { ...createMemory(ROWS.global), originProject: '' });
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serveKeyed({ hippoRoot: home, port: 0 }, serve);
   return handle;
 }
 

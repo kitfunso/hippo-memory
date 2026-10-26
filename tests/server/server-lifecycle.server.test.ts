@@ -1,13 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { serveKeyed } from '../_helpers/keyed-server.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -16,7 +13,7 @@ afterEach(() => {
 // Not initStore'd on purpose: these tests start from an empty `.hippo` dir.
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-srv-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
+  mkdirSync(join(home, '.hippo'), PRIVATE_DIR);
   return home;
 }
 
@@ -87,7 +84,7 @@ function uploadUnpaced(port: number, path: string, headers: Record<string, strin
 describe('server lifecycle', () => {
   it('serve returns a handle with a positive port and matching url', async () => {
     const home = makeRoot();
-    const handle = await serve({ hippoRoot: home, port: 0 });
+    const handle = await serveKeyed({ hippoRoot: home, port: 0 });
     try {
       // Port 0 asks the OS for any free port, so only the TCP range is fixed.
       expect(handle.port).toBeGreaterThan(0);
@@ -101,7 +98,7 @@ describe('server lifecycle', () => {
 
   it('GET /health returns 200 with ok, version, started_at, pid', async () => {
     const home = makeRoot();
-    const handle = await serve({ hippoRoot: home, port: 0 });
+    const handle = await serveKeyed({ hippoRoot: home, port: 0 });
     try {
       const res = await fetch(`${handle.url}/health`);
       expect(res.status).toBe(200);
@@ -123,7 +120,7 @@ describe('server lifecycle', () => {
 
   it('stop() removes the pidfile and closes the listener', async () => {
     const home = makeRoot();
-    const handle = await serve({ hippoRoot: home, port: 0 });
+    const handle = await serveKeyed({ hippoRoot: home, port: 0 });
     const pidfile = join(home, 'server.pid');
     expect(existsSync(pidfile)).toBe(true);
 
@@ -147,7 +144,7 @@ describe('server lifecycle', () => {
 
   it('stop() is idempotent (safe to call twice)', async () => {
     const home = makeRoot();
-    const handle = await serve({ hippoRoot: home, port: 0 });
+    const handle = await serveKeyed({ hippoRoot: home, port: 0 });
     await handle.stop();
     await expect(handle.stop()).resolves.toBeUndefined();
     rmSync(home, { recursive: true, force: true });
@@ -155,7 +152,7 @@ describe('server lifecycle', () => {
 
   it('logs a listener error raised after boot and keeps serving', async () => {
     const home = makeRoot();
-    const handle = await serve({ hippoRoot: home, port: 0 });
+    const handle = await serveKeyed({ hippoRoot: home, port: 0 });
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       // What Node emits when accept() fails, as it does when the process runs out of file descriptors.
@@ -174,12 +171,12 @@ describe('server lifecycle', () => {
   it('full lifecycle: start, health, stop, second start succeeds', async () => {
     const home = makeRoot();
 
-    const first = await serve({ hippoRoot: home, port: 0 });
+    const first = await serveKeyed({ hippoRoot: home, port: 0 });
     const firstHealth = await fetch(`${first.url}/health`);
     expect(firstHealth.status).toBe(200);
     await first.stop();
 
-    const second = await serve({ hippoRoot: home, port: 0 });
+    const second = await serveKeyed({ hippoRoot: home, port: 0 });
     try {
       const secondHealth = await fetch(`${second.url}/health`);
       expect(secondHealth.status).toBe(200);
@@ -193,11 +190,11 @@ describe('server lifecycle', () => {
 
   it('refuses to start a second server on a hippoRoot already served', async () => {
     const home = makeRoot();
-    const first = await serve({ hippoRoot: home, port: 0 });
+    const first = await serveKeyed({ hippoRoot: home, port: 0 });
     try {
       // A concurrent `hippo serve` on the same root must be rejected before it
       // can listen or clobber the pidfile.
-      await expect(serve({ hippoRoot: home, port: 0 })).rejects.toThrow(/already running/i);
+      await expect(serveKeyed({ hippoRoot: home, port: 0 })).rejects.toThrow(/already running/i);
 
       // The pidfile must still describe the first (real) server, uncorrupted.
       const info = JSON.parse(readFileSync(join(home, 'server.pid'), 'utf8'));
@@ -211,10 +208,10 @@ describe('server lifecycle', () => {
 
   it('answers an upload still streaming past 1 MB with its 413, then closes the connection', async () => {
     const home = makeRoot();
-    const handle = await serve({ hippoRoot: home, port: 0 });
+    const handle = await serveKeyed({ hippoRoot: home, port: 0 });
     try {
-      // The cap lives in readBody, shared by every route: the generic /v1 route reads a body
-      // before any key check, and a webhook route reads one once a secret and a signature header are there.
+      // The cap lives in readBody, shared by every route: the generic /v1 route reads a keyed caller's body, and a
+      // webhook route reads one once a secret and a signature header are there.
       vi.stubEnv('SLACK_SIGNING_SECRET', 'test-only-webhook-signing-material');
       // Well formed, as the checks made before the body demand: a v0= digest and a timestamp inside the skew window.
       const signed = {
@@ -222,7 +219,7 @@ describe('server lifecycle', () => {
         'x-slack-request-timestamp': String(Math.floor(Date.now() / 1000)),
       };
       for (const [path, headers] of [
-        ['/v1/memories', {}],
+        ['/v1/memories', handle.auth],
         ['/v1/connectors/slack/events', signed],
       ] as const) {
         const reply = await uploadUnpaced(handle.port, path, headers);
@@ -242,7 +239,7 @@ describe('server lifecycle', () => {
 
   it('stop() does not remove a pidfile that a newer server rewrote (ownership guard)', async () => {
     const home = makeRoot();
-    const handle = await serve({ hippoRoot: home, port: 0 });
+    const handle = await serveKeyed({ hippoRoot: home, port: 0 });
     const pidfile = join(home, 'server.pid');
     try {
       // A is live and owns the pidfile. Simulate a newer server B taking over
@@ -277,7 +274,7 @@ describe('/v1 rate limiting', () => {
     vi.stubEnv('HIPPO_V1_RPS', '1'); // rate 1/s, burst 2
     const ac = new AbortController();
     try {
-      const handle = await serve({ hippoRoot: home, port: 0 });
+      const handle = await serveKeyed({ hippoRoot: home, port: 0 });
       try {
         const mcp = await Promise.all(
           Array.from({ length: 12 }, () => fetch(`${handle.url}/mcp`, { method: 'POST', body: '{}' })),

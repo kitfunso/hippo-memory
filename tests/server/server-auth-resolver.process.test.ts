@@ -178,8 +178,7 @@ describe('auth resolver acceptance', () => {
     expect((await get('/v1/memories?q=x', 'nobody.knows')).status).toBe(401);
   });
 
-  it('accepts a resolver token under HIPPO_REQUIRE_AUTH=1', async () => {
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
+  it('accepts a resolver token', async () => {
     await start(tokenResolver());
     expect((await get('/v1/memories?q=x', EXT)).status).toBe(200);
   });

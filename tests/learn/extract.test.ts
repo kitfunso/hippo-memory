@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { extractFacts } from '../../src/domain/learn/extract.js';
 
@@ -36,6 +36,21 @@ describe('extractFacts', () => {
     const fetcher = mockFetcher('this is not json at all');
     const facts = await extractFacts('some text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
     expect(facts).toEqual([]);
+  });
+
+  it('logs a warn with the error fields when the caller passes no onError', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const fetcher = mockFetcher('this is not json at all');
+      expect(await extractFacts('some text', { llm: anthropicLlm({ apiKey: 'test', fetcher }) })).toEqual([]);
+      const warned = stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('fact extraction failed'));
+      expect(warned).toHaveLength(1);
+      expect(warned[0]).toMatch(
+        /^\[hippo\] warn: fact extraction failed: unparseable response: .* errorClass=SyntaxError/,
+      );
+    } finally {
+      stderr.mockRestore();
+    }
   });
 
   it('caps at 8 facts max', async () => {

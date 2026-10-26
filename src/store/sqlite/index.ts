@@ -7,6 +7,7 @@ export { sqliteImportFiles } from './import-files.js';
 export { sqliteImportStores } from './agent-import-stores.js';
 export { runDetachedSqliteRequest, runSqliteBatch, runSqliteHookRequest, runSqliteRequest } from './request-scope.js';
 export { sqliteServerRuntime, type ServerRuntimeOptions, type SqliteServerRuntime } from './server-runtime.js';
+export { currentStoreRuntime, StoreRuntime } from '../../db/store-runtime.js';
 export { tenantOfApiKey, type ResolveOptions } from './tenant.js';
 export { askingNearestFirst } from './vector-reads.js';
 export { saveVectorGraphFile } from '../../db/vector-graph-build.js';

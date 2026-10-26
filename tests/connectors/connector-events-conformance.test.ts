@@ -1,7 +1,7 @@
 // ConnectorEvents answers: the answers, entries, event log rows, dead letters
 // and audit rows, over two tenants that hold rows under the same artifact refs.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -34,6 +34,7 @@ import {
   type LoggedEvent,
   type ParkedLetter,
 } from '../_helpers/connector-sides.js';
+import { copyTree } from '../_helpers/copy-tree.js';
 
 oneRequestPerTest();
 
@@ -151,7 +152,7 @@ async function registerRoutes(root: string): Promise<void> {
 
 async function copyOfFixture(prepare: (root: string) => void | Promise<void>): Promise<string> {
   const root = join(home, `copy-${String(++copies)}`);
-  cpSync(fixture.dir, root, { recursive: true });
+  copyTree(fixture.dir, root);
   await prepare(root);
   return root;
 }
@@ -452,7 +453,7 @@ describe('ConnectorEvents.route', () => {
     routing({}),
   ];
 
-  it('answers the registered tenant, an installation ahead of a repository and the first tenant to register a repository, else the rows a match could have come from', async () => {
+  it('answers the registered tenant, an installation ahead of a repository and the one tenant that registered a repository, else the rows a match could have come from', async () => {
     const side = await conforms(CALLS, registerRoutes);
     const routes = (n: number) => ({ tenantId: null, routes: n });
     expect(values(side)).toEqual([
@@ -460,7 +461,8 @@ describe('ConnectorEvents.route', () => {
       routes(1),
       { tenantId: TENANT_A },
       routes(1),
-      { tenantId: TENANT_A },
+      // Two tenants registered acme/shared, and nothing in an event without an installation id says which one sent it.
+      routes(4),
       { tenantId: TENANT_B },
       routes(4),
       routes(4),

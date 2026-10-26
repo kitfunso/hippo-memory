@@ -1,5 +1,5 @@
 // The store workers' queue cap, a request's deadline in the queue, on a reader and on the writer, and the handler deadline, each held open by a real lock.
-import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,11 +20,9 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -56,7 +54,7 @@ function deadline(ms: string): void {
 
 async function start(root: string, opts: Partial<ServeOptions> = {}): Promise<ServerHandle> {
   vi.stubEnv('HIPPO_V1_RPS', '0');
-  const server = await serve({ hippoRoot: root, port: 0, ...opts });
+  const server = await serveKeyed({ hippoRoot: root, port: 0, ...opts });
   cleanups.push(async () => {
     await server.stop();
     await opts.store?.close();
@@ -303,7 +301,7 @@ describe("a read still running at its request's deadline", () => {
     const executor = createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS });
     const server = await start(root, { store: workerSqliteStore(root, executor) });
     const before = await counts(server);
-    mkdirSync(join(root, '.hippo'), { recursive: true });
+    mkdirSync(join(root, '.hippo'), PRIVATE_DIR);
     initTestStore(root);
     // The setup runs on the writer before any read. It is asked of the executor, since after any response the server would hold a connection, as the idle writer would.
     await executor.call('readiness.ping', [], { mode: 'write', requestId: undefined });

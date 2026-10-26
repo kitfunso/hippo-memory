@@ -2,7 +2,7 @@
 // move a key an HTTP client reads.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { DEFAULT_TENANT_ID } from '../../src/base/util/tenant.js';
 import { recallableEntry } from '../_helpers/every-field-entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -13,11 +13,10 @@ let handle: ServerHandle;
 
 beforeEach(async () => {
   for (const k of CLEARED_ENV) vi.stubEnv(k, '');
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
   vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
   const home = makeRoot('wire-http-golden');
   writeEntry(home, { ...recallableEntry(), tenantId: DEFAULT_TENANT_ID });
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serveKeyed({ hippoRoot: home, port: 0 });
 });
 
 afterEach(async () => {

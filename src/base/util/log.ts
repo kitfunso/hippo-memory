@@ -34,11 +34,14 @@ export function isLevelEnabled(level: LogLevel): boolean {
 // A field value is caller data; flattening newlines keeps one event on one line.
 const oneLine = (value: string): string => value.replace(/[\r\n]+/g, ' ');
 
+// A value with a space, quote or `=` is quoted, so a reader of the line can tell where it ends and the next key starts.
+const fieldValue = (value: string): string => (/[\s"=]/.test(value) ? JSON.stringify(value) : value);
+
 /** Same `[hippo] ` prefix the existing stderr lines use, so default-level output reads as before. */
 export function formatLogLine(level: LogLevel, message: string, fields: LogFields = {}): string {
   const extras = Object.entries(fields)
     .filter(([, v]) => v !== undefined)
-    .map(([k, v]) => ` ${k}=${oneLine(String(v))}`)
+    .map(([k, v]) => ` ${k}=${fieldValue(oneLine(String(v)))}`)
     .join('');
   return `[hippo] ${level}: ${oneLine(message)}${extras}`;
 }

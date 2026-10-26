@@ -22,7 +22,7 @@ function gitOutput(args: readonly string[], cwd: string, timeoutMs: number): str
     const notARepo = err instanceof Error && 'status' in err && err.status === GIT_FATAL_STATUS;
     if (!notARepo) {
       const message = `git ${args.join(' ')} failed (${errorCode(err) || 'no code'}): ${errorMessage(err)}`;
-      log.once(`handoff-evidence:git ${args[0]}`, 'warn', message, errorFields(err));
+      log.warnThenSample(`handoff-evidence:git ${args[0]}`, message, errorFields(err));
     }
     return null;
   }

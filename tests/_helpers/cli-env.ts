@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initTestStore } from './store-template.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 /** A project dir with its own `.hippo` store plus a sibling `global-hippo` dir to point HIPPO_HOME at. */
 export interface TestEnv {
@@ -15,7 +16,7 @@ export function makeEnv(label: string, opts: { initGlobal?: boolean } = {}): Tes
   const cwd = mkdtempSync(join(tmpdir(), `hippo-${label}-`));
   const hippoRoot = join(cwd, '.hippo');
   const globalRoot = join(cwd, 'global-hippo');
-  mkdirSync(globalRoot, { recursive: true });
+  mkdirSync(globalRoot, PRIVATE_DIR);
   initTestStore(hippoRoot);
   if (opts.initGlobal) initTestStore(globalRoot);
   return { cwd, hippoRoot, globalRoot };

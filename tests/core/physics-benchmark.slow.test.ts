@@ -13,7 +13,7 @@ import { type MemoryEntry } from '../../src/base/memory/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
-import { loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
+import { loadAllPhysicsState, resetAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { computeSystemEnergy, simulate, type ForceContext } from '../../src/base/rank/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -297,7 +297,7 @@ function seedCorpus(): void {
 
     // Run 10 sleep cycles to let clusters form
     for (let cycle = 0; cycle < 10; cycle++) {
-      const physicsMap = loadPhysicsState(db);
+      const physicsMap = loadAllPhysicsState(db);
       const particles = Array.from(physicsMap.values());
       if (particles.length === 0) break;
 
@@ -317,7 +317,7 @@ function seedCorpus(): void {
       savePhysicsState(db, particles);
     }
 
-    const finalState = loadPhysicsState(db);
+    const finalState = loadAllPhysicsState(db);
     console.log(`  Physics initialized: ${resetCount} particles, 10 sleep cycles`);
     console.log(`  Final particle count: ${finalState.size}`);
   } finally {
@@ -580,7 +580,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
         const energyHistory: number[] = [];
 
         for (let cycle = 0; cycle < 50; cycle++) {
-          const physicsMap = loadPhysicsState(db);
+          const physicsMap = loadAllPhysicsState(db);
           const particles = Array.from(physicsMap.values());
           if (particles.length === 0) break;
 

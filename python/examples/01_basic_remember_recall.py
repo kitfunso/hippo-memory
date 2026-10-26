@@ -1,20 +1,21 @@
 """Example 1: basic remember + recall.
 
 Prereq: `npm install -g hippo-memory@1.11.4` (or local repo build), then
-`HIPPO_ALLOW_KEYLESS_LOCAL=1 hippo serve` in another terminal (the examples
-send no API key; without that switch, pass `api_key=` to `Hippo`).
+`hippo serve` in another terminal, and HIPPO_API_KEY set to the key it wrote to
+`.hippo/server.key` (or one from `hippo auth create`).
 
 Run::
     uv run python examples/01_basic_remember_recall.py
 """
 
 import asyncio
+import os
 
 from hippo_memory import Hippo
 
 
 async def main() -> None:
-    async with Hippo(base_url="http://127.0.0.1:3737") as client:
+    async with Hippo(base_url="http://127.0.0.1:3737", api_key=os.environ["HIPPO_API_KEY"]) as client:
         # Persist 3 memories
         for content in [
             "bug fix: prevent shared tag array mutation in learnFromRepo",

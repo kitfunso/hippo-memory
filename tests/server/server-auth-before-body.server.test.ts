@@ -3,11 +3,11 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { connect } from 'node:net';
-import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed, type KeyedServer } from '../_helpers/keyed-server.js';
 
 /** An admin key, since only an admin passes the mint route's gate to its body read. */
 function adminKey(root: string): string {
@@ -18,10 +18,6 @@ function adminKey(root: string): string {
     closeHippoDb(db);
   }
 }
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -82,11 +78,11 @@ const WEBHOOKS = [
 
 describe('no route reads an unauthenticated body beyond a stated cap and deadline', () => {
   let root: string;
-  let handle: ServerHandle;
+  let handle: KeyedServer;
 
   beforeEach(async () => {
     root = makeRoot('auth-before-body');
-    handle = await serve({ hippoRoot: root, port: 0 });
+    handle = await serveKeyed({ hippoRoot: root, port: 0 });
   });
 
   afterEach(async () => {
@@ -120,7 +116,7 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     'POST /v1/auth/keys answers 408 and drops the socket when an accepted caller never sends the promised body',
     async () => {
       await handle.stop();
-      handle = await serve({ hippoRoot: root, port: 0, mintBodyDeadlineMs: 50 });
+      handle = await serveKeyed({ hippoRoot: root, port: 0, mintBodyDeadlineMs: 50 });
       const credential = `Authorization: Bearer ${adminKey(root)}\r\n`;
       expect(await statusUntilServerCloses(handle.port, '/v1/auth/keys', credential)).toBe(
         'HTTP/1.1 408 Request Timeout',
@@ -128,11 +124,12 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     },
   );
 
-  // Past auth (a keyless loopback store accepts the caller) every other route reads through one shared reader, so one route stands for all.
+  // Past auth (the local key) every other route reads through one shared reader, so one route stands for all.
   it('POST /mcp answers 408 and drops the socket when an accepted caller never sends the promised body', async () => {
     vi.stubEnv('HIPPO_BODY_TIMEOUT_MS', '50');
     try {
-      expect(await statusUntilServerCloses(handle.port, '/mcp', '')).toBe('HTTP/1.1 408 Request Timeout');
+      const credential = `Authorization: Bearer ${handle.key}\r\n`;
+      expect(await statusUntilServerCloses(handle.port, '/mcp', credential)).toBe('HTTP/1.1 408 Request Timeout');
     } finally {
       vi.stubEnv('HIPPO_BODY_TIMEOUT_MS', undefined);
     }
@@ -143,7 +140,7 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     'POST %s drops a caller whose body never arrives: 404 with no signing secret, 401 with no signature, 408 once a signed body stalls',
     async (path, secretEnv, signatureHeaders) => {
       await handle.stop();
-      handle = await serve({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
+      handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
       vi.stubEnv(secretEnv, undefined);
       expect(await statusUntilServerCloses(handle.port, path, signatureHeaders())).toBe('HTTP/1.1 404 Not Found');
       // Test-only signing material, not a real secret.
@@ -155,7 +152,7 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
 
   it('POST /v1/connectors/slack/events answers 401 to a stale timestamp or a signature that is no v0= digest, without waiting for the body', async () => {
     await handle.stop();
-    handle = await serve({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
+    handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
     vi.stubEnv('SLACK_SIGNING_SECRET', 'test-only-webhook-signing-material');
     const now = Math.floor(Date.now() / 1000);
     const digest = '0'.repeat(64);
@@ -177,7 +174,7 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
 
   it('POST /v1/connectors/github/events answers 401 to a signature header that is no SHA-256 digest, without waiting for the body', async () => {
     await handle.stop();
-    handle = await serve({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
+    handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
     vi.stubEnv('GITHUB_WEBHOOK_SECRET', 'test-only-webhook-signing-material');
     for (const malformed of ['sha256=00', 'sha1=' + '0'.repeat(40), `sha256=${'g'.repeat(64)}`]) {
       expect(

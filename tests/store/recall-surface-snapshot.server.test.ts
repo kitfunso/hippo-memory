@@ -7,6 +7,7 @@ import { rmSync } from 'node:fs';
 import { handleRecall } from '../../src/surface/cli/recall.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { serve } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
@@ -120,7 +121,7 @@ interface HttpReply {
 }
 
 async function viaHttp(s: Store, c: SnapshotCase): Promise<HttpReply> {
-  const handle = await serve({ hippoRoot: s.root, port: 0 });
+  const handle = await serveKeyed({ hippoRoot: s.root, port: 0 }, serve);
   try {
     const params = new URLSearchParams({ q: c.query, ...c.http });
     const res = await fetch(`${handle.url}/v1/memories?${params.toString()}`);
@@ -177,7 +178,6 @@ describe('recall surface snapshot', () => {
     for (const k of CLEARED_ENV) vi.stubEnv(k, '');
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-    vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
     vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
     callers = createCallerState();
   });

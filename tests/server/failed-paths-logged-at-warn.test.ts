@@ -64,7 +64,7 @@ describe('judge failures', () => {
     const out = await judgeAll(['a durable fact about the deploy'], { apiKey: 'sk-secret-key', fetcher });
     expect(out).toEqual([null]);
     const text = lines.join('');
-    expect(text).toMatch(/warn: judge: non-2xx reply .*status=401 body=bad credentials/);
+    expect(text).toMatch(/warn: judge: non-2xx reply .*status=401 body="bad credentials"/);
     expect(text).not.toContain('sk-secret-key');
   });
 

@@ -13,6 +13,7 @@ import { extractFromTexts, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
 import type { CaptureDedup, CapturedOutcome } from '../../base/ports/store/capture.js';
 import type { StoreGroups } from '../../base/ports/store.js';
+import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
@@ -73,7 +74,7 @@ function beginLogTee(logFile: string): () => void {
 /** Creates the log's folder and appends the banner line; false, after a warning, when the log cannot be written. */
 function writeLogBanner(logFile: string): boolean {
   try {
-    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
     fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} capturing session...\n`, 'utf8');
   } catch (err) {
     log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`, errorFields(err));

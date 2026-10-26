@@ -11,6 +11,7 @@ import type {
   GitHubStream,
 } from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { log } from '../../../base/util/log.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */
 export interface GitHubEventLogEntry {
@@ -64,8 +65,8 @@ export const GITHUB_DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
   { field: 'bucket', column: 'bucket', kind: 'bucket', insert: true },
 ]);
 
-/** The installation's tenant when one is named, else the repository's first to register it; with no match, how many
- * rows it could have come from. */
+/** The installation's tenant when one is named, else the one tenant that registered the repository; with no match, or
+ * a repository two tenants registered, how many rows it could have come from. */
 export function githubRoute(
   db: DatabaseSyncLike,
   { installationId, repoFullName }: { installationId?: string | null; repoFullName?: string | null },
@@ -76,14 +77,24 @@ export function githubRoute(
     ) as { tenant_id?: string } | undefined;
     return row?.tenant_id ? { tenantId: row.tenant_id } : { tenantId: null, routes: rowCount(db, 'installations') };
   }
-  const row = repoFullName
-    ? (cachedStatement(
-        db,
-        `SELECT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY added_at, tenant_id LIMIT 1`,
-      ).get(repoFullName) as { tenant_id?: string } | undefined)
-    : undefined;
-  if (row?.tenant_id) return { tenantId: row.tenant_id };
+  const tenants = repoFullName ? repoTenants(db, repoFullName) : [];
+  if (tenants.length === 1) return { tenantId: tenants[0]! };
+  // Nothing in an event without an installation id says which tenant sent it, so a shared name goes to neither.
+  if (tenants.length > 1) {
+    log.warn('github webhook: two tenants registered this repository; refusing the route', {
+      repo: repoFullName ?? undefined,
+      tenants: tenants.join(','),
+    });
+  }
   return { tenantId: null, routes: rowCount(db, 'installations') + rowCount(db, 'repositories') };
+}
+
+/** Up to two of the tenants that registered `repoFullName`, which is enough to tell one owner from a shared name. */
+function repoTenants(db: DatabaseSyncLike, repoFullName: string): string[] {
+  const sql = `SELECT DISTINCT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY tenant_id LIMIT 2`;
+  // SAFETY: the SELECT names one column, which the schema declares TEXT NOT NULL.
+  const rows = cachedStatement(db, sql).all(repoFullName) as Array<{ tenant_id: string }>;
+  return rows.map((row) => row.tenant_id);
 }
 
 function rowCount(db: DatabaseSyncLike, table: 'installations' | 'repositories'): number {

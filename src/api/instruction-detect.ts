@@ -1,10 +1,16 @@
 /**
- * Prompt-injection detection for untrusted memory content. Same shape as secret-detect.ts; leaf module, no
- * store/api/shared imports.
+ * Prompt-injection detection for untrusted memory content: a heuristic that patterns can miss, never the boundary.
+ * The boundary is the frame every untrusted row prints in (api/context-render.ts). Leaf module, no store/api imports.
  */
 
 /** What a member's flagged row in a shared scope carries: it is kept, and prints framed as untrusted. */
 export const INSTRUCTION_LIKE_TAG = 'instruction-like';
+
+/** What every untrusted write (connector text) carries, so it prints framed whatever the detector said of it. */
+export const UNTRUSTED_ORIGIN_TAG = 'untrusted-origin';
+
+/** The tags connector rows written before UNTRUSTED_ORIGIN_TAG carry, so an upgraded store frames them too. */
+export const CONNECTOR_SOURCE_TAGS: readonly string[] = ['source:slack', 'source:github'];
 
 export interface InstructionDetection {
   flagged: boolean;

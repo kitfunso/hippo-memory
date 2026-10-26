@@ -58,12 +58,19 @@ def _wait_for_health(url: str, timeout: float = 20.0) -> bool:
 
 
 _ADMIN_KEYS: dict[str, str] = {}
+_MEMBER_KEYS: dict[str, str] = {}
 
 
 @pytest.fixture(scope="function")
 def hippo_admin_key(hippo_server: str) -> str:
     """An admin key for the server `hippo_server` started; a keyless client is only a member."""
     return _ADMIN_KEYS[hippo_server]
+
+
+@pytest.fixture(scope="function")
+def hippo_member_key(hippo_server: str) -> str:
+    """The member key `hippo serve` wrote to server.key, as the hippo CLI on the same machine sends it."""
+    return _MEMBER_KEYS[hippo_server]
 
 
 @pytest.fixture(scope="function")
@@ -77,12 +84,11 @@ def hippo_server() -> Iterator[str]:
 
     home = tempfile.mkdtemp(prefix="hippo-py-test-")
     port = _pick_free_port()
-    # Most SDK tests use a keyless client, which acts as a member; the ones that need admin use hippo_admin_key.
+    # Most SDK tests send the member key serve writes; the ones that need admin use hippo_admin_key.
     env = {
         **os.environ,
         "HIPPO_HOME": home,
         "HIPPO_TENANT": "default",
-        "HIPPO_ALLOW_KEYLESS_LOCAL": "1",
     }
 
     # hippo serve requires a .hippo dir to exist. Bootstrap it via `hippo init`.
@@ -131,6 +137,7 @@ def hippo_server() -> Iterator[str]:
         _unavailable(f"hippo serve did not respond on {url}/health within 20s; see TODOS.md python-v0.1 integration-test gap")
 
     _ADMIN_KEYS[url] = admin_key
+    _MEMBER_KEYS[url] = (Path(home) / ".hippo" / "server.key").read_text().strip()
     try:
         yield url
     finally:

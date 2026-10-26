@@ -14,6 +14,7 @@ import { decodeError } from './error-codec.js';
 import { portError } from './port-errors.js';
 import { workerCounts } from './executor-counts.js';
 import { markAllTenants } from './tenant-wire.js';
+import { currentStoreRuntime } from '../../db/store-runtime.js';
 import { type Job, type OpMode, type OpRoute, type Reply, STORE_SETUP_OP, type WorkerInit } from './worker-ops.js';
 
 // Resolved from the package root, so a server run from TypeScript source starts the same built file.
@@ -138,6 +139,8 @@ class WorkerPool implements SqliteExecutor {
   readonly #vectorGraphThreshold: number | undefined;
   readonly #vectorGraphMaxVectors: number | undefined;
   readonly #lossAversionRatio: number | undefined;
+  // Captured at construction: a queued job starts from another job's reply, outside the runtime's context.
+  readonly #runtime = currentStoreRuntime();
   #nextId = 1;
   #closed = false;
   // 'done' once the writer has run the store's open-time setup, which a reader's connection could not write.
@@ -343,7 +346,7 @@ class WorkerPool implements SqliteExecutor {
     try {
       lane.worker.postMessage({
         ...next.job,
-        walPages: autoCheckpointPages(getHippoDbPath(this.#hippoRoot)),
+        walPages: autoCheckpointPages(getHippoDbPath(this.#hippoRoot), this.#runtime),
       } satisfies Job);
     } catch (err) {
       // Arguments that cannot be copied to the thread fail this call alone.

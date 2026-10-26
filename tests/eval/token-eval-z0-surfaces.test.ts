@@ -11,6 +11,7 @@ import {
   cleanup, tmp, isolate, makeRepo, task, plain, teach, apply, family, lesson, spec, run,
   readRecords, readPlan, readLedger, rawResult, find, runRoot, type LedgerLine,
 } from '../fixtures/z0-harness.js';
+import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -33,7 +34,7 @@ function unitRun(name: string) {
   const memory = join(dirs.claudeConfig, 'projects', 'p', 'memory', 'MEMORY.md');
   mkdirSync(join(memory, '..'), { recursive: true });
   writeFileSync(memory, 'kept line\n');
-  mkdirSync(join(dirs.work, '.hippo'), { recursive: true });
+  mkdirSync(join(dirs.work, '.hippo'), PRIVATE_DIR);
   writeFileSync(join(dirs.work, '.hippo', 'store.txt'), 'store\n');
   return { out, ctx, r, step, dirs, memory };
 }

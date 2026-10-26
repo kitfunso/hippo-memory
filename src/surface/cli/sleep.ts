@@ -20,6 +20,7 @@ import { repairQualityOnce } from './quality-repair-once.js';
 import { printError } from './output.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { plural } from '../../base/util/format.js';
+import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 /** Runs `hippo sleep`; `--global` sleeps the global store instead of the folder's. */
 export async function handleSleep({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
@@ -35,7 +36,7 @@ export async function sleepStore({ hippoRoot, tenantId, flags }: CommandContext)
   let restoreStdout: (() => void) | null = null;
   if (logFile) {
     try {
-      fs.mkdirSync(path.dirname(logFile), { recursive: true });
+      fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
       fs.writeFileSync(logFile, `[hippo] ${new Date().toISOString()} consolidating memory...\n`, 'utf8');
       restoreStdout = teeStdStreams(logFile);
     } catch (err) {

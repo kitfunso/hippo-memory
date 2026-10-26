@@ -19,6 +19,7 @@ import { hippoHomeDir } from '../../host/agent-homes.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { type CliFlags, stringFlag } from './flag-values.js';
+import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 /**
  * Detached worker (internal `__session-end-worker`): counts re-reads, runs sleep, then capture; one stage failing does
@@ -54,14 +55,14 @@ export function appendSessionEndCloseLog(
 ): void {
   if (!logFile) return;
   try {
-    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
     // sanitizeLogMessage: `message` interpolates the payload-controlled session_id, the same log-forgery guard
     // appendPreCompactLog applies.
     const write = opts.startFresh ? fs.writeFileSync : fs.appendFileSync;
     write(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
   } catch (err) {
-    // Best-effort only: a log-write failure must never fail the hook.
-    log.debug(`session-end log not written: ${errorMessage(err)}`, errorFields(err));
+    // A log-write failure must never fail the hook, but a log that never fills is told.
+    log.warn(`session-end log not written: ${errorMessage(err)}`, errorFields(err));
   }
 }
 

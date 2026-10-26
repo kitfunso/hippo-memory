@@ -5,6 +5,7 @@ import type { PhysicsParticle } from '../../rank/physics.js';
 import type { HalfLifeOutcome } from '../../memory/half-life-plan.js';
 import type { AppendAuditOptions, EntryCursor, EntryPage } from './types.js';
 import type { RejectedValueRow } from './rejections.js';
+import type { SessionEvent } from './sessions.js';
 
 export type {
   HalfLifeChange,
@@ -70,8 +71,14 @@ export interface SleepStart {
   readonly sleepCount: number;
   /** The newest 20 run times, newest first. */
   readonly recentRuns: readonly string[];
-  /** The session ids `traces` asked for. */
-  readonly sessions: readonly string[];
+  /** The sessions `traces` asked for, each with its newest events. */
+  readonly sessions: readonly UntracedSession[];
+}
+
+/** A completed session with no trace yet and its newest TRACE_EVENT_ROWS events, oldest first. */
+export interface UntracedSession {
+  readonly sessionId: string;
+  readonly events: readonly SessionEvent[];
 }
 
 /** EntryPage with only each row's id. */

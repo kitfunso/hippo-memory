@@ -46,10 +46,11 @@ export function deferDueMirrors(hippoRoot: string): void {
   deferMirrorWrite(hippoRoot, 'markdown mirrors', () => rewriteDueMirrorsIn(hippoRoot));
 }
 
-/** On a store's first open in this process, rewrites the mirrors a crash or a failed rewrite left due. */
-export function recoverDueMirrors(hippoRoot: string, db: DatabaseSyncLike): void {
+/** On a store's first open in this runtime, rewrites the mirrors a crash or a failed rewrite left due; `due` is the
+ * open probe's answer when it had one, so a store with none due reads nothing more. */
+export function recoverDueMirrors(hippoRoot: string, db: DatabaseSyncLike, due?: boolean): void {
   oncePerStore(hippoRoot, 'due-mirrors', () => {
-    if (dueMarks(db, DUE).length > 0) mirrorBestEffort('markdown mirrors', () => rewriteDueMirrorsIn(hippoRoot));
+    if (due ?? dueMarks(db, DUE).length > 0) mirrorBestEffort('markdown mirrors', () => rewriteDueMirrorsIn(hippoRoot));
   });
 }
 

@@ -1,0 +1,154 @@
+// What one process keeps between its store connections: the open steps each store has run, the request scopes still
+// open, idle read handles, and file writes held back. A composition root makes one,
+// runs its work inside it, and disposes it from its own exit hook; outside every runtime each open starts fresh.
+import { AsyncLocalStorage } from 'node:async_hooks';
+import * as path from 'node:path';
+import { errorFields, errorMessage, log } from '../base/util/log.js';
+import type { DatabaseSyncLike } from './sqlite.js';
+import { HeldWrites } from './held-writes.js';
+
+/** The lifetime counter increments a store write adds. */
+export interface StatsCounts {
+  readonly remembered: number;
+  readonly recalled: number;
+  readonly forgotten: number;
+}
+
+/** A request scope the runtime closes when the process exits before the scope settles. */
+interface OpenScope {
+  close(): void;
+}
+
+// Per pool key: a server answers several requests at once, and each closing scope hands its handle back.
+const IDLE_PER_KEY = 4;
+
+const runtimes = new AsyncLocalStorage<StoreRuntime>();
+
+/** The runtime the current code runs inside, if any. */
+export function currentStoreRuntime(): StoreRuntime | undefined {
+  return runtimes.getStore();
+}
+
+/** The resolved path of a store's hippo.db, the key every per-store record here uses. */
+export function storeKey(hippoRoot: string): string {
+  return path.resolve(hippoRoot, 'hippo.db');
+}
+
+export class StoreRuntime {
+  /** Mirror and stats writes held back to at most one per interval per root. */
+  readonly held = new HeldWrites();
+  readonly #settled = new Map<string, Set<string>>();
+  readonly #open = new Set<OpenScope>();
+  readonly #idle = new Map<string, DatabaseSyncLike[]>();
+  readonly #background = new Set<string>();
+  readonly #stats = new Map<string, StatsCounts>();
+
+  /** Runs `fn` with this runtime as the current one, across its awaits. */
+  run<T>(fn: () => T): T {
+    return runtimes.run(this, fn);
+  }
+
+  /** Whether `step` has run to its end on the store at `key`. */
+  hasRun(key: string, step: string): boolean {
+    return this.#settled.get(key)?.has(step) ?? false;
+  }
+
+  markRun(key: string, step: string): void {
+    const steps = this.#settled.get(key) ?? new Set<string>();
+    this.#settled.set(key, steps.add(step));
+  }
+
+  /** Makes `step`, or every step when none is named, due again on the store at `key`. */
+  forget(key: string, step?: string): void {
+    if (step === undefined) this.#settled.delete(key);
+    else this.#settled.get(key)?.delete(step);
+  }
+
+  track(scope: OpenScope): void {
+    this.#open.add(scope);
+  }
+
+  untrack(scope: OpenScope): void {
+    this.#open.delete(scope);
+  }
+
+  /** Whether a checkpointer of this runtime checkpoints the store at `key` off its connections' commits. */
+  checkpointsInBackground(key: string): boolean {
+    return this.#background.has(key);
+  }
+
+  markBackground(key: string, on: boolean): void {
+    if (on) this.#background.add(key);
+    else this.#background.delete(key);
+    // An idle handle keeps the checkpoint limit it opened with, so the store's idle handles close for fresh ones.
+    for (const [poolKey, idle] of this.#idle) {
+      if (!poolKey.startsWith(`${key}\0`)) continue;
+      for (const db of idle) closeQuietly(db);
+      this.#idle.delete(poolKey);
+    }
+  }
+
+  /** Takes the stats increments a busy store refused, to fold into the next update. */
+  takeStats(root: string): StatsCounts | undefined {
+    const held = this.#stats.get(root);
+    this.#stats.delete(root);
+    return held;
+  }
+
+  holdStats(root: string, counts: StatsCounts): void {
+    this.#stats.set(root, counts);
+  }
+
+  /** An open idle handle for `poolKey`, or undefined. */
+  takeIdle(poolKey: string): DatabaseSyncLike | undefined {
+    const idle = this.#idle.get(poolKey);
+    for (let db = idle?.pop(); db !== undefined; db = idle?.pop()) if (db.isOpen !== false) return db;
+    return undefined;
+  }
+
+  /** Keeps `db` for the next scope on `poolKey`; false when the pool is full and the caller closes it. */
+  giveIdle(poolKey: string, db: DatabaseSyncLike): boolean {
+    const idle = this.#idle.get(poolKey) ?? [];
+    if (idle.length >= IDLE_PER_KEY) return false;
+    idle.push(db);
+    this.#idle.set(poolKey, idle);
+    return true;
+  }
+
+  /** Closes every idle handle, so a held connection can be the store's last. */
+  closeIdle(): void {
+    for (const idle of this.#idle.values()) for (const db of idle) closeQuietly(db);
+    this.#idle.clear();
+  }
+
+  /** Runs the held writes, then closes the open scopes and the idle handles; each step runs if the one before
+   * throws. */
+  dispose(): void {
+    try {
+      this.held.flush();
+    } finally {
+      for (const scope of this.#open) closeScopeQuietly(scope);
+      this.#open.clear();
+      this.closeIdle();
+      this.#settled.clear();
+      this.#background.clear();
+      this.#stats.clear();
+    }
+  }
+}
+
+function closeQuietly(db: DatabaseSyncLike): void {
+  try {
+    if (db.isOpen !== false) db.close();
+  } catch (err) {
+    log.error(`store runtime: an idle handle did not close: ${errorMessage(err)}`, errorFields(err));
+  }
+}
+
+function closeScopeQuietly(scope: OpenScope): void {
+  try {
+    scope.close();
+  } catch (err) {
+    log.error(`store runtime: a request scope did not close: ${errorMessage(err)}`, errorFields(err));
+  }
+}

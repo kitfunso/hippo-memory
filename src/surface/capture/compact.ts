@@ -14,11 +14,13 @@ import {
   type HookRuntime,
 } from '../../base/session/capture-contract.js';
 import { errorCode, errorMessage, log as logger, errorFields } from '../../base/util/log.js';
+import { exitAfterFlush } from '../../base/util/crash-handlers.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, type WorkingState } from '../../base/session/working-state.js';
 import { transcriptWorkingState } from './working-state.js';
 import type { StoreGroups } from '../../base/ports/store.js';
+import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
@@ -33,7 +35,7 @@ export function sanitizeLogMessage(message: string): string {
 
 function appendPreCompactLog(logFile: string, message: string): void {
   try {
-    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
     // One handle, so the cap acts on the file it measured; two hooks writing in the same instant can overwrite one
     // diagnostic line, which this log accepts.
     const fd = fs.openSync(logFile, fs.constants.O_RDWR | fs.constants.O_CREAT);
@@ -47,8 +49,8 @@ function appendPreCompactLog(logFile: string, message: string): void {
       fs.closeSync(fd);
     }
   } catch (err) {
-    // Diagnostic-only; a log write failure must never affect the exit-0 contract.
-    logger.debug(`pre-compact log not written: ${errorMessage(err)}`, errorFields(err));
+    // A log write failure must never affect the exit-0 contract, but a log that never fills is told.
+    logger.warn(`pre-compact log not written: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
@@ -300,7 +302,7 @@ export async function preCompactHook(
     logger.error(`pre-compact failed: ${errorMessage(err)}`, errorFields(err));
   }
 
-  process.exit(0);
+  exitAfterFlush(0);
 }
 
 export interface PostCompactOptions {

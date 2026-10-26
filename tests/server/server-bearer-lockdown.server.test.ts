@@ -1,4 +1,4 @@
-// Regression bar: with the loopback no-auth fallback off (HIPPO_REQUIRE_AUTH=1) every
+// Regression bar: every
 // /v1 and /mcp route must 401 without a valid Bearer. The route list is derived from
 // the route table so a new route missing buildContextWithAuth/requireAuth fails here.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -134,7 +134,6 @@ describe('server Bearer lockdown', () => {
 
   beforeEach(async () => {
     root = makeRoot('lockdown');
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     // '0' disables the default limiter (20 rps/burst 40), which would
     // 429 the ~120 /v1 requests this file sends.
     vi.stubEnv('HIPPO_V1_RPS', '0');

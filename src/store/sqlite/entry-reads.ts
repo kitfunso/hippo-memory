@@ -1,9 +1,11 @@
 import type { MemoryEntry } from '../../base/memory/memory.js';
+import { CURRENT_DISTILLED } from '../../db/continuity.js';
+import { duplicateHash } from '../../base/util/same-text.js';
 import { isFtsAvailable, isFtsInSync, withReadSnapshot, type DatabaseSyncLike } from '../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { escapeLike } from '../../base/util/escape.js';
-import { bareTextSql, scopeAdmitSql } from './rule-sql.js';
+import { scopeAdmitSql } from './rule-sql.js';
 import type { SqlFragment } from '../../db/sql.js';
 import { chunked } from '../../base/util/chunked.js';
 import { byIdOrder, FRESH_RAW_ORDER, oldestFirst, orderSql } from '../rules/order.js';
@@ -495,34 +497,71 @@ export function* iterateRowsWithObjects(db: DatabaseSyncLike): Generator<HalfLif
   for (const row of rows) yield { entry: rowToEntry(row), object: row.object_link };
 }
 
-const CURRENT_DISTILLED = "COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''";
-
-// Texts equal apart from spacing are equal with all of it gone, so a group of these keys holds every duplicate group.
-const SPACELESS_CONTENT = bareTextSql('content');
+// Hashes per page of the duplicate read; each page reads its hashes' rows by idx_memories_duplicate_hash.
+const DUPLICATE_KEYS_PAGE = 500;
 
 /** The current distilled rows that may be another's duplicate, and the partitions in the order they first appear. */
 export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidates {
   // One read transaction, so the partition keys describe the rows read.
   return withReadSnapshot(db, () => {
+    // An older binary's rows carry no hash: hash them here, and read the hashed rows that share one. The caller
+    // regroups by duplicateKey, so a hash two different texts share costs only a row read.
+    // SAFETY: MEMORY_SELECT_COLUMNS selects every MemoryRow key.
     const rows = cachedStatement(
       db,
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (SELECT id FROM (SELECT id, COUNT(*) OVER ` +
-        `(PARTITION BY ${SPACELESS_CONTENT}) AS n FROM memories WHERE ${CURRENT_DISTILLED}) WHERE n > 1) ` +
-        `ORDER BY created ASC, id ASC`,
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${CURRENT_DISTILLED} AND duplicate_hash IS NULL`,
     ).all() as MemoryRow[];
-    // SAFETY: every read cast to this row selects all its keys. The ORDER BY ranks in SQL, the order the rows sort in.
-    const firsts = cachedStatement(
-      db,
-      `SELECT tenant_id, scope, origin_project FROM memories WHERE ${CURRENT_DISTILLED} ` +
-        `GROUP BY tenant_id, scope, origin_project ORDER BY MIN(created || char(31) || id)`,
-    ).all() as Array<{ tenant_id: string | null; scope: string | null; origin_project: string | null }>;
-    const firstSeen = firsts.map((f) => ({
-      tenantId: f.tenant_id ?? DEFAULT_TENANT_ID,
-      scope: f.scope,
-      originProject: f.origin_project,
-    }));
-    return { rows: rows.map(rowToEntry), firstSeen };
+    const unread = new Set(rows.map((row) => duplicateHash(row.content)));
+    for (let after = -1; ;) {
+      // SAFETY: the SELECT names one INTEGER column, k.
+      const keys = cachedStatement(
+        db,
+        `SELECT duplicate_hash AS k FROM memories WHERE ${CURRENT_DISTILLED} AND duplicate_hash > ? ` +
+          `GROUP BY duplicate_hash HAVING COUNT(*) > 1 ORDER BY duplicate_hash LIMIT ?`,
+      ).all(after, DUPLICATE_KEYS_PAGE) as Array<{ k: number }>;
+      for (const key of keys) unread.delete(key.k);
+      rows.push(
+        ...rowsWithHashes(
+          db,
+          keys.map((key) => key.k),
+        ),
+      );
+      if (keys.length < DUPLICATE_KEYS_PAGE) break;
+      after = keys[keys.length - 1]!.k;
+    }
+    for (const hashes of chunked([...unread], DUPLICATE_KEYS_PAGE)) rows.push(...rowsWithHashes(db, hashes));
+    // Pages come in hash order; the port's order is created then id, as SQLite compares the ASCII stamps and ids.
+    rows.sort(byCreatedThenId);
+    return { rows: rows.map(rowToEntry), firstSeen: firstSeenPartitions(db) };
   });
+}
+
+function rowsWithHashes(db: DatabaseSyncLike, hashes: readonly number[]): MemoryRow[] {
+  if (hashes.length === 0) return [];
+  // SAFETY: MEMORY_SELECT_COLUMNS selects every MemoryRow key.
+  return cachedStatement(
+    db,
+    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+      `WHERE ${CURRENT_DISTILLED} AND duplicate_hash IN (SELECT value FROM json_each(?))`,
+  ).all(JSON.stringify(hashes)) as MemoryRow[];
+}
+
+const byCreatedThenId = (a: MemoryRow, b: MemoryRow): number =>
+  a.created === b.created ? (a.id < b.id ? -1 : 1) : a.created < b.created ? -1 : 1;
+
+/** Each (tenant, scope, origin) of a current distilled row, in the order its first row appears by created then id. */
+function firstSeenPartitions(db: DatabaseSyncLike): DuplicateCandidates['firstSeen'] {
+  // SAFETY: every read cast to this row selects all its keys. The ORDER BY ranks in SQL, the order the rows sort in.
+  const firsts = cachedStatement(
+    db,
+    `SELECT tenant_id, scope, origin_project FROM memories WHERE ${CURRENT_DISTILLED} ` +
+      `GROUP BY tenant_id, scope, origin_project ORDER BY MIN(created || char(31) || id)`,
+  ).all() as Array<{ tenant_id: string | null; scope: string | null; origin_project: string | null }>;
+  return firsts.map((f) => ({
+    tenantId: f.tenant_id ?? DEFAULT_TENANT_ID,
+    scope: f.scope,
+    originProject: f.origin_project,
+  }));
 }
 
 /** A page of the rows holding at least one signal, in loadAllEntries' order. A superset: callers re-check each row. */

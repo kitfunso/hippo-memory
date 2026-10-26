@@ -3,6 +3,7 @@
 import { getMeta, setMeta, withReadSnapshot, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import {
   physicsSpeedSum,
+  loadAllPhysicsState,
   loadPhysicsState,
   resetPhysicsFromSeeds,
   savePhysicsState,
@@ -234,7 +235,7 @@ export function writeVectors(db: DatabaseSyncLike, write: VectorWrite): VectorWr
 
 /** Every particle stored under `hippoRoot`. */
 function listStoredParticles(db: DatabaseSyncLike): PhysicsParticle[] {
-  return Array.from(loadPhysicsState(db).values());
+  return Array.from(loadAllPhysicsState(db).values());
 }
 
 /** The particle count and mean speed from the velocity column alone, and every particle while at most `fullUpTo` are

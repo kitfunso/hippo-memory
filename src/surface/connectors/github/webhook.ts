@@ -107,9 +107,9 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, ports: 
   }
 }
 
-// GitHub signs no timestamp, so a captured delivery verifies forever; a hold in the store refuses its replay and
-// survives a restart. The event log's content-derived idempotency key (ingest.ts, the deletion key below) backs it.
-const REPLAY_HOLD_MS = DAY_MS;
+// GitHub signs no timestamp, so a captured delivery verifies forever. The event log keeps each idempotency key for
+// good, so the signature hold must not run out first: a century outlives any store, and the sweep never reaches it.
+const REPLAY_HOLD_MS = 36_500 * DAY_MS;
 
 async function claimOrRefuse(store: WebhookPorts['store'], key: string): Promise<void> {
   const claim = { connector: 'github', key, nowMs: Date.now(), ttlMs: REPLAY_HOLD_MS } as const;

@@ -45,32 +45,28 @@ interface PhysicsRow {
 }
 const PHYSICS_COLUMNS = 'memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation';
 
-/**
- * Load physics state for specific memory IDs (or all if no IDs given).
- */
-export function loadPhysicsState(db: DatabaseSyncLike, memoryIds?: string[]): Map<string, PhysicsParticle> {
-  const map = new Map<string, PhysicsParticle>();
-
-  let rows: PhysicsRow[] = [];
-  if (memoryIds && memoryIds.length > 0) {
-    // Chunked so a whole-store candidate list stays under SQLite's bound-parameter limit.
-    for (const chunk of chunked(memoryIds)) {
-      rows.push(
-        ...(cachedStatement(
-          db,
-          `SELECT ${PHYSICS_COLUMNS}
-         FROM memory_physics WHERE memory_id IN (SELECT value FROM json_each(?))`,
-        ).all(JSON.stringify(chunk)) as PhysicsRow[]),
-      );
-    }
-  } else {
-    rows = cachedStatement(
-      db,
-      `SELECT ${PHYSICS_COLUMNS}
-       FROM memory_physics`,
-    ).all() as PhysicsRow[];
+/** The stored particles of `memoryIds`; an empty list reads nothing. */
+export function loadPhysicsState(db: DatabaseSyncLike, memoryIds: readonly string[]): Map<string, PhysicsParticle> {
+  const rows: PhysicsRow[] = [];
+  // Chunked so a whole-store candidate list stays under SQLite's bound-parameter limit.
+  for (const chunk of chunked(memoryIds)) {
+    rows.push(
+      ...(cachedStatement(
+        db,
+        `SELECT ${PHYSICS_COLUMNS} FROM memory_physics WHERE memory_id IN (SELECT value FROM json_each(?))`,
+      ).all(JSON.stringify(chunk)) as PhysicsRow[]),
+    );
   }
+  return particlesOf(rows);
+}
 
+/** Every stored particle, for a caller that has checked the count is small. */
+export function loadAllPhysicsState(db: DatabaseSyncLike): Map<string, PhysicsParticle> {
+  return particlesOf(cachedStatement(db, `SELECT ${PHYSICS_COLUMNS} FROM memory_physics`).all() as PhysicsRow[]);
+}
+
+function particlesOf(rows: readonly PhysicsRow[]): Map<string, PhysicsParticle> {
+  const map = new Map<string, PhysicsParticle>();
   for (const row of rows) {
     map.set(row.memory_id, {
       memoryId: row.memory_id,
@@ -86,7 +82,7 @@ export function loadPhysicsState(db: DatabaseSyncLike, memoryIds?: string[]): Ma
   return map;
 }
 
-/** How many particles are stored and the sum of their speeds, in loadPhysicsState's order, reading one column. */
+/** How many particles are stored and the sum of their speeds, in loadAllPhysicsState's order, reading one column. */
 export function physicsSpeedSum(db: DatabaseSyncLike) {
   let count = 0;
   let speedSum = 0;

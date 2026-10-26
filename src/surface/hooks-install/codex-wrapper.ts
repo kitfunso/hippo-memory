@@ -23,6 +23,7 @@ import {
 } from './rules/codex-wrapper.js';
 import { HIPPO_CODEX_WRAPPER_MARKER } from './rules/shared.js';
 import { processHomes } from '../../host/agent-homes.js';
+import { PRIVATE_DIR } from '../../host/private-dir.js';
 
 // The installer module exposes the paths it installs to.
 /** Where the wrapper, its metadata and its logs live under this process's home folder. */
@@ -167,9 +168,10 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
   }
 
   const paths = resolveCodexWrapperPaths();
-  ensureDir(path.dirname(paths.metadataPath));
-  ensureDir(path.dirname(paths.logFile));
-  ensureDir(paths.runsDir);
+  // These live under ~/.hippo, which this may be the first write to make.
+  for (const dir of [path.dirname(paths.metadataPath), path.dirname(paths.logFile), paths.runsDir]) {
+    fs.mkdirSync(dir, PRIVATE_DIR);
+  }
   cleanupLegacyCodexPathWrappers(paths);
 
   const plan = resolveCodexInstallPlan(resolvedRealCodexPath);

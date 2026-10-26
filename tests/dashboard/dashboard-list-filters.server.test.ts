@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { daysBetween } from '../../src/base/memory/memory-facts.js';
 import { closeHippoDb, openHippoDb, type SqlValue } from '../../src/db/index.js';
 import { buildMemoryPage, type MemoryQuery } from '../../src/api/dashboard/queries.js';
-import { HOLDS_TEXT, holdsTextBinds, useDashboardFunctions } from '../../src/store/sqlite/dashboard-functions.js';
+import { textFilter, useDashboardFunctions } from '../../src/store/sqlite/dashboard-functions.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { dashboardOf, makeStore, NOW, type TmpStore } from '../_helpers/dashboard-fixture.js';
@@ -143,20 +143,41 @@ describe('dashboard list filters', () => {
     const db = openHippoDb(store.hippoRoot);
     try {
       useDashboardFunctions(db, {});
-      db.exec('CREATE TEMP TABLE letters (id TEXT, content TEXT, tags_json TEXT)');
-      const insert = db.prepare('INSERT INTO temp.letters VALUES (?, ?, ?)');
-      for (const [i, letter] of letters.entries()) insert.run(`l${i}`, `x${letter}y`, JSON.stringify([`x${letter}y`]));
+      // Each letter becomes a memory row inside a transaction rolled back after, so the trigram index holds it too.
+      db.exec('BEGIN');
+      // SAFETY: pragma_table_info answers one TEXT `name` per column.
+      const rest = (db.prepare(`SELECT name FROM pragma_table_info('memories')`).all() as Array<{ name: string }>)
+        .map((r) => r.name)
+        .filter((name) => !['id', 'content', 'tags_json'].includes(name))
+        .join(', ');
+      // SAFETY: the SELECT names two TEXT columns of one row the seed wrote.
+      const template = db.prepare('SELECT id, tenant_id FROM memories LIMIT 1').get() as {
+        id: string;
+        tenant_id: string;
+      };
+      const clone = db.prepare(
+        `INSERT INTO memories (id, content, tags_json, ${rest}) SELECT ?, ?, ?, ${rest} FROM memories WHERE id = ?`,
+      );
+      for (const [i, letter] of letters.entries()) {
+        clone.run(`letter-${i}`, `x${letter}y`, JSON.stringify([`x${letter}y`]), template.id);
+      }
       // SAFETY: COUNT(*) answers one row.
       const count = (sql: string, binds: Record<string, SqlValue>): number =>
-        (db.prepare(`SELECT COUNT(*) AS n FROM temp.letters WHERE ${sql}`).get(binds) as { n: number }).n;
+        (
+          db
+            .prepare(`SELECT COUNT(*) AS n FROM memories WHERE tenant_id = :tenant AND id LIKE 'letter-%' AND ${sql}`)
+            .get({ tenant: template.tenant_id, ...binds }) as { n: number }
+        ).n;
       for (const letter of letters) {
         // The ASCII run JavaScript's lower-casing leads with, such as xi from the dotted capital I.
         const needle = `x${letter}y`.toLowerCase().split(/[^\x20-\x7e]/)[0];
         const want = count('hippo_holds_text(id, content, tags_json, :text)', { text: needle });
         expect(want).toBeGreaterThan(0);
-        expect(count(HOLDS_TEXT, { ...holdsTextBinds(needle) }), letter).toBe(want);
+        const filter = textFilter(db, needle);
+        expect(count(filter.sql, filter.binds), letter).toBe(want);
       }
     } finally {
+      db.exec('ROLLBACK');
       closeHippoDb(db);
     }
   });
@@ -165,15 +186,25 @@ describe('dashboard list filters', () => {
     const db = openHippoDb(store.hippoRoot);
     try {
       useDashboardFunctions(db, {});
+      // SAFETY: COUNT(DISTINCT) and MIN answer one row.
+      const { tenants, tenant } = db
+        .prepare('SELECT COUNT(DISTINCT tenant_id) AS tenants, MIN(tenant_id) AS tenant FROM memories')
+        .get() as { tenants: number; tenant: string };
+      expect(tenants).toBe(1);
       const ids = (sql: string, binds: Record<string, SqlValue>): string[] =>
-        (db.prepare(`SELECT id FROM memories WHERE ${sql} ORDER BY id`).all(binds) as Array<{ id: string }>).map(
-          (r) => r.id,
-        );
+        (
+          db
+            .prepare(`SELECT id FROM memories WHERE tenant_id = :tenant AND ${sql} ORDER BY id`)
+            .all({ tenant, ...binds }) as Array<{
+            id: string;
+          }>
+        ).map((r) => r.id);
       const rand = rng(7);
       const needles = [...NEEDLES, ...Array.from({ length: 40 }, () => textOf(rand, 4) || 'ka')];
       for (const needle of [...needles, ...needles.map((n) => n.toLowerCase())]) {
         const want = ids('hippo_holds_text(id, content, tags_json, :text)', { text: needle });
-        expect(ids(HOLDS_TEXT, { ...holdsTextBinds(needle) }), JSON.stringify(needle)).toEqual(want);
+        const filter = textFilter(db, needle);
+        expect(ids(filter.sql, filter.binds), JSON.stringify(needle)).toEqual(want);
       }
     } finally {
       closeHippoDb(db);
@@ -199,7 +230,10 @@ describe('dashboard list filters', () => {
           calls += 1;
           return 1;
         });
-        const hits = db.prepare(`SELECT COUNT(*) AS n FROM memories WHERE ${HOLDS_TEXT}`).get(holdsTextBinds('kafka'));
+        const filter = textFilter(db, 'kafka');
+        const hits = db
+          .prepare(`SELECT COUNT(*) AS n FROM memories WHERE tenant_id = :tenant AND ${filter.sql}`)
+          .get({ tenant: 'default', ...filter.binds });
         expect(hits?.n).toBe(5);
         expect(calls).toBe(5);
       } finally {

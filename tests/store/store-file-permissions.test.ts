@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { appendSessionEndCloseLog } from '../../src/surface/cli/hook-runtime.js';
 
 const mode = (p: string): number => statSync(p).mode & 0o777;
 
@@ -38,5 +39,17 @@ describe.skipIf(process.platform === 'win32')('store files are owner-only on cre
     initTestStore(root);
     expect(mode(root).toString(8)).toBe('755');
     expect(mode(join(root, 'hippo.db')).toString(8)).toBe('644');
+  });
+
+  it('a hook log written before the store exists makes its folder owner-only under a 022 umask', () => {
+    base = makeRoot('perms', { init: false });
+    const root = join(base, '.hippo');
+    const previous = process.umask(0o022);
+    try {
+      appendSessionEndCloseLog(join(root, 'logs', 'last-sleep.log'), 'line');
+    } finally {
+      process.umask(previous);
+    }
+    expect([mode(root), mode(join(root, 'logs'))].map((m) => m.toString(8))).toEqual(['700', '700']);
   });
 });

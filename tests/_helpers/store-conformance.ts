@@ -1,6 +1,6 @@
 // Runs one store group's calls on sqliteStore over its own copy of a two-tenant fixture, and returns the answers and
 // the audit rows so a test can assert them.
-import { cpSync, mkdtempSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { afterAll, describe, expect, it } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,6 +20,7 @@ import { portOnlyStore } from './port-only-store.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { initTestStore } from './store-template.js';
 import { removeAfterRequest } from './one-request-per-test.js';
+import { copyTree } from './copy-tree.js';
 
 export const TENANT_A = 'acme';
 export const TENANT_B = 'globex';
@@ -149,7 +150,7 @@ export async function runOnFixture<G extends ConformanceGroup, R>(
   const home = mkdtempSync(join(tmpdir(), 'hippo-conformance-'));
   try {
     const root = join(home, 'sqlite');
-    cpSync(fixture.dir, root, { recursive: true });
+    copyTree(fixture.dir, root);
     const store = sqliteStore(root);
     const methods = groupOf(store, group);
     const outcomes: Outcome<R>[] = [];

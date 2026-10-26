@@ -1,5 +1,5 @@
 // The memory write, key, audit and session assemble routes run their SQLite work on worker threads, and so does the key row read of every request.
-import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { copyFileSync, mkdtempSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,6 +7,7 @@ import { revokeApiKey } from '../../src/store/sqlite/auth.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { getHippoDbPath } from '../../src/db/index.js';
 import { autoCheckpointPages, startWalCheckpointer } from '../../src/db/wal-checkpointer.js';
+import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { log } from '../../src/base/util/log.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/base/memory/memory.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
@@ -41,10 +42,6 @@ import {
 } from '../_helpers/store-worker-server.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -666,9 +663,11 @@ describe("a store worker's wal_autocheckpoint", () => {
   it('follows the server thread: no checkpoint inside a commit while the checkpointer runs, and one in the next commit after it stops', async () => {
     const root = newRoot();
     const inlineLimit = autoCheckpointPages(getHippoDbPath(root));
-    const checkpointer = startWalCheckpointer(getHippoDbPath(root));
+    // The checkpointer and the store share one runtime, as a server's do.
+    const runtime = new StoreRuntime();
+    const checkpointer = startWalCheckpointer(getHippoDbPath(root), runtime);
     cleanups.push(() => checkpointer.stop());
-    const store = workerSqliteStore(root);
+    const store = runtime.run(() => workerSqliteStore(root));
     cleanups.push(() => store.close());
     const save = (n: number) => {
       const saved = { classTag: 'release', claimText: `claim ${n}` };
