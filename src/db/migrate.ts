@@ -36,6 +36,9 @@ function assertMinBinary(minRequired: string | null | undefined): void {
   }
 }
 
+// The probe's errors that mean a store the slow path must build: a table or column it reads is not there yet.
+const PROBE_SLOW_PATH = /no such (table: (meta|raw_archive|memories)|column: mirror_cleaned_at)\b/;
+
 /** Refuse a store stamped for a newer binary. Fails closed: runMigrations creates meta first, so a failed read is a
  * real error. */
 export function assertBinaryCompatible(db: DatabaseSyncLike): void {
@@ -71,7 +74,7 @@ export const SCHEMA_PROBE_SQL = `SELECT
   (SELECT COUNT(*) FROM meta WHERE key IN (${sqlList(META_DEFAULTS.map(([key]) => key))})) AS meta_keys,
   (SELECT COUNT(*) FROM sqlite_master
     WHERE type IN ('table', 'index', 'trigger') AND name IN (${REQUIRED_OBJECTS})) AS objects,
-  (SELECT MAX(id) FROM raw_archive) AS archive_top,
+  (SELECT 1 FROM raw_archive WHERE mirror_cleaned_at IS NULL LIMIT 1) AS archive_pending,
   (SELECT 1 FROM memories LIMIT 1) AS has_memories,
   ${MIRRORS_DUE}`;
 
@@ -83,15 +86,15 @@ interface SchemaProbe {
   fts5: string | null;
   meta_keys: number;
   objects: number;
-  archive_top: number | null;
+  archive_pending: number | null;
   has_memories: number | null;
   mirrors_due: number | null;
 }
 
 /** What the probe of a current store read beyond the schema proof, so the same open need not read them again. */
 export interface OpenFacts {
-  /** The largest raw_archive id, 0 for an empty archive. */
-  readonly archiveTop: number;
+  /** Whether an archived row's mirror file is still to remove. */
+  readonly archivePending: boolean;
   readonly hasMemories: boolean;
   /** Whether any markdown mirror is marked due for a rewrite. */
   readonly mirrorsDue: boolean;
@@ -105,7 +108,7 @@ function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
     probe = db.prepare(SCHEMA_PROBE_SQL).get() as SchemaProbe | undefined;
   } catch (err) {
     // A store missing a table the probe reads is the slow path's job; anything else is a real error.
-    if (err instanceof Error && /no such table: (meta|raw_archive|memories)\b/.test(err.message)) return null;
+    if (err instanceof Error && PROBE_SLOW_PATH.test(err.message)) return null;
     throw err;
   }
   if (!probe) return null;
@@ -119,9 +122,9 @@ function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   return current ? factsOf(probe) : null;
 }
 
-function factsOf(row: Pick<SchemaProbe, 'archive_top' | 'has_memories' | 'mirrors_due'>): OpenFacts {
+function factsOf(row: Pick<SchemaProbe, 'archive_pending' | 'has_memories' | 'mirrors_due'>): OpenFacts {
   return {
-    archiveTop: Number(row.archive_top ?? 0),
+    archivePending: row.archive_pending !== null,
     hasMemories: row.has_memories !== null,
     mirrorsDue: row.mirrors_due !== null,
   };
@@ -131,7 +134,7 @@ const SETTLED_CHECK_SQL = `SELECT
   (SELECT user_version FROM pragma_user_version) AS user_version,
   (SELECT value FROM meta WHERE key = 'schema_version') AS schema_version,
   (SELECT value FROM meta WHERE key = 'min_compatible_binary') AS min_binary,
-  (SELECT MAX(id) FROM raw_archive) AS archive_top,
+  (SELECT 1 FROM raw_archive WHERE mirror_cleaned_at IS NULL LIMIT 1) AS archive_pending,
   (SELECT 1 FROM memories LIMIT 1) AS has_memories,
   ${MIRRORS_DUE}`;
 
@@ -143,7 +146,7 @@ export function settledStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
     user_version: number;
     schema_version: string | null;
     min_binary: string | null;
-    archive_top: number | null;
+    archive_pending: number | null;
     has_memories: number | null;
     mirrors_due: number | null;
   };

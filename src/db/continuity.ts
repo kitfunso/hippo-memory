@@ -237,6 +237,9 @@ export function isFtsMissing(message: string): boolean {
   return (/no such module/i.test(message) && /fts5/i.test(message)) || /no such tokenizer/i.test(message);
 }
 
+/** The rows the duplicate read groups: current distilled ones. */
+export const CURRENT_DISTILLED = "COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''";
+
 // A tag list with a `\`, a digit, an object or a nested list may not hold its tags' text as written: an escape, or a
 // value String() writes another way.
 export const TAGS_NOT_AS_WRITTEN =

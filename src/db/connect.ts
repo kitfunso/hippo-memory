@@ -55,19 +55,10 @@ function warnWideModes(hippoRoot: string): void {
   }
 }
 
-// The archive only grows and its ids never repeat, so an empty archive or an unchanged top id means no row this runtime
-// has not swept; a failed sweep stays due.
-function sweepArchivedMirrorsIfDue(hippoRoot: string, db: DatabaseSyncLike, probedTop: number | undefined): void {
-  const runtime = currentStoreRuntime();
-  const top = probedTop ?? archiveTop(db);
-  const key = storeKey(hippoRoot);
-  if (top === 0 || runtime?.sweptTop(key) === top) return;
-  if (cleanupArchivedMirrors(hippoRoot, db)) runtime?.markSwept(key, top);
-}
-
-function archiveTop(db: DatabaseSyncLike): number {
-  const row = db.prepare('SELECT MAX(id) AS top FROM raw_archive').get() as { top: number | null } | undefined;
-  return Number(row?.top ?? 0);
+// The probe read whether any archived row's mirror is still uncleaned, so a clean archive costs no scan; a failed unlink
+// leaves its row uncleaned, and the next open retries it.
+function sweepArchivedMirrorsIfDue(hippoRoot: string, db: DatabaseSyncLike, pending: boolean | undefined): void {
+  if (pending !== false) cleanupArchivedMirrors(hippoRoot, db);
 }
 
 const SCHEMA_STEP = 'schema';
@@ -123,7 +114,7 @@ export function connectWithFacts(hippoRoot: string, busyWaitMs: number = DEFAULT
     const facts = settleSchema(db, hippoRoot, busyWaitMs);
     // Orphan mirrors of archived raw rows go here; a filesystem failure must not block the open.
     try {
-      sweepArchivedMirrorsIfDue(hippoRoot, db, facts?.archiveTop);
+      sweepArchivedMirrorsIfDue(hippoRoot, db, facts?.archivePending);
     } catch (cleanupErr) {
       log.error(
         `openHippoDb: cleanupArchivedMirrors failed (non-fatal): ${errorMessage(cleanupErr)}`,

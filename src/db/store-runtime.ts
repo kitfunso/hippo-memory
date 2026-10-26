@@ -1,5 +1,5 @@
-// What one process keeps between its store connections: the open steps each store has run, the archive top it has
-// swept, the request scopes still open, idle read handles, and file writes held back. A composition root makes one,
+// What one process keeps between its store connections: the open steps each store has run, the request scopes still
+// open, idle read handles, and file writes held back. A composition root makes one,
 // runs its work inside it, and disposes it from its own exit hook; outside every runtime each open starts fresh.
 import { AsyncLocalStorage } from 'node:async_hooks';
 import * as path from 'node:path';
@@ -38,7 +38,6 @@ export class StoreRuntime {
   /** Mirror and stats writes held back to at most one per interval per root. */
   readonly held = new HeldWrites();
   readonly #settled = new Map<string, Set<string>>();
-  readonly #swept = new Map<string, number>();
   readonly #open = new Set<OpenScope>();
   readonly #idle = new Map<string, DatabaseSyncLike[]>();
   readonly #background = new Set<string>();
@@ -61,18 +60,8 @@ export class StoreRuntime {
 
   /** Makes `step`, or every step when none is named, due again on the store at `key`. */
   forget(key: string, step?: string): void {
-    if (step === undefined) {
-      this.#settled.delete(key);
-      this.#swept.delete(key);
-    } else this.#settled.get(key)?.delete(step);
-  }
-
-  sweptTop(key: string): number | undefined {
-    return this.#swept.get(key);
-  }
-
-  markSwept(key: string, top: number): void {
-    this.#swept.set(key, top);
+    if (step === undefined) this.#settled.delete(key);
+    else this.#settled.get(key)?.delete(step);
   }
 
   track(scope: OpenScope): void {
@@ -142,7 +131,6 @@ export class StoreRuntime {
       this.#open.clear();
       this.closeIdle();
       this.#settled.clear();
-      this.#swept.clear();
       this.#background.clear();
       this.#stats.clear();
     }

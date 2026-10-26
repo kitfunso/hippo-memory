@@ -1,4 +1,4 @@
-// Schema v64 adds the trigram index substring search reads, the duplicate key the duplicate read groups on, and the
+// Schema v64 adds the trigram index substring search reads, the duplicate hash the duplicate read groups on, and the
 // audit and conflict indexes the bounded reads use.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -6,9 +6,17 @@ import { v64 } from '../../src/db/migrations/v64.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
+import { recordStatements } from '../_helpers/count-statements.js';
+import { listDuplicateCandidates } from '../../src/store/sqlite/entry-reads.js';
+
+function plan(db: DatabaseSyncLike, sql: string): string {
+  // SAFETY: EXPLAIN QUERY PLAN rows carry a TEXT `detail` column.
+  const rows = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>;
+  return rows.map((r) => r.detail).join(' | ');
+}
 
 const V64_INDEXES = [
-  'idx_memories_duplicate_key',
+  'idx_memories_duplicate_hash',
   'idx_audit_log_tenant_op_ts',
   'idx_memory_conflicts_updated',
   'idx_memories_text_outside_trigrams',
@@ -29,12 +37,13 @@ function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-/** Takes a current store back to v63's shape: no trigram index, no duplicate key, none of v64's indexes. */
+/** Takes a current store back to v63's shape: no trigram index, no duplicate hash and none of v64's indexes. */
 function toV63(db: DatabaseSyncLike): void {
   for (const name of V64_INDEXES) db.exec(`DROP INDEX ${name}`);
+  db.exec('DROP TRIGGER memories_duplicate_hash_stale');
+  db.exec('ALTER TABLE memories DROP COLUMN duplicate_hash');
   for (const name of TRIGRAM_OBJECTS.slice(0, 3)) db.exec(`DROP TRIGGER ${name}`);
   db.exec('DROP TABLE memories_trigram');
-  db.exec('ALTER TABLE memories DROP COLUMN duplicate_key');
 }
 
 function matches(db: DatabaseSyncLike, phrase: string): string[] {
@@ -71,19 +80,41 @@ describe('migration v64', () => {
     });
   });
 
-  it('gives current distilled rows a whitespace-free duplicate key, and every other row none', () => {
+  it('groups duplicates by their spaceless text through the duplicate hash index', () => {
     const root = makeRoot('migration-v64-key');
-    writeEntriesTogether(root, [createMemory('a  b\tc'), createMemory('raw row', { kind: 'raw' })]);
+    writeEntriesTogether(root, [
+      createMemory('a  b\tc'),
+      createMemory('ab c'),
+      createMemory('abc', { kind: 'raw' }),
+      createMemory('other'),
+    ]);
     withDb(root, (db) => {
-      // SAFETY: the SELECT names two TEXT columns.
-      const rows = db.prepare(`SELECT content, duplicate_key FROM memories ORDER BY content`).all() as Array<{
-        content: string;
-        duplicate_key: string | null;
-      }>;
-      expect(rows).toEqual([
-        { content: 'a  b\tc', duplicate_key: 'abc' },
-        { content: 'raw row', duplicate_key: null },
-      ]);
+      const { result, statements } = recordStatements(() => listDuplicateCandidates(db));
+      expect(result.rows.map((row) => row.content).sort()).toEqual(['a  b\tc', 'ab c']);
+      const keyRead = statements.find((sql) => sql.includes('HAVING COUNT(*) > 1'));
+      expect(plan(db, keyRead!)).toMatch(/USING (COVERING )?INDEX idx_memories_duplicate_hash/);
+    });
+  });
+
+  it('hashes the rows v63 held, and finds a row an older binary wrote or edited without its hash', () => {
+    const root = makeRoot('migration-v64-old-writes');
+    writeEntriesTogether(root, [createMemory('a  b c'), createMemory('kept apart'), createMemory('x y')]);
+    withDb(root, (db) => {
+      toV63(db);
+      v64.up(db);
+      // SAFETY: the SELECT names one INTEGER column, n.
+      const unhashed = () =>
+        (db.prepare('SELECT COUNT(*) AS n FROM memories WHERE duplicate_hash IS NULL').get() as { n: number }).n;
+      expect(unhashed()).toBe(0);
+
+      db.exec(`UPDATE memories SET content = 'ab c' WHERE content = 'kept apart'`);
+      // An older binary's insert leaves the column it does not know empty.
+      db.exec(`CREATE TEMP TABLE copied AS SELECT * FROM memories WHERE content = 'x y'`);
+      db.exec(`UPDATE copied SET id = 'old_binary', content = 'x' || char(9) || 'y', duplicate_hash = NULL`);
+      db.exec(`INSERT INTO memories SELECT * FROM copied`);
+      expect(unhashed()).toBe(2);
+      const contents = listDuplicateCandidates(db).rows.map((row) => row.content);
+      expect(contents.sort()).toEqual(['a  b c', 'ab c', 'x\ty', 'x y']);
     });
   });
 });

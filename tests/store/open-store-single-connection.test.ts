@@ -1,5 +1,6 @@
 // initStore + a second openHippoDb was two connections per loader; openStore
 // runs init on the one connection the caller keeps. Real SQLite store, no mocks.
+import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
 import * as path from 'node:path';
@@ -75,11 +76,14 @@ describe('openStore makes the mirror folders once per store', () => {
       }
     };
 
-    // beforeEach's initStore was this store's first open.
-    expect(foldersMadeBy(3)).toBe(0);
+    // The runtime remembers the step for the process, as a CLI or server root's does; its first open runs it.
+    new StoreRuntime().run(() => {
+      closeHippoDb(openStore(root));
+      expect(foldersMadeBy(3)).toBe(0);
 
-    fs.rmSync(root, { recursive: true, force: true });
-    expect(foldersMadeBy(3)).toBe(mirrorFolders.length);
+      fs.rmSync(root, { recursive: true, force: true });
+      expect(foldersMadeBy(3)).toBe(mirrorFolders.length);
+    });
     expect(mirrorFolders.filter((folder) => fs.existsSync(path.join(root, folder)))).toEqual(mirrorFolders);
   });
 });
