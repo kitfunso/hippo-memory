@@ -1,7 +1,7 @@
 // Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method switch.
 
 import { currentSignal } from '../../base/util/request-scope.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../../base/util/http-util.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
 import { hasGroup } from '../../base/ports/store-index.js';
 import { estimateTokens } from '../../base/util/token-text.js';

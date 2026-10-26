@@ -7,6 +7,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 pinClock();
 
@@ -45,8 +46,8 @@ describe('consolidate auto-promote: session -> trace', () => {
     const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(result.promotedTraces).toBe(1);
-    expect(result.details).toContain('  🧬 promoted 1 trace from completed session');
-    expect(result.details.some((l) => l.includes(`from session ${sid} (success)`))).toBe(true);
+    expect(detailLines(result)).toContain('  🧬 promoted 1 trace from completed session');
+    expect(detailLines(result).some((l) => l.includes(`from session ${sid} (success)`))).toBe(true);
     const traces = loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(1);
     expect(traces[0].traceOutcome).toBe('success');

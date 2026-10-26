@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { TLSSocket } from 'node:tls';
-import { tryParseUrl } from './net.js';
+import { tryParseUrl } from '../../base/util/net.js';
+import { BodyTimeoutError, BodyTooLargeError } from '../../base/errors/http-errors.js';
+import { MAX_BODY_BYTES } from '../../base/util/limits.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
 
@@ -9,10 +11,6 @@ import { tryParseUrl } from './net.js';
 export function isHeaderString(value: string | string[] | undefined): value is string {
   return typeof value === 'string';
 }
-
-// 1 MB body cap. The CLI never sends payloads near this; anything bigger is almost certainly a misconfigured client or
-// a deliberate memory-blowup attempt.
-export const MAX_BODY_BYTES = 1024 * 1024;
 
 function sizeLabel(bytes: number): string {
   return bytes % (1024 * 1024) === 0 ? `${bytes / (1024 * 1024)}MB` : `${Math.ceil(bytes / 1024)}KB`;
@@ -23,38 +21,6 @@ function sizeLabel(bytes: number): string {
 const REFUSED_UPLOAD_LINGER_MS = 2000;
 
 export const JSON_HEADERS = { 'content-type': 'application/json' } as const;
-
-export class HttpError extends Error {
-  status: number;
-  /** Sent as the Retry-After header, so a refused caller knows when to come back. */
-  readonly retryAfterSec: number | undefined;
-  constructor(status: number, message: string, retryAfterSec?: number) {
-    super(message);
-    this.status = status;
-    this.retryAfterSec = retryAfterSec;
-  }
-}
-
-/**
- * A request, or a store call it waited on, ran past the request's deadline; the reply carries `code` so a client
- * branches without parsing prose.
- */
-export class DeadlineExceededError extends HttpError {
-  readonly code = 'deadline_exceeded';
-  constructor(message: string) {
-    super(504, message);
-  }
-}
-
-export class BodyTooLargeError extends Error {}
-
-/** The body did not arrive in time. Its own class so mapApiError answers 408 and the server drops the socket. */
-export class BodyTimeoutError extends Error {}
-
-export const INTERNAL_ERROR_MESSAGE = 'internal server error';
-
-/** The reply when a request under another store reaches code that still opens hippo.db. */
-export const STORE_NOT_PORTED_MESSAGE = 'store_not_ported';
 
 /** Serialises before the head goes out, so a body that is not JSON still reaches the caller's error reply. */
 export function sendJson<T>(res: ServerResponse, status: number, body: T): void {

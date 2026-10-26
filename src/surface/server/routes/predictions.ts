@@ -8,7 +8,8 @@ import {
 } from '../../../api/objects/predictions.js';
 import { VALID_CLOSURE_STATES } from '../../../base/records/prediction.js';
 import type { PredictionFilter } from '../../../base/ports/store.js';
-import { HttpError, sendJson } from '../../../base/util/http-util.js';
+import { HttpError } from '../../../base/errors/http-errors.js';
+import { sendJson } from '../../http/http-util.js';
 import { MAX_DATE_LEN, MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import { parseCursor } from '../../../api/cursor.js';
 import { byCreatedAt, pageOf } from '../cursor.js';

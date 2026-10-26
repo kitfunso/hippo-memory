@@ -35,7 +35,7 @@ Only the composition roots in `SQLITE_ROOTS` (`scripts/check-layers.mjs`) import
 
 A layer imports only from its own layer or a lower one, so domain and api reach the store through the port in `src/base/ports` and never through `src/store`. The port is data only: no method takes a function, because a call crosses to a store worker thread and a function cannot go with it (`src/store/sqlite/worker-ops.ts` names what crosses and which worker runs each method).
 
-`sqliteStore` in `src/store/sqlite` is the one adapter, and each store rule is written once, in the SQL or the file that runs it. Store tests call `sqliteStore` over a seeded copy of the two-tenant fixture: `seedTwoTenants` and `runOnFixture` in `tests/_helpers/store-conformance.ts` copy the folder, run a list of calls and return the answers and the audit rows, which a test asserts against literal values.
+`sqliteStore` in `src/store/sqlite` is the one adapter, and each store rule is written once, in the SQL or the file that runs it. Store tests call `sqliteStore` over a seeded copy of the two-tenant fixture: `seedTwoTenants` and `runOnFixture` in `tests/_helpers/store-conformance.ts` copy the folder, run a list of calls and return the answers and the audit rows, which a test asserts against literal values. `runStoreConformance` in `src/entry/store-conformance.ts` is the suite an add-on runs on its own store; `tests/_helpers/store-conformance.ts` runs it over `sqliteStore` and the port-only store.
 
 The port-only run is the proof that `serve()` holds for any store. `tests/_helpers/port-only-store.ts` wraps `sqliteStore` without its folder groups and under a kind that is not `'sqlite'`. The server blocks hippo.db opens for any other kind, so a path that skips the port throws. `HIPPO_TEST_STORE=port-only` serves the HTTP and MCP suites on that store, and the `port-only` job in `.github/workflows/ci.yml` runs them. A test that needs hippo.db's folder skips with its reason in `tests/_helpers/store-switch.ts`.
 
@@ -872,10 +872,14 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/surface/server/boot.ts
 - `handleRequest`: v1.6.4: pre-decode raw-URL slash check.
 - `assertNoLiveServer`: H3: refuse to start if a live hippo server already serves this hippoRoot.
-- `bootRateLimiter`: E3: per-IP rate limiter for /v1/* and /mcp*.
-- `replyWithFailure`: M3: readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
 - `serve`: Every route but the public ones checks the auth middleware (buildContextWithAuth / requireAuth) on every bind, so 3.0 dropped the `HIPPO_REQUIRE_AUTH=1` bind gate; a non-loopback bind still needs TLS or a cleartext allowance
 - `serve.stop`: an unconditional unlink here would orphan it. (v0.37.0 server-hardening.)
+
+### src/surface/server/rate-limits.ts
+- `bootRateLimiter`: E3: per-IP rate limiter for /v1/* and /mcp*.
+
+### src/surface/server/failure-replies.ts
+- `replyWithFailure`: M3: readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
 
 ### src/surface/server/client-ip.ts
 - `enforceRateLimit`: E3: per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration.

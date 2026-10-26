@@ -3,7 +3,6 @@ import { simulate, type ForceContext } from '../../base/rank/physics.js';
 import { clockBasisOf, type MemoryEntry } from '../../base/memory/memory.js';
 import { recordPhaseFailure, type SleepRun } from './run.js';
 
-const STATS_DECIMALS = 4;
 // Every substep is all-pairs, so one sleep moves at most this many particles; the rest keep their stored state until
 // they are recalled.
 const SLEEP_PHYSICS_MAX_PARTICLES = 1000;
@@ -16,7 +15,7 @@ export async function physicsPass(run: SleepRun, maxParticles: number = SLEEP_PH
 
     if (physicsEnabled) await simulateStoredParticles(run, maxParticles);
   } catch (error) {
-    recordPhaseFailure(result, 'physics', error, '  ⚠️ physics simulation skipped');
+    recordPhaseFailure(result, 'physics', error);
   }
 }
 
@@ -38,14 +37,13 @@ async function simulateStoredParticles(run: SleepRun, maxParticles: number): Pro
   await consolidation.saveParticles(particles);
 
   result.physicsSimulated = stats.particleCount;
-  const capped =
-    particles.length < storedIds.length
-      ? ` (the ${particles.length} most recently recalled of ${storedIds.length})`
-      : '';
-  result.details.push(
-    `  ⚛️  physics: ${stats.particleCount} particles${capped}, ` +
-      `avg vel ${stats.avgVelocityMagnitude.toFixed(STATS_DECIMALS)}`,
-  );
+  result.events.push({
+    kind: 'physics',
+    particles: stats.particleCount,
+    shown: particles.length,
+    stored: storedIds.length,
+    avgVelocity: stats.avgVelocityMagnitude,
+  });
 }
 
 /** Each survivor's last recall, read only when the cap applies. */

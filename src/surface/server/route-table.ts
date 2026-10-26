@@ -1,19 +1,13 @@
 import type { Context } from '../../api/index.js';
-import type { ContextWith } from '../../api/types.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
 import type { WebhookPorts } from '../connectors/ingest.js';
-import { hasGroup, type OptionalGroup, type StoreGroup } from '../../base/ports/store-index.js';
-import {
-  HttpError,
-  JSON_HEADERS,
-  STORE_NOT_PORTED_MESSAGE,
-  sendJson,
-  type WebhookRequest,
-} from '../../base/util/http-util.js';
+import { hasGroup, type HippoStore } from '../../base/ports/store-index.js';
+import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
+import { JSON_HEADERS, sendJson, type WebhookRequest } from '../http/http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLocalCaller } from './auth.js';
 import { INT_PARAM, matchPath, noteAccess } from './request.js';
-import { routeLookup } from './route-lookup.js';
+import { routeLookup, type RouteLookup } from './route-lookup.js';
 import {
   handleApproveQuarantine,
   handleCreateAuthKey,
@@ -47,8 +41,9 @@ import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecal
 import { handleNearestVectors } from './routes/vectors.js';
 import { parseJsonBody } from './validation.js';
 import type {
+  AddonRoute,
   AuthedRouteRequest,
-  ResolvedServeOptions,
+  BoundRoute,
   Route,
   RouteEndpoint,
   RouteParams,
@@ -59,19 +54,14 @@ function webhook(
   handle: (r: WebhookRequest, ports: WebhookPorts) => Promise<void>,
 ): (r: RouteRequest) => Promise<void> {
   return async ({ req, res, opts }) => {
-    await handle({ req, res, opts }, { store: opts.store, config: opts.configAt(opts.hippoRoot), infra: opts.infra() });
-  };
-}
-
-/** A handler that takes a context typed with the row's storeReady `group`, which the gate's 501 has already proved. */
-function withGroup<G extends OptionalGroup>(
-  group: G,
-  handler: (r: AuthedRouteRequest & { ctx: ContextWith<G> }, params: RouteParams) => Promise<void>,
-): (r: AuthedRouteRequest, params: RouteParams) => Promise<void> {
-  return async (r, params) => {
-    const { store } = r.ctx;
-    if (!hasGroup(store, group)) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
-    await handler({ ...r, ctx: { ...r.ctx, store } }, params);
+    await handle(
+      { req, res, opts },
+      {
+        store: opts.store,
+        config: opts.configAt(opts.hippoRoot),
+        infra: opts.infra(),
+      },
+    );
   };
 }
 
@@ -126,7 +116,7 @@ export const V1_ROUTES: readonly Route[] = [
     auth: 'caller',
     // The copy names its source folder and goes to the operator's global store, which only a folder store reaches.
     storeReady: 'folderFiles',
-    handler: withGroup('folderFiles', handlePromoteMemory),
+    handler: handlePromoteMemory,
   },
   {
     method: 'DELETE',
@@ -234,16 +224,17 @@ export function bindPath<R>(route: RouteEndpoint<R>, path: string): ((r: R) => P
   return match ? (r) => route.handler(r, match) : null;
 }
 
+/** Whether a row serves this method and path, whatever its store; a malformed `%` escape throws as in routeMatches. */
+export function routeServes(route: Route, method: string, path: string): boolean {
+  return bindPath<never>(route, path) !== null && method === route.method;
+}
+
 /** The route's run for this request, gate first, or null when method or path differ. The matcher runs before the method
  * check, as the inline route blocks did, so a malformed `%` escape still throws from matchPath on any method. */
-export function routeMatches(route: Route, method: string, path: string): ((r: RouteRequest) => Promise<void>) | null {
+function routeMatches(route: BoundRoute, method: string, path: string): ((r: RouteRequest) => Promise<void>) | null {
   if (route.auth === 'webhook-signature') {
     const run = bindPath<RouteRequest>(route, path);
-    if (run === null || method !== route.method) return null;
-    return async (r) => {
-      assertRoutePorted(r.opts, routeGroup(route));
-      await run(r);
-    };
+    return run === null || method !== route.method ? null : run;
   }
   const run = bindPath<AuthedRouteRequest>(route, path);
   if (run === null || method !== route.method) return null;
@@ -253,7 +244,7 @@ export function routeMatches(route: Route, method: string, path: string): ((r: R
 /** The one caller check a gated route passes: sleep refuses a caller off this host before any key work, then one
  * charged auth, then 501 for an unported route, so a bad key is still a 401 there, and the row's role last. */
 async function passAuthGate(
-  route: Exclude<Route, { auth: 'webhook-signature' }>,
+  route: Exclude<BoundRoute, { auth: 'webhook-signature' }>,
   { req, opts }: RouteRequest,
 ): Promise<Context> {
   const label = routeLabel(route);
@@ -262,7 +253,7 @@ async function passAuthGate(
     throw new HttpError(403, `${label} is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)`);
   }
   const ctx = await buildContextWithAuth(req, opts);
-  assertRoutePorted(opts, routeGroup(route));
+  if (route.unported) await notPorted();
   if (route.auth === 'admin' && ctx.actor.role !== 'admin') throw new HttpError(403, `${label} requires admin role`);
   if (route.auth === 'host-admin-local') assertCrossTenantAdmin(ctx, label);
   return ctx;
@@ -275,11 +266,37 @@ export function routeLabel(route: RouteEndpoint<never>): string {
   return route.regex.source.replace(/^\^|\$$/g, '').replaceAll('\\/', '/');
 }
 
-const findV1Route = routeLookup(V1_ROUTES, routeMatches);
+/** The one 501 of a route whose store lacks what it needs, thrown by the gate before the role check. */
+async function notPorted(): Promise<void> {
+  throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
+}
+
+/** A row whose store lacks what it needs is marked at boot, so its gate answers 501 and no request checks a group. */
+function boundRoute(route: Route, store: HippoStore, onHippoDb: boolean): BoundRoute {
+  if (route.storeReady === 'folderFiles') {
+    const { handler } = route;
+    if (!hasGroup(store, 'folderFiles')) return { ...route, unported: true, handler: notPorted };
+    const run = (r: AuthedRouteRequest, params: RouteParams): Promise<void> =>
+      handler({ ...r, ctx: { ...r.ctx, store } }, params);
+    return { ...route, handler: run };
+  }
+  // A hippoDbOnly row needs hippo.db; a row naming no group runs on any store.
+  const meets =
+    route.hippoDbOnly === undefined ? route.storeReady === undefined || hasGroup(store, route.storeReady) : onHippoDb;
+  return meets ? route : { ...route, unported: true };
+}
+
+/** The /v1 lookup for one store: each row's store need is settled here, once, so a request checks no group. */
+export function bindV1Routes(store: HippoStore, onHippoDb: boolean): RouteLookup<BoundRoute> {
+  return routeLookup(
+    V1_ROUTES.map((route) => boundRoute(route, store, onHippoDb)),
+    routeMatches,
+  );
+}
 
 /** Run the first /v1 route whose method and path match. */
 export async function dispatchV1Route(r: RouteRequest, method: string, path: string): Promise<boolean> {
-  const match = findV1Route(method, path);
+  const match = r.opts.v1Routes(method, path);
   if (match === null) return false;
   const { route, run } = match;
   noteAccess(r.req, { route: routeLabel(route) });
@@ -289,6 +306,26 @@ export async function dispatchV1Route(r: RouteRequest, method: string, path: str
   return true;
 }
 
+/** An add-on route with its store need settled at boot. */
+export interface BoundAddonRoute {
+  readonly route: AddonRoute;
+  readonly ported: boolean;
+}
+
+/** The add-on routes by path; a route naming no group needs hippo.db alone. */
+export function bindAddonRoutes(
+  routes: readonly AddonRoute[],
+  store: HippoStore,
+  onHippoDb: boolean,
+): ReadonlyMap<string, BoundAddonRoute> {
+  return new Map(
+    routes.map((route) => {
+      const ported = route.storeReady === undefined ? onHippoDb : hasGroup(store, route.storeReady);
+      return [route.path, { route, ported }];
+    }),
+  );
+}
+
 /** Core authenticates and parses before the handler runs, so an add-on route gets the same 401, 400 and 501 as a core
  * one. */
 export async function dispatchAddonRoute(
@@ -296,12 +333,13 @@ export async function dispatchAddonRoute(
   method: string,
   path: string,
 ): Promise<boolean> {
-  const route = method === 'POST' ? opts.routes?.find((r) => r.path === path) : undefined;
-  if (!route) return false;
+  const bound = method === 'POST' ? opts.addonRoutes.get(path) : undefined;
+  if (!bound) return false;
+  const { route, ported } = bound;
   noteAccess(req, { route: route.path });
   const answer = async (): Promise<void> => {
     const ctx = await buildContextWithAuth(req, opts);
-    assertRoutePorted(opts, route.storeReady ?? 'hippoDb');
+    if (!ported) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
     noteAccess(req, { tenant: ctx.tenantId });
     const body = await parseJsonBody(req, ctx);
     sendJson(res, 200, await route.handler({ ctx, body }));
@@ -346,19 +384,4 @@ export function dispatchPublicJson({ req, res, opts }: RouteRequest, method: str
   res.writeHead(200, { ...JSON_HEADERS, 'cache-control': 'no-store' });
   res.end(text);
   return true;
-}
-
-/** What a route needs of its store: a group, or hippo.db itself. */
-type StoreNeed = StoreGroup | 'hippoDb';
-
-/** What a row needs: a hippoDbOnly row needs hippo.db, a row naming none runs on any store. */
-function routeGroup(route: Route): StoreNeed | undefined {
-  return route.hippoDbOnly === undefined ? route.storeReady : 'hippoDb';
-}
-
-/** A route answers 501 without running when the store lacks what it needs. */
-function assertRoutePorted(opts: ResolvedServeOptions, need: StoreNeed | undefined): void {
-  if (need === undefined) return;
-  const meets = need === 'hippoDb' ? opts.onHippoDb : hasGroup(opts.store, need);
-  if (!meets) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }

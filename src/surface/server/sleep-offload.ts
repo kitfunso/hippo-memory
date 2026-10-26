@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { type Actor, type SleepOpts, type SleepResult, type Context } from '../../api/index.js';
 import { StoreBusyError } from '../../base/ports/store.js';
 import { envSleepTimeoutMs } from '../../base/util/env.js';
-import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/util/http-util.js';
+import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
 
 const DEFAULT_SLEEP_DEADLINE_MS = 600_000;
 

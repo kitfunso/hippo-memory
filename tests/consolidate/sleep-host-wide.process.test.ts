@@ -22,6 +22,7 @@ import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { appendSessionEvent, replaceDetectedConflicts } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 oneRequestPerTest();
 
@@ -373,7 +374,7 @@ const made = (state: HostState) =>
     }));
 
 /** The detail lines less their leading emoji. */
-const detailText = (result: SleepResult): string[] => result.details.map((d) => d.replace(/^\s*\S+\s+/, ''));
+const detailText = (result: SleepResult): string[] => detailLines(result).map((d) => d.replace(/^\s*\S+\s+/, ''));
 const faded = (verb: string, n: number): string[] =>
   BY_NAME.map((t) => `${verb} ${idOf(t, n)} (strength 0.0000 < 0.05)`);
 const MERGED_LINE = `merged 3 episodic entries into semantic: "${CLUSTER_HEADER}..."`;
@@ -502,7 +503,7 @@ describe('one sleep over three tenants', () => {
   // Each case also runs at one-row pages and at one page for the whole store, which must end the same.
   it('moves, decays, promotes, replays, retires, merges and records each tenant on its own rows', async () => {
     const { result, state } = await sleepAtEveryPageSize({});
-    const { details: _, ...counts } = result;
+    const { events: _, ...counts } = result;
     expect(counts).toEqual(sleepCounts({ decayed: 39, dormant: 6, extractionCandidates: 30 }));
     const replayed = [idOf('globex', 1), idOf('acme', 15), idOf('acme', 12), idOf('default', 15), TRACE];
     expect(detailText(result)).toEqual(sleepDetails(false, replayed));
@@ -521,7 +522,7 @@ describe('one sleep over three tenants', () => {
     const { result, state } = await sleepAtEveryPageSize({
       memoryValue: { enabled: true },
     });
-    const { details: _, ...counts } = result;
+    const { events: _, ...counts } = result;
     expect(counts).toEqual(sleepCounts({ decayed: 42, dormant: 3, extractionCandidates: 33 }));
     const replayed = [idOf('default', 1), idOf('globex', 3), idOf('default', 11), idOf('default', 15), TRACE];
     expect(detailText(result)).toEqual(sleepDetails(true, replayed));
@@ -540,7 +541,7 @@ describe('one sleep over three tenants', () => {
     const unslept = hostState(await seed({}));
     const { result, state } = await sleepAtEveryPageSize({}, { dryRun: true });
     expect(state).toEqual(unslept);
-    const { details: _, ...counts } = result;
+    const { events: _, ...counts } = result;
     expect(counts).toEqual({
       ...sleepCounts({ decayed: 39, dormant: 6, extractionCandidates: 30 }),
       dryRun: true,

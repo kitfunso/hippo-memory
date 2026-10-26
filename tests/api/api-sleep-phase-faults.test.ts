@@ -30,6 +30,7 @@ import { makeStore, makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 oneRequestPerTest();
 
@@ -254,7 +255,7 @@ describe('a skipped pass or a failed graph rebuild is logged with its error', ()
         fields: expect.objectContaining({ errorClass: 'Error' }),
       },
     ]);
-    expect(seen?.details).toContain(`  ⚠️ physics simulation skipped: ${boom.message}`);
+    expect(detailLines(seen ?? { dryRun: false })).toContain(`  ⚠️ physics simulation skipped: ${boom.message}`);
     const logged = warn.mock.calls.find(([message]) => message.includes('physics pass failed'));
     expect(logged?.[1]).toEqual(
       expect.objectContaining({
@@ -294,7 +295,7 @@ describe('a skipped pass or a failed graph rebuild is logged with its error', ()
         },
       },
     );
-    expect(result.details?.some((d) => d.includes('extract failed for a dirty tenant'))).toBe(true);
+    expect(detailLines(result).some((d) => d.includes('extract failed for a dirty tenant'))).toBe(true);
     const logged = warn.mock.calls.find(([message]) => message.includes('graph extract failed'));
     expect(logged?.[1]).toEqual(expect.objectContaining({ errorClass: 'Error' }));
   });
