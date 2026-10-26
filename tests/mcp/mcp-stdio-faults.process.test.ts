@@ -346,7 +346,7 @@ describe('MCP stdio fault handling', () => {
     const code = await run.exited;
     expect(code).toBe(1);
     expect(run.stderr()).toMatch(
-      /mcp uncaught exception: boom-uncaught .*errorClass=Error stack=Error: boom-uncaught\s+at /,
+      /mcp uncaught exception: boom-uncaught .*errorClass=Error stack="Error: boom-uncaught\s+at /,
     );
   });
 
@@ -355,7 +355,7 @@ describe('MCP stdio fault handling', () => {
     const code = await run.exited;
     expect(code).toBe(1);
     expect(run.stderr()).toMatch(
-      /mcp unhandled rejection: boom-rejected .*errorClass=TypeError stack=TypeError: boom-rejected\s+at /,
+      /mcp unhandled rejection: boom-rejected .*errorClass=TypeError stack="TypeError: boom-rejected\s+at /,
     );
   });
 });

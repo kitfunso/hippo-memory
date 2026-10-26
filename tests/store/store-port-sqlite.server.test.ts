@@ -14,6 +14,7 @@ import { loadPhysicsState, resetAllPhysicsState } from '../../src/db/physics-sta
 import { planningFallacyEvidence } from '../../src/store/sqlite/planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../../src/store/sqlite/recall-trace.js';
 import { serve } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import {
   sqliteStore,
   type ActiveGoals,
@@ -67,10 +68,6 @@ import {
 import type { AppendAuditOpts } from '../../src/base/ports/store/types.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 type Kind = 'local' | 'wide';
 interface Outcome<T> {
@@ -730,7 +727,7 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
         );
       }
       const before = embeddings.requests();
-      const handle = await serve({ hippoRoot: s.root, port: 0, store: sqliteStore(s.root) });
+      const handle = await serveKeyed({ hippoRoot: s.root, port: 0, store: sqliteStore(s.root) }, serve);
       try {
         const { statements } = await recordStatementsAsync(() => recallOver(handle.url, call));
         expect(countMatching(statements, STORE_OPEN)).toBe(opens);
@@ -761,7 +758,7 @@ describe('a recall whose store read fails mid-way', () => {
         },
       };
       const before = { ...rowsOf(s.root), auditOps: auditOps(s.root), statsMirror: statsMirror(s.root) };
-      const handle = await serve({ hippoRoot: s.root, port: 0, store });
+      const handle = await serveKeyed({ hippoRoot: s.root, port: 0, store }, serve);
       try {
         const args = { query: 'deploy', session_id: SESSION, include_continuity: true };
         const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } };

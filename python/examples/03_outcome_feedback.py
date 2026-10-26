@@ -12,12 +12,13 @@ Run::
 """
 
 import asyncio
+import os
 
 from hippo_memory import Hippo
 
 
 async def main() -> None:
-    async with Hippo(base_url="http://127.0.0.1:3737") as client:
+    async with Hippo(base_url="http://127.0.0.1:3737", api_key=os.environ["HIPPO_API_KEY"]) as client:
         # Seed a memory
         mem = await client.remember(content="feedback-loop target memory")
         print(f"seeded {mem.id}")

@@ -167,7 +167,6 @@ describe('dashboard local access token', () => {
     const onDashboard = await fetch(`http://127.0.0.1:${port}/v1/memories?q=x`, { headers: { cookie: pair } });
     expect(onDashboard.headers.get('content-type')).toBe('text/html; charset=utf-8');
 
-    vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '');
     const v1 = await serve({ hippoRoot, port: 0 });
     try {
       const cookie = `${pair}; ${sessionCookie(v1.port, TOKEN)}`;

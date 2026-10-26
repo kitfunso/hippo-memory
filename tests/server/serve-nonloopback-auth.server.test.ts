@@ -1,17 +1,7 @@
 // tests/server/serve-nonloopback-auth.server.test.ts
 //
-// serve()'s non-loopback guard used to refuse EVERY non-loopback host
-// unconditionally, citing the A5 v2 auth middleware as "not yet built".
-// That middleware (buildContextWithAuth / requireAuth in src/server.ts) has
-// since shipped: every route except GET /health goes through it. This suite
-// asserts the updated guard:
-//   1. still refuses a non-loopback bind by default (no auth = no bind),
-//   2. allows a non-loopback bind when HIPPO_REQUIRE_AUTH=1, and once bound,
-//      every route behaves exactly as the Bearer-lockdown regime promises
-//      (public /health, 401 without a token, 200 with a valid one, and the
-//      created row is actually retrievable through the authed path),
-//   3. the loopback default path is unaffected (no regression),
-//   4. a non-loopback bind with no TLS refuses unless cleartext is allowed.
+// Every route but GET /health needs a key on any bind, so a non-loopback bind asks only for TLS or an explicit cleartext
+// allowance; once bound, the Bearer-lockdown rules hold there as on loopback.
 //
 // Store-root convention follows tests/cli/cli-recall-cutoff-counters.test.ts's
 // makeEnv: the store root passed to initStore/serve IS the .hippo directory
@@ -36,7 +26,6 @@ describe('serve() non-loopback host guard', () => {
 
   beforeEach(() => {
     hippoRoot = makeStore('nla').root;
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', undefined);
     vi.stubEnv('HIPPO_ALLOW_CLEARTEXT', undefined);
   });
 
@@ -47,20 +36,13 @@ describe('serve() non-loopback host guard', () => {
     }
   });
 
-  it('rejects a non-loopback bind without HIPPO_REQUIRE_AUTH', async () => {
-    await expect(serve({ hippoRoot, host: '0.0.0.0', port: 0 })).rejects.toThrow(
-      /Set HIPPO_REQUIRE_AUTH=1 to bind non-loopback/,
-    );
-  });
-
-  it('loopback bind still works without HIPPO_REQUIRE_AUTH (no regression)', async () => {
+  it('binds loopback', async () => {
     handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0 });
     const res = await fetch(`http://127.0.0.1:${handle.port}/health`);
     expect(res.status).toBe(200);
   });
 
   it('refuses a network bind without TLS by default, naming every way to allow it', async () => {
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     await expect(serve({ hippoRoot, host: '0.0.0.0', port: 0 })).rejects.toMatchObject({
       name: 'CleartextBindError',
       message: expect.stringMatching(
@@ -70,7 +52,6 @@ describe('serve() non-loopback host guard', () => {
   });
 
   it('starts a network bind without TLS once HIPPO_ALLOW_CLEARTEXT=1', async () => {
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     vi.stubEnv('HIPPO_ALLOW_CLEARTEXT', '1');
     handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0 });
     // Port 0 lets the OS pick a free port, so only its range is fixed.
@@ -79,7 +60,6 @@ describe('serve() non-loopback host guard', () => {
   });
 
   it('warns once at start that an allowed network bind without TLS is cleartext, and stays quiet on loopback', async () => {
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
     try {
       handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0, allowCleartext: true });
@@ -95,9 +75,8 @@ describe('serve() non-loopback host guard', () => {
     }
   });
 
-  describe('with HIPPO_REQUIRE_AUTH=1', () => {
+  describe('on a network bind', () => {
     beforeEach(async () => {
-      vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
       handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0, allowCleartext: true });
     });
 

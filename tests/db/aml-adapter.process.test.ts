@@ -8,12 +8,7 @@
 //
 // Store-root convention follows tests/server/serve-nonloopback-auth.server.test.ts's
 // makeEnv: the store root passed to initStore/serve IS the .hippo directory
-// itself, not its parent. HIPPO_REQUIRE_AUTH=1 is set the same way that test
-// sets it, so the throwaway hippo server in this suite enforces Bearer auth
-// exactly like the production deployment (deploy/aml/Dockerfile bakes in the
-// same env var) -- without it, hippo's loopback no-auth fallback would admit
-// unauthenticated local requests and the "no credential -> 401" case below
-// would never actually exercise auth.
+// itself, not its parent.
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
@@ -122,7 +117,6 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     // Match the production deployment: hippo requires auth on every route
     // except GET /health. Without this, hippo's loopback no-auth fallback
     // would silently admit the adapter's unauthenticated forwards.
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     hippoHandle = await serve({ hippoRoot, host: '127.0.0.1', port: 0 });
 
     const db = openHippoDb(hippoRoot);
@@ -410,7 +404,6 @@ describe('rate-limit key forwarding and status pass-through', () => {
     rlHippoRoot = makeStore('aml-adapter-ratelimit').root;
 
     // Set before serve(), which checks the proxy pair at boot; one place saves and restores them all.
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'cf-connecting-ip');
     // The adapter connects from loopback here; deploy/aml lists the compose subnet instead.
     vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1,::1');

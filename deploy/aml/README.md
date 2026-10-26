@@ -36,8 +36,8 @@ per real client.
   leaderboard entry per AML's versioned-contract rules.
 - **Store root layout**: the root IS the `.hippo` directory (`/data/.hippo` on
   the volume). The entrypoint runs `hippo init` on first boot only.
-- **`HIPPO_REQUIRE_AUTH=1`** (baked into the image): binds non-loopback and
-  forces every request through Bearer validation.
+- **Bearer auth on every request**: hippo has no keyless mode, so the
+  adapter sends its key on each call.
 - **`HIPPO_CLIENT_IP_HEADER=cf-connecting-ip`**: Cloudflare stamps the real
   client address in this header, so the /v1 rate limiter keys per client
   instead of collapsing every request into the tunnel's single source address.

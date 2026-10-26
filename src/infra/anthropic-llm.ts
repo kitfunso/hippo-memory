@@ -3,7 +3,7 @@
 import type { Llm, LlmReply, LlmRequest } from '../base/ports/llm.js';
 import { envLlmTimeoutMs } from '../base/util/env.js';
 import { withRequestSignal } from '../base/util/request-scope.js';
-import { fetchWithRetry, llmTimeoutMs, llmTotalMs } from './http-retry.js';
+import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, llmTotalMs } from './http-retry.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { readCappedJson, readCappedText } from '../base/util/capped-json.js';
 import { MAX_REPLY_BYTES } from '../base/util/limits.js';
@@ -69,7 +69,13 @@ async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Pr
         }),
         signal: withRequestSignal(),
       },
-      { timeoutMs, totalMs: llmTotalMs(timeoutMs), fetchFn: connection.fetcher ?? fetch },
+      // A message call stores nothing on the far side, so an overloaded 529 is replayed as a 429 is.
+      {
+        timeoutMs,
+        totalMs: llmTotalMs(timeoutMs),
+        retryOn: (r) => isRetryableStatus(r.status),
+        fetchFn: connection.fetcher ?? fetch,
+      },
     );
   } catch (err) {
     return { ok: false, failure: { kind: 'request', message: errorMessage(err), cause: err } };

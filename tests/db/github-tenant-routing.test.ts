@@ -229,26 +229,19 @@ describe('resolveTenant', () => {
     }
   });
 
-  it('rule 4 deterministic order: multiple tenants share a repo_full_name -> returns first by (added_at, tenant_id)', async () => {
+  it('rule 4 shared name: two tenants registered the repository -> null, with a warn naming both', async () => {
     const db = openHippoDb(root);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      // Insert in non-sorted order to prove ORDER BY is doing the work.
       insertRepository(db, 'shared/tool', 'tenant-zulu', '2026-01-02T00:00:00.000Z');
       insertRepository(db, 'shared/tool', 'tenant-alpha', '2026-01-01T00:00:00.000Z');
-      insertRepository(db, 'shared/tool', 'tenant-bravo', '2026-01-01T00:00:00.000Z');
-      // Earliest added_at wins; tie broken by tenant_id ascending -> 'tenant-alpha'.
-      expect(
-        await resolveTenant(
-          sqliteStore(root),
-          {
-            connector: 'github',
-            installationId: null,
-            repoFullName: 'shared/tool',
-          },
-          fallback(),
-        ),
-      ).toBe('tenant-alpha');
+      const query = { connector: 'github', installationId: null, repoFullName: 'shared/tool' } as const;
+      expect(await resolveTenant(sqliteStore(root), query, fallback())).toBeNull();
+      const warned = stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('two tenants registered'));
+      expect(warned).toHaveLength(1);
+      expect(warned[0]).toContain('repo=shared/tool tenants=tenant-alpha,tenant-zulu');
     } finally {
+      stderr.mockRestore();
       closeHippoDb(db);
     }
   });

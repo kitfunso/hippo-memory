@@ -2117,7 +2117,7 @@ The code audit found gaps that break any pod today, some of which break `deploy/
 <a id="k2-single-replica-helm-chart-planned-after-k1"></a>
 
 #### K8.2. Single-replica Helm chart [planned, after K8.1]
-- **Chart shape:** a StatefulSet on a `ReadWriteOncePod` volume, `HIPPO_HOME` and the model cache on that volume, and `HIPPO_REQUIRE_AUTH=1` always paired with `--host 0.0.0.0` (the server refuses the bind otherwise, `src/server.ts:3354-3360`).
+- **Chart shape:** a StatefulSet on a `ReadWriteOncePod` volume, `HIPPO_HOME` and the model cache on that volume, and `--host 0.0.0.0` with TLS or `HIPPO_ALLOW_CLEARTEXT` (3.0 dropped `HIPPO_REQUIRE_AUTH`: every request needs a key on every bind).
 - **Values and secrets:** `values.schema.json`, `existingSecret` for keys, optional NetworkPolicy.
 - **Security:** a `restricted` securityContext (non-root, `RuntimeDefault` seccomp, no privilege escalation, read-only root filesystem).
 - **Docs:** state the single-replica limit and the block-storage requirement at the top of the chart README.

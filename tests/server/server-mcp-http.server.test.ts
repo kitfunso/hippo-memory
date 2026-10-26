@@ -3,12 +3,9 @@ import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
 import { presentConnectionsAsRemote } from '../_helpers/listen.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -32,7 +29,7 @@ describe('MCP-over-HTTP transport', () => {
     // through handleMcpRequest, so executeTool no longer walks cwd via
     // findHippoRoot() or reads HIPPO_TENANT from the env. No env hacks
     // needed — the per-test temp root is the source of truth end-to-end.
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serveKeyed({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
@@ -162,7 +159,8 @@ describe('MCP-over-HTTP transport', () => {
     presentConnectionsAsRemote(handle.server!);
     const res = await fetch(`${handle.url}/mcp`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      // An empty Authorization is named, so the keyed fetch adds no key.
+      headers: { 'content-type': 'application/json', authorization: '' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 99, method: 'tools/list' }),
     });
     expect(res.status).toBe(401);

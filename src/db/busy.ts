@@ -1,4 +1,4 @@
-import { errorFields, errorMessage, log } from '../base/util/log.js';
+import { errorFields, errorMessage, isLevelEnabled, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 
 // SQLite's busy result codes; the SQLite adapter turns each into the port's StoreBusyError at its boundary.
@@ -19,17 +19,33 @@ export function isSqliteBusy(cause: unknown): boolean {
 /** The lock wait of an open that names none: its busy_timeout and every explicit wait below. */
 export const DEFAULT_BUSY_WAIT_MS = 5000;
 
+// The wait blocks its thread, the only one in a CLI or hook run, so a wait past this gets one line naming the file.
+const LONG_LOCK_WAIT_MS = 1000;
+
+function noteLongWait(db: DatabaseSyncLike, sql: string, startedAt: number): void {
+  const waitedMs = Date.now() - startedAt;
+  if (waitedMs <= LONG_LOCK_WAIT_MS || !isLevelEnabled('debug')) return;
+  const path = String(db.prepare('PRAGMA database_list').get()?.file ?? '');
+  log.debug('sqlite lock wait', { path, sql, waitedMs });
+}
+
 // busy_timeout covers neither contended statement here: SQLite skips the busy handler for `PRAGMA journal_mode` and for
 // a write that upgrades a deferred read snapshot, so both need an explicit wait.
 export function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs = DEFAULT_BUSY_WAIT_MS): void {
-  const deadline = Date.now() + timeoutMs;
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
   const idle = new Int32Array(new SharedArrayBuffer(4));
   for (;;) {
     try {
       db.exec(sql);
+      noteLongWait(db, sql, startedAt);
       return;
     } catch (error) {
-      if (!isSqliteBusy(error) || Date.now() >= deadline) throw error;
+      if (!isSqliteBusy(error)) throw error;
+      if (Date.now() >= deadline) {
+        noteLongWait(db, sql, startedAt);
+        throw error;
+      }
       Atomics.wait(idle, 0, 0, 10 + Math.floor(Math.random() * 20));
     }
   }

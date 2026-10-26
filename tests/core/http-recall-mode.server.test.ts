@@ -5,14 +5,11 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { retrieve, supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEntriesByIds, loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -46,7 +43,7 @@ beforeEach(async () => {
   writeEntry(home, strong);
   weakId = weak.id;
   strongId = strong.id;
-  handle = await serve({ hippoRoot: home, port: 0, host: '127.0.0.1' });
+  handle = await serveKeyed({ hippoRoot: home, port: 0, host: '127.0.0.1' }, serve);
 });
 
 afterEach(async () => {

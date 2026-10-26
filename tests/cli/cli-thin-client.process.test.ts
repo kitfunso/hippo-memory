@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, vi, afterEach } from 'vitest';
 import { mintAdminKey } from '../_helpers/admin-server.js';
 import { rmSync, existsSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -7,6 +7,7 @@ import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_proces
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { detectServer, type ServerInfo } from '../../src/surface/server/server-detect.js';
 import { boundPort } from '../_helpers/listen.js';
 import { waitFor } from '../_helpers/wait-for.js';
@@ -15,10 +16,6 @@ import { makeStore } from '../_helpers/make-root.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
-});
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
 });
 
 /**
@@ -371,7 +368,7 @@ describe('cli thin-client mode', () => {
       }
 
       server = await startServer(workspace);
-      // A keyless caller is a member, which may not change a row it does not own, so the CLI sends an admin key.
+      // The local key is a member, which may not change a row it does not own, so the CLI sends an admin key.
       vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
 
       // With the server up, forget --archive now routes over HTTP like plain
@@ -455,7 +452,7 @@ describe('cli thin-client mode', () => {
       }
 
       server = await startServer(workspace);
-      // A keyless caller is a member, which may not change a row it does not own, so the CLI sends an admin key.
+      // The local key is a member, which may not change a row it does not own, so the CLI sends an admin key.
       vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
 
       // raw-archive.ts throws "is not raw" for a non-raw kind; the server's refusal must read as the store's does.
@@ -647,7 +644,7 @@ describe('cli thin-client mode', () => {
       const routedId = /Remembered \[([^\]]+)\]/.exec(routedRemember.stdout)?.[1];
       expect(routedId, `stdout: ${routedRemember.stdout} stderr: ${routedRemember.stderr}`).toMatch(/^mem_[0-9a-f]+$/);
 
-      // A keyless caller is a member, which may not change a row it does not own, so the CLI sends an admin key.
+      // The local key is a member, which may not change a row it does not own, so the CLI sends an admin key.
       vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
       const routedForget = runCli(workspace, 'forget', routedId!);
       expect(routedForget.stdout, `stderr: ${routedForget.stderr}`).toMatch(/Forgot/);
@@ -688,13 +685,13 @@ describe('cli thin-client mode', () => {
   }, 38_000);
 
   // Starts a server process and a CLI process for remember and for forget.
-  it('a keyless routed forget of a row with no writer fails with the 403 text and the HIPPO_API_KEY hint', async () => {
+  it('a routed forget on the local key of a row with no writer fails with the 403 text and the HIPPO_API_KEY hint', async () => {
     const workspace = makeWorkspace();
     let server: SpawnedServer | null = null;
     try {
       vi.stubEnv('HIPPO_API_KEY', undefined);
       server = await startServer(workspace);
-      const remembered = runCli(workspace, 'remember', 'keyless-refusal-canary');
+      const remembered = runCli(workspace, 'remember', 'local-key-refusal-canary');
       const id = /Remembered \[([^\]]+)\]/.exec(remembered.stdout)?.[1];
       expect(id, `stdout: ${remembered.stdout} stderr: ${remembered.stderr}`).toMatch(/^mem_[0-9a-f]+$/);
 
@@ -703,7 +700,8 @@ describe('cli thin-client mode', () => {
       expect(refused.status, refused.stderr).toBe(1);
       expect(refused.stderr).toContain(
         `memory ${id} records no writer: change it with an admin key. hippo serve is running, so the CLI acts as ` +
-          'the key in HIPPO_API_KEY, or as a member without one: set HIPPO_API_KEY to that key or an admin key.',
+          'the key in HIPPO_API_KEY, or as the member key in server.key without one: set HIPPO_API_KEY to that key or ' +
+          'an admin key.',
       );
       const db = openHippoDb(join(workspace, '.hippo'));
       try {
@@ -720,8 +718,8 @@ describe('cli thin-client mode', () => {
   it('remember --scope X relays through a live server and the stored row envelope scope is X', async () => {
     const workspace = makeWorkspace();
     const hippoRoot = join(workspace, '.hippo');
-    // A keyless member may not write a private scope it cannot read, so the CLI sends an admin key.
-    const handle: ServerHandle = await serve({ hippoRoot, port: 0 });
+    // The local key is a member, which may not write a private scope it cannot read, so the CLI sends an admin key.
+    const handle: ServerHandle = await serveKeyed({ hippoRoot, port: 0 }, serve);
     vi.stubEnv('HIPPO_API_KEY', mintAdminKey(hippoRoot));
     try {
       const { stdout, stderr } = await runCliAsync(

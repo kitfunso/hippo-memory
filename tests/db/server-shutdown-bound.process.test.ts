@@ -1,5 +1,5 @@
 // A signal or crash shutdown that cannot finish ends the process at its bound; one that can finish still exits 0 on a signal.
-import { afterEach, describe, expect, it, beforeEach, onTestFailed, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFailed, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -7,10 +7,6 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { waitFor } from '../_helpers/wait-for.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -71,6 +67,8 @@ function serveThen(home: string, after: readonly string[]): Served {
     [
       `const { serve } = await import(${JSON.stringify(pathToFileURL(resolve('dist', 'server.js')).href)});`,
       `const handle = await serve({ hippoRoot: ${JSON.stringify(home)}, port: 0, handleSignals: true, shutdownDrainMs: ${DRAIN_MS} });`,
+      `const { readLocalKey } = await import(${JSON.stringify(pathToFileURL(resolve('dist', 'surface', 'server', 'local-key.js')).href)});`,
+      `const auth = { authorization: 'Bearer ' + readLocalKey(${JSON.stringify(home)}) };`,
       ...after,
     ].join('\n'),
   );
@@ -118,10 +116,10 @@ function trackedRoot(): string {
 // The read first: it ends only after the store's writer thread has started and done its setup, so the write is that thread's only work.
 // The write is never answered, so the script reports it sent and then waits for the test to see its statement running.
 const STUCK_WRITE = [
-  'const warm = await fetch(`${handle.url}/v1/predictions`);',
+  'const warm = await fetch(`${handle.url}/v1/predictions`, { headers: auth });',
   'if (warm.status !== 200) throw new Error(`the read answered ${warm.status}: ${await warm.text()}`);',
   "const body = JSON.stringify({ claim: 'stuck', classTag: 'release', estimate: 3, unit: 'days' });",
-  "void fetch(`${handle.url}/v1/predictions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body }).then((res) => console.log(`write answered ${res.status}`), (err) => console.log(`write failed: ${err.message}`));",
+  "void fetch(`${handle.url}/v1/predictions`, { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body }).then((res) => console.log(`write answered ${res.status}`), (err) => console.log(`write failed: ${err.message}`));",
   "console.log('write sent');",
   "await new Promise((go) => process.stdin.once('data', go));",
 ];

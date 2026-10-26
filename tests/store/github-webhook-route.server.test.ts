@@ -419,7 +419,22 @@ describe('POST /v1/connectors/github/events', () => {
     ).toEqual(['github://acme/repo/issue/50', 'github://acme/repo/issue/51']);
   });
 
-  it('14d. the same delivery replayed after a restart is refused with 409, since the hold lives in the store, and adds no rows', async () => {
+  it('14c. holds a signature past any time the event log could drop its idempotency key, which it never does', async () => {
+    const body = issueBody({ number: 52 });
+    expect((await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-14c'))).status).toBe(200);
+    const db = openHippoDb(root);
+    try {
+      const hold = queryOne<{ value: string }>(
+        db,
+        `SELECT value FROM meta WHERE key = 'delivery_hold:github:${sign(body)}'`,
+      );
+      expect(Number(hold.value) - Date.now()).toBeGreaterThan(99 * 365 * 24 * 60 * 60 * 1000);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('14d.the same delivery replayed after a restart is refused with 409, since the hold lives in the store, and adds no rows', async () => {
     const issueRows = () =>
       loadAllEntries(root, 'default').filter(
         (e) => e.kind === 'raw' && e.artifactRef === 'github://acme/repo/issue/53',

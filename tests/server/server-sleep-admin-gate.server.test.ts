@@ -1,7 +1,7 @@
 /**
  * Runtime test for v1.12.0 A5 v2 sub-1: admin-role gate on POST /v1/sleep.
  *
- * The keyless loopback caller is always a member, and member-role Bearer tokens are
+ * The local key is always a member, and member-role Bearer tokens are
  * 403'd at the route boundary BEFORE any host-wide consolidation runs.
  *
  * Member keys are constructed via direct DB insert per brainstorm decision #3
@@ -16,11 +16,8 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import type { ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 
 describe('POST /v1/sleep admin-role gate', () => {
   let home: string;
@@ -31,8 +28,7 @@ describe('POST /v1/sleep admin-role gate', () => {
     home = makeRoot('sleep-gate');
     globalHome = makeRoot('sleep-gate');
     vi.stubEnv('HIPPO_HOME', globalHome);
-    vi.stubEnv('HIPPO_KEYLESS_LOCAL_ROLE', undefined);
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serveKeyed({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
@@ -42,7 +38,7 @@ describe('POST /v1/sleep admin-role gate', () => {
     vi.unstubAllEnvs();
   });
 
-  const keyless = (path: string, method = 'POST'): Promise<Response> =>
+  const asLocalKey = (path: string, method = 'POST'): Promise<Response> =>
     fetch(
       `${handle.url}${path}`,
       method === 'GET'
@@ -51,23 +47,13 @@ describe('POST /v1/sleep admin-role gate', () => {
     );
 
   it.skipIf(needsHippoDb('sleep'))(
-    'loopback no-Bearer is a member: 403 on sleep and the quarantine routes, 200 on a member route',
+    'the local key is a member: 403 on sleep and the quarantine routes, 200 on a member route',
     async () => {
-      expect(process.env.HIPPO_KEYLESS_LOCAL_ROLE).toBeUndefined();
-      expect((await keyless('/v1/sleep')).status).toBe(403);
-      expect((await keyless('/v1/quarantine', 'GET')).status).toBe(403);
-      expect((await keyless('/v1/quarantine/mem_missing/approve')).status).toBe(403);
-      expect((await keyless('/v1/quarantine/mem_missing/reject')).status).toBe(403);
-      expect((await keyless('/v1/memories?q=deploy', 'GET')).status).toBe(200);
-    },
-  );
-
-  it.skipIf(needsHippoDb('sleep'))(
-    'loopback no-Bearer stays a member when HIPPO_KEYLESS_LOCAL_ROLE=admin is set, which nothing reads any more',
-    async () => {
-      vi.stubEnv('HIPPO_KEYLESS_LOCAL_ROLE', 'admin');
-      expect((await keyless('/v1/sleep')).status).toBe(403);
-      expect((await keyless('/v1/quarantine', 'GET')).status).toBe(403);
+      expect((await asLocalKey('/v1/sleep')).status).toBe(403);
+      expect((await asLocalKey('/v1/quarantine', 'GET')).status).toBe(403);
+      expect((await asLocalKey('/v1/quarantine/mem_missing/approve')).status).toBe(403);
+      expect((await asLocalKey('/v1/quarantine/mem_missing/reject')).status).toBe(403);
+      expect((await asLocalKey('/v1/memories?q=deploy', 'GET')).status).toBe(200);
     },
   );
 

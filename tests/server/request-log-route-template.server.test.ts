@@ -1,15 +1,14 @@
 // A path can carry a memory id or other caller data, so a failed request's log line names the route template instead.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ServerHandle } from '../../src/server.js';
-import { serve } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 let handle: ServerHandle;
 
 beforeEach(async () => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
   vi.stubEnv('HIPPO_LOG', 'info');
-  handle = await serve({ hippoRoot: makeRoot('log-route-template'), host: '127.0.0.1', port: 0 });
+  handle = await serveKeyed({ hippoRoot: makeRoot('log-route-template'), host: '127.0.0.1', port: 0 });
 });
 
 afterEach(async () => {

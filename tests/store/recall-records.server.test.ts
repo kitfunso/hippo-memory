@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { handleRecall } from '../../src/surface/cli/recall.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
@@ -34,7 +35,6 @@ import { createCallerState, type CallerState } from '../../src/api/callers.js';
 let callers: CallerState;
 
 beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
   callers = createCallerState();
 });
 
@@ -108,7 +108,7 @@ async function recallOn(
   calls: readonly RecallCall[],
   between?: (done: number) => void,
 ): Promise<Reply[]> {
-  const handle = surface === 'http' ? await serve({ hippoRoot: s.root, port: 0 }) : null;
+  const handle = surface === 'http' ? await serveKeyed({ hippoRoot: s.root, port: 0 }, serve) : null;
   try {
     const out: Reply[] = [];
     for (const c of calls) {

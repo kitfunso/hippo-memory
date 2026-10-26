@@ -15,14 +15,11 @@ import { extractGraph } from '../../src/domain/graph/extract.js';
 import { buildGraphModel, layoutGraph, type GraphModel } from '../../src/domain/graph/view.js';
 import { renderGraphHtml, renderGraphCanvas } from '../../src/surface/cli/graph-page.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -265,7 +262,7 @@ describe('graph-view: GET /v1/graph (live server)', () => {
     home = makeRoot('graphview');
     globalHome = makeRoot('graphview');
     vi.stubEnv('HIPPO_HOME', globalHome);
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serveKeyed({ hippoRoot: home, port: 0 }, serve);
   });
   afterEach(async () => {
     await handle.stop();

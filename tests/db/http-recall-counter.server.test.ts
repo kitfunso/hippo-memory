@@ -6,12 +6,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
 import { remember, retrieve } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -42,7 +39,7 @@ beforeEach(async () => {
   for (const content of ['alpha token one', 'alpha token two', 'alpha token three']) {
     await remember(ctx(), { content });
   }
-  handle = await serve({ hippoRoot: home, port: 0, host: '127.0.0.1' });
+  handle = await serveKeyed({ hippoRoot: home, port: 0, host: '127.0.0.1' }, serve);
 });
 
 afterEach(async () => {

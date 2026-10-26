@@ -8,6 +8,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { handleRecall } from '../../src/surface/cli/recall.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { retrieveRanking, RecallContractError, type RecallResult } from '../../src/api/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
@@ -39,7 +40,6 @@ import { testInfra } from '../_helpers/infra.js';
 let callers: CallerState;
 
 beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
   callers = createCallerState();
 });
 
@@ -133,7 +133,7 @@ async function viaHttp(handle: ServerHandle, c: RecallCall): Promise<HttpRecalle
 
 /** One server for a whole run of calls, as a long-lived HTTP client sees it. */
 async function httpCalls(s: Store, calls: readonly RecallCall[]): Promise<HttpRecalled[]> {
-  const handle = await serve({ hippoRoot: s.root, port: 0 });
+  const handle = await serveKeyed({ hippoRoot: s.root, port: 0 }, serve);
   try {
     const out: HttpRecalled[] = [];
     for (const c of calls) out.push(await viaHttp(handle, c));
@@ -615,7 +615,7 @@ describe('recall and context validation drift, MCP vs HTTP', () => {
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
     for (const k of CLEARED_ENV) vi.stubEnv(k, '');
     s = freshStore(templates, 'local');
-    handle = await serve({ hippoRoot: s.root, port: 0 });
+    handle = await serveKeyed({ hippoRoot: s.root, port: 0 }, serve);
   });
 
   afterAll(async () => {
@@ -689,7 +689,7 @@ describe('shared store recall, MCP vs HTTP', () => {
       expect(mcp.isError, mcp.text).toBe(false);
       expect(mcp.text).toContain('the acme repo');
       expect(mcp.text).not.toContain('the beta repo');
-      handle = await serve({ hippoRoot: root, port: 0 });
+      handle = await serveKeyed({ hippoRoot: root, port: 0 }, serve);
       const http = await viaHttp(handle, { query: 'lighthouse' });
       expect(http.output.status).toBe(200);
       expect(http.output.body.results.map((r) => r.id).sort()).toEqual(['mem_d18_acme', 'mem_d18_beta']);
