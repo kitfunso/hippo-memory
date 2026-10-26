@@ -154,7 +154,8 @@ export interface ResetAllPhysicsStateOptions {
 }
 
 /** resetPhysicsFromSeeds for each of `entries` that has a vector in `embeddingIndex`. The first
- * three stay positional: the frozen scripts/lifecycle-stress scripts call it that way through dist. */
+ * three stay positional: the frozen scripts/lifecycle-stress scripts call it that way through
+ * dist. */
 export function resetAllPhysicsState(
   db: DatabaseSyncLike,
   entries: Iterable<MemoryEntry>,

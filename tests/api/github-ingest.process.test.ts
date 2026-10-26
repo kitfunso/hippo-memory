@@ -1,6 +1,6 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { remember } from '../../src/api/index.js';
+import { rememberUntrusted } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { ingestEvent, type IngestEvent, type IngestInput } from '../../src/surface/connectors/github/ingest.js';
 import type { IngestResult } from '../../src/surface/connectors/ingest.js';
@@ -109,7 +109,7 @@ async function storeAsOtherWorker(scratch: string, { event }: IngestInput): Prom
     issue.updated_at ?? null,
   );
   const logged = { connector: 'github', idempotencyKey, deliveryId: 'd-other-worker', eventName: 'issues' } as const;
-  const stored = await remember(ctx(scratch), { ...opts, untrusted: true, event: logged });
+  const stored = await rememberUntrusted(ctx(scratch), { ...opts, event: logged });
   return {
     status: stored.duplicate ? 'skipped_duplicate' : 'ingested',
     memoryId: stored.duplicate?.memoryId ?? stored.id,

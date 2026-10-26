@@ -1,6 +1,6 @@
 // Where-you-left-off verbs: snapshot, session, handoff, current and working memory.
 
-import { continuityLatest } from '../../api/continuity.js';
+import { CONTINUITY_EVENT_LIMIT, continuityLatest } from '../../api/continuity.js';
 import { cliApiContext, cliStore } from './api-context.js';
 import {
   isHandoffOutcome,
@@ -25,6 +25,8 @@ import {
   stringFlag,
 } from './flag-values.js';
 import { fail } from './exit.js';
+import { WM_DEFAULT_IMPORTANCE } from './flag-defaults.js';
+import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../../base/util/limits.js';
 
 const ISO_DATETIME_CHARS = 19;
 
@@ -257,7 +259,7 @@ export async function handleSession({
   const subcommand = args[0] ?? 'show';
   const sessionId = stringFlagOrExit(flags, 'id') ?? stringFlagOrExit(flags, 'session') ?? '';
   const task = stringFlagOrExit(flags, 'task') ?? '';
-  const limit = Math.max(1, numberFlag(flags, 'limit') || 8);
+  const limit = Math.max(1, numberFlag(flags, 'limit') || SESSION_EVENT_LIMIT);
   const s: SessionArgs = { sessionId, task, limit };
 
   if (subcommand === 'log') return sessionLog(hippoRoot, tenantId, s, flags);
@@ -501,7 +503,7 @@ function printCurrentState(snapshot: TaskSnapshot | null, events: SessionEvent[]
 async function currentShow(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const asJson = boolFlag(flags, 'json');
   const { snapshot, events } = await continuityLatest(cliApiContext(hippoRoot, tenantId), {
-    limit: 5,
+    limit: CONTINUITY_EVENT_LIMIT,
   });
 
   if (asJson) {
@@ -582,8 +584,6 @@ export async function handleWm({
   fail('Usage: hippo wm <push|read|clear|flush>');
 }
 
-const WM_DEFAULT_IMPORTANCE = 0.5;
-
 async function wmPushCmd(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const scope = stringFlagOrExit(flags, 'scope') ?? 'default';
   const content = stringFlagOrExit(flags, 'content') ?? '';
@@ -611,7 +611,7 @@ async function wmPushCmd(hippoRoot: string, tenantId: string, flags: CliFlags): 
 async function wmReadCmd(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const scope = stringFlagOrExit(flags, 'scope') || undefined;
   const sessionId = stringFlagOrExit(flags, 'session') || undefined;
-  const limit = numberFlag(flags, 'limit') || 20;
+  const limit = numberFlag(flags, 'limit') || WM_MAX_ENTRIES;
 
   const items = await cliStore(hippoRoot).sessions.read(tenantId, 'working_memory', {
     scope,

@@ -18,8 +18,8 @@ export interface DrillDownOptions {
    * printed line under `cost`, else ceil(content.length / 4)). For depth > 1 the budget is
    * global and cumulative, not per level. */
   budget?: number;
-  /** Levels to walk down (default 1 = direct children); capped at 10 internally. BFS dedups with
-   * a visited Set, defensive against shared-child anomalies. */
+  /** Levels to walk down (default 1 = direct children); capped at MAX_DRILL_DOWN_DEPTH. BFS
+   * dedups with a visited Set, defensive against shared-child anomalies. */
   depth?: number;
   cost?: DrillDownCost;
   project?: CallerProject;

@@ -1,21 +1,18 @@
 import { predictionMirror } from '../../base/records/prediction.js';
 import type {
-  Objects,
   PredictionClose,
   PredictionListQuery,
   PredictionSave,
 } from '../../base/ports/store.js';
-import type { Context } from '../types.js';
+import type { ContextWith } from '../types.js';
 import type { Prediction, SavePredictionOptions } from '../../base/ports/store/objects.js';
 import type { PredictionBaserate } from '../../base/ports/store/types.js';
 
-const objectsOf = (ctx: Context): Objects => ctx.store.objects;
-
 export async function predictionSave(
-  ctx: Context,
+  ctx: ContextWith<'objects'>,
   input: Omit<PredictionSave, 'actor'>,
 ): Promise<Prediction> {
-  return objectsOf(ctx).saveObject(ctx.tenantId, 'prediction', {
+  return ctx.store.objects.saveObject(ctx.tenantId, 'prediction', {
     ...input,
     actor: ctx.actor.subject,
   });
@@ -24,7 +21,7 @@ export async function predictionSave(
 /** A claim saved with its recall mirror, built under the store root's half-life as the HTTP
  * create route builds it. */
 export async function predictionRecord(
-  ctx: Context,
+  ctx: ContextWith<'objects'>,
   claim: SavePredictionOptions,
 ): Promise<Prediction> {
   return predictionSave(ctx, {
@@ -39,29 +36,32 @@ export async function predictionRecord(
 }
 
 export async function predictionList(
-  ctx: Context,
+  ctx: ContextWith<'objects'>,
   query: PredictionListQuery,
 ): Promise<Prediction[]> {
-  return objectsOf(ctx).listObjects(ctx.tenantId, 'prediction', query);
+  return ctx.store.objects.listObjects(ctx.tenantId, 'prediction', query);
 }
 
 export async function predictionBaserate(
-  ctx: Context,
+  ctx: ContextWith<'objects'>,
   classTag: string,
 ): Promise<PredictionBaserate> {
-  return objectsOf(ctx).predictionBaserate(ctx.tenantId, classTag, ctx.actor.subject);
+  return ctx.store.objects.predictionBaserate(ctx.tenantId, classTag, ctx.actor.subject);
 }
 
-export async function predictionById(ctx: Context, id: number): Promise<Prediction | null> {
-  return objectsOf(ctx).objectById(ctx.tenantId, 'prediction', id);
+export async function predictionById(
+  ctx: ContextWith<'objects'>,
+  id: number,
+): Promise<Prediction | null> {
+  return ctx.store.objects.objectById(ctx.tenantId, 'prediction', id);
 }
 
 export async function predictionClose(
-  ctx: Context,
+  ctx: ContextWith<'objects'>,
   id: number,
   close: Omit<PredictionClose, 'actor'>,
 ): Promise<Prediction> {
-  return objectsOf(ctx).closeObject(ctx.tenantId, 'prediction', id, {
+  return ctx.store.objects.closeObject(ctx.tenantId, 'prediction', id, {
     ...close,
     actor: ctx.actor.subject,
   });

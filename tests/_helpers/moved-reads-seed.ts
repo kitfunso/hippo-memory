@@ -1,7 +1,7 @@
 // One seeded store for the tests of the reads that answer from worker threads: the recall golden rows plus vectors, a graph, held memories and callers.
 import { vi } from 'vitest';
 import { dirname, join } from 'node:path';
-import { adminActor, remember } from '../../src/api/index.js';
+import { adminActor, rememberUntrusted } from '../../src/api/index.js';
 import { setMeta } from '../../src/db/index.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
@@ -75,9 +75,8 @@ async function seedGraph(root: string): Promise<void> {
 
 /** A connector's flagged text, which lands under a quarantine scope with a pending record; returns the memory id. */
 async function hold(root: string, tenantId: string, ending: string): Promise<string> {
-  const saved = await remember(apiCtx(root, tenantId, adminActor('seed')), {
+  const saved = await rememberUntrusted(apiCtx(root, tenantId, adminActor('seed')), {
     content: `${STANDING_ORDER} ${ending}.`,
-    untrusted: true,
     scope: HELD_SCOPE,
   });
   if (saved.quarantined === undefined) throw new Error(`the seed text was not quarantined: ${ending}`);

@@ -9,11 +9,11 @@ import { buildMemoryPage, buildSearch } from '../../api/dashboard/queries.js';
 import { createSnapshotClock } from '../../api/dashboard/snapshot-clock.js';
 import type { Context } from '../../api/types.js';
 import { configReader } from '../../host/config-file.js';
-import { isStoreBusy } from '../../base/ports/store.js';
 import { defaultDashboardReads, defaultStore } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { ReaderCall, ReaderInit, ReaderReply, ReaderValue } from './dashboard-reader.js';
+import { failureReply } from './failure-reply.js';
 import { rootInfra } from '../../infra/ports.js';
 
 // The audit log's actor for every dashboard write.
@@ -95,11 +95,6 @@ function answerInOrder(
   });
 }
 
-function failed<E>(id: number, err: E): ReaderReply {
-  const stack = err instanceof Error ? err.stack : undefined;
-  return { id, ok: false, busy: isStoreBusy(err), message: errorMessage(err), stack };
-}
-
 // The server logs the failure with its request, so the thread only hands it back.
 async function replyTo(
   call: ReaderCall,
@@ -108,7 +103,7 @@ async function replyTo(
   try {
     return { id: call.id, ok: true, value: await run(call) };
   } catch (err) {
-    return failed(call.id, err);
+    return { id: call.id, ...failureReply(err) };
   }
 }
 
@@ -122,7 +117,7 @@ function answer(port: MessagePort, reply: ReaderReply): void {
       `dashboard reader: reply ${reply.id} could not be sent: ${errorMessage(err)}`,
       errorFields(err),
     );
-    port.postMessage(failed(reply.id, err));
+    port.postMessage({ id: reply.id, ...failureReply(err) });
   }
 }
 

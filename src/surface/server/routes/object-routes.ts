@@ -1,7 +1,7 @@
 // The rows of a typed-object kind, from one config: create, list, get and close for every kind,
 // plus supersede for a kind that versions. Each handler parses and replies; the work is one api
 // call.
-import type { Context } from '../../../api/index.js';
+import type { ContextWith } from '../../../api/types.js';
 import {
   objectClose,
   objectGet,
@@ -18,9 +18,9 @@ import { sendJson } from '../../http/http-util.js';
 import type { JsonValue } from '../../../base/util/json.js';
 import { parseCursor } from '../../../api/cursor.js';
 import { byCreatedAt, pageOf } from '../cursor.js';
-import type { AuthedRouteRequest, Route } from '../types.js';
+import type { Route } from '../types.js';
 import { isSetMember, parseJsonBody, parseLimitParam } from '../validation.js';
-import { kindRows, type IdHandler, type NamedRoute } from './kind-routes.js';
+import { kindRows, type IdHandler, type NamedRoute, type ObjectRequest } from './kind-routes.js';
 
 type Body = Record<string, JsonValue>;
 
@@ -37,7 +37,7 @@ export interface ObjectRouteConfig<K extends ObjectKind> {
   /** List query parameter matched against the kind's filter column, e.g. "customer". */
   readonly filterParam?: string;
   /** Checks the body, then saves the new object. */
-  readonly create: (ctx: Context, body: Body) => Promise<ObjectByKind[K]>;
+  readonly create: (ctx: ContextWith<'objects'>, body: Body) => Promise<ObjectByKind[K]>;
   readonly named?: readonly NamedRoute[];
   /** `POST /:id/<action>` rows only this kind has; they come before close. */
   readonly actions?: Readonly<Record<string, IdHandler>>;
@@ -55,7 +55,7 @@ function notFound<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, id: number): 
 
 async function createRoute<K extends ObjectKind>(
   cfg: ObjectRouteConfig<K>,
-  rr: AuthedRouteRequest,
+  rr: ObjectRequest,
 ): Promise<void> {
   const { req, res, ctx } = rr;
   const body = await parseJsonBody(req, ctx);
@@ -70,7 +70,7 @@ async function createRoute<K extends ObjectKind>(
 
 async function listRoute<K extends ObjectKind>(
   cfg: ObjectRouteConfig<K>,
-  rr: AuthedRouteRequest,
+  rr: ObjectRequest,
 ): Promise<void> {
   const { res, query, ctx } = rr;
   const status = query.get('status') ?? 'all';
@@ -98,7 +98,7 @@ async function listRoute<K extends ObjectKind>(
 
 async function getRoute<K extends ObjectKind>(
   cfg: ObjectRouteConfig<K>,
-  rr: AuthedRouteRequest,
+  rr: ObjectRequest,
   id: number,
 ): Promise<void> {
   const found = await objectGet(rr.ctx, cfg.kind, id);
@@ -108,7 +108,7 @@ async function getRoute<K extends ObjectKind>(
 
 async function closeRoute<K extends ObjectKind>(
   cfg: ObjectRouteConfig<K>,
-  rr: AuthedRouteRequest,
+  rr: ObjectRequest,
   id: number,
 ): Promise<void> {
   sendJson(rr.res, 200, { [cfg.field]: await objectClose(rr.ctx, cfg.kind, id) });
@@ -116,7 +116,7 @@ async function closeRoute<K extends ObjectKind>(
 
 async function supersedeRoute<K extends SavableKind>(
   cfg: VersionedRouteConfig<K>,
-  rr: AuthedRouteRequest,
+  rr: ObjectRequest,
   id: number,
 ): Promise<void> {
   const { ctx } = rr;

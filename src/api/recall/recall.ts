@@ -20,6 +20,7 @@ import {
   recallAuditRow,
   recallLead,
   recordShownRecall,
+  shownRecallRows,
   strengthenOf,
   type ShownList,
 } from './finish.js';
@@ -42,8 +43,7 @@ import { POSITION_BAND, BAND_RANKED } from './profiles.js';
 import type { ActiveGoals, ContinuityKey } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
 import type { RecallWrites } from '../../base/ports/store.js';
-
-const CONTINUITY_EVENT_LIMIT = 5;
+import { CONTINUITY_EVENT_LIMIT } from '../continuity.js';
 
 /** Ranks under POSITION_BAND, composes the band, then writes the recall; a caller that sets
  * `recordAs` also has the recall recorded in full. */
@@ -116,7 +116,7 @@ function presentedList(opts: RecallOptions, shown: ShownRanking): ShownList {
     query: opts.query,
     sessionId: opts.boost?.sessionId,
     ids: shown.ids,
-    anchoredOn: shown.anchoredOn,
+    anchoredOn: shown.hints.anchoring?.memoryId,
     tokens: shown.tokens ?? 0,
     ledgerSessionId: null,
     // finishShownRecall throws when its audit write fails, so this point is never reached without
@@ -239,13 +239,18 @@ async function finishShownRecall(
 ): Promise<ShownRanking> {
   const shown = cut.show(cut.ranking, composed.result);
   const { shownRow, trace } = shownAuditAndTrace(ctx, opts, shown.ids, cut.ranking.ranked);
+  const hintRows = shownRecallRows(
+    ctx,
+    { query: opts.query, sessionId: opts.boost?.sessionId },
+    shown.hints,
+  );
   const { writes } = composed;
   await finishRecall(
     ctx,
     opts,
     {
       goalLog: [...cut.goalLog, ...writes.goalLog],
-      audit: [...writes.audit, shownRow, ...shown.audit],
+      audit: [...writes.audit, shownRow, ...hintRows],
       trace,
     },
     shown.ids,

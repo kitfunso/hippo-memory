@@ -33,9 +33,14 @@ export const dormantTerms = (opts: ListDormantOptions): string[] =>
     .split(/\s+/)
     .filter((term) => term.length > 0);
 
-/** The rows a dormant list reads: a whole positive `limit`, else 20. */
+/** Rows a dormant list reads when the caller names no usable limit. */
+export const DEFAULT_DORMANT_LIST_LIMIT = 20;
+
+/** The rows a dormant list reads: a whole positive `limit`, else the default. */
 export const dormantListCap = ({ limit }: ListDormantOptions): number =>
-  limit !== undefined && Number.isFinite(limit) && limit >= 1 ? Math.floor(limit) : 20;
+  limit !== undefined && Number.isFinite(limit) && limit >= 1
+    ? Math.floor(limit)
+    : DEFAULT_DORMANT_LIST_LIMIT;
 
 /** The restored memory, or why nothing was written: no dormant copy in reach, or a live memory
  * already holds the id. */

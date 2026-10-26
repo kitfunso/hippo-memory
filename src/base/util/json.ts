@@ -14,6 +14,15 @@ export function isJsonString(value: JsonValue | undefined): value is string {
   return typeof value === 'string';
 }
 
+/** The option in `allowed` that `value` names, or undefined: a parsed value narrows to a literal
+ * union with no cast. */
+export function knownOption<T extends string>(
+  allowed: readonly T[],
+  value: JsonValue | undefined,
+): T | undefined {
+  return allowed.find((option) => option === value);
+}
+
 export function isJsonNumber(value: JsonValue | undefined): value is number {
   return typeof value === 'number';
 }

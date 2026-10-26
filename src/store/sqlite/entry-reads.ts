@@ -16,7 +16,7 @@ import { chunked } from '../../base/util/chunked.js';
 import { byIdOrder, FRESH_RAW_ORDER, oldestFirst, orderSql } from '../rules/order.js';
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
-import { MAX_FRESH_RAW } from '../rules/windows.js';
+import { MAX_FRESH_RAW } from '../../base/util/limits.js';
 import { tenantAnd, TENANT_IS } from './tenant.js';
 import { listEntriesWhere } from './entry-filter.js';
 import {
@@ -159,9 +159,9 @@ export function countSessionRawMemories(
   return Number(row?.c ?? 0);
 }
 
-/** Last N kind='raw' memories by `created` desc, tenant-scoped, max 200; pass `sessionId` or
- * concurrent sessions show up in each other's fresh tail. The tenant-wide shape is discouraged:
- * `api.recall` throws `RecallContractError` for it when
+/** Last N kind='raw' memories by `created` desc, tenant-scoped, at most MAX_FRESH_RAW; pass
+ * `sessionId` or concurrent sessions show up in each other's fresh tail. The tenant-wide shape
+ * is discouraged: `api.recall` throws `RecallContractError` for it when
  * `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
 export function listFreshRawMemories(
   db: DatabaseSyncLike,

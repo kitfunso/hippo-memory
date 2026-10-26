@@ -2,30 +2,31 @@
 // any backend can serve it from any thread, and hippo.db is one adapter. Type-only apart from the
 // group probes and the store errors.
 import { StoreNotPortedError } from '../util/store-blocked.js';
-import type { SessionAndAdminGroups } from './store-groups.js';
+import type { ConnectorGroups, RecordGroups, ReviewGroups } from './store-groups.js';
 import type { MemoryEntry } from '../memory/entry.js';
 import type { TenantId } from '../util/tenant.js';
 import type { TokenUse, Ledger } from './store/ledger.js';
-import type { SessionEvent, TaskSnapshot } from './store/sessions.js';
+import type { SessionEvent, Sessions, TaskSnapshot } from './store/sessions.js';
 import type { SessionHandoff } from '../session/handoff.js';
 import type { AuditMaintenance, AuditLog } from './store/audit.js';
 import type { LessonWrites, EntryWrites } from './store/entry-writes.js';
 import type { VectorReads, VectorWrites, EmbeddingIndex } from './store/vectors.js';
 import type { KeyWrites } from './store/keys.js';
 import type { ContextReads, DagReads } from './store/context-reads.js';
-import type { Objects } from './store/objects.js';
-import type { Quarantine } from './store/quarantine.js';
 import type { GraphReads, GraphRebuild } from './store/graph.js';
 import type { Readiness, Diagnostics } from './store/diagnostics.js';
 import type { LastRecall, RecallSearchArgs, RecallWrites } from './store/recall-writes.js';
-import type { ConnectorEvents, ConnectorWrites } from './store/connectors.js';
 import type { Promotion, Sharing } from './store/sharing.js';
 import type { FolderFiles } from './store/folder-files.js';
 import type { Consolidation } from './store/consolidation.js';
 import type { Learning } from './store/learning.js';
-import type { Captures, CompactionHooks } from './store/capture.js';
+import type { Captures, CompactionHooks, Compactions } from './store/capture.js';
 import type { ProjectTags } from './store/project-tags.js';
 import type { AgentImport } from './store/agent-import.js';
+import type { Goals } from './store/goals.js';
+import type { Reports } from './store/reports.js';
+import type { Dormant } from './store/dormant.js';
+import type { FailureLog } from './store/rejections.js';
 export type { FolderStore, GlobalTargetGroup, StoreReach } from './store/reach.js';
 import type {
   ApiKeyRecord,
@@ -36,27 +37,60 @@ import type {
   AppendAuditOptions,
 } from './store/types.js';
 
-/** Every group a store has: the required ones, then five optional capabilities, each a set of
+/** Every group a store has: the required ones, then the optional capabilities, each a set of
  * groups a store sets or leaves unset together. `RequiredStore` is the smallest store, and
  * `runStoreConformance` from store-kit checks one. */
-export interface StoreGroups
+export interface StoreGroups extends RequiredGroups, OptionalGroups {}
+
+/** Every capability a store may leave unset. */
+interface OptionalGroups
   extends
-    RequiredGroups,
     FallbackGroups,
     FolderGroups,
     SleepGroups,
     CaptureGroups,
-    MaintenanceGroups {}
+    MaintenanceGroups,
+    ConnectorGroups,
+    RecordGroups,
+    ReviewGroups {}
 
 /** The groups a store may leave unset, each with a fallback or a 501 where it is missing. */
-export type OptionalGroup = keyof (FallbackGroups &
-  FolderGroups &
-  SleepGroups &
-  CaptureGroups &
-  MaintenanceGroups);
+export type OptionalGroup = keyof OptionalGroups;
 
-/** The groups a sleep runs on. */
-export type SleepGroup = keyof SleepGroups;
+/** Each optional group once, for a surface or a test to walk;
+ * tests/types/store-kit.types.test.ts proves it whole. */
+export const OPTIONAL_GROUPS = [
+  'readiness',
+  'lastRecall',
+  'folderFiles',
+  'sharing',
+  'promotion',
+  'embeddingIndex',
+  'ledger',
+  'consolidation',
+  'learning',
+  'graphRebuild',
+  'lessonWrites',
+  'auditMaintenance',
+  'dormant',
+  'captures',
+  'compactionHooks',
+  'compactions',
+  'failureLog',
+  'projectTags',
+  'diagnostics',
+  'agentImport',
+  'connectorWrites',
+  'connectorEvents',
+  'quarantine',
+  'objects',
+  'cards',
+  'conflicts',
+  'rejections',
+] as const satisfies readonly OptionalGroup[];
+
+/** The groups a sleep runs on: its own, and the objects its graph pass reads. */
+export type SleepGroup = keyof SleepGroups | 'objects';
 
 /** Groups a store may skip for a fallback: GET /ready answers 200 with `store: "unchecked"`, and
  * context writes no last recall for the CLI's no-ids outcome to read. */
@@ -79,21 +113,30 @@ export interface FolderGroups {
   readonly ledger: Ledger;
 }
 
-/** Sleep's reads and writes; without them, sleep and consolidate answer 501. */
+/** Sleep's reads and writes, git learn's batch and the dormant rows sleep keeps; without them,
+ * sleep and consolidate answer 501. */
 export interface SleepGroups {
   /** Over every tenant. */
   readonly consolidation: Consolidation;
   /** The learn passes. */
   readonly learning: Learning;
   readonly graphRebuild: GraphRebuild;
+  readonly lessonWrites: LessonWrites;
+  /** The audit pass's deletes and repairs, and the audit log's prune. */
+  readonly auditMaintenance: AuditMaintenance;
+  readonly dormant: Dormant;
 }
 
-/** `hippo capture` and the compaction hooks, which a store without them refuses. */
+/** `hippo capture`, the compaction hooks and the failure log, which a store without them
+ * refuses. */
 export interface CaptureGroups {
   /** Capture's writes and its dedup read. */
   readonly captures: Captures;
   /** The compaction hooks' records and their replay. */
   readonly compactionHooks: CompactionHooks;
+  /** The compaction records a caller's hook starts and fills. */
+  readonly compactions: Compactions;
+  readonly failureLog: FailureLog;
 }
 
 /** What `hippo doctor`, the project repair and the agent-memories import read and write. */
@@ -106,10 +149,9 @@ export interface MaintenanceGroups {
   readonly agentImport: AgentImport;
 }
 
-/** Every group a store sets whole. */
-interface RequiredGroups extends SessionAndAdminGroups {
-  readonly auditMaintenance: AuditMaintenance;
-  readonly lessonWrites: LessonWrites;
+/** What recall, remember and context read, and the key writes auth makes: every store sets these
+ * whole. */
+interface RequiredGroups {
   readonly vectors: VectorReads;
   readonly keyWrites: KeyWrites;
   /** embedMemory and embedAll with a store need it and `vectors`. */
@@ -118,13 +160,12 @@ interface RequiredGroups extends SessionAndAdminGroups {
   readonly contextReads: ContextReads;
   readonly dagReads: DagReads;
   readonly auditLog: AuditLog;
-  readonly quarantine: Quarantine;
   readonly graphReads: GraphReads;
-  /** A write that carries a connector event or untrusted content. */
-  readonly connectorWrites: ConnectorWrites;
-  /** Both connector webhooks' dedup, dead letters and tenant routing. */
-  readonly connectorEvents: ConnectorEvents;
-  readonly objects: Objects;
+  /** The continuity, session-end and working-memory paths. */
+  readonly sessions: Sessions;
+  readonly goals: Goals;
+  /** Status, tokens, failures and the memory listings. */
+  readonly reports: Reports;
 }
 
 /** A store a sleep can run on. */
@@ -150,6 +191,26 @@ export function requireGroup<G extends OptionalGroup>(store: HippoStore, group: 
   const methods = groups[group];
   if (methods === undefined) throw new StoreNotPortedError(store.kind, group);
   return methods;
+}
+
+/** True when the store sets every group `needs` names; a surface asks once, as it binds a verb,
+ * never per request. */
+export function hasGroups<G extends OptionalGroup>(
+  store: HippoStore,
+  needs: readonly G[],
+): store is StoreWith<G> {
+  return needs.every((group) => store[group] !== undefined);
+}
+
+/** `store` narrowed to every group `needs` names; a store without one throws StoreNotPortedError
+ * naming the first. */
+export function requireGroups<G extends OptionalGroup>(
+  store: HippoStore,
+  needs: readonly G[],
+): StoreWith<G> {
+  if (hasGroups(store, needs)) return store;
+  const missing = needs.find((group) => store[group] === undefined);
+  throw new StoreNotPortedError(store.kind, missing ?? needs.join(', '));
 }
 
 /** The smallest store: every required group and base method, none of the optional groups. */
@@ -179,8 +240,8 @@ export interface HippoStore
   /** The session's active goals and their policies, read together so a goal and its policy never
    * disagree. */
   activeGoals(opts: GetActiveGoalsOptions): Promise<ActiveGoals>;
-  /** The first `count` (at most 200) unsuperseded raw rows of `tenantId` that a non-empty session
-   * id and non-null `origins` (those projects and user-global rows) must narrow, by created
+  /** The first `count` (at most MAX_FRESH_RAW) unsuperseded raw rows of `tenantId` that a non-empty
+   * session id and non-null `origins` (those projects and user-global rows) must narrow, by created
    * descending, then content and id ascending.
    */
   freshRawEntries(
@@ -213,6 +274,8 @@ export interface HippoStore
   finishRecall(writes: RecallWrites): Promise<void>;
   /** Adds `recalled` to the one store-wide total_recalled counter, no tenant. */
   bumpRecallStats(recalled: number): Promise<void>;
+  /** Adds `count` to the one store-wide remembered counter, no tenant. */
+  bumpRemembered(count: number): Promise<void>;
   /** One token-ledger row. Throws, so the caller decides whether a ledger failure matters. */
   recordTokens(use: TokenUse): Promise<void>;
   /** Releases the store's connections; `serve()` closes only a store it made itself. */

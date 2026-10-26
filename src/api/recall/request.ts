@@ -25,6 +25,7 @@ import {
   recallAuditMetadata,
   recallAuditRow,
   recordShownRecall,
+  shownRecallRows,
   strengthenOf,
 } from './finish.js';
 import type {
@@ -115,7 +116,8 @@ function flagParam(params: RequestParams, name: string): boolean {
   return value === true || value === '1' || value === 'true';
 }
 
-function optionalFlagParam(params: RequestParams, name: string): boolean | undefined {
+/** Absent stays undefined, so the caller's default applies; any value reads by flagParam's rule. */
+export function optionalFlagParam(params: RequestParams, name: string): boolean | undefined {
   const value = params.get(name);
   return value === undefined || value === null ? undefined : flagParam(params, name);
 }
@@ -287,7 +289,7 @@ function resultOf(ranking: RankRecallResult, shown: readonly SearchResult[]): Re
   };
 }
 
-interface ShownRanking {
+interface ShownCliRecall {
   readonly ranking: RankRecallResult;
   readonly shown: ShownCliCore;
   readonly planningAudit: AppendAuditOptions | undefined;
@@ -297,7 +299,7 @@ interface RecordShownOptions {
   readonly store: HippoStore;
   readonly opts: CliCoreQuery;
   readonly core: CliCoreRecall;
-  readonly done: ShownRanking;
+  readonly done: ShownCliRecall;
 }
 
 /** Audit rows first: a recall they cannot be written for leaves no strengthen, trace, marker or
@@ -316,9 +318,14 @@ async function recordShown(
   );
   const second = secondStore(ctx, core);
   const heldElsewhere = second !== undefined ? await idsNotHeld(store, ids, ctx.tenantId) : [];
+  const hintRows = shownRecallRows(
+    ctx,
+    { query: opts.query, sessionId: opts.boost?.sessionId },
+    shown.hints,
+  );
   const writes = {
     goalLog: ranking.goalRecallLog,
-    audit: [...(planningAudit ? [planningAudit] : []), ...shown.audit, recallRow],
+    audit: [...(planningAudit ? [planningAudit] : []), ...hintRows, recallRow],
     strengthen: strengthenOf(ctx, ids),
     trace: traceOf(ctx, opts, core, shown.results),
   };
@@ -332,7 +339,7 @@ async function recordShown(
     query: opts.query,
     sessionId: opts.boost?.sessionId,
     ids,
-    anchoredOn: shown.anchoredOn,
+    anchoredOn: shown.hints.anchoring?.memoryId,
     tokens: shown.tokens,
     ledgerSessionId: core.hostSessionId ?? null,
     written: audited,

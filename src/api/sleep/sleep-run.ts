@@ -36,7 +36,7 @@ export interface SleepPhases {
     store: StoreWith<'consolidation'>,
   ) => Promise<DirtyTenantSnapshot['dirtyTenants']>;
   extractGraph: (
-    store: StoreWith<'graphRebuild'>,
+    store: StoreWith<'graphRebuild' | 'objects'>,
     tenantId: string,
   ) => ExtractResult | Promise<ExtractResult>;
   pageSize: number;

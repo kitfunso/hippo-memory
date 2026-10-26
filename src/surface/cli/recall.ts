@@ -3,7 +3,11 @@
 import { envActiveScope, envHippoSessionId } from '../../base/util/env.js';
 import type { CallerState } from '../../api/callers.js';
 import { Layer } from '../../base/memory/entry.js';
-import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../../base/rank/search-types.js';
+import {
+  DEFAULT_MIN_RESULTS,
+  DEFAULT_RECALL_BUDGET,
+  type SearchResult,
+} from '../../base/rank/search-types.js';
 import { estimateTokens, tokenPurse } from '../../base/util/token-text.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
 import * as api from '../../api/index.js';
@@ -13,12 +17,7 @@ import type {
   PlanningFallacyWatching,
 } from '../../base/records/planning-fallacy.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import {
-  hashQueryText,
-  sessionRing,
-  shownRecallRows,
-  type AnchoringHint,
-} from '../../api/recall/finish.js';
+import { hashQueryText, sessionRing, type AnchoringHint } from '../../api/recall/finish.js';
 import type { AvailabilityHint } from '../../api/availability.js';
 import {
   handoffText,
@@ -29,6 +28,7 @@ import {
 } from '../../api/context-render.js';
 import type {
   RankRecallResult,
+  RankRecallStages,
   RecallGraphHops,
   RecallGraphStream,
   RecallReranker,
@@ -78,9 +78,7 @@ import { continuityTexts, recallEntryText, recallHeading } from './print.js';
 import { continuityJson, type ContinuityBlockJson } from '../../api/continuity-json.js';
 import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
 import { fail } from './exit.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
-
-const MAX_NEIGHBORS_FLAG = 200;
+import { MAX_NEIGHBORS_FLAG } from './flag-defaults.js';
 
 // JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
 function planningLine(p: PlanningFallacyOutput): string | null {
@@ -103,13 +101,10 @@ function cutoffLine(shown: number, s: api.RecallSuppressionSummary): string | nu
     : null;
 }
 
-interface RecallStageFlags {
-  graphHops?: RecallGraphHops;
-  reranker?: RecallReranker;
-  salienceThreshold?: number;
-  outcome?: string;
-  layer?: string;
-}
+type RecallStageFlags = Pick<
+  RankRecallStages,
+  'graphHops' | 'reranker' | 'salienceThreshold' | 'outcome' | 'layer'
+>;
 
 /** `--graph-stream` implies rrf fusion as well as the graph stream; the CLI fuses the local
  * store only. */
@@ -601,7 +596,7 @@ function fitMemories(
     budget: parsed.budget,
     // The first --min-results are kept whatever they cost (the documented exception); the rest skip
     // and continue.
-    floor: parsed.minResults ?? 1,
+    floor: parsed.minResults ?? DEFAULT_MIN_RESULTS,
     cost: ranked.printCost,
     render,
     textOf: (r) => r.recallText,
@@ -622,7 +617,7 @@ interface PresentRecallOptions {
 }
 
 /** The presenter `retrieveWithCliCore` calls once ranking ends: fits and renders the block, and
- * names the rows and hint rows to record. */
+ * names the rows shown and the hints over them. */
 async function presentRecall(
   ctx: api.Context,
   { query, parsed, ranked, planning }: PresentRecallOptions,
@@ -639,23 +634,9 @@ async function presentRecall(
     isGlobal: ranked.isGlobal,
     now: ctx.infra.clock(),
   });
-  const audit = shownRecallRows(
-    ctx.config,
-    { tenantId: parsed.tenantId, actor: CLI_ACTOR },
-    {
-      query,
-      sessionId: parsed.sessionId,
-      topId: results[0]?.entry.id ?? null,
-      anchoring: hints.anchoring,
-      availability: hints.availability,
-    },
-  );
   // The token ledger books the text this recall prints, on whichever exit it takes; the ring keeps
   // the hint the final detect made.
-  return {
-    text,
-    shown: { results, audit, tokens: estimateTokens(text), anchoredOn: hints.anchoring?.memoryId },
-  };
+  return { text, shown: { results, hints, tokens: estimateTokens(text) } };
 }
 
 /** Where the presenter parks what it built; a `let` it assigned would read as never-assigned

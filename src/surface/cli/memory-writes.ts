@@ -8,6 +8,7 @@ import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
 import { envRequireServer } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import * as api from '../../api/index.js';
+import type { ContextWith } from '../../api/types.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { callerKey } from '../server/local-key.js';
@@ -78,7 +79,11 @@ const SERVED_KEY_HINT =
   'one: set HIPPO_API_KEY to that key or an admin key.';
 
 /** What `hippo forget <id>` says when the store refuses it; the dry run says the same. */
-export async function forgetRefusal(ctx: api.Context, id: string, cause: unknown): Promise<string> {
+export async function forgetRefusal(
+  ctx: ContextWith<'dormant'>,
+  id: string,
+  cause: unknown,
+): Promise<string> {
   if (cause instanceof RawAppendOnlyError) {
     return (
       `Cannot forget ${id}: it is a raw, append-only memory. ` +

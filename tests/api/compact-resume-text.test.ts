@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initProject, removeScratch, runHippo, scratch, type Scratch } from '../_helpers/compaction-hooks.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { transcriptWorkingState } from '../../src/surface/capture/working-state.js';
-import { preCompactForCaller, type Context } from '../../src/server.js';
+import { preCompactForCaller } from '../../src/server.js';
+import type { CallerContext } from '../_helpers/compaction-callers.js';
 import type { TaskSnapshot } from '../../src/base/ports/store/sessions.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, compactResumeText } from '../../src/api/context-render.js';
 import { truncateCodePointSafe } from '../../src/base/util/code-point-cut.js';
@@ -146,7 +147,7 @@ describe('preCompactForCaller', () => {
     fs.mkdirSync(server, { recursive: true });
     initTestStore(server);
     fs.writeFileSync(path.join(server, 'config.json'), JSON.stringify({ sharedStore: true }));
-    const ctx: Context = {
+    const ctx: CallerContext = {
       store: sqliteStore(server),
       config: loadConfig(server),
       tenantId: 'acme',

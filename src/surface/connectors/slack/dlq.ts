@@ -1,4 +1,5 @@
-import { adminActor, type Context } from '../../../api/index.js';
+import { adminActor } from '../../../api/index.js';
+import type { ConnectorContext } from '../ingest.js';
 import {
   replayParked,
   type ConnectorDlq,
@@ -53,7 +54,7 @@ export interface ReplayDlqOptions {
  * re-verifying the signature with the CURRENT secret unless forced. A NULL signature needs
  * --force; replays use today's routing. */
 export async function replaySlackDlqEntry(
-  ctx: Pick<Context, 'tenantId' | 'store' | 'config' | 'infra'>,
+  ctx: Pick<ConnectorContext, 'tenantId' | 'store' | 'config' | 'infra'>,
   id: number,
   opts: ReplayDlqOptions = {},
 ): Promise<ReplayResult> {
@@ -103,7 +104,7 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal
 }
 
 async function reingest(
-  { store, config, infra }: Pick<Context, 'store' | 'config' | 'infra'>,
+  { store, config, infra }: Pick<ConnectorContext, 'store' | 'config' | 'infra'>,
   envelope: JsonValue & SlackEventEnvelope,
   fallback: RouteFallback,
 ): Promise<Reingest> {
@@ -124,7 +125,7 @@ async function reingest(
     return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };
   }
 
-  const replayCtx: Context = {
+  const replayCtx: ConnectorContext = {
     tenantId,
     actor: adminActor('connector:slack:replay'),
     store,
@@ -135,7 +136,7 @@ async function reingest(
 }
 
 async function replayMessage(
-  replayCtx: Context,
+  replayCtx: ConnectorContext,
   envelope: JsonValue & SlackEventEnvelope,
   inner: SlackMessageEvent,
 ): Promise<Reingest> {

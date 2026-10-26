@@ -1,6 +1,9 @@
 // The goal options the Goals group takes.
 import type { PolicyType, Goal } from './types.js';
 
+/** Level a pushed goal gets when the caller names none. */
+export const DEFAULT_GOAL_LEVEL = 0;
+
 export interface PushGoalOptions {
   sessionId: string;
   tenantId: string;

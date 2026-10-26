@@ -46,6 +46,7 @@ import {
   type JsonValue,
 } from '../../base/util/json.js';
 import { CliExit, fail } from './exit.js';
+import { DEFAULT_BOOTSTRAP_CASES } from './flag-defaults.js';
 
 const HIT_TOP_K = 10;
 const MAX_FAILING_SHOWN = 10;
@@ -139,7 +140,7 @@ async function runCorpusEval(
 /** Bootstrap mode: emit a synthetic corpus built from the store's own memories. */
 function writeBootstrapCorpus(entries: MemoryEntry[], flags: CliFlags): void {
   const outPath = stringFlagOrExit(flags, 'out') || null;
-  const max = numberFlag(flags, 'max-cases') ?? 50;
+  const max = numberFlag(flags, 'max-cases') ?? DEFAULT_BOOTSTRAP_CASES;
   const corpus = bootstrapCorpus(entries, max);
   const payload = JSON.stringify({ cases: corpus }, null, 2);
   if (outPath) {

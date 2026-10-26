@@ -64,9 +64,10 @@ export type {
 // The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types,
 // hippo.db's rule helpers), so a store built on it applies hippo.db's rules with the same code.
 
-// An add-on serves from another database by passing serve() its own HippoStore.
+// An add-on serves from another database by passing serve() its own HippoStore; sqliteStore names
+// hippo.db's, which the composition roots open as their default store.
 export {
-  sqliteStore,
+  defaultStore as sqliteStore,
   decodeVector,
   EMBEDDING_MODEL_META_KEY,
   encodeVector,
@@ -78,6 +79,7 @@ export {
 export { runStoreConformance, type ConformanceRunner } from './store-conformance.js';
 export {
   hasGroup,
+  OPTIONAL_GROUPS,
   requireGroup,
   type RequiredStore,
   type AmbientCandidateRequest,

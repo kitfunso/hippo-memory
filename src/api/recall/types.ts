@@ -8,7 +8,12 @@ import type {
   PlanningFallacyOutput,
   PlanningFallacyWatching,
 } from '../../base/records/planning-fallacy.js';
-import type { AnchoringHint, RecallHistorySnapshot, RecallRecording } from './finish.js';
+import type {
+  AnchoringHint,
+  RecallHistorySnapshot,
+  RecallRecording,
+  ShownHints,
+} from './finish.js';
 import type { AvailabilityHint } from '../availability.js';
 import type { CallerProject } from '../prompt-hook.js';
 import type { GlobalInReach } from '../types.js';
@@ -26,8 +31,8 @@ export interface RecallWindowOptions {
   /** DAG-aware recall (default true): entries overflowing `limit` that share a level-2 parent
    * get that summary appended instead, capped at ceil(limit 0.3) extra rows. */
   summarizeOverflow?: boolean;
-  /** Fresh tail (default 0 = off, capped at 200): prepend the last N kind='raw' rows (tenant +
-   * scope filtered, deduped against BM25 hits) even when the query terms miss. */
+  /** Fresh tail (default 0 = off, capped at MAX_FRESH_RAW): prepend the last N kind='raw' rows
+   * (tenant + scope filtered, deduped against BM25 hits) even when the query terms miss. */
   freshTailCount?: number;
   /** Restricts the fresh-tail window to one session; without it the tail is tenant-wide and
    * surfaces newest rows across ALL sessions. */
@@ -149,23 +154,20 @@ export interface CliCoreInspection extends CliCoreRanking {
  * hippo.db. */
 export type CliCoreRanker = CliCoreRecall | CliCoreInspection;
 
-/** `results`: the rows the caller shows, best first; `audit`: its hint rows, written ahead of
- * the 'recall' row; `tokens`: the text it prints, for the ledger. */
+/** `results`: the rows the caller shows, best first; `hints`: the hints over them, whose rows go
+ * ahead of the 'recall' row; `tokens`: the text it prints, for the ledger. */
 export interface ShownCliCore {
   results: readonly SearchResult[];
-  audit: readonly AppendAuditOptions[];
+  hints: ShownHints;
   tokens: number;
-  anchoredOn?: string; // the memory its anchoring hint named; the session ring keeps it for the next recall's cooldown
 }
 
-/** `ids`: what the caller showed; `audit`: its own rows, written after the recall's and in the
- * same transaction, so all land or none. */
+/** `ids`: what the caller showed; `hints`: the hints over that list, whose rows go after the
+ * recall's in the same transaction, so all land or none. */
 export interface ShownRanking {
   ids: readonly string[];
-  audit: readonly AppendAuditOptions[];
-  /** Read only under `recordAs`: the memory the shown list's anchoring hint named, and the shown
-   * text's tokens. */
-  anchoredOn?: string;
+  hints: ShownHints;
+  /** Read only under `recordAs`: the shown text's tokens. */
   tokens?: number;
 }
 

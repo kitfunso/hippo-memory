@@ -1,13 +1,15 @@
 // No unauthenticated caller can make the server buffer a large body or wait long for one: every keyed route checks
 // the credential before it reads. The two webhook routes take no API key, so they check the signing secret and the signature headers first.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { connect } from 'node:net';
 import { makeRoot } from '../_helpers/make-root.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { needsHippoDb } from '../_helpers/store-switch.js';
 import { serveKeyed, type KeyedServer } from '../_helpers/keyed-server.js';
+import { portOnlyStore } from '../_helpers/port-only-store.js';
+import { CONNECTOR_GROUPS } from '../../src/surface/connectors/ingest.js';
 
 /** An admin key, since only an admin passes the mint route's gate to its body read. */
 function adminKey(root: string): string {
@@ -140,7 +142,7 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     'POST %s drops a caller whose body never arrives: 404 with no signing secret, 401 with no signature, 408 once a signed body stalls',
     async (path, secretEnv, signatureHeaders) => {
       await handle.stop();
-      handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
+      handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50, keep: CONNECTOR_GROUPS });
       vi.stubEnv(secretEnv, undefined);
       expect(await statusUntilServerCloses(handle.port, path, signatureHeaders())).toBe('HTTP/1.1 404 Not Found');
       // Test-only signing material, not a real secret.
@@ -150,9 +152,23 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     },
   );
 
+  // A store without the connector groups refuses each webhook at once, and closes the body it never reads.
+  it.each(WEBHOOKS)(
+    'POST %s on a store without the connector groups is a 501 that drops a caller whose body never arrives',
+    async (path, secretEnv, signatureHeaders) => {
+      await handle.stop();
+      const store = portOnlyStore(root);
+      onTestFinished(() => store.close());
+      handle = await serveKeyed({ hippoRoot: root, port: 0, store });
+      // Test-only signing material, not a real secret.
+      vi.stubEnv(secretEnv, 'test-only-webhook-signing-material');
+      expect(await statusUntilServerCloses(handle.port, path, signatureHeaders())).toBe('HTTP/1.1 501 Not Implemented');
+    },
+  );
+
   it('POST /v1/connectors/slack/events answers 401 to a stale timestamp or a signature that is no v0= digest, without waiting for the body', async () => {
     await handle.stop();
-    handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
+    handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50, keep: CONNECTOR_GROUPS });
     vi.stubEnv('SLACK_SIGNING_SECRET', 'test-only-webhook-signing-material');
     const now = Math.floor(Date.now() / 1000);
     const digest = '0'.repeat(64);
@@ -174,7 +190,7 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
 
   it('POST /v1/connectors/github/events answers 401 to a signature header that is no SHA-256 digest, without waiting for the body', async () => {
     await handle.stop();
-    handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
+    handle = await serveKeyed({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50, keep: CONNECTOR_GROUPS });
     vi.stubEnv('GITHUB_WEBHOOK_SECRET', 'test-only-webhook-signing-material');
     for (const malformed of ['sha256=00', 'sha1=' + '0'.repeat(40), `sha256=${'g'.repeat(64)}`]) {
       expect(

@@ -29,14 +29,13 @@ export {
   type ServerRuntimeOptions,
   type SqliteServerRuntime as ServerRuntime,
 } from '../store/sqlite/index.js';
-// The published entries' own names: ./store-kit's default store and vector rules.
+// The vector rules ./store-kit publishes under the names they have here.
 export {
   decodeVector,
   EMBEDDING_MODEL_META_KEY,
   encodeVector,
   OTHER_STORE_MARKER,
   rankVectorRows,
-  sqliteStore,
   type VectorMatch,
   type VectorRow,
 } from '../store/sqlite/index.js';

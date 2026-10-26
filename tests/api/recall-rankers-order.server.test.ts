@@ -276,7 +276,7 @@ describe('recall ranker order', () => {
         },
         (ranking) => {
           ranked = ranking.ranked.map((r) => r.entry.id);
-          return { ids: ranked.slice(0, 10), audit: [] };
+          return { ids: ranked.slice(0, 10), hints: { anchoring: null, availability: null } };
         },
       );
       return { ranked: ranked.map(stable), band: result.results.map((r) => stable(r.id)) };
@@ -298,7 +298,7 @@ describe('recall ranker order', () => {
             : undefined,
           show: (ranking) => {
             ranked = ranking.results.map((r) => stable(r.entry.id));
-            return { results: ranking.results, audit: [], tokens: 0 };
+            return { results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 };
           },
           lastRecall: ctx.store.lastRecall,
         },

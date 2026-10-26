@@ -5,11 +5,13 @@ import {
   assessAutomaticMemory,
   automaticDefect,
   BUNDLE_HEADER,
-  hasNoSpecificity,
   isAutomaticEntry,
   isCertainReason,
   isFragment,
   isReleaseCommitNoise,
+  isShortAndUnspecific,
+  MIN_MEMORY_CHARS,
+  MIN_SUBSTANTIVE_WORDS,
   substantiveWordCount,
   type AutomaticMemoryDefect,
 } from './memory-quality.js';
@@ -49,6 +51,9 @@ export function auditMemory(entry: MemoryEntry, backsObject = false): AuditIssue
 
 type Defect = Pick<AuditIssue, 'severity' | 'reason'>;
 
+/** Text this short is an error, not a weak memory. */
+const TRIVIAL_CHARS = 3;
+
 function classifyMemory(entry: MemoryEntry): AuditIssue | null {
   const content = entry.content.trim();
   const defect = formDefect(content) ?? vaguenessDefect(entry, content);
@@ -56,12 +61,12 @@ function classifyMemory(entry: MemoryEntry): AuditIssue | null {
 }
 
 function formDefect(content: string): Defect | null {
-  if (content.length < 3) {
-    return { severity: 'error', reason: 'too short (< 3 chars)' };
+  if (content.length < TRIVIAL_CHARS) {
+    return { severity: 'error', reason: `too short (< ${TRIVIAL_CHARS} chars)` };
   }
 
-  if (content.length < 10) {
-    return { severity: 'error', reason: 'too short (< 10 chars)' };
+  if (content.length < MIN_MEMORY_CHARS) {
+    return { severity: 'error', reason: `too short (< ${MIN_MEMORY_CHARS} chars)` };
   }
 
   if (isReleaseCommitNoise(content)) {
@@ -76,11 +81,11 @@ function formDefect(content: string): Defect | null {
 
 function vaguenessDefect(entry: MemoryEntry, content: string): Defect | null {
   const substantive = substantiveWordCount(content);
-  if (substantive < 2) {
+  if (substantive < MIN_SUBSTANTIVE_WORDS) {
     return { severity: 'warning', reason: `only ${substantive} substantive word(s) — too vague` };
   }
 
-  if (content.length < 40 && hasNoSpecificity(content)) {
+  if (isShortAndUnspecific(content)) {
     return { severity: 'warning', reason: 'no specific details (names, paths, numbers, code)' };
   }
 

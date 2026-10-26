@@ -444,28 +444,32 @@ export function availabilityRows(
   ];
 }
 
-export interface ShownRecall {
-  readonly query: string;
-  /** Empty or absent when the call named no session, the one case the skip row records. */
-  readonly sessionId: string | undefined;
-  readonly topId: string | null;
+/** The bias hints over the list a surface showed. The api turns them into audit rows and keeps
+ * the anchor for the session ring's cooldown, so a presenter decides what prints and never what
+ * is recorded. */
+export interface ShownHints {
   readonly anchoring: AnchoringHint | null;
   readonly availability: AvailabilityHint | null;
 }
 
-/**
- * The hint rows for a list a surface showed, so a surface on the store port can hand them to the
- * recall's one write.
- */
+/** The recall a surface showed a list for: its query, and its session, absent or empty when it
+ * named none. */
+export interface ShownQuery {
+  readonly query: string;
+  readonly sessionId: string | undefined;
+}
+
+/** The hint rows for a list a surface showed, written in the recall's one write. */
 export function shownRecallRows(
-  config: HintConfig,
-  who: RecallAuditCaller,
-  shown: ShownRecall,
+  ctx: Context,
+  shown: ShownQuery,
+  hints: ShownHints,
 ): AppendAuditOptions[] {
+  const who = callerOf(ctx);
   return [
-    ...(shown.sessionId ? [] : anchorSkippedRows(config, who, shown.query)),
-    ...anchoringRows(who, shown.anchoring),
-    ...availabilityRows(who, shown.availability),
+    ...(shown.sessionId ? [] : anchorSkippedRows(ctx.config, who, shown.query)),
+    ...anchoringRows(who, hints.anchoring),
+    ...availabilityRows(who, hints.availability),
   ];
 }
 

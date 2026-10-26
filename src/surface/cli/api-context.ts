@@ -15,13 +15,10 @@ import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
 import { rerankerWithClef } from '../../api/recall/rows.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import type { McpHost } from '../mcp/protocol.js';
-import type { ImportFiles } from '../importers/core.js';
 import type { HippoStore, StoreGroups } from '../../base/ports/store-index.js';
 import type { OptionalGroup } from '../../base/ports/store.js';
-import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
 import {
   askingNearestFirst,
-  defaultDiagnostics,
   defaultImportFiles,
   defaultImportStores,
   defaultReach,
@@ -76,14 +73,6 @@ export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
   );
 }
 
-/** The folder's hippo.db as doctor reads it: read-only, so a check leaves the store as it found
- * it. */
-export function cliDiagnostics(
-  hippoRoot: string,
-): Pick<StoreGroups, 'diagnostics'> & ProjectTagReads {
-  return defaultDiagnostics(hippoRoot);
-}
-
 /** A folder's hippo.db with its config, as sharing and sync take each side; the global one may
  * not exist yet. */
 export function cliFolder(hippoRoot: string): ConfiguredFolder<HippoStore & StoreGroups> {
@@ -94,16 +83,10 @@ export function cliFolder(hippoRoot: string): ConfiguredFolder<HippoStore & Stor
   };
 }
 
-/** The folder's hippo.db as an import reaches it, answering at once: the published importers
- * return their result. */
-export function cliImportFiles(hippoRoot: string): ImportFiles {
-  return defaultImportFiles(hippoRoot);
-}
-
 /** Creates the global store, or finishes one that was partly made: what a first share needs of
  * it. */
 export function cliInitGlobal(): void {
-  cliImportFiles(hippoHomeDir()).ensure();
+  defaultImportFiles(hippoHomeDir()).ensure();
 }
 
 /** One handle per store at the hook's lock wait; a store still busy after it skips the hook's

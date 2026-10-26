@@ -4,6 +4,7 @@
 import {
   CONFLICT_PEER_MULTIPLIER,
   DEFAULT_LOCAL_BUMP,
+  DEFAULT_MIN_RESULTS,
   DEFAULT_MMR_LAMBDA,
   DEFAULT_RECALL_BUDGET,
   SALIENCE_MIN_MULTIPLIER,
@@ -18,8 +19,19 @@ import {
   DEFAULT_GRAPH_HOPS,
   DEFAULT_GRAPH_SEED_COUNT,
 } from '../../../base/rank/recall-defaults.js';
+import { DEFAULT_CONTEXT_BUDGET } from '../../../api/context.js';
+import { DEFAULT_MAX_NEIGHBORS } from '../../../domain/graph/recall.js';
+import { JEV_DEFAULT_TOP_K } from '../../../domain/rerankers/hosted.js';
+import { DEFAULT_RERANK_TOP_K } from '../../../domain/search/rerank.js';
+import {
+  DEFAULT_BOOTSTRAP_CASES,
+  MAX_NEIGHBORS_FLAG,
+  SEED_DAYS_SCAN,
+  SEED_DAYS_SINGLE,
+} from '../flag-defaults.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 
+const SEED_DAYS_HELP = `${SEED_DAYS_SCAN} for --scan, ${SEED_DAYS_SINGLE} for single`;
 const VALUE_CLIP = `clip(1 + ${VALUE_MULT_SLOPE}*tanh(pos - neg), ${VALUE_MULT_MIN}, ${VALUE_MULT_MAX})`;
 
 export const MEMORY_VERBS = {
@@ -35,7 +47,7 @@ export const MEMORY_VERBS = {
       `
   init                     Create .hippo/ structure in current directory
     --scan [dir]           Find all git repos under dir (default: ~) and init each
-    --days <n>             Days of git history to seed (default: 365 for --scan, 30 for single)
+    --days <n>             Days of git history to seed (default: ${SEED_DAYS_HELP})
     --global               Init the global store ($HIPPO_HOME or ~/.hippo/)
     --no-hooks             Skip auto-detecting and installing agent hooks
                            (HIPPO_SKIP_AUTO_INTEGRATIONS=1 does the same)
@@ -115,7 +127,7 @@ export const MEMORY_VERBS = {
       `
   recall <query>           Search and retrieve memories (local + global)
     --budget <n>           Token budget for the whole printed block (default: ${DEFAULT_RECALL_BUDGET})
-    --min-results <n>      Minimum results regardless of budget (default: 1)
+    --min-results <n>      Minimum results regardless of budget (default: ${DEFAULT_MIN_RESULTS})
     --json                 Output as JSON
     --why                  Show match reasons and source annotations
     --include-superseded   Also return memories a newer version replaced
@@ -127,7 +139,7 @@ export const MEMORY_VERBS = {
                            lexical matches. Graph hits are tagged [graph: Nhop <rel>].
                            Today the graph holds supersedes edges; cross-object
                            edges light up the same walk once extracted.
-    --max-neighbors <n>    Per-hop fanout cap for --hops (1..200, default 25).
+    --max-neighbors <n>    Per-hop fanout cap for --hops (1..${MAX_NEIGHBORS_FLAG}, default ${DEFAULT_MAX_NEIGHBORS}).
     --graph-stream         Fuse a graph-proximity ranking into the result list,
                            re-ranking in-pool results by closeness to the strong
                            lexical matches. Implies rrf scoring (default is blend).
@@ -164,8 +176,8 @@ export const MEMORY_VERBS = {
                            Cloudflare Workers AI (CLOUDFLARE_ACCOUNT_ID and
                            CLOUDFLARE_API_TOKEN) or to HIPPO_CLEF_ENDPOINT, and
                            keep the native order on any failure.
-    --reranker-top-k <n>   Cap candidates passed to the reranker (default 50;
-                           40 for jev, clef-flash and clef).
+    --reranker-top-k <n>   Cap candidates passed to the reranker (default ${DEFAULT_RERANK_TOP_K};
+                           ${JEV_DEFAULT_TOP_K} for jev, clef-flash and clef).
     --goal <tag>           Goal-conditioned recall: memories tagged with the
                            goal tag get a 1.5x score boost and results are
                            re-sorted. Default off.
@@ -254,7 +266,7 @@ export const MEMORY_VERBS = {
   eval [<corpus.json>]     Measure recall quality against a test corpus
     --bootstrap            Generate a synthetic corpus from current memories
     --out <path>           With --bootstrap, write to file instead of stdout
-    --max-cases <n>        With --bootstrap, cap case count (default: 50)
+    --max-cases <n>        With --bootstrap, cap case count (default: ${DEFAULT_BOOTSTRAP_CASES})
     --show-cases           Print per-case details (query, R@10, missed, top 3)
     --compare <path>       JSON from a prior \`eval --json\` run; print deltas
     --no-mmr               Disable MMR for this eval run
@@ -277,7 +289,7 @@ export const MEMORY_VERBS = {
       `
   context                  Smart context injection for AI agents
     --auto                 Auto-detect task from git state
-    --budget <n>           Token budget for the whole printed block (default: 1500)
+    --budget <n>           Token budget for the whole printed block (default: ${DEFAULT_CONTEXT_BUDGET})
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
     --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
     (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)

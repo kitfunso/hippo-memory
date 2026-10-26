@@ -3,7 +3,13 @@
 import { closeHippoDb, openHippoDb, withSqliteAllowed } from '../../src/db/index.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { auditRowsOn } from './audit-rows.js';
-import type { HippoStore, OptionalGroup, StoreGroups } from '../../src/base/ports/store-index.js';
+import {
+  OPTIONAL_GROUPS,
+  type HippoStore,
+  type OptionalGroup,
+  type StoreGroups,
+  type StoreWith,
+} from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 
 /** The groups only a store kept as files in a folder serves, which an add-on store holds none of. */
@@ -24,9 +30,6 @@ export const FOLDER_GROUPS = [
 ] as const satisfies readonly OptionalGroup[];
 type FolderGroup = (typeof FOLDER_GROUPS)[number];
 
-// The optional groups, which an add-on store at its smallest has none of.
-const LEFT_OUT: ReadonlySet<string> = new Set<OptionalGroup>(['readiness', 'lastRecall', ...FOLDER_GROUPS]);
-
 /** `store` without its folder groups, as a store that is not hippo.db holds none; copying string keys alone drops the
  * symbol that marks a store as hippo.db. */
 export function withoutFolderGroups<S extends HippoStore>(store: S): Omit<S, FolderGroup> {
@@ -44,10 +47,16 @@ function allowedGroup<T extends object>(group: T): T {
   return Object.fromEntries(Object.entries(group).map(([name, method]) => [name, allowed(method)])) as T;
 }
 
-/** hippo.db's required groups and none of the optional ones: an add-on store at its smallest. Base
- * methods are listed by hand so one added to the port fails to compile here until it is wired. */
-export function portOnlyStore(hippoRoot: string): HippoStore {
+/** hippo.db's required groups and of the optional ones only `keep`: with none kept, an add-on store at its smallest.
+ * Base methods are listed by hand so one added to the port fails to compile here until it is wired. */
+export function portOnlyStore<G extends OptionalGroup = never>(
+  hippoRoot: string,
+  keep: readonly G[] = [],
+): StoreWith<G> {
   const inner = sqliteStore(hippoRoot);
+  const leftOut: ReadonlySet<string> = new Set<OptionalGroup>(
+    OPTIONAL_GROUPS.filter((group) => !keep.some((k) => k === group)),
+  );
   const base = {
     kind: 'port-only',
     findApiKey: allowed(inner.findApiKey),
@@ -60,21 +69,23 @@ export function portOnlyStore(hippoRoot: string): HippoStore {
     appendAuditEvents: allowed(inner.appendAuditEvents),
     finishRecall: allowed(inner.finishRecall),
     bumpRecallStats: allowed(inner.bumpRecallStats),
+    bumpRemembered: allowed(inner.bumpRemembered),
     recordTokens: allowed(inner.recordTokens),
     close: allowed(inner.close),
   };
-  const groups = Object.entries(inner).filter(([key]) => !(key in base) && !LEFT_OUT.has(key));
-  // SAFETY: what is left of sqliteStore's own keys is its required groups, each wrapped whole.
-  const required = Object.fromEntries(groups.map(([key, group]) => [key, allowedGroup(group)])) as Omit<
+  const groups = Object.entries(inner).filter(([key]) => !(key in base) && !leftOut.has(key));
+  // SAFETY: what is left of sqliteStore's own keys is its required groups and the kept ones, each wrapped whole.
+  const kept = Object.fromEntries(groups.map(([key, group]) => [key, allowedGroup(group)])) as Omit<
     StoreGroups,
     OptionalGroup
-  >;
-  return { ...base, ...required };
+  > &
+    Pick<StoreGroups, G>;
+  return { ...base, ...kept };
 }
 
 /** The store with the name of each recall and context read it answers pushed onto `calls`: the two base reads,
  * contextReads, vectors and the sessions read. */
-function logged(store: HippoStore, calls: string[]): HippoStore {
+function logged<S extends HippoStore>(store: S, calls: string[]): S {
   const log =
     <A extends unknown[], R>(name: string, fn: (...args: A) => R) =>
     (...args: A): R => {
@@ -106,16 +117,19 @@ function logged(store: HippoStore, calls: string[]): HippoStore {
 }
 
 /** A port-only store that logs its recall reads, and a read of every audit row it holds, oldest first. */
-export interface PortOnlySide {
-  readonly store: HippoStore;
+export interface PortOnlySide<G extends OptionalGroup = never> {
+  readonly store: StoreWith<G>;
   readonly calls: readonly string[];
   readonly auditRows: () => AuditEvent[];
 }
 
-export function portOnlySide(hippoRoot: string): PortOnlySide {
+export function portOnlySide<G extends OptionalGroup = never>(
+  hippoRoot: string,
+  keep: readonly G[] = [],
+): PortOnlySide<G> {
   const calls: string[] = [];
   return {
-    store: logged(portOnlyStore(hippoRoot), calls),
+    store: logged(portOnlyStore(hippoRoot, keep), calls),
     calls,
     auditRows: () => {
       const db = openHippoDb(hippoRoot);

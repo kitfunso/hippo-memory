@@ -1,6 +1,11 @@
 // Promote to the global store, supersede with a successor, and archive raw memories.
 
-import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
+import {
+  BadRequestError,
+  ConflictError,
+  memoryNotFoundText,
+  NotFoundError,
+} from '../../base/errors/api-errors.js';
 import type { ConnectorEvent, StoreHome } from '../../base/ports/store.js';
 import {
   createSuccessor,
@@ -33,7 +38,7 @@ export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Prom
   // of either.
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
   if (!entry || !canReadScope(ctx.actor, entry.scope ?? null)) {
-    throw new NotFoundError(`memory not found: ${id}`);
+    throw new NotFoundError(memoryNotFoundText(id));
   }
   // A root's reach sets it for a store kept in a folder, so only a context built without a reach
   // lacks it.
@@ -163,36 +168,45 @@ function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null
   return row;
 }
 
-/** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is deleted. The
- * store writes the one archive_raw audit row, under the caller's subject. */
-export interface ArchiveRawOptions {
-  /** The connector event this archive answers. The store logs it in the archive's own
-   * transaction, so a redelivery finds it logged. */
-  event?: ConnectorEvent;
-}
-
 export interface ArchiveRawResult {
   ok: true;
   archivedAt: string;
 }
-export async function rawArchive(
-  ctx: Context,
-  id: string,
-  reason: string,
-  opts: ArchiveRawOptions = {},
-): Promise<ArchiveRawResult> {
-  const store = ctx.store;
-  const entryWrites = store.entryWrites;
-  const archive = {
+
+function archiveOf(ctx: Context, id: string, reason: string) {
+  return {
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
     ...scopeReaderOf(ctx.actor),
     id,
     reason,
   };
-  const { event } = opts;
-  const archivedAt = event
-    ? await store.connectorWrites.archiveConnectorEntry({ ...archive, event })
-    : await entryWrites.archiveRaw(archive);
+}
+
+/** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is deleted. The
+ * store writes the one archive_raw audit row, under the caller's subject. */
+export async function rawArchive(
+  ctx: Context,
+  id: string,
+  reason: string,
+): Promise<ArchiveRawResult> {
+  return {
+    ok: true,
+    archivedAt: await ctx.store.entryWrites.archiveRaw(archiveOf(ctx, id, reason)),
+  };
+}
+
+/** rawArchive for a connector's delete: the store logs `event` in the archive's own transaction,
+ * so a redelivery finds it logged. */
+export async function rawArchiveForEvent(
+  ctx: ContextWith<'connectorWrites'>,
+  id: string,
+  reason: string,
+  event: ConnectorEvent,
+): Promise<ArchiveRawResult> {
+  const archivedAt = await ctx.store.connectorWrites.archiveConnectorEntry({
+    ...archiveOf(ctx, id, reason),
+    event,
+  });
   return { ok: true, archivedAt };
 }

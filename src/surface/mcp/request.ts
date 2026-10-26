@@ -3,8 +3,13 @@
 
 import { currentSignal } from '../../base/util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
-import type { HippoStore } from '../../base/ports/store-index.js';
-import { hasGroup } from '../../base/ports/store-index.js';
+import {
+  hasGroup,
+  hasGroups,
+  type HippoStore,
+  type OptionalGroup,
+  type StoreWith,
+} from '../../base/ports/store.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
 import { validateToolArgs } from './tool-args.js';
@@ -13,6 +18,7 @@ import { globalTargetOf } from '../../api/infra.js';
 import { recordTokens } from '../../api/tokens.js';
 import {
   mcpApiContext,
+  type GroupToolHandler,
   type LocalToolHandler,
   type McpContext,
   type McpRequest,
@@ -56,34 +62,61 @@ async function recordMcpTokens(toolName: string, output: string, ctx: McpContext
 
 // ── Tool execution ──
 
-/** A tool, and the optional group it needs; unset, it runs under any store. */
-type ToolEntry =
-  | { readonly needs?: undefined; readonly run: ToolHandler }
-  | { readonly needs: 'folderFiles'; readonly run: LocalToolHandler };
-
-/** A tool that runs only under a folder store with a global store in its reach. */
-function localTool(run: LocalToolHandler): ToolEntry {
-  return { needs: 'folderFiles', run };
-}
-
 type ToolRun = (args: Record<string, JsonValue>) => string | Promise<string>;
 
 /** A tool bound to one store: its run for a call, or undefined when the call's reach has no
  * global store for it. */
 type StoreTool = (ctx: McpContext) => ToolRun | undefined;
 
-const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([
-  ['hippo_recall', { run: runRecallTool }],
-  ['hippo_assemble', { run: runAssembleTool }],
-  ['hippo_drill', { run: runDrillTool }],
-  ['hippo_predict_baserate', { run: runPredictBaserateTool }],
-  ['hippo_remember', { run: runRememberTool }],
-  ['hippo_outcome', { run: runOutcomeTool }],
-  ['hippo_context', { run: runContextTool }],
-  ['hippo_status', { run: runStatusTool }],
-  ['hippo_learn', { run: runLearnTool }],
-  ['hippo_conflicts', { run: runConflictsTool }],
-  ['hippo_resolve', { run: runResolveTool }],
+/** Binds a tool to one store, or answers undefined for a store that lacks a group the tool
+ * needs. */
+type ToolBinder = (store: HippoStore) => StoreTool | undefined;
+
+/** A tool that runs under any store. */
+function anyStore(run: ToolHandler): ToolBinder {
+  return () => (ctx) => (args) => run({ ...toolCall(ctx), args });
+}
+
+/** A tool that runs only on a store with every group `needs` names, handed that store and an api
+ * Context on it. */
+function needing<G extends OptionalGroup>(
+  needs: readonly G[],
+  run: GroupToolHandler<G>,
+): ToolBinder {
+  return (store) => {
+    if (!hasGroups(store, needs)) return undefined;
+    const proved: StoreWith<G> = store;
+    return (ctx) => (args) =>
+      run({ ...toolCall(ctx), args, store: proved, api: { ...mcpApiContext(ctx), store: proved } });
+  };
+}
+
+/** A tool that runs only under a folder store with a global store in its reach. */
+function localTool(run: LocalToolHandler): ToolBinder {
+  return (store) => {
+    if (!hasGroup(store, 'folderFiles')) return undefined;
+    const proved: StoreWith<'folderFiles'> = store;
+    return (ctx) => {
+      const globalTarget = globalTargetOf(ctx);
+      return globalTarget === undefined
+        ? undefined
+        : (args) => run({ ...toolCall(ctx), args, store: proved, globalTarget });
+    };
+  };
+}
+
+const TOOL_HANDLERS: ReadonlyMap<string, ToolBinder> = new Map<string, ToolBinder>([
+  ['hippo_recall', anyStore(runRecallTool)],
+  ['hippo_assemble', anyStore(runAssembleTool)],
+  ['hippo_drill', anyStore(runDrillTool)],
+  ['hippo_predict_baserate', needing(['objects'], runPredictBaserateTool)],
+  ['hippo_remember', anyStore(runRememberTool)],
+  ['hippo_outcome', anyStore(runOutcomeTool)],
+  ['hippo_context', anyStore(runContextTool)],
+  ['hippo_status', anyStore(runStatusTool)],
+  ['hippo_learn', needing(['lessonWrites'], runLearnTool)],
+  ['hippo_conflicts', needing(['conflicts'], runConflictsTool)],
+  ['hippo_resolve', needing(['conflicts'], runResolveTool)],
   ['hippo_share', localTool(runShareTool)],
   ['hippo_peers', localTool(runPeersTool)],
 ]);
@@ -98,27 +131,12 @@ function toolsOn(store: HippoStore): ReadonlyMap<string, StoreTool> {
   const known = toolsByStore.get(store);
   if (known !== undefined) return known;
   const tools = new Map<string, StoreTool>();
-  for (const [name, entry] of TOOL_HANDLERS) {
-    const bound = boundTool(entry, store);
+  for (const [name, bind] of TOOL_HANDLERS) {
+    const bound = bind(store);
     if (bound !== undefined) tools.set(name, bound);
   }
   toolsByStore.set(store, tools);
   return tools;
-}
-
-function boundTool(entry: ToolEntry, store: HippoStore): StoreTool | undefined {
-  if (entry.needs === undefined) {
-    const { run } = entry;
-    return (ctx) => (args) => run({ ...toolCall(ctx), args });
-  }
-  if (!hasGroup(store, entry.needs)) return undefined;
-  const { run } = entry;
-  return (ctx) => {
-    const globalTarget = globalTargetOf(ctx);
-    return globalTarget === undefined
-      ? undefined
-      : (args) => run({ ...toolCall(ctx), args, store, globalTarget });
-  };
 }
 
 /** The transport's context is trusted: its hippoRoot, store and tenantId were bound by the host

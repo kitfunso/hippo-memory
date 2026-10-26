@@ -228,7 +228,7 @@ async function orderAndFit(
   return fitBudget(
     ordered,
     options.budget ?? DEFAULT_RECALL_BUDGET,
-    options.minResults ?? 1,
+    options.minResults,
     options.cost,
   );
 }

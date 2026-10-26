@@ -8,7 +8,9 @@ export type GlobalTargetGroup =
   | 'sharing'
   | 'folderFiles'
   | 'embeddingIndex'
-  | 'captures';
+  | 'captures'
+  | 'lessonWrites'
+  | 'rejections';
 
 /** A store and the folder its root opened it from; the folder is for the root's own config read. */
 export interface FolderStore<S extends HippoStore = HippoStore> {
@@ -20,7 +22,7 @@ export interface StoreReach {
   readonly hasLocal: boolean; // the primary store has a project of its own, or has no local files
   readonly isGlobal: boolean; // the primary root is the operator's global store
   readonly shared: boolean; // a store serving many people, so the operator's global store stays out
-  readonly global?: FolderStore; // set only when readable
+  readonly global?: FolderStore<StoreWith<'learning'>>; // set only when readable; churn marks its rows stale
   // The primary store has local files, whose folder `hippo embed` and sleep reach.
   readonly isHippoDb?: boolean;
   // Where share, promote and sync write; perhaps not created.

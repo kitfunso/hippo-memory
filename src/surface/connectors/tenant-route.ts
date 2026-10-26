@@ -1,6 +1,6 @@
 // The tenant a webhook lands in, by one rule for every connector: its routing rows, else the host's
 // on an install that registered none.
-import type { HippoStore } from '../../base/ports/store-index.js';
+import type { ConnectorStore } from './ingest.js';
 import type { RouteQuery } from '../../base/ports/store/connectors.js';
 
 /** The host's tenant, which the root resolved, and the root's allow-unknown escape for the
@@ -13,7 +13,7 @@ export interface RouteFallback {
 /** The tenant the routing rows name; with no match, the host's when no row could have matched (a
  * single-tenant install) or `allowUnknown` escapes, else null (fail closed). */
 export async function resolveTenant(
-  store: HippoStore,
+  store: ConnectorStore,
   query: RouteQuery,
   { hostTenant, allowUnknown }: RouteFallback,
 ): Promise<string | null> {

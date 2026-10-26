@@ -4,7 +4,7 @@
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { LAYERS, type Chip } from '../../api/dashboard/live.js';
 import { SORT_KEYS, type MemoryQuery } from '../../api/dashboard/queries.js';
-import { isJsonObject, isJsonString, tryParseJson } from '../../base/util/json.js';
+import { isJsonObject, isJsonString, knownOption, tryParseJson } from '../../base/util/json.js';
 
 /** A request field failed validation; the server answers 400 with this plain message. */
 export class ParamError extends BadRequestError {}
@@ -31,7 +31,7 @@ function integerParam(
   return n;
 }
 
-function oneOf<T extends string>(
+function choiceParam<T extends string>(
   params: URLSearchParams,
   name: string,
   allowed: readonly T[],
@@ -39,7 +39,7 @@ function oneOf<T extends string>(
 ): T {
   const raw = params.get(name);
   if (raw === null) return fallback;
-  const hit = allowed.find((a) => a === raw);
+  const hit = knownOption(allowed, raw);
   if (hit === undefined) throw new ParamError(`${name} must be one of ${allowed.join(', ')}`);
   return hit;
 }
@@ -87,14 +87,14 @@ function optionalSearch(params: URLSearchParams): string | null {
 export function parseMemoryQuery(params: URLSearchParams): MemoryQuery {
   const [amin, amax] = rangeParam(params, 'amin', 'amax');
   const [smin, smax] = rangeParam(params, 'smin', 'smax');
-  const sort = oneOf(params, 'sort', SORT_KEYS, 'strength');
+  const sort = choiceParam(params, 'sort', SORT_KEYS, 'strength');
   return {
     offset: integerParam(params, 'offset', { fallback: 0, min: 0, max: Number.MAX_SAFE_INTEGER }),
     limit: integerParam(params, 'limit', { fallback: LIMIT_DEFAULT, min: 1, max: LIMIT_MAX }),
     sort,
     // Weakest first by default, like the mockup; retrievals starts with the most.
-    dir: oneOf(params, 'dir', ['asc', 'desc'], sort === 'retrievals' ? 'desc' : 'asc'),
-    chip: oneOf(params, 'chip', CHIPS, 'all'),
+    dir: choiceParam(params, 'dir', ['asc', 'desc'], sort === 'retrievals' ? 'desc' : 'asc'),
+    chip: choiceParam(params, 'chip', CHIPS, 'all'),
     layers: layersParam(params),
     brush: { amin, amax, smin, smax },
     q: optionalSearch(params),

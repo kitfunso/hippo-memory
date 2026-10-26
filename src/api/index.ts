@@ -36,8 +36,9 @@ export {
   requireHostAdmin,
 } from './types.js';
 export type { Actor, Context, ContextReach, EntryContext, GlobalInReach } from './types.js';
-export { remember } from './memories/remember.js';
+export { remember, rememberUntrusted } from './memories/remember.js';
 export type {
+  ConnectorRememberOptions,
   GatedRememberOptions,
   RememberLocal,
   RememberOptions,
@@ -140,9 +141,8 @@ export type {
   ProjectSummary,
   RepairResult,
 } from './objects/projects.js';
-export { rawArchive, promote, supersede } from './memories/promote.js';
+export { rawArchive, rawArchiveForEvent, promote, supersede } from './memories/promote.js';
 export type {
-  ArchiveRawOptions,
   ArchiveRawResult,
   PromoteResult,
   SupersedeOverrides,

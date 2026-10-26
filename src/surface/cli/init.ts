@@ -42,6 +42,7 @@ import {
 import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
 import { appendHookBlock, HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks-install/instructions.js';
 import { HIPPO_DIR } from '../../base/util/agent-homes.js';
+import { SEED_DAYS_SCAN, SEED_DAYS_SINGLE } from './flag-defaults.js';
 
 // An unreadable or vanished folder is expected while scanning; any other failure is worth a line.
 const QUIET_SCAN_ERRORS: ReadonlySet<string> = new Set(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR']);
@@ -223,7 +224,7 @@ async function initScannedRepos(scanDir: string, tenantId: string, flags: CliFla
   console.log(`Found ${repos.length} repositories:\n`);
 
   const globalRoot = initGlobalFirst();
-  const seedDays = numberFlag(flags, 'days') ?? 365;
+  const seedDays = numberFlag(flags, 'days') ?? SEED_DAYS_SCAN;
   const machine = currentMachine();
   const agentImport = emptyReport();
   const learn = !boolFlag(flags, 'no-learn');
@@ -263,7 +264,7 @@ async function initGlobalOnly(tenantId: string, flags: CliFlags): Promise<void> 
 
 async function seedFromGitHistory(hippoRoot: string, tenantId: string): Promise<void> {
   if (!isGitRepo(processGit, process.cwd())) return;
-  const seedDays = 30;
+  const seedDays = SEED_DAYS_SINGLE;
   console.log(`\n   Seeding memories from last ${seedDays} days of git history...`);
   const { added, skipped } = await learnFromRepo({
     hippoRoot,

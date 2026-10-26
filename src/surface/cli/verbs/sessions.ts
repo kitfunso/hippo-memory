@@ -1,6 +1,7 @@
 // Continuity, transfer, capture and agent-hook verbs, in `hippo help` order.
 
-import { DEFAULT_LEARN_DAYS } from '../../../base/util/limits.js';
+import { DEFAULT_LEARN_DAYS, SESSION_EVENT_LIMIT } from '../../../base/util/limits.js';
+import { AUTO_SHARE_MIN_SCORE } from '../../../domain/sharing/share.js';
 import { boolFlag } from '../flag-values.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 
@@ -43,7 +44,7 @@ export const SESSION_VERBS = {
     session show           Show recent events for a session or task
       --id <session-id>
       --task <task>
-      --limit <n>          Event limit (default: 8)
+      --limit <n>          Event limit (default: ${SESSION_EVENT_LIMIT})
       --json               Output as JSON
     session latest         Show latest task snapshot + events
       --id <session-id>   Filter by session
@@ -89,6 +90,7 @@ export const SESSION_VERBS = {
     ],
   }),
   card: verb(() => import('../card.js'), 'handleCard', {
+    needs: ['cards'],
     // Every card subcommand's flags together; card.ts then refuses the ones its subcommand does not
     // read.
     flags: {
@@ -187,6 +189,7 @@ export const SESSION_VERBS = {
     ],
   }),
   learn: verb(() => import('../transfer.js'), 'handleLearn', {
+    needs: ['lessonWrites'],
     scoped: true,
     flags: { switches: ['git'], values: ['repos'], numbers: ['days'] },
     usage: [
@@ -217,7 +220,7 @@ export const SESSION_VERBS = {
     --force                Share even if transfer score is low
     --auto                 Auto-share all high-transfer-score memories
     --dry-run              Preview what would be shared
-    --min-score <n>        Minimum transfer score (default: 0.6)`,
+    --min-score <n>        Minimum transfer score (default: ${AUTO_SHARE_MIN_SCORE})`,
     ],
   }),
   peers: verb(() => import('../transfer.js'), 'handlePeers', {

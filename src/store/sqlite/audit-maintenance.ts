@@ -323,6 +323,8 @@ function applyPlan(
   });
 }
 
+/** Preview by default; apply backs the database up, then moves certain defects `protect` lets go
+ * to dormant storage. `db` is opened without running migrations, read-only for a preview. */
 function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): QualityRepairResult {
   const root = files.hippoRoot;
   const initial = withTrialScope(db, 'quality_repair_plan', () => plannedResult(db, root, run));
@@ -345,16 +347,6 @@ function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): Qual
     );
   }
   return { ...result, warnings };
-}
-
-/** Preview by default; apply backs the database up, then moves certain defects `protect` lets go
- * to dormant storage. `db` is opened without running migrations, read-only for a preview. */
-function repairAutomaticMemories(
-  db: DatabaseSyncLike,
-  files: StoreFiles,
-  opts: { tenantId: string; protect: RepairProtection; apply?: boolean },
-): QualityRepairResult {
-  return repairOn(db, files, opts);
 }
 
 /** Applies the repair once per store, so stores that predate the quality gate are cleaned on
@@ -401,7 +393,7 @@ export function sqliteAuditMaintenance({ on, files }: Handles): AuditMaintenance
     repairQuality: (tenantId, apply, protect) =>
       answered(() =>
         withUnmigratedDb(files.hippoRoot, !apply, (db) =>
-          repairAutomaticMemories(db, files, { tenantId, apply, protect }),
+          repairOn(db, files, { tenantId, apply, protect }),
         ),
       ),
     repairQualityOnce: (tenantId, protect) =>

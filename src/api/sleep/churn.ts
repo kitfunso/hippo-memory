@@ -55,8 +55,7 @@ export function markChurnStaleInReach(
   const { global } = ctx.reach ?? {};
   const stores: ChurnStore[] = [{ root: opts.root, store: ctx.store }];
   if (global !== undefined && global.root !== opts.root) {
-    // SAFETY: a reach's global store is opened by sqliteReach as hippo.db, which sets every group.
-    stores.push({ root: global.root, store: global.store as StoreWith<'learning'> });
+    stores.push({ root: global.root, store: global.store });
   }
   return markChurnStale(ctx, stores, opts);
 }

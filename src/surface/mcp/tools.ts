@@ -7,7 +7,12 @@ import {
 } from '../../base/rank/search-types.js';
 import { DEFAULT_ASSEMBLE_BUDGET, DEFAULT_FRESH_TAIL_COUNT } from '../../api/assemble.js';
 import { DEFAULT_DRILL_DOWN_LIMIT, MAX_DRILL_DOWN_DEPTH } from '../../api/objects/drill-down.js';
-import { DEFAULT_LEARN_DAYS, MAX_ID_LEN, MAX_LIST_LIMIT } from '../../base/util/limits.js';
+import {
+  DEFAULT_LEARN_DAYS,
+  MAX_FRESH_RAW,
+  MAX_ID_LEN,
+  MAX_LIST_LIMIT,
+} from '../../base/util/limits.js';
 import { DEFAULT_CONFIG } from '../../base/config/config.js';
 
 // ── Tool definitions ──
@@ -60,13 +65,12 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'number',
           description:
             'When > 0, surface the last N kind=raw rows tagged isFreshTail=true regardless of query match. Useful ' +
-            'for "what did I just see" continuity. Capped at 200.',
+            `for "what did I just see" continuity. Capped at ${MAX_FRESH_RAW}.`,
         },
         fresh_tail_session_id: {
           type: 'string',
           description:
-            'Restrict the fresh-tail window to a specific session. Without this, fresh-tail is tenant-wide (legacy ' +
-            'v1.5.2 behaviour, pre-v1.6.3 default).',
+            'Restrict the fresh-tail window to a specific session. Without this, fresh-tail is tenant-wide.',
         },
         summarize_overflow: {
           type: 'boolean',
@@ -86,7 +90,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'string',
           maxLength: MAX_ID_LEN,
           description:
-            `Optional session id (v1.7.4). When set AND (tenant, session) has active goals, ` +
+            `Optional session id. When set AND (tenant, session) has active goals, ` +
             `applies the dlPFC goal-stack boost to the ranked memories before formatting. ` +
             `Mirrors fresh_tail_session_id shape (${MAX_ID_LEN}-char cap).`,
         },
@@ -171,7 +175,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
           minimum: 1,
           maximum: MAX_DRILL_DOWN_DEPTH,
           description:
-            `v0.30 / E5: walk N levels down (default 1 = direct children only). Higher values include children of ` +
+            `Walk N levels down (default 1 = direct children only). Higher values include children of ` +
             `children. Token budget remains GLOBAL across levels. Hard cap ${MAX_DRILL_DOWN_DEPTH}.`,
         },
       },

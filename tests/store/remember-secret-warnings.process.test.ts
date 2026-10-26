@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { remember } from '../../src/api/index.js';
+import { remember, rememberUntrusted } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
@@ -40,7 +40,7 @@ describe('api.remember', () => {
   });
 
   it('redacts untrusted text and warns', async () => {
-    const result = await remember(ctx(), { content: TYPED, untrusted: true });
+    const result = await rememberUntrusted(ctx(), { content: TYPED });
     expect(result.warnings).toEqual([expect.stringContaining('redacted')]);
     expect(loadAllEntries(root, 'default')[0].content).not.toContain(GHP);
   });

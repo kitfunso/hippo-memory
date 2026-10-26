@@ -21,7 +21,7 @@ const DEFAULT_REBUILD_CAP = 20;
 const CLUSTER_JACCARD_MIN = 0.5;
 
 /** Sleep's store: the summary reads and writes, and the row writes every store has. */
-type DagStore = StoreWith<'consolidation'>;
+type DagStore = StoreWith<'consolidation' | 'lessonWrites'>;
 
 /** The summary options plus the config's default half-life, which new summaries start on. */
 export type DagBuildOptions = DagSummaryOptions & { baseHalfLifeDays: number; now: Date };

@@ -79,7 +79,10 @@ export interface LearnResult {
 type LessonCounts = Pick<LearnResult, 'added' | 'skipped' | 'rejected' | 'invalidations'>;
 
 /** Learn from `repoPath`'s last `days` of commits into the caller's tenant. Host admin only. */
-export async function learn(ctx: Context, opts: LearnOptions): Promise<LearnResult> {
+export async function learn(
+  ctx: ContextWith<'lessonWrites'>,
+  opts: LearnOptions,
+): Promise<LearnResult> {
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
@@ -107,7 +110,7 @@ interface QueuedLesson {
 /** Where a batch writes and what it has learned so far: `live` and `keys` follow every write, so
  * a later lesson matches against them. */
 interface LessonBatch {
-  readonly ctx: Context;
+  readonly ctx: ContextWith<'lessonWrites'>;
   readonly writes: LessonWrites;
   readonly live: MemoryEntry[];
   readonly keys: Set<string>;
@@ -139,12 +142,14 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   }
   counts.added += landed.length;
   if (!batch.full) return;
-  if (landed.length > 0) await writes.bumpRemembered(landed.length);
-  const { embedderFor, clock } = ctx.infra;
+  if (landed.length > 0) await ctx.store.bumpRemembered(landed.length);
+  const { embedderFor, clock, failureNotices } = ctx.infra;
+  const { store, config } = ctx;
   const target = {
-    store: ctx.store,
-    embeddings: ctx.config.embeddings,
+    store,
+    embeddings: config.embeddings,
     embedderFor,
+    failureNotices,
     strength: strengthOf(ctx),
     clock,
   };
@@ -227,7 +232,7 @@ async function scanTenant(
 }
 
 async function writeLessons(
-  ctx: Context,
+  ctx: ContextWith<'lessonWrites'>,
   lessons: readonly string[],
   opts: LearnOptions,
   config: HippoConfig,
@@ -268,7 +273,7 @@ interface OpenedLessonBatch {
 }
 
 async function openLessonBatch(
-  ctx: Context,
+  ctx: ContextWith<'lessonWrites'>,
   lessons: readonly string[],
   opts: LearnOptions,
 ): Promise<OpenedLessonBatch> {
@@ -314,7 +319,7 @@ export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
 /** `hippo invalidate`: weakens the caller's tenant's memories that reference `target.from`, or
  * only the one `options.onlyId` names. */
 export async function memoryInvalidate(
-  ctx: ContextWith<'learning'>,
+  ctx: ContextWith<'learning' | 'lessonWrites'>,
   target: InvalidationTarget,
   options: InvalidationOptions,
 ): Promise<InvalidationResult> {

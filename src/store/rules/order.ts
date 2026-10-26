@@ -1,6 +1,5 @@
 // The row orders the adapter keeps, each written once: hippo.db sorts by its ORDER BY text, JS
 // callers with the comparator built from the same keys.
-import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 
 /** Byte order, as hippo.db compares text; JavaScript's own string order differs above the basic
@@ -55,7 +54,6 @@ export const FRESH_RAW_ORDER: readonly OrderKey<Keyed>[] = [
 
 export const oldestFirst = comparing(STORE_ORDER);
 export const byIdOrder = comparing(BY_ID_ORDER);
-export const freshRawOrder = comparing(FRESH_RAW_ORDER);
 
 /** The dormant list: newest set aside first, the id breaking a tie. */
 export const DORMANT_ORDER: readonly OrderKey<{
@@ -91,10 +89,4 @@ const idOf = <R>(walk: DescendingKeyset<R>, row: R): string | number =>
 /** The comparator of a (key, id) descending walk. */
 export function newestFirst<R>(walk: DescendingKeyset<R>): (a: R, b: R) => number {
   return (a, b) => byBytes(walk.key(b), walk.key(a)) || idOrder(walk, b, idOf(walk, a));
-}
-
-/** Whether `row` comes after `after` in the walk, as `(key, id) < (?, ?)` reads it. */
-export function isBelow<R>(walk: DescendingKeyset<R>, row: R, after: KeysetPosition): boolean {
-  const byKey = byBytes(walk.key(row), String(after.key));
-  return byKey < 0 || (byKey === 0 && idOrder(walk, row, after.id) < 0);
 }

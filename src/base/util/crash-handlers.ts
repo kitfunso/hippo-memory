@@ -9,10 +9,13 @@ export interface Shutdown {
   readonly boundMs: number;
 }
 
+/** A stream that never drains must not hold the exit open. */
+const FLUSH_CAP_MS = 1000;
+
 function afterFlush(leave: () => void): void {
   let pending = 2;
   // The cap is cleared once both streams drain, so `leave` runs once.
-  const cap = setTimeout(leave, 1000);
+  const cap = setTimeout(leave, FLUSH_CAP_MS);
   cap.unref();
   const done = (): void => {
     if (--pending !== 0) return;

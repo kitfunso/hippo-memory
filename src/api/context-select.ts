@@ -443,14 +443,10 @@ async function searchBothStores(
     entries: { local: pools.local.entries, global: pools.global.entries },
     vectorCandidates: contextVectorSpec(ctx, plan, admit),
     options: {
+      ...engineSettings(ctx, plan),
       budget: left,
       minResults,
       cost: cost && ((r) => price(r.entry, isGlobalHit(r.entry))),
-      scope: plan.activeScope,
-      runtime: ctx.config.runtime,
-      cwd: ctx.infra.machine.cwd,
-      switches: ctx.infra.evalSwitches,
-      now: plan.now,
     },
   });
   return merged.map((r) => ({
@@ -459,6 +455,17 @@ async function searchBothStores(
     tokens: price(r.entry, isGlobalHit(r.entry)),
     isGlobal: isGlobalHit(r.entry),
   }));
+}
+
+/** What both context engine calls rank under, built once so a new ranking input reaches each. */
+function engineSettings(ctx: Context, plan: ContextPlan) {
+  return {
+    scope: plan.activeScope,
+    runtime: ctx.config.runtime,
+    cwd: ctx.infra.machine.cwd,
+    switches: ctx.infra.evalSwitches,
+    now: plan.now,
+  };
 }
 
 // A local pool row is local by construction; sync keeps a global row's id on its local copy, so
@@ -536,14 +543,10 @@ async function searchLocalRows(
     pool: localEntries,
     physics: usePhysicsCtx ? ctxConfig.physics : null,
     options: {
+      ...engineSettings(ctx, plan),
       budget: left,
       minResults,
       cost: localCost,
-      scope: plan.activeScope,
-      runtime: ctx.config.runtime,
-      cwd: ctx.infra.machine.cwd,
-      switches: ctx.infra.evalSwitches,
-      now: plan.now,
       vectorCandidates,
     },
   });

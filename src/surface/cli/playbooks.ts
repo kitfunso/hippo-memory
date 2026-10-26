@@ -1,7 +1,7 @@
 // First-class object verbs for processes, policies and skills.
 
 import { policiesInForce, skillsExport } from '../../api/objects/object-kinds.js';
-import type { Context } from '../../api/types.js';
+import type { ContextWith } from '../../api/types.js';
 import type { Policy, Process, Skill } from '../../base/records/object-types.js';
 import { flagValueless, nonEmptyStringFlag, repeatedFlag, type CliFlags } from './flag-values.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -82,7 +82,11 @@ function printPolicyRow(p: Policy): void {
   if (p.changeSummary) console.log(`    change: ${p.changeSummary}`);
 }
 
-async function policyAsOf(ctx: Context, args: string[], flags: CliFlags): Promise<void> {
+async function policyAsOf(
+  ctx: ContextWith<'objects'>,
+  args: string[],
+  flags: CliFlags,
+): Promise<void> {
   const dateRaw = args[1];
   if (!dateRaw) {
     fail('Usage: hippo policy asof <iso-date> [--name "<policy>"]');
@@ -161,7 +165,7 @@ function printSkillRow(s: Skill): void {
   if (s.changeSummary) console.log(`    change: ${s.changeSummary}`);
 }
 
-async function skillExport(ctx: Context): Promise<void> {
+async function skillExport(ctx: ContextWith<'objects'>): Promise<void> {
   const md = await skillsExport(ctx);
   if (!md) {
     console.log('No active skills.');

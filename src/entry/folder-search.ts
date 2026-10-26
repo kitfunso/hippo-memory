@@ -22,7 +22,8 @@ import { loadConfig } from '../host/config-file.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { rankPhysics, type PhysicsSearchOptions } from '../domain/search/physics-search.js';
 import type { VectorSource } from '../domain/search/vector.js';
-import { evalNow, evalRun, evalSwitches } from '../infra/eval-switches.js';
+import { evalNow, evalSwitches } from '../infra/eval-switches.js';
+import { entryInfra } from '../surface/entry-infra.js';
 import type { EvalSwitches } from '../base/memory/eval-switches.js';
 
 /** A published ranker's options under the environment's eval switches and clock, unless the
@@ -98,7 +99,7 @@ export async function embedMemory(hippoRoot: string, entry: MemoryEntry): Promis
     const config = loadConfig(hippoRoot);
     const target = folderEmbedTarget(
       { store, config, embedderFor: resolveEmbeddingProvider },
-      evalRun(),
+      entryInfra(),
     );
     return await embedMemoryInto(target, entry);
   } finally {

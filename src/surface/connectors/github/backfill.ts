@@ -2,7 +2,7 @@
  *  An HWM (high-water mark) is saved only after its stream fully drains, so a crash in stream 2 keeps stream 1.
  *  `repository.private` is left undefined (REST lists omit it), so scopeFromRepository falls through to private. */
 
-import type { Context } from '../../../api/index.js';
+import type { ConnectorContext } from '../ingest.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
 import type {
@@ -117,7 +117,7 @@ interface DrainStreamOptions {
 }
 
 async function drainStream(
-  ctx: Context,
+  ctx: ConnectorContext,
   url0: string,
   options: DrainStreamOptions,
 ): Promise<{ ingested: number; pages: number; maxUpdatedAt: string | null; drained: boolean }> {
@@ -162,7 +162,7 @@ function itemUpdatedAt(item: JsonValue): string | null {
 
 /** True when the item counts toward the stream's ingested total. */
 async function ingestBackfillItem(
-  ctx: Context,
+  ctx: ConnectorContext,
   item: JsonValue,
   evt: IngestEvent,
   updatedAt: string | null,
@@ -269,7 +269,7 @@ function prReviewCommentItemToEvent(
 
 const GITHUB_STREAMS: readonly GitHubStream[] = ['issues', 'issueComments', 'prReviewComments'];
 
-const hwmOf = (ctx: Context, opts: BackfillOptions, stream: GitHubStream): CursorKey => ({
+const hwmOf = (ctx: ConnectorContext, opts: BackfillOptions, stream: GitHubStream): CursorKey => ({
   connector: 'github',
   tenantId: ctx.tenantId,
   repo: opts.repoFullName,
@@ -278,7 +278,7 @@ const hwmOf = (ctx: Context, opts: BackfillOptions, stream: GitHubStream): Curso
 
 /** Each stream's HWM, after a first run's `--since` seeds the ones no run saved. */
 async function resumeFrom(
-  ctx: Context,
+  ctx: ConnectorContext,
   opts: BackfillOptions,
 ): Promise<Record<GitHubStream, string | null>> {
   const events = ctx.store.connectorEvents;
@@ -298,7 +298,7 @@ async function resumeFrom(
 
 /** Drains one stream, then persists its HWM only when the stream ran to the end. */
 async function backfillStream(
-  ctx: Context,
+  ctx: ConnectorContext,
   opts: BackfillOptions,
   sleep: (ms: number) => Promise<void>,
   stream: {
@@ -322,7 +322,10 @@ async function backfillStream(
   return { ingested: res.ingested, pages: res.pages };
 }
 
-export async function backfillRepo(ctx: Context, opts: BackfillOptions): Promise<BackfillResult> {
+export async function backfillRepo(
+  ctx: ConnectorContext,
+  opts: BackfillOptions,
+): Promise<BackfillResult> {
   const sleep = opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const cursors = await resumeFrom(ctx, opts);
   const repository = syntheticRepository(opts.repoFullName);

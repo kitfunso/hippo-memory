@@ -5,7 +5,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { needsHippoDb } from '../_helpers/store-switch.js';
+import { needsHippoDb, ROUTE_GROUPS } from '../_helpers/store-switch.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -240,7 +240,7 @@ describe('HTTP route status table: status and error text per route', () => {
       seeded[key] = entry.id;
     }
     vi.stubEnv('HIPPO_V1_RPS', '0');
-    handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
+    handle = await serveAsAdmin({ hippoRoot: home, port: 0, keep: ROUTE_GROUPS });
   });
 
   afterAll(async () => {
@@ -522,7 +522,7 @@ describe('HTTP route status table under the rate limiter', () => {
   it('throttles /v1 and /mcp but never /health or other paths', async () => {
     const home = makeRoot('route-parity-rl');
     vi.stubEnv('HIPPO_V1_RPS', '0.5');
-    const handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
+    const handle = await serveAsAdmin({ hippoRoot: home, port: 0, keep: ROUTE_GROUPS });
     try {
       expect(await runCases(handle.url, LIMITED)).toEqual(expected(LIMITED));
     } finally {

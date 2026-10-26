@@ -17,6 +17,15 @@ export type AutomaticMemoryDefect =
   | 'too-vague'
   | 'no-specificity';
 
+/** Text shorter than this holds no fact worth keeping. */
+export const MIN_MEMORY_CHARS = 10;
+/** Text shorter than this must name a path, number, name or code to be kept. */
+const SPECIFIC_DETAIL_CHARS = 40;
+/** A line that opens on to, for or and and stays shorter than this is a cut-off clause. */
+const FRAGMENT_MAX_CHARS = 50;
+/** Fewer substantive words than this leave a memory too vague to act on. */
+export const MIN_SUBSTANTIVE_WORDS = 2;
+
 /** `reason` names a defect even when `accepted`: a possible fragment is stored and listed for
  * review. */
 export interface AutomaticMemoryAssessment {
@@ -59,7 +68,7 @@ const ALWAYS_NEVER_TARGET = new RegExp(
 );
 
 /** Short preferences and rules carry a useful relationship even without a path or number. */
-export function hasNoSpecificity(text: string): boolean {
+function hasNoSpecificity(text: string): boolean {
   const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter(
     (a) => !CHAT_ACRONYMS.test(a),
   );
@@ -120,7 +129,7 @@ function isBareCondition(bare: string): boolean {
 function isDanglingAssertion(text: string): boolean {
   const bare = bareText(text);
   // Only a lowercase start is a cut: "To rebuild the index, run ..." opens an instruction.
-  if (/^(?:to|and|for)\s/.test(bare) && bare.length < 50) return true;
+  if (/^(?:to|and|for)\s/.test(bare) && bare.length < FRAGMENT_MAX_CHARS) return true;
   // Prepositions, modals and "is" can end a whole sentence ("the branch it merges into"), so only
   // cut-off endings count.
   if (
@@ -212,14 +221,14 @@ function isRawOutput(text: string): boolean {
 export function assessAutomaticMemory(content: string): AutomaticMemoryAssessment {
   const text = content.trim();
   let reason: AutomaticMemoryDefect | null = null;
-  if (text.length < 10) reason = 'too-short';
+  if (text.length < MIN_MEMORY_CHARS) reason = 'too-short';
   else if (isRoutineReleaseActivity(text)) reason = 'release-activity';
   else if (isRawOutput(text)) reason = 'raw-output';
   else if (isDanglingAssertion(text)) reason = 'sentence-fragment';
   else if (isSubjectlessOutcome(text)) reason = 'subjectless-outcome';
   else if (isPossibleFragment(text)) reason = 'possible-fragment';
-  else if (substantiveWordCount(text) < 2) reason = 'too-vague';
-  else if (text.length < 40 && hasNoSpecificity(text)) reason = 'no-specificity';
+  else if (substantiveWordCount(text) < MIN_SUBSTANTIVE_WORDS) reason = 'too-vague';
+  else if (isShortAndUnspecific(text)) reason = 'no-specificity';
   return { accepted: reason === null || reason === 'possible-fragment', reason };
 }
 
@@ -310,9 +319,14 @@ export function isReusable(entry: Provenance): boolean {
   return !isAutomaticEntry(entry) || !hasCertainDefect(entry);
 }
 
+/** Short text that names no path, number, proper name or code. */
+export function isShortAndUnspecific(text: string): boolean {
+  return text.length < SPECIFIC_DETAIL_CHARS && hasNoSpecificity(text);
+}
+
 /** The person floor's fragment test, on trimmed text. */
 export function isFragment(text: string): boolean {
-  return /^(?:to|for|and) /.test(text) && text.length < 50;
+  return /^(?:to|for|and) /.test(text) && text.length < FRAGMENT_MAX_CHARS;
 }
 
 /** Admission check for text no person typed: capture and compaction items. */
@@ -330,10 +344,10 @@ export function isWorthSurfacing(entry: MemoryEntry): boolean {
   }
   const text = entry.content.trim();
   return (
-    text.length >= 10 &&
+    text.length >= MIN_MEMORY_CHARS &&
     !isReleaseCommitNoise(text) &&
     !isFragment(text) &&
-    substantiveWordCount(text) >= 2 &&
-    !(text.length < 40 && hasNoSpecificity(text))
+    substantiveWordCount(text) >= MIN_SUBSTANTIVE_WORDS &&
+    !isShortAndUnspecific(text)
   );
 }

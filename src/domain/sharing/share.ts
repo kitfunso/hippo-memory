@@ -180,6 +180,7 @@ export async function shareMemory(
       store: global.store,
       embeddings: global.config.embeddings,
       embedderFor: global.embedderFor,
+      failureNotices: options.embed.failureNotices,
       strength: strengthModelFor(options.embed.evalSwitches, global.config.runtime),
       clock: options.embed.clock,
     };
@@ -425,7 +426,7 @@ async function shareCandidates({
  * rejection refusals (0 under `dryRun`). */
 export async function autoShare(
   from: { readonly store: Pick<StoreGroups, 'sharing' | 'folderFiles' | 'reports'> },
-  global: ConfiguredFolder<StoreWith<'sharing' | 'folderFiles' | 'captures'>>,
+  global: ConfiguredFolder<SharingStore & StoreWith<'captures'>>,
   options: {
     minScore?: number;
     dryRun?: boolean;

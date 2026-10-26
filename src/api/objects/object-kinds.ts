@@ -29,8 +29,8 @@ import {
   MAX_SKILL_TRIGGER_LEN,
   skillsMarkdown,
 } from '../../domain/objects/skills.js';
-import type { Context } from '../types.js';
-import { objectsOf, saveSiteOf, taggedFrom, type WriteOrigin } from './objects.js';
+import type { Context, ContextWith } from '../types.js';
+import { saveSiteOf, taggedFrom, type WriteOrigin } from './objects.js';
 
 export type { BriefDigest } from '../../domain/objects/project-briefs.js';
 export type { SaveIncidentOptions } from '../../domain/objects/incidents.js';
@@ -54,13 +54,13 @@ export const OBJECT_CAPS = {
 /** Opens an incident as the caller; a linked memory outside the caller's tenant refuses the
  * whole write. */
 export function incidentOpen(
-  ctx: Context,
+  ctx: ContextWith<'objects'>,
   write: SaveIncidentOptions,
   origin?: WriteOrigin,
 ): Promise<Incident> {
   const { defaultHalfLifeDays } = ctx.config;
   const tagged = taggedFrom(write, origin);
-  return openIncident(objectsOf(ctx), {
+  return openIncident(ctx.store.objects, {
     baseHalfLifeDays: defaultHalfLifeDays,
     tenantId: ctx.tenantId,
     opts: tagged,
@@ -73,11 +73,11 @@ export function incidentOpen(
 
 /** Moves an open incident to resolved as the caller. */
 export function incidentResolve(
-  ctx: Context,
+  ctx: ContextWith<'objects'>,
   id: number,
   resolutionText: string,
 ): Promise<Incident> {
-  return resolveOpenIncident(objectsOf(ctx), {
+  return resolveOpenIncident(ctx.store.objects, {
     tenantId: ctx.tenantId,
     id,
     resolutionText,
@@ -90,32 +90,35 @@ export function incidentResolve(
 
 /** The caller's policies in force at `date`, optionally one policy's versions only. */
 export function policiesInForce(
-  ctx: Context,
+  ctx: ContextWith<'objects'>,
   date: string,
   opts: { readonly name?: string },
 ): Promise<Policy[]> {
-  return policiesAsOf(objectsOf(ctx), ctx.tenantId, date, { name: opts.name });
+  return policiesAsOf(ctx.store.objects, ctx.tenantId, date, { name: opts.name });
 }
 
 /** The caller's active skills as one AGENTS.md block; empty when there are none. */
-export function skillsExport(ctx: Context): Promise<string> {
-  return skillsMarkdown(objectsOf(ctx), ctx.tenantId);
+export function skillsExport(ctx: ContextWith<'objects'>): Promise<string> {
+  return skillsMarkdown(ctx.store.objects, ctx.tenantId);
 }
 
 /** The brief a refresh of `repo` would save, without saving it. */
-export function briefDigest(ctx: Context, repo: string): Promise<BriefDigest> {
-  return briefFromReceipts(objectsOf(ctx), ctx.tenantId, repo);
+export function briefDigest(ctx: ContextWith<'objects'>, repo: string): Promise<BriefDigest> {
+  return briefFromReceipts(ctx.store.objects, ctx.tenantId, repo);
 }
 
 /** Saves a new version of the repo's brief from its receipts, as the caller. */
-export function briefRefresh(ctx: Context, repo: string): Promise<ProjectBrief> {
-  return refreshedBrief(objectsOf(ctx), saveSiteOf(ctx), repo);
+export function briefRefresh(ctx: ContextWith<'objects'>, repo: string): Promise<ProjectBrief> {
+  return refreshedBrief(ctx.store.objects, saveSiteOf(ctx), repo);
 }
 
 /** The active decision whose mirror is `memoryId`, or null: what the CLI's `--supersedes
  * <memory-id>` names. */
-export function decisionIdByMemory(ctx: Context, memoryId: string): Promise<number | null> {
-  return resolveActiveDecisionIdByMemory(objectsOf(ctx), ctx.tenantId, memoryId);
+export function decisionIdByMemory(
+  ctx: ContextWith<'objects'>,
+  memoryId: string,
+): Promise<number | null> {
+  return resolveActiveDecisionIdByMemory(ctx.store.objects, ctx.tenantId, memoryId);
 }
 
 /** Weakens the memory a new decision replaces, once that decision has saved. */

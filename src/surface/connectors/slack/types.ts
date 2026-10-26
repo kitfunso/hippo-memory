@@ -8,12 +8,6 @@ import {
   isJsonNumber,
 } from '../../../base/util/json.js';
 
-export interface SlackUrlVerification {
-  type: 'url_verification';
-  challenge: string;
-  token?: string;
-}
-
 export interface SlackMessageEvent {
   type: 'message';
   subtype?: 'message_deleted' | 'message_changed' | 'channel_join' | string;

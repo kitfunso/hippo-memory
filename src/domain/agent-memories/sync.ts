@@ -420,7 +420,7 @@ async function bumpRemembered(
   report: ImportReport,
 ): Promise<void> {
   try {
-    await store.lessonWrites.bumpRemembered(remembered);
+    await store.bumpRemembered(remembered);
   } catch (err) {
     log.debug('remembered counter not updated', errorFields(err));
     report.warnings.push(`remembered counter not updated: ${errorMessage(err)}`);

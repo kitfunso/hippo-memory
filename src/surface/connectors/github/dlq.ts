@@ -1,4 +1,4 @@
-import type { Context } from '../../../api/index.js';
+import type { ConnectorContext } from '../ingest.js';
 import {
   replayParked,
   type ConnectorDlq,
@@ -41,7 +41,7 @@ export interface ReplayDlqOptions {
 /** Hook the webhook route injects to re-ingest a row, which keeps this module free of every event-type handler.
  *  No `idempotencyKey` field: ingest re-derives it from the parsed event, and a passed-in key could be stale. */
 export type IngestHook = (
-  ctx: Context,
+  ctx: ConnectorContext,
   args: {
     rawPayload: string;
     eventName: string;
@@ -53,7 +53,7 @@ export type IngestHook = (
  * bumps retry_count. No `ingestHook` (dry-run): bumps retry_count, returns `replayed` with
  * memoryId=null. Replays use today's routing. */
 export async function replayGithubDlqEntry(
-  ctx: Context,
+  ctx: ConnectorContext,
   id: number,
   opts: ReplayDlqOptions & { ingestHook?: IngestHook } = {},
 ): Promise<ReplayResult> {

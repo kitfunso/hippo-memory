@@ -3,7 +3,6 @@ import { objectCreate } from '../../../api/objects/objects.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import { sendJson } from '../../http/http-util.js';
 import { type JsonValue, isJsonNumber } from '../../../base/util/json.js';
-import type { AuthedRouteRequest } from '../types.js';
 import {
   parseJsonBody,
   getString,
@@ -12,6 +11,7 @@ import {
 } from '../validation.js';
 import { MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import type { ObjectRouteConfig } from './object-routes.js';
+import type { ObjectRequest } from './kind-routes.js';
 
 const TEXT: RequiredStringRule = { max: MAX_SHORT_FIELD_LEN };
 
@@ -38,7 +38,7 @@ function decisionOptions(body: Record<string, JsonValue>, pathId?: number) {
 
 // Not the shared supersede: this one answers 201 and leaves the missing-row 404 to the store, where
 // the other kinds answer 200 after their own lookup.
-async function handleSupersedeDecision(rr: AuthedRouteRequest, id: number): Promise<void> {
+async function handleSupersedeDecision(rr: ObjectRequest, id: number): Promise<void> {
   const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);
   const decision = await objectCreate(ctx, 'decision', decisionOptions(body, id));

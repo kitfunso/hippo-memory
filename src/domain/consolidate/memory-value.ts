@@ -76,10 +76,6 @@ function computeMvFeatures(entry: MemoryEntry, now: Date, rules: StrengthModel):
   };
 }
 
-function isFiniteWeightValue(value: number): boolean {
-  return Number.isFinite(value);
-}
-
 function isNonEmptyDigestString(value: string): boolean {
   return (value?.length ?? 0) > 0;
 }
@@ -94,7 +90,7 @@ export function validateWeights(
 ): void {
   for (const key of MV_FEATURE_NAMES) {
     const v = weights[key];
-    if (!isFiniteWeightValue(v)) {
+    if (!Number.isFinite(v)) {
       throw new Error(
         `memory-value: weights constant is malformed — "${key}" is not a finite number ` +
           `(src/domain/consolidate/memory-value-weights.ts)`,

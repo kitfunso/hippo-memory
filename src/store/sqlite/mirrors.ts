@@ -25,7 +25,7 @@ import type { LegacyStats } from '../../base/ports/store/reports.js';
 import type { MemoryConflict } from '../../base/ports/store/conflicts.js';
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import type { TaskSnapshot, SessionEvent } from '../../base/ports/store/sessions.js';
-import { serializeEntry } from '../../base/memory/markdown.js';
+import { mirrorDecimal, serializeEntry } from '../../base/memory/markdown.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
@@ -158,10 +158,7 @@ export function writeRecentSessionMirror(
 const conflictMirrorName = (conflict: MemoryConflict): string => `conflict_${conflict.id}.md`;
 
 function writeConflictMirror(conflictDir: string, conflict: MemoryConflict): void {
-  const fm = dumpFrontmatter({
-    ...conflictToWire(conflict),
-    score: Math.round(conflict.score * 10000) / 10000,
-  });
+  const fm = dumpFrontmatter({ ...conflictToWire(conflict), score: mirrorDecimal(conflict.score) });
   const body = [
     '# Memory Conflict',
     '',

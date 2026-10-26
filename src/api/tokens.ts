@@ -33,6 +33,9 @@ export async function recordTokens(
   }
 }
 
+/** Days a token or failure report covers when the caller names none. */
+export const DEFAULT_REPORT_WINDOW_DAYS = 30;
+
 /** Token ledger totals for the tenant over the last `days` days (default 30): tokens sent,
  * skipped as unchanged and re-read, per surface, with session counts and mean tokens per
  * session. */
@@ -50,6 +53,7 @@ export function failureSummary(
 }
 
 function reportWindowStart(days: number | undefined, now: Date): string {
-  const span = days !== undefined && Number.isFinite(days) && days > 0 ? days : 30;
+  const span =
+    days !== undefined && Number.isFinite(days) && days > 0 ? days : DEFAULT_REPORT_WINDOW_DAYS;
   return new Date(now.getTime() - span * DAY_MS).toISOString();
 }

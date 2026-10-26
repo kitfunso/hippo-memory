@@ -166,7 +166,7 @@ async function candidatePartitions(store: StoreWith<'consolidation'>): Promise<P
 }
 
 async function scanPairs(
-  store: StoreWith<'consolidation'>,
+  store: StoreWith<'consolidation' | 'auditMaintenance'>,
   partitions: Partitions,
 ): Promise<DedupPair[]> {
   const losers = [...partitions.values()].flatMap((groups) =>
@@ -180,7 +180,7 @@ async function scanPairs(
  * across (isolation). Strength wins, then retrievals; `threshold` is ignored; `pages` feeds
  * every row in place of the candidates read. */
 export async function deduplicateStore(
-  store: StoreWith<'consolidation'>,
+  store: StoreWith<'consolidation' | 'auditMaintenance'>,
   options: { threshold?: number; dryRun?: boolean; actor?: string; pages?: RowPages } = {},
 ): Promise<DedupResult> {
   // Only current distilled rows compete: raw rows are append-only (the delete trigger would abort
@@ -195,7 +195,7 @@ export async function deduplicateStore(
 
 /** The pairs whose loser was deleted; one store call, one transaction per batch of deletes. */
 async function deletePairs(
-  store: StoreWith<'consolidation'>,
+  store: StoreWith<'consolidation' | 'auditMaintenance'>,
   pairs: readonly DedupPair[],
   actor: string | undefined,
 ): Promise<DedupPair[]> {

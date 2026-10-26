@@ -51,6 +51,14 @@ interface EntryFrontmatterFields {
   origin_project?: FrontmatterValue;
 }
 
+// Four decimal places: enough to tell two strengths apart, short enough to read in a mirror file.
+const MIRROR_SCALE = 10_000;
+
+/** A strength or score as every mirror file prints it. */
+export function mirrorDecimal(value: number): number {
+  return Math.round(value * MIRROR_SCALE) / MIRROR_SCALE;
+}
+
 /** The fields every mirror file carries; serializeEntry adds the optional ones. */
 function entryFrontmatter(wire: MemoryWire): EntryFrontmatterFields {
   return {
@@ -58,7 +66,7 @@ function entryFrontmatter(wire: MemoryWire): EntryFrontmatterFields {
     created: wire.created,
     last_retrieved: wire.last_retrieved,
     retrieval_count: wire.retrieval_count,
-    strength: Math.round(wire.strength * 10000) / 10000,
+    strength: mirrorDecimal(wire.strength),
     half_life_days: wire.half_life_days,
     layer: wire.layer,
     tags: wire.tags,

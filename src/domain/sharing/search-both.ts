@@ -262,7 +262,7 @@ export async function rankBothStores({
   return fitBudget(
     mergeStoreResults(localResults, globalResults, localBump),
     budget,
-    minResults ?? 1,
+    minResults,
     cost,
   );
 }

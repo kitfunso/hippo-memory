@@ -3,13 +3,13 @@
 import { briefDigest, briefRefresh, OBJECT_CAPS } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
 import { sendJson } from '../../http/http-util.js';
-import type { AuthedRouteRequest } from '../types.js';
 import { parseJsonBody, getString, requiredString } from '../validation.js';
 import type { VersionedRouteConfig } from './object-routes.js';
+import type { ObjectRequest } from './kind-routes.js';
 
 const SUMMARY = { max: OBJECT_CAPS.briefSummary };
 
-async function handleRefreshProjectBrief(rr: AuthedRouteRequest): Promise<void> {
+async function handleRefreshProjectBrief(rr: ObjectRequest): Promise<void> {
   const { req, res, ctx } = rr;
   const body = await parseJsonBody(req, ctx);
   const repo = requiredString(body, 'repo', { max: OBJECT_CAPS.repo });

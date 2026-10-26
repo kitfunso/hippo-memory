@@ -12,6 +12,7 @@ import type { ConfigReader } from '../../host/config-file.js';
 import type { CallerState } from '../../api/callers.js';
 import type { SleepQueue } from './sleep-offload.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
+import type { ConnectorStore } from '../connectors/ingest.js';
 
 export interface ServerHandle {
   port: number;
@@ -156,11 +157,14 @@ export interface AuthedRouteRequest extends RouteRequest {
   ctx: Context;
 }
 
-/** A route's store status: the optional group it needs, a `hippoDbOnly` reason, or neither for a
- * route that runs on any store; never both. */
-type StoreStatus =
-  | { storeReady?: Exclude<OptionalGroup, 'folderFiles'>; hippoDbOnly?: never }
-  | { hippoDbOnly: string; storeReady?: never };
+/** A request past the gate whose store boot proved holds the optional groups `G`. */
+export type GroupRequest<G extends OptionalGroup> = AuthedRouteRequest & { ctx: ContextWith<G> };
+
+/** A connector webhook's request, with the connector store boot proved; the handler checks the
+ * sender itself. */
+export interface WebhookRouteRequest extends RouteRequest {
+  readonly store: ConnectorStore;
+}
 
 /** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on
  * loopback, nothing, for a route whose handler checks the sender's signature itself, or the
@@ -171,6 +175,9 @@ export type RouteAuth =
   | 'host-admin-local'
   | 'webhook-signature'
   | 'dashboard-session';
+
+/** The gates a /v1 row's caller passes before its handler runs. */
+type GatedAuth = Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'>;
 
 /** A pattern row's params by name; a `:name(int)` value holds digits only. */
 export type RouteParams = Readonly<Record<string, string>>;
@@ -189,26 +196,40 @@ export type RouteEndpoint<R> =
 
 /** A route as the gate runs it, its store need already settled at boot. */
 export type BoundRoute = { method: string; unported?: true } & (
-  | ({
-      auth: Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'>;
-    } & PathEndpoint<AuthedRouteRequest>)
+  | ({ auth: GatedAuth } & PathEndpoint<AuthedRouteRequest>)
   | ({ auth: 'webhook-signature' } & PathEndpoint<RouteRequest>)
 );
 
-/** A route that needs a folder store; boot hands its handler the store it proved. */
-export interface FolderRoute {
+/** A route that runs on any store, or with a `hippoDbOnly` reason on hippo.db alone. */
+type AnyStoreRoute = {
   method: string;
-  auth: Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'>;
-  storeReady: 'folderFiles';
+  auth: GatedAuth;
+  storeReady?: never;
+  hippoDbOnly?: string;
+} & PathEndpoint<AuthedRouteRequest>;
+
+/** A route that needs the optional group `G`: boot hands its handler the store it proved, or
+ * marks the row 501. */
+export type GroupRouteOf<G extends OptionalGroup> = {
+  method: string;
+  auth: GatedAuth;
+  storeReady: G;
   hippoDbOnly?: never;
-  pattern: string;
-  handler: (
-    r: AuthedRouteRequest & { ctx: ContextWith<'folderFiles'> },
-    params: RouteParams,
-  ) => Promise<void>;
-}
+} & PathEndpoint<GroupRequest<G>>;
+
+/** A route that needs any one optional group. */
+export type GroupRoute = { [G in OptionalGroup]: GroupRouteOf<G> }[OptionalGroup];
+
+/** A connector webhook: boot hands it the connector store it proved, or answers 501 for a store
+ * without one. */
+export type WebhookRoute = {
+  method: string;
+  auth: 'webhook-signature';
+  storeReady?: never;
+  hippoDbOnly?: never;
+} & PathEndpoint<WebhookRouteRequest>;
 
 /** One /v1 route: an exact path or a matchPath pattern, paired with one method's handler. Under
  * another store it runs only with its `storeReady` group; its hippo.db work runs on a worker
  * thread when the store has one. */
-export type Route = (BoundRoute & StoreStatus) | FolderRoute;
+export type Route = AnyStoreRoute | GroupRoute | WebhookRoute;

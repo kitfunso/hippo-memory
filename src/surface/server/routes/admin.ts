@@ -14,7 +14,7 @@ import { readBody, sendJson } from '../../http/http-util.js';
 import { assertCrossTenantAdmin, recheckContextWithAuth } from '../auth.js';
 import { parseCursor } from '../../../api/cursor.js';
 import { pageOf, setNextCursorHeader } from '../cursor.js';
-import type { AuthedRouteRequest, RouteParams } from '../types.js';
+import type { AuthedRouteRequest, GroupRequest, RouteParams } from '../types.js';
 import {
   getString,
   isSetMember,
@@ -124,7 +124,11 @@ export async function handleRevokeAuthKey(
 
 // GET /v1/quarantine?status=&limit=&cursor=: quarantine review queue. quarantineList carries no
 // role gate itself, so its row's admin gate is the check.
-export async function handleListQuarantine({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
+export async function handleListQuarantine({
+  res,
+  ctx,
+  query,
+}: GroupRequest<'quarantine'>): Promise<void> {
   const statusRaw = query.get('status');
   let status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending';
   if (statusRaw !== null) {
@@ -154,7 +158,7 @@ export async function handleListQuarantine({ res, ctx, query }: AuthedRouteReque
 
 // POST /v1/quarantine/:id/approve: admin only; ForbiddenError falls through to mapApiError's 403.
 export async function handleApproveQuarantine(
-  { res, ctx }: AuthedRouteRequest,
+  { res, ctx }: GroupRequest<'quarantine'>,
   { id }: RouteParams,
 ): Promise<void> {
   validateIdSegment(id, 'memory id');
@@ -165,7 +169,7 @@ export async function handleApproveQuarantine(
 
 // POST /v1/quarantine/:id/reject: admin only; ForbiddenError falls through to mapApiError's 403.
 export async function handleRejectQuarantine(
-  { res, ctx }: AuthedRouteRequest,
+  { res, ctx }: GroupRequest<'quarantine'>,
   { id }: RouteParams,
 ): Promise<void> {
   validateIdSegment(id, 'memory id');

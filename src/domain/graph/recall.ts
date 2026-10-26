@@ -7,6 +7,7 @@
  */
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import {
+  DEFAULT_MIN_RESULTS,
   DEFAULT_RECALL_BUDGET,
   type ResultCost,
   type SearchResult,
@@ -356,7 +357,7 @@ function selectWithinBudget(
   opts: GraphExpandOptions,
 ): Set<SearchResult> {
   const budget = opts.budget ?? DEFAULT_RECALL_BUDGET;
-  const minResults = opts.minResults ?? 1;
+  const minResults = opts.minResults ?? DEFAULT_MIN_RESULTS;
   // Budget selection is by score, not position, so a high-value graph hit can beat a low-score
   // lexical distractor; the greedy pack uses `continue`, so the DISPLAY loop emits a hit only under
   // a kept seed. The top --min-results base rows are never evicted; at least one result is kept.

@@ -6,13 +6,13 @@ import { sleepWholeStore } from '../../api/sleep/sleep.js';
 import { autoSleepConsolidate } from '../../api/sleep/auto-sleep.js';
 import { rootInfra } from '../../infra/ports.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
-import { isStoreBusy } from '../../base/ports/store.js';
 import { configReader } from '../../host/config-file.js';
 import { createHost } from '../../host/host.js';
 import { defaultReach, defaultStore, runStoreRequest, saveVectorGraphFile } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { SleepJob, SleepMessage, SleepReply } from './sleep-offload.js';
+import { failureReply } from './failure-reply.js';
 import type { SleepResult } from '../../api/sleep/sleep.js';
 import { contextReach } from '../../api/types.js';
 
@@ -27,15 +27,6 @@ const storeAt = (root: string) => defaultStore(root, evalStoreRules(envLossAvers
 // The child runs one job, so its one root builds the ports and its Host once.
 const childHost = createHost();
 const childInfra = rootInfra(childHost);
-
-function failed<E>(err: E): SleepReply<never> {
-  return {
-    ok: false,
-    busy: isStoreBusy(err),
-    message: errorMessage(err),
-    stack: err instanceof Error ? err.stack : undefined,
-  };
-}
 
 /** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global
  * store. */
@@ -94,7 +85,7 @@ process.once('message', (message) => {
   // The server's own request scope and lock wait, so a busy store answers as it did when sleep ran
   // in the server.
   runStoreRequest(work, 'server')
-    .then((result): SleepReply<JobResult> => ({ ok: true, result }), failed)
+    .then((result): SleepReply<JobResult> => ({ ok: true, result }), failureReply)
     // Exit only once the reply is written, or the parent could see the process end first.
     .then(async (reply) => {
       const code = await sendReply(reply);

@@ -1,6 +1,6 @@
 // First-class object verbs for incidents: open one, resolve it, close it.
 
-import type { Context } from '../../api/types.js';
+import type { ContextWith } from '../../api/types.js';
 import { incidentOpen, incidentResolve } from '../../api/objects/object-kinds.js';
 import { objectClose, objectGet, objectList, objectStates } from '../../api/objects/objects.js';
 import type { Incident } from '../../base/records/object-types.js';
@@ -34,7 +34,7 @@ function printIncidentRow(inc: Incident): void {
   if (inc.context) console.log(`    context: ${inc.context}`);
 }
 
-function incidentList(ctx: Context, flags: CliFlags): Promise<void> {
+function incidentList(ctx: ContextWith<'objects'>, flags: CliFlags): Promise<void> {
   return listObjectsVerb(flags, {
     plural: 'incidents',
     states: objectStates('incident'),
@@ -43,7 +43,7 @@ function incidentList(ctx: Context, flags: CliFlags): Promise<void> {
   });
 }
 
-async function incidentGet(ctx: Context, args: string[]): Promise<void> {
+async function incidentGet(ctx: ContextWith<'objects'>, args: string[]): Promise<void> {
   const id = idArgOrExit(args, 'Usage: hippo incident get <id>', INCIDENT.idLabel);
   const incident = foundOrExit(await objectGet(ctx, 'incident', id), INCIDENT.noun, id);
   console.log(`Incident #${incident.id}`);
@@ -60,7 +60,11 @@ async function incidentGet(ctx: Context, args: string[]): Promise<void> {
   console.log(`  created: ${incident.createdAt}`);
 }
 
-async function resolveIncident(ctx: Context, args: string[], flags: CliFlags): Promise<void> {
+async function resolveIncident(
+  ctx: ContextWith<'objects'>,
+  args: string[],
+  flags: CliFlags,
+): Promise<void> {
   const id = idArgOrExit(
     args,
     'Usage: hippo incident resolve <id> --resolution "<text>"',
@@ -76,7 +80,7 @@ async function resolveIncident(ctx: Context, args: string[], flags: CliFlags): P
   console.log(`Incident #${resolved.id} resolved.`);
 }
 
-function incidentClose(ctx: Context, args: string[]): Promise<void> {
+function incidentClose(ctx: ContextWith<'objects'>, args: string[]): Promise<void> {
   return closeObjectVerb(args, INCIDENT, (id) => objectClose(ctx, 'incident', id));
 }
 
@@ -99,7 +103,11 @@ export async function handleIncident({
   await incidentCreate(ctx, subcommand === 'open' ? (args[1] ?? '') : subcommand, flags);
 }
 
-async function incidentCreate(ctx: Context, incidentText: string, flags: CliFlags): Promise<void> {
+async function incidentCreate(
+  ctx: ContextWith<'objects'>,
+  incidentText: string,
+  flags: CliFlags,
+): Promise<void> {
   if (!incidentText) {
     printError(
       'Usage: hippo incident "<incident>" [--context "<details>"] [--link <memory-id>]...',

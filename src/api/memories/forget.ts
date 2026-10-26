@@ -1,6 +1,10 @@
 // Forget a memory, and reject or unreject a value so it cannot be stored again.
 
-import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
+import {
+  BadRequestError,
+  memoryNotFoundText,
+  NotFoundError,
+} from '../../base/errors/api-errors.js';
 import { rawRemovalRefusal } from '../../base/errors/raw-append-only.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import {
@@ -11,7 +15,7 @@ import {
   type UnrejectOutcome,
 } from '../../domain/trust/reject-flow.js';
 import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
-import { requireHostAdmin, type Context } from '../types.js';
+import { requireHostAdmin, type Context, type ContextWith } from '../types.js';
 import { memoryGet } from './memories.js';
 import { canReadScope, personalScopeOf, scopeReaderOf } from '../../base/scope/recall-scope.js';
 
@@ -40,7 +44,7 @@ export async function removalTarget(
   archive: boolean,
 ): Promise<MemoryEntry> {
   const entry = await memoryGet(ctx, id);
-  if (entry === null) throw new NotFoundError(`memory not found: ${id}`);
+  if (entry === null) throw new NotFoundError(memoryNotFoundText(id));
   const refusal = rawRemovalRefusal(entry, archive);
   if (refusal !== null) throw refusal;
   return entry;
@@ -67,13 +71,16 @@ export interface RejectResult {
  * `unreject`; pass exactly one of `memoryId` or `value`. `memoryId` also removes every live
  * tenant row with that digest (not others' personal rows); `reason` is required. Throws on an
  * unknown id or both/neither. */
-export async function reject(ctx: Context, opts: RejectOptions): Promise<RejectResult> {
+export async function reject(
+  ctx: ContextWith<'rejections'>,
+  opts: RejectOptions,
+): Promise<RejectResult> {
   if (opts.memoryId !== undefined) {
     // Tenant scope: same not-found-shaped denial as forget/promote; rejectValue tenant-checks too,
     // but pre-checking keeps the error message consistent.
     const entry = await memoryGet(ctx, opts.memoryId);
     if (entry === null || !canReadScope(ctx.actor, entry.scope)) {
-      throw new NotFoundError(`memory not found: ${opts.memoryId}`);
+      throw new NotFoundError(memoryNotFoundText(opts.memoryId));
     }
   }
   const result = await applyReject(ctx, opts);
@@ -83,12 +90,18 @@ export async function reject(ctx: Context, opts: RejectOptions): Promise<RejectR
 /** `hippo reject` on the host: every row it removed and the rows that kept their other texts. A
  * personal row by id answers with the personal refusal rather than reject's not-found, as the
  * operator can see that row. */
-export async function rejectOnHost(ctx: Context, opts: RejectOptions): Promise<RejectFlowResult> {
+export async function rejectOnHost(
+  ctx: ContextWith<'rejections'>,
+  opts: RejectOptions,
+): Promise<RejectFlowResult> {
   requireHostAdmin(ctx, 'Rejecting with the removal report');
   return applyReject(ctx, opts);
 }
 
-function applyReject(ctx: Context, opts: RejectOptions): Promise<RejectFlowResult> {
+function applyReject(
+  ctx: ContextWith<'rejections'>,
+  opts: RejectOptions,
+): Promise<RejectFlowResult> {
   return rejectValue(ctx.store, {
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
@@ -101,7 +114,10 @@ function applyReject(ctx: Context, opts: RejectOptions): Promise<RejectFlowResul
 
 /** Lifts the tombstone a digest or unambiguous prefix names, as the caller; a blank one, no
  * match or several come back as the outcome, so a caller can list the candidates. */
-export function liftRejection(ctx: Context, digestOrPrefix: string): Promise<UnrejectOutcome> {
+export function liftRejection(
+  ctx: ContextWith<'rejections'>,
+  digestOrPrefix: string,
+): Promise<UnrejectOutcome> {
   return unrejectValue(ctx.store, {
     tenantId: ctx.tenantId,
     digestOrPrefix,
@@ -110,13 +126,13 @@ export function liftRejection(ctx: Context, digestOrPrefix: string): Promise<Unr
 }
 
 /** Every tombstone of the caller's tenant. */
-export function listRejections(ctx: Context): Promise<RejectedValueRow[]> {
+export function listRejections(ctx: ContextWith<'rejections'>): Promise<RejectedValueRow[]> {
   return listRejectionsForTenant(ctx.store, ctx.tenantId);
 }
 
 /** Deletes a tombstone by exact digest or unambiguous prefix, restoring writability (the only v1
  * escape hatch); throws on blank, no match or several. */
-export async function unreject(ctx: Context, digestOrPrefix: string) {
+export async function unreject(ctx: ContextWith<'rejections'>, digestOrPrefix: string) {
   const outcome = await liftRejection(ctx, digestOrPrefix);
   if (outcome.status === 'not_found') {
     throw new NotFoundError(`no rejected value matches: ${digestOrPrefix}`);

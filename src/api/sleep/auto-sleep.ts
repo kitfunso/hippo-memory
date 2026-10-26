@@ -78,7 +78,10 @@ export async function autoSleepAfterWrite(
 /** What one auto-sleep runs: the consolidation alone, its skipped passes logged by the process
  * that ran it. */
 export async function autoSleepConsolidate(
-  ctx: Pick<ContextWith<'consolidation' | 'learning'>, 'store' | 'config' | 'tenantId' | 'infra'>,
+  ctx: Pick<
+    ContextWith<'consolidation' | 'learning' | 'lessonWrites' | 'auditMaintenance'>,
+    'store' | 'config' | 'tenantId' | 'infra'
+  >,
 ): Promise<ConsolidationResult> {
   const { store, config, tenantId, infra } = ctx;
   const result = await runConsolidation(store, {

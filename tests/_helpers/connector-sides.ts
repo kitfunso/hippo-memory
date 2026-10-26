@@ -2,10 +2,10 @@
 // straight from their tables.
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import type { ConnectorDeadLetter, ConnectorEvent } from '../../src/base/ports/store.js';
-import type { HippoStore } from '../../src/base/ports/store-index.js';
+import type { ConnectorStore } from '../../src/surface/connectors/ingest.js';
 import { auditRowsOn } from './audit-rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import type { StoreSide } from './store-conformance.js';
+import type { FixtureStore, StoreSide } from './store-conformance.js';
 
 /** One connector event log row; the delivery id and event name are GitHub's and null for Slack. */
 export interface LoggedEvent {
@@ -48,13 +48,14 @@ export interface HeldRecord {
 }
 
 /** A store under test with reads of both event logs, Slack's first, and of the quarantine records, oldest first. */
-export interface ConnectorSide extends StoreSide {
+export interface ConnectorSide<S extends ConnectorStore = ConnectorStore> extends StoreSide {
+  readonly store: S;
   readonly events: () => readonly LoggedEvent[];
   readonly records: () => readonly HeldRecord[];
 }
 
 /** A connector side with a read of both dead-letter queues, Slack's first, each oldest first. */
-export interface ConnectorEventsSide extends ConnectorSide {
+export interface ConnectorEventsSide<S extends ConnectorStore = ConnectorStore> extends ConnectorSide<S> {
   readonly letters: () => readonly ParkedLetter[];
 }
 
@@ -85,7 +86,9 @@ export function rowsOf<T>(hippoRoot: string, sql: string): T[] {
 }
 
 /** `store`, hippo.db's by default, with the same reads straight from hippo.db's tables. */
-export function sqliteConnectorSide(hippoRoot: string, store: HippoStore = sqliteStore(hippoRoot)): ConnectorSide {
+export function sqliteConnectorSide(hippoRoot: string): ConnectorSide<FixtureStore>;
+export function sqliteConnectorSide<S extends ConnectorStore>(hippoRoot: string, store: S): ConnectorSide<S>;
+export function sqliteConnectorSide(hippoRoot: string, store: ConnectorStore = sqliteStore(hippoRoot)): ConnectorSide {
   return {
     store,
     auditRows: () => onDb(hippoRoot, (db) => auditRowsOn(db)),
@@ -94,6 +97,14 @@ export function sqliteConnectorSide(hippoRoot: string, store: HippoStore = sqlit
   };
 }
 
-export function sqliteConnectorEventsSide(hippoRoot: string, store?: HippoStore): ConnectorEventsSide {
+export function sqliteConnectorEventsSide(hippoRoot: string): ConnectorEventsSide<FixtureStore>;
+export function sqliteConnectorEventsSide<S extends ConnectorStore>(
+  hippoRoot: string,
+  store: S,
+): ConnectorEventsSide<S>;
+export function sqliteConnectorEventsSide(
+  hippoRoot: string,
+  store: ConnectorStore = sqliteStore(hippoRoot),
+): ConnectorEventsSide {
   return { ...sqliteConnectorSide(hippoRoot, store), letters: () => rowsOf<ParkedLetter>(hippoRoot, LETTERS_SQL) };
 }

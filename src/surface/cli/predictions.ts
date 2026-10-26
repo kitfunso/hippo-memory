@@ -2,7 +2,7 @@
 // the class base rate.
 
 import * as predictionsApi from '../../api/objects/predictions.js';
-import type { Context } from '../../api/types.js';
+import type { ContextWith } from '../../api/types.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../../base/records/prediction.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
@@ -15,7 +15,11 @@ import type { Prediction } from '../../base/ports/store/objects.js';
 const BASERATE_DECIMALS = 3;
 const PREDICTION_NOUN = 'Prediction';
 
-async function predictClose(ctx: Context, args: string[], flags: CliFlags): Promise<void> {
+async function predictClose(
+  ctx: ContextWith<'objects'>,
+  args: string[],
+  flags: CliFlags,
+): Promise<void> {
   const id = idArgOrExit(
     args,
     'Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]',
@@ -45,7 +49,7 @@ async function predictClose(ctx: Context, args: string[], flags: CliFlags): Prom
 }
 
 async function loadPredictionList(
-  ctx: Context,
+  ctx: ContextWith<'objects'>,
   status: string,
   classTag: string,
   limit: number,
@@ -73,7 +77,7 @@ async function loadPredictionList(
   });
 }
 
-async function predictList(ctx: Context, flags: CliFlags): Promise<void> {
+async function predictList(ctx: ContextWith<'objects'>, flags: CliFlags): Promise<void> {
   const classTag = stringFlag(flags, 'class')?.trim() ?? '';
   const status = stringFlag(flags, 'status')?.trim() ?? 'all';
   const limit = parseListLimit(flags);
@@ -97,7 +101,7 @@ async function predictList(ctx: Context, flags: CliFlags): Promise<void> {
   }
 }
 
-async function predictShow(ctx: Context, args: string[]): Promise<void> {
+async function predictShow(ctx: ContextWith<'objects'>, args: string[]): Promise<void> {
   const id = idArgOrExit(args, 'Usage: hippo predict show <id>', 'prediction');
   const pred = foundOrExit(await predictionsApi.predictionById(ctx, id), PREDICTION_NOUN, id);
   console.log(`Prediction #${pred.id}`);
@@ -117,7 +121,7 @@ async function predictShow(ctx: Context, args: string[]): Promise<void> {
   console.log(`  created: ${pred.createdAt}`);
 }
 
-async function predictBaserate(ctx: Context, flags: CliFlags): Promise<void> {
+async function predictBaserate(ctx: ContextWith<'objects'>, flags: CliFlags): Promise<void> {
   // Reference-class / planning-fallacy detector
   const classTag = stringFlag(flags, 'class')?.trim();
   if (!classTag) {
@@ -169,7 +173,11 @@ export async function handlePredict({
   return predictCreate(ctx, subcommand, flags);
 }
 
-async function predictCreate(ctx: Context, claimText: string, flags: CliFlags): Promise<void> {
+async function predictCreate(
+  ctx: ContextWith<'objects'>,
+  claimText: string,
+  flags: CliFlags,
+): Promise<void> {
   if (!claimText) {
     printError(
       'Usage: hippo predict "<claim>" --class <c> [--estimate <v>] [--unit <u>] [--target <YYYY-MM-DD>]',

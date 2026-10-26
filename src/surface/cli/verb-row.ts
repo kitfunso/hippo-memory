@@ -3,6 +3,7 @@
 
 import type { CliFlags, CommandContext } from './flag-values.js';
 import type { VerbFlags } from './flags.js';
+import type { OptionalGroup } from '../../base/ports/store.js';
 
 type Handler = (ctx: CommandContext) => void | Promise<void>;
 
@@ -27,6 +28,9 @@ export interface VerbRow {
    * them last. */
   readonly listedLast?: readonly string[];
   readonly aliases?: readonly string[];
+  /** The optional store groups the verb reaches; on a store without one it refuses before it
+   * opens anything. */
+  readonly needs?: readonly OptionalGroup[];
   /** Runs in a request scope, opening each store once; set on api-backed verbs, as hook verbs
    * open their own. */
   readonly scoped?: true;

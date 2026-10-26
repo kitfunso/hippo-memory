@@ -171,12 +171,7 @@ async function rankByParticles(
       : [];
   const merged = mergeScorePools(physicsResults, classicResults);
   merged.sort(compareScoredResults);
-  return fitBudget(
-    merged,
-    hybrid.budget ?? DEFAULT_RECALL_BUDGET,
-    hybrid.minResults ?? 1,
-    hybrid.cost,
-  );
+  return fitBudget(merged, hybrid.budget ?? DEFAULT_RECALL_BUDGET, hybrid.minResults, hybrid.cost);
 }
 
 /** The caller's vector, else the provider's; null sends the caller to hybridSearch. */

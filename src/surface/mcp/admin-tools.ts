@@ -4,7 +4,12 @@ import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
 import { conflictListOpen, conflictPages, conflictResolve } from '../../api/memories/conflicts.js';
 import { memoryGetTouchable } from '../../api/memories/memories.js';
-import { mcpApiContext, type LocalToolCall, type ToolCall } from './protocol.js';
+import {
+  mcpApiContext,
+  type GroupToolCall,
+  type LocalToolCall,
+  type ToolCall,
+} from './protocol.js';
 import { sharePeers, shareToGlobal } from '../../api/sharing.js';
 import { MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import { boolArg, numberArg, optionalStringArg, stringArg } from './tool-args.js';
@@ -15,14 +20,17 @@ const BASERATE_DECIMALS = 3;
 
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
 
-export async function runPredictBaserateTool({ args, ctx }: ToolCall): Promise<string> {
+export async function runPredictBaserateTool({
+  args,
+  api,
+}: GroupToolCall<'objects'>): Promise<string> {
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no
   // surface can skip it.
   const classTag = stringArg(args, 'class_tag', MAX_ID_LEN).trim();
   if (!classTag) {
     return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
   }
-  const baserate = await predictionBaserate(mcpApiContext(ctx), classTag);
+  const baserate = await predictionBaserate(api, classTag);
   if (baserate.nClosed === 0) {
     return (
       `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) ` +
@@ -68,12 +76,10 @@ export async function runStatusTool({ ctx, config }: ToolCall): Promise<string> 
   ].join('\n');
 }
 
-export async function runConflictsTool(call: ToolCall): Promise<string> {
-  const { ctx } = call;
-  const apiCtx = mcpApiContext(ctx);
+export async function runConflictsTool({ ctx, api }: GroupToolCall<'conflicts'>): Promise<string> {
   const lines: string[] = [];
   for await (const page of conflictPages((p) =>
-    conflictListOpen(apiCtx, { ...p, project: ctx?.project }),
+    conflictListOpen(api, { ...p, project: ctx.project }),
   )) {
     for (const c of page.conflicts) {
       lines.push(
@@ -84,7 +90,7 @@ export async function runConflictsTool(call: ToolCall): Promise<string> {
   return lines.length === 0 ? 'No open conflicts.' : lines.join('\n');
 }
 
-export async function runResolveTool({ args, ctx }: ToolCall): Promise<string> {
+export async function runResolveTool({ args, api }: GroupToolCall<'conflicts'>): Promise<string> {
   const conflictId = numberArg(args, 'conflict_id');
   const keepId = stringArg(args, 'keep', MAX_ID_LEN);
   const forget = boolArg(args, 'forget');
@@ -93,13 +99,7 @@ export async function runResolveTool({ args, ctx }: ToolCall): Promise<string> {
   if (conflictId === undefined || !keepId) return 'Required: conflict_id and keep.';
   let loserId: string;
   try {
-    const apiCtx = mcpApiContext(ctx);
-    ({ loserId } = await conflictResolve(apiCtx, conflictId, {
-      keepId,
-      forget,
-      rejectLoser,
-      reason,
-    }));
+    ({ loserId } = await conflictResolve(api, conflictId, { keepId, forget, rejectLoser, reason }));
   } catch (err) {
     // A missing, unreachable or settled conflict answers alike, so the reply says nothing of a pair
     // the caller cannot touch.

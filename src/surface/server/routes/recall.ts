@@ -14,6 +14,7 @@ import { RECALL_RECORDING } from '../../../api/recall/finish.js';
 import { continuityJson, sessionEventJson, snapshotJson } from '../../../api/continuity-json.js';
 import {
   httpParams,
+  optionalFlagParam,
   parseContextRequest,
   parseRecallRequest,
 } from '../../../api/recall/request.js';
@@ -56,11 +57,7 @@ export async function handleAssembleSession(
   validateIdSegment(id, 'session id');
   const budget = parseNumberParam(query.get('budget'), 'budget');
   const freshTailCount = parseNumberParam(query.get('freshTail'), 'freshTail', true);
-  // Same strict-parse convention as summarize_overflow on /v1/memories:
-  // ?summarizeOlder=banana is false (matches includeContinuity convention).
-  const sumOlderRaw = query.get('summarizeOlder');
-  const summarizeOlder =
-    sumOlderRaw === null ? undefined : sumOlderRaw === '1' || sumOlderRaw === 'true';
+  const summarizeOlder = optionalFlagParam(httpParams(query), 'summarizeOlder');
   const scopeQ = query.get('scope');
   const scope = scopeQ !== null && scopeQ.length > 0 ? scopeQ : undefined;
   const assembleExtra: Pick<

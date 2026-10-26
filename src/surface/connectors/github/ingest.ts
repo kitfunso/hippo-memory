@@ -3,9 +3,9 @@
 // delivery id. The pre-check is only the fast path: the store logs the key in the memory's own
 // transaction, which is what holds when two workers race.
 
-import type { RememberOptions, Context } from '../../../api/index.js';
+import type { RememberOptions } from '../../../api/index.js';
 import type { ConnectorEvent } from '../../../base/ports/store.js';
-import { rememberWithEventLog, type IngestResult } from '../ingest.js';
+import { rememberWithEventLog, type ConnectorContext, type IngestResult } from '../ingest.js';
 import { computeIdempotencyKey } from './signature.js';
 import {
   issueEventToRememberOpts,
@@ -79,7 +79,10 @@ function eventUpdatedAt(event: IngestEvent): string | null {
   }
 }
 
-export async function ingestEvent(ctx: Context, input: IngestInput): Promise<IngestResult> {
+export async function ingestEvent(
+  ctx: ConnectorContext,
+  input: IngestInput,
+): Promise<IngestResult> {
   const events = ctx.store.connectorEvents;
   const idempotencyKey = computeIdempotencyKey(
     eventArtifactRef(input.event),

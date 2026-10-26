@@ -7,7 +7,13 @@ import { join } from 'node:path';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import type { HippoStore, LastRecall, LastRecallWrites, RecallWrites } from '../../src/base/ports/store-index.js';
+import type {
+  HippoStore,
+  LastRecall,
+  LastRecallWrites,
+  RecallWrites,
+  StoreWith,
+} from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { withSqliteAllowed } from '../../src/db/index.js';
@@ -48,7 +54,7 @@ function cliCore(): CliCoreRecall {
         explain: false,
       },
     },
-    show: (ranking) => ({ results: ranking.results, audit: [], tokens: 0 }),
+    show: (ranking) => ({ results: ranking.results, hints: { anchoring: null, availability: null }, tokens: 0 }),
     lastRecall: sqliteStore(hippoRoot).lastRecall,
   };
 }
@@ -105,7 +111,7 @@ describe('retrieve with the CLI ranking core', () => {
     expect(store.kind).toBe('port-only');
     expect(result.results.map((r) => r.id).sort()).toEqual(['mem_core_0', 'mem_core_1']);
     expect(writes).toHaveLength(1);
-    expect(writes[0]!.audit.map((a) => a.op)).toEqual(['recall']);
+    expect(writes[0]!.audit.map((a) => a.op)).toEqual(['recall_anchor_skipped_no_session', 'recall']);
     expect([...(writes[0]!.strengthen?.ids ?? [])].sort()).toEqual(['mem_core_0', 'mem_core_1']);
     expect(recallRowsInHippoDb()).toBe(1);
     expect(writes[0]!.trace?.results).toHaveLength(2);
@@ -136,9 +142,9 @@ describe('retrieve with the CLI ranking core', () => {
       id: 'mem_second_0',
       strength: 1,
     });
-    const inner = portOnlyStore(secondRoot);
+    const inner = portOnlyStore(secondRoot, ['learning']);
     const writes: RecallWrites[] = [];
-    const globalStore: HippoStore = {
+    const globalStore: StoreWith<'learning'> = {
       ...inner,
       finishRecall: async (w) => {
         writes.push(w);

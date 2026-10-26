@@ -4,7 +4,8 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../../base/memory/entry.js';
 import { remember, rawArchive, isPrivateScope, type Context } from '../../api/index.js';
-import type { HippoStore } from '../../base/ports/store.js';
+import type { ContextWith } from '../../api/types.js';
+import type { StoreWith } from '../../base/ports/store.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS, readAll } from '../../base/util/pages.js';
 import { assertClientScope } from '../../base/scope/recall-scope.js';
@@ -29,7 +30,7 @@ import type { InfraPorts } from '../../base/ports/infra.js';
 /** The store a vault import writes to and the batch a dry run's guard probes share; a
  * composition root builds it. */
 export interface VaultTarget {
-  readonly store: HippoStore;
+  readonly store: StoreWith<'rejections'>;
   readonly batch: <T>(run: () => Promise<T>) => Promise<T>;
   readonly infra: InfraPorts;
 }
@@ -62,7 +63,11 @@ export async function importVaultInto(
   return syncVaultFolder(folderPath, options, target, identity);
 }
 
-function vaultContext(hippoRoot: string, tenantId: string, { store, infra }: VaultTarget): Context {
+function vaultContext(
+  hippoRoot: string,
+  tenantId: string,
+  { store, infra }: VaultTarget,
+): ContextWith<'rejections'> {
   return {
     tenantId,
     // Process-local actor; the vault importer is a CLI/SDK ingestion path, not a bearer-authed
@@ -168,7 +173,7 @@ interface VaultTally {
 }
 
 interface VaultImportRun {
-  ctx: Context;
+  ctx: ContextWith<'rejections'>;
   folderPath: string;
   vaultName: string;
   scope: string | null;

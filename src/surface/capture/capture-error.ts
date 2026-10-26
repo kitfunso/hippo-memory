@@ -2,7 +2,7 @@
 // repeats are not stored, because error memories decay slowly and would crowd out real lessons;
 // what is stored stays `observed` until outcome feedback confirms it. Every failure, stored or not,
 // goes to the failure log.
-import type { Context } from '../../api/types.js';
+import type { ContextWith } from '../../api/types.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { createMemory, ERROR_TAG } from '../../base/memory/entry.js';
@@ -17,7 +17,10 @@ import type { JsonValue } from '../../base/util/json.js';
 import type { CaptureErrorOutcome, FailureOutcome } from '../../base/ports/store/rejections.js';
 
 /** The store a failure is logged and its lesson kept in, with that store's config. */
-export type FailureTarget = Pick<Context, 'tenantId' | 'store' | 'config'> & {
+export type FailureTarget = Pick<
+  ContextWith<'failureLog' | 'lessonWrites'>,
+  'tenantId' | 'store' | 'config'
+> & {
   readonly infra: Pick<InfraPorts, 'clock'>;
 };
 

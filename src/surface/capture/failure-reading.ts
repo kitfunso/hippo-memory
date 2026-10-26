@@ -135,8 +135,8 @@ export function lessonFromFailure(
 export interface FailureReport {
   /** The payload's tool name; null when it named none. */
   tool: string | null;
-  /** Scrubbed for sharing, then cut to at most 200 chars; null when the payload had no readable
-   * error. */
+  /** Scrubbed for sharing, then cut to at most FAILURE_TEXT_MAX_CHARS; null when the payload had
+   * no readable error. */
   text: string | null;
   /** Why it is not stored; null for a lesson. */
   skip: Exclude<CaptureErrorOutcome, 'stored' | 'duplicate'> | null;

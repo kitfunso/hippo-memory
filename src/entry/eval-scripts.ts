@@ -3,14 +3,14 @@
 import { folderEmbedTarget, type EmbedTarget } from '../domain/search/embed-memories.js';
 import { hybridSearch as rankHybrid, type HybridRankOptions } from '../domain/search/hybrid.js';
 import { outcomeMultiplier as outcomeNudge } from '../domain/search/boosts.js';
-import { evalNow, evalRun, evalSwitches, isOutcomeFastAblated } from '../infra/eval-switches.js';
+import { evalNow, evalSwitches, isOutcomeFastAblated } from '../infra/eval-switches.js';
 // Frozen eval scripts set HIPPO_FAKE_NOW per simulated session and read the clock and the
 // recall-boost switch here.
 export { evalNow, isRecallBoostAblated } from '../infra/eval-switches.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
-import type { HippoStore } from '../base/ports/store.js';
+import { requireGroups, type HippoStore } from '../base/ports/store.js';
 import { judgeOver, type JudgeOptions, type Judgment } from '../infra/judgment.js';
 import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { httpOver } from '../infra/http.js';
@@ -26,7 +26,8 @@ import type {
 } from '../api/index.js';
 import { ingestEvent as ingestGithubEvent } from '../surface/connectors/github/ingest.js';
 import { ingestMessage as ingestSlackMessage } from '../surface/connectors/slack/ingest.js';
-import { withEntryInfra } from '../surface/entry-infra.js';
+import { CONNECTOR_GROUPS, type ConnectorContext } from '../surface/connectors/ingest.js';
+import { entryInfra, withEntryInfra } from '../surface/entry-infra.js';
 
 // The target a folderIndex builds carries the embedder, so embedAll needs no wiring of its own.
 export { embedAll } from '../domain/search/embed-memories.js';
@@ -40,7 +41,7 @@ export { scriptRerankers as getReranker };
 export function folderIndex(
   folder: Omit<ConfiguredFolder<HippoStore>, 'embedderFor'>,
 ): EmbedTarget {
-  return folderEmbedTarget({ ...folder, embedderFor: resolveEmbeddingProvider }, evalRun());
+  return folderEmbedTarget({ ...folder, embedderFor: resolveEmbeddingProvider }, entryInfra());
 }
 
 /** The domain hybridSearch under the environment's eval switches and clock, with no folder
@@ -100,7 +101,16 @@ export function remember(
 export const retrieve = filled(api.retrieve);
 export const retrieveRanking = filled(api.retrieveRanking);
 export const retrieveWithCliCore = filled(api.retrieveWithCliCore);
-export const ingestEvent = filled(ingestGithubEvent);
-export const ingestMessage = filled(ingestSlackMessage);
+/** A connector ingest on the store its script opened; a store without the connector groups
+ * refuses before it writes. */
+function connector<A extends unknown[], R>(
+  fn: (ctx: ConnectorContext, ...args: A) => R,
+): (ctx: EntryContext, ...args: A) => R {
+  return filled<A, R>((ctx, ...args) =>
+    fn({ ...ctx, store: requireGroups(ctx.store, CONNECTOR_GROUPS) }, ...args),
+  );
+}
+export const ingestEvent = connector(ingestGithubEvent);
+export const ingestMessage = connector(ingestSlackMessage);
 export { adminActor, goalPush, outcome } from '../api/index.js';
 export type { EntryContext as Context } from '../api/index.js';

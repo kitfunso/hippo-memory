@@ -17,7 +17,7 @@ export class SleepRows {
 
   constructor(
     private readonly store: Pick<
-      StoreWith<'consolidation'>,
+      StoreWith<'consolidation' | 'auditMaintenance'>,
       'entriesByIds' | 'consolidation' | 'auditMaintenance'
     >,
     private readonly preview: ReadonlyMap<string, number>,

@@ -25,9 +25,10 @@ export function bound<G>(on: OnHandle, bodies: Bodies<G>, open?: HandleOpener): 
   // SAFETY: Object.keys lists the own keys of the bodies, which are the keys of G by the Bodies
   // mapping.
   for (const key of Object.keys(bodies) as (keyof G)[]) {
-    // Widened for apply: each body has its own argument list.
+    // Typed as Function so that apply can pass each body its own argument list.
     const body: Function = bodies[key];
-    // Inline, as a helper's frames would push the caller out of a stack's ten.
+    // Built here, not in a helper: an error stack keeps only 10 frames, and helper frames would
+    // push the caller out.
     const method = (...args: never[]) => {
       try {
         return Promise.resolve(on((db) => body.apply(undefined, [db, ...args]), open));

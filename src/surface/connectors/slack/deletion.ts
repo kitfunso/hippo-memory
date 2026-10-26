@@ -1,5 +1,6 @@
-import { rawArchive, type Context } from '../../../api/index.js';
+import { rawArchiveForEvent } from '../../../api/index.js';
 import type { ConnectorEvent } from '../../../base/ports/store.js';
+import type { ConnectorContext } from '../ingest.js';
 
 export interface DeletionInput {
   teamId: string;
@@ -18,7 +19,7 @@ export interface DeletionResult {
 /** Handles Slack `message_deleted`. The store logs the event in the archive's own transaction,
  * so a crash cannot leave a retry answering `not_found` where `duplicate` is due. */
 export async function handleMessageDeleted(
-  ctx: Context,
+  ctx: ConnectorContext,
   input: DeletionInput,
 ): Promise<DeletionResult> {
   const events = ctx.store.connectorEvents;
@@ -36,13 +37,7 @@ export async function handleMessageDeleted(
     await events.markEventSeen(event);
     return { status: 'not_found', memoryId: null };
   }
-  await rawArchive(
-    ctx,
-    memoryId,
-    `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`,
-    {
-      event,
-    },
-  );
+  const reason = `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`;
+  await rawArchiveForEvent(ctx, memoryId, reason, event);
   return { status: 'archived', memoryId };
 }

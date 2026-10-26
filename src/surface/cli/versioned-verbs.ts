@@ -3,7 +3,7 @@
 
 import { errorMessage } from '../../base/util/log.js';
 import type { ObjectByKind } from '../../base/records/object-types.js';
-import type { Context } from '../../api/types.js';
+import type { ContextWith } from '../../api/types.js';
 import {
   objectClose,
   objectCreate,
@@ -67,7 +67,7 @@ export interface VersionedKind<K extends VersionedKindName, B> {
   /** A subcommand only this kind has. */
   readonly extra?: {
     readonly sub: string;
-    readonly run: (ctx: Context, args: string[], flags: CliFlags) => Promise<void>;
+    readonly run: (ctx: ContextWith<'objects'>, args: string[], flags: CliFlags) => Promise<void>;
   };
 }
 
@@ -107,7 +107,7 @@ export function versionedVerbs<K extends VersionedKindName, B>(
 }
 
 async function getVersion<K extends VersionedKindName, B>(
-  ctx: Context,
+  ctx: ContextWith<'objects'>,
   kind: VersionedKind<K, B>,
   args: string[],
 ): Promise<void> {
@@ -119,7 +119,7 @@ async function getVersion<K extends VersionedKindName, B>(
 }
 
 async function createVersion<K extends VersionedKindName, B>(
-  ctx: Context,
+  ctx: ContextWith<'objects'>,
   kind: VersionedKind<K, B>,
   key: string,
   flags: CliFlags,
@@ -136,7 +136,7 @@ async function createVersion<K extends VersionedKindName, B>(
 }
 
 async function supersedeVersion<K extends VersionedKindName, B>(
-  ctx: Context,
+  ctx: ContextWith<'objects'>,
   kind: VersionedKind<K, B>,
   args: string[],
   flags: CliFlags,

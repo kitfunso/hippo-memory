@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { remember, type Actor } from '../../src/api/index.js';
+import { remember, rememberUntrusted, type Actor } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { handleRemember } from '../../src/surface/cli/remember.js';
@@ -101,7 +101,7 @@ describe('remember with personal', () => {
 
   it('personal with untrusted throws a plain error, never a quarantine row', async () => {
     const fn = async (): Promise<void> => {
-      await remember(ctxFor(ownerA), { content: 'note', personal: true, untrusted: true });
+      await rememberUntrusted(ctxFor(ownerA), { content: 'note', personal: true });
     };
     await expect(Promise.resolve().then(fn)).rejects.toThrow(Error);
     expect((await refusal(fn)).status).toBe(500);

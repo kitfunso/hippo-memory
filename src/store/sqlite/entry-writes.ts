@@ -14,6 +14,7 @@ import {
   RejectedValueError,
   ConflictError,
   CrossTenantIdError,
+  memoryNotFoundText,
   NotFoundError,
 } from '../../base/errors/api-errors.js';
 import { markSummaryDirtyInTx, markSummariesDirtyInTx } from './summary-dirty.js';
@@ -248,6 +249,12 @@ export function writeEntryMirrors(hippoRoot: string, entry: MemoryEntry): void {
   mirrorBestEffort(`${entry.id}.md`, () => writeMarkdownMirror(hippoRoot, entry));
 }
 
+/** No ids, or a run that ablates the recall boost: nothing to strengthen, so no handle opens and
+ * no scope starts. */
+function strengthensNothing(ids: readonly string[], opts: StrengthenOptions): boolean {
+  return ids.length === 0 || opts.recallBoostAblated;
+}
+
 /** strengthenRetrieved on an open handle in its own write scope, a savepoint inside a caller's
  * transaction, so a recall's last writes share one handle. */
 export function strengthenRetrievedInOwnTx(
@@ -256,7 +263,7 @@ export function strengthenRetrievedInOwnTx(
   opts: StrengthenOptions,
   rules: StoreModel,
 ): Set<string> {
-  if (ids.length === 0 || opts.recallBoostAblated) return new Set();
+  if (strengthensNothing(ids, opts)) return new Set();
   try {
     return withWriteScope(db, 'strengthen_retrieved', () =>
       strengthenRetrievedOn(db, ids, opts, rules),
@@ -280,7 +287,7 @@ export function strengthenRetrieved(
   opts: StrengthenOptions,
   rules: StoreModel,
 ): Set<string> {
-  if (ids.length === 0 || opts.recallBoostAblated) return new Set();
+  if (strengthensNothing(ids, opts)) return new Set();
   let db: DatabaseSyncLike;
   try {
     db = bindHandleClock(openHippoDb(hippoRoot), rules.clock);
@@ -314,7 +321,7 @@ export function strengthenRetrievedOn(
   rules: StoreModel,
 ): Set<string> {
   const found = new Set<string>();
-  if (ids.length === 0 || opts.recallBoostAblated) return found;
+  if (strengthensNothing(ids, opts)) return found;
   const byId = readEntriesByIds(db, ids, opts.tenantId);
   const live = [...new Set(ids)].flatMap((id) => byId.get(id) ?? []);
   const updated = markRetrieved(live, rules.clock(), rules.strength);
@@ -556,7 +563,7 @@ export function archiveRaw(
 }
 
 function notFound(id: string): NotFoundError {
-  return new NotFoundError(`memory not found: ${id}`);
+  return new NotFoundError(memoryNotFoundText(id));
 }
 
 /** Another tenant's row, or one out of reach, answers as missing, so a caller learns nothing
@@ -564,7 +571,7 @@ function notFound(id: string): NotFoundError {
 function assertMayChange(db: DatabaseSyncLike, target: EntryTarget, id: string): void {
   const reach = readMemoryReach(db, id);
   const own = reach?.tenantId === target.tenantId ? reach : undefined;
-  assertWriteRight(targetReader(target), own, id, `memory not found: ${id}`);
+  assertWriteRight(targetReader(target), own, id, memoryNotFoundText(id));
 }
 
 /** The refusal row lands after `write` has rolled back, in a fresh implicit transaction the

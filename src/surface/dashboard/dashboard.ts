@@ -1,8 +1,7 @@
 // The dashboard's JSON API behind the Health view and the Board; surface/server/dashboard-routes.ts
 // maps each path here.
 import type * as http from 'node:http';
-import type { Context } from '../../api/index.js';
-import type { DashboardRouteRequest } from '../server/dashboard-types.js';
+import type { DashboardContext, DashboardRouteRequest } from '../server/dashboard-types.js';
 import { readBody, sendJson } from '../http/http-util.js';
 import { MAX_LIST_LIMIT } from '../../base/util/limits.js';
 import { encodeCursor, parseCursor } from '../../api/cursor.js';
@@ -76,7 +75,7 @@ export async function cardRoute(r: DashboardRouteRequest, { id }: Params): Promi
   );
 }
 
-type Action = (ctx: Context, body: ActionBody) => Promise<ActionResult>;
+type Action = (ctx: DashboardContext, body: ActionBody) => Promise<ActionResult>;
 
 // Nothing runs until the content type and the body pass; a committed write then moves the snapshot
 // id before the reply.

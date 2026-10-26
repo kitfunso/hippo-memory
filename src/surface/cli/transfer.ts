@@ -29,7 +29,6 @@ import { pickWrites } from './memory-writes.js';
 import {
   cliApiContext,
   cliBatch,
-  cliImportFiles,
   cliInitGlobal,
   cliInfra,
   cliRequest,
@@ -38,6 +37,7 @@ import {
   type CliContext,
 } from './api-context.js';
 import { printError } from './output.js';
+import { defaultImportFiles } from '../open-store.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { requireInit, learnFromRepo, type LearnFromRepoOptions } from './shared.js';
 import { fmt } from './print.js';
@@ -247,7 +247,7 @@ async function importIntoStore(run: ImportRun): Promise<void> {
     tenantId,
     target: {
       root: targetRoot,
-      files: cliImportFiles(targetRoot),
+      files: defaultImportFiles(targetRoot),
       batch: cliBatch,
       clock: cliInfra().clock,
     },

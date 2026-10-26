@@ -71,7 +71,7 @@ export async function sharePeers(
 /** Copies the global rows the caller's store lacks into it; other projects' rows only with
  * `includeCrossProject`. */
 export async function syncFromGlobal(
-  ctx: ContextWith<'sharing' | 'folderFiles'>,
+  ctx: ContextWith<'sharing' | 'folderFiles' | 'lessonWrites' | 'rejections'>,
   opts: { readonly includeCrossProject: boolean },
 ): Promise<number> {
   const local = { store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor };

@@ -10,12 +10,7 @@ import { failureHash, failureReport } from '../../src/surface/capture/failure-re
 import { COMPACTION_ITEM_MAX_CHARS } from '../../src/base/util/compaction-items.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import {
-  bindSessionOwner,
-  captureFailureForCaller,
-  saveCompactionItemsForCaller,
-  type Context,
-} from '../../src/server.js';
+import { bindSessionOwner, captureFailureForCaller, saveCompactionItemsForCaller } from '../../src/server.js';
 import {
   ITEMS,
   LESSON,
@@ -38,6 +33,7 @@ import {
   whileLocked,
   withDb,
   writtenRows,
+  type CallerContext,
 } from '../_helpers/compaction-callers.js';
 
 useCallerStore();
@@ -45,7 +41,7 @@ useCallerStore();
 describe('saveCompactionItemsForCaller', () => {
   it('writes with ownerOrSubject as actor and the project as origin', async () => {
     expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
-    const unowned: Context = {
+    const unowned: CallerContext = {
       store: sqliteStore(root),
       config: loadConfig(root),
       tenantId: TENANT,

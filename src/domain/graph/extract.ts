@@ -375,7 +375,7 @@ function resultOf(derived: DerivedGraph, skipped: number): ExtractResult {
 /** Idempotent rebuild of the tenant's graph from its consolidated objects, in one transaction; safe to re-run.
  *  Returns the derived counts and which types hit the per-type cap. */
 export async function extractGraph(
-  store: StoreWith<'graphRebuild'>,
+  store: StoreWith<'graphRebuild' | 'objects'>,
   tenantId: string,
 ): Promise<ExtractResult> {
   assertTenantId('extractGraph', tenantId);
@@ -387,7 +387,7 @@ export async function extractGraph(
 /** extractGraph for sleep: diffs outside the lock, then applies in transactions of about `budget.holdMs` with a pause
  *  between them. A run stopped between chunks leaves a mixed graph that the next run's diff finishes. */
 export async function extractGraphChunked(
-  store: StoreWith<'graphRebuild'>,
+  store: StoreWith<'graphRebuild' | 'objects'>,
   tenantId: string,
   budget: WriteBudget = WRITE_BUDGET,
 ): Promise<ExtractResult> {
@@ -396,7 +396,7 @@ export async function extractGraphChunked(
 }
 
 async function rebuildGraph(
-  store: StoreWith<'graphRebuild'>,
+  store: StoreWith<'graphRebuild' | 'objects'>,
   tenantId: string,
   budget: WriteBudget,
 ): Promise<ExtractResult> {
