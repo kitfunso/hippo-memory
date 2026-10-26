@@ -10,10 +10,8 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { apiCtx, testReach } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
-
-oneRequestPerTest();
 
 // Every MCP tool takes tenant and client from its own context, so one caller can never read, share or score another's memories.
 
@@ -51,8 +49,8 @@ describe('mcp tenant + client-key isolation', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    removeAfterRequest(home);
-    removeAfterRequest(globalHome);
+    removeDir(home);
+    removeDir(globalHome);
   });
 
   // ---- Test 1: last-shown list keyed by clientKey --------------------------

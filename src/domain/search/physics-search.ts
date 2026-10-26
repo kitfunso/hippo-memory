@@ -101,7 +101,7 @@ export async function rankPhysics(
   if (options.asOf) return hybridSearch(query, entries, hybrid);
 
   // Shared with every hybrid ranking below, so a provider that stalls here is not waited on a second time.
-  const queryEmbedDeadline = startQueryEmbedDeadline(options.runtime?.queryEmbedTimeoutMs);
+  const queryEmbedDeadline = startQueryEmbedDeadline(options);
   const queryVector = await physicsQueryVector(query, source, queryEmbedDeadline, options.queryEmbedding);
   if (!queryVector) return hybridSearch(query, entries, { ...hybrid, queryEmbedDeadline });
   const pool = currentEntries(

@@ -6,16 +6,14 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { refineOne } from '../_helpers/refine-one.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function tmpStore(): string {
   const dir = makeRoot('refine');
   return dir;
 }
 function cleanup(dir: string): void {
-  removeAfterRequest(dir);
+  removeDir(dir);
 }
 
 /** A fetch stub that returns a canned Claude-shaped JSON response. */

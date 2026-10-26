@@ -21,9 +21,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { envRuntimeSettings } from '../../src/base/util/env.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -54,7 +52,7 @@ describe('fresh-tail policy', () => {
     vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', undefined);
   });
   afterEach(() => {
-    removeAfterRequest(root);
+    removeDir(root);
   });
 
   it('back-compat: env unset, freshTailCount > 0, no sessionId → tenant-wide rows, no throw', async () => {

@@ -10,9 +10,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { closePrediction, loadAllEntries } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 const QUERY = 'the migration effort will take 3 days';
 const DETECTED = '[detected: "will take 3 days"]';
@@ -65,7 +63,7 @@ describe('hippo recall with no matching memory keeps the planning-fallacy hint',
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    removeAfterRequest(root);
+    removeDir(root);
   });
 
   it('--json returns no results and still carries planningFallacyHint', async () => {

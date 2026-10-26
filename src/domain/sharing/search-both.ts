@@ -226,7 +226,7 @@ export async function rankBothStores(
     runtime: options.runtime,
     cwd: options.cwd,
     vectorCandidates,
-    queryEmbedDeadline: startQueryEmbedDeadline(options.runtime?.queryEmbedTimeoutMs),
+    queryEmbedDeadline: startQueryEmbedDeadline(options),
   };
   const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
   const localResults = await hybridSearch(query, entries.local, { ...side(false), source: sources.local });

@@ -17,11 +17,8 @@ import { countMatching, peakRowsRead, recordStatements, recordStatementsAsync } 
 import { makeRoot } from '../_helpers/make-root.js';
 import { seedRows } from '../_helpers/seed-rows.js';
 import type { EntryCursor } from '../../src/base/ports/store/types.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 const ID_PAGE_READ = 'SELECT id, created FROM memories';
 

@@ -13,7 +13,9 @@ import {
   setMeta,
   withWriteScope,
   pruneConsolidationRuns,
+  type OpenOptions,
 } from '../../db/index.js';
+import type { StoreAt } from '../../db/connect.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { type HippoIndex } from './rows.js';
@@ -36,12 +38,13 @@ export interface StoreModel {
 
 /** The folder a store keeps its mirror files in, beside hippo.db, with the model its root opened it with; an adapter
  * hands it on and never reads it. `host` keeps the folder's project walk and shared flag for the store's life. */
-export interface StoreFiles extends StoreModel {
-  readonly hippoRoot: string;
+export interface StoreFiles extends StoreModel, StoreAt {
   readonly host: Host;
+  /** What each open of the store passes: its grant and its lock wait. */
+  readonly opens: OpenOptions;
 }
 
-export type HandleOpener = (hippoRoot: string) => DatabaseSyncLike;
+export type HandleOpener = (hippoRoot: string, opts: OpenOptions) => DatabaseSyncLike;
 
 /** One call on a handle of the store's own, closed after; `open` defaults to a bare handle, `openStore` also sets up
  * the mirror folders. */
@@ -52,12 +55,9 @@ export type OnHandleAsync = <T>(
   open?: HandleOpener,
 ) => Promise<T>;
 
-/** An opener that waits on a locked store for `busyWaitMs` in place of the default wait. */
-export function waitingOpener(
-  busyWaitMs: number | undefined,
-  open: (hippoRoot: string, opts?: { busyWaitMs?: number }) => DatabaseSyncLike = openHippoDb,
-): HandleOpener {
-  return (hippoRoot) => open(hippoRoot, { busyWaitMs });
+/** An opener that waits on a locked store for `busyWaitMs` in place of the store's own wait. */
+export function waitingOpener(busyWaitMs: number | undefined, open: HandleOpener = openHippoDb): HandleOpener {
+  return (hippoRoot, opts) => open(hippoRoot, { ...opts, busyWaitMs });
 }
 
 /** What an adapter gets of the store it serves: the openers and the files beside hippo.db, never the folder itself. */

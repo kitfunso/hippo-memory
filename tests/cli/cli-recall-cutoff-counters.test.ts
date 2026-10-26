@@ -41,9 +41,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 /** `hippo <args>` run in this process from `cwd` against `globalRoot`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, globalRoot: string, ...args: string[]): Promise<string> {
@@ -102,7 +100,7 @@ describe('printRecall candidate accounting closes', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    if (env?.cwd) removeAfterRequest(env.cwd);
+    if (env?.cwd) removeDir(env.cwd);
   });
 
   it.each([
@@ -204,7 +202,7 @@ describe('BUDGET-driven truncation is counted (the measured failure)', () => {
   let env: TestEnv;
   afterEach(() => {
     vi.unstubAllEnvs();
-    if (env?.cwd) removeAfterRequest(env.cwd);
+    if (env?.cwd) removeDir(env.cwd);
   });
 
   // THE GAP THIS FILE ORIGINALLY MISSED. Every other test here passes
@@ -238,7 +236,7 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    if (env?.cwd) removeAfterRequest(env.cwd);
+    if (env?.cwd) removeDir(env.cwd);
   });
 
   it('prints "Cutoff:" naming the dropped count when --limit truncates the result set', async () => {

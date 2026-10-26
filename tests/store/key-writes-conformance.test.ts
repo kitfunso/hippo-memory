@@ -15,10 +15,7 @@ import {
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { OWNED_SCOPE, OWNER, seedOwnedKeys, type OwnedKeys } from '../_helpers/owned-keys.js';
-
-oneRequestPerTest();
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const EXPIRES = '2026-04-01T12:00:05.000Z';

@@ -12,9 +12,6 @@ import {
   writeEntry,
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
 
 let root: string;
 const indexPath = (): string => path.join(root, 'index.json');

@@ -19,9 +19,6 @@ import {
   type GroupCall,
   type TwoTenantFixture,
 } from '../_helpers/store-conformance.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
 
 const at = (minute: number): string => new Date(Date.UTC(2026, 2, 1, 0, minute)).toISOString();
 

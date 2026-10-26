@@ -24,10 +24,8 @@ import { cliConfig } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -60,7 +58,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
   });
 
   afterEach(() => {
-    removeAfterRequest(home);
+    removeDir(home);
   });
 
   it('env=1, no session_id, fresh_tail_count > 0 → throws typed RecallContractError to the transport', async () => {
@@ -180,7 +178,7 @@ describe('mcp hippo_recall fresh tail on a shared store', () => {
   });
 
   afterEach(() => {
-    removeAfterRequest(shared);
+    removeDir(shared);
   });
 
   it("keeps the tail to the caller's project, with or without a session id", async () => {

@@ -23,7 +23,7 @@ export interface VerbRow {
   /** Help blocks the full listing prints after every verb's own; `hippo <verb> --help` prints them last. */
   readonly listedLast?: readonly string[];
   readonly aliases?: readonly string[];
-  /** Runs in a request scope, opening each store once; set on api-backed verbs, as hook verbs open their own. */
+  /** Runs on a session of its own, opening each store once; set on api-backed verbs, as hook verbs open their own. */
   readonly scoped?: true;
   /** Routine verbs after which a previously installed codex wrapper is repaired (never first-installed). */
   readonly repairsCodexWrapper?: true;

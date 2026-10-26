@@ -28,10 +28,8 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
-
-oneRequestPerTest();
 
 function ctx(home: string): FullContext {
   return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
@@ -77,7 +75,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   });
 
   afterEach(() => {
-    removeAfterRequest(home);
+    removeDir(home);
   });
 
   it('api.recall denies acme:private:demo to a no-scope caller', async () => {

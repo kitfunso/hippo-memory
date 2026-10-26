@@ -7,11 +7,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, writeEntriesTogether, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { calculateStrength } from '../../src/entry/memory.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 const roots: string[] = [];
 
@@ -23,7 +21,7 @@ function newRoot(): string {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
 
 describe('strengthenRetrieved', () => {

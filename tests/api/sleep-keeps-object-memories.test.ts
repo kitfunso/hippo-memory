@@ -23,11 +23,9 @@ import {
   readEntry,
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { saveDecision } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 const roots: string[] = [];
 
@@ -39,7 +37,7 @@ function newRoot(): string {
 }
 
 afterEach(() => {
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
 
 const ctxFor = (hippoRoot: string): FullContext =>

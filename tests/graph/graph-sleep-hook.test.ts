@@ -39,12 +39,10 @@ import {
   loadEntities,
   loadRelations,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -68,7 +66,7 @@ function newCtx(): TestCtx {
     hippoRoot,
     ctx,
     restore: () => {
-      removeAfterRequest(tmpDir);
+      removeDir(tmpDir);
     },
   };
 }

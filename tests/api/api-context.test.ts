@@ -26,9 +26,7 @@ import { remember, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -44,7 +42,7 @@ function tmpHome() {
   return {
     home,
     restore: () => {
-      removeAfterRequest(home);
+      removeDir(home);
     },
   };
 }

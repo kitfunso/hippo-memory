@@ -139,6 +139,7 @@ export async function extractRememberedFacts(
     const found = await extractFacts(entry.content, {
       llm,
       model: extraction.model,
+      signal: ctx.signal,
       onError: (msg) => {
         failures.push(msg);
       },

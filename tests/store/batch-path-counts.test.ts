@@ -18,12 +18,9 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether, loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
 import { seedRows } from '../_helpers/seed-rows.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
-
-oneRequestPerTest();
 
 const FULL_ROW = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`;
 /** A full-row read of every row in the store, or of every current distilled row: no id, tenant or parent filter. */

@@ -23,9 +23,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 
-oneRequestPerTest();
 import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
@@ -38,7 +37,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   try {
-    removeAfterRequest(home);
+    removeDir(home);
   } catch {
     /* best-effort */
   }

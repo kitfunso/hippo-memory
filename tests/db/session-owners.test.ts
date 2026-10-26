@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { openHippoDb, closeHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { bindSessionOwner, type Context } from '../../src/server.js';
@@ -31,9 +31,9 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-function ctx(owner: string, tenantId = 'default'): Context {
+function ctx(owner: string, tenantId = 'default', busyWaitMs?: number): Context {
   return {
-    store: sqliteStore(home),
+    store: sqliteStore(home, { busyWaitMs }),
     config: loadConfig(home),
     tenantId,
     actor: { subject: `api_key:hk_${owner}`, role: 'member', owner },
@@ -90,12 +90,8 @@ describe('bindSessionOwner', () => {
     holder.exec('BEGIN IMMEDIATE');
     try {
       // Another connection holds the write lock, so a rebind that asked for it would fail after the short wait.
-      await expect(
-        runWithRequestStores(() => bindSessionOwner(ctx('alice'), 's1'), { busyWaitMs: 50 }),
-      ).resolves.toBeUndefined();
-      await expect(
-        runWithRequestStores(() => bindSessionOwner(ctx('alice'), 's2'), { busyWaitMs: 50 }),
-      ).rejects.toThrow();
+      await expect(bindSessionOwner(ctx('alice', 'default', 50), 's1')).resolves.toBeUndefined();
+      await expect(bindSessionOwner(ctx('alice', 'default', 50), 's2')).rejects.toThrow();
     } finally {
       holder.exec('ROLLBACK');
       closeHippoDb(holder);

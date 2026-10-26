@@ -24,11 +24,9 @@ import {
   readEntry,
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 import { DAY_MS } from '../../src/base/util/time.js';
-
-oneRequestPerTest();
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
@@ -65,7 +63,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
 
 describe('consolidate never deletes a raw row', () => {

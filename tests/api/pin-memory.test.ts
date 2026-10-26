@@ -8,9 +8,7 @@ import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 let root: string;
 
@@ -19,7 +17,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  removeAfterRequest(root);
+  removeDir(root);
 });
 
 function seed(tenantId = 'default', scope: string | null = null): MemoryEntry {

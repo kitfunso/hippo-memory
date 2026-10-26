@@ -10,10 +10,7 @@ import { listEntriesMentioning, listEntryIdsPage } from '../../src/store/sqlite/
 import type { EntryCursor } from '../../src/base/ports/store/types.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
-
-oneRequestPerTest();
 
 const TEXTS = [
   'the quuxlib client retries twice',

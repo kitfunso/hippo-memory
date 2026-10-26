@@ -24,10 +24,8 @@ import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { remember, sleepWholeStore, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -47,7 +45,7 @@ function tmpHome() {
   return {
     home,
     restore: () => {
-      removeAfterRequest(home);
+      removeDir(home);
     },
   };
 }

@@ -21,10 +21,7 @@ import {
   incidentOf,
   useObjectsConformance,
 } from '../_helpers/objects-conformance.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { copyTree } from '../_helpers/copy-tree.js';
-
-oneRequestPerTest();
 
 useObjectsConformance();
 

@@ -1,7 +1,6 @@
-// What one process keeps between its store connections: the open steps each store has run, the request scopes still
-// open, idle read handles, and file writes held back. A composition root makes one,
-// runs its work inside it, and disposes it from its own exit hook; outside every runtime each open starts fresh.
-import { AsyncLocalStorage } from 'node:async_hooks';
+// What one process keeps between its store connections: the open steps each store has run, the request sessions still
+// open, idle read handles, and file writes held back. A composition root makes one, hands it to the stores it builds,
+// and disposes it from its own exit hook; an open given no runtime starts fresh.
 import * as path from 'node:path';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
@@ -14,20 +13,13 @@ export interface StatsCounts {
   readonly forgotten: number;
 }
 
-/** A request scope the runtime closes when the process exits before the scope settles. */
-interface OpenScope {
+/** A request session the runtime closes when the process exits before the session settles. */
+interface OpenSession {
   close(): void;
 }
 
-// Per pool key: a server answers several requests at once, and each closing scope hands its handle back.
+// Per pool key: a server answers several requests at once, and each closing session hands its handle back.
 const IDLE_PER_KEY = 4;
-
-const runtimes = new AsyncLocalStorage<StoreRuntime>();
-
-/** The runtime the current code runs inside, if any. */
-export function currentStoreRuntime(): StoreRuntime | undefined {
-  return runtimes.getStore();
-}
 
 /** The resolved path of a store's hippo.db, the key every per-store record here uses. */
 export function storeKey(hippoRoot: string): string {
@@ -38,15 +30,10 @@ export class StoreRuntime {
   /** Mirror and stats writes held back to at most one per interval per root. */
   readonly held = new HeldWrites();
   readonly #settled = new Map<string, Set<string>>();
-  readonly #open = new Set<OpenScope>();
+  readonly #open = new Set<OpenSession>();
   readonly #idle = new Map<string, DatabaseSyncLike[]>();
   readonly #background = new Set<string>();
   readonly #stats = new Map<string, StatsCounts>();
-
-  /** Runs `fn` with this runtime as the current one, across its awaits. */
-  run<T>(fn: () => T): T {
-    return runtimes.run(this, fn);
-  }
 
   /** Whether `step` has run to its end on the store at `key`. */
   hasRun(key: string, step: string): boolean {
@@ -64,12 +51,12 @@ export class StoreRuntime {
     else this.#settled.get(key)?.delete(step);
   }
 
-  track(scope: OpenScope): void {
-    this.#open.add(scope);
+  track(session: OpenSession): void {
+    this.#open.add(session);
   }
 
-  untrack(scope: OpenScope): void {
-    this.#open.delete(scope);
+  untrack(session: OpenSession): void {
+    this.#open.delete(session);
   }
 
   /** Whether a checkpointer of this runtime checkpoints the store at `key` off its connections' commits. */
@@ -106,7 +93,7 @@ export class StoreRuntime {
     return undefined;
   }
 
-  /** Keeps `db` for the next scope on `poolKey`; false when the pool is full and the caller closes it. */
+  /** Keeps `db` for the next session on `poolKey`; false when the pool is full and the caller closes it. */
   giveIdle(poolKey: string, db: DatabaseSyncLike): boolean {
     const idle = this.#idle.get(poolKey) ?? [];
     if (idle.length >= IDLE_PER_KEY) return false;
@@ -121,13 +108,13 @@ export class StoreRuntime {
     this.#idle.clear();
   }
 
-  /** Runs the held writes, then closes the open scopes and the idle handles; each step runs if the one before
+  /** Runs the held writes, then closes the open sessions and the idle handles; each step runs if the one before
    * throws. */
   dispose(): void {
     try {
       this.held.flush();
     } finally {
-      for (const scope of this.#open) closeScopeQuietly(scope);
+      for (const session of this.#open) closeSessionQuietly(session);
       this.#open.clear();
       this.closeIdle();
       this.#settled.clear();
@@ -145,10 +132,10 @@ function closeQuietly(db: DatabaseSyncLike): void {
   }
 }
 
-function closeScopeQuietly(scope: OpenScope): void {
+function closeSessionQuietly(session: OpenSession): void {
   try {
-    scope.close();
+    session.close();
   } catch (err) {
-    log.error(`store runtime: a request scope did not close: ${errorMessage(err)}`, errorFields(err));
+    log.error(`store runtime: a request session did not close: ${errorMessage(err)}`, errorFields(err));
   }
 }

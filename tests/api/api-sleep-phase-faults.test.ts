@@ -30,10 +30,8 @@ import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -65,7 +63,7 @@ function newCtx() {
     ctx,
     tmpDir,
     restore: () => {
-      removeAfterRequest(tmpDir);
+      removeDir(tmpDir);
     },
   };
 }

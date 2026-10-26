@@ -34,10 +34,7 @@ import {
   condemnedEntry,
   auditRescueRows,
 } from '../_helpers/memory-value-wiring.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
-
-oneRequestPerTest();
 
 useMemoryValueScratch();
 

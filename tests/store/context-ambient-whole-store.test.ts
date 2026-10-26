@@ -20,10 +20,8 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { evalSwitches } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 let root = '';
 let store = '';
@@ -41,7 +39,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  removeAfterRequest(root);
+  removeDir(root);
 });
 
 describe('ambient summary over the whole store', () => {

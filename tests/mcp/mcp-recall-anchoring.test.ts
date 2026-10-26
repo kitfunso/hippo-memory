@@ -20,10 +20,8 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { cliConfig } from '../../src/surface/cli/api-context.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { createCallerState } from '../../src/api/callers.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -82,7 +80,7 @@ describe('mcp hippo_recall anchoringHint', () => {
   });
 
   afterEach(() => {
-    removeAfterRequest(home);
+    removeDir(home);
   });
 
   it('R2 fires after >=3 recalls with same query on same session (memory_dominance + suppressedByInterference bumped)', async () => {

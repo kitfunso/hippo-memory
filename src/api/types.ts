@@ -63,6 +63,9 @@ export interface Context {
   readonly clientKey?: string;
   /** The machine, model, embedder and rerankers this context reaches past the store, set by its composition root. */
   readonly infra: InfraPorts;
+  /** Aborts when the request passes its deadline, so a call stops starting work nobody waits for. Set by a server or
+   * stdio root; the deadline itself rides in the store, whose worker calls wait on it. */
+  readonly signal?: AbortSignal | undefined;
 }
 
 /** The strength model `ctx` scores by: its root's eval switches with its config's loss-aversion ratio. */

@@ -22,11 +22,9 @@ import {
 } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -193,7 +191,7 @@ describe('MCP hippo_recall ranking', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    for (const h of homes.splice(0)) removeAfterRequest(h);
+    for (const h of homes.splice(0)) removeDir(h);
   });
 
   it('default hybrid mode, default budget', async () => {

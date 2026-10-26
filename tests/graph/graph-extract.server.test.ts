@@ -20,7 +20,6 @@ import {
   openHippoDb,
   closeHippoDb,
   getHippoDbPath,
-  runWithRequestStores,
   withSharedStoreHandles,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
@@ -466,10 +465,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
       await once(holder, 'message');
     });
 
-    const r = await runWithRequestStores(
-      async () => await extractGraphChunked(sqliteStore(home), 'default', holdsOnFirstPause),
-      { busyWaitMs: 250 },
-    );
+    const r = await extractGraphChunked(sqliteStore(home, { busyWaitMs: 250 }), 'default', holdsOnFirstPause);
 
     expect(await exited).toEqual([0]);
     expect(r.entities).toBe(11);

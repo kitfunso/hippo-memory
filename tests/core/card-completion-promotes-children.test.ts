@@ -2,14 +2,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import type { Card } from '../../src/base/records/card.js';
-import { closeHippoDb, openHippoDb, outsideRequestStores } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { cardDetailOf } from '../_helpers/card-detail.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { claimCard, completeCard, createCard, loadCard, reviewCard } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
 
 const TENANT = 'default';
 interface Preparer {
@@ -151,9 +148,7 @@ describe('statements one completion prepares and runs', () => {
     for (const children of [1, 10, 100]) {
       const family = await seedFamily(children);
       // The completion's statements all run inside the call; only its answer waits on the Promise.
-      const log = recordStatements(() =>
-        recordPrepares(() => outsideRequestStores(() => completeCard(root, TENANT, family.parent, 'success'))),
-      );
+      const log = recordStatements(() => recordPrepares(() => completeCard(root, TENANT, family.parent, 'success')));
       expect((await log.result.result)?.promotedChildren).toHaveLength(family.promotable.size);
       runs.push({ prepared: log.result.prepared, run: log.statements });
     }
@@ -171,9 +166,7 @@ describe('statements one completion prepares and runs', () => {
     const parents: string[] = [];
     for (let i = 0; i < 20; i++) parents.push((await createCard(root, TENANT, { title: `parent ${i}` })).id);
     const log = recordStatements(() =>
-      recordPrepares(() =>
-        outsideRequestStores(() => createCard(root, TENANT, { title: 'child', dependsOn: parents })),
-      ),
+      recordPrepares(() => createCard(root, TENANT, { title: 'child', dependsOn: parents })),
     );
     expect(countMatching(log.result.prepared, 'INSERT INTO card_deps')).toBe(1);
     expect(countMatching(log.statements, 'INSERT INTO card_deps')).toBe(20);

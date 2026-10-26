@@ -8,7 +8,6 @@ import {
   getSchemaVersion,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
-import { reproveStoreSchema } from '../../src/db/connect.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/continuity.js';
 import { v54 } from '../../src/db/migrations/v54.js';
 import { tableColumns, tableExists } from '../../src/db/tables.js';
@@ -214,7 +213,6 @@ describe('schema v54', () => {
     withDb((db) => {
       for (const idx of Object.values(REQUEST_INDEXES)) db.exec(`DROP INDEX ${idx}`);
     });
-    reproveStoreSchema(home); // the drop stands for another process's
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       for (const idx of Object.values(REQUEST_INDEXES)) {

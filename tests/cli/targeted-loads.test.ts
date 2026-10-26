@@ -19,11 +19,9 @@ import {
   strengthenRetrieved,
   writeEntry,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 let root: string;
 
@@ -31,7 +29,7 @@ beforeEach(() => {
   root = makeStore('targeted-loads').root;
 });
 
-afterEach(() => removeAfterRequest(join(root, '..')));
+afterEach(() => removeDir(join(root, '..')));
 
 // One transaction and no mirrors: these tests read rows only, and 1003 mirrored writes overran the Windows timeout.
 async function seed(count: number, tenantId = 'default'): Promise<string[]> {

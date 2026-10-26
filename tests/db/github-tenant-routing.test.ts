@@ -4,9 +4,7 @@ import { resolveTenant, type RouteFallback } from '../../src/surface/connectors/
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { envTenant } from '../../src/base/util/env.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): RouteFallback => ({
@@ -49,7 +47,7 @@ describe('resolveTenant', () => {
   });
 
   afterEach(() => {
-    removeAfterRequest(root);
+    removeDir(root);
   });
 
   it('rule 1: installation_id matches a row -> returns mapped tenant', async () => {

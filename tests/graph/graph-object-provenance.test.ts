@@ -25,11 +25,9 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, writeEntry, loadEntities } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { saveDecision, savePolicy } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 const T = 'default';
 
@@ -111,7 +109,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
   });
   afterEach(() => {
     try {
-      removeAfterRequest(home);
+      removeDir(home);
     } catch {
       /* ignore */
     }

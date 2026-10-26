@@ -19,9 +19,6 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, loadAllDirtySummaries, writeEntry, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
 
 function defaultCtx(hippoRoot: string): FullContext {
   return apiCtx(hippoRoot, 'default', { subject: 'test-actor', role: 'admin' });

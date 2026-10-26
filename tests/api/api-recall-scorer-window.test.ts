@@ -22,9 +22,7 @@ import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:f3', role: 'admin' });
@@ -44,7 +42,7 @@ describe('RecallOptions.scorerWindow', () => {
   beforeEach(() => {
     root = makeRoot('f3');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('scorerWindow can widen the candidate pool above limit (proves widening)', async () => {
     // Codex diff-pass P2 #4: original assertion `total <= 25 && total > 0`

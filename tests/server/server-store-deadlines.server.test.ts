@@ -8,8 +8,7 @@ import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from
 import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/base/ports/store.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { log, type LogFields } from '../../src/base/util/log.js';
-import { currentSignal } from '../../src/base/util/request-scope.js';
-import type { AuthResolver, ServeOptions, ServerHandle } from '../../src/server.js';
+import type { AddonCall, AuthResolver, ServeOptions, ServerHandle } from '../../src/server.js';
 import {
   type CallOptions,
   createSqliteExecutor,
@@ -472,13 +471,13 @@ describe('the handler deadline', () => {
       const routes = [
         {
           path: '/v1/slow',
-          handler: async () => {
+          handler: async ({ ctx }: AddonCall) => {
             await gate;
-            seen(currentSignal()?.aborted === true);
+            seen(ctx.signal?.aborted === true);
             return {};
           },
         },
-        { path: '/v1/quick', handler: async () => ({ aborted: currentSignal()?.aborted === true }) },
+        { path: '/v1/quick', handler: async ({ ctx }: AddonCall) => ({ aborted: ctx.signal?.aborted === true }) },
       ];
       const server = await start(root, { routes });
       vi.spyOn(log, 'error').mockImplementation(() => {});

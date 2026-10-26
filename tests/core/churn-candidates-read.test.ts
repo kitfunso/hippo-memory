@@ -9,9 +9,8 @@ import { recordStatementsAsync, countMatching } from '../_helpers/count-statemen
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 
-oneRequestPerTest();
 import { processGit } from '../../src/infra/git-runner.js';
 
 /** loadAllEntries' statement: every full row of one tenant. */
@@ -22,7 +21,7 @@ const NO_REFS_REPO = '/no/such/repo';
 const roots: string[] = [];
 
 afterEach(() => {
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
 
 function newRoot(): string {

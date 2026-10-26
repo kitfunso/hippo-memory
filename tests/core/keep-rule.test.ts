@@ -27,13 +27,11 @@ import {
   readEntry,
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 
 pinClock();
-
-oneRequestPerTest();
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
@@ -63,7 +61,7 @@ const okFetcher = () =>
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
 
 const KEEP_CASES: ReadonlyArray<{ label: string; tags: string[]; source: string; kept: boolean }> = [

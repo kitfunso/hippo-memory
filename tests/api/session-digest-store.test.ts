@@ -19,13 +19,10 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
 
 pinClock();
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();

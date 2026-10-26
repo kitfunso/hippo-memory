@@ -31,6 +31,7 @@ import { handleMcpPost, handleMcpStream } from './mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../../base/scope/project-identity.js';
 import { parseRequest, rejectEncodedSlash } from './request.js';
 import { loopbackBindHosts } from './loopback.js';
+import type { RequestLimits } from '../../base/util/request-scope.js';
 import { assertTlsOrCleartextAllowed, createListener } from './tls.js';
 import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
 import { answerRequest } from './failure-replies.js';
@@ -87,10 +88,9 @@ async function handleRequest(
 
   enforceRateLimit(req, path, limiter);
 
-  if (await dispatchScopedRoute(routeRequest, method, path)) return;
+  if (await dispatchLimitedRoute(routeRequest, method, path)) return;
 
-  // The request scope (the server's lock wait) is kept by the heartbeat timer after it closes, so the key check and
-  // every heartbeat wait that long. Store-ready: the stream only authenticates, through the port.
+  // Store-ready: the stream only authenticates, through the port.
   if (await dispatchHostRoute(routeRequest, request, mcpStream, () => handleMcpStream(req, res, opts, streamSlots))) {
     return;
   }
@@ -99,9 +99,8 @@ async function handleRequest(
   res.end(JSON.stringify({ error: 'not found' }));
 }
 
-/** Every route that runs inside a request scope, so it opens each store once: the /v1 table with the webhooks, public
- * JSON, add-on routes and POST /mcp. */
-async function dispatchScopedRoute(r: RouteRequest, method: string, path: string): Promise<boolean> {
+/** The routes behind the rate limit: the /v1 table with the webhooks, public JSON, add-on routes and POST /mcp. */
+async function dispatchLimitedRoute(r: RouteRequest, method: string, path: string): Promise<boolean> {
   if (await dispatchV1Route(r, method, path)) return true;
   if (dispatchPublicJson(r, method, path)) return true;
   if (await dispatchAddonRoute(r, method, path)) return true;
@@ -274,13 +273,8 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
 function frozenAddonRoutes(addonRoutes: ServeOptions['routes']): NonNullable<ServeOptions['routes']> {
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
   const routes = Object.freeze(
-    (addonRoutes ?? []).map(({ path, handler, storeReady, loop }) =>
-      Object.freeze({
-        path,
-        handler,
-        ...(storeReady !== undefined && { storeReady }),
-        ...(loop !== undefined && { loop }),
-      }),
+    (addonRoutes ?? []).map(({ path, handler, storeReady }) =>
+      Object.freeze({ path, handler, ...(storeReady !== undefined && { storeReady }) }),
     ),
   );
   assertAddonRoutes(routes);
@@ -311,12 +305,11 @@ function servedOptsFor(
     addonRoutes: bindAddonRoutes(routes, store, runtime.onHippoDb),
     store,
     onHippoDb: runtime.onHippoDb,
-    reachOf: runtime.reachOf,
+    reachOf: (shared) => runtime.reachOf(shared, {}),
+    storeFor: (own) => own,
     configAt: configReader(envRuntimeSettings),
-    offLoop: runtime.offLoop,
     callerLimiter,
     failedAuthLimiter,
-    authResolver: runtime.outsideRouteBlock(opts.authResolver),
     callers: createCallerState(autoSleep),
     infra: rootInfra(runtime.host),
     sleeps,
@@ -334,11 +327,23 @@ function acceptingServer(
     res.once('finish', runtime.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    answerRequest(req, res, () => runtime.runRequest(() => handleRequest(req, res, served, options)), {
+    answerRequest(req, res, (limits) => handleRequest(req, res, servedFor(served, runtime, limits), options), {
       slowWarnMs: served.slowRequestWarnMs,
       counts: options.counts,
     });
   });
+}
+
+/** `served` as one request reads it: each store call to a worker waits on the request's deadline, and its Context
+ * carries the abort signal. */
+function servedFor(served: ResolvedServeOptions, runtime: ServerRuntime, limits: RequestLimits): ResolvedServeOptions {
+  return {
+    ...served,
+    store: runtime.storeFor(served.store, limits),
+    reachOf: (shared) => runtime.reachOf(shared, limits),
+    storeFor: (own) => runtime.storeFor(own, limits),
+    signal: limits.signal,
+  };
 }
 
 async function listenAndDescribe(

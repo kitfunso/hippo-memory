@@ -15,10 +15,7 @@ import {
   readEntry,
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 function reject(home: string, text: string, reason: string): string {
   const digest = rejectionDigest(text);

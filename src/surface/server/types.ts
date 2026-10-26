@@ -47,13 +47,11 @@ export interface AddonCall {
 }
 
 /** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then sends the returned
- * value as 200 JSON. Unset, `storeReady` means the route runs on hippo.db alone; `loop: 'off'` runs it off-thread like
- * core's. */
+ * value as 200 JSON. Unset, `storeReady` means the route runs on hippo.db alone. */
 export interface AddonRoute {
   readonly path: string;
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
   readonly storeReady?: StoreGroup;
-  readonly loop?: 'off';
 }
 
 export interface RateLimitSpec {
@@ -118,10 +116,12 @@ export type ResolvedServeOptions = ServeOptions & {
   onHippoDb: boolean;
   /** What a request's store call reaches, probed per request (`shared` is the transport's flag). */
   reachOf: (shared: boolean) => StoreReach;
+  /** A store the server built at boot, as this request calls it: each call to a worker waits on its deadline. */
+  storeFor: <S extends HippoStore>(store: S) => S;
+  /** Fires when this request passes its deadline; unset outside a request and for an exempt route. */
+  signal?: AbortSignal;
   /** This server's own config reader: each request reads config.json through it. */
   configAt: ConfigReader;
-  /** Fences a loop-off route's work from hippo.db on the server thread when the store has workers. */
-  offLoop: <T>(run: () => T) => T;
   publicJsonBodies: ReadonlyMap<string, string>;
   /** The /v1 rows for this store, each row's store need settled at boot. */
   v1Routes: RouteLookup<BoundRoute>;

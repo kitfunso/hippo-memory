@@ -25,9 +25,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function safeRmSync(p: string): void {
   try {
@@ -77,7 +75,7 @@ describe('graph-recall scope parity', () => {
   beforeEach(() => {
     home = makeRoot('graphrecall-scope');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('core: a graph-reached private-scoped memory is default-denied (no recallScope = fail-closed)', async () => {
     const seed = mem(home, T, 'decision alpha about cache invalidation strategy');
@@ -236,7 +234,7 @@ describe('graph-recall scope parity: CLI e2e', () => {
   });
   afterEach(() => {
     vi.unstubAllEnvs();
-    if (cliHome) removeAfterRequest(cliHome);
+    if (cliHome) removeDir(cliHome);
   });
 
   it('`hippo recall <q> --hops 1` denies the private neighbour; `--scope slack:private:dm1 --hops 1` surfaces it', async () => {

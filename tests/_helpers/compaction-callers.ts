@@ -2,7 +2,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, vi } from 'vitest';
-import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  openHippoDb,
+  withSharedStoreHandles,
+  type DatabaseSyncLike,
+  type RequestStores,
+} from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -105,9 +111,9 @@ export function writtenRows(db: DatabaseSyncLike, source: string): WrittenRow[] 
     .all(TENANT, source) as WrittenRow[];
 }
 
-export function owned(owner: string): Context {
+export function owned(owner: string, session?: RequestStores): Context {
   return {
-    store: sqliteStore(root),
+    store: sqliteStore(root, { session }),
     config: loadConfig(root),
     tenantId: TENANT,
     actor: { subject: `api_key:hk_${owner}`, role: 'member', owner },
@@ -132,12 +138,12 @@ export function failOn(table: string, when: 'INSERT' | 'UPDATE', message: string
   return () => withDb((db) => db.exec(`DROP TRIGGER ${name}`));
 }
 
-/** Runs `fn` while another connection holds the write lock, with a 50 ms wait so busy shows fast. */
-export async function whileLocked<T>(fn: () => T): Promise<T> {
+/** Runs `fn` on a session with a 50 ms wait, so busy shows fast, while another connection holds the write lock. */
+export async function whileLocked<T>(fn: (session: RequestStores) => T): Promise<T> {
   const holder = openHippoDb(root);
   holder.exec('BEGIN IMMEDIATE');
   try {
-    return await runWithRequestStores(fn, { busyWaitMs: 50 });
+    return await withSharedStoreHandles(fn, { busyWaitMs: 50 });
   } finally {
     holder.exec('ROLLBACK');
     closeHippoDb(holder);

@@ -15,6 +15,7 @@ import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { loadConfig } from '../../src/host/config-file.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
@@ -24,7 +25,6 @@ import {
   getMeta,
   HOOK_DB_WAIT_MS,
   openHippoDb,
-  runWithRequestStores,
   withSharedStoreHandles,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
@@ -360,9 +360,8 @@ describe('chunked consolidation flush', () => {
       await once(holder, 'message');
     });
 
-    const result = await runWithRequestStores(() => consolidate(fx.root, { now: NOW, budget: holdsOnFirstPause }), {
-      busyWaitMs: 250,
-    });
+    const store = sqliteStore(fx.root, { busyWaitMs: 250 });
+    const result = await consolidate(store, { now: NOW, budget: holdsOnFirstPause, config: loadConfig(fx.root) });
 
     expect(await exited).toEqual([0]);
     expect(result.semanticCreated).toBe(4);

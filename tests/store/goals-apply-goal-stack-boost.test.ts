@@ -21,10 +21,8 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 interface ScoredRow {
   entry: MemoryEntry;
@@ -172,7 +170,7 @@ describe('the session goal boost policy branches', () => {
     root = makeRoot('goal-policy-branches');
   });
   afterEach(() => {
-    removeAfterRequest(root);
+    removeDir(root);
   });
 
   function stored(content: string, tags: string[], schemaFit?: number): MemoryEntry {

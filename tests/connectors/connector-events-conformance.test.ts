@@ -27,7 +27,6 @@ import {
 } from '../_helpers/store-conformance.js';
 import { markGitHubEventSeen, markSlackEventSeen, writeEntry } from '../_helpers/root-forms.js';
 import type { CursorKey, GitHubStream, SlackWorkspace, TenantRoute } from '../../src/base/ports/store/connectors.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
   sqliteConnectorEventsSide,
   type ConnectorEventsSide,
@@ -35,8 +34,6 @@ import {
   type ParkedLetter,
 } from '../_helpers/connector-sides.js';
 import { copyTree } from '../_helpers/copy-tree.js';
-
-oneRequestPerTest();
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const ACTOR = 'connector:github';

@@ -5,10 +5,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHandoff } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -66,7 +64,7 @@ describe('mcp hippo_recall include_continuity', () => {
   });
 
   afterEach(() => {
-    removeAfterRequest(home);
+    removeDir(home);
   });
 
   it('omits continuity by default (hot path)', async () => {

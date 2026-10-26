@@ -8,9 +8,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 const TENANT = 'default';
 const PROJECT = 'the-session-project';
@@ -28,7 +26,7 @@ beforeEach(() => {
   lines = [];
   steps = [];
 });
-afterEach(() => removeAfterRequest(root));
+afterEach(() => removeDir(root));
 
 function work(over: Partial<Work> = {}): Work {
   return {
@@ -135,7 +133,7 @@ describe('sessionEndWork', () => {
       expect(lines).toContain('skip sleep: this folder has no store of its own');
       expect(loadActiveTaskSnapshot(globalRoot, TENANT)).toBeNull();
     } finally {
-      removeAfterRequest(globalRoot);
+      removeDir(globalRoot);
     }
   });
 

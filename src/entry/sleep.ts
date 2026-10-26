@@ -1,6 +1,6 @@
 // The root entry's sleep and consolidation: each opens one handle per store and fills the outside services that a
 // caller's Context or options leave out.
-import { defaultStore, withSharedStoreHandles } from '../surface/open-store.js';
+import { defaultStore, inStoreSession, withSharedStoreHandles } from '../surface/open-store.js';
 import type { SleepStore } from '../base/ports/store.js';
 import { runConsolidation, type ConsolidateOptions, type SleepRules } from '../domain/consolidate/sleep.js';
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
@@ -25,7 +25,9 @@ export type { SleepContext, SleepStore };
 export async function sleep(ctx: SleepContext, opts?: SleepOptions): Promise<SleepResult> {
   // One handle per store, as `hippo sleep` has: a pass that opened its own would make each close hippo.db's last, which
   // checkpoints and deletes the WAL.
-  return withSharedStoreHandles(() => sleepWholeStore(withEntryInfra(ctx), opts));
+  return withSharedStoreHandles((session) =>
+    sleepWholeStore(withEntryInfra({ ...ctx, store: inStoreSession(ctx.store, session) }), opts),
+  );
 }
 
 /** consolidate's options as published: the LLM phases call the model ANTHROPIC_API_KEY opens, over `fetcher`. */
@@ -43,8 +45,14 @@ export async function consolidate(
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   const llm = anthropicLlmFromEnv(fetcher);
   // One handle per store, for the reason `sleep` gives.
-  return withSharedStoreHandles(() =>
-    runConsolidation(store, { ...rest, config, tenantId, llm, ...sleepRules(rest.now, config) }),
+  return withSharedStoreHandles((session) =>
+    runConsolidation(inStoreSession(store, session), {
+      ...rest,
+      config,
+      tenantId,
+      llm,
+      ...sleepRules(rest.now, config),
+    }),
   );
 }
 

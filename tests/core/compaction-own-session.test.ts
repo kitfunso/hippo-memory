@@ -13,11 +13,7 @@ import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
 
 const PROJECT = 'proj-a';
 const OWN = 'sess-own';
@@ -90,10 +86,6 @@ afterEach(() => {
 describe('own-session compaction items in recent context', () => {
   // 40 items outnumber the loader's first window (32), so admit has to reject them for the load to widen.
   function seedFortyItemsAndOlderRows() {
-    return withRequestStoresSync(seedFortyItemsAndOlderRowsIn);
-  }
-
-  function seedFortyItemsAndOlderRowsIn() {
     const older = Array.from({ length: 8 }, (_, i) =>
       seed(local, `older release note ${i} about the checklist for the payments service`, { created: minute(0, i) }),
     );

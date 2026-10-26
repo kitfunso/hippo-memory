@@ -28,9 +28,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 
-oneRequestPerTest();
 import { closeObject, objectById } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { saveProjectBrief } from '../../src/entry/testing.js';
@@ -81,7 +80,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
   beforeEach(() => {
     home = makeRoot('project-briefs');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('saveProjectBrief creates memory + row + project_brief_create audit; v1', async () => {
     const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {

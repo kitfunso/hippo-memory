@@ -7,9 +7,8 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 
-oneRequestPerTest();
 import { processGit } from '../../src/infra/git-runner.js';
 
 const OLD_TARGETS = 200;
@@ -21,7 +20,7 @@ const outcomeRows = (reads: readonly { sql: string; rows: number }[]): number =>
 const roots: string[] = [];
 
 afterEach(() => {
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
 
 function newRoot(): string {

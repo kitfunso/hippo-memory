@@ -22,7 +22,6 @@ import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { markRetrieved } from '../../src/entry/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 // ---------------------------------------------------------------------------
@@ -211,10 +210,6 @@ interface SimResult {
  *   - hippo: starts empty, learns from each trap hit, memories strengthen through use
  */
 function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[] {
-  return withRequestStoresSync(() => simulateIn(tasks, mode));
-}
-
-function simulateIn(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[] {
   const tmpDir = makeRoot(`eval-${mode}`);
 
   // For static mode: pre-load all lessons

@@ -16,9 +16,7 @@ import { assemble } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadSessionRawMemories, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:assemble', role: 'admin' });
@@ -60,7 +58,7 @@ describe('loadSessionRawMemories', () => {
   beforeEach(() => {
     root = makeRoot('assemble-load');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('empty session id returns []', () => {
     expect(loadSessionRawMemories(root, '', 'default')).toEqual([]);
@@ -93,7 +91,7 @@ describe('api.assemble', () => {
   beforeEach(() => {
     root = makeRoot('assemble');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('1. empty session id returns clean empty result', async () => {
     const r = await assemble(ctxFor(root), '');

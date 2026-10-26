@@ -8,10 +8,8 @@ import { supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadChildrenOfSummary, loadAllL2Summaries, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { DAY_MS } from '../../src/base/util/time.js';
-
-oneRequestPerTest();
 
 const roots: string[] = [];
 
@@ -27,7 +25,7 @@ const ctxFor = (hippoRoot: string): FullContext =>
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
 
 describe('sleep skips superseded rows', () => {

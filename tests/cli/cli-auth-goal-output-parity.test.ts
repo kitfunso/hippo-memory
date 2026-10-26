@@ -10,9 +10,7 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 type Flags = Record<string, string | boolean | string[]>;
 
@@ -41,7 +39,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  removeAfterRequest(root);
+  removeDir(root);
 });
 
 /** Replaces each distinct id matching `pattern` with its first-seen order, and every ISO timestamp with <ts>. */

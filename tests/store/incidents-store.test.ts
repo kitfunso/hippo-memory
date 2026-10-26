@@ -25,12 +25,10 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 /** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
@@ -77,7 +75,7 @@ describe('incidents store (first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('incidents');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('saveIncident creates both memory and incidents row + incident_open audit', async () => {
     const inc = await openIncident(

@@ -14,10 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { tmpDir, seedIds, useBenchmarkCorpus } from '../_helpers/benchmark-corpus.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 useBenchmarkCorpus();
 

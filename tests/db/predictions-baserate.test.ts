@@ -18,16 +18,14 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closePrediction, computePredictionBaserate } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 describe('computePredictionBaserate (baserate detector)', () => {
   let home: string;
   beforeEach(() => {
     home = makeRoot('j3');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('empty class returns nClosed=0 + null stats + empty summary', () => {
     const br = computePredictionBaserate(home, 'default', 'empty-class');

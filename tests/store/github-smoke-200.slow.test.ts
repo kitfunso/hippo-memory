@@ -32,9 +32,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { envTenant } from '../../src/base/util/env.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 // The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): RouteFallback => ({
@@ -246,7 +244,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     root = makeRoot('gh-smoke-200');
   });
   afterEach(() => {
-    removeAfterRequest(root);
+    removeDir(root);
   });
 
   // Ingests 200 webhook events and replays them, each its own write to a real store.

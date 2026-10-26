@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
-import { currentRequestStores, runWithRequestStores, type RequestStores } from '../../src/db/index.js';
+import { RequestStores } from '../../src/db/index.js';
 import { sleepRuns } from '../_helpers/sleep-runs.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import type { McpHost } from '../../src/surface/mcp/protocol.js';
@@ -19,9 +19,11 @@ afterEach(() => {
 
 /** A remember through `host`, whose callers hold the stores with a sleep in flight. */
 function remember(host: McpHost, hippoRoot: string, text: string) {
-  return handleMcpRequest(
-    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text } } },
-    host.contextFor(hippoRoot, 'default'),
+  return host.runFrame(new AbortController().signal, (contextFor) =>
+    handleMcpRequest(
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text } } },
+      contextFor(hippoRoot, 'default'),
+    ),
   );
 }
 
@@ -58,37 +60,41 @@ describe('MCP auto-sleep', () => {
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(2));
   });
 
-  it("runs in its own open scope, not the tool call's, with the caller's lock wait", async () => {
+  it("runs in a session of its own, open while it runs, not the tool call's", async () => {
     const root = makeRoot('mcp-autosleep-scope');
     roots.push(root);
     writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
-    const seen: { scope: RequestStores | undefined; open: boolean }[] = [];
+    // Every open on a session goes through getWithFacts, so its `this` names the session that made it.
+    const sessions: RequestStores[] = [];
+    const getWithFacts = RequestStores.prototype.getWithFacts;
+    const opens = vi.spyOn(RequestStores.prototype, 'getWithFacts').mockImplementation(function (
+      this: RequestStores,
+      ...args: Parameters<RequestStores['getWithFacts']>
+    ) {
+      sessions.push(this);
+      return getWithFacts.apply(this, args);
+    });
+    const seen: { session: RequestStores | undefined; open: boolean }[] = [];
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
-        const scope = currentRequestStores();
-        seen.push({ scope, open: scope !== undefined && !scope.closed });
+        const session = sessions.at(-1);
+        seen.push({ session, open: session !== undefined && !session.closed });
         return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
       }),
     );
 
-    // HTTP POST /mcp wraps the call in a 250 ms scope; the tool call joins it.
-    let callScope: RequestStores | undefined;
-    await runWithRequestStores(
-      async () => {
-        callScope = currentRequestStores();
-        await remember(cliStdioHost(), root, 'the deploy moved to friday');
-      },
-      { busyWaitMs: 250 },
-    );
+    await remember(cliStdioHost(), root, 'the deploy moved to friday');
+    const frame = sessions[0];
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
+    opens.mockRestore();
     // One episodic memory is one extraction call; no later LLM pass has the facts or summaries it needs.
     expect(seen).toHaveLength(1);
+    expect(frame?.closed).toBe(true);
     for (const s of seen) {
       expect(s.open).toBe(true);
-      expect(s.scope).not.toBe(callScope);
-      expect(s.scope?.busyWaitMs).toBe(250);
+      expect(s.session).not.toBe(frame);
     }
   });
 });

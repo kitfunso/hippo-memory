@@ -18,9 +18,7 @@ import { recordStatementsAsync, countMatching } from '../_helpers/count-statemen
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadLastRecall, saveIndex } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function tmpHome(): string {
   const home = makeRoot('api-ofr');
@@ -28,7 +26,7 @@ function tmpHome(): string {
 }
 
 function cleanup(home: string): void {
-  removeAfterRequest(home);
+  removeDir(home);
 }
 
 async function seedMemory(home: string, content: string, tenantId = 'default'): Promise<string> {

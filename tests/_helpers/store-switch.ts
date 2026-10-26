@@ -27,8 +27,8 @@ export function needsHippoDb(why: keyof typeof NEEDS_HIPPO_DB): boolean {
 }
 
 /** serve() as the suites call it: on the port-only run, a test that names no store of its own gets hippo.db's store
- * through the port alone, without its folder groups and under a kind that is not 'sqlite', so a path that skips the
- * port throws. */
+ * through the port alone, without its folder groups and under a kind that is not 'sqlite'. A path that skips the port
+ * is caught by tests/server/server-no-direct-open.server.test.ts, which serves a folder marked for another store. */
 export function serve(opts: ServeOptions): Promise<ServerHandle> {
   if (!onPortOnly || opts.store) return serveOn(opts);
   return serveOn({ ...opts, store: portOnlyStore(opts.hippoRoot) });

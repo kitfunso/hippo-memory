@@ -11,10 +11,7 @@ import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
-
-oneRequestPerTest();
 
 const at = (i: number): string => new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString();
 

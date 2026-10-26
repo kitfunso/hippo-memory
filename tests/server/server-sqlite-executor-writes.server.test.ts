@@ -665,12 +665,12 @@ function checkpointedPredictions(root: string): number {
 describe("a store worker's wal_autocheckpoint", () => {
   it('follows the server thread: no checkpoint inside a commit while the checkpointer runs, and one in the next commit after it stops', async () => {
     const root = newRoot();
-    const inlineLimit = autoCheckpointPages(getHippoDbPath(root));
+    const inlineLimit = autoCheckpointPages(getHippoDbPath(root), undefined);
     // The checkpointer and the store share one runtime, as a server's do.
     const runtime = new StoreRuntime();
     const checkpointer = startWalCheckpointer(getHippoDbPath(root), runtime);
     cleanups.push(() => checkpointer.stop());
-    const store = runtime.run(() => workerSqliteStore(root));
+    const store = workerSqliteStore(root, createSqliteExecutor(root, { runtime }), { runtime });
     cleanups.push(() => store.close());
     const save = (n: number) => {
       const saved = { classTag: 'release', claimText: `claim ${n}` };

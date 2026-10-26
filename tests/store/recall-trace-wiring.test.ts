@@ -27,9 +27,7 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -61,7 +59,7 @@ function tmpHome() {
   return {
     home,
     restore: () => {
-      removeAfterRequest(home);
+      removeDir(home);
     },
   };
 }

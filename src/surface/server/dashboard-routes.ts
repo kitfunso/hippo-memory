@@ -1,6 +1,7 @@
 // The dashboard's route table and its dispatch: the /v1 rows' shape and lookup, behind the dashboard session.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '../../api/index.js';
+import type { RequestLimits } from '../../base/util/request-scope.js';
 import {
   cardRoute,
   cardsRoute,
@@ -47,18 +48,21 @@ export const DASHBOARD_ROUTES: readonly DashboardRoute[] = [
 export interface DashboardServing {
   readonly access: DashboardAccess;
   readonly reader: DashboardReader;
-  /** A fresh Context per request, so a config edit shows on the next one. */
-  readonly context: () => Context;
+  /** A fresh Context per request, so a config edit shows on the next one, on the request's deadline and signal. */
+  readonly context: (limits: RequestLimits) => Context;
   readonly bodyDeadlineMs: number;
   readonly staticFiles: StaticFiles | null;
-  /** Fences the handlers from hippo.db on the server thread: the store's workers and the reader thread answer. */
-  readonly offLoop: <T>(run: () => T) => T;
+}
+
+/** One dashboard request as the listener hands it over. */
+export interface DashboardExchange {
+  readonly req: IncomingMessage;
+  readonly res: ServerResponse;
+  readonly limits: RequestLimits;
 }
 
 /** A request before the gate. */
-interface DashboardCall {
-  readonly req: IncomingMessage;
-  readonly res: ServerResponse;
+interface DashboardCall extends DashboardExchange {
   readonly query: URLSearchParams;
   readonly serving: DashboardServing;
 }
@@ -68,9 +72,9 @@ function passGate({ req, res, query, serving }: DashboardCall): DashboardSession
 }
 
 function admitted(call: DashboardCall, session: DashboardSession): DashboardRouteRequest {
-  const { req, res, query, serving } = call;
+  const { req, res, query, serving, limits } = call;
   const { reader, bodyDeadlineMs, staticFiles } = serving;
-  return { req, res, query, session, ctx: serving.context(), reader, bodyDeadlineMs, staticFiles };
+  return { req, res, query, session, ctx: serving.context(limits), reader, bodyDeadlineMs, staticFiles };
 }
 
 /** The row's run, gate first, or null when method or path differ; the path matcher runs first, as for a /v1 row. */
@@ -88,14 +92,11 @@ const findDashboardRoute = routeLookup(DASHBOARD_ROUTES, dashboardRouteMatches);
 
 /** One dashboard request: the security headers, then the first matching row; a path no row takes still passes the gate
  * before its 404, so only a signed-in browser learns which paths exist. */
-export async function answerDashboard(
-  serving: DashboardServing,
-  req: IncomingMessage,
-  res: ServerResponse,
-): Promise<void> {
+export async function answerDashboard(serving: DashboardServing, exchange: DashboardExchange): Promise<void> {
+  const { req, res } = exchange;
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
   const { method, path, query } = parseRequest(req);
-  const call: DashboardCall = { req, res, query, serving };
+  const call: DashboardCall = { ...exchange, query, serving };
   const match = findDashboardRoute(method, path);
   if (match === null) {
     passGate(call);
@@ -103,5 +104,5 @@ export async function answerDashboard(
     return;
   }
   noteAccess(req, { route: routeLabel(match.route) });
-  await serving.offLoop(() => match.run(call));
+  await match.run(call);
 }

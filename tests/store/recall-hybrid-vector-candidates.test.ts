@@ -19,10 +19,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -106,7 +104,7 @@ describe('hybrid recall candidates with stored vectors', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    for (const d of dirs.splice(0)) removeAfterRequest(d);
+    for (const d of dirs.splice(0)) removeDir(d);
   });
 
   it('searchBothHybrid default recall', async () => {

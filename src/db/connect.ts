@@ -6,17 +6,22 @@ import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { DEFAULT_BUSY_WAIT_MS, execWithBusyRetry } from './busy.js';
 import { type OpenFacts, importLegacyVectors, runMigrations, settledStoreFacts } from './migrate.js';
 import { autoCheckpointPages } from './wal-checkpointer.js';
-import { currentStoreRuntime, storeKey } from './store-runtime.js';
+import { storeKey, type StoreRuntime } from './store-runtime.js';
 import { PRIVATE_DIR } from '../host/private-dir.js';
 
 export function getHippoDbPath(hippoRoot: string): string {
   return path.join(hippoRoot, 'hippo.db');
 }
 
-/** Runs `step` on this store unless it already ran to the end under the current store runtime; a throw leaves it due,
- * and outside every runtime it always runs. */
-export function oncePerStore(hippoRoot: string, name: string, step: () => void): void {
-  const runtime = currentStoreRuntime();
+/** A store's folder and the runtime its opens run under; undefined runs every open step on every open. */
+export interface StoreAt {
+  readonly hippoRoot: string;
+  readonly runtime: StoreRuntime | undefined;
+}
+
+/** Runs `step` on the store unless it already ran to the end under the store's runtime; a throw leaves it due, and
+ * with no runtime it always runs. */
+export function oncePerStore({ hippoRoot, runtime }: StoreAt, name: string, step: () => void): void {
   const key = storeKey(hippoRoot);
   if (runtime?.hasRun(key, name)) return;
   step();
@@ -24,16 +29,17 @@ export function oncePerStore(hippoRoot: string, name: string, step: () => void):
 }
 
 // Owner-only on create; SQLite gives the WAL and SHM files the db's mode. Existing paths keep theirs, with one warning.
-function createStoreFilesOwnerOnly(hippoRoot: string): void {
+function createStoreFilesOwnerOnly(at: StoreAt): void {
+  const { hippoRoot } = at;
   // A stat, not a failed exclusive open, is what an existing store costs on every connection.
   if (fs.existsSync(getHippoDbPath(hippoRoot))) {
-    oncePerStore(hippoRoot, 'mode-check', () => warnWideModes(hippoRoot));
+    oncePerStore(at, 'mode-check', () => warnWideModes(hippoRoot));
     return;
   }
   fs.mkdirSync(hippoRoot, PRIVATE_DIR);
   try {
     fs.closeSync(fs.openSync(getHippoDbPath(hippoRoot), 'wx', 0o600));
-    currentStoreRuntime()?.forget(storeKey(hippoRoot));
+    at.runtime?.forget(storeKey(hippoRoot));
   } catch (err) {
     if (errorCode(err) !== 'EEXIST') throw err;
   }
@@ -64,16 +70,17 @@ function sweepArchivedMirrorsIfDue(hippoRoot: string, db: DatabaseSyncLike, pend
 
 const SCHEMA_STEP = 'schema';
 
-/** Makes the next connection to this store prove its schema again; `hippo init` calls it because it is the explicit ask
- * to set a store up. */
-export function reproveStoreSchema(hippoRoot: string): void {
-  currentStoreRuntime()?.forget(storeKey(hippoRoot), SCHEMA_STEP);
+/** Makes the next connection under `runtime` prove this store's schema again; `hippo init` calls it because it is the
+ * explicit ask to set a store up. */
+export function reproveStoreSchema({ hippoRoot, runtime }: StoreAt): void {
+  runtime?.forget(storeKey(hippoRoot), SCHEMA_STEP);
 }
 
 // Once the runtime has proven a store's schema, a new connection re-reads only the two version stamps and the binary
 // floor: a migration by another process moves a stamp and sends the open down the full path.
-function settleSchema(db: DatabaseSyncLike, hippoRoot: string, busyWaitMs: number): OpenFacts | null {
-  if (currentStoreRuntime()?.hasRun(storeKey(hippoRoot), SCHEMA_STEP)) {
+function settleSchema(db: DatabaseSyncLike, at: StoreAt, busyWaitMs: number): OpenFacts | null {
+  const { hippoRoot, runtime } = at;
+  if (runtime?.hasRun(storeKey(hippoRoot), SCHEMA_STEP)) {
     const settled = settledStoreFacts(db);
     if (settled) {
       // An older binary can still write embeddings.json beside a store this process has proven.
@@ -82,7 +89,7 @@ function settleSchema(db: DatabaseSyncLike, hippoRoot: string, busyWaitMs: numbe
     }
   }
   const facts = runMigrations(db, hippoRoot, busyWaitMs);
-  oncePerStore(hippoRoot, SCHEMA_STEP, () => undefined);
+  oncePerStore(at, SCHEMA_STEP, () => undefined);
   return facts;
 }
 
@@ -99,20 +106,20 @@ export interface OpenedDb {
 
 /**
  * A new connection with the store's pragmas and migrations applied and the mirror cleanup run when it is due; the
- * caller owns and closes it.
- * Outside any request scope (CLI start-up, timers) this is the only handle there is; openHippoDb reuses the scope's
- * when one exists.
+ * caller owns and closes it. `busyWaitMs` is the default lock wait when unset.
+ * An open with no session takes this path; a session's first open on a store does too.
  */
-export function connectWithFacts(hippoRoot: string, busyWaitMs: number = DEFAULT_BUSY_WAIT_MS): OpenedDb {
-  createStoreFilesOwnerOnly(hippoRoot);
+export function connectWithFacts(at: StoreAt, busyWaitMs: number = DEFAULT_BUSY_WAIT_MS): OpenedDb {
+  const { hippoRoot } = at;
+  createStoreFilesOwnerOnly(at);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
   try {
     db.exec(`PRAGMA busy_timeout = ${busyWaitMs}`);
     execWithBusyRetry(db, 'PRAGMA journal_mode = WAL', busyWaitMs);
     db.exec('PRAGMA synchronous = NORMAL');
-    db.exec(`PRAGMA wal_autocheckpoint = ${autoCheckpointPages(getHippoDbPath(hippoRoot))}`);
+    db.exec(`PRAGMA wal_autocheckpoint = ${autoCheckpointPages(getHippoDbPath(hippoRoot), at.runtime)}`);
     db.exec('PRAGMA foreign_keys = ON');
-    const facts = settleSchema(db, hippoRoot, busyWaitMs);
+    const facts = settleSchema(db, at, busyWaitMs);
     // Orphan mirrors of archived raw rows go here; a filesystem failure must not block the open.
     try {
       sweepArchivedMirrorsIfDue(hippoRoot, db, facts?.archivePending);

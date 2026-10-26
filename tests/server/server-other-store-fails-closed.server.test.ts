@@ -1,8 +1,8 @@
 // Under a store other than hippo.db, a route that needs hippo.db's local files answers 501 and no request opens or creates hippo.db.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { closeHippoDb, openHippoDb, SqliteBlockedError } from '../../src/db/index.js';
+import { closeHippoDb, OTHER_STORE_MARKER, openHippoDb, SqliteBlockedError } from '../../src/db/index.js';
 import { STORE_BUSY_MESSAGE } from '../../src/base/ports/store.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../../src/base/errors/http-errors.js';
 import { mcpErrorResponse } from '../../src/surface/mcp/server.js';
@@ -83,6 +83,8 @@ describe('serve() under a store that is not hippo.db', () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     root = makeRoot('other-store', { init: false });
+    // As a store-kit adapter marks its folder, so any hippo.db open on it throws.
+    writeFileSync(join(root, OTHER_STORE_MARKER), 'stub');
     handle = await serve({
       hippoRoot: root,
       port: 0,
@@ -257,7 +259,7 @@ describe('serve() under a store that is not hippo.db', () => {
   });
 
   it('a SqliteBlockedError inside an MCP tool call answers store_not_ported, not an internal error', () => {
-    expect(mcpErrorResponse(7, new SqliteBlockedError('stub'))).toEqual({
+    expect(mcpErrorResponse(7, new SqliteBlockedError('stub', STORE_NOT_PORTED_MESSAGE))).toEqual({
       jsonrpc: '2.0',
       id: 7,
       error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE },
@@ -291,7 +293,7 @@ describe('serve() under a store that is not hippo.db', () => {
   });
 
   it('leaves nothing under the served root but the pidfile and the local key: no hippo.db, no .hippo folder', () => {
-    expect(readdirSync(root)).toEqual(['server.key', 'server.pid']);
+    expect(readdirSync(root)).toEqual([OTHER_STORE_MARKER, 'server.key', 'server.pid']);
     expect(existsSync(join(root, '.hippo'))).toBe(false);
   });
 });

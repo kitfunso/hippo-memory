@@ -8,9 +8,7 @@ import { runCli as runCliEntry } from '../../src/cli.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 const savedCwd = process.cwd();
 let home = '';
@@ -33,7 +31,7 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  removeAfterRequest(home);
+  removeDir(home);
 });
 
 describe('global numeric-flag value-less/non-numeric guard - exit-1 cases', () => {

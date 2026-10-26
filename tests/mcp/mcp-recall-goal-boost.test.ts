@@ -18,10 +18,8 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { pushGoal } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
-
-oneRequestPerTest();
 
 type HippoRecallToolArgs = {
   query: string;
@@ -65,7 +63,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
     home = makeRoot('mcp-goal-boost');
   });
 
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('session_id schema field is accepted (no validation error) and reaches the boost', async () => {
     const ctx: McpContext = {

@@ -3,7 +3,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
-import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -17,14 +16,15 @@ import {
   setMeta,
   ftsRowCounts,
   getCurrentSchemaVersion,
+  withSharedStoreHandlesSync,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/continuity.js';
 import { MIGRATIONS } from '../../src/db/migrations/index.js';
-import { reproveStoreSchema } from '../../src/db/connect.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
+import { grantFor } from '../../src/store/sqlite/grant.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 
 afterEach(() => {
@@ -94,12 +94,6 @@ function withDb(fn: (db: DatabaseSyncLike) => void): void {
   }
 }
 
-/** withDb for damage another process would do: this process has proven the schema, so it must be asked to look again. */
-function withOutOfBandDamage(fn: (db: DatabaseSyncLike) => void): void {
-  withDb(fn);
-  reproveStoreSchema(root);
-}
-
 function userVersion(db: DatabaseSyncLike): number {
   // SAFETY: PRAGMA user_version returns one row with one integer column.
   return Number((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version);
@@ -118,7 +112,7 @@ describe('store open fast path', () => {
   });
 
   it('every CREATE the slow path runs names an object in the required list, and every listed object is created', () => {
-    withOutOfBandDamage((db) => db.prepare(`DELETE FROM meta WHERE key = 'last_trace_id'`).run());
+    withDb((db) => db.prepare(`DELETE FROM meta WHERE key = 'last_trace_id'`).run());
 
     const created = new Set(openAndClose().flatMap((sql) => [...sql.matchAll(ANY_CREATE)].map((m) => m[1])));
 
@@ -171,7 +165,7 @@ describe('store open fast path', () => {
   });
 
   it('repairs a dropped continuity table and a dropped index', () => {
-    withOutOfBandDamage((db) => {
+    withDb((db) => {
       db.exec('DROP TABLE card_comments');
       db.exec('DROP INDEX idx_memory_quarantine_status');
     });
@@ -185,7 +179,7 @@ describe('store open fast path', () => {
   });
 
   it('takes the slow path and restores a missing meta default key', () => {
-    withOutOfBandDamage((db) => db.prepare(`DELETE FROM meta WHERE key = 'total_recalled'`).run());
+    withDb((db) => db.prepare(`DELETE FROM meta WHERE key = 'total_recalled'`).run());
 
     expect(openAndClose().some((sql) => DDL.test(sql))).toBe(true);
     withDb((db) => expect(getMeta(db, 'total_recalled', 'missing')).toBe('0'));
@@ -201,17 +195,22 @@ describe('one open reads the store once', () => {
 
   it('a current store with a memory opens on its PRAGMAs and the one probe, through openHippoDb and openStore', () => {
     // The runtime remembers the once-per-store steps the first open ran, as a CLI or server process does.
-    new StoreRuntime().run(() => {
-      closeHippoDb(openStore(root));
-      expect(afterPragmas(() => openHippoDb(root))).toHaveLength(1);
-      expect(afterPragmas(() => openStore(root))).toHaveLength(1);
-    });
+    const runtime = new StoreRuntime();
+    const opts = { grant: grantFor({ runtime }) };
+    try {
+      closeHippoDb(openStore(root, opts));
+      expect(afterPragmas(() => openHippoDb(root, opts))).toHaveLength(1);
+      expect(afterPragmas(() => openStore(root, opts))).toHaveLength(1);
+    } finally {
+      runtime.dispose();
+    }
   });
 
   it("a later openStore in one request asks once whether a memory row is there, for both of setup's steps", () => {
-    withRequestStoresSync(() => {
-      openStore(root);
-      expect(captureStatements(() => openStore(root))).toEqual(['SELECT 1 AS x FROM memories LIMIT 1']);
+    withSharedStoreHandlesSync((session) => {
+      const opts = { grant: grantFor({ session }) };
+      openStore(root, opts);
+      expect(captureStatements(() => openStore(root, opts))).toEqual(['SELECT 1 AS x FROM memories LIMIT 1']);
     });
   });
 
@@ -228,12 +227,13 @@ describe('one open reads the store once', () => {
   });
 
   it('a request that empties the store on its own handle gets the same re-read from its next openStore', () => {
-    withRequestStoresSync(() => {
-      const handle = openStore(root);
+    withSharedStoreHandlesSync((session) => {
+      const opts = { grant: grantFor({ session }) };
+      const handle = openStore(root, opts);
       expect(memoryRows(handle)).toBe(1);
       handle.exec('DELETE FROM memories');
 
-      expect(memoryRows(openStore(root))).toBe(1);
+      expect(memoryRows(openStore(root, opts))).toBe(1);
     });
   });
 });

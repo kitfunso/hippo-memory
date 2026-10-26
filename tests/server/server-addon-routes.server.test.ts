@@ -7,7 +7,8 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { HttpError, type AddonCall, type AddonRoute, type ServerHandle } from '../../src/server.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
-import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore, sqliteStoreOn } from '../../src/store/sqlite/store.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -201,16 +202,13 @@ describe('an add-on route behind serve()', () => {
   });
 });
 
-describe("an add-on route with `loop: 'off'`", () => {
+describe('an add-on route on a worker store', () => {
   const LABELS = '/v1/x-labels';
-  const labels = (loop?: 'off'): AddonRoute => {
-    const route: AddonRoute = {
-      path: LABELS,
-      storeReady: 'keyWrites',
-      handler: async ({ ctx }) =>
-        (await ctx.store.keyWrites.listApiKeys({ tenantId: ctx.tenantId, active: true })).map((row) => row.key.label),
-    };
-    return loop === undefined ? route : { ...route, loop };
+  const labels: AddonRoute = {
+    path: LABELS,
+    storeReady: 'keyWrites',
+    handler: async ({ ctx }) =>
+      (await ctx.store.keyWrites.listApiKeys({ tenantId: ctx.tenantId, active: true })).map((row) => row.key.label),
   };
   const blockedLines = (info: { readonly mock: { readonly calls: ReadonlyArray<readonly unknown[]> } }): string[] =>
     info.mock.calls
@@ -218,8 +216,8 @@ describe("an add-on route with `loop: 'off'`", () => {
       .filter((line) => line.includes('opened on the server thread by a route'));
 
   /** One POST to the route on a server over `store`, stopped before it returns. */
-  async function once(route: AddonRoute, store?: HippoStore): Promise<{ status: number; reply: unknown }> {
-    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0, routes: [route], ...(store && { store }) });
+  async function once(store?: HippoStore): Promise<{ status: number; reply: unknown }> {
+    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0, routes: [labels], ...(store && { store }) });
     try {
       return await post(LABELS, '{}');
     } finally {
@@ -231,28 +229,20 @@ describe("an add-on route with `loop: 'off'`", () => {
 
   it('answers from the store workers with the reply the in-process store gives', async () => {
     const info = vi.spyOn(log, 'info');
-    const onWorkers = await once(labels('off'));
-    const inProcess = await once(labels('off'), sqliteStore(root));
+    const onWorkers = await once();
+    const inProcess = await once(sqliteStore(root));
     expect(onWorkers).toEqual({ status: 200, reply: ['addon-test'] });
     expect(inProcess).toEqual(onWorkers);
     expect(blockedLines(info)).toEqual([]);
   });
 
-  it('answers 501 when its handler opens hippo.db on the server thread, which an unset `loop` allows', async () => {
+  it('answers 501 when a call the op table missed opens hippo.db on the server thread', async () => {
     const info = vi.spyOn(log, 'info');
-    // The worker-backed store with keyWrites swapped back to the in-process one: the defect the fence exists to catch.
-    const swapped = () => Object.assign(workerSqliteStore(root), { keyWrites: sqliteStore(root).keyWrites });
-    expect((await once(labels('off'), swapped())).status).toBe(501);
+    // keyWrites answered by the worker store's server-thread part, as a method missing from WORKER_OPS would be.
+    const unrouted = sqliteStoreOn(handlesOf(root, { workerOnly: true }));
+    const swapped = () => Object.assign(workerSqliteStore(root), { keyWrites: unrouted.keyWrites });
+    expect((await once(swapped())).status).toBe(501);
     expect(blockedLines(info)).toHaveLength(1);
-    expect(await once(labels(), swapped())).toEqual({ status: 200, reply: ['addon-test'] });
-    expect(blockedLines(info)).toHaveLength(1);
-  });
-
-  it("refuses at boot a `loop` other than 'off'", async () => {
-    // An untyped add-on's typo, which Object.assign lets past the field's type as plain JavaScript would.
-    const err = await bootError([Object.assign(echo(), { loop: 'on' })]);
-    expect(err?.message).toBe("add-on route '/v1/x-echo' has loop 'on'; set 'off' or leave it unset");
-    expect(existsSync(join(root, 'server.pid'))).toBe(false);
   });
 });
 

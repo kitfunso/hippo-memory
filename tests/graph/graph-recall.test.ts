@@ -24,9 +24,7 @@ import {
   loadEntitiesByIds,
   writeEntry,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function safeRmSync(p: string): void {
   try {
@@ -64,7 +62,7 @@ describe('graph-recall engine', () => {
   beforeEach(() => {
     home = makeRoot('graphrecall');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('1-hop surfaces a graph-linked neighbour the lexical search missed (loaded by id, not lexically gated)', async () => {
     const a = mem(home, T, 'decision alpha about cache invalidation strategy');
@@ -379,7 +377,7 @@ describe('graph.ts read helpers', () => {
   beforeEach(() => {
     home = makeRoot('graphrecall');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('loadEntitiesByMemoryId maps source memory ids to entities (hit + miss)', async () => {
     const a = mem(home, T, 'a');

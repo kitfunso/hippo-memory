@@ -22,9 +22,7 @@ import { selectGraphSeeds, graphRankStream } from '../../src/domain/graph/stream
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function mem(home: string, tenant: string, text: string): MemoryEntry {
   const m = createMemory(text, {
@@ -58,7 +56,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
   beforeEach(() => {
     home = makeRoot('gstream-rrf');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('Gate-(b) dry-run: a lexically-weak, graph-adjacent answer (rank>5 in 2-list) enters top-5 under the 3-list fusion', async () => {
     // 8-entry pool. strong=0 is a top lexical hit; weak=7 is the answer: lexically last

@@ -21,13 +21,10 @@ import { mergedText } from '../../src/base/util/same-text.js';
 import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { appendSessionEvent, replaceDetectedConflicts } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { detailLines } from '../_helpers/sleep-lines.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 import { META_KEY } from '../../src/db/meta.js';
-
-oneRequestPerTest();
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const TENANTS = ['default', 'acme', 'globex'] as const;

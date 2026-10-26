@@ -17,7 +17,6 @@ import {
   type RememberResult,
   type SupersedeResult,
 } from '../../src/api/index.js';
-import { withSqliteBlocked } from '../../src/db/index.js';
 import { handleMcpRequest, type McpContext } from '../../src/surface/mcp/server.js';
 import { createCallerState } from '../../src/api/callers.js';
 import { serve, type ServerHandle } from '../../src/server.js';
@@ -79,7 +78,7 @@ describe('the api with ctx.store', () => {
       config: loadConfig(hippoRoot),
       infra: testInfra(),
     };
-    await withSqliteBlocked('port-only', async () => {
+    await (async () => {
       const raw = await remember(ctx, { content: 'raw call transcript about the outage', kind: 'raw' });
       const note = await remember(ctx, { content: 'deploys go out on tuesdays' });
       expect(await outcome(ctx, [note.id, 'mem_missing'], true)).toEqual({ applied: 1, appliedIds: [note.id] });
@@ -88,7 +87,7 @@ describe('the api with ctx.store', () => {
       expect(await forget(ctx, newId)).toEqual({ ok: true, id: newId });
       const rows = await side.store.entriesByIds([note.id, newId, raw.id], TENANT_A);
       expect(rows.map((r) => [r.id, r.supersededBy, r.outcomePositive])).toEqual([[note.id, newId, 1]]);
-    });
+    })();
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     const ops = side
       .auditRows()
@@ -216,9 +215,7 @@ describe('hippo_remember and hippo_outcome under another store', () => {
       callers,
     };
     const call = (name: string, args: Record<string, string | boolean>) =>
-      withSqliteBlocked('port-only', () =>
-        handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx),
-      );
+      handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx);
     const textOf = (res: Awaited<ReturnType<typeof call>>): string | undefined =>
       // SAFETY: a tools/call reply carries { content: [{ type: 'text', text }] }.
       (res?.result as { content: { text: string }[] } | undefined)?.content[0]?.text;

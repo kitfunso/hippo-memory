@@ -16,11 +16,9 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -54,7 +52,7 @@ describe('`hippo context` prints the ambient summary contextGet computed', () =>
     } finally {
       process.chdir(saved);
       vi.unstubAllEnvs();
-      removeAfterRequest(dir);
+      removeDir(dir);
     }
   });
 });

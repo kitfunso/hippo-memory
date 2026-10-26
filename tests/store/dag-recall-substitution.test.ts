@@ -14,7 +14,6 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 
@@ -52,7 +51,6 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
 
 describe('DAG-aware recall substitution', () => {
   let root: string;
-  oneRequestPerTest();
   beforeEach(() => {
     root = makeRoot('dag-sub');
   });

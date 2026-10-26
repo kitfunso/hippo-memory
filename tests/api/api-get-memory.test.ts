@@ -13,15 +13,13 @@ import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 const TENANT = 'acme';
 const roots: string[] = [];
 
 afterEach(() => {
-  for (const root of roots.splice(0)) removeAfterRequest(root);
+  for (const root of roots.splice(0)) removeDir(root);
 });
 
 function root(): string {

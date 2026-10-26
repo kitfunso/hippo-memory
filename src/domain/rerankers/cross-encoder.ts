@@ -64,13 +64,16 @@ export function createCrossEncoderReranker(loadModel: CrossEncoderLoad): Reranke
       pipe = await loadModel();
     } catch (err) {
       // A silent identity fallback otherwise reads as a working reranker.
-      outage.failed(errorMessage(err), errorFields(err));
+      outage.failed(errorMessage(err), { fields: errorFields(err), signal: options?.signal });
       return identityOrder(head);
     }
     const { results: scored, succeeded, firstError } = await scoreHead(pipe, query, head);
     // A loaded model whose every call throws is as dead as one that never loaded; the first error names why.
     if (head.length > 0 && succeeded === 0) {
-      outage.failed(`every inference failed: ${errorMessage(firstError)}`, errorFields(firstError));
+      outage.failed(`every inference failed: ${errorMessage(firstError)}`, {
+        fields: errorFields(firstError),
+        signal: options?.signal,
+      });
     } else {
       outage.answered();
     }

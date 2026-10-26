@@ -20,10 +20,7 @@ import {
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
-
-oneRequestPerTest();
 
 let s: Scratch;
 let logFile: string;

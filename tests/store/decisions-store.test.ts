@@ -22,13 +22,11 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { saveDecision } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 /**
  * Typed wrappers around DatabaseSyncLike's untyped get/all and JSON.parse.
@@ -67,7 +65,7 @@ describe('decisions store (first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('decisions');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('saveDecision creates both memory and decisions row + decision_create audit', async () => {
     const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {

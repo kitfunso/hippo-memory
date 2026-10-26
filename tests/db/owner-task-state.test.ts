@@ -17,9 +17,7 @@ import {
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
 import type { ContinuityKey } from '../../src/base/ports/store/types.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 const T = 'default';
 const A: ContinuityKey = { owner: 'alice', project: ['p'] };
@@ -75,7 +73,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  removeAfterRequest(home);
+  removeDir(home);
 });
 
 describe('task snapshots keyed by owner and project', () => {
@@ -137,7 +135,7 @@ describe('task snapshots keyed by owner and project', () => {
   });
 
   it("on a shared store an unkeyed save or clear throws and every owner's snapshot stays active", async () => {
-    removeAfterRequest(home);
+    removeDir(home);
     home = makeRoot('owner-task-state-shared', { config: { sharedStore: true } });
     const a = saveActiveTaskSnapshot(home, T, snap('a'), A);
     const b = saveActiveTaskSnapshot(home, T, snap('b'), B);

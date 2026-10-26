@@ -8,9 +8,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 describe('api.remember', () => {
   it('persists a memory and returns its envelope', async () => {
@@ -25,7 +23,7 @@ describe('api.remember', () => {
     const stored = readEntry(home, result.id);
     expect(stored?.content).toBe('api-canary-remember-77');
     expect(stored?.tenantId).toBe('default');
-    removeAfterRequest(home);
+    removeDir(home);
   });
 
   it('emits an audit event with the supplied actor', async () => {
@@ -41,7 +39,7 @@ describe('api.remember', () => {
     expect(events.length).toBe(1);
     expect(events[0]!.actor).toBe('api_key:hk_test');
     closeHippoDb(db);
-    removeAfterRequest(home);
+    removeDir(home);
   });
 });
 
@@ -50,7 +48,7 @@ describe("api.remember stamps the caller's project", () => {
   beforeEach(() => {
     tmp = makeRoot('api-rem-proj', { init: false });
     return () => {
-      removeAfterRequest(tmp);
+      removeDir(tmp);
     };
   });
 

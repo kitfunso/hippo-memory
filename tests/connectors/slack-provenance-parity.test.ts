@@ -19,10 +19,8 @@ import { withSharedStoreHandles } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { rawProvenanceAt } from '../_helpers/report-reads.js';
-
-oneRequestPerTest();
 
 const PUBLIC_CHANNEL: ChannelMeta = { id: 'C01PUB', is_private: false };
 const TEAM_ID = 'T01TEAM';
@@ -47,7 +45,7 @@ describe('Slack connector — provenance coverage parity', () => {
   beforeEach(() => {
     root = makeRoot('slack-prov');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('every ingested user message carries owner + artifact_ref (coverage = 1.0)', async () => {
     const ctx = ctxFor(root);

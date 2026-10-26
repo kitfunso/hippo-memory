@@ -17,9 +17,7 @@ import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function ctxFor(root: string, tenantId: string): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:tenant-iso', role: 'admin' });
@@ -39,7 +37,7 @@ describe('scorerWindow tenant isolation', () => {
   beforeEach(() => {
     root = makeRoot('f3-tenant');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   // The scope+tenant SQL clauses are appended to FOUR paths in listSearchRows
   // (no-terms, FTS, LIKE fallback, full-store fallback). Cover three of the

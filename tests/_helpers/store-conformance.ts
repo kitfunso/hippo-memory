@@ -19,7 +19,7 @@ import { runStoreConformance } from '../../src/entry/store-kit.js';
 import { portOnlyStore } from './port-only-store.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { initTestStore } from './store-template.js';
-import { removeAfterRequest } from './one-request-per-test.js';
+import { removeDir } from './remove-dir.js';
 import { copyTree } from './copy-tree.js';
 
 export const TENANT_A = 'acme';
@@ -158,7 +158,7 @@ export async function runOnFixture<G extends ConformanceGroup, R>(
     await store.close();
     return { outcomes, audit: auditRowsAt(root) };
   } finally {
-    removeAfterRequest(home);
+    removeDir(home);
   }
 }
 
@@ -172,7 +172,7 @@ export function runPackagedConformance(): void {
     return home;
   };
   afterAll(() => {
-    for (const home of homes) removeAfterRequest(home);
+    for (const home of homes) removeDir(home);
   });
   describe.each([
     ['sqliteStore', (): HippoStore => sqliteStore(folder())],

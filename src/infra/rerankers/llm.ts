@@ -37,11 +37,11 @@ export function createLlmReranker(http: Http): RerankerFn {
 
     let permutation: number[] | null = null;
     try {
-      permutation = await requestPermutation(http, url, query, head);
+      permutation = await requestPermutation({ http, url, signal: options?.signal }, query, head);
       outage.answered();
     } catch (err) {
       // A read path never throws, and never hands back the unranked order without saying so.
-      outage.failed(errorMessage(err));
+      outage.failed(errorMessage(err), { signal: options?.signal });
     }
 
     const ordered = permutation ? permutation.map((idx) => head[idx]) : head;
@@ -63,10 +63,10 @@ function replyText(body: JsonValue): string {
   return isJsonString(content) ? content : '';
 }
 
-/** One chat-completions call; rejects with the reason when the reply holds no usable permutation. */
+/** One chat-completions call to `url`, stopped by `signal`; rejects with the reason when the reply holds no usable
+ * permutation. */
 async function requestPermutation(
-  http: Http,
-  url: string,
+  { http, url, signal }: { readonly http: Http; readonly url: string; readonly signal: AbortSignal | undefined },
   query: string,
   head: readonly SearchResult[],
 ): Promise<number[]> {
@@ -89,6 +89,7 @@ async function requestPermutation(
       temperature: 0,
     },
     budgetMs: envLlmRerankerTimeoutMs() ?? DEFAULT_TIMEOUT_MS,
+    signal,
   });
   if (!resp.ok) {
     await resp.body?.cancel();

@@ -21,17 +21,14 @@ import {
   openHippoDb,
   openHippoDbReadOnly,
   closeHippoDb,
-  currentRequestStores,
   getSchemaVersion,
   getCurrentSchemaVersion,
   setMeta,
 } from '../../src/db/index.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -43,7 +40,7 @@ function sha256(file: string): string {
 
 const dirs: string[] = [];
 afterEach(() => {
-  while (dirs.length) removeAfterRequest(dirs.pop()!);
+  while (dirs.length) removeDir(dirs.pop()!);
 });
 function tmp(prefix: string): string {
   const d = mkdtempSync(join(tmpdir(), prefix));
@@ -385,13 +382,10 @@ describe('hippo doctor', () => {
     setMeta(seed, 'schema_version', String(older));
     seed.exec(`PRAGMA user_version = ${older}`);
     closeHippoDb(seed);
-    // Doctor runs as a request of its own, and the last close checkpoints the WAL into hippo.db, the hash target.
-    currentRequestStores()?.close();
 
     const before = sha256(join(global, 'hippo.db'));
     const r = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' });
     expect(r.checks.find((c) => c.id === 'projects')?.status).toBe('pass');
-    currentRequestStores()?.close();
     expect(sha256(join(global, 'hippo.db'))).toBe(before);
     const check = openHippoDbReadOnly(global);
     expect(getSchemaVersion(check)).toBe(older);

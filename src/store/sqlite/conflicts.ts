@@ -156,7 +156,7 @@ export function replaceDetectedConflicts(
 ): void {
   const changedIds = writeConflictRefresh(db, readConflictRefresh(db, detected), detected, detectedAt);
   const changed = [...readEntriesByIds(db, changedIds, ALL_TENANTS).values()];
-  syncChangedMirrors(files.hippoRoot, db, changed, detectedAt);
+  syncChangedMirrors(files, db, changed, detectedAt);
 }
 
 /** The tenant of every memory the refresh can compare, and each stored conflicts_with_json other than '[]', read before
@@ -372,7 +372,7 @@ function resolveConflict(
   if (removal === null) return false;
   const { keep, loser } = resolution;
   const changed = [...readEntriesByIds(db, [keep.id, loser.id], tenantId).values()];
-  syncChangedMirrors(files.hippoRoot, db, changed, resolution.at);
+  syncChangedMirrors(files, db, changed, resolution.at);
   if (removal.loserRemoved) purgeRemovedLoserMirrors(files.hippoRoot, db, loser.id, removal);
   return true;
 }

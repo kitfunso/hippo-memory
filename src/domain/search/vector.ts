@@ -7,7 +7,7 @@ import { errorFields, errorMessage, log, type LogFields } from '../../base/util/
 import type { RuntimeSettings } from '../../base/config/config.js';
 import type { HippoStore, VectorReads } from '../../base/ports/store-index.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
-import { withRequestSignal } from '../../base/util/request-scope.js';
+
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
 import type { VectorCandidateSpec } from '../../base/ports/store/vectors.js';
 
@@ -41,6 +41,8 @@ export interface VectorArmOptions extends CurrentnessOptions {
   queryEmbedDeadline?: AbortSignal;
   /** The root's settings; a fresh budget lasts its `queryEmbedTimeoutMs`. */
   runtime?: Pick<RuntimeSettings, 'queryEmbedTimeoutMs'>;
+  /** The request's abort signal; a fresh budget ends with it too. */
+  signal?: AbortSignal;
 }
 
 // Jev's default budget (infra/rerankers/jev.ts): each is one off-box call that a recall waits on.
@@ -54,9 +56,14 @@ function queryEmbedBudgetMs(configured: number | undefined): number {
   return configured ?? QUERY_EMBED_BUDGET_MS;
 }
 
-/** One deadline for every query embedding a recall makes, so two stores or a physics fallback share the budget. */
-export function startQueryEmbedDeadline(configuredMs?: number): AbortSignal {
-  return withRequestSignal(AbortSignal.timeout(queryEmbedBudgetMs(configuredMs)));
+/** One deadline for every query embedding a recall makes, so two stores or a physics fallback share the budget; the
+ * request's own abort ends it as well. */
+export function startQueryEmbedDeadline({
+  runtime,
+  signal,
+}: Pick<VectorArmOptions, 'runtime' | 'signal'>): AbortSignal {
+  const budget = AbortSignal.timeout(queryEmbedBudgetMs(runtime?.queryEmbedTimeoutMs));
+  return signal === undefined ? budget : AbortSignal.any([budget, signal]);
 }
 
 /**
@@ -146,12 +153,11 @@ async function fillVectorArm(
   );
   // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search can use.
   if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
-  const configuredMs = options.runtime?.queryEmbedTimeoutMs;
-  const vec = await embedQueryBy(options.queryEmbedDeadline ?? startQueryEmbedDeadline(configuredMs), provider, query);
+  const vec = await embedQueryBy(options.queryEmbedDeadline ?? startQueryEmbedDeadline(options), provider, query);
   if (vec === null) {
     warnBm25Fallback(
       'query-embed-budget',
-      `the ${provider.kind} embedding provider gave no query vector within ${queryEmbedBudgetMs(configuredMs)} ms`,
+      `the ${provider.kind} embedding provider gave no query vector within ${queryEmbedBudgetMs(options.runtime?.queryEmbedTimeoutMs)} ms`,
     );
     return;
   }

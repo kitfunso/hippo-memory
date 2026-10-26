@@ -21,9 +21,7 @@ import { retrieve } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'test:legacy', role: 'admin' });
@@ -44,7 +42,7 @@ describe('recall: default-deny on unknown:legacy', () => {
   beforeEach(() => {
     root = makeRoot('unknown-legacy');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('unscoped recall does NOT surface scope=unknown:legacy rows (also excludes private:*)', async () => {
     writeEntry(root, makeWithScope('public-row alpha', null));

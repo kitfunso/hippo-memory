@@ -8,7 +8,6 @@ import { toWire } from '../../src/base/memory/memory-wire.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   closeHippoDb,
-  currentRequestStores,
   getCurrentSchemaVersion,
   getSchemaVersion,
   openHippoDb,
@@ -23,9 +22,6 @@ import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -300,8 +296,6 @@ describe('hippo projects list', () => {
     open();
     setMeta(db, 'schema_version', String(older));
     db.exec(`PRAGMA user_version = ${older}`);
-    // The command runs as a request of its own, whose first open reads the schema version afresh.
-    currentRequestStores()?.close();
     // The rows already have the last migration's shape, so only its run is counted.
     const up = vi.spyOn(MIGRATIONS[MIGRATIONS.length - 1]!, 'up').mockImplementation(() => undefined);
     try {

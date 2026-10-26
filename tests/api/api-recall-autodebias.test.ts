@@ -20,9 +20,7 @@ import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { closePrediction } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -82,7 +80,7 @@ describe('api.recall planningFallacyHint', () => {
     vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
   });
   afterEach(() => {
-    removeAfterRequest(root);
+    removeDir(root);
   });
 
   it('populates planningFallacyHint when query has forward-claim AND class resolves AND nClosed > 0', async () => {

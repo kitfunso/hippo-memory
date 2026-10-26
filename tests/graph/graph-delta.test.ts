@@ -7,7 +7,6 @@ import { insertEntityAt } from '../_helpers/graph-seed.js';
 import type { EntityType, GraphOp, SourceObjectType } from '../../src/base/ports/store/graph.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -322,7 +321,6 @@ const CROSS_OBJECT_FIXTURES: Array<[string, (h: string) => Promise<void>]> = [
 
 describe('graph delta', () => {
   let home: string;
-  oneRequestPerTest();
   beforeEach(() => {
     home = makeRoot('graph-delta');
   });

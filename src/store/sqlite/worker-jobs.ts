@@ -5,10 +5,11 @@ import { type DatabaseSyncLike, RequestStores } from '../../db/index.js';
 import type { OpenedDb } from '../../db/connect.js';
 import { VectorGraphs } from '../../db/vector-graph-index.js';
 import { errorFields, log } from '../../base/util/log.js';
-import { requestScopes } from '../../base/util/request-scope.js';
+import { runWithRequestId } from '../../base/util/request-scope.js';
 import { handlesOf, initStore } from './handles.js';
 import { watchCommits } from './commit-watch.js';
 import { StoreRuntime } from '../../db/store-runtime.js';
+import { grantFor } from './grant.js';
 import { encodeError } from './error-codec.js';
 import { sqliteStoreOn } from './store.js';
 import { restoreAllTenants } from './tenant-wire.js';
@@ -27,8 +28,8 @@ import {
 
 /** Every method the op table can name, on the thread's store, each run to its end on the thread's one connection;
  * stored vectors answer as a pack, which worker-store.ts turns back into the port's Map. */
-function workerOps({ hippoRoot, rules }: WorkerInit, graphs: VectorGraphs | undefined) {
-  const handles = handlesOf(hippoRoot, rules);
+function workerOps({ hippoRoot, rules }: WorkerInit, graphs: VectorGraphs | undefined, session: WorkerStores) {
+  const handles = handlesOf(hippoRoot, { ...rules, session });
   const store = sqliteStoreOn(handles);
   const vectors = sqliteVectorReads(handles, graphs);
   const stored = async (part: StoredPart, ids: readonly string[]) =>
@@ -38,9 +39,8 @@ function workerOps({ hippoRoot, rules }: WorkerInit, graphs: VectorGraphs | unde
 
 type Ops = ReturnType<typeof workerOps>;
 
-/** The scope every job of a thread runs in, so each open inside a job gets the thread's one connection. */
+/** The session every job of a thread opens through, so each open inside a job gets the thread's one connection. */
 class WorkerStores extends RequestStores {
-  override requestId: string | undefined = undefined;
   walPages: number | undefined;
   jobId = 0;
   readonly #init: WorkerInit;
@@ -48,9 +48,9 @@ class WorkerStores extends RequestStores {
   readonly #prepared = new WeakSet<DatabaseSyncLike>();
   readonly #walPagesOn = new WeakMap<DatabaseSyncLike, number>();
 
-  constructor(init: WorkerInit) {
+  constructor(init: WorkerInit, runtime: StoreRuntime) {
     // The executor sends a reader its first job only after the writer has run the setup.
-    super({ busyWaitMs: init.busyWaitMs, ...(init.mode === 'read' && { setupDoneFor: init.hippoRoot }) });
+    super({ runtime, busyWaitMs: init.busyWaitMs, ...(init.mode === 'read' && { setupDoneFor: init.hippoRoot }) });
     this.#init = init;
     this.#commitFlag = init.commitFlag && new Int32Array(init.commitFlag);
   }
@@ -109,24 +109,21 @@ function runOp(ops: Ops, op: string, args: readonly unknown[]) {
   return run(...args);
 }
 
-/** The thread's store runtime and its one scope, which every job runs in. */
+/** The thread's store runtime and its one session, which every job opens through. */
 interface Thread {
   readonly runtime: StoreRuntime;
   readonly stores: WorkerStores;
 }
 
-async function answer(ops: Ops, { runtime, stores }: Thread, hippoRoot: string, job: Job): Promise<Reply> {
+async function answer(ops: Ops, { stores }: Thread, hippoRoot: string, job: Job): Promise<Reply> {
   const failuresBefore = auditWriteFailureCount();
-  stores.requestId = job.requestId;
   stores.walPages = job.walPages;
   stores.jobId = job.id;
   try {
-    const value = await runtime.run(() =>
-      requestScopes.run(stores, () =>
-        job.op === STORE_SETUP_OP
-          ? initStore(hippoRoot)
-          : runOp(ops, job.op, restoreAllTenants(job.args, job.allTenants)),
-      ),
+    const value = await runWithRequestId(job.requestId, () =>
+      job.op === STORE_SETUP_OP
+        ? initStore(hippoRoot, { grant: grantFor({ session: stores }) })
+        : runOp(ops, job.op, restoreAllTenants(job.args, job.allTenants)),
     );
     return { id: job.id, ok: true, value, auditFailures: auditWriteFailureCount() - failuresBefore };
   } catch (err) {
@@ -154,12 +151,12 @@ export function serveJobs(port: MessagePort, init: WorkerInit): void {
   const graphs = init.pinned
     ? new VectorGraphs(init.hippoRoot, { threshold: init.vectorGraphThreshold, maxVectors: init.vectorGraphMaxVectors })
     : undefined;
-  const ops = workerOps(init, graphs);
   // A thread is its own composition root: its runtime holds its mirror writes and closes its connection at stop.
   const runtime = new StoreRuntime();
-  const thread: Thread = { runtime, stores: runtime.run(() => new WorkerStores(init)) };
+  const thread: Thread = { runtime, stores: new WorkerStores(init, runtime) };
+  const ops = workerOps(init, graphs, thread.stores);
   // Each step still closes what is left when the one before it throws, so a failed flush leaves no handle on the files.
-  // Held writes run first, then the thread's scope closes, and dispose finds no scope left to close twice.
+  // Held writes run first, then the thread's session closes, and dispose finds no session left to close twice.
   const closeThread = (): void => {
     try {
       runtime.held.flush();

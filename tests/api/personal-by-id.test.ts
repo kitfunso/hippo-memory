@@ -15,10 +15,8 @@ import { apiCtx, testReach } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { readEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
-
-oneRequestPerTest();
 
 let root: string;
 let globalRoot: string;
@@ -84,8 +82,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  removeAfterRequest(root);
-  removeAfterRequest(globalRoot);
+  removeDir(root);
+  removeDir(globalRoot);
 });
 
 describe("by-id writes on someone else's personal row", () => {

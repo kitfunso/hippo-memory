@@ -11,9 +11,7 @@ import { handleEmbed } from '../../src/surface/cli/maintenance.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -59,7 +57,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   process.exitCode = undefined;
-  removeAfterRequest(emptyCache);
+  removeDir(emptyCache);
 });
 
 describe('the local provider with a model that cannot load', () => {

@@ -4,10 +4,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { rankMultihop } from '../../src/domain/search/multihop.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 describe('multihopSearch', () => {
   let hippoRoot: string;

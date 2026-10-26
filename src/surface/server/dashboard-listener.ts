@@ -60,7 +60,7 @@ export class DashboardListenError extends Error {
 }
 
 /** What every request shares: the reader thread on its own store connection, and a Context on the store's workers. */
-function servingFor(opts: DashboardOptions, { store, offLoop, host }: ServerRuntime): DashboardServing {
+function servingFor(opts: DashboardOptions, { store, storeFor, host }: ServerRuntime): DashboardServing {
   const { hippoRoot, tenantId } = opts;
   const clock = evalClock();
   const now = opts.now ?? ((): number => clock().getTime());
@@ -69,17 +69,17 @@ function servingFor(opts: DashboardOptions, { store, offLoop, host }: ServerRunt
   return {
     access: { token: opts.token, port: opts.port, tickets: dashboardTickets() },
     reader: startDashboardReader({ hippoRoot, tenantId }, { now, cacheClock: opts.cacheClock ?? Date.now }),
-    context: () => ({
+    context: (limits) => ({
       hippoRoot,
       tenantId,
       actor: adminActor(DASHBOARD_ACTOR),
-      store,
+      store: storeFor(store, limits),
       config: configAt(hippoRoot),
       infra: infra(),
+      signal: limits.signal,
     }),
     bodyDeadlineMs: bodyDeadlineMs(opts.bodyDeadlineMs),
     staticFiles: loadStaticFiles(),
-    offLoop,
   };
 }
 
@@ -95,7 +95,7 @@ export async function serveDashboard(opts: DashboardOptions): Promise<DashboardH
     res.once('finish', runtime.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    answerRequest(req, res, () => runtime.runRequest(() => answerDashboard(serving, req, res)), {
+    answerRequest(req, res, (limits) => answerDashboard(serving, { req, res, limits }), {
       slowWarnMs: undefined,
       counts,
     });

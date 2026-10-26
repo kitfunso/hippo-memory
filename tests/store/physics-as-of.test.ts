@@ -15,10 +15,8 @@ import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import { saveEmbeddingIndex, writeEntry } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -79,7 +77,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  removeAfterRequest(root);
+  removeDir(root);
 });
 
 const ids = (results: SearchResult[]): string[] => results.map((r) => r.entry.id);

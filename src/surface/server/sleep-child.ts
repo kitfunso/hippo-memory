@@ -8,7 +8,7 @@ import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { isStoreBusy } from '../../base/ports/store.js';
 import { configReader } from '../../host/config-file.js';
 import { createHost } from '../../host/host.js';
-import { defaultReach, defaultStore, runStoreRequest, saveVectorGraphFile } from '../open-store.js';
+import { defaultReach, defaultStore, runStoreRequest, saveVectorGraphFile, type StoreSession } from '../open-store.js';
 import { envLossAversionRatio, envRuntimeSettings, envTenant } from '../../base/util/env.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { SleepJob, SleepMessage, SleepReply } from './sleep-offload.js';
@@ -21,7 +21,8 @@ type JobResult = SleepResult | Awaited<ReturnType<typeof autoSleepConsolidate>>;
 const EXIT_MARGIN_MS = 5_000;
 
 const loadConfig = configReader(envRuntimeSettings);
-const storeAt = (root: string) => defaultStore(root, evalStoreRules(envLossAversionRatio()));
+const storeIn = (session: StoreSession) => (root: string) =>
+  defaultStore(root, { ...evalStoreRules(envLossAversionRatio()), session });
 // The child runs one job, so its one root builds the ports and its Host once.
 const childHost = createHost();
 const childInfra = rootInfra(childHost);
@@ -36,7 +37,11 @@ function failed<E>(err: E): SleepReply<never> {
 }
 
 /** The served sleep, with the reach `hippo sleep` probes, so it shares into the same global store. */
-function sleepJob({ hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>): Promise<SleepResult> {
+function sleepJob(
+  { hippoRoot, ...job }: Extract<SleepJob, { kind: 'sleep' }>,
+  session: StoreSession,
+): Promise<SleepResult> {
+  const storeAt = storeIn(session);
   const store = storeAt(hippoRoot);
   const reach = contextReach(
     defaultReach(hippoRoot, store, undefined, storeAt, childHost),
@@ -70,16 +75,16 @@ function sendReply(reply: SleepReply<JobResult>): Promise<number> {
 process.once('message', (message) => {
   // SAFETY: sleep-offload.ts is the only writer on this channel and sends exactly one SleepMessage.
   const job = message as SleepMessage;
-  const work = (): Promise<JobResult> =>
+  const work = (session: StoreSession): Promise<JobResult> =>
     job.kind === 'consolidate'
       ? autoSleepConsolidate({
-          store: storeAt(job.hippoRoot),
+          store: storeIn(session)(job.hippoRoot),
           config: loadConfig(job.hippoRoot),
           tenantId: envTenant(),
           infra: childInfra(),
         })
-      : sleepJob(job);
-  // The server's own request scope and lock wait, so a busy store answers as it did when sleep ran in the server.
+      : sleepJob(job, session);
+  // The server's own session and lock wait, so a busy store answers as it did when sleep ran in the server.
   runStoreRequest(work, 'server')
     .then((result): SleepReply<JobResult> => ({ ok: true, result }), failed)
     // Exit only once the reply is written, or the parent could see the process end first.

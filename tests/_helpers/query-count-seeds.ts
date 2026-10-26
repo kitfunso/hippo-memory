@@ -9,10 +9,10 @@ import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { adminActor } from '../../src/api/types.js';
-import { withRequestStoresSync } from '../../src/db/request-stores.js';
+import { closeHippoDb } from '../../src/db/index.js';
 import { writeEntriesTogether } from './root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
-import { removeAfterRequest } from './one-request-per-test.js';
+import { removeDir } from './remove-dir.js';
 
 export const SIZES = [10, 200] as const;
 export const ROW_READ = MEMORY_SELECT_COLUMNS;
@@ -24,7 +24,7 @@ const roots: string[] = [];
 export function useQueryCountRoots(): void {
   afterEach(() => {
     vi.unstubAllEnvs();
-    for (const dir of roots.splice(0)) removeAfterRequest(dir);
+    for (const dir of roots.splice(0)) removeDir(dir);
   });
 }
 
@@ -48,12 +48,14 @@ export function seed(
   entries: readonly MemoryEntry[],
   after?: (db: ReturnType<typeof openStore>, e: MemoryEntry) => void,
 ): void {
-  withRequestStoresSync(() => {
-    writeEntriesTogether(ctx.hippoRoot, entries);
-    if (!after) return;
-    const db = openStore(ctx.hippoRoot);
+  writeEntriesTogether(ctx.hippoRoot, entries);
+  if (!after) return;
+  const db = openStore(ctx.hippoRoot);
+  try {
     for (const e of entries) after(db, e);
-  });
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 export function rows(n: number, label: string, extra: Partial<MemoryEntry> = {}): MemoryEntry[] {

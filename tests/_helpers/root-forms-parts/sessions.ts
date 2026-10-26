@@ -16,6 +16,7 @@ import * as handoffsSql from '../../../src/store/sqlite/handoffs.js';
 import * as indexAndStatsSql from '../../../src/store/sqlite/index-and-stats.js';
 import { readLastRecall } from '../../../src/store/sqlite/mirrors.js';
 import { onHandle, openStore, storeFilesOf } from '../../../src/store/sqlite/handles.js';
+import type { StoreFiles } from '../../../src/store/sqlite/open.js';
 import type { HippoIndex } from '../../../src/store/sqlite/rows.js';
 import * as sessionsSql from '../../../src/store/sqlite/sessions.js';
 import type { UntracedSession } from '../../../src/base/ports/store/consolidation.js';
@@ -95,15 +96,17 @@ export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retri
   return onHandle(hippoRoot, (db) => indexAndStatsSql.saveIndex(db, index), openStore);
 }
 
+/** `at` as store files carries the runtime and lock wait of the caller's store; a bare root has neither. */
 export function updateStatsUnlessBusy(
-  hippoRoot: string,
+  at: string | StoreFiles,
   delta: Parameters<typeof indexAndStatsSql.updateStatsUnlessBusy>[2],
   committed: string,
 ): void {
+  const files = typeof at === 'string' ? storeFilesOf(at) : at;
   onHandle(
-    hippoRoot,
-    (db) => indexAndStatsSql.updateStatsUnlessBusy(db, storeFilesOf(hippoRoot), delta, committed),
-    openStore,
+    files.hippoRoot,
+    (db) => indexAndStatsSql.updateStatsUnlessBusy(db, files, delta, committed),
+    (root) => openStore(root, files.opens),
   );
 }
 

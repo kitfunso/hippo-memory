@@ -16,16 +16,20 @@ describe('process.exit inside the root store runtime', () => {
     const marker = join(root, 'held-write.txt');
     const script = [
       `import * as fs from 'node:fs';`,
-      `import { withRootStoreRuntime } from ${built('surface/open-store.js')};`,
+      `import { openRootStoreRuntime } from ${built('surface/open-store.js')};`,
       `import { deferMirrorWrite } from ${built('store/sqlite/mirrors.js')};`,
-      `import { openHippoDb, runWithRequestStores } from ${built('db/index.js')};`,
+      `import { grantFor } from ${built('store/sqlite/grant.js')};`,
+      `import { openHippoDb, withSharedStoreHandles } from ${built('db/index.js')};`,
       `const root = ${JSON.stringify(root)};`,
-      'await withRootStoreRuntime(() => runWithRequestStores(() => {',
-      `  openHippoDb(root).exec("INSERT INTO meta(key, value) VALUES ('exit-probe', '1')");`,
-      `  deferMirrorWrite(root, 'probe', () => fs.writeFileSync(${JSON.stringify(marker)}, 'flushed'));`,
+      'const runtime = openRootStoreRuntime();',
+      'await withSharedStoreHandles((session) => {',
+      `  const db = openHippoDb(root, { grant: grantFor({ session }) });`,
+      `  db.exec("INSERT INTO meta(key, value) VALUES ('exit-probe', '1')");`,
+      `  const at = { hippoRoot: root, runtime };`,
+      `  deferMirrorWrite(at, 'probe', () => fs.writeFileSync(${JSON.stringify(marker)}, 'flushed'));`,
       "  console.log('exiting');",
       '  process.exit(0);',
-      '}));',
+      '}, { runtime });',
     ].join('\n');
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
       encoding: 'utf-8',

@@ -29,9 +29,7 @@ import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -46,7 +44,7 @@ function tmpHome() {
   return {
     home,
     restore: () => {
-      removeAfterRequest(home);
+      removeDir(home);
       rmSync(globalTmp, { recursive: true, force: true });
     },
   };
@@ -512,7 +510,7 @@ describe('pinned budget reserve dedupes mirrored entries', () => {
   });
 
   afterEach(() => {
-    removeAfterRequest(home);
+    removeDir(home);
   });
 
   it('a pin mirrored in local+global reserves its cost ONCE, so a recent entry still fits', async () => {

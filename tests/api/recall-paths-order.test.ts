@@ -16,9 +16,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { CLEARED_ENV, FAKE_NOW, pinUpdatedAt, seeded, TENANT } from '../_helpers/recall-golden-seed.js';
 import { loadEntriesByIds, loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
 import type { AppendAuditOptions, AuditEvent } from '../../src/base/ports/store/types.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 const ROWS = [
   seeded('deploy pipeline uses blue green rollout', 'mem_o_a', '2026-01-28T00:00:00.000Z'),
@@ -126,7 +124,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  removeAfterRequest(root);
+  removeDir(root);
 });
 
 describe('retrieve paths: order and writes', () => {

@@ -17,9 +17,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
 import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
 
 const captureTurns = (turns: readonly SessionTurn[]) => {
   const { users, assistants } = sessionTail(turns);

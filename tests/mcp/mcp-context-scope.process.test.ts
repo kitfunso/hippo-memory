@@ -11,10 +11,8 @@ import {
   appendSessionEvent,
   saveSessionHandoff,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
-
-oneRequestPerTest();
 
 function callTool(
   reqId: number,
@@ -55,7 +53,7 @@ describe('mcp hippo_context scope filter', () => {
   });
 
   afterEach(() => {
-    removeAfterRequest(home);
+    removeDir(home);
   });
 
   it('prints the snapshot, handoff and trail, and drops a superseded row', async () => {

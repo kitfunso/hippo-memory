@@ -156,8 +156,10 @@ describe('the MCP tool gate on a shared store', () => {
     expect(loadAllEntries(store, 'default')).toEqual([]);
   });
 
-  it('leaves stdio alone: the stdio host is never gated on a shared store', () => {
-    const ctx = cliStdioHost().contextFor(flaggedStore(), 'default');
-    for (const { name } of TOOLS) expect(sharedStoreRefusal(name, ctx), name).toBeUndefined();
+  it('leaves stdio alone: the stdio host is never gated on a shared store', async () => {
+    await cliStdioHost().runFrame(new AbortController().signal, async (contextFor) => {
+      const ctx = contextFor(flaggedStore(), 'default');
+      for (const { name } of TOOLS) expect(sharedStoreRefusal(name, ctx), name).toBeUndefined();
+    });
   });
 });

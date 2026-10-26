@@ -22,7 +22,6 @@ import {
 } from '../_helpers/store-conformance.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { markSlackEventSeen, writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import {
   sqliteConnectorSide,
   type ConnectorSide,
@@ -30,8 +29,6 @@ import {
   type LoggedEvent,
 } from '../_helpers/connector-sides.js';
 import { copyTree } from '../_helpers/copy-tree.js';
-
-oneRequestPerTest();
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const ACTOR = 'connector:slack';

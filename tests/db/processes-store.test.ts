@@ -22,11 +22,9 @@ import {
 } from '../../src/domain/objects/processes.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 function countRows(home: string, table: string): number {
   const db = openHippoDb(home);
@@ -43,7 +41,7 @@ describe('processes store (first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('processes');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('saveProcess creates both memory and processes row + process_create audit, version 1', async () => {
     const proc = await cliSave(home, 'default', PROCESS, {

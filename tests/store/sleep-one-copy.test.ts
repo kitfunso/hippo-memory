@@ -9,12 +9,10 @@ import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { escapeRegex } from '../../src/base/util/escape.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 /** loadAllEntries' statement with no tenant: every full row of the store. */
 // An every-tenant page is one statement that picks each tenant's rows off its own index; `(1)` is no filter.
@@ -35,7 +33,7 @@ const ctxFor = (hippoRoot: string): FullContext =>
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
 
 describe('sleep after consolidation', () => {

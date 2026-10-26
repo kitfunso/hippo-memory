@@ -11,9 +11,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 // Four phrasings that hash apart and all rank the one seeded memory first.
 const Q = [
@@ -73,7 +71,7 @@ describe('hippo recall anchoring hint', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    removeAfterRequest(root);
+    removeDir(root);
   });
 
   it('prints the anchored_on line above the results on the third distinct query one memory tops, and not again on the fourth', async () => {

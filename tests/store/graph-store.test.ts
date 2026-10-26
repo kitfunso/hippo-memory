@@ -26,9 +26,7 @@ import {
   loadEntities,
   loadRelations,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 /** Write a memory and force its kind (default writes are 'distilled'). Setting kind
  *  to 'raw' is allowed (the append-only trigger is BEFORE DELETE, not UPDATE). */
@@ -67,7 +65,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
   beforeEach(() => {
     home = makeRoot('graph');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('insertEntity from a distilled / superseded memory sets source_kind; insertRelation links them', async () => {
     const md = addMemory(home, 'default', 'distilled');

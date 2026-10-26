@@ -9,19 +9,15 @@ import {
   issueEventToRememberOpts,
 } from '../../src/surface/connectors/github/transform.js';
 import { messageToRememberOpts } from '../../src/surface/connectors/slack/transform.js';
-import { withSqliteBlocked } from '../../src/db/index.js';
 import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
 import type { ConnectorEvent } from '../../src/base/ports/store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { rowsOf, sqliteConnectorSide } from '../_helpers/connector-sides.js';
 import { testInfra } from '../_helpers/infra.js';
 import { copyTree } from '../_helpers/copy-tree.js';
-
-oneRequestPerTest();
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const connector: Actor = { subject: 'connector:slack', role: 'admin' };
@@ -109,7 +105,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       deliveryId: 'd-1',
       eventName: 'issues',
     };
-    const ids = await withSqliteBlocked('port-only', async () => {
+    const ids = await (async () => {
       const message = await remember(ctx, ingestOpts(slackMessage, { connector: 'slack', eventId: 'Ev_message' }));
       const redelivered = await remember(ctx, ingestOpts(slackMessage, { connector: 'slack', eventId: 'Ev_message' }));
       expect(redelivered.duplicate).toEqual({ memoryId: message.id });
@@ -124,7 +120,7 @@ describe('a served store with connectorWrites takes connector traffic', () => {
         [opened.id, 'raw', 'github://acme/demo/issue/42'],
       ]);
       return { message: message.id, opened: opened.id };
-    });
+    })();
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
     expect(side.events().map((e) => [e.connector, e.eventKey, e.memoryId, e.deliveryId])).toEqual([
       ['slack', 'Ev_deleted', ids.message, null],
@@ -170,13 +166,13 @@ describe('a served store with connectorWrites takes connector traffic', () => {
       deliveryId: 'd-2',
       eventName: 'issue_comment',
     };
-    const held = await withSqliteBlocked('port-only', async () => {
+    const held = await (async () => {
       const result = await remember(ctx, ingestOpts(comment, event));
       expect((await side.store.entriesByIds([result.id], TENANT_A)).map((r) => r.scope)).toEqual([
         'quarantine:private:github:public:acme/demo',
       ]);
       return result;
-    });
+    })();
     expect(held.quarantined).toEqual({ reason: expect.any(String) });
     expect(side.records()).toEqual([
       {

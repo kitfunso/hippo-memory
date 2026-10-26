@@ -62,14 +62,11 @@ import {
   clearAblationEnv,
   QUESTIONS,
   QUESTION_C,
-  benchmarkStores,
   cleanupScratch,
   runPipeline,
   TEST_SIM_ROUNDS,
 } from './memory-value-fixtures.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest(benchmarkStores);
+import { removeDir } from '../_helpers/remove-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -284,7 +281,7 @@ describe('memory-value harness (real stores)', () => {
     cleanupScratch();
     shared = undefined;
     const run1 = await runOnceAndScore();
-    for (const q of QUESTIONS) removeAfterRequest(questionDir(q.question_id), benchmarkStores);
+    for (const q of QUESTIONS) removeDir(questionDir(q.question_id));
     const run2 = await runOnceAndScore();
 
     expect(run2.rowCounts).toEqual(run1.rowCounts);
@@ -340,7 +337,7 @@ describe('causal clock clamp', () => {
       expect(s0Rows.length).toBe(3);
       for (const row of s0Rows) expect(row.features.age_days).toBe(10);
     } finally {
-      removeAfterRequest(questionDir(QUESTION_C.question_id), benchmarkStores);
+      removeDir(questionDir(QUESTION_C.question_id));
     }
   });
 });
@@ -378,7 +375,7 @@ describe('--skip-simulate variance-gate exemption', () => {
       expect(CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE).toBe(3);
       expect(skipSimulateGate.passed).toBe(true);
     } finally {
-      for (const q of QUESTIONS) removeAfterRequest(questionDir(q.question_id), benchmarkStores);
+      for (const q of QUESTIONS) removeDir(questionDir(q.question_id));
     }
   });
 });

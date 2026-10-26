@@ -1,9 +1,11 @@
 // The one module outside the SQLite adapter that names it: each composition root opens the default store, its request
-// scopes, its store runtime and its server runtime here, so a second adapter changes this file and no root
+// sessions, its store runtime and its server runtime here, so a second adapter changes this file and no root
 // (scripts/check-layers.mjs). The exit hooks live here too, since the store layers install none.
+import type { StoreRules } from '../base/ports/infra.js';
+import type { HippoStore, StoreGroups } from '../base/ports/store-index.js';
 import {
-  currentStoreRuntime,
   sqliteServerRuntime,
+  sqliteStore as sqliteStoreWith,
   StoreRuntime,
   type ServerRuntimeOptions,
   type SqliteServerRuntime,
@@ -11,7 +13,7 @@ import {
 
 export {
   askingNearestFirst,
-  runDetachedSqliteRequest as runDetachedStoreRequest,
+  inSqliteSession as inStoreSession,
   runSqliteBatch as runStoreBatch,
   runSqliteHookRequest as runStoreHookRequest,
   runSqliteRequest as runStoreRequest,
@@ -24,9 +26,12 @@ export {
   sqliteStore as defaultStore,
   tenantOfApiKey,
   withSharedStoreHandles,
+  type RequestStores as StoreSession,
   type ResolveOptions,
   type ServerRuntimeOptions,
   type SqliteServerRuntime as ServerRuntime,
+  type SqliteStoreOptions as StoreOptions,
+  type StoreRuntime,
 } from '../store/sqlite/index.js';
 // The published entries' own names: ./store-kit's default store and vector rules.
 export {
@@ -35,28 +40,16 @@ export {
   encodeVector,
   OTHER_STORE_MARKER,
   rankVectorRows,
-  sqliteStore,
   type VectorMatch,
   type VectorRow,
 } from '../store/sqlite/index.js';
 
-/** Runs `fn` inside the process's store runtime: inside one already, it joins it; else it opens one that is disposed
- * when `fn` settles, or by its exit hook when process.exit comes first. */
-export async function withRootStoreRuntime<T>(fn: () => Promise<T>): Promise<T> {
-  if (currentStoreRuntime()) return fn();
-  const runtime = new StoreRuntime();
-  const onExit = (): void => runtime.dispose();
-  process.once('exit', onExit);
-  try {
-    return await runtime.run(fn);
-  } finally {
-    process.off('exit', onExit);
-    runtime.dispose();
-  }
-}
+/** ./store-kit's default store takes only the rules an add-on picks: a runtime or a session belongs to a composition
+ * root, and the published entries export neither. */
+export const sqliteStore: (hippoRoot: string, rules?: StoreRules) => HippoStore & StoreGroups = sqliteStoreWith;
 
-/** A store runtime for a root that runs until the process exits, such as the stdio MCP loop; its exit hook disposes
- * it. */
+/** A store runtime for a root that runs until the process exits, such as the CLI or the stdio MCP loop; its exit hook
+ * disposes it. */
 export function openRootStoreRuntime(): StoreRuntime {
   const runtime = new StoreRuntime();
   process.once('exit', () => runtime.dispose());

@@ -28,16 +28,14 @@ import {
   loadOpenPredictions,
   writeEntry,
 } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 describe('predictions store (first-class object)', () => {
   let home: string;
   beforeEach(() => {
     home = makeRoot('predictions');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('savePrediction creates both memory and predictions row', async () => {
     const pred = await savePrediction(home, 'default', {

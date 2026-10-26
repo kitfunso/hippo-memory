@@ -20,14 +20,11 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries, appendSessionEvent } from '../_helpers/root-forms.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 pinClock();
-
-oneRequestPerTest();
 
 function makeOkFetcher(content: string) {
   return vi.fn<typeof fetch>(

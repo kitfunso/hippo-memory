@@ -14,10 +14,8 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, loadEntities, loadRelations } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
-
-oneRequestPerTest();
 
 const T = 'default';
 /** All `references` edges in a tenant's graph. */
@@ -35,7 +33,7 @@ describe('cross-object references (Pass 3 name-match)', () => {
   });
   afterEach(() => {
     try {
-      removeAfterRequest(home);
+      removeDir(home);
     } catch {
       /* ignore */
     }

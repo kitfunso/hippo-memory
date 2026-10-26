@@ -6,10 +6,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
-
-oneRequestPerTest();
 
 describe('failed replay bumps retry_count by exactly one, for both connectors', () => {
   let root: string;

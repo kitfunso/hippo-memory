@@ -2,15 +2,9 @@
 // the rewrite leaves the mark, and the store's next open rewrites that mirror.
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
-import {
-  closeHippoDb,
-  type DatabaseSyncLike,
-  getHippoDbPath,
-  openHippoDb,
-  outsideRequestStores,
-  withWriteScope,
-} from '../../db/index.js';
-import { oncePerStore } from '../../db/connect.js';
+import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, openHippoDb, withWriteScope } from '../../db/index.js';
+import { oncePerStore, type StoreAt } from '../../db/connect.js';
+import { grantFor } from './grant.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { readEntriesByIds } from './entry-reads.js';
 import { deferMirrorWrite, mirrorBestEffort, writeMarkdownMirrors } from './mirrors.js';
@@ -42,30 +36,28 @@ export function markMirrorsDue(db: DatabaseSyncLike, ids: readonly string[]): vo
 }
 
 /** Rewrites the due mirrors once the current job is done, on a connection of its own. */
-export function deferDueMirrors(hippoRoot: string): void {
-  deferMirrorWrite(hippoRoot, 'markdown mirrors', () => rewriteDueMirrorsIn(hippoRoot));
+export function deferDueMirrors(at: StoreAt): void {
+  deferMirrorWrite(at, 'markdown mirrors', () => rewriteDueMirrorsIn(at));
 }
 
 /** On a store's first open in this runtime, rewrites the mirrors a crash or a failed rewrite left due; `due` is the
  * open probe's answer when it had one, so a store with none due reads nothing more. */
-export function recoverDueMirrors(hippoRoot: string, db: DatabaseSyncLike, due?: boolean): void {
-  oncePerStore(hippoRoot, 'due-mirrors', () => {
-    if (due ?? dueMarks(db, DUE).length > 0) mirrorBestEffort('markdown mirrors', () => rewriteDueMirrorsIn(hippoRoot));
+export function recoverDueMirrors(at: StoreAt, db: DatabaseSyncLike, due?: boolean): void {
+  oncePerStore(at, 'due-mirrors', () => {
+    if (due ?? dueMarks(db, DUE).length > 0) mirrorBestEffort('markdown mirrors', () => rewriteDueMirrorsIn(at));
   });
 }
 
-// Outside the job's scope, so the rewrite neither shares the job's handle nor counts as the job's commit.
-function rewriteDueMirrorsIn(hippoRoot: string): void {
+// No session, so the rewrite neither shares the job's handle nor counts as the job's commit.
+function rewriteDueMirrorsIn({ hippoRoot, runtime }: StoreAt): void {
   // A store removed before its deferred rewrite has nothing left to mirror.
   if (!fs.existsSync(getHippoDbPath(hippoRoot))) return;
-  outsideRequestStores(() => {
-    const db = openHippoDb(hippoRoot);
-    try {
-      rewriteDueMirrors(db, hippoRoot);
-    } finally {
-      closeHippoDb(db);
-    }
-  });
+  const db = openHippoDb(hippoRoot, { grant: grantFor({ runtime }) });
+  try {
+    rewriteDueMirrors(db, hippoRoot);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 /** Rewrites each due mirror from its row as it stands now, a page at a time; a mark is cleared once its file is written

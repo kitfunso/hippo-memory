@@ -22,18 +22,19 @@ export {
   getHippoDbPath,
   HOOK_DB_WAIT_MS,
   noteStoreBusy,
-  withSharedStoreHandles,
   SERVER_DB_WAIT_MS,
   SLEEP_DB_WAIT_MS,
-  scopedBusyWait,
-  withSqliteBlocked,
-  withSqliteAllowed,
-  withSqliteOffLoop,
-  outsideSqliteOffLoop,
   OTHER_STORE_MARKER,
   openHippoDb,
   openHippoDbReadOnly,
   closeHippoDb,
 } from './open.js';
-export { RequestStores, runWithRequestStores, currentRequestStores, outsideRequestStores } from './request-stores.js';
+export type { DbGrant, OpenOptions } from './grant.js';
+export {
+  RequestStores,
+  sessionOf,
+  withSharedStoreHandles,
+  withSharedStoreHandlesSync,
+  type RequestStoresOptions,
+} from './request-stores.js';
 export { OtherStoreFolderError, SqliteBlockedError } from './sqlite-blocked.js';

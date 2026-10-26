@@ -10,15 +10,13 @@ import { conflictLoserFate } from '../../src/domain/consolidate/conflicts.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 const T = 'default';
 const roots: string[] = [];
 
 afterEach(() => {
-  for (const r of roots.splice(0)) removeAfterRequest(r);
+  for (const r of roots.splice(0)) removeDir(r);
 });
 
 function root(): string {

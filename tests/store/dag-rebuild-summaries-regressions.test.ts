@@ -14,10 +14,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';
 import { makeOkFetcher, getRow, forceMarkDirty, rejectValue, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 afterEach(() => {
   vi.unstubAllEnvs();

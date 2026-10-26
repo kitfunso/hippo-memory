@@ -11,10 +11,8 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
-
-oneRequestPerTest();
 
 const A_TEXT = 'always run the deploy script with --dry-run first';
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
@@ -87,7 +85,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  removeAfterRequest(root);
+  removeDir(root);
 });
 
 describe('resolving conflicts next to personal rows', () => {

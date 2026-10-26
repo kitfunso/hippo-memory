@@ -20,11 +20,9 @@ import { POLICY, loadPolicies, policiesAsOf, normalizePolicyDate } from '../../s
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { savePolicy } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 /** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
@@ -58,7 +56,7 @@ describe('policies store (bi-temporal first-class object)', () => {
   beforeEach(() => {
     home = makeRoot('policies');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('savePolicy creates memory + policies row + policy_create audit; v1; valid_from defaults to creation instant', async () => {
     const before = new Date().toISOString();

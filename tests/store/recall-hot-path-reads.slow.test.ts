@@ -5,7 +5,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements, recordStatementsAsync, countMatching } from '../_helpers/count-statements.js';
-import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
@@ -16,7 +15,6 @@ import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipelin
 import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
 import { finishRecall } from '../../src/store/sqlite/last-recall.js';
-import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import {
   pushGoal,
@@ -27,16 +25,14 @@ import {
   updateStats,
 } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { removeDir } from '../_helpers/remove-dir.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-oneRequestPerTest();
 
 const roots: string[] = [];
 
 afterEach(() => {
   vi.useRealTimers();
-  for (const dir of roots.splice(0)) removeAfterRequest(dir);
+  for (const dir of roots.splice(0)) removeDir(dir);
 });
 
 function freshRoot(label: string): string {
@@ -50,9 +46,7 @@ function memory(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry 
 }
 
 function seed(root: string, entries: readonly MemoryEntry[]): void {
-  withRequestStoresSync(() => {
-    for (const e of entries) writeEntry(root, e);
-  });
+  for (const e of entries) writeEntry(root, e);
 }
 
 /** Runs `write` on a short-lived handle, for fixtures the store API has no writer for. */
@@ -193,7 +187,6 @@ describe('updateStats', () => {
     const root = freshRoot('hp-stats-file');
     for (const i of [3, 1, 2]) appendConsolidationRun(root, run(i));
     updateStats(root, { recalled: 1 });
-    flushHeldMirrors(root);
     // SAFETY: writeStatsMirror serializes a LegacyStats, whose counters and runs carry these fields.
     const stats = JSON.parse(fs.readFileSync(path.join(root, 'stats.json'), 'utf8')) as StatsFile;
     expect(stats.total_recalled).toBe(1);

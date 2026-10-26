@@ -26,9 +26,6 @@ import {
   opts,
   archivedRows,
 } from '../_helpers/importers-vault.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
 
 useVaultImport();
 

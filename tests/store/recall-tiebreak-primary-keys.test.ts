@@ -28,9 +28,7 @@ import { compareEntryIdentity, type EntryIdentity } from '../../src/base/rank/co
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 // ---------------------------------------------------------------------------
 // api.ts:833 — DAG-substitution ordering (overflow-child count desc)
@@ -65,7 +63,7 @@ describe('api.ts:833 DAG substitution ordering', () => {
   beforeEach(() => {
     root = makeRoot('dag-tiebreak');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('primary wins: the summary with MORE overflowing children is substituted, not the one with fewer', async () => {
     // Every leaf under both topics tokenizes to the SAME 4-term bag ("alpha
@@ -222,7 +220,7 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
   beforeEach(() => {
     home = makeRoot('hop-tiebreak');
   });
-  afterEach(() => removeAfterRequest(home));
+  afterEach(() => removeDir(home));
 
   it('primary wins (hop distance) and the tail decides same-hop ties', async () => {
     // a (origin, base seed) --1hop--> b, c (tied score: same origin+hop under

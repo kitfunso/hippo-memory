@@ -304,15 +304,14 @@ describe('an id-list read of one tenant', () => {
     const ids = entries.map((e) => e.id);
     // Inside a runtime, as the CLI runs it, the outcome's mirror rewrite stays held until dispose.
     const runtime = new StoreRuntime();
-    const { result, statements } = await runtime.run(() =>
-      recordStatementsAsync(async () => {
-        await outcome(ctxFor(root), ids, true);
-        return {
-          held: (await sqliteStore(root).entriesByIds(ids, 'default')).some((e) => e.id === ids[0]),
-          listed: loadEntriesByIds(root, ids, 'default').length,
-        };
-      }),
-    );
+    const ctx = { ...ctxFor(root), store: sqliteStore(root, { runtime }) };
+    const { result, statements } = await recordStatementsAsync(async () => {
+      await outcome(ctx, ids, true);
+      return {
+        held: (await ctx.store.entriesByIds(ids, 'default')).some((e) => e.id === ids[0]),
+        listed: loadEntriesByIds(root, ids, 'default').length,
+      };
+    });
     runtime.dispose();
     expect(result).toEqual({ held: true, listed: 10 });
 

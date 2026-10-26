@@ -22,12 +22,11 @@ import { rememberFailedCommand } from '../../api/memories/remember-local.js';
 import { pickWrites } from './memory-writes.js';
 import {
   cliApiContext,
-  cliBatch,
-  cliImportFiles,
+  cliImportBatch,
   cliInitGlobal,
   cliInfra,
-  cliRequest,
   cliStore,
+  cliStoreBatch,
   cliSyncOptions,
   type CliContext,
 } from './api-context.js';
@@ -188,7 +187,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
     extraTags,
     hippoRoot,
     tenantId,
-    target: { root: targetRoot, files: cliImportFiles(targetRoot), batch: cliBatch, clock: cliInfra().clock },
+    target: { root: targetRoot, batch: cliImportBatch(targetRoot), clock: cliInfra().clock },
   };
 
   // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through
@@ -330,7 +329,7 @@ async function importVaultFolder(options: VaultFolderOptions): Promise<void> {
   };
   const vaultResult = await importVaultInto(folderPath, vaultOptions, {
     store: cliStore(hippoRoot),
-    batch: cliRequest,
+    batch: cliStoreBatch(hippoRoot),
     infra: cliInfra(),
   });
   printVaultSummary(vaultResult, folderPath, cliApiContext(hippoRoot, tenantId), dryRun);

@@ -10,7 +10,6 @@ import { loadConfig } from '../../src/host/config-file.js';
 import type { HippoStore, LastRecall, LastRecallWrites, RecallWrites } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
-import { withSqliteAllowed } from '../../src/db/index.js';
 import { adminActor } from '../../src/api/index.js';
 import { retrieveWithCliCore } from '../../src/api/recall/request.js';
 import type { CliCoreRecall } from '../../src/api/recall/types.js';
@@ -20,10 +19,7 @@ import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadLastRecall, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
-
-oneRequestPerTest();
 
 let home: string;
 let hippoRoot: string;
@@ -88,7 +84,7 @@ describe('retrieve with the CLI ranking core', () => {
       ...lastRecall,
       finishRecall: async (w: LastRecallWrites, root) => {
         writes.push(w);
-        return withSqliteAllowed(() => lastRecall.finishRecall(w, root));
+        return lastRecall.finishRecall(w, root);
       },
     };
     const store: HippoStore = { ...inner, lastRecall: traced };

@@ -277,7 +277,7 @@ function boundRoute(route: Route, store: HippoStore, onHippoDb: boolean): BoundR
     const { handler } = route;
     if (!hasGroup(store, 'folderFiles')) return { ...route, unported: true, handler: notPorted };
     const run = (r: AuthedRouteRequest, params: RouteParams): Promise<void> =>
-      handler({ ...r, ctx: { ...r.ctx, store } }, params);
+      handler({ ...r, ctx: { ...r.ctx, store: r.opts.storeFor(store) } }, params);
     return { ...route, handler: run };
   }
   // A hippoDbOnly row needs hippo.db; a row naming no group runs on any store.
@@ -300,9 +300,7 @@ export async function dispatchV1Route(r: RouteRequest, method: string, path: str
   if (match === null) return false;
   const { route, run } = match;
   noteAccess(r.req, { route: routeLabel(route) });
-  // Only a store with worker threads has moved the route's hippo.db work; under any other the handler still opens
-  // hippo.db itself.
-  await r.opts.offLoop(() => run(r));
+  await run(r);
   return true;
 }
 
@@ -337,25 +335,21 @@ export async function dispatchAddonRoute(
   if (!bound) return false;
   const { route, ported } = bound;
   noteAccess(req, { route: route.path });
-  const answer = async (): Promise<void> => {
-    const ctx = await buildContextWithAuth(req, opts);
-    if (!ported) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
-    noteAccess(req, { tenant: ctx.tenantId });
-    const body = await parseJsonBody(req, ctx);
-    sendJson(res, 200, await route.handler({ ctx, body }));
-  };
-  // The add-on, not core, knows whether its handler reaches hippo.db only through the store's worker-backed methods.
-  await (route.loop === 'off' ? opts.offLoop(answer) : answer());
+  const ctx = await buildContextWithAuth(req, opts);
+  if (!ported) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
+  noteAccess(req, { tenant: ctx.tenantId });
+  const body = await parseJsonBody(req, ctx);
+  sendJson(res, 200, await route.handler({ ctx, body }));
   return true;
 }
 
-/** A route outside /v1 and the add-ons; its store work runs off the server thread as a V1 row's does. */
+/** A route outside /v1 and the add-ons. */
 export interface HostRoute {
   readonly method: string;
   readonly path: string;
 }
 
-/** Each runs where boot.ts places it around the rate limit and the request scope. */
+/** Each runs where boot.ts places it around the rate limit. */
 export const HOST_ROUTES = {
   health: { method: 'GET', path: '/health' },
   ready: { method: 'GET', path: '/ready' },
@@ -363,7 +357,7 @@ export const HOST_ROUTES = {
   mcpStream: { method: 'GET', path: '/mcp/stream' },
 } as const satisfies Readonly<Record<string, HostRoute>>;
 
-/** Runs `handle` off the server thread when the request is `route`'s; false when it is another route. */
+/** Runs `handle` when the request is `route`'s; false when it is another route. */
 export async function dispatchHostRoute(
   { req, opts }: RouteRequest,
   request: { readonly method: string; readonly path: string },
@@ -372,7 +366,7 @@ export async function dispatchHostRoute(
 ): Promise<boolean> {
   if (request.method !== route.method || request.path !== route.path) return false;
   noteAccess(req, { route: route.path });
-  await opts.offLoop(handle);
+  await handle();
   return true;
 }
 

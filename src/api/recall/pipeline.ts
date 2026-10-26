@@ -40,7 +40,7 @@ import {
 import { rankBothStores } from '../../domain/sharing/search-both.js';
 import type { HippoStore } from '../../base/ports/store.js';
 import { isJsonNumber } from '../../base/util/json.js';
-import { currentSignal } from '../../base/util/request-scope.js';
+
 import { textOverlap, tokenize as tokenizeQuery } from '../../base/util/tokenize.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import type { HybridVectorCandidates } from '../../domain/search/vector.js';
@@ -73,6 +73,9 @@ export interface RankRecallCtx extends RankSource {
   now: Date;
   /** Receives each operator note when the pipeline reaches it, so it interleaves with other stderr in order. */
   note?: (line: string) => void;
+  /** Fires when the request passes its deadline: the later stages are skipped, and the query embedding and the
+   * reranker's call stop. */
+  signal?: AbortSignal;
 }
 
 /** Search-engine choice and tuning; tuning left unset takes the engine's own default. */
@@ -216,6 +219,7 @@ export function rankCtxOf(ctx: Context): RankRecallCtx {
     cwd: ctx.infra.machine.cwd,
     switches: ctx.infra.evalSwitches,
     now: ctx.infra.clock(),
+    signal: ctx.signal,
   };
 }
 
@@ -232,7 +236,7 @@ export async function rankRecall(
   const state: RankState = { results: [], droppedPreRank: pool.dropped, graphAdded: 0, goalRecallLog: [] };
   state.results = await searchPool(reach, opts, pool, profile);
   // A request past its deadline during the search has no caller left for the later stages.
-  currentSignal()?.throwIfAborted();
+  ctx.signal?.throwIfAborted();
   await rankStages(reach, opts, state, profile);
   if (opts.limit < state.results.length) state.results = state.results.slice(0, opts.limit);
   return {
@@ -257,7 +261,7 @@ async function rankStages(
 ): Promise<void> {
   if (opts.graphHops) await expandGraph(ctx, opts, opts.graphHops, state);
   reorderResults(opts, state);
-  if (opts.reranker) state.results = await applyRecallReranker(opts, opts.reranker, state.results, ctx.config);
+  if (opts.reranker) state.results = await applyRecallReranker(opts, opts.reranker, state.results, ctx);
   if (profile.goalBoost.ranked) await applyGoalBoosts(ctx, opts, state);
   if (opts.salienceThreshold !== undefined) state.results = applySalience(opts, opts.salienceThreshold, state.results);
   const { outcome, layer } = opts;
@@ -452,6 +456,7 @@ async function engineSearch(ctx: RankRecallCtx, opts: SettledOptions, poolSearch
     cwd: ctx.cwd,
     switches: ctx.switches,
     now: ctx.now,
+    signal: ctx.signal,
   };
   if (ctx.global && pool.global.length > 0) {
     // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it rather than read both
@@ -623,9 +628,9 @@ function applyRecallReranker(
   opts: RankRecallOptions,
   reranker: RecallReranker,
   results: SearchResult[],
-  config: HippoConfig,
+  { config, signal }: RankRecallCtx,
 ): Promise<SearchResult[]> {
-  const rerankerOptions = { topK: reranker.topK, clef: config.runtime?.clef };
+  const rerankerOptions = { topK: reranker.topK, clef: config.runtime?.clef, signal };
   // The reranker's score becomes `score` so later stages that sort by score keep its order.
   return applyReranker(opts.query, results, reranker.fn, rerankerOptions, (r) =>
     traced(

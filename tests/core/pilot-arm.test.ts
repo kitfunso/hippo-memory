@@ -9,7 +9,6 @@ import {
   openHippoDb,
   closeHippoDb,
   HOOK_DB_WAIT_MS,
-  runWithRequestStores,
   SERVER_DB_WAIT_MS,
   type DatabaseSyncLike,
 } from '../../src/db/index.js';
@@ -174,23 +173,18 @@ describe('pilot arm helpers', () => {
     const holder = openHippoDb(root);
     try {
       holder.exec('BEGIN IMMEDIATE');
-      await runWithRequestStores(
-        async () => {
-          const reader = openHippoDb(root);
-          try {
-            let arm: Promise<PilotArm> | undefined;
-            const waited = waitOnSteppedClock(reader, () => {
-              arm = ensurePilotArm(reader, 'default', 'locked', 10000);
-            });
-            expect(await arm).toBe('holdout');
-            expect(waited).toBeGreaterThanOrEqual(SERVER_DB_WAIT_MS);
-            expect(waited).toBeLessThan(HOOK_DB_WAIT_MS);
-          } finally {
-            closeHippoDb(reader);
-          }
-        },
-        { busyWaitMs: SERVER_DB_WAIT_MS },
-      );
+      const reader = openHippoDb(root, { busyWaitMs: SERVER_DB_WAIT_MS });
+      try {
+        let arm: Promise<PilotArm> | undefined;
+        const waited = waitOnSteppedClock(reader, () => {
+          arm = ensurePilotArm(reader, 'default', 'locked', 10000);
+        });
+        expect(await arm).toBe('holdout');
+        expect(waited).toBeGreaterThanOrEqual(SERVER_DB_WAIT_MS);
+        expect(waited).toBeLessThan(HOOK_DB_WAIT_MS);
+      } finally {
+        closeHippoDb(reader);
+      }
     } finally {
       holder.exec('ROLLBACK');
       closeHippoDb(holder);

@@ -10,9 +10,7 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements } from '../_helpers/count-statements.js';
-import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
-
-oneRequestPerTest();
+import { removeDir } from '../_helpers/remove-dir.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -32,7 +30,7 @@ describe('loadSearchEntries paths', () => {
   beforeEach(() => {
     root = makeRoot('f1');
   });
-  afterEach(() => removeAfterRequest(root));
+  afterEach(() => removeDir(root));
 
   it('FTS path: a match in a shorter row ranks first, and no row carries a score', () => {
     // Written first and sorting later by content, so only bm25 can put it first.
