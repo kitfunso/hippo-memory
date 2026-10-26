@@ -82,7 +82,7 @@ jobs:
         run: node scripts/check-row-casts.mjs
       - name: Every api write call in src and tests awaited or returned
         run: node scripts/check-floating-api.mjs
-      - name: Store-port ratchet
+      - name: Store-port shape: port methods take data, tenants required
         run: node scripts/check-store-port.mjs
       - name: No fs or child_process import in src/domain or src/api
         run: node scripts/check-domain-io.mjs

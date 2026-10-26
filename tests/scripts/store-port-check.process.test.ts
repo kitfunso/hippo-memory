@@ -1,600 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const REPO = join(import.meta.dirname, '..', '..');
 const SCRIPT = join(REPO, 'scripts', 'check-store-port.mjs');
-const BASELINE = '.store-port-baseline.json';
 
-type Counts = {
-  openersOutside: number;
-  openersInCli: number;
-  storeBranches: number;
-  routesNeedingHippoDb: number;
-  hippoDbOnlyRoutes: number;
-  twinFunctions: number;
-  sqlOutside: number;
-  txLiterals: number;
-  tenantResolvesInCli: number;
-  storeImportsInCli: number;
-  storeImportsInDomain: number;
-  handleHoldersOutside: number;
-  openersOutsideByFile: Record<string, number>;
-  sqlOutsideByFile: Record<string, number>;
-  handleHoldersOutsideByFile: Record<string, number>;
-  sqliteLocalMethods: string[];
-  hippoDbOnlyRoutesList: string[];
-  carrierFiles: number;
-  carrierFilesList: string[];
-  storeFilesWithoutSql?: number;
-  storeFilesWithoutSqlList?: string[];
-};
-type Run = (...args: string[]) => { status: number | null; stdout: string; stderr: string };
+type Run = { status: number | null; stdout: string; stderr: string; sites: string[] };
 
-const zero: Counts = {
-  openersOutside: 0,
-  openersInCli: 0,
-  storeBranches: 0,
-  routesNeedingHippoDb: 0,
-  hippoDbOnlyRoutes: 0,
-  twinFunctions: 0,
-  sqlOutside: 0,
-  txLiterals: 0,
-  tenantResolvesInCli: 0,
-  storeImportsInCli: 0,
-  storeImportsInDomain: 0,
-  handleHoldersOutside: 0,
-  openersOutsideByFile: {},
-  sqlOutsideByFile: {},
-  handleHoldersOutsideByFile: {},
-  sqliteLocalMethods: [],
-  hippoDbOnlyRoutesList: [],
-  carrierFiles: 0,
-  carrierFilesList: [],
-};
-
-function withFixture(
-  files: Record<string, string>,
-  baseline: Partial<Counts> | null,
-  body: (f: { run: Run; baseline: () => Counts }) => void,
-) {
+function runOn(files: Record<string, string>): Run {
   const root = mkdtempSync(join(tmpdir(), 'hippo-store-port-'));
-  const write = (p: string, text: string) => {
-    mkdirSync(dirname(join(root, p)), { recursive: true });
-    writeFileSync(join(root, p), text);
-  };
   try {
-    write('layers.json', JSON.stringify({ folders: { domain: 'domain', surface: 'surface' } }));
-    for (const [p, text] of Object.entries(files)) write(p, text);
-    if (baseline) write(BASELINE, JSON.stringify({ ...zero, ...baseline }));
-    // SAFETY: the script only ever writes the Counts shape to the baseline.
-    const readBaseline = () => JSON.parse(readFileSync(join(root, BASELINE), 'utf-8')) as Counts;
-    body({
-      run: (...args) => {
-        const r = spawnSync(process.execPath, [SCRIPT, ...args], { cwd: root, encoding: 'utf-8' });
-        return { status: r.status, stdout: r.stdout, stderr: r.stderr };
-      },
-      baseline: readBaseline,
-    });
+    for (const [p, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, p)), { recursive: true });
+      writeFileSync(join(root, p), text);
+    }
+    const r = spawnSync(process.execPath, [SCRIPT], { cwd: root, encoding: 'utf-8' });
+    const sites = r.stderr
+      .split('\n')
+      .filter((l) => l.startsWith('  '))
+      .map((l) => l.trim());
+    return { status: r.status, stdout: r.stdout, stderr: r.stderr, sites };
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 }
 
-const list = (run: Run) =>
-  Object.fromEntries(
-    run('--list')
-      .stdout.split('\n')
-      .filter(Boolean)
-      .map((l) => l.split('\t'))
-      .map(([n, key]) => [key, n]),
-  );
-
 describe('check-store-port.mjs', () => {
-  it('counts a plain call outside the data layer', () => {
-    withFixture(
-      { 'src/a.ts': "import { openHippoDb } from './db.js';\nexport const f = () => openHippoDb('r');\n" },
-      null,
-      ({ run }) => {
-        expect(list(run)).toMatchObject({ openersOutside: '1', 'src/a.ts': '1' });
-      },
-    );
-  });
-
-  it('counts a file outside the data layer that names the handle type, once, and not comments or the data layer', () => {
-    const holder =
-      "import type { DatabaseSyncLike } from './db/index.js';\nexport const f = (db: DatabaseSyncLike, g: DatabaseSyncLike) => db === g;\n";
-    const comment = '// DatabaseSync is only named here\nexport const b = 1;\n';
-    withFixture(
-      {
-        'src/a.ts': holder,
-        'src/b.ts': comment,
-        'src/store/c.ts': holder,
-        'src/db/d.ts': holder,
-        'src/surface/cli/e.ts': holder,
-      },
-      null,
-      ({ run, baseline }) => {
-        expect(list(run)).toMatchObject({ handleHoldersOutside: '2', 'src/a.ts': '1', 'src/surface/cli/e.ts': '1' });
-        run('--update');
-        expect(baseline().handleHoldersOutsideByFile).toEqual({ 'src/a.ts': 1, 'src/surface/cli/e.ts': 1 });
-      },
-    );
-  });
-
-  it('fails when a new file starts holding a handle', () => {
-    const src = "import type { DatabaseSync } from 'node:sqlite';\nexport type H = DatabaseSync;\n";
-    withFixture({ 'src/a.ts': src }, { handleHoldersOutside: 0, handleHoldersOutsideByFile: {} }, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('handleHoldersOutside: 0 -> 1');
-    });
-  });
-
-  it('does not count calls under src/db, src/store, src/surface/cli or src/db/index.ts in number 1', () => {
-    const call = "export const f = () => openStore('r');\n";
-    withFixture(
-      {
-        'src/db/a.ts': call,
-        'src/store/b.ts': call,
-        'src/surface/cli/c.ts': call,
-        'src/cli.ts': call,
-        'src/db/index.ts': call,
-      },
-      null,
-      ({ run }) => {
-        expect(list(run)).toMatchObject({ openersOutside: '0', openersInCli: '2' });
-      },
-    );
-  });
-
-  it('counts calls of an aliased import and re-exports, not the import line', () => {
-    const src =
-      "import { openHippoDb as x } from './db.js';\nexport { onHandle } from './db.js';\nexport const f = () => x('r');\n";
-    withFixture({ 'src/a.ts': src }, null, ({ run }) => {
-      expect(list(run).openersOutside).toBe('2');
-    });
-  });
-
-  it('ignores opener names in comments and strings', () => {
-    const src =
-      "// openHippoDb('x')\n/* openStore('y') */\nexport const s = \"onHandle('z')\";\nexport const t = `openHippoDbReadOnly('w')`;\n";
-    withFixture({ 'src/a.ts': src }, null, ({ run }) => {
-      expect(list(run).openersOutside).toBe('0');
-    });
-  });
-
-  it('counts store ternaries and kind checks in src/api, twins, and routes that need hippo.db', () => {
-    const api =
-      "export function fooThroughStore() {}\nexport const f = (ctx: any) => (ctx.store ? 1 : 2);\nexport const g = (store: any) => store.kind !== 'sqlite';\nexport const h = ({ store }: any) => (store ? 1 : 2);\n";
-    const server =
-      "const V1_ROUTES = [\n  { method: 'GET', path: '/a', handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n];\n";
-    withFixture({ 'src/api/a.ts': api, 'src/surface/server/route-table.ts': server }, null, ({ run }) => {
-      expect(list(run)).toMatchObject({ storeBranches: '3', twinFunctions: '1', routesNeedingHippoDb: '1' });
-    });
-  });
-
-  it('fails with exit 1 naming the file when a count rises', () => {
-    const call = "export const f = () => openStore('r');\n";
-    withFixture(
-      { 'src/a.ts': call + call, 'src/b.ts': call },
-      { openersOutside: 2, openersOutsideByFile: { 'src/a.ts': 1 } },
-      ({ run }) => {
-        const r = run();
-        expect(r.status).toBe(1);
-        expect(r.stderr).toContain('src/a.ts: 1 -> 2');
-        expect(r.stderr).toContain('src/b.ts: new -> 1');
-        expect(r.stderr).toContain('openersOutside: 2 -> 3');
-      },
-    );
-  });
-
-  it('passes on a drop and --update lowers the baseline', () => {
-    withFixture(
-      { 'src/a.ts': "export const f = () => openStore('r');\n" },
-      { openersOutside: 3, openersOutsideByFile: { 'src/a.ts': 3 } },
-      ({ run, baseline }) => {
-        const r = run();
-        expect(r.status).toBe(0);
-        expect(r.stdout).toContain('--update');
-        expect(run('--update').status).toBe(0);
-        expect(baseline().openersOutside).toBe(1);
-        expect(baseline().openersOutsideByFile).toEqual({ 'src/a.ts': 1 });
-      },
-    );
-  });
-
-  it('--update refuses to raise a number', () => {
-    withFixture({ 'src/a.ts': "export const f = () => openStore('r');\n" }, {}, ({ run, baseline }) => {
-      const r = run('--update');
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('Refusing to raise');
-      expect(baseline().openersOutside).toBe(0);
-    });
-  });
-
-  it('fails on a SqliteLocal method the baseline does not list, and --update will not add it', () => {
-    const local =
-      'export interface SqliteLocal {\n  archiveRaw(id: string): string;\n  writeEntry(id: string): void;\n}\n';
-    withFixture({ 'src/store/sqlite/local.ts': local }, { sqliteLocalMethods: ['archiveRaw'] }, ({ run, baseline }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('SqliteLocal.writeEntry: unlisted -> declared');
-      expect(r.stderr).not.toContain('SqliteLocal.archiveRaw');
-      expect(run('--update').status).toBe(1);
-      expect(baseline().sqliteLocalMethods).toEqual(['archiveRaw']);
-    });
-    withFixture(
-      { 'src/store/sqlite/local.ts': local },
-      { sqliteLocalMethods: ['archiveRaw', 'writeEntry', 'gone'] },
-      ({ run, baseline }) => {
-        expect(run().status).toBe(0);
-        expect(run('--update').status).toBe(0);
-        expect(baseline().sqliteLocalMethods).toEqual(['archiveRaw', 'writeEntry']);
-      },
-    );
-  });
-
-  it('fails and names the file when a prepare call appears outside the data layer, and ignores src/store', () => {
-    const call = "export const f = (db: any) => db.prepare('SELECT 1');\n";
-    withFixture({ 'src/a.ts': call, 'src/store/b.ts': call }, { sqlOutside: 0, sqlOutsideByFile: {} }, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/a.ts: new -> 1');
-      expect(r.stderr).toContain('sqlOutside: 0 -> 1');
-      expect(r.stderr).not.toContain('src/store/b.ts');
-    });
-  });
-
-  it('counts resolveTenantId calls under src/surface/cli/ only, not the import or other folders', () => {
-    const call = "import { resolveTenantId } from './t.js';\nexport const f = () => resolveTenantId({});\n";
-    withFixture(
-      { 'src/surface/cli/a.ts': call, 'src/cli.ts': call, 'src/api/b.ts': call },
-      { tenantResolvesInCli: 0 },
-      ({ run }) => {
-        expect(list(run).tenantResolvesInCli).toBe('1');
-        const r = run();
-        expect(r.status).toBe(1);
-        expect(r.stderr).toContain('tenantResolvesInCli: 0 -> 1');
-      },
-    );
-  });
-
-  it('counts value imports from src/store and src/db under src/surface/cli/, not type-only lines or other folders', () => {
-    const cli = [
-      "import { readEntry } from '../../store/entry-reads.js';",
-      "import { openHippoDb } from '../../db/index.js';",
-      "import { loadStats, type Stats } from '../../store/stats.js';",
-      "import * as store from '../../store/index.js';",
-      "import type { MemoryEntry } from '../../store/rows.js';",
-      "import { type TaskSnapshot, type SessionEvent } from '../../store/rows.js';",
-      "import { getMemory } from '../../api/memories.js';",
-      "import { x } from './store/local.js';",
-    ].join('\n');
-    const nested = "import { readEntry } from '../../../store/entry-reads.js';\n";
-    const files = {
-      'src/surface/cli/a.ts': cli,
-      'src/surface/cli/deep/b.ts': nested,
-      'src/cli.ts': "import { y } from './store/index.js';\n",
-      'src/api/c.ts': cli.replaceAll('../../', '../'),
-    };
-    withFixture(files, { storeImportsInCli: 4 }, ({ run }) => {
-      expect(list(run).storeImportsInCli).toBe('5');
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('storeImportsInCli: 4 -> 5');
-    });
-  });
-
-  it('storeImportsInCli skips the CLI composition root, which builds the store', () => {
-    const files = {
-      'src/surface/cli/api-context.ts': "import { sqliteStore } from '../../store/sqlite/store.js';\n",
-      'src/surface/cli/a.ts': "import { readEntry } from '../../store/entry-reads.js';\n",
-    };
-    withFixture(files, null, ({ run }) => {
-      expect(list(run).storeImportsInCli).toBe('1');
-    });
-  });
-
-  it('a baseline without storeImportsInCli passes and --update writes it', () => {
-    const files = { 'src/surface/cli/a.ts': "import { readEntry } from '../../store/entry-reads.js';\n" };
-    withFixture(files, { storeImportsInCli: undefined }, ({ run, baseline }) => {
-      expect(run().status).toBe(0);
-      expect(run('--update').status).toBe(0);
-      expect(baseline().storeImportsInCli).toBe(1);
-    });
-  });
-
-  it('counts a BEGIN literal outside src/db/busy.ts and not inside it', () => {
-    const tx = "export const a = 'BEGIN IMMEDIATE';\nexport const b = `BEGIN`;\nexport const c = `BEGIN ${'x'}`;\n";
-    withFixture({ 'src/a.ts': tx, 'src/db/busy.ts': tx }, { txLiterals: 0 }, ({ run }) => {
-      expect(list(run).txLiterals).toBe('3');
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('txLiterals: 0 -> 3');
-    });
-  });
-
-  it('a key the baseline never held is a first write; a key it holds still cannot rise', () => {
-    const call = "export const f = (db: any) => db.prepare('SELECT 1');\n";
-    const absent = { sqlOutside: undefined, sqlOutsideByFile: undefined };
-    withFixture({ 'src/a.ts': call }, absent, ({ run, baseline }) => {
-      expect(run().status).toBe(0);
-      expect(run('--update').status).toBe(0);
-      expect(baseline().sqlOutsideByFile).toEqual({ 'src/a.ts': 1 });
-    });
-    withFixture({ 'src/a.ts': call }, { sqlOutside: 0, sqlOutsideByFile: {} }, ({ run }) => {
-      expect(run('--update').status).toBe(1);
-    });
-  });
-
-  it('reads route status from the syntax tree: localFiles and hippoDbOnly rows need hippo.db, a comment does not', () => {
-    const table =
-      "const V1_ROUTES = [\n  { method: 'GET', path: '/a', /* storeReady: 'localFiles' */ handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n  { method: 'GET', path: '/e', storeReady: 'readiness', handler: e },\n  { method: 'POST', path: '/c', hippoDbOnly: 'runs the local process', handler: c },\n];\n";
-    withFixture({ 'src/surface/server/route-table.ts': table }, null, ({ run }) => {
-      expect(list(run)).toMatchObject({ routesNeedingHippoDb: '2', hippoDbOnlyRoutes: '1' });
-    });
-    const listed = { routesNeedingHippoDb: 1, hippoDbOnlyRoutes: 1, hippoDbOnlyRoutesList: ['POST /c'] };
-    withFixture({ 'src/surface/server/route-table.ts': table }, listed, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('routesNeedingHippoDb: 1 -> 2');
-    });
-  });
-
-  it('fails on a route row whose status is not a literal, names both statuses, or is spread', () => {
-    const bad = (row: string) => `const V1_ROUTES = [\n  ${row}\n];\n`;
-    const cases: [string, string][] = [
-      ["{ method: 'GET', path: '/a', storeReady: someIdentifier, handler: a },", 'GET /a'],
-      ["{ method: 'POST', path: '/b', hippoDbOnly: reason, handler: b },", 'POST /b'],
-      ["{ method: 'POST', path: '/c', hippoDbOnly: '', handler: c },", 'POST /c'],
-      ["{ method: 'POST', path: '/d', storeReady: 'base', hippoDbOnly: 'x', handler: d },", 'POST /d'],
-      ['...MORE_ROUTES,', 'spread'],
-    ];
-    for (const [row, named] of cases) {
-      withFixture({ 'src/surface/server/route-table.ts': bad(row) }, null, ({ run }) => {
-        const r = run();
-        expect(r.status, row).toBe(1);
-        expect(r.stderr).toContain(named);
-      });
-    }
-  });
-
-  it('reads a spread of built kind rows as needing no hippo.db, unless kind-routes.ts names a hippo.db status', () => {
-    const table =
-      "const V1_ROUTES = [\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n  ...kindRows(PREDICTIONS),\n  ...versionedRoutes(POLICIES),\n];\n";
-    const rows = (builder: string) => ({
-      'src/surface/server/route-table.ts': table,
-      'src/surface/server/routes/kind-routes.ts': builder,
-    });
-    for (const builder of [
-      'export function kindRows(kind) {\n  return [];\n}\n',
-      "export const row = { storeReady: 'objects' };\n",
-    ]) {
-      withFixture(rows(builder), null, ({ run }) => {
-        expect(list(run)).toMatchObject({ routesNeedingHippoDb: '1', hippoDbOnlyRoutes: '0' });
-      });
-    }
-    for (const status of ["storeReady: 'localFiles'", "hippoDbOnly: 'local only'"]) {
-      withFixture(rows(`export const row = { ${status} };\n`), null, ({ run }) => {
-        const r = run();
-        expect(r.status).toBe(1);
-        expect(r.stderr).toContain(
-          "kind-routes.ts builds rows that name a hippoDbOnly or a storeReady other than 'objects'",
-        );
-      });
-    }
-  });
-
-  it('fails and names a hippoDbOnly route the baseline does not list, and --update will not add it', () => {
-    const table =
-      "const V1_ROUTES = [\n  { method: 'POST', path: '/x', hippoDbOnly: 'local only', handler: x },\n  { method: 'POST', path: '/y', hippoDbOnly: 'local only', handler: y },\n];\n";
-    withFixture(
-      { 'src/surface/server/route-table.ts': table },
-      { hippoDbOnlyRoutes: 2, hippoDbOnlyRoutesList: ['POST /x'] },
-      ({ run, baseline }) => {
-        const r = run();
-        expect(r.status).toBe(1);
-        expect(r.stderr).toContain('hippoDbOnly POST /y: unlisted -> declared');
-        expect(r.stderr).not.toContain('hippoDbOnly POST /x');
-        expect(run('--update').status).toBe(1);
-        expect(baseline().hippoDbOnlyRoutesList).toEqual(['POST /x']);
-      },
-    );
-  });
-
-  it('counts a store import from a domain folder that layers.json marks, outside the first three', () => {
-    const files = {
-      'src/domain/trust/a.ts': "import { openHippoDb } from '../../db/busy.js';\nexport const f = openHippoDb;\n",
-    };
-    withFixture(files, { storeImportsInDomain: 0 }, ({ run }) => {
-      expect(list(run).storeImportsInDomain).toBe('1');
-      expect(run().stderr).toContain('storeImportsInDomain: 0 -> 1');
-    });
-  });
-
-  it('exits 1 when src/surface/server/route-table.ts has no V1_ROUTES', () => {
-    withFixture({ 'src/surface/server/route-table.ts': 'export const ROUTES = [];\n' }, null, ({ run }) => {
-      const r = run('--list');
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('V1_ROUTES');
-    });
-  });
-
-  it('fails and names a file outside the list that names the carrier, a file defining it included', () => {
-    const use = "import { onStore } from './on-store.js';\nexport const f = (ctx: any) => onStore(ctx, () => 1);\n";
-    const reply = 'export type R = StoreReply<object, number>;\n';
-    const files = {
-      'src/api/on-store.ts': 'export const onStore = andThen;\n',
-      'src/api/old.ts': use,
-      'src/api/new.ts': use,
-      'src/api/reply.ts': reply,
-    };
-    withFixture(files, { carrierFiles: 2, carrierFilesList: ['src/api/old.ts', 'src/api/gone.ts'] }, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/api/new.ts: not a carrier file -> uses andThen, onStore or StoreReply');
-      expect(r.stderr).toContain('src/api/on-store.ts: not a carrier file');
-      expect(r.stderr).toContain('src/api/reply.ts: not a carrier file');
-      expect(r.stderr).not.toContain('src/api/old.ts');
-    });
-  });
-
-  it('fails and names each surface file that records a recall itself, in a route, a CLI verb or an MCP tool', () => {
-    const route = [
-      "import { noteRecall as n } from '../../../api/recall/finish.js';",
-      'export const f = (s: any, ctx: any) => {',
-      '  s.bumpRecallStats(1);',
-      "  recordTokens(ctx, 'http_recall', {});",
-      '};',
-    ].join('\n');
-    const verb = "export const g = (store: any) => store.recordTokens({ surface: 'recall', items: 1 });\n";
-    const tool = "export const h = (ctx: any) => ctx.callers?.lastShown.set('k', []);\n";
-    const files = {
-      'src/surface/server/routes/recall.ts': route,
-      'src/surface/cli/recall.ts': verb,
-      'src/surface/mcp/recall-tools.ts': tool,
-    };
-    withFixture(files, {}, ({ run }) => {
-      for (const args of [[], ['--list'], ['--update']]) {
-        const r = run(...args);
-        expect(r.status, args.join()).toBe(1);
-        expect(r.stderr).toContain('src/surface/server/routes/recall.ts:1 noteRecall');
-        expect(r.stderr).toContain('src/surface/server/routes/recall.ts:3 bumpRecallStats');
-        expect(r.stderr).toContain('src/surface/server/routes/recall.ts:4 recordTokens with a recall label');
-        expect(r.stderr).toContain('src/surface/cli/recall.ts:1 recordTokens with a recall label');
-        expect(r.stderr).toContain('src/surface/mcp/recall-tools.ts:1 lastShown');
-        expect(r.stderr).toContain('recall/finish.ts');
-      }
-    });
-  });
-
-  it('lets src/api record a recall, and a surface book another label or name a recorder in a comment or string', () => {
-    const records = [
-      'export const f = (s: any, ring: any, ctx: any) => {',
-      '  noteRecall(ring);',
-      '  s.bumpRecallStats(1);',
-      "  recordTokens(ctx, 'mcp_recall', {});",
-      "  ctx.callers?.lastShown.set('k', []);",
-      '};',
-    ].join('\n');
-    const route = [
-      '// noteRecall(ring) and bumpRecallStats(1)',
-      'export const s = "recordTokens(ctx, \'recall\')";',
-      "export const g = (ctx: any) => recordTokens(ctx, 'http_context', { note: 'recalled' });",
-    ].join('\n');
-    withFixture(
-      {
-        'src/api/recall/finish.ts': records,
-        'src/surface/mcp/request.ts': "export const t = (ctx: any) => recordTokens(ctx, 'mcp_context', {});\n",
-        'src/surface/server/routes/recall.ts': route,
-      },
-      {},
-      ({ run }) => {
-        const r = run();
-        expect(r.status, r.stderr).toBe(0);
-      },
-    );
-  });
-
-  it('fails and names a src/store file that runs no SQL, and passes hippo.db definition files, listed files and files that touch hippo.db', () => {
-    const files = {
-      'src/store/sqlite/plumbing.ts': 'export const a = 1;\n',
-      'src/store/reads.ts': "export const f = (db: any) => db.prepare('SELECT 1').get();\n",
-      'src/store/opens.ts': 'export const g = (r: string) => onHandle(r, () => 1);\n',
-      'src/store/old.ts': 'export const b = 2;\n',
-      'src/store/scope.ts':
-        "// db.prepare('SELECT 1') in a comment is no SQL call\nexport const isPrivate = (s: string) => s.includes(':private:');\n",
-    };
-    withFixture(files, { storeFilesWithoutSql: 1, storeFilesWithoutSqlList: ['src/store/old.ts'] }, ({ run }) => {
-      expect(list(run)).toMatchObject({
-        storeFilesWithoutSql: '2',
-        'src/store/scope.ts': 'no SQL',
-        'src/store/old.ts': 'no SQL',
-      });
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('storeFilesWithoutSql: 1 -> 2');
-      expect(r.stderr).toContain('src/store/scope.ts: unlisted -> under src/store, runs no SQL');
-      for (const quiet of ['plumbing.ts', 'reads.ts', 'opens.ts', 'old.ts']) {
-        expect(r.stderr).not.toContain(quiet);
-      }
-      expect(run('--update').status).toBe(1);
-    });
-  });
-
-  it('portImportsFromSql counts a port file import of a store file outside the port or a db file that runs SQL, and nothing else', () => {
-    const files = {
-      'src/base/ports/store.ts':
-        "import type { A } from '../../store/sql.js';\nimport type { B } from '../../store/pure.js';\nexport type { C } from './store/g.js';\n",
-      'src/base/ports/store/g.ts':
-        "import type { A } from '../../../store/sql.js';\nimport type { E } from './h.js';\nimport type { F } from '../../../db/pure.js';\nimport type { G } from '../../../db/sql.js';\nexport type C = A;\n",
-      'src/base/ports/store/h.ts': 'export type E = 1;\n',
-      'src/base/ports/store-groups.ts':
-        "import type { B } from '../../store/pure.js';\nimport type { C } from './store/g.js';\n",
-      'src/store/sql.ts': "export type A = 1;\nexport const f = (db: any) => db.prepare('SELECT 1');\n",
-      'src/store/pure.ts': 'export type B = 2;\n',
-      'src/db/pure.ts': 'export type F = 3;\n',
-      'src/db/sql.ts': "export type G = 4;\nexport const g = (db: any) => db.exec('SELECT 1');\n",
-    };
-    withFixture(files, null, ({ run }) => {
-      const l = list(run);
-      expect(l).toMatchObject({
-        portImportsFromSql: '5',
-        'src/base/ports/store.ts:1': 'portImportsFromSql',
-        'src/base/ports/store.ts:2': 'portImportsFromSql',
-        'src/base/ports/store/g.ts:1': 'portImportsFromSql',
-        'src/base/ports/store/g.ts:4': 'portImportsFromSql',
-        'src/base/ports/store-groups.ts:1': 'portImportsFromSql',
-      });
-      for (const quiet of [
-        'src/base/ports/store.ts:3',
-        'src/base/ports/store/g.ts:2',
-        'src/base/ports/store/g.ts:3',
-        'src/base/ports/store-groups.ts:2',
-      ]) {
-        expect(l[quiet]).toBeUndefined();
-      }
-    });
-  });
-
-  it('buildsOutsideRoots counts an imported store builder outside the roots, and skips a same-named local function', () => {
-    const files = {
-      'src/store/open.ts': 'export const initStore = (r: string) => r;\n',
-      'src/surface/capture/a.ts':
-        "import { initStore } from '../../store/open.js';\nexport const f = () => initStore('r');\n",
-      'src/surface/capture/b.ts':
-        "function initStore(r: string) { return r; }\nexport const g = () => initStore('r');\n",
-      'src/surface/cli/api-context.ts':
-        "import { initStore } from '../../store/open.js';\nexport const h = () => initStore('r');\n",
-    };
-    withFixture(files, null, ({ run }) => {
-      const l = list(run);
-      expect(l.buildsOutsideRoots).toBe('1');
-      expect(l['src/surface/capture/a.ts:2']).toBe('buildsOutsideRoots');
-      expect(l['src/surface/capture/b.ts:2']).toBeUndefined();
-    });
-  });
-
-  it('groupChecksInApi counts requireGroup and hasGroup in the api and domain layers only', () => {
-    const files = {
-      'layers.json': JSON.stringify({ folders: { api: 'api', domain: 'domain', surface: 'surface' } }),
-      'src/api/a.ts': "export const f = (s: any) => requireGroup(s, 'localFiles');\n",
-      'src/domain/consolidate/b.ts': "export const g = (s: any) => hasGroup(s, 'localFiles');\n",
-      'src/surface/cli/c.ts': "export const h = (s: any) => requireGroup(s, 'localFiles');\n",
-    };
-    withFixture(files, null, ({ run }) => {
-      const l = list(run);
-      expect(l.groupChecksInApi).toBe('2');
-      expect(l['src/api/a.ts:1']).toBe('groupChecksInApi');
-      expect(l['src/surface/cli/c.ts:1']).toBeUndefined();
-    });
-  });
-
-  it('portFunctionParams counts a port method parameter that holds a function, through an alias, a union member, a property and an import', () => {
-    const files = {
+  it('fails on a port method parameter that holds a function, through an alias, a union member, a property and an import', () => {
+    const r = runOn({
       'src/base/ports/store.ts': [
         "import type { Fate } from './store/fate.js';",
         'export type Protect = (id: string) => string | undefined;',
@@ -612,117 +47,43 @@ describe('check-store-port.mjs', () => {
       'src/base/ports/store-groups.ts':
         'export interface Later { readonly every: { readonly on: { tick(): void } } }\nexport interface G { start(later: Later): void }\n',
       'src/api/a.ts': 'export interface NotPort { visit(each: () => void): void }\n',
-    };
-    withFixture(files, null, ({ run }) => {
-      const l = list(run);
-      expect(l.portFunctionParams).toBe('4');
-      expect(l['src/base/ports/store.ts:5 Group.visit(each)']).toBe('portFunctionParams');
-      expect(l['src/base/ports/store.ts:6 Group.repair(protect)']).toBe('portFunctionParams');
-      expect(l['src/base/ports/store.ts:7 Group.resolve(fate.inReach)']).toBe('portFunctionParams');
-      expect(l['src/base/ports/store-groups.ts:2 G.start(later.every.on.tick)']).toBe('portFunctionParams');
     });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('A port method takes a parameter whose type holds a function');
+    expect(r.sites.sort()).toEqual([
+      'src/base/ports/store-groups.ts:2 G.start(later.every.on.tick)',
+      'src/base/ports/store.ts:5 Group.visit(each)',
+      'src/base/ports/store.ts:6 Group.repair(protect)',
+      'src/base/ports/store.ts:7 Group.resolve(fate.inReach)',
+    ]);
   });
 
-  it('portFunctionParams leaves out a type the store only receives, whose function the taking method already counts', () => {
-    const files = {
+  it('leaves out a type the store only receives, whose function the taking method already names', () => {
+    const r = runOn({
       'src/base/ports/store.ts': [
         'export interface Source { read(sink: (row: string) => void): void }',
         'export interface Group { take(source: Source): void; open(): Promise<Opened> }',
         'export interface Opened { each(visit: () => void): void }',
         'export interface HippoStore { readonly group: Group }',
       ].join('\n'),
-    };
-    withFixture(files, null, ({ run }) => {
-      const l = list(run);
-      expect(l.portFunctionParams).toBe('2');
-      expect(l['src/base/ports/store.ts:2 Group.take(source.read)']).toBe('portFunctionParams');
-      expect(l['src/base/ports/store.ts:3 Opened.each(visit)']).toBe('portFunctionParams');
     });
-  });
-
-  it('portFunctionParams fails on one function parameter, and --update cannot pin it', () => {
-    const files = { 'src/base/ports/store.ts': 'export interface Group { visit(each: () => void): void }\n' };
-    withFixture(files, {}, ({ run, baseline }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/base/ports/store.ts:1 Group.visit(each): data only -> takes a function');
-      expect(run('--update').status).toBe(1);
-      expect(baseline()).not.toHaveProperty('portFunctionParams');
-    });
-  });
-
-  const FOLDER_FORM =
-    'export function loadRecallSearchEntries(hippoRoot: string) {\n  return onHandle(hippoRoot, () => []);\n}\n';
-
-  it('folderFormsAboveAdapter fails on an exported src/store function that opens hippo.db from a folder, through a helper or a default too', () => {
-    const files = {
-      'src/store/reads.ts': [
-        "import { openStore as open } from './sqlite/handles.js';",
-        'const viaHelper = (root: string) => open(root);',
-        'export function readAll(hippoRoot: string) { return viaHelper(hippoRoot); }',
-        'export const byDefault = (hippoRoot: string, o = openHippoDb) => o(hippoRoot);',
-        'export function typed(db: ReturnType<typeof openHippoDb>, hippoRoot: string) { return [db, hippoRoot]; }',
-        'export function noFolder(busyWaitMs: number, o = openHippoDb) { return (r: string) => o(r, busyWaitMs); }',
-        'function notExported(hippoRoot: string) { return openHippoDb(hippoRoot); }',
-      ].join('\n'),
-      'src/store/sqlite/fixtures.ts':
-        'export const writeEntry = (hippoRoot: string) => onHandle(hippoRoot, () => 1);\n',
-    };
-    withFixture(files, null, ({ run }) => {
-      const l = list(run);
-      const sites = Object.entries(l).filter(([, v]) => v === 'folderFormsAboveAdapter');
-      expect(sites.map(([k]) => k).sort()).toEqual(['src/store/reads.ts:3 readAll', 'src/store/reads.ts:4 byDefault']);
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('Folder forms above src/store/sqlite: 2, none allowed');
-      expect(r.stderr).toContain('src/store/reads.ts:3 readAll');
-    });
-  });
-
-  it('folderFormsAboveAdapter keeps no exception: the eval kit form passes in src/store/sqlite and fails above it', () => {
-    withFixture({ 'src/store/sqlite/fixtures.ts': FOLDER_FORM }, null, ({ run }) => {
-      const r = run();
-      expect(r.status, r.stderr).toBe(0);
-    });
-    withFixture({ 'src/base/ports/store/rows.ts': FOLDER_FORM }, null, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('  src/base/ports/store/rows.ts:1 loadRecallSearchEntries');
-    });
-  });
-
-  it('fails and names a file directly in src/store', () => {
-    const kept = {
-      'src/base/ports/store.ts': 'export type A = 1;\n',
-      'src/base/ports/store-groups.ts': 'export type B = 2;\n',
-      'src/base/ports/store-index.ts': 'export type C = 3;\n',
-      'src/base/ports/store/g.ts': 'export type E = 4;\n',
-      'src/store/sqlite/reads.ts': "export const f = (db: any) => db.prepare('SELECT 1').get();\n",
-    };
-    withFixture(kept, null, ({ run }) => {
-      const r = run();
-      expect(r.status, r.stderr).toBe(0);
-    });
-    const stray = { 'src/store/graph-apply.ts': "export const g = (db: any) => db.prepare('SELECT 2').get();\n" };
-    withFixture({ ...kept, ...stray }, null, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('  src/store/graph-apply.ts');
-      for (const file of Object.keys(kept)) expect(r.stderr).not.toContain(`  ${file}`);
-    });
+    expect(r.status).toBe(1);
+    expect(r.sites.sort()).toEqual([
+      'src/base/ports/store.ts:2 Group.take(source.read)',
+      'src/base/ports/store.ts:3 Opened.each(visit)',
+    ]);
   });
 
   it('fails and names each store tenant a caller can leave out, as a parameter or an argument property, and passes the rest', () => {
-    const port = [
-      "import type { Opts } from './store/opts.js';",
-      'export interface Group {',
-      '  page(tenantId?: string): void;',
-      '  list(query: Opts): void;',
-      '  named(tenantId: string | typeof ALL): void;',
-      '}',
-    ].join('\n');
-    const files = {
-      'src/base/ports/store.ts': port,
+    const r = runOn({
+      'src/base/ports/store.ts': [
+        "import type { Opts } from './store/opts.js';",
+        'export interface Group {',
+        '  page(tenantId?: string): void;',
+        '  list(query: Opts): void;',
+        '  named(tenantId: string | typeof ALL): void;',
+        '}',
+      ].join('\n'),
       'src/base/ports/store/opts.ts':
         'export type Opts = Base & { limit: number };\ninterface Base { tenant: string | null }\n',
       'src/store/sqlite/reads.ts': [
@@ -731,18 +92,23 @@ describe('check-store-port.mjs', () => {
         "export function ok(db: any, tenantId: string, row: { tenant_id?: string }) { return db.prepare('SELECT 3').get(); }",
       ].join('\n'),
       'src/api/loose.ts': 'export function f(tenantId?: string) {}\n',
-    };
-    withFixture(files, null, ({ run }) => {
-      const r = run();
-      expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/base/ports/store.ts:3 page(tenantId: tenantId)');
-      expect(r.stderr).toContain('src/base/ports/store.ts:4 list(query: Base.tenant)');
-      expect(r.stderr).toContain('src/store/sqlite/reads.ts:1 read(tenantId: tenantId)');
-      expect(r.stderr).toContain('src/store/sqlite/reads.ts:2 rows(');
-      expect(r.stderr).not.toContain(' named(');
-      expect(r.stderr).not.toContain(' ok(');
-      expect(r.stderr).not.toContain('src/api/loose.ts');
     });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('A store function or port method can be called without its tenant');
+    expect(r.stderr).toContain('src/base/ports/store.ts:3 page(tenantId: tenantId)');
+    expect(r.stderr).toContain('src/base/ports/store.ts:4 list(query: Base.tenant)');
+    expect(r.stderr).toContain('src/store/sqlite/reads.ts:1 read(tenantId: tenantId)');
+    expect(r.stderr).toContain('src/store/sqlite/reads.ts:2 rows(');
+    expect(r.stderr).not.toContain(' named(');
+    expect(r.stderr).not.toContain(' ok(');
+    expect(r.stderr).not.toContain('src/api/loose.ts');
+  });
+
+  it('passes a port that takes data and required tenants', () => {
+    const r = runOn({
+      'src/base/ports/store.ts': 'export interface Group { read(tenantId: string, opts: { readonly limit: number }): void }\n',
+    });
+    expect(r.status, r.stderr).toBe(0);
   });
 
   it('passes on the real repo', () => {

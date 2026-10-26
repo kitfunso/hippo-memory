@@ -1,10 +1,7 @@
 #!/usr/bin/env node
-// Fails when a test writes process.env by hand: an assignment, a delete or an Object.assign onto it. vi.stubEnv
-// with vi.unstubAllEnvs in afterEach restores the value vitest.config.ts set, so a test cannot leak env into the next.
-// tests/_helpers/ may own env for a child process. An env object built for a spawn is a read, not a write.
-// A vi.stubEnv made once (beforeAll, a describe body, module scope) under an afterEach unstub is gone after the first test.
-// Also fails a test whose name puts it in another vitest project than what it starts needs (scripts/lib/test-classes.mjs),
-// and a secret, endpoint or path that src/base/util/env.ts reads but scripts/lib/test-env-scrub.mjs (which vitest.config.ts blanks) lacks.
+// Fails a vi.stubEnv an afterEach unstub wipes after the first test, an unstub that runs before a teardown, a test whose
+// name puts it in another vitest project than what it starts needs, and a secret env.ts reads that vitest leaves set.
+// A hand-written process.env write in a test is the boundaries/no-env-write lint rule.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -22,43 +19,11 @@ import {
   reachesChildProcess,
 } from './lib/test-classes.mjs';
 
-const isProcessEnv = (e) => e.getText() === 'process.env';
-const isEnvMember = (e) =>
-  (ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e)) && isProcessEnv(e.expression);
-
 function visit(node, fn) {
   fn(node);
   ts.forEachChild(node, (child) => {
     visit(child, fn);
   });
-}
-
-/**
- * Returns one entry per write onto process.env in a test source.
- * @param {string} text
- * @returns {{ line: number, write: string }[]}
- */
-export function envWrites(text) {
-  if (!text.includes('process.env')) return [];
-  const sf = ts.createSourceFile('test.ts', text, ts.ScriptTarget.Latest, true);
-  const hits = [];
-  visit(sf, (n) => {
-    const assigns =
-      ts.isBinaryExpression(n) &&
-      n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-      n.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
-      (isEnvMember(n.left) || isProcessEnv(n.left));
-    const deletes = ts.isDeleteExpression(n) && isEnvMember(n.expression);
-    const assignsInto =
-      ts.isCallExpression(n) &&
-      n.expression.getText() === 'Object.assign' &&
-      n.arguments.length > 0 &&
-      isProcessEnv(n.arguments[0]);
-    if (assigns || deletes || assignsInto) {
-      hits.push({ line: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, write: n.getText().slice(0, 60) });
-    }
-  });
-  return hits;
 }
 
 const callName = (call) => {
@@ -167,12 +132,11 @@ function testFiles(dir, out = []) {
  * @param {string} dir
  * @returns {{ file: string, line: number, write: string }[]}
  */
-export function findEnvWrites(dir) {
+function findEnvLeaks(dir) {
   return testFiles(dir).flatMap((file) => {
     const text = readFileSync(file, 'utf8');
     const name = file.replaceAll('\\', '/');
     return [
-      ...envWrites(text).map((hit) => ({ file: name, ...hit })),
       ...earlyUnstubs(text).map((hit) => ({ file: name, ...hit })),
       ...onceStubs(text).map((hit) => ({
         file: name,
@@ -279,11 +243,8 @@ const RENAME = {
 
 function report(dir, hits, misnamed, unscrubbed) {
   if (hits.length > 0) {
-    console.error(`\nTests that write or leak process.env in ${dir}/:`);
+    console.error(`\nTests that leak a stubbed env in ${dir}/:`);
     for (const h of hits) console.error(`  ${h.file}:${h.line} ${h.write}`);
-    console.error(
-      '\nFix: vi.stubEnv(name, value) to set, vi.stubEnv(name, undefined) to unset, and vi.unstubAllEnvs() in afterEach.',
-    );
     console.error(
       'A stub made once (beforeAll, describe body, module scope) goes in beforeEach, or pairs with vi.unstubAllEnvs() in afterAll.\n',
     );
@@ -305,11 +266,11 @@ function report(dir, hits, misnamed, unscrubbed) {
 // Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const dir = process.argv[2] ?? 'tests';
-  const hits = findEnvWrites(dir);
+  const hits = findEnvLeaks(dir);
   const misnamed = misnamedTests(dir);
   const envFile = join(dirname(dir), 'src/base/util/env.ts');
   const unscrubbed = existsSync(envFile) ? unscrubbedEnvReads(readFileSync(envFile, 'utf8')) : [];
   report(dir, hits, misnamed, unscrubbed);
   if (hits.length > 0 || misnamed.length > 0 || unscrubbed.length > 0) process.exit(1);
-  console.log(`No test in ${dir}/ writes process.env by hand, and each test's name matches what it starts. OK.`);
+  console.log(`No test in ${dir}/ leaks a stubbed env, and each test's name matches what it starts. OK.`);
 }

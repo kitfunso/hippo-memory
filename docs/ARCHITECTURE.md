@@ -21,7 +21,7 @@ The port is `src/base/ports/store.ts`, with its groups in `src/base/ports/store/
 
 ### What lives in src/store
 
-A file belongs in `src/store` only if it runs SQL on hippo.db, holds or opens a handle, or is one of the row-shape, SQL-text and adapter files named in `DB_DEFINITION_FILES` in `scripts/check-store-port.mjs`. Scope predicates, the markdown mirror format, typed-object shapes, embedding providers and hook payload parsing live under `src/base`. The same script pins `storeFilesWithoutSqlList`, the files still under `src/store` that run no SQL, so a new pure helper filed there fails CI.
+`src/store` holds two folders: `sqlite/`, the SQLite adapter and its row shapes, SQL text and plumbing, and `rules/`, the rules the adapter shares across files and store-kit exports, which import only `src/base` and each other. Scope predicates, the markdown mirror format, typed-object shapes, embedding providers and hook payload parsing live under `src/base`. The `store-folders` and `store-rules-pure` rules in `.dependency-cruiser.cjs` fail a file anywhere else under `src/store` and a rules file that imports more, so a new pure helper filed there fails CI.
 
 ### Read verbs
 
