@@ -17,8 +17,8 @@ const DOC_LINES = new Set([
   'api/assemble.ts: * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */',
   "store/sqlite/handoffs.ts: // api.recall and printRecall continuity exclude slack:private:* and 'unknown:legacy'.",
   "store/sqlite/sessions.ts: // api.recall and printRecall continuity reads skip slack:private:* and 'unknown:legacy' rows.",
-  'store/sqlite/search-rows.ts: /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies',
-  "store/sqlite/search-rows.ts: * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot",
+  'store/sqlite/search-rows.ts: /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty',
+  "store/sqlite/search-rows.ts: * '%:private:%'` runs before the LIMIT so private rows cannot starve admitted ones;",
 ]);
 
 function hitsIn(file: string, text: string): string[] {

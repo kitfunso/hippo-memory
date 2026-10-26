@@ -1,7 +1,8 @@
+// Plain JS with JSDoc types so the plugin loads on the package's Node floor, which cannot strip types.
 import { eslintCompatPlugin } from '@oxlint/plugins';
 
-import { maxSignatureParamsRule } from './max-signature-params.ts';
-import { noAdapterNameRule } from './no-adapter-name.ts';
+import { maxSignatureParamsRule } from './max-signature-params.mjs';
+import { noAdapterNameRule } from './no-adapter-name.mjs';
 
 /** Rules the import graph and the built-in rules cannot see; .dependency-cruiser.cjs holds the
  * import rules. */

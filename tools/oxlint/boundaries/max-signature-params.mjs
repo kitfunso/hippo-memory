@@ -1,17 +1,22 @@
+// Plain JS with JSDoc types so the plugin loads on the package's Node floor, which cannot strip types.
 import { defineRule } from '@oxlint/plugins';
-import type { ESTree } from '@oxlint/plugins';
 
 // The same limit as max-params in .oxlintrc.json, which skips the four signature kinds below.
 const MAX_POSITIONAL = 5;
 
-type Signature =
-  | ESTree.TSMethodSignature
-  | ESTree.TSCallSignatureDeclaration
-  | ESTree.TSConstructSignatureDeclaration
-  | ESTree.TSConstructorType;
+/**
+ * @typedef {import('@oxlint/plugins').ESTree.TSMethodSignature
+ *   | import('@oxlint/plugins').ESTree.TSCallSignatureDeclaration
+ *   | import('@oxlint/plugins').ESTree.TSConstructSignatureDeclaration
+ *   | import('@oxlint/plugins').ESTree.TSConstructorType} Signature
+ */
 
-/** Parameters a caller passes by position: a rest parameter and a `this` type take none. */
-function positionalCount(node: Signature): number {
+/**
+ * Parameters a caller passes by position: a rest parameter and a `this` type take none.
+ * @param {Signature} node
+ * @returns {number}
+ */
+function positionalCount(node) {
   return node.params.filter(
     (param) => param.type !== 'RestElement' && !(param.type === 'Identifier' && param.name === 'this'),
   ).length;
@@ -28,7 +33,8 @@ export const maxSignatureParamsRule = defineRule({
     },
   },
   createOnce(context) {
-    const check = (node: Signature): void => {
+    /** @param {Signature} node */
+    const check = (node) => {
       const count = positionalCount(node);
       if (count > MAX_POSITIONAL) {
         context.report({ node, messageId: 'tooMany', data: { count: String(count), max: String(MAX_POSITIONAL) } });

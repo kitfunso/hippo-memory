@@ -23,7 +23,7 @@
   ],
   "jsPlugins": [
     { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" },
-    { "name": "boundaries", "specifier": "./tools/oxlint/boundaries/index.ts" }
+    { "name": "boundaries", "specifier": "./tools/oxlint/boundaries/index.mjs" }
   ],
   "plugins": ["typescript", "unicorn", "oxc", "import"],
   "rules": {

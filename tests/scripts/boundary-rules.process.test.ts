@@ -12,15 +12,33 @@ interface Diagnostic {
   readonly filename: string;
 }
 
-/** The repo's .oxlintrc.json, copied into `root` with its plugin paths pointing back at the repo. */
+/** An oxlint rule setting: a severity, or a severity and its options. */
+type RuleSetting = string | readonly [string, ...object[]];
+
+interface RuleTable {
+  readonly [rule: string]: RuleSetting;
+}
+
+interface Config {
+  jsPlugins: { readonly name: string; specifier: string }[];
+  rules?: RuleTable;
+  overrides?: { rules?: RuleTable }[];
+}
+
+/** `rules` without the anti-slop ones. */
+const withoutAntiSlop = (rules: RuleTable | undefined): RuleTable | undefined =>
+  rules && Object.fromEntries(Object.entries(rules).filter(([name]) => !name.startsWith('anti-slop/')));
+
+/** The repo's .oxlintrc.json in `root`, its plugin paths pointing back at the repo. The anti-slop
+ * plugin is TypeScript, which Node 22.16 (the engines floor) cannot load, so it and its rules go. */
 function configIn(root: string): string {
   // SAFETY: .oxlintrc.json is the repo's own config, whose jsPlugins entries all carry a specifier.
-  const config = JSON.parse(readFileSync(join(REPO, '.oxlintrc.json'), 'utf8')) as {
-    jsPlugins: { name: string; specifier: string }[];
-  };
-  for (const plugin of config.jsPlugins) {
-    plugin.specifier = relative(root, join(REPO, plugin.specifier)).split(sep).join('/');
-  }
+  const config = JSON.parse(readFileSync(join(REPO, '.oxlintrc.json'), 'utf8')) as Config;
+  config.jsPlugins = config.jsPlugins
+    .filter((plugin) => plugin.name !== 'anti-slop')
+    .map((plugin) => ({ ...plugin, specifier: relative(root, join(REPO, plugin.specifier)).split(sep).join('/') }));
+  config.rules = withoutAntiSlop(config.rules);
+  for (const override of config.overrides ?? []) override.rules = withoutAntiSlop(override.rules);
   const file = join(root, '.oxlintrc.json');
   writeFileSync(file, JSON.stringify(config));
   return file;
