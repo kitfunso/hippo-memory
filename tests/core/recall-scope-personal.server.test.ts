@@ -1,7 +1,7 @@
 // Personal scopes answer to their owner alone, and an HttpError can carry Retry-After.
 import { afterAll, beforeAll, describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
-import { HttpError } from '../../src/base/util/http-util.js';
+import { HttpError } from '../../src/base/errors/http-errors.js';
 import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 import {
   assertClientScope,

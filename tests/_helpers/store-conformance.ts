@@ -1,6 +1,7 @@
 // Runs one store group's calls on sqliteStore over its own copy of a two-tenant fixture, and returns the answers and
 // the audit rows so a test can assert them.
 import { cpSync, mkdtempSync } from 'node:fs';
+import { afterAll, describe, expect, it } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
@@ -14,6 +15,8 @@ import {
   type StoreGroups,
 } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { runStoreConformance } from '../../src/entry/store-kit.js';
+import { portOnlyStore } from './port-only-store.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { initTestStore } from './store-template.js';
 import { removeAfterRequest } from './one-request-per-test.js';
@@ -156,4 +159,24 @@ export async function runOnFixture<G extends ConformanceGroup, R>(
   } finally {
     removeAfterRequest(home);
   }
+}
+
+/** The suite store-kit ships, run over sqliteStore and the port-only store, each on a fresh migrated folder. */
+export function runPackagedConformance(): void {
+  const homes: string[] = [];
+  const folder = (): string => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-packaged-conformance-'));
+    homes.push(home);
+    initTestStore(home);
+    return home;
+  };
+  afterAll(() => {
+    for (const home of homes) removeAfterRequest(home);
+  });
+  describe.each([
+    ['sqliteStore', (): HippoStore => sqliteStore(folder())],
+    ['the port-only store', (): HippoStore => portOnlyStore(folder())],
+  ])('%s', (_name, open) => {
+    runStoreConformance({ describe, it, expect }, open);
+  });
 }

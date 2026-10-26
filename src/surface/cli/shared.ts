@@ -2,12 +2,12 @@
 // This module must never import cli.ts.
 
 import { isSharedStore } from '../../host/config-file.js';
-import { markChurnStale, type ChurnStaleResult } from '../../api/sleep/churn.js';
+import { markChurnStaleInReach, type ChurnStaleResult } from '../../api/sleep/churn.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { learn, CLI_LEARN } from '../../api/index.js';
 import { processGit } from '../../infra/git-runner.js';
-import { cliApiContext, cliInfra, cliInitGlobal, cliStore } from './api-context.js';
+import { cliApiContext, cliInitGlobal } from './api-context.js';
 import { fail } from './exit.js';
 import { type CliFlags, boolFlag } from './flag-values.js';
 
@@ -26,10 +26,7 @@ export async function runChurnStaleForRepo(
   tenantId: string,
   dryRun: boolean,
 ): Promise<{ root: string; result: ChurnStaleResult }[]> {
-  const globalRoot = hippoHomeDir();
-  const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
-  const stores = roots.map((root) => ({ root, store: cliStore(root) }));
-  return markChurnStale({ tenantId, infra: cliInfra() }, stores, { repoDir: process.cwd(), dryRun });
+  return markChurnStaleInReach(cliApiContext(hippoRoot, tenantId), { root: hippoRoot, repoDir: process.cwd(), dryRun });
 }
 
 /** True, after one line, on a shared store: this account's commits and agent notes are not its members' memories. */

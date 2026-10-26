@@ -6,6 +6,7 @@ import type { DormantMove, StrengthRefresh } from '../../base/ports/store/consol
 import type { StoreWith } from '../../base/ports/store.js';
 import type { SleepRows, Survivors } from './survivors.js';
 import type { TombstoneChecks } from './tombstones.js';
+import type { ConsolidateEvent } from './events.js';
 
 /** A pass that threw and was skipped; the sleep carries on without it. */
 export interface PhaseFailure {
@@ -33,7 +34,7 @@ export interface ConsolidationResult {
   dagCandidateClusters: number;
   dagSummariesCreated: number;
   // Failed and zero-child counts are first-class so callers (CLI eval, HTTP /v1/sleep) see structured data, not a
-  // parsed details string.
+  // parsed line.
   summariesRebuilt: number;
   summariesRebuildFailed: number;
   summariesZeroChildSkipped: number;
@@ -43,8 +44,9 @@ export interface ConsolidationResult {
   summariesRebuildCapped: boolean;
   entityProfilesCreated: number;
   dryRun: boolean;
-  details: string[];
-  /** Passes that failed and were skipped, with the error's log fields, for a caller that drops `details`. */
+  /** What the run did, in order; the CLI and /v1/sleep render each event as a line. */
+  events: ConsolidateEvent[];
+  /** Passes that failed and were skipped, with the error's log fields, for a caller that drops `events`. */
   phaseFailures: PhaseFailure[];
   physicsSimulated: number;
   /** Ids the decay pass removes (or would remove, under dryRun). */
@@ -112,22 +114,22 @@ export function newConsolidationResult(dryRun: boolean): ConsolidationResult {
     summariesRebuildCapped: false,
     entityProfilesCreated: 0,
     dryRun,
-    details: [],
+    events: [],
     phaseFailures: [],
     physicsSimulated: 0,
   };
 }
 
 /** Logs the failure with its stack, keeps it in the result for callers that run the sleep elsewhere, and adds the
- * `detail` line the sleep report shows. */
-export function recordPhaseFailure<E>(result: ConsolidationResult, phase: string, error: E, detail: string): void {
+ * event the sleep report shows. */
+export function recordPhaseFailure<E>(result: ConsolidationResult, phase: string, error: E): void {
   const failure = {
     phase,
     message: errorMessage(error),
     fields: errorFields(error),
   };
   result.phaseFailures.push(failure);
-  result.details.push(`${detail}: ${failure.message}`);
+  result.events.push({ kind: 'phaseSkipped', phase, message: failure.message });
   log.warn(`consolidate: ${phase} pass failed and was skipped: ${failure.message}`, errorFields(error));
 }
 

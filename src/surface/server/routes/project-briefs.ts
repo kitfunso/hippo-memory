@@ -2,7 +2,7 @@
 // and not-active to 409.
 import { briefDigest, briefRefresh, OBJECT_CAPS } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
-import { sendJson } from '../../../base/util/http-util.js';
+import { sendJson } from '../../http/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { parseJsonBody, getString, requiredString } from '../validation.js';
 import type { VersionedRouteConfig } from './object-routes.js';

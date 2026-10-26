@@ -36,7 +36,7 @@ import type {
 } from './store/types.js';
 
 /** Every group a store has: the required ones, then five optional capabilities, each a set of groups a store sets or
- * leaves unset together. */
+ * leaves unset together. `RequiredStore` is the smallest store, and `runStoreConformance` from store-kit checks one. */
 export interface StoreGroups
   extends RequiredGroups, FallbackGroups, FolderGroups, SleepGroups, CaptureGroups, MaintenanceGroups {}
 
@@ -134,6 +134,9 @@ export function requireGroup<G extends OptionalGroup>(store: HippoStore, group: 
   if (methods === undefined) throw new StoreNotPortedError(store.kind, group);
   return methods;
 }
+
+/** The smallest store: every required group and base method, none of the optional groups. */
+export type RequiredStore = Omit<HippoStore, OptionalGroup>;
 
 /** A store that sets the optional groups `G`, as a surface proves once before it calls in. */
 export type StoreWith<G extends OptionalGroup> = HippoStore & Pick<StoreGroups, G>;

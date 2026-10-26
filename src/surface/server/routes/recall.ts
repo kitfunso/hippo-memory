@@ -1,6 +1,4 @@
 // Recall routes: /v1/memories search, assemble, drill and /v1/context.
-import { dirname, resolve } from 'node:path';
-import { assertCallerProject, type ProjectRef } from '../../../base/scope/project-identity.js';
 import { assembleCost, contextCost, drillCost } from '../../../api/context-render.js';
 import {
   assemble,
@@ -8,15 +6,16 @@ import {
   drillDown,
   type DrillDownOptions,
   contextGet,
+  contextProjectFor,
   recordTokens,
   retrieve,
 } from '../../../api/index.js';
 import { RECALL_RECORDING } from '../../../api/recall/finish.js';
 import { continuityJson, sessionEventJson, snapshotJson } from '../../../api/continuity-json.js';
 import { httpParams, parseContextRequest, parseRecallRequest } from '../../../api/recall/request.js';
-import { HttpError, sendJson } from '../../../base/util/http-util.js';
+import { HttpError } from '../../../base/errors/http-errors.js';
+import { sendJson } from '../../http/http-util.js';
 import type { AuthedRouteRequest, RouteParams } from '../types.js';
-import { sharedStoreOf, type Context } from '../../../api/types.js';
 import { MAX_LIST_LIMIT } from '../../../base/util/limits.js';
 import { parseIntParam, parseLimitParam, parseNumberParam, validateIdSegment } from '../validation.js';
 
@@ -93,19 +92,6 @@ export async function handleDrillRecall({ res, ctx, query }: AuthedRouteRequest,
   return;
 }
 
-/**
- * A shared store's folder is no caller's project, so the caller names it (`project`, repeated `alias`); with none,
- * contextGet refuses.
- */
-function contextReader(ctx: Context, hippoRoot: string, query: URLSearchParams): ProjectRef {
-  if (!sharedStoreOf(ctx)) return ctx.infra.machine.projectIdentity(dirname(resolve(hippoRoot)));
-  const name = query.get('project');
-  if (name === null) return '';
-  const aliases = query.getAll('alias');
-  assertCallerProject({ name, aliases });
-  return { name, legacyName: name, aliases };
-}
-
 // GET /v1/context: a budget-bounded ContextResult JSON, rendered by clients, not the server; tenant-scoped via the
 // Bearer.
 // Pinned-only and '*' fallback skip the recall audit emit (as printContext does); a real-query hybrid search emits one
@@ -114,7 +100,11 @@ export async function handleGetContext({ res, ctx, query, opts }: AuthedRouteReq
   const parsed = parseContextRequest(httpParams(query));
   const result = await contextGet(ctx, {
     ...parsed,
-    currentProject: contextReader(ctx, opts.hippoRoot, query),
+    currentProject: contextProjectFor(ctx, {
+      storeDir: opts.hippoRoot,
+      project: query.get('project'),
+      aliases: query.getAll('alias'),
+    }),
     cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
   });
   await recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });
