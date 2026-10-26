@@ -2,11 +2,11 @@
 
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { sqliteStore } from '../../../src/store/sqlite/store.js';
-import { onHandle } from '../../../src/store/sqlite/runtime/handles.js';
+import { onHandle } from '../../../src/store/sqlite/handles.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
 import type { CompleteGoalOptions, PushGoalOptions } from '../../../src/base/ports/store/goals.js';
-import * as goalsSql from '../../../src/store/sqlite/goals/goals.js';
-import * as predictionsSql from '../../../src/store/sqlite/learning/predictions.js';
+import * as goalsSql from '../../../src/store/sqlite/goals.js';
+import * as predictionsSql from '../../../src/store/sqlite/predictions.js';
 import type { KeysetPosition } from '../../../src/base/util/keyset.js';
 import { DEFAULT_LIST_LIMIT } from '../../../src/base/util/limits.js';
 import type {

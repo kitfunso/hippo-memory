@@ -22,7 +22,7 @@ import { rememberLocally } from '../../src/api/memories/remember-local.js';
 import { importVault } from '../../src/entry/importers.js';
 import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
+import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { seeded } from '../_helpers/recall-golden-seed.js';
 import { apiCtx } from '../_helpers/api-ctx.js';

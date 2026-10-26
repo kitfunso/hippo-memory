@@ -8,7 +8,7 @@ import { outcome } from '../../src/api/memories/outcome.js';
 import { quarantineList } from '../../src/api/auth/quarantine.js';
 import { drillDown } from '../../src/api/objects/drill-down.js';
 import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
-import { recordQuarantine } from '../../src/store/sqlite/quarantine/quarantine.js';
+import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
 import { dashboardDetailAfterWrite } from '../../src/api/dashboard/detail.js';
 import { buildOverview } from '../../src/api/dashboard/overview.js';
 import { dashboardOf } from '../_helpers/dashboard-fixture.js';
@@ -16,7 +16,7 @@ import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadEntriesByIds, replaceDetectedConflicts, strengthenRetrieved, readEntry } from '../_helpers/root-forms.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { openStore } from '../../src/store/sqlite/runtime/handles.js';
+import { openStore } from '../../src/store/sqlite/handles.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
 import {
   ROW_READ,

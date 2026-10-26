@@ -56,7 +56,7 @@ describe('openclaw package metadata', () => {
   it('ships a compiled dist twin for every TypeScript openclaw extension entry', () => {
     // Runs the real publish gate in a plain Node process: vitest's own import() interops
     // CommonJS, so an in-test import stays green on the exact emit that breaks Node.
-    execFileSync(process.execPath, [join(repoRoot, 'scripts', 'checks', 'check-openclaw-dist.mjs')], {
+    execFileSync(process.execPath, [join(repoRoot, 'scripts', 'check-openclaw-dist.mjs')], {
       cwd: repoRoot,
       stdio: 'pipe',
     });

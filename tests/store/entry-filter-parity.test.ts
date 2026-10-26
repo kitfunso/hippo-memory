@@ -8,7 +8,7 @@ import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { EntryFilter } from '../../src/base/ports/store/reports.js';
 import type { EntryCursor, EntryPage } from '../../src/base/ports/store/types.js';
-import { dormantSnapshotsWhere, insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
+import { dormantSnapshotsWhere, insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import {

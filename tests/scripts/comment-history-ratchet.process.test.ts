@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-comment-history.mjs');
+const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-comment-history.mjs');
 const BASELINE = '.comment-history-baseline.json';
 
 type Run = (...args: string[]) => { status: number | null; stdout: string; stderr: string };

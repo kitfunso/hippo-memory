@@ -9,7 +9,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { consolidate } from '../../src/index.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/github/ingest.js';
 import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';

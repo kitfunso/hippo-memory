@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { inject } from 'vitest';
 import { getHippoDbPath } from '../../src/db/open.js';
-import { initStore } from '../../src/store/sqlite/runtime/handles.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 declare module 'vitest' {

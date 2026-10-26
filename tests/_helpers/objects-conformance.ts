@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { auditRowsOn } from './audit-rows.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { objectMirror } from '../../src/domain/objects/lifecycle.js';
-import { auditHighId } from './root-forms.js';
+import { auditHighId } from '../_helpers/root-forms.js';
 import type {
   BriefReceipt,
   Incident,
@@ -23,7 +23,7 @@ import {
   type GroupCall,
   type SideResult,
   type TwoTenantFixture,
-} from './store-conformance.js';
+} from '../_helpers/store-conformance.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';

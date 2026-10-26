@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { findLongLists, LIMIT } from '../../scripts/checks/check-positional-params.mjs';
+import { findLongLists, LIMIT } from '../../scripts/check-positional-params.mjs';
 
 function inFixture<T>(files: Record<string, string>, body: (root: string) => T): T {
   const root = mkdtempSync(join(tmpdir(), 'hippo-positional-params-'));

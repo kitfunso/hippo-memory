@@ -4,8 +4,8 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements } from '../_helpers/count-statements.js';
-import { pickRarestFtsQuery } from '../../src/store/sqlite/recall/search-rows.js';
-import { updateMemoryRows, upsertMemoryRow } from '../../src/store/sqlite/entries/entry-row.js';
+import { pickRarestFtsQuery } from '../../src/store/sqlite/search-rows.js';
+import { updateMemoryRows, upsertMemoryRow } from '../../src/store/sqlite/entry-row.js';
 
 let db: DatabaseSyncLike;
 

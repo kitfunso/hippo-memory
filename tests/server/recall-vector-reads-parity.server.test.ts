@@ -19,7 +19,7 @@ import { log as hippoLog } from '../../src/base/util/log.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import {
   CLEARED_ENV,

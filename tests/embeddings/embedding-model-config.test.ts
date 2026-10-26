@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { loadConfig } from '../../src/host/config-file.js';
-import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -108,7 +108,7 @@ describe('embedding model configuration', () => {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
       const { resolveEmbeddingProvider } = await import('../../src/infra/embedding-provider.js');
-      const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vectors/vector-index.js');
+      const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vector-index.js');
       const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
       const { createMemory } = await import('../../src/entry/memory.js');
@@ -142,7 +142,7 @@ describe('embedding model configuration', () => {
   it('treats a legacy embedding index as stale when the configured model changes', async () => {
     writeConfig(tmpDir, 'custom/model');
 
-    const { embeddingModelRequiresReindex } = await import('../../src/store/sqlite/vectors/vector-index.js');
+    const { embeddingModelRequiresReindex } = await import('../../src/store/sqlite/vector-index.js');
     const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
     saveEmbeddingIndex(tmpDir, { mem_legacy: [1, 0, 0] });
 
@@ -154,7 +154,7 @@ describe('embedding model configuration', () => {
     try {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
-      const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vectors/vector-index.js');
+      const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vector-index.js');
       const { saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
       const { createMemory } = await import('../../src/entry/memory.js');
@@ -182,7 +182,7 @@ describe('embedding model configuration', () => {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
       const { resolveEmbeddingProvider } = await import('../../src/infra/embedding-provider.js');
-      const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vectors/vector-index.js');
+      const { saveStoredEmbeddingModel } = await import('../../src/store/sqlite/vector-index.js');
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
       const { createMemory } = await import('../../src/entry/memory.js');
 

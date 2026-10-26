@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-dts-diff.mjs');
+const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-dts-diff.mjs');
 const FIXTURES = join(import.meta.dirname, '..', 'fixtures', 'api-report');
 const roots: string[] = [];
 

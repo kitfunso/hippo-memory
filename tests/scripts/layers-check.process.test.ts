@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-layers.mjs');
+const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-layers.mjs');
 const MAP = {
   order: ['low', 'high'],
   folders: { sub: 'high' },

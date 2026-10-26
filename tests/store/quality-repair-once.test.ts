@@ -1,5 +1,5 @@
-import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
-import type { StoreFiles } from '../../src/store/sqlite/runtime/open.js';
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
+import type { StoreFiles } from '../../src/store/sqlite/open.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

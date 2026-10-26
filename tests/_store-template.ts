@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TestProject } from 'vitest/node';
 import { getHippoDbPath } from '../src/db/open.js';
-import { initStore } from '../src/store/sqlite/runtime/handles.js';
+import { initStore } from '../src/store/sqlite/handles.js';
 
 export function setup(project: TestProject): void {
   // In the run's temp folder, which the store guard's teardown removes.

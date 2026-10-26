@@ -20,7 +20,7 @@ import {
   type StoredGraph,
   type StoredRelation,
 } from '../../src/store/rules/graph-delta.js';
-import { insertEntityRow, insertRelationRow } from '../../src/store/sqlite/graph/graph-writes.js';
+import { insertEntityRow, insertRelationRow } from '../../src/store/sqlite/graph-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { countMatching, peakRowsRead, recordStatementsAsync } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { packageScriptsAt } from '../../src/domain/learn/churn-git.js';
-import { onHandle, openStore } from '../../src/store/sqlite/runtime/handles.js';
+import { onHandle, openStore } from '../../src/store/sqlite/handles.js';
 import { processGit } from '../../src/infra/git-runner.js';
 
 let dir: string;

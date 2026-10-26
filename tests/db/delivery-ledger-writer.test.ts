@@ -5,7 +5,7 @@ import {
   deliveryPruneSchedule,
   writeDeliveryEventOnHandle,
   writeDeliveryEventVia,
-} from '../../src/store/sqlite/recall/recall-trace.js';
+} from '../../src/store/sqlite/recall-trace.js';
 import { readDeliveryEvents } from '../_helpers/delivery-events.js';
 import { createDeliveryRecorder } from '../../src/api/delivery-recorder.js';
 import { DELIVERY_LEDGER_VERSION } from '../../src/base/session/delivery.js';
@@ -22,7 +22,7 @@ import {
 } from '../_helpers/count-statements.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 // A prompt hook waits a second for a lock in all; the ledger may spend a fraction of it.

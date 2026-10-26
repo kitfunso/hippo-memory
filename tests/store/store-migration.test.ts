@@ -5,7 +5,7 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
-import { initStore } from '../../src/store/sqlite/runtime/handles.js';
+import { initStore } from '../../src/store/sqlite/handles.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite's DatabaseSync constructor genuinely has this shape at

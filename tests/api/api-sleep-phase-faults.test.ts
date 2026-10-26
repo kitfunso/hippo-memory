@@ -26,7 +26,7 @@ import {
   type ConsolidationResult,
 } from '../../src/domain/consolidate/run.js';
 import { log } from '../../src/base/util/log.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { writeEntry } from '../_helpers/root-forms.js';

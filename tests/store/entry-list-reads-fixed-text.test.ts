@@ -6,8 +6,8 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { createMemory } from '../../src/entry/memory.js';
 import type { EmotionalValence } from '../../src/base/memory/entry.js';
-import { contentsWithTag, listEntriesWithSignals } from '../../src/store/sqlite/entries/entry-reads.js';
-import { listEntriesWhere } from '../../src/store/sqlite/entries/entry-filter.js';
+import { contentsWithTag, listEntriesWithSignals } from '../../src/store/sqlite/entry-reads.js';
+import { listEntriesWhere } from '../../src/store/sqlite/entry-filter.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 

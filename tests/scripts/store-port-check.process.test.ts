@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const REPO = join(import.meta.dirname, '..', '..');
-const SCRIPT = join(REPO, 'scripts', 'checks', 'check-store-port.mjs');
+const SCRIPT = join(REPO, 'scripts', 'check-store-port.mjs');
 const BASELINE = '.store-port-baseline.json';
 
 type Counts = {

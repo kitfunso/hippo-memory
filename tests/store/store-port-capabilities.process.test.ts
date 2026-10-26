@@ -19,7 +19,7 @@ import { openHippoDb, closeHippoDb, SqliteBlockedError } from '../../src/db/inde
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import type { HippoStore } from '../../src/base/ports/store-index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
+import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';

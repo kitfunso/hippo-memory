@@ -12,7 +12,7 @@ import type {
 } from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { log } from '../../../base/util/log.js';
-import { handleStamp } from '../runtime/handle-clock.js';
+import { handleStamp } from '../handle-clock.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */
 export interface GitHubEventLogEntry {

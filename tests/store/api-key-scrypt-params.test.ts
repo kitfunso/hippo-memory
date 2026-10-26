@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { randomBytes, scryptSync } from 'node:crypto';
-import { insertApiKey } from '../../src/store/sqlite/keys/auth.js';
+import { insertApiKey } from '../../src/store/sqlite/auth.js';
 import { verifyApiKeyCached } from '../../src/surface/server/api-key.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';

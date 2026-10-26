@@ -11,11 +11,11 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { closeHippoDb } from '../../src/db/index.js';
-import { gatedWrite } from '../../src/store/sqlite/capture/gated-write.js';
+import { gatedWrite } from '../../src/store/sqlite/gated-write.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
-import { openStore, storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 

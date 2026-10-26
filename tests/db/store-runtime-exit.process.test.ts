@@ -17,7 +17,7 @@ describe('process.exit inside the root store runtime', () => {
     const script = [
       `import * as fs from 'node:fs';`,
       `import { withRootStoreRuntime } from ${built('surface/open-store.js')};`,
-      `import { deferMirrorWrite } from ${built('store/sqlite/folder-files/mirrors.js')};`,
+      `import { deferMirrorWrite } from ${built('store/sqlite/mirrors.js')};`,
       `import { openHippoDb, runWithRequestStores } from ${built('db/index.js')};`,
       `const root = ${JSON.stringify(root)};`,
       'await withRootStoreRuntime(() => runWithRequestStores(() => {',

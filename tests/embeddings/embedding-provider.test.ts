@@ -3,13 +3,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import {
-  embeddingModelRequiresReindex,
-  saveStoredEmbeddingModel,
-} from '../../src/store/sqlite/vectors/vector-index.js';
+import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

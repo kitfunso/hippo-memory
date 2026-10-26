@@ -7,7 +7,7 @@ import { StoreBusyError } from '../../src/base/ports/store.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../src/base/errors/http-errors.js';
 import { ScopeForbiddenError } from '../../src/base/scope/recall-scope.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
-import { decodeError, encodeError } from '../../src/store/sqlite/runtime/error-codec.js';
+import { decodeError, encodeError } from '../../src/store/sqlite/error-codec.js';
 import { StoreNotPortedError } from '../../src/base/util/store-blocked.js';
 import { arr, both, forAll, int, map, pick, str, type Gen } from '../_helpers/property.js';
 

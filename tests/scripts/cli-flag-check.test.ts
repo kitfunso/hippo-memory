@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { findHandFlagReads, handFlagLines } from '../../scripts/checks/check-cli-flags.mjs';
+import { findHandFlagReads, handFlagLines } from '../../scripts/check-cli-flags.mjs';
 
 describe('check-cli-flags', () => {
   let dir: string;

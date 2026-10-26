@@ -5,11 +5,11 @@ import { dirname, join } from 'node:path';
 import { forget, reject, dormantRestore, supersede } from '../../src/api/index.js';
 import { importForStore } from '../../src/api/agent-memories.js';
 import type { ImportReport } from '../../src/base/memory/agent-memory-report.js';
-import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { removeEntryMirrors } from '../../src/store/sqlite/folder-files/mirrors.js';
-import { deleteEntryRowInTx } from '../../src/store/sqlite/entries/entry-writes.js';
+import { removeEntryMirrors } from '../../src/store/sqlite/mirrors.js';
+import { deleteEntryRowInTx } from '../../src/store/sqlite/entry-writes.js';
 import {
   auditCount,
   auditTotal,
@@ -29,7 +29,7 @@ import {
   type World,
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { sqliteImportStores } from '../../src/store/sqlite/agent-import/agent-import-stores.js';
+import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { TEST_RUN } from '../_helpers/test-run.js';

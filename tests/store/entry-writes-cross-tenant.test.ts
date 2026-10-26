@@ -10,9 +10,9 @@ import {
   writeEntryOn,
   writeEntryDbOnly,
   writePromotedEntry,
-} from '../../src/store/sqlite/entries/entry-writes.js';
-import { onHandle, openStore, storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
-import type { StoreFiles } from '../../src/store/sqlite/runtime/open.js';
+} from '../../src/store/sqlite/entry-writes.js';
+import { onHandle, openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
+import type { StoreFiles } from '../../src/store/sqlite/open.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

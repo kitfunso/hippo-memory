@@ -2,8 +2,8 @@
 import { beforeAll } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
-import { makeRoot } from './make-root.js';
-import { writeEntry } from './root-forms.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntry } from '../_helpers/root-forms.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */

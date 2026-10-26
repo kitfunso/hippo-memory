@@ -36,7 +36,7 @@ These observations describe the review snapshot, not a perpetual assertion about
 ## Release and publication checklist
 
 1. Update this inventory, README and affected hand-written website/agent-install/integration copy together. Reconcile edition, default, setup/trust, egress and benchmark qualifiers. MSG6 still owns the wider semantic audit, including package metadata, historical entry points and all relevant public pages.
-2. Run `node scripts/checks/check-roadmap.mjs` and `node website/scripts/check-readme-sync.mjs`; build affected website pages. These guards check document structure and selected shared wording, not every semantic claim or live compatibility.
+2. Run `node scripts/check-roadmap.mjs` and `node website/scripts/check-readme-sync.mjs`; build affected website pages. These guards check document structure and selected shared wording, not every semantic claim or live compatibility.
 3. Follow `docs/release-policy.md` for an npm release. Verify tag, package version, tarball README/metadata, npm dist-tag and the rendered listing against the release commit. Do not publish a package merely to label a roadmap change complete.
 4. Follow the website deployment process and check rendered setup, enterprise availability, FAQ, comparison, metadata, footer and `/llms.txt`/`llms-full.txt`. Record deployed commit and date. A source-derived version label alone cannot prove deployment or npm consistency.
 5. Record availability and fixture/live/task evidence separately for core and commercial capabilities. Leave planned features, absent telemetry, blocked runtime modes and unmeasured outcomes explicit; never promote them because a document guard passed.

@@ -3,7 +3,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { adminActor, remember, rememberLocally } from '../../src/api/index.js';
-import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import type { JsonValue } from '../../src/base/util/json.js';

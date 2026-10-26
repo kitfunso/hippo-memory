@@ -13,11 +13,11 @@ import {
 import { passesScopeFilterForRecall } from '../../src/base/scope/recall-scope.js';
 import { isSessionDigestRow, SESSION_DIGEST_TAG } from '../../src/base/session/session-digest-row.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { listAmbientCandidates } from '../../src/store/sqlite/recall/candidates.js';
+import { listAmbientCandidates } from '../../src/store/sqlite/candidates.js';
 import type { AmbientRefusal, HippoStore, StoreGroups, SummaryDescendants } from '../../src/base/ports/store.js';
-import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/runtime/rows.js';
+import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/sqlite/rows.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { workerSqliteStore } from '../../src/store/sqlite/runtime/worker-store.js';
+import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { detectSecret } from '../../src/base/util/secret-detect.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { seeded } from '../_helpers/recall-golden-seed.js';

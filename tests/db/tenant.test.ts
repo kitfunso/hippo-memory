@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import { resolveTenantId } from '../../src/surface/server/boot.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

@@ -1,6 +1,6 @@
 # Agent inventory
 
-`agent-inventory.json` lists every agent surface hippo names. For each one it records what hippo hooks into today, and, per mode, whether hippo saves a checkpoint and lessons before the host drops context. CI runs `node scripts/checks/check-agent-inventory.mjs` on every PR.
+`agent-inventory.json` lists every agent surface hippo names. For each one it records what hippo hooks into today, and, per mode, whether hippo saves a checkpoint and lessons before the host drops context. CI runs `node scripts/check-agent-inventory.mjs` on every PR.
 
 The inventory is the AZ6 backlog in `ROADMAP.md`. It replaces no other document; it is the one place the per-agent status lives.
 
@@ -54,7 +54,7 @@ Website pages are listed in `claims` but not parsed, since they hold no structur
 1. Add an entry with every field. Use `null` for anything you have not checked.
 2. Add one mode per surface that behaves differently: local, cloud, remote host, CLI, SDK.
 3. Set statuses from evidence only. A new adapter starts at `planned`; it moves to `shipped` with a fixture test, and to `verified` with a recorded live run.
-4. Run `node scripts/checks/check-agent-inventory.mjs`.
+4. Run `node scripts/check-agent-inventory.mjs`.
 
 ## The capture contract
 

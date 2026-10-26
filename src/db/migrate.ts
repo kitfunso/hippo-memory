@@ -60,7 +60,7 @@ const META_DEFAULTS: ReadonlyArray<readonly [string, string]> = [
 const sqlList = (names: readonly string[]): string => names.map((n) => `'${n}'`).join(', ');
 
 const REQUIRED_OBJECTS = sqlList(REQUIRED_SCHEMA_OBJECTS);
-// The mirror rewrite marks sqlite/folder-files/due-mirrors.ts leaves; read here so an open with none due skips it.
+// The mirror rewrite marks src/store/sqlite/due-mirrors.ts leaves; read here so an open with none due skips that step.
 const MIRRORS_DUE = `(SELECT 1 FROM meta WHERE key > 'mirror_due:' AND key < 'mirror_due;' LIMIT 1) AS mirrors_due`;
 /** The fast path's single probe: versions, the binary minimum, the FTS flag, and counts of the meta defaults and
  * required objects. */
@@ -76,7 +76,7 @@ export const SCHEMA_PROBE_SQL = `SELECT
   (SELECT 1 FROM memories LIMIT 1) AS has_memories,
   ${MIRRORS_DUE}`;
 
-// SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
+// SAFETY: every read cast to this row selects all its keys; scripts/check-row-casts.mjs proves it.
 interface SchemaProbe {
   user_version: number;
   schema_version: string | null;

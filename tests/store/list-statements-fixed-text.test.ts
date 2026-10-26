@@ -1,10 +1,10 @@
 // A cached statement's SQL text is the same for every list length, so three ids and thirty prepare it once.
-import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { sqliteCards } from '../../src/store/sqlite/cards/cards.js';
-import type { OnHandle } from '../../src/store/sqlite/runtime/open.js';
+import { sqliteCards } from '../../src/store/sqlite/cards.js';
+import type { OnHandle } from '../../src/store/sqlite/open.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
 const TENANT = 'default';

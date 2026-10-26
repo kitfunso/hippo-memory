@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { adminActor, retrieve } from '../../src/api/index.js';
 import { findHippoStoreDir, getHippoRoot, isInitialized } from '../../src/host/project-identity.js';
 import { findHippoRoot } from '../../src/surface/mcp/server.js';

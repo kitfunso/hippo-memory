@@ -1,9 +1,9 @@
-import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { replayCompactions, saveCompaction } from '../../src/surface/capture/compaction-record.js';
-import { compactionByRequest, saveItems } from '../../src/store/sqlite/capture/compactions-record.js';
+import { compactionByRequest, saveItems } from '../../src/store/sqlite/compactions-record.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import {
   compactionMemories,

@@ -4,14 +4,14 @@ import * as path from 'node:path';
 import { afterEach, vi } from 'vitest';
 import { apiCtx, type FullContext } from './api-ctx.js';
 import { makeRoot } from './make-root.js';
-import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/runtime/rows.js';
+import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { adminActor } from '../../src/api/types.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { writeEntriesTogether } from './root-forms.js';
-import { openStore } from '../../src/store/sqlite/runtime/handles.js';
+import { openStore } from '../../src/store/sqlite/handles.js';
 import { removeAfterRequest } from './one-request-per-test.js';
 
 export const SIZES = [10, 200] as const;

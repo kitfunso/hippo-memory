@@ -9,7 +9,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
 

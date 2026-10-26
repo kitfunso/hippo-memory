@@ -12,7 +12,7 @@ import type {
   SlackWorkspace,
 } from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import { handleStamp } from '../runtime/handle-clock.js';
+import { handleStamp } from '../handle-clock.js';
 
 // Backfill cursors
 

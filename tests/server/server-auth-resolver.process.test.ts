@@ -20,7 +20,7 @@ import {
   type Context,
 } from '../../src/server.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../../src/db/index.js';
 import { auditRowsOn } from '../_helpers/audit-rows.js';

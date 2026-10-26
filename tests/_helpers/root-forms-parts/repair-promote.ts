@@ -6,7 +6,7 @@ import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import { promote } from '../../../src/api/memories/promote.js';
 import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import { apiCtx } from '../api-ctx.js';
-import { type StoreFiles } from '../../../src/store/sqlite/runtime/open.js';
+import { type StoreFiles } from '../../../src/store/sqlite/open.js';
 import type { RepairProtection } from '../../../src/base/memory/memory-audit.js';
 import type { QualityRepairResult } from '../../../src/base/ports/store/audit.js';
 

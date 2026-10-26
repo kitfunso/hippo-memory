@@ -29,7 +29,7 @@ const { importForStore, importAtSessionEnd } = await import(syncUrl);
 const { currentMachine } = await import(new URL('../infra/machine.js', syncUrl).href);
 const { homedir } = await import('node:os');
 const { loadConfig } = await import(new URL('../host/config-file.js', syncUrl).href);
-const { sqliteImportStores } = await import(new URL('../store/sqlite/agent-import/agent-import-stores.js', syncUrl).href);
+const { sqliteImportStores } = await import(new URL('../store/sqlite/agent-import-stores.js', syncUrl).href);
 const { evalNow } = await import(new URL('../infra/eval-switches.js', syncUrl).href);
 const machine = mode === 'negative' ? { ...currentMachine(), home: cleanHome, env: {} }
   : mode === 'env' ? currentMachine() : { ...currentMachine(), home: homedir(), env: {} };

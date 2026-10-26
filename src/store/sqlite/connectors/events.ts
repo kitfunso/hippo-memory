@@ -2,7 +2,7 @@
 
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import { archiveRawMemories } from '../entries/raw-archive.js';
+import { archiveRawMemories } from '../raw-archive.js';
 import type {
   ArtifactDeletion,
   ArtifactLookup,

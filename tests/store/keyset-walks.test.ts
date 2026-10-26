@@ -12,9 +12,9 @@ import {
   listEntryIdsPage,
   listEntryTextKeysPage,
   listTenantTextsPage,
-} from '../../src/store/sqlite/entries/entry-reads.js';
-import { listEntriesWhere } from '../../src/store/sqlite/entries/entry-filter.js';
-import { pendingVectorIds, resetStoredParticles } from '../../src/store/sqlite/vectors/vector-index.js';
+} from '../../src/store/sqlite/entry-reads.js';
+import { listEntriesWhere } from '../../src/store/sqlite/entry-filter.js';
+import { pendingVectorIds, resetStoredParticles } from '../../src/store/sqlite/vector-index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { recordStatements } from '../_helpers/count-statements.js';

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { adapterReach, findDomainIo, hostReach, ioImports } from '../../scripts/checks/check-domain-io.mjs';
+import { adapterReach, findDomainIo, hostReach, ioImports } from '../../scripts/check-domain-io.mjs';
 
 describe('check-domain-io', () => {
   let dir: string;

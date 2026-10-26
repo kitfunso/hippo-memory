@@ -1,6 +1,6 @@
 /**
  * Graph observability and visualization, READ-ONLY over the entity/relation graph (no writes, so
- * `scripts/checks/check-graph-writes.mjs` stays green).
+ * `scripts/check-graph-writes.mjs` stays green).
  * Shared by `hippo graph show|view` and the HTTP `GET /v1/graph` route, which all build the same `GraphModel`. */
 
 import type { ScopeActor } from '../../base/scope/recall-scope.js';

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-api-root-calls.mjs');
+const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-api-root-calls.mjs');
 const STORE =
   'export function readThing(hippoRoot: string) { return hippoRoot; }\nexport function other(db: string) { return db; }\n';
 

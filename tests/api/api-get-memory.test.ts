@@ -7,12 +7,12 @@ import { adminActor } from '../../src/api/types.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { CreateMemoryOptions, MemoryEntry } from '../../src/base/memory/entry.js';
-import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
-import { openStore } from '../../src/store/sqlite/runtime/handles.js';
+import { openStore } from '../../src/store/sqlite/handles.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 
 oneRequestPerTest();

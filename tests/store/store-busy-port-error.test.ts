@@ -3,12 +3,8 @@
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, isSqliteBusy, openHippoDb, runWithRequestStores } from '../../src/db/index.js';
 import { isStoreBusy, StoreBusyError } from '../../src/base/ports/store.js';
-import { portError } from '../../src/store/sqlite/runtime/port-errors.js';
-import {
-  runSqliteBatch,
-  runSqliteHookRequest,
-  runSqliteRequest,
-} from '../../src/store/sqlite/runtime/request-scope.js';
+import { portError } from '../../src/store/sqlite/port-errors.js';
+import { runSqliteBatch, runSqliteHookRequest, runSqliteRequest } from '../../src/store/sqlite/request-scope.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

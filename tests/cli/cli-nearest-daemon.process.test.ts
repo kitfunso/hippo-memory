@@ -11,7 +11,7 @@ import { embedAll } from '../../src/domain/search/embed-memories.js';
 import { serve } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
 import type { VectorCandidateSpec } from '../../src/base/ports/store/vectors.js';
-import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
+import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { localIndex } from '../_helpers/cli-stores.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';

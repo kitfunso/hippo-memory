@@ -8,7 +8,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { ServerHandle } from '../../src/server.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
-import { createSqliteExecutor } from '../../src/store/sqlite/runtime/executor.js';
+import { createSqliteExecutor } from '../../src/store/sqlite/executor.js';
 import { StoreBusyError } from '../../src/base/ports/store.js';
 import { mintAdminKey } from '../_helpers/admin-server.js';
 import {

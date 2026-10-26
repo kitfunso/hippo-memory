@@ -67,11 +67,11 @@ Bump them with one command in the release PR:
 
 npm writes `package.json` and the lockfile, then runs the `version` script:
 `scripts/sync-version.mjs` copies the version to the other five sites and
-`scripts/checks/check-manifest-versions.mjs` confirms all eight. Pass
+`scripts/check-manifest-versions.mjs` confirms all eight. Pass
 `--no-git-tag-version` because the tag is cut at publish, from the squash
 commit on master. Never edit the sites by hand.
 
-`scripts/checks/check-manifest-versions.mjs` also runs in `prepublishOnly`, so a
+`scripts/check-manifest-versions.mjs` also runs in `prepublishOnly`, so a
 drifted site still blocks the publish. Adding a new lockstep manifest?
 Append it to `LOCKSTEP_MANIFESTS` in the check and to `JSON_MANIFESTS` in
 the sync script; the check fails `npm version` until both agree.
@@ -83,7 +83,7 @@ bundle fix, v1.13.1 nested manifest drift) before this check existed.
 
 ## Em-dash discipline (pre-publish guard)
 
-`scripts/checks/check-em-dashes-in-release-notes.mjs` scans the CHANGELOG.md
+`scripts/check-em-dashes-in-release-notes.mjs` scans the CHANGELOG.md
 entry for the version about to be published and rejects on em-dash
 (U+2014). Historical entries from before the discipline are not in
 scope; only the section matching the current `package.json` version
@@ -94,10 +94,10 @@ entries is a separate doc-clean-up task, not a release blocker.
 
 ## Test suite (pre-publish guard)
 
-`prepublishOnly` ends with `node scripts/checks/check-tests-pass.mjs`, which runs `vitest run` through
+`prepublishOnly` ends with `node scripts/check-tests-pass.mjs`, which runs `vitest run` through
 node and vitest's own bin (no npm shim, no `pretest` rebuild). It runs after `build:all` so the
 CLI-spawning tests see the fresh `dist/`. Extra arguments pass through to vitest, so
-`node scripts/checks/check-tests-pass.mjs tests/foo.test.ts` gates on one file; `--outputFile` and
+`node scripts/check-tests-pass.mjs tests/foo.test.ts` gates on one file; `--outputFile` and
 `--output-file` are the arguments it rejects, because vitest treats them as the same option and the
 gate reserves vitest's JSON report for itself.
 That run leaves out the sixteen slow token-eval harness tests (`EVAL_TESTS` in `vitest.config.ts`); `npm-publish.yml` runs them through `token-eval.yml` on the tagged commit and stops if one fails.

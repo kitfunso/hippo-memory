@@ -9,7 +9,7 @@ export { startStdioLoop } from './stdio.js';
 import { envMcpStdio } from '../../base/util/env.js';
 import { startStdioLoop } from './stdio.js';
 
-// Auto-start only as the main module (node dist/surface/mcp/server.js or the cli's import('./server.js'));
+// Auto-start only as the main module (node dist/surface/mcp/server.js or the cli's import('../mcp/server.js'));
 // importing it elsewhere (the HTTP/SSE wiring) must not start stdio. Fallback: HIPPO_MCP_STDIO=1 or argv1 ending in
 // /mcp/server.js also starts it.
 const isMainModule = (() => {

@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { daysBetween } from '../../src/base/memory/memory-facts.js';
 import { closeHippoDb, openHippoDb, type SqlValue } from '../../src/db/index.js';
 import { buildMemoryPage, type MemoryQuery } from '../../src/api/dashboard/queries.js';
-import { textFilter, useDashboardFunctions } from '../../src/store/sqlite/dashboard/dashboard-functions.js';
+import { textFilter, useDashboardFunctions } from '../../src/store/sqlite/dashboard-functions.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { dashboardOf, makeStore, NOW, type TmpStore } from '../_helpers/dashboard-fixture.js';

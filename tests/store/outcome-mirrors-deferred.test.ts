@@ -9,12 +9,12 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
-import { writeOutcome, writeEntriesTogether, writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
-import { readEntriesByIds } from '../../src/store/sqlite/entries/entry-reads.js';
-import { markMirrorsDue } from '../../src/store/sqlite/folder-files/due-mirrors.js';
-import { flushHeldMirrors } from '../../src/store/sqlite/folder-files/mirrors.js';
+import { writeOutcome, writeEntriesTogether, writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
+import { readEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
+import { markMirrorsDue } from '../../src/store/sqlite/due-mirrors.js';
+import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
-import { openStore, storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 
 const open: DatabaseSyncLike[] = [];

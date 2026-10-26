@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 
-const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-expiring-keys-floor.mjs');
+const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-expiring-keys-floor.mjs');
 const repos = new Map<string, string>();
 
 interface Floors {

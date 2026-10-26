@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { failPairLines, findFailPairs } from '../../scripts/checks/check-cli-fail.mjs';
+import { failPairLines, findFailPairs } from '../../scripts/check-cli-fail.mjs';
 
 describe('check-cli-fail', () => {
   let dir: string;

@@ -4,9 +4,9 @@ import { mkdtempSync } from 'node:fs';
 import { afterAll, describe, expect, it } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendAuditEvents } from '../../src/store/sqlite/audit/audit.js';
+import { appendAuditEvents } from '../../src/store/sqlite/audit.js';
 import { auditRowsOn } from './audit-rows.js';
-import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/keys/auth.js';
+import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/sqlite/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import {
   requireGroup,

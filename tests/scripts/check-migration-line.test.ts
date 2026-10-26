@@ -1,9 +1,9 @@
-// scripts/checks/check-migration-line.mjs keeps a publish from shipping a MIGRATIONS list with a missing version.
+// scripts/check-migration-line.mjs keeps a publish from shipping a MIGRATIONS list with a missing version.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describeGap, findMigrationGaps, readMigrationVersions } from '../../scripts/checks/check-migration-line.mjs';
+import { describeGap, findMigrationGaps, readMigrationVersions } from '../../scripts/check-migration-line.mjs';
 
 describe('findMigrationGaps', () => {
   it('passes a consecutive list and an empty one', () => {

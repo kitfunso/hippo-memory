@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { DELIVERY_LEDGER_VERSION } from '../../src/base/session/delivery.js';
 import type { JsonValue } from '../../src/base/util/json.js';
-import { trySymlink } from './symlink.js';
+import { trySymlink } from '../_helpers/symlink.js';
 import {
   dispose,
   hippo,
@@ -16,8 +16,14 @@ import {
   type Config as ProjectConfig,
   type Project,
   type RunOptions,
-} from './delivery-boundary.js';
-import { listingOf, verdictOf, writeHostTranscript, type ReadOptions, type TurnSpec } from './host-transcript.js';
+} from '../_helpers/delivery-boundary.js';
+import {
+  listingOf,
+  verdictOf,
+  writeHostTranscript,
+  type ReadOptions,
+  type TurnSpec,
+} from '../_helpers/host-transcript.js';
 
 // Capture-error runs in process; TF1, TF12 and TF13 spawn it once each, far inside the 30 s process-project timeout.
 

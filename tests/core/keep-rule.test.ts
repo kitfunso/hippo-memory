@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../../src/base/memory/agent-memory-tools.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { KEEP_PAIRS, canAutoDelete } from '../../src/base/memory/keep-rules.js';
-import { AUTO_DELETABLE } from '../../src/store/sqlite/runtime/rule-sql.js';
+import { AUTO_DELETABLE } from '../../src/store/sqlite/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';

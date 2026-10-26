@@ -4,7 +4,7 @@
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import { handleStamp } from '../runtime/handle-clock.js';
+import { handleStamp } from '../handle-clock.js';
 
 export type DlqTable = 'slack_dlq' | 'github_dlq';
 

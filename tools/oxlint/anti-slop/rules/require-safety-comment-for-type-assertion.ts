@@ -22,7 +22,7 @@ function isConstAssertion(node: TypeAssertion): boolean {
 
 const statementReads = new Set(["get", "all", "iterate"]);
 
-/** A cast of `x.get(...)`, `x.all(...)` or `x.iterate(...)`: scripts/checks/check-row-casts.mjs proves those in src/. */
+/** A cast of `x.get(...)`, `x.all(...)` or `x.iterate(...)`: scripts/check-row-casts.mjs proves those in src/. */
 function isStatementRead(node: TypeAssertion): boolean {
   const read = node.expression;
   return (

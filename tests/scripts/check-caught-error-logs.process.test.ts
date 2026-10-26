@@ -10,9 +10,9 @@ import {
   resultOnlyCatchLines,
   partialPickLines,
   unfieldedLogLines,
-} from '../../scripts/checks/check-caught-error-logs.mjs';
+} from '../../scripts/check-caught-error-logs.mjs';
 
-const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-caught-error-logs.mjs');
+const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-caught-error-logs.mjs');
 const BASELINE = '.caught-error-logs-baseline.json';
 
 describe('check-caught-error-logs', () => {

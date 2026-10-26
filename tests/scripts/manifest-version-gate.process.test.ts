@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 // The gate excluded package-lock.json wholesale, so a release whose lockfile
 // still named the previous version printed OK (v1.38.9).
 
-const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-manifest-versions.mjs');
+const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'check-manifest-versions.mjs');
 const SYNC = join(import.meta.dirname, '..', '..', 'scripts', 'sync-version.mjs');
 
 interface Overrides {

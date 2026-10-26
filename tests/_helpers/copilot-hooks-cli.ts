@@ -3,14 +3,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { expect, beforeEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { readDeliveryEvents, type DeliveryEventRow } from './delivery-events.js';
+import { readDeliveryEvents, type DeliveryEventRow } from '../_helpers/delivery-events.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { runCli } from '../../src/cli.js';
-import { runInProcess } from './run-in-process.js';
-import { runCliAs } from './run-cli-as.js';
-import { hippoRun } from './spawn-hippo.js';
-import { waitFor } from './wait-for.js';
-import { copilotScratch, type CopilotScratch } from './copilot-hooks.js';
+import { runInProcess } from '../_helpers/run-in-process.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
+import { hippoRun } from '../_helpers/spawn-hippo.js';
+import { waitFor } from '../_helpers/wait-for.js';
+import { copilotScratch, type CopilotScratch } from '../_helpers/copilot-hooks.js';
 import { initTestStore } from './store-template.js';
 
 export const runHippo = (args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string) =>

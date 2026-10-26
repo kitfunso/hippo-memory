@@ -70,7 +70,7 @@ const SKIPPED = [...configDefaults.exclude, ...EVAL_TESTS];
 export default defineConfig({
   test: {
     // A test that starts a child process, the HTTP server or a worker thread waits on the operating system and keeps 30 s; the rest get UNIT_MS.
-    // Its name says which (*.process.test.ts, *.server.test.ts); scripts/checks/check-test-env.mjs fails a name that does not match.
+    // Its name says which (*.process.test.ts, *.server.test.ts); scripts/check-test-env.mjs fails a name that does not match.
     // A test that starts nothing but needs minutes of CPU or disk is *.slow.test.ts and gets SLOW_MS, so no test sets a long timeout of its own.
     projects: [
       {

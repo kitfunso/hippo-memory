@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHook } from 'node:async_hooks';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
+import { createApiKey } from '../../src/store/sqlite/auth.js';
 import type { ServeOptions } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';

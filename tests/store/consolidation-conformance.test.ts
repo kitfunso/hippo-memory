@@ -10,8 +10,8 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { savePhysicsState } from '../../src/db/physics-state.js';
 import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import type { SleepCommit, SummarySettle } from '../../src/base/ports/store/consolidation.js';
-import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
-import { insertRejectedValue } from '../../src/store/sqlite/rejections/rejection.js';
+import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
+import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   runOnFixture,

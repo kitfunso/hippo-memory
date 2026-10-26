@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createApiKey, readApiKeyRecord } from '../../src/store/sqlite/keys/auth.js';
+import { createApiKey, readApiKeyRecord } from '../../src/store/sqlite/auth.js';
 import { DEFAULT_KEY_TTL_DAYS } from '../../src/base/scope/api-key.js';
 import { makeRoot } from '../_helpers/make-root.js';
 

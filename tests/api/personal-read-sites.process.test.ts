@@ -1,5 +1,5 @@
 // E10 lane A: every SQL read site admits the caller's own personal row only when handed its owner, and deny-only sites admit none.
-import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -17,9 +17,9 @@ import {
   recallScopeFilter,
   type ScopeActor,
 } from '../../src/base/scope/recall-scope.js';
-import { touchableScopeSql } from '../../src/store/sqlite/runtime/rule-sql.js';
+import { touchableScopeSql } from '../../src/store/sqlite/rule-sql.js';
 import { briefFromReceipts } from '../../src/domain/objects/project-briefs.js';
-import { saveItems, type ItemContext } from '../../src/store/sqlite/capture/compactions-record.js';
+import { saveItems, type ItemContext } from '../../src/store/sqlite/compactions-record.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';

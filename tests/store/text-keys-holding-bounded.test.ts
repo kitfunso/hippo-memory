@@ -7,7 +7,7 @@ import { chunked } from '../../src/base/util/chunked.js';
 import { duplicateKey, heldTextKeys, mergedText } from '../../src/base/util/same-text.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb, setFtsInSync, type DatabaseSyncLike } from '../../src/db/index.js';
-import { listTextKeysHolding } from '../../src/store/sqlite/sharing/copy-rows.js';
+import { listTextKeysHolding } from '../../src/store/sqlite/copy-rows.js';
 import { countMatching, peakRowsRead, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeStore } from '../_helpers/make-root.js';

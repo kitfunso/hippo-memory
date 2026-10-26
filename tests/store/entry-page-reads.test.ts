@@ -6,7 +6,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { listEntriesMentioning, listEntryIdsPage } from '../../src/store/sqlite/entries/entry-reads.js';
+import { listEntriesMentioning, listEntryIdsPage } from '../../src/store/sqlite/entry-reads.js';
 import type { EntryCursor } from '../../src/base/ports/store/types.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';

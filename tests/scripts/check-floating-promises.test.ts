@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from 'typescript';
-import { findFloatingApiCalls } from '../../scripts/checks/check-floating-api.mjs';
-import { findFloatingPromises } from '../../scripts/checks/check-floating-promises.mjs';
+import { findFloatingApiCalls } from '../../scripts/check-floating-api.mjs';
+import { findFloatingPromises } from '../../scripts/check-floating-promises.mjs';
 
 // Parsing the real ES2022 lib took 6.5 s on a CI runner, past the unit budget; the check only needs these globals.
 const MINIMAL_LIB = [

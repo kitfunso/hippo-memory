@@ -7,7 +7,7 @@ import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } fr
 import { v63 } from '../../src/db/migrations/v63.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
 import { shareMemory } from '../../src/domain/sharing/share.js';
-import { layerDir } from '../../src/store/sqlite/folder-files/mirrors.js';
+import { layerDir } from '../../src/store/sqlite/mirrors.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';

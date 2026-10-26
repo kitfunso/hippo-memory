@@ -15,8 +15,8 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { BUDGET_RANKED } from '../../src/api/recall/profiles.js';
 import { searchBothHybrid } from '../../src/domain/sharing/search-both.js';
-import { finishRecall } from '../../src/store/sqlite/recall/last-recall.js';
-import { flushHeldMirrors } from '../../src/store/sqlite/folder-files/mirrors.js';
+import { finishRecall } from '../../src/store/sqlite/last-recall.js';
+import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import {
   pushGoal,
@@ -26,7 +26,7 @@ import {
   writeEntry,
   updateStats,
 } from '../_helpers/root-forms.js';
-import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 

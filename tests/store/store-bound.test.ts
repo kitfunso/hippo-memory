@@ -1,10 +1,10 @@
 // bound() and answered() give a group's methods the port's async form without changing what the bodies do.
-import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
+import { storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { describe, expect, it } from 'vitest';
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 import { StoreBusyError } from '../../src/base/ports/store.js';
-import { answered, bound } from '../../src/store/sqlite/runtime/bound.js';
-import type { OnHandle } from '../../src/store/sqlite/runtime/open.js';
+import { answered, bound } from '../../src/store/sqlite/bound.js';
+import type { OnHandle } from '../../src/store/sqlite/open.js';
 
 interface Probe {
   boom(): Promise<void>;

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_process';
 import { openHippoDb, closeHippoDb, getMeta } from '../../src/db/index.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
 import { detectServer, type ServerInfo } from '../../src/surface/server/server-detect.js';

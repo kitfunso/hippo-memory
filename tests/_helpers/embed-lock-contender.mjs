@@ -1,7 +1,7 @@
 // A process that races for the embedding index lock at a set time, reports what it got, and holds it until told to stop.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { releaseEmbedLock, tryEmbedLock } from '../../dist/store/sqlite/vectors/embed-lock.js';
+import { releaseEmbedLock, tryEmbedLock } from '../../dist/store/sqlite/embed-lock.js';
 
 const [root, id, goAt] = process.argv.slice(2);
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);

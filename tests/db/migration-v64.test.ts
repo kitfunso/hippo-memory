@@ -7,7 +7,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { recordStatements } from '../_helpers/count-statements.js';
-import { listDuplicateCandidates } from '../../src/store/sqlite/entries/entry-reads.js';
+import { listDuplicateCandidates } from '../../src/store/sqlite/entry-reads.js';
 
 function plan(db: DatabaseSyncLike, sql: string): string {
   // SAFETY: EXPLAIN QUERY PLAN rows carry a TEXT `detail` column.

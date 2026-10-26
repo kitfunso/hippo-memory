@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
-import { listEntriesWhere, prefixUpperBound } from '../../src/store/sqlite/entries/entry-filter.js';
-import { finishRecall } from '../../src/store/sqlite/recall/last-recall.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit.js';
+import { listEntriesWhere, prefixUpperBound } from '../../src/store/sqlite/entry-filter.js';
+import { finishRecall } from '../../src/store/sqlite/last-recall.js';
 import type { RecallWrites } from '../../src/base/ports/store/recall-writes.js';
 import { rowsInPages } from '../../src/base/util/pages.js';
 import type { EntryCursor } from '../../src/base/ports/store/types.js';
