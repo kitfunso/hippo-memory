@@ -101,9 +101,7 @@ function walks(db: DatabaseSyncLike, tenantId: TenantId) {
       ),
     idOrder: () => pagesOf((afterId?: string) => listEveryTenantEntryIds(db, { limit: 3, afterId })),
     pendingVectors: () => pagesOf((afterId?: string) => pendingVectorIds(db, { limit: 3, afterId })),
-    particleReset: () => [
-      [String(resetStoredParticles(db, { strength: PRODUCTION_STRENGTH, clock: evalNow }))],
-    ],
+    particleReset: () => [[String(resetStoredParticles(db, { strength: PRODUCTION_STRENGTH, clock: evalNow }))]],
   };
 }
 

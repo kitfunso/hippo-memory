@@ -38,6 +38,7 @@ import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 pinClock();
 oneRequestPerTest();
@@ -186,7 +187,7 @@ describe('a faded credential-tagged memory', () => {
     expect(result.removed).toBe(1);
     expect(result.dormant).toBe(0);
     expect(result.removedIds).toEqual([tagged.id]);
-    expect(result.details.some((l) => l.startsWith(`  🗑  removed ${tagged.id} (strength `))).toBe(true);
+    expect(detailLines(result).some((l) => l.startsWith(`  🗑  removed ${tagged.id} (strength `))).toBe(true);
     expect(await api.dormantList(ctxFor(home))).toEqual([]);
     expect(loadAllEntries(home, 'default')).toEqual([]);
   });
@@ -304,7 +305,7 @@ describe('with dormant memories enabled', () => {
 
     expect(result.removed).toBe(0);
     expect(result.dormant).toBe(1);
-    expect(result.details.some((d) => d.includes(faded.id) && d.includes('dormant'))).toBe(true);
+    expect(detailLines(result).some((d) => d.includes(faded.id) && d.includes('dormant'))).toBe(true);
     expect(loadAllEntries(home, 'default').map((e) => e.id)).toEqual([fresh.id]);
     // The markdown mirror goes too, so a bootstrap of an empty table
     // cannot re-import the row as active.
@@ -392,7 +393,7 @@ describe('with dormant memories enabled', () => {
     const result = await consolidate(home, { now: FIXED_NOW, dryRun: true });
 
     expect(result.dormant).toBe(1);
-    expect(result.details.some((l) => l.startsWith(`  💤 dormant ${faded.id} (strength `))).toBe(true);
+    expect(detailLines(result).some((l) => l.startsWith(`  💤 dormant ${faded.id} (strength `))).toBe(true);
     expect(loadAllEntries(home, 'default').map((e) => e.id)).toEqual([faded.id]);
     expect(countDormantRows(home)).toBe(0);
   });

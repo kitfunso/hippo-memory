@@ -1,7 +1,7 @@
 // /v1/processes routes: supersede creates a new version that keeps the predecessor's name.
 import { OBJECT_CAPS } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
-import { HttpError } from '../../../base/util/http-util.js';
+import { HttpError } from '../../../base/errors/http-errors.js';
 import { getString, getStringArray, requiredString } from '../validation.js';
 import { MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import type { JsonValue } from '../../../base/util/json.js';

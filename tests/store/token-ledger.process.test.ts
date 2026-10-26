@@ -15,6 +15,7 @@ import { shouldSkipUnchanged } from '../../src/base/session/skip-unchanged.js';
 import { hookPayloadSessionId } from '../../src/base/util/hook-payload.js';
 import { blockHash } from '../../src/base/util/token-text.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { hippoOut } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
@@ -23,10 +24,6 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -293,7 +290,7 @@ describe('ledger on the HTTP and MCP surfaces', () => {
   }
 
   it('records HTTP recall and context', async () => {
-    const handle: ServerHandle = await serve({ hippoRoot: home, port: 0 });
+    const handle: ServerHandle = await serveKeyed({ hippoRoot: home, port: 0 }, serve);
     try {
       expect((await fetch(`${handle.url}/v1/memories?q=zanzibar`)).status).toBe(200);
       expect((await fetch(`${handle.url}/v1/context?q=zanzibar`)).status).toBe(200);

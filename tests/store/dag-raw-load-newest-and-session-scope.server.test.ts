@@ -15,6 +15,7 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { rmSync } from 'node:fs';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -23,10 +24,6 @@ import { retrieve, assemble } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { loadSessionRawMemories, loadFreshRawMemories, writeEntry } from '../_helpers/root-forms.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -180,8 +177,7 @@ describe('HTTP /v1/memories accepts new RecallOptions', () => {
     b.created = '2026-01-02T00:00:00.000Z';
     writeEntry(root, a);
     writeEntry(root, b);
-    const { serve } = await import('../../src/server.js');
-    serverHandle = await serve({ hippoRoot: root, port: 0 });
+    serverHandle = await serveKeyed({ hippoRoot: root, port: 0 });
   });
   afterEach(async () => {
     await serverHandle.stop();

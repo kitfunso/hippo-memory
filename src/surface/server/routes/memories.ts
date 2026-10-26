@@ -2,7 +2,8 @@
 import { graphEntityOf, graphView } from '../../../api/objects/graph.js';
 import { rawArchive, forget, outcome, promote, remember, supersede } from '../../../api/index.js';
 import { MEMORY_KINDS, type MemoryKind } from '../../../base/memory/entry.js';
-import { HttpError, sendJson } from '../../../base/util/http-util.js';
+import { HttpError } from '../../../base/errors/http-errors.js';
+import { sendJson } from '../../http/http-util.js';
 import { keptShownIds } from '../../../api/recall/last-recalled.js';
 import type { ContextWith } from '../../../api/types.js';
 import type { AuthedRouteRequest, RouteParams } from '../types.js';
@@ -16,7 +17,9 @@ import {
   validateIdSegment,
 } from '../validation.js';
 import { MAX_ARRAY_ITEMS, MAX_CONTENT_LEN, MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
-import { isJsonBoolean } from '../../../base/util/json.js';
+import { isJsonBoolean, type JsonValue } from '../../../base/util/json.js';
+import type { SleepResult } from '../../../api/index.js';
+import { sleepEventLines } from '../../render/sleep-events.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);
 const MAX_OUTCOME_IDS = 1000;
@@ -132,6 +135,15 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
   return;
 }
 
+/** The reply keeps `details` as the printed lines where the result carries events, so the JSON shape is as it was. */
+function sleepReply(result: SleepResult): Record<string, JsonValue> {
+  return Object.fromEntries(
+    Object.entries(result).map(([key, value]): [string, JsonValue] =>
+      key === 'events' ? ['details', sleepEventLines(result.events ?? [], result.dryRun)] : [key, value],
+    ),
+  );
+}
+
 // POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE
 // hippoRoot, cross-tenant by design, so the row's host-admin-local gate is the trust boundary. Body {dry_run?,
 // no_share?}; returns SleepResult JSON.
@@ -149,6 +161,6 @@ export async function handleRunSleep({ req, res, ctx, opts }: AuthedRouteRequest
     dryRun: dryRunRaw === true,
     noShare: noShareRaw === true,
   });
-  sendJson(res, 200, result);
+  sendJson(res, 200, sleepReply(result));
   return;
 }

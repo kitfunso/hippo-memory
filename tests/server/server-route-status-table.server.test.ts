@@ -273,7 +273,7 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   }
 
-  // A keyless loopback caller of these routes reaches the global store, the caller's project or sleep.
+  // A caller on this machine of these routes reaches the global store, the caller's project or sleep.
   const onHippoDbOnly = (path: string): boolean =>
     path.endsWith('/sleep') ? needsHippoDb('sleep') : /\/promote$|^\/v1\/context$/.test(path) && needsHippoDb('team');
   for (const [method, path, , [status, error]] of ROUTES) {

@@ -42,6 +42,7 @@ import {
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 oneRequestPerTest();
 
@@ -236,7 +237,7 @@ describe('sleep enqueue-hook', () => {
     expect(pending(tc.hippoRoot, 'tenantOk')).toHaveLength(0); // ok tenant drained
     expect(pending(tc.hippoRoot, 'tenantFail')).toHaveLength(1); // failed tenant left pending
     expect(r.graph?.tenants).toBe(1); // only tenantOk counted
-    expect((r.details ?? []).some((d) => d.includes('graph: extract failed'))).toBe(true);
+    expect(detailLines(r).some((d) => d.includes('graph: extract failed'))).toBe(true);
   });
 
   it('11. end-to-end: a supersede edge is built by sleep with NO manual extract', async () => {
@@ -290,7 +291,7 @@ describe('sleep enqueue-hook', () => {
     const r = await runSleep(tc.ctx, { noShare: true }, phases); // must NOT reject
     expect(r.active).toBeGreaterThanOrEqual(0); // consolidation still ran (result built)
     expect(r.graph).toBeUndefined(); // graph refresh skipped, not crashed
-    expect((r.details ?? []).some((d) => d.includes('dirty-tenant snapshot failed'))).toBe(true);
+    expect(detailLines(r).some((d) => d.includes('dirty-tenant snapshot failed'))).toBe(true);
     expect(pending(tc.hippoRoot)).toHaveLength(1); // item left pending, recovered next sleep
   });
 
@@ -371,6 +372,6 @@ describe('sleep enqueue-hook', () => {
     const r = await runSleep(tc.ctx, { noShare: true }, phases);
 
     expect(r.graph?.tenants).toBe(1);
-    expect(r.details).toContain('graph: 2 stale op(s) skipped for a tenant; the next sleep redoes them');
+    expect(detailLines(r)).toContain('graph: 2 stale op(s) skipped for a tenant; the next sleep redoes them');
   });
 });

@@ -7,7 +7,7 @@ import type { StoreRules } from '../../base/ports/infra.js';
 import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../db/index.js';
 import { StoreBusyError } from '../../base/ports/store.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';
-import { DeadlineExceededError } from '../../base/util/http-util.js';
+import { DeadlineExceededError } from '../../base/errors/http-errors.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { requestScopes } from '../../base/util/request-scope.js';
 import { decodeError } from './error-codec.js';

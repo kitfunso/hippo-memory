@@ -6,5 +6,5 @@
     --allow-cleartext      Bind a non-loopback host without TLS, for a TLS proxy
                            in front (or $HIPPO_ALLOW_CLEARTEXT=1)
                            Every request needs an API key (hippo auth create).
-                           $HIPPO_ALLOW_KEYLESS_LOCAL=1 lets requests from this machine
-                           in without one, as a member; $HIPPO_REQUIRE_AUTH=1 wins over it.
+                           The hippo CLI on this machine sends the member key
+                           serve writes to server.key, which only you can read.

@@ -11,13 +11,10 @@ import { Socket } from 'node:net';
 import { clientLimitKey } from '../../src/surface/server/client-ip.js';
 import { createRateLimiter } from '../../src/surface/server/rate-limit.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { readLocalKey } from '../../src/surface/server/local-key.js';
 import { withoutFolderGroups } from '../_helpers/port-only-store.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -28,7 +25,6 @@ const ENV_KEYS = [
   'HIPPO_CALLER_RPS',
   'HIPPO_CLIENT_IP_HEADER',
   'HIPPO_TRUSTED_PROXIES',
-  'HIPPO_REQUIRE_AUTH',
   'MCP_SSE_HEARTBEAT_MS',
   'MCP_SSE_MAX_STREAMS',
 ] as const;
@@ -83,7 +79,9 @@ async function send(path: string, init: RequestInit = {}): Promise<Reply> {
 }
 
 const bearer = (token: string, extra: Record<string, string> = {}) => ({ authorization: `Bearer ${token}`, ...extra });
-const recall = (headers: Record<string, string> = {}): Promise<Reply> => send('/v1/memories?q=x', { headers });
+/** The local key the running server wrote, as the CLI on this machine sends it. */
+const localKey = (): Record<string, string> => bearer(readLocalKey(root)!);
+const recall = (headers: Record<string, string> = localKey()): Promise<Reply> => send('/v1/memories?q=x', { headers });
 const addonRoute = (onRun: () => void): AddonRoute => ({
   path: '/v1/x-addon',
   handler: async () => {
@@ -153,10 +151,10 @@ describe('per-caller buckets', () => {
     expect((await recall(bearer(away))).status).toBe(200);
   });
 
-  it('never charges the loopback fallback or /health', async () => {
+  it('charges the local key like any key, and never charges /health', async () => {
     const a = mint({ ownerSubject: 'oid-health' });
     await start({ perCaller: { ratePerSec: 0.1, burst: 1 }, perAddress: WIDE });
-    expect(await statuses(() => recall(), 3)).toEqual([200, 200, 200]);
+    expect(await statuses(() => recall(), 3)).toEqual([200, 429, 429]);
     expect(await statuses(() => send('/health', { headers: bearer(a) }), 5)).toEqual([200, 200, 200, 200, 200]);
     expect((await recall(bearer(a))).status).toBe(200);
   });
@@ -287,10 +285,11 @@ describe('the MCP stream heartbeat', () => {
     await start({ perAddress: WIDE });
     const ac = new AbortController();
     try {
-      const first = await fetch(`${url}/mcp/stream`, { headers: { accept: 'text/event-stream' }, signal: ac.signal });
+      const headers = { accept: 'text/event-stream', ...localKey() };
+      const first = await fetch(`${url}/mcp/stream`, { headers, signal: ac.signal });
       expect(first.status).toBe(200);
       await first.body!.getReader().read();
-      expect(await send('/mcp/stream', { headers: { accept: 'text/event-stream' } })).toEqual({
+      expect(await send('/mcp/stream', { headers })).toEqual({
         status: 429,
         retryAfter: '60',
       });

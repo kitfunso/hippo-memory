@@ -14,6 +14,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 oneRequestPerTest();
 
@@ -102,7 +103,7 @@ async function sleepCountingAsks(perTenant: number): Promise<SleepAsks> {
     config: loadConfig(root),
     tenantId: 'default',
   });
-  const retired = result.details.flatMap((line) => RETIRED.exec(line)?.[1] ?? []);
+  const retired = detailLines(result).flatMap((line) => RETIRED.exec(line)?.[1] ?? []);
   return { root, asks: asks.sort(), retired: retired.sort(), acmeMerged };
 }
 

@@ -1,12 +1,13 @@
 // A request opens each store it reads on the server thread once, however many api helpers it runs, and not at all when its store work runs on worker threads.
 // Counts real DatabaseSync connections per database file by patching the prototype, as the hook open-count test does.
-import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { serve, type AddonRoute, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import { retrieve, remember } from '../../src/api/index.js';
@@ -19,10 +20,6 @@ import { withEntryInfra } from '../../src/surface/entry-infra.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
-});
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
 });
 
 interface Connection {
@@ -112,7 +109,7 @@ beforeAll(async () => {
       return { total: (await retrieve(ctx, { query: 'release train' })).total };
     },
   };
-  server = await serve({ hippoRoot: root, port: 0, routes: [addon] });
+  server = await serveKeyed({ hippoRoot: root, port: 0, routes: [addon] }, serve);
 });
 
 afterAll(async () => {

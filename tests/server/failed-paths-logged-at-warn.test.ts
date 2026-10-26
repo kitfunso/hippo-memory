@@ -6,7 +6,7 @@ import { logRequestFailure } from '../../src/surface/server/request.js';
 import { mcpErrorResponse } from '../../src/surface/mcp/protocol.js';
 import { runWithRequestId } from '../../src/base/util/request-scope.js';
 import { StoreBusyError } from '../../src/base/ports/store.js';
-import { HttpError } from '../../src/base/util/http-util.js';
+import { HttpError } from '../../src/base/errors/http-errors.js';
 import { judgeAll } from '../../src/entry/eval-scripts.js';
 import { createLocalEmbedder } from '../../src/infra/local-embedder.js';
 import { installOpencodePlugin } from '../../src/surface/hooks-install/opencode.js';
@@ -64,7 +64,7 @@ describe('judge failures', () => {
     const out = await judgeAll(['a durable fact about the deploy'], { apiKey: 'sk-secret-key', fetcher });
     expect(out).toEqual([null]);
     const text = lines.join('');
-    expect(text).toMatch(/warn: judge: non-2xx reply .*status=401 body=bad credentials/);
+    expect(text).toMatch(/warn: judge: non-2xx reply .*status=401 body="bad credentials"/);
     expect(text).not.toContain('sk-secret-key');
   });
 

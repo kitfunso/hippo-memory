@@ -16,13 +16,10 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { drillDown } from '../../src/api/index.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -114,7 +111,7 @@ describe('HTTP /v1/recall/drill status mapping', () => {
   let handle: ServerHandle;
   beforeEach(async () => {
     home = makeRoot('v164-http');
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serveKeyed({ hippoRoot: home, port: 0 }, serve);
   });
   afterEach(async () => {
     await handle.stop();
@@ -163,7 +160,7 @@ describe('HTTP path-segment validation', () => {
   let handle: ServerHandle;
   beforeEach(async () => {
     home = makeRoot('v164-path');
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serveKeyed({ hippoRoot: home, port: 0 }, serve);
   });
   afterEach(async () => {
     await handle.stop();

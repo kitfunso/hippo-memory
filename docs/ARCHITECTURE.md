@@ -35,7 +35,7 @@ Only the composition roots in `SQLITE_ROOTS` (`scripts/check-layers.mjs`) import
 
 A layer imports only from its own layer or a lower one, so domain and api reach the store through the port in `src/base/ports` and never through `src/store`. The port is data only: no method takes a function, because a call crosses to a store worker thread and a function cannot go with it (`src/store/sqlite/worker-ops.ts` names what crosses and which worker runs each method).
 
-`sqliteStore` in `src/store/sqlite` is the one adapter, and each store rule is written once, in the SQL or the file that runs it. Store tests call `sqliteStore` over a seeded copy of the two-tenant fixture: `seedTwoTenants` and `runOnFixture` in `tests/_helpers/store-conformance.ts` copy the folder, run a list of calls and return the answers and the audit rows, which a test asserts against literal values.
+`sqliteStore` in `src/store/sqlite` is the one adapter, and each store rule is written once, in the SQL or the file that runs it. Store tests call `sqliteStore` over a seeded copy of the two-tenant fixture: `seedTwoTenants` and `runOnFixture` in `tests/_helpers/store-conformance.ts` copy the folder, run a list of calls and return the answers and the audit rows, which a test asserts against literal values. `runStoreConformance` in `src/entry/store-conformance.ts` is the suite an add-on runs on its own store; `tests/_helpers/store-conformance.ts` runs it over `sqliteStore` and the port-only store.
 
 The port-only run is the proof that `serve()` holds for any store. `tests/_helpers/port-only-store.ts` wraps `sqliteStore` without its folder groups and under a kind that is not `'sqlite'`. The server blocks hippo.db opens for any other kind, so a path that skips the port throws. `HIPPO_TEST_STORE=port-only` serves the HTTP and MCP suites on that store, and the `port-only` job in `.github/workflows/ci.yml` runs them. A test that needs hippo.db's folder skips with its reason in `tests/_helpers/store-switch.ts`.
 
@@ -80,11 +80,11 @@ Nothing caches these env vars. The readers here read them on each call, so a tes
 
 ## src/surface/server/boot.ts
 
-`serve(opts)` boots the HTTP daemon on host:port and writes the pidfile under `hippoRoot`. It refuses non-loopback hosts at boot unless `HIPPO_REQUIRE_AUTH=1` is set.
+`serve(opts)` boots the HTTP daemon on host:port and writes the local key (`server.key`) and the pidfile under `hippoRoot`. A non-loopback host needs TLS or an explicit cleartext allowance; auth is the same on every bind.
 
 Every `/v1` row in `V1_ROUTES` declares its `auth` need, and dispatch runs that gate before the handler. The auth middleware (`buildContextWithAuth` / `requireAuth`) is checked by every route except `GET /health` (public by design, for platform health checks), the two connector webhooks whose rows declare `webhook-signature` (HMAC-gated by their own signing secrets, and 404 when those secrets are unset) and any `publicJson` GET path.
 
-Under `HIPPO_ALLOW_KEYLESS_LOCAL=1` the keyless fallback inside `buildContextWithAuth` admits unauthenticated requests from a loopback remote address, unless they carry `Forwarded`, `X-Forwarded-For`/`-Host`/`-Proto`, `X-Real-IP`, `Cf-Connecting-Ip`, `True-Client-Ip` or `Fly-Client-Ip` (these mark a same-host proxy and get a 401 like any keyless remote request). So binding to a non-loopback host needs `HIPPO_REQUIRE_AUTH=1`, which wins over that opt-in and forces every request (loopback or not) through Bearer-token validation. Without it, a non-loopback bind could expose the DB to the network with no auth, so boot fails fast instead.
+There is no keyless path. A loopback socket proves nothing: `ssh -L`, `socat` and `kubectl port-forward` deliver remote traffic from loopback with no proxy header. So each start of `serve()` writes a fresh 256-bit local key (`hl_` prefix) to `<hippoRoot>/server.key`, mode 0600, beside the pidfile, and holds only its SHA-256. The CLI and hooks on the machine send `HIPPO_API_KEY` when it is set, else that file's key (`callerKey` in `src/surface/server/local-key.ts`). The local key signs a member of the server's tenant, audited as `localhost:cli`, and is charged by the per-caller limiter like any key. It is checked before the auth-resolver routing, so the secret never reaches resolver code, and the key of an earlier run stops working at the next start. `isLocalCaller` (loopback socket, no proxy header, local Host, not cross-site) is never the auth boundary: it only picks the 401 text, the `/health` body and the `host-admin-local` defence in depth.
 
 Tests use `port: 0` to bind an ephemeral port and read the actual port back via `server.address()` after listen.
 
@@ -869,16 +869,19 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: This is deliberately a thin slice of the A4 lifecycle-compliance item (no PII detection).
 
 ### src/surface/server/auth.ts
-- `buildContextWithAuth`: v1.12.0: loopback fallback is process-local, treat as admin.
-- `checkAuth` (src/surface/server/auth.ts): A request with no key is refused 401 on loopback too, unless the server runs with `HIPPO_ALLOW_KEYLESS_LOCAL=1` (`HIPPO_REQUIRE_AUTH=1` wins over it). Before this the fallback was on by default, so any process on the machine, and any other container in the same pod, was host admin with no key. The 401 names both fixes only for a caller that passes `isLocalCaller` (loopback socket, no proxy header, local Host, not cross-site); a proxied caller or a browser page gets the plain `auth required`. No key is handed to first-party callers at boot: the CLI's routed writes send `HIPPO_API_KEY` when it is set and fail with the server's message when it is not, and `hippo serve` prints the rule at start. `GET /health` uses the same `isLocalCaller` test for its version and pid, so a rebound Host or a cross-site page reads liveness only.
+- `checkAuth` (src/surface/server/auth.ts): A request with no key is refused 401, from loopback too. 3.0 removed `HIPPO_ALLOW_KEYLESS_LOCAL`, which let a loopback caller with no proxy header in as a member: a port forwarder sends no such header, so the header list could never prove a caller local. The CLI now sends the key `serve()` writes to `server.key`. The 401 says where that key is only for a caller that passes `isLocalCaller`; a proxied caller or a browser page gets the plain `auth required`. `GET /health` uses the same `isLocalCaller` test for its version and pid, so a rebound Host or a cross-site page reads liveness only.
 
 ### src/surface/server/boot.ts
 - `handleRequest`: v1.6.4: pre-decode raw-URL slash check.
 - `assertNoLiveServer`: H3: refuse to start if a live hippo server already serves this hippoRoot.
-- `bootRateLimiter`: E3: per-IP rate limiter for /v1/* and /mcp*.
-- `replyWithFailure`: M3: readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
-- `serve`: Refuses non-loopback hosts at boot (Footgun #3 from the A1 plan) unless HIPPO_REQUIRE_AUTH=1 is set. The A5 v2 auth middleware (buildContextWithAuth / requireAuth) has shipped and every route checks it
+- `serve`: Every route but the public ones checks the auth middleware (buildContextWithAuth / requireAuth) on every bind, so 3.0 dropped the `HIPPO_REQUIRE_AUTH=1` bind gate; a non-loopback bind still needs TLS or a cleartext allowance
 - `serve.stop`: an unconditional unlink here would orphan it. (v0.37.0 server-hardening.)
+
+### src/surface/server/rate-limits.ts
+- `bootRateLimiter`: E3: per-IP rate limiter for /v1/* and /mcp*.
+
+### src/surface/server/failure-replies.ts
+- `replyWithFailure`: M3: readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
 
 ### src/surface/server/client-ip.ts
 - `enforceRateLimit`: E3: per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration.

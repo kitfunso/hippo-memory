@@ -1,5 +1,5 @@
 // The predictions routes run their SQLite work on worker threads: the server answers through a held write lock, and a client sees what the in-process store gave.
-import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { closeHippoDb, getHippoDbPath, openHippoDb } from '../../src/db/index.js';
 import { log } from '../../src/base/util/log.js';
@@ -29,12 +29,9 @@ import {
 } from '../_helpers/store-worker-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -284,7 +281,7 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
     async () => {
       const root = newRoot();
       vi.stubEnv('HIPPO_V1_RPS', '0');
-      const server = await serve({
+      const server = await serveKeyed({
         hippoRoot: root,
         port: 0,
         authResolver: (token) => {

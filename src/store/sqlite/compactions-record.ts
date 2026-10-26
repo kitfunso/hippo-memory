@@ -38,8 +38,9 @@ import type { CompactionStart, CompactionText } from '../../base/ports/store/cap
 
 export type { CompactionStatus };
 
-/** Where a step's lines go: a hook's log file, or the notes a port method answers. */
-export type Log = (message: string) => void;
+/** Where a step's lines go: a hook's log file, or the notes a port method answers. A line that carries the error it
+ * caught also reaches the shared logger with that error's fields. */
+export type Log = <E>(message: string, err?: E) => void;
 
 export interface CompactionRecord {
   id: string;
@@ -356,7 +357,7 @@ function finishItemWrites(db: DatabaseSyncLike, files: StoreFiles, writes: ItemW
       updateStats(db, files, { remembered: writes.written.length });
     } catch (err) {
       // The rows are committed; a counter that could not be bumped must not turn that into a failed step.
-      log(`remembered counter not updated: ${errorMessage(err)}`);
+      log('remembered counter not updated', err);
     }
   }
 }

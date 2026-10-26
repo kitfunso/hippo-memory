@@ -16,6 +16,8 @@ import { withEntryInfra } from '../surface/entry-infra.js';
 
 export { ConsolidationResult } from '../domain/consolidate/run.js';
 export type { SleepOpts, SleepResult } from '../api/sleep/sleep.js';
+export type { SleepEvent } from '../api/sleep/events.js';
+export type { RescueRank } from '../domain/consolidate/events.js';
 // Named in the signatures of sleep and consolidate, so a caller needs them to type its own variable.
 export type { SleepContext, SleepStore };
 

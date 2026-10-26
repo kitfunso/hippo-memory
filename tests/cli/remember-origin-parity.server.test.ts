@@ -5,13 +5,10 @@ import * as path from 'node:path';
 import { handleRemember } from '../../src/surface/cli/remember.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -45,7 +42,7 @@ async function directRemember(store: string, text: string): Promise<string> {
 
 /** `hippo remember` with a server up: the CLI itself decides to route and builds the body, so the test fails if it stops routing. */
 async function thinRemember(store: string, text: string): Promise<string> {
-  handle = await serve({ hippoRoot: store, port: 0 });
+  handle = await serveKeyed({ hippoRoot: store, port: 0 }, serve);
   const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   let printed = '';
   try {

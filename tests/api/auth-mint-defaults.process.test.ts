@@ -93,7 +93,6 @@ beforeEach(async () => {
   home = makeRoot('mint-defaults');
   globalHome = makeRoot('mint-defaults-global');
   vi.stubEnv('HIPPO_HOME', globalHome);
-  vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 

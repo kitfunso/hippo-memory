@@ -3,14 +3,7 @@
 import { randomBytes } from 'crypto';
 import { installCrashHandlers } from '../../base/util/crash-handlers.js';
 import { printDashboardBanner, reportListenFailure } from './dashboard-banner.js';
-import {
-  envAllowKeylessLocal,
-  envBodyTimeoutMs,
-  envPort,
-  envRequireAuth,
-  envTlsCert,
-  envTlsKey,
-} from '../../base/util/env.js';
+import { envBodyTimeoutMs, envPort, envTlsCert, envTlsKey } from '../../base/util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { type CommandContext, boolFlag, numberFlag, stringFlag, stringFlagOrExit } from './flag-values.js';
@@ -20,6 +13,7 @@ import { fail } from './exit.js';
 import { cliStdioHost } from './api-context.js';
 import { DEFAULT_DASHBOARD_PORT, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../server/defaults.js';
 import type { DashboardHandle } from '../server/dashboard-listener.js';
+import { localKeyPath } from '../server/local-key.js';
 
 export async function handleDashboard({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
@@ -72,22 +66,12 @@ function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buff
   }
 }
 
-/**
- * Said at every start, so the key rule is a choice an operator sees, and an upgrade that changed it explains itself.
- */
-function keyRuleLine(): string {
-  if (envRequireAuth()) return 'every request needs an API key (HIPPO_REQUIRE_AUTH=1)';
-  if (envAllowKeylessLocal()) {
-    return (
-      'requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1); ' +
-      'unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request'
-    );
-  }
+/** Said at every start, so the key rule is a choice an operator sees, and an upgrade that changed it explains
+ * itself. */
+function keyRuleLine(hippoRoot: string): string {
   return (
-    'every request needs an API key: mint one with `hippo auth create` and send it as ' +
-    '"Authorization: Bearer <key>" ' +
-    '(the hippo CLI reads HIPPO_API_KEY). To let requests from this machine in without a key, ' +
-    'start with HIPPO_ALLOW_KEYLESS_LOCAL=1'
+    'every request needs an API key: the hippo CLI here sends HIPPO_API_KEY, else the member key in ' +
+    `${localKeyPath(hippoRoot)} (readable by this user only); mint others with \`hippo auth create\``
   );
 }
 
@@ -105,7 +89,7 @@ export async function handleServe({ hippoRoot, flags }: CommandContext): Promise
   const allowCleartext = boolFlag(flags, 'allow-cleartext') || undefined;
   const handle = await serve({ hippoRoot, port, host, handleSignals: true, tls, allowCleartext });
   console.log(`hippo serve listening on ${handle.url} (pid ${process.pid})`);
-  console.log(keyRuleLine());
+  console.log(keyRuleLine(hippoRoot));
   console.log(`pidfile: ${path.join(hippoRoot, 'server.pid')}`);
   console.log('press Ctrl+C to stop');
   // The SIGINT/SIGTERM handlers stop the server and exit. Hang until then.

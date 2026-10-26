@@ -4,7 +4,7 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '.
 import { RawAppendOnlyError } from '../../src/base/errors/raw-append-only.js';
 import { IncompatibleBinaryError, OtherStoreFolderError, SqliteBlockedError } from '../../src/db/index.js';
 import { StoreBusyError } from '../../src/base/ports/store.js';
-import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../src/base/util/http-util.js';
+import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../src/base/errors/http-errors.js';
 import { ScopeForbiddenError } from '../../src/base/scope/recall-scope.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { decodeError, encodeError } from '../../src/store/sqlite/error-codec.js';

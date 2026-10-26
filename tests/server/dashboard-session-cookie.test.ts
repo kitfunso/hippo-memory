@@ -5,7 +5,7 @@ import { IncomingMessage, ServerResponse } from 'node:http';
 import { Socket } from 'node:net';
 import { TLSSocket } from 'node:tls';
 import { describe, expect, it } from 'vitest';
-import { HttpError } from '../../src/base/util/http-util.js';
+import { HttpError } from '../../src/base/errors/http-errors.js';
 import { DAY_MS, MINUTE_MS } from '../../src/base/util/time.js';
 import {
   dashboardTickets,

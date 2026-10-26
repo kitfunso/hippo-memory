@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from '../../base/ports/store.js';
 import { errorClassFields, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { mapApiError } from '../../api/error-reply.js';
-import { HttpError, sendJson } from '../../base/util/http-util.js';
+import { HttpError } from '../../base/errors/http-errors.js';
+import { sendJson } from '../http/http-util.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import type { RouteParams } from './types.js';
 

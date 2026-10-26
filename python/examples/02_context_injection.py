@@ -9,6 +9,7 @@ Run::
 """
 
 import asyncio
+import os
 
 from hippo_memory import Hippo
 
@@ -25,7 +26,7 @@ def render(ctx) -> str:
 
 
 async def main() -> None:
-    async with Hippo(base_url="http://127.0.0.1:3737") as client:
+    async with Hippo(base_url="http://127.0.0.1:3737", api_key=os.environ["HIPPO_API_KEY"]) as client:
         # Seed a handful so the bundle has something to assemble
         for content in [
             "always use real DB for tests",

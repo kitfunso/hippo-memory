@@ -11,11 +11,8 @@ import {
   type MvRankInfo,
 } from './memory-value.js';
 import type { ConsolidationResult, SleepRun } from './run.js';
-import { plural } from '../../base/util/format.js';
 import { DAY_MS } from '../../base/util/time.js';
 import type { SleepStart } from '../../base/ports/store/consolidation.js';
-
-const STRENGTH_DECIMALS = 4;
 
 export const DECAY_THRESHOLD = 0.05;
 
@@ -47,12 +44,11 @@ export interface DecayOutcome {
 // called for rows `retirable` allows.
 function retireFaded(run: SleepRun, entry: MemoryEntry, strength: number): void {
   const { result } = run;
-  const why = `(strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})`;
   // A faded secret is deleted, never kept dormant: keeping it would hold a credential on disk that the user reasonably
   // expects forgetting removed.
   if (run.config.dormant.enabled && !detectSecret(entry).flagged) {
     result.dormant++;
-    result.details.push(`  💤 dormant ${entry.id} ${why}`);
+    result.events.push({ kind: 'dormant', id: entry.id, strength, threshold: DECAY_THRESHOLD });
     run.pendingDormant.push({
       entry: { ...entry, strength },
       strength,
@@ -62,7 +58,7 @@ function retireFaded(run: SleepRun, entry: MemoryEntry, strength: number): void 
     return;
   }
   result.removed++;
-  result.details.push(`  🗑  removed ${entry.id} ${why}`);
+  result.events.push({ kind: 'removed', id: entry.id, strength, threshold: DECAY_THRESHOLD });
   run.pendingDeletes.push(entry.id);
 }
 
@@ -102,10 +98,7 @@ export async function decayPass(run: SleepRun): Promise<DecayOutcome> {
 function reportNonFiniteScores(result: ConsolidationResult, rankById: Map<string, MvRankInfo>): void {
   const nonFiniteIds = [...rankById.entries()].filter(([, info]) => !Number.isFinite(info.score)).map(([id]) => id);
   if (nonFiniteIds.length > 0) {
-    result.details.push(
-      `  ⚠️ memory-value: skipped ${plural(nonFiniteIds.length, 'entry', 'entries')} ` +
-        `with non-finite computed features (never rescued): ${nonFiniteIds.join(', ')}`,
-    );
+    result.events.push({ kind: 'nonFiniteScores', ids: nonFiniteIds });
   }
 }
 
@@ -136,10 +129,7 @@ async function classifyByStrength(run: SleepRun) {
 }
 
 function reportRescue(result: ConsolidationResult, id: string, strength: number, rank: MvRankInfo | undefined): void {
-  const rankNote = rank
-    ? ` - rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`
-    : ' - rescued';
-  result.details.push(`  🛟 ${id} (strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})${rankNote}`);
+  result.events.push({ kind: 'rescued', id, strength, threshold: DECAY_THRESHOLD, rank });
 }
 
 async function decayWithMemoryValue(run: SleepRun): Promise<DecayOutcome> {

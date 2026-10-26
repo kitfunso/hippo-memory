@@ -5,11 +5,8 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey, revokeApiKey } from '../../src/store/sqlite/auth.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -69,7 +66,6 @@ describe('server hardening', () => {
         /* already stopped */
       }
     }
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', undefined);
     vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
     vi.stubEnv('MCP_SSE_MAX_AGE_SEC', undefined);
     vi.stubEnv('MCP_SSE_HEARTBEAT_MS', undefined);
@@ -79,7 +75,7 @@ describe('server hardening', () => {
   it('SSE max-age closes stream with reason=max_age_exceeded', async () => {
     vi.stubEnv('MCP_SSE_MAX_AGE_SEC', '1');
     vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '200'); // poll fast
-    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+    handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0 });
 
     const ac = new AbortController();
     try {
@@ -103,10 +99,9 @@ describe('server hardening', () => {
 
   // ---- Fix 5.3: SSE auth-revoked closes stream -------------------------
   it.skipIf(needsHippoDb('db'))('SSE heartbeat closes stream with reason=auth_revoked when key revoked', async () => {
-    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '200');
     vi.stubEnv('MCP_SSE_MAX_AGE_SEC', '60'); // far enough out of the way
-    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+    handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0 });
 
     // Mint a key, open stream with it, then revoke and wait for the
     // heartbeat to detect.
@@ -170,7 +165,7 @@ describe('server hardening', () => {
   // closeAllConnections() and resolves cleanly.
   it('graceful shutdown: stop() resolves while SSE stream is open', async () => {
     vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '60000'); // keep stream sleepy
-    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+    handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0 });
 
     const ac = new AbortController();
     const streamPromise = fetch(`${handle.url}/mcp/stream`, {
@@ -198,14 +193,13 @@ describe('server hardening', () => {
   describe('PUBLIC_ROUTES bypass attempts', () => {
     beforeEach(async () => {
       vi.stubEnv('SLACK_SIGNING_SECRET', SLACK_SECRET);
-      vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
-      handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+      handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0 });
     });
 
     it('trailing slash on slack events does NOT bypass auth (still HMAC-required)', async () => {
       const body = JSON.stringify({ type: 'url_verification', challenge: 'x' });
       // Trailing slash → path !== exact match in PUBLIC_ROUTES, so route
-      // falls through. With HIPPO_REQUIRE_AUTH=1, the bearer check fires
+      // falls through. The bearer check fires
       // and returns 401. Critically: NOT 200.
       const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events/`, {
         method: 'POST',

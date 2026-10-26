@@ -1,18 +1,15 @@
 // A running server keeps one store connection open, so a request's own close is never SQLite's last-connection close.
-import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { ServerHandle } from '../../src/server.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { readyProbeFor } from '../../src/surface/server/ready.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -48,7 +45,7 @@ describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
     const root = makeRoot('srv-conn');
     dirs.push(root);
     const wal = join(root, 'hippo.db-wal');
-    const handle = await serve({ hippoRoot: root, port: 0 });
+    const handle = await serveKeyed({ hippoRoot: root, port: 0 });
     try {
       expect(await post(handle, 'the staging queue drains at midnight')).toBe(200);
       // Without a held connection each request's close is the last one, which checkpoints and deletes the WAL.
@@ -64,7 +61,7 @@ describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
   it('holds the store a first write creates, and never creates one on its own', async () => {
     const root = makeRoot('srv-conn-fresh', { init: false });
     dirs.push(root);
-    const handle = await serve({ hippoRoot: root, port: 0 });
+    const handle = await serveKeyed({ hippoRoot: root, port: 0 });
     try {
       expect(existsSync(join(root, 'hippo.db'))).toBe(false);
       expect(await post(handle, 'the staging queue drains at midnight')).toBe(200);
@@ -82,7 +79,7 @@ describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
     const inlineLimit = inlineCheckpointPages(root);
     // Sized so 16 posts write over twice the inline limit's pages, and under the 4,000 a served store checkpoints at.
     const filler = 'x'.repeat(inlineLimit * 320);
-    const handle = await serve({ hippoRoot: root, port: 0, rateLimits: { perAddress: 'off' } });
+    const handle = await serveKeyed({ hippoRoot: root, port: 0, rateLimits: { perAddress: 'off' } });
     try {
       const before = readFileSync(db);
       // Too few responses for a background checkpoint to be due, so a changed hippo.db could only come from a request's own commit.
@@ -121,7 +118,7 @@ describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
     let handle: ServerHandle | undefined;
     try {
       await new Promise<void>((ok) => holder.stdout.once('data', () => ok()));
-      handle = await serve({ hippoRoot: root, port: 0 });
+      handle = await serveKeyed({ hippoRoot: root, port: 0 });
       // The lock is still held, so only an open that gave up early can have logged this by now.
       const gaveUp = stderrSpy.mock.calls
         .map((c) => String(c[0]))
@@ -149,7 +146,7 @@ describe('GET /ready', () => {
     async () => {
       const root = makeRoot('srv-ready', { init: false });
       dirs.push(root);
-      const handle = await serve({ hippoRoot: root, port: 0 });
+      const handle = await serveKeyed({ hippoRoot: root, port: 0 });
       try {
         expect(await ready(handle)).toEqual({ status: 200, body: '{"ok":true}' });
         expect(existsSync(join(root, 'hippo.db'))).toBe(false);
@@ -201,7 +198,11 @@ describe('GET /ready', () => {
   it('answers 200 with store "unchecked" for a served store that has no readiness group', async () => {
     const root = makeRoot('srv-ready-unchecked');
     dirs.push(root);
-    const handle = await serve({ hippoRoot: root, port: 0, store: { ...sqliteStore(root), readiness: undefined } });
+    const handle = await serveKeyed({
+      hippoRoot: root,
+      port: 0,
+      store: { ...sqliteStore(root), readiness: undefined },
+    });
     try {
       expect(await ready(handle)).toEqual({ status: 200, body: '{"ok":true,"store":"unchecked"}' });
     } finally {
@@ -216,7 +217,7 @@ describe('GET /ready', () => {
       dirs.push(root);
       writeFileSync(join(root, 'hippo.db'), 'this file is not a database. '.repeat(400));
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      const handle = await serve({ hippoRoot: root, port: 0 });
+      const handle = await serveKeyed({ hippoRoot: root, port: 0 });
       try {
         expect(await ready(handle)).toEqual({ status: 503, body: '{"ok":false,"error":"store_unavailable"}' });
         const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('GET /ready'));

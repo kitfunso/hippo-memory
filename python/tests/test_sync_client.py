@@ -18,8 +18,8 @@ def test_sync_health_reports_version(hippo_server: str):
         assert info.pid > 0
 
 
-def test_sync_remember_recall_roundtrip(hippo_server: str):
-    with HippoSync(base_url=hippo_server) as client:
+def test_sync_remember_recall_roundtrip(hippo_server: str, hippo_member_key: str):
+    with HippoSync(base_url=hippo_server, api_key=hippo_member_key) as client:
         mem = client.remember(content="sync integration alpha token sentinel")
         assert mem.id.startswith("mem_")
 
@@ -30,8 +30,8 @@ def test_sync_remember_recall_roundtrip(hippo_server: str):
         assert any("sentinel" in (c or "") for c in contents)
 
 
-def test_sync_get_context_returns_entries(hippo_server: str):
-    with HippoSync(base_url=hippo_server) as client:
+def test_sync_get_context_returns_entries(hippo_server: str, hippo_member_key: str):
+    with HippoSync(base_url=hippo_server, api_key=hippo_member_key) as client:
         client.remember(content="sync context entry one")
         client.remember(content="sync context entry two")
         ctx = client.get_context(budget=2000)
@@ -39,8 +39,8 @@ def test_sync_get_context_returns_entries(hippo_server: str):
         assert len(ctx.entries) >= 1
 
 
-def test_sync_outcome_last_recall(hippo_server: str):
-    with HippoSync(base_url=hippo_server) as client:
+def test_sync_outcome_last_recall(hippo_server: str, hippo_member_key: str):
+    with HippoSync(base_url=hippo_server, api_key=hippo_member_key) as client:
         client.remember(content="sync outcome candidate")
         # Prime last_retrieval_ids via get_context (recall doesn't populate it).
         client.get_context(q="outcome candidate", budget=1000)

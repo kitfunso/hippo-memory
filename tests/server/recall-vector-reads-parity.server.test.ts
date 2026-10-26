@@ -37,11 +37,8 @@ import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 
 const MODEL = 'hashed-16';
 const IDENTITY = embeddingIndexIdentity(`openai:${MODEL}`);
@@ -201,7 +198,7 @@ async function runPass(
     const sampled = vi.spyOn(hippoLog, 'warnThenSample').mockImplementation((_key, message) => {
       lines.push(`${message}\n`);
     });
-    const handle = await serve({ hippoRoot: s.root, port: 0, store });
+    const handle = await serveKeyed({ hippoRoot: s.root, port: 0, store });
     const replies: Reply[] = [];
     try {
       for (const call of calls) {

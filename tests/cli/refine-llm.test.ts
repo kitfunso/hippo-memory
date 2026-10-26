@@ -89,7 +89,7 @@ describe('refining one consolidated entry', () => {
       const line = warnLines().join('');
       expect(line).toContain('errorClass=TypeError');
       expect(line).toContain('errno=ECONNRESET');
-      expect(line).toContain('cause=Error: read ECONNRESET');
+      expect(line).toContain('cause="Error: read ECONNRESET"');
     });
   });
 });

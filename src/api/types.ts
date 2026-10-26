@@ -16,14 +16,14 @@ import type { EmbedderFor } from '../base/ports/embedder.js';
  *  Role checks happen at the request boundary (e.g. /v1/sleep), except in authCreate and authRevoke (ForbiddenError).
  */
 export interface Actor {
-  /** 'cli' | 'localhost:cli' | 'api_key:<key_id>' | 'mcp' | 'connector:slack' | 'connector:github' */
+  /** 'cli' | 'api_key:<key_id>' | 'mcp' | 'connector:slack' | 'connector:github' */
   subject: string;
   role: 'admin' | 'member';
   /** Restricted scopes a member key may read (auth.ts grantScope). Unused for admin actors. */
   scopes?: readonly string[];
   /** An auth resolver vouched for this caller, so its admin role stops at its own tenant. */
   viaAuthResolver?: true;
-  /** The host's operator (CLI, stdio MCP, keyless loopback set to admin, host-tenant admin key): may act beyond its
+  /** The host's operator (CLI, stdio MCP, host-tenant admin key): may act beyond its
    * tenant. */
   hostAdmin?: true;
   owner?: string; // the person behind the key; task state keys on it

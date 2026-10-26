@@ -1,5 +1,5 @@
 // A held write lock answers a server write with a quick 503 and Retry-After instead of stalling the event loop for seconds.
-import { afterAll, beforeAll, describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 import { MessageChannel } from 'node:worker_threads';
 import { getHippoDbPath, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -11,11 +11,8 @@ import { serveJobs } from '../../src/store/sqlite/worker-jobs.js';
 import type { Job, Reply } from '../../src/store/sqlite/worker-ops.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -33,7 +30,7 @@ describe('server under a held write lock', () => {
 
   beforeAll(async () => {
     home = makeRoot('busy-503');
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serveKeyed({ hippoRoot: home, port: 0 });
     holder = new DatabaseSync(getHippoDbPath(home));
   });
 

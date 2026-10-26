@@ -227,7 +227,7 @@ describe('renderSleepResult snapshots', () => {
       mergedEpisodic: 0,
       newSemantic: 0,
       dryRun: true,
-      details: [],
+      events: [],
     };
     const out = captureStdout(() => renderSleepResult(result));
     expect(out).toMatchSnapshot();
@@ -240,7 +240,7 @@ describe('renderSleepResult snapshots', () => {
       mergedEpisodic: 5,
       newSemantic: 2,
       dryRun: false,
-      details: ['Merged: 3 entries about caching strategy'],
+      events: [{ kind: 'merged', count: 3, preview: 'caching strategy' }],
       deduped: { removed: 4, semDups: 2, epiDups: 1, crossDups: 1 },
       audit: { errorsRemoved: 1, warningCount: 3 },
       shared: 2,
@@ -256,7 +256,7 @@ describe('renderSleepResult snapshots', () => {
       mergedEpisodic: 0,
       newSemantic: 0,
       dryRun: false,
-      details: [],
+      events: [],
       shared: 2,
       secretSkipped: 1,
     };
@@ -271,7 +271,7 @@ describe('renderSleepResult snapshots', () => {
       mergedEpisodic: 0,
       newSemantic: 0,
       dryRun: false,
-      details: [],
+      events: [],
     };
     const out = captureStdout(() => renderSleepResult(result));
     expect(out).toMatchSnapshot();
@@ -284,7 +284,7 @@ describe('renderSleepResult snapshots', () => {
       mergedEpisodic: 0,
       newSemantic: 0,
       dryRun: false,
-      details: [],
+      events: [],
       audit: { errorsRemoved: 0, warningCount: 5 },
     };
     const out = captureStdout(() => renderSleepResult(result));

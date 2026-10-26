@@ -16,6 +16,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 pinClock();
 
@@ -110,8 +111,8 @@ describe('Decay pass', () => {
     expect(real.dormant).toBe(1);
     expect(real.removed).toBe(1);
     expect(real.merged).toBe(2);
-    expect(dry.details).toEqual(real.details);
-    expect(real.details.filter((l) => l.includes('💤') || l.includes('🗑'))).toHaveLength(2);
+    expect(detailLines(dry)).toEqual(detailLines(real));
+    expect(detailLines(real).filter((l) => l.includes('💤') || l.includes('🗑'))).toHaveLength(2);
   });
 
   it('keeps the stored confidence tier for old non-verified memories through sleep, while resolveConfidence reports stale', async () => {
@@ -208,7 +209,7 @@ describe('Replay pass (integration)', () => {
     const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
     expect(result.replayed).toBe(2);
-    expect(result.details.some((l) => /^ {2}💭 replayed 2 memories: /.test(l))).toBe(true);
+    expect(detailLines(result).some((l) => /^ {2}💭 replayed 2 memories: /.test(l))).toBe(true);
     const after = loadAllEntries(tmpDir, 'default');
     const touched = after.filter((e) => e.retrievalCount > 0);
     expect(touched).toHaveLength(2);
@@ -229,7 +230,7 @@ describe('Merge pass', () => {
 
     expect(result.merged).toBe(2);
     expect(result.semanticCreated).toBe(1);
-    expect(result.details.some((l) => l.startsWith('  🔀 merged 2 episodic entries into semantic: '))).toBe(true);
+    expect(detailLines(result).some((l) => l.startsWith('  🔀 merged 2 episodic entries into semantic: '))).toBe(true);
 
     const all = loadAllEntries(tmpDir, 'default');
     const semantics = all.filter((e) => e.layer === Layer.Semantic);
@@ -323,7 +324,7 @@ describe('Merge pass', () => {
 
     const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
-    expect(result.details).toContain('  ⚠️ detected 1 memory conflict');
+    expect(detailLines(result)).toContain('  ⚠️ detected 1 memory conflict');
     const conflicts = await listMemoryConflicts(tmpDir);
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0].reason).toMatch(/enabled\/disabled mismatch|negation polarity mismatch/i);
@@ -533,7 +534,9 @@ describe('Physics pass', () => {
     const result = await consolidate(tmpDir, { now });
 
     expect(result.physicsSimulated).toBe(3);
-    expect(result.details).toContain(`  ⚛️  physics: 3 particles, avg vel ${stats.avgVelocityMagnitude.toFixed(4)}`);
+    expect(detailLines(result)).toContain(
+      `  ⚛️  physics: 3 particles, avg vel ${stats.avgVelocityMagnitude.toFixed(4)}`,
+    );
     const stored = new Map(storedParticles().map((p) => [p.memoryId, p]));
     for (const want of expected) {
       const got = stored.get(want.memoryId)!;
@@ -576,6 +579,6 @@ describe('Physics pass', () => {
     writeEntry(empty, createMemory7('A memory with no particle stored for it'));
     const result = await consolidate(empty, { now: FIXED_NOW });
     expect(result.physicsSimulated).toBe(0);
-    expect(result.details.filter((line) => line.includes('physics'))).toEqual([]);
+    expect(detailLines(result).filter((line) => line.includes('physics'))).toEqual([]);
   });
 });

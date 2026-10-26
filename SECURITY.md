@@ -46,7 +46,7 @@ Out of scope:
 
 From 2.0 the HTTP server starts strict, and each default has one explicit opt-out:
 
-- A keyless request from this machine (`HIPPO_ALLOW_KEYLESS_LOCAL=1`) acts as a member. Mint an admin key for anything that needs admin.
+- No request gets in without a key, from this machine either: a port forwarder (`ssh -L`, `socat`) looks local. The CLI sends the member key `hippo serve` writes to `.hippo/server.key` (mode 0600) at each start. Mint an admin key for anything that needs admin.
 - A non-loopback bind without TLS refuses to start. `--allow-cleartext` or `HIPPO_ALLOW_CLEARTEXT=1` allows it behind a TLS-terminating proxy.
 - `HIPPO_CLIENT_IP_HEADER` is read only from the peers in `HIPPO_TRUSTED_PROXIES`, and the server refuses to start with the header set and no proxy listed, or with `*` listed.
 - Each API key owner gets 20 requests a second, burst 40. `HIPPO_CALLER_RPS` sets the rate, and `0` turns the limit off.

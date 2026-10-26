@@ -1,42 +1,26 @@
 import { evalStoreRules } from '../../infra/eval-switches.js';
 import {
   envAllowCleartext,
-  envCallerRps,
   envLossAversionRatio,
   envPort,
-  envRequireAuth,
   envRuntimeSettings,
   envStoreQueueMax,
   envTenant,
-  envV1Rps,
   validateFlags,
 } from '../../base/util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
+import { issueLocalKey } from './local-key.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
-import { isStoreBusy } from '../../base/ports/store.js';
 import { defaultServerRuntime, tenantOfApiKey, type ResolveOptions, type ServerRuntime } from '../open-store.js';
 import { configReader, loadConfig } from '../../host/config-file.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
-import { MINUTE_MS } from '../../base/util/time.js';
-import { errorCode, errorClassFields, errorFields, errorMessage, log } from '../../base/util/log.js';
-import { runWithRequestId } from '../../base/util/request-scope.js';
-import { createRateLimiter, type RateLimiter } from './rate-limit.js';
-import { RecallContractError } from '../../api/index.js';
-import {
-  BodyTimeoutError,
-  BodyTooLargeError,
-  closeAfterReply,
-  DeadlineExceededError,
-  HttpError,
-  JSON_HEADERS,
-  sendJson,
-} from '../../base/util/http-util.js';
-import { isLocalCaller, LIMITER_MAX_KEYS } from './auth.js';
+import { errorFields, log } from '../../base/util/log.js';
+import { JSON_HEADERS, sendJson } from '../http/http-util.js';
+import { isLocalCaller } from './auth.js';
 import { assertClientIpHeaderPinned, enforceRateLimit } from './client-ip.js';
-import { answerAtDeadline, isAbandoned, requestDeadlineFor } from './deadline.js';
 import { createSleepQueue } from './sleep-offload.js';
 import { createCallerState } from '../../api/callers.js';
 import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
@@ -45,36 +29,25 @@ import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './defaults.js';
 import { installCrashHandlers, installSignalHandlers } from '../../base/util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../../base/scope/project-identity.js';
-import {
-  accessRouteOf,
-  endReply,
-  logRequestFailure,
-  openRequest,
-  parseRequest,
-  rejectEncodedSlash,
-  replyFor,
-  sendError,
-} from './request.js';
+import { parseRequest, rejectEncodedSlash } from './request.js';
 import { loopbackBindHosts } from './loopback.js';
 import { assertTlsOrCleartextAllowed, createListener } from './tls.js';
 import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
+import { answerRequest } from './failure-replies.js';
+import { bootLimiters } from './rate-limits.js';
+import type { RateLimiter } from './rate-limit.js';
 import { warnGitHubPreviousSecretOpen } from '../connectors/github/webhook.js';
 import { warnSlackPreviousSecretOpen } from '../connectors/slack/webhook.js';
 import {
+  bindAddonRoutes,
+  bindV1Routes,
   dispatchAddonRoute,
   dispatchHostRoute,
   dispatchPublicJson,
   dispatchV1Route,
   HOST_ROUTES,
 } from './route-table.js';
-import type {
-  RateLimitSpec,
-  ResolvedServeOptions,
-  RouteRequest,
-  ServeOpts,
-  ServerCounts,
-  ServerHandle,
-} from './types.js';
+import type { ResolvedServeOptions, RouteRequest, ServeOpts, ServerCounts, ServerHandle } from './types.js';
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before listening, a string only for
 // pipe/unix-socket listeners (never used here).
@@ -177,214 +150,12 @@ async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> 
   sendJson(res, 200, { ok: true });
 }
 
-function assertBindable(host: string, loopbackHosts: ReadonlySet<string>): void {
-  if (!loopbackHosts.has(host) && !envRequireAuth()) {
-    throw new Error(
-      `Refusing to bind hippo serve to non-loopback host '${host}' without auth. ` +
-        `Set HIPPO_REQUIRE_AUTH=1 to bind non-loopback; every request then requires ` +
-        `a valid API key. Bind to 127.0.0.1 / ::1 otherwise, or to localhost when every address it resolves to is ` +
-        `loopback.`,
-    );
-  }
-}
-
-// The buckets see every request because serve() holds the store's pidfile lock (claimPidfile): one server per store.
-function limiterFor({ ratePerSec, burst }: RateLimitSpec): RateLimiter {
-  return createRateLimiter({ ratePerSec, burst, idleEvictMs: MINUTE_MS, maxKeys: LIMITER_MAX_KEYS });
-}
-
-function bootRateLimiter(perAddress: RateLimitSpec | 'off' | undefined): RateLimiter | undefined {
-  if (perAddress === 'off') return undefined;
-  if (perAddress !== undefined) return limiterFor(perAddress);
-  // Per-IP rate limiter for /v1/* and /mcp*, built here (not at module scope) so HIPPO_V1_RPS is read at boot and a
-  // test can set it before serve().
-  // A typo must not switch the limit off, so only an explicit 0 does.
-  const raw = envV1Rps();
-  const v1Rps = raw === undefined ? 20 : Number(raw);
-  if (!Number.isFinite(v1Rps) || v1Rps < 0) {
-    throw new Error(`HIPPO_V1_RPS must be a number of at least 0 (0 turns the per-address limit off), not '${raw}'`);
-  }
-  return v1Rps > 0 ? limiterFor({ ratePerSec: v1Rps, burst: v1Rps * 2 }) : undefined;
-}
-
-const DEFAULT_FAILED_AUTH: RateLimitSpec = { ratePerSec: 20, burst: 40 };
-
-function assertRateLimitSpec(name: string, { ratePerSec, burst }: RateLimitSpec): void {
-  if (!Number.isFinite(ratePerSec) || ratePerSec <= 0) {
-    throw new Error(`rateLimits.${name}.ratePerSec must be a finite number above 0`);
-  }
-  if (!Number.isFinite(burst) || burst < 1) {
-    throw new Error(`rateLimits.${name}.burst must be a finite number of at least 1`);
-  }
-}
-
-interface BootedLimiters {
-  perAddress: RateLimiter | undefined;
-  callerLimiter: RateLimiter | undefined;
-  failedAuthLimiter: RateLimiter;
-}
-
-const DEFAULT_CALLER_RPS = 20;
-
-/**
- * The per-caller spec when serve() names none: HIPPO_CALLER_RPS (0 is off), else 20 per second with a burst of twice
- * that.
- */
-function defaultCallerSpec(): RateLimitSpec | 'off' {
-  const raw = envCallerRps();
-  const rps = raw === undefined ? DEFAULT_CALLER_RPS : Number(raw);
-  // A typo must not switch the limit off, so only an explicit 0 does.
-  if (!Number.isFinite(rps) || rps < 0) {
-    throw new Error(`HIPPO_CALLER_RPS must be a number of at least 0 (0 turns the per-caller limit off), not '${raw}'`);
-  }
-  return rps === 0 ? 'off' : { ratePerSec: rps, burst: Math.max(1, rps * 2) };
-}
-
 /** A flag typo is refused at boot, since the safe side it would take may not be the side the operator meant. */
 function assertFlagsValid(): void {
   const bad = validateFlags();
   if (bad.length > 0) {
     throw new Error(`hippo serve: unknown flag value(s) ${bad.join(', ')}; use 1, true, on, 0, false or off`);
   }
-}
-
-/** Refuses a bad spec at boot, since a NaN or zero rate would otherwise turn a bucket off or refuse every request. */
-function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
-  const { perCaller = defaultCallerSpec(), perAddress, failedAuthPerAddress = DEFAULT_FAILED_AUTH } = rateLimits ?? {};
-  if (perCaller !== 'off') assertRateLimitSpec('perCaller', perCaller);
-  if (perAddress !== undefined && perAddress !== 'off') assertRateLimitSpec('perAddress', perAddress);
-  assertRateLimitSpec('failedAuthPerAddress', failedAuthPerAddress);
-  assertClientIpHeaderPinned();
-  assertFlagsValid();
-  return {
-    perAddress: bootRateLimiter(perAddress),
-    callerLimiter: perCaller === 'off' ? undefined : limiterFor(perCaller),
-    failedAuthLimiter: limiterFor(failedAuthPerAddress),
-  };
-}
-
-function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
-  const mapped = replyFor(err);
-  logRequestFailure(req, err, mapped.status);
-  if (res.headersSent) {
-    endReply(res);
-    return;
-  }
-  if (isStoreBusy(err)) {
-    res.setHeader('Retry-After', '1');
-  } else if (err instanceof HttpError && err.retryAfterSec !== undefined) {
-    res.setHeader('Retry-After', String(err.retryAfterSec));
-  }
-  if (mapped.status === 500) {
-    // The id lets an operator find the logged cause without the client seeing internal text.
-    sendJson(res, 500, { error: mapped.message, requestId });
-    return;
-  }
-  // RecallContractError keeps the shared {error} shape and adds `code` so clients branch without parsing prose.
-  if (err instanceof RecallContractError) {
-    sendJson(res, 400, { error: err.message, code: err.code });
-    return;
-  }
-  if (err instanceof DeadlineExceededError) {
-    sendJson(res, 504, { error: err.message, code: err.code, requestId });
-    return;
-  }
-  // readBody hit its cap or deadline, so close once the 413 or 408 is out rather than drain what the client keeps
-  // sending.
-  if (err instanceof BodyTooLargeError || err instanceof BodyTimeoutError) {
-    res.once('finish', () => closeAfterReply(req));
-  }
-  sendError(res, mapped.status, mapped.message);
-}
-
-const HANDLER_LATE =
-  'the request did not finish by its deadline and was abandoned; a write it started may or may not be saved';
-
-// The caller already has its 504, so this line is the only trace of the failure. The path and the error text can hold
-// caller data, so it carries neither.
-function logLateFailure<E>(req: IncomingMessage, err: E, requestId: string): void {
-  const fields = {
-    requestId,
-    method: req.method ?? 'GET',
-    route: accessRouteOf(req),
-    failureStatus: replyFor(err).status,
-  };
-  log.warn('request failed after its deadline reply', { ...fields, ...errorClassFields(err) });
-}
-
-// A handler that ends after the 504 finds the response finished, so sending its own reply throws this: its work ran to
-// the end.
-function isDroppedLateReply<E>(err: E): boolean {
-  return errorCode(err) === 'ERR_HTTP_HEADERS_SENT';
-}
-
-/** A GET only reads; every other method this server routes can write. */
-const isRead = (method: string): boolean => method === 'GET';
-
-// A read that ends late changed nothing. A write that ends late ran to its end after its caller was told it may not
-// have been saved.
-function logLateFinish(req: IncomingMessage, requestId: string): void {
-  const method = req.method ?? 'GET';
-  if (isRead(method)) return;
-  log.info('request finished after its deadline reply; its own reply was dropped', {
-    requestId,
-    method,
-    route: accessRouteOf(req),
-  });
-}
-
-function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
-  try {
-    replyWithFailure(req, res, err, requestId);
-  } catch (replyErr) {
-    // A throw here would be an unhandled rejection, which stops the daemon for every caller.
-    log.error(`serve: failure reply not sent, socket closed: ${errorMessage(replyErr)}`, errorFields(replyErr));
-    res.destroy();
-  }
-}
-
-/**
- * Runs `handle` under the request's id and deadline; a failure becomes the reply, unless the deadline has already
- * answered.
- */
-export function answerRequest(
-  req: IncomingMessage,
-  res: ServerResponse,
-  handle: () => Promise<void>,
-  { slowWarnMs, counts }: { slowWarnMs: number | undefined; counts: Pick<ServerCounts, 'handlerDeadlines'> },
-): void {
-  const requestId = openRequest(req, res, slowWarnMs);
-  const deadline = requestDeadlineFor(req);
-  const abort = deadline ? new AbortController() : undefined;
-  // Inside the scope, so the failure reply's log line carries the id too.
-  runWithRequestId(
-    requestId,
-    () => {
-      if (deadline) {
-        answerAtDeadline(
-          res,
-          deadline,
-          () => {
-            counts.handlerDeadlines += 1;
-            replyOrClose(req, res, new DeadlineExceededError(HANDLER_LATE), requestId);
-          },
-          () => abort?.abort(new DeadlineExceededError(HANDLER_LATE)),
-        );
-      }
-      handle().then(
-        () => {
-          if (isAbandoned(res)) logLateFinish(req, requestId);
-        },
-        <E>(err: E) => {
-          if (!isAbandoned(res)) replyOrClose(req, res, err, requestId);
-          else if (isDroppedLateReply(err)) logLateFinish(req, requestId);
-          else logLateFailure(req, err, requestId);
-        },
-      );
-    },
-    deadline,
-    abort?.signal,
-  );
 }
 
 export function listenOn(server: Server, port: number, host: string): Promise<void> {
@@ -418,8 +189,8 @@ export function resolveTenantId(opts: ResolveOptions): string {
 }
 
 /**
- * Boots the HTTP daemon on host:port and writes the pidfile under hippoRoot; refuses a non-loopback host unless
- * HIPPO_REQUIRE_AUTH=1 and either `tls` or allowCleartext is given, and refuses HIPPO_CLIENT_IP_HEADER without
+ * Boots the HTTP daemon on host:port and writes the local key and the pidfile under hippoRoot; refuses a non-loopback
+ * host unless `tls` or allowCleartext is given, and refuses HIPPO_CLIENT_IP_HEADER without
  * HIPPO_TRUSTED_PROXIES.
  * Use port: 0 in tests for an ephemeral port. See docs/ARCHITECTURE.md#srcserverbootts. */
 export async function serve(opts: ServeOpts): Promise<ServerHandle> {
@@ -428,8 +199,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const routes = frozenAddonRoutes(opts.routes);
   const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
   const limiters = bootLimiters(opts.rateLimits);
+  assertClientIpHeaderPinned();
+  assertFlagsValid();
   const loopbackHosts = await loopbackBindHosts(host);
-  assertBindable(host, loopbackHosts);
   assertTlsOrCleartextAllowed(host, opts.tls, loopbackHosts, opts.allowCleartext ?? envAllowCleartext());
   // An open-ended previous secret keeps working, so the operator hears once that nothing will close it.
   warnSlackPreviousSecretOpen();
@@ -480,6 +252,7 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
 
   const { port: actualPort, url } = await listenAndDescribe(server, requestedPort, host, opts.tls);
 
+  issueLocalKey(opts.hippoRoot);
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
   runtime.hold();
 
@@ -534,6 +307,8 @@ function servedOptsFor(
     ...opts,
     routes,
     publicJsonBodies,
+    v1Routes: bindV1Routes(store, runtime.onHippoDb),
+    addonRoutes: bindAddonRoutes(routes, store, runtime.onHippoDb),
     store,
     onHippoDb: runtime.onHippoDb,
     reachOf: runtime.reachOf,

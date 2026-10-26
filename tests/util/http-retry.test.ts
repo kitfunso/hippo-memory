@@ -176,6 +176,28 @@ describe('fetchWithRetry against a local server', () => {
     expect(sleeps).toEqual([2000]);
   });
 
+  it('hands back a 5xx to a POST at once, since the far side may have committed it', async () => {
+    const { url, hits } = await startServer([{ status: 503 }, { status: 200 }]);
+    const res = await fetchWithRetry(url, { method: 'POST', body: '{}' }, { timeoutMs: 2000, ...noSleep });
+    expect(res.status).toBe(503);
+    expect(hits()).toBe(1);
+  });
+
+  it('retries a 5xx to a POST whose caller says a replay is safe', async () => {
+    const { url, hits } = await startServer([{ status: 503 }, { status: 200 }]);
+    const init = { method: 'POST', body: '{}' };
+    const res = await fetchWithRetry(url, init, { timeoutMs: 2000, retryTransport: true, ...noSleep });
+    expect(res.status).toBe(200);
+    expect(hits()).toBe(2);
+  });
+
+  it('retries a 429 to a POST, which the far side refused unrun', async () => {
+    const { url, hits } = await startServer([{ status: 429, headers: { 'retry-after': '0' } }, { status: 200 }]);
+    const res = await fetchWithRetry(url, { method: 'POST', body: '{}' }, { timeoutMs: 2000, ...noSleep });
+    expect(res.status).toBe(200);
+    expect(hits()).toBe(2);
+  });
+
   it('never retries a 400', async () => {
     const { url, hits } = await startServer([{ status: 400, body: 'bad request' }, { status: 200 }]);
     const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, ...noSleep });

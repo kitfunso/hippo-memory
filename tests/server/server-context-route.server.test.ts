@@ -31,12 +31,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { needsHippoDb, serve } from '../_helpers/store-switch.js';
+import { needsHippoDb } from '../_helpers/store-switch.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -57,7 +54,7 @@ describe('GET /v1/context', () => {
     home = makeRoot('srv-ctx');
     globalHome = makeRoot('srv-ctx');
     vi.stubEnv('HIPPO_HOME', globalHome);
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serveKeyed({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
@@ -102,7 +99,7 @@ describe('GET /v1/context', () => {
       const projHippo = join(isoTmp, 'proj-a', '.hippo');
       mkdirSync(projHippo, { recursive: true });
       initTestStore(projHippo);
-      const projHandle = await serve({ hippoRoot: projHippo, port: 0 });
+      const projHandle = await serveKeyed({ hippoRoot: projHippo, port: 0 });
       try {
         const ctx: FullContext = apiCtx(projHippo, 'default', { subject: 'localhost:cli', role: 'admin' });
         await remember(ctx, { content: 'ownrow deploykey local fact' });
@@ -296,7 +293,7 @@ describe('GET /v1/context - ambientState field', () => {
     globalHome = makeRoot('srv-ctx');
     writeFileSync(join(home, 'config.json'), JSON.stringify({ ambient: { enabled: ambientEnabled } }), 'utf8');
     vi.stubEnv('HIPPO_HOME', globalHome);
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serveKeyed({ hippoRoot: home, port: 0 });
   }
 
   afterEach(async () => {

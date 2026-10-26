@@ -26,8 +26,6 @@ const FLAGS = {
   HIPPO_MCP_STDIO: false,
   HIPPO_REQUIRE_SERVER: false,
   HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL: false,
-  HIPPO_REQUIRE_AUTH: true,
-  HIPPO_ALLOW_KEYLESS_LOCAL: false,
   HIPPO_ALLOW_CLEARTEXT: false,
   SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK: false,
   GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK: false,
@@ -231,9 +229,6 @@ export const envPort = text('HIPPO_PORT');
  * the default.
  */
 export const envHealthProbeMs = posInt('HIPPO_HEALTH_PROBE_MS');
-export const envRequireAuth = bool('HIPPO_REQUIRE_AUTH');
-/** `1` lets a request made on this machine in with no key; HIPPO_REQUIRE_AUTH=1 wins over it. */
-export const envAllowKeylessLocal = bool('HIPPO_ALLOW_KEYLESS_LOCAL');
 /** `1` lets a non-loopback bind start without TLS, for TLS that ends at a proxy in front. */
 export const envAllowCleartext = bool('HIPPO_ALLOW_CLEARTEXT');
 export const envV1Rps = text('HIPPO_V1_RPS');
@@ -253,7 +248,8 @@ export const envRequestDeadlineMs = nonNegInt('HIPPO_REQUEST_DEADLINE_MS');
 export const envStoreQueueMax = posInt('HIPPO_STORE_QUEUE_MAX');
 /** How long the daily runner lets one child `hippo` step run; surface/cli/setup.ts holds the default. */
 export const envDailyStepTimeoutMs = posInt('HIPPO_DAILY_STEP_TIMEOUT_MS');
-export const envApiKey = text('HIPPO_API_KEY');
+/** Blank reads as unset, so an emptied variable falls back to the local key. */
+export const envApiKey = trimmedText('HIPPO_API_KEY');
 export function envClientIpHeader(): string | undefined {
   return raw('HIPPO_CLIENT_IP_HEADER')?.trim().toLowerCase();
 }

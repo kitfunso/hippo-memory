@@ -19,6 +19,7 @@ import {
   auditRescueRows,
 } from '../_helpers/memory-value-wiring.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 oneRequestPerTest();
 
@@ -55,7 +56,7 @@ describe('(e) rescue semantics', () => {
       stderr.mockRestore();
     }
 
-    expect(result.details).toContain(
+    expect(detailLines(result)).toContain(
       '  ⚠️ memory-value: 1 mv_rescue audit row failed to write (the rescue itself still landed)',
     );
     expect(new Set(auditRescueRows(dir, 'ta').map((e) => e.targetId))).toEqual(new Set([built[0]!.id, built[2]!.id]));
@@ -191,7 +192,7 @@ describe('(e) rescue semantics', () => {
 
     const result = await consolidate(dir, { now: NOW });
     expect(result.removed).toBe(1);
-    expect(result.details.some((l) => l.includes('🛟'))).toBe(false);
+    expect(detailLines(result).some((l) => l.includes('🛟'))).toBe(false);
 
     const remaining = loadEveryTenantEntries(dir);
     expect(remaining.find((e) => e.id === lonely.id)).toBeUndefined();

@@ -12,7 +12,8 @@ import {
 } from '../../../api/objects/objects.js';
 import { NotFoundError } from '../../../base/errors/api-errors.js';
 import type { ObjectByKind, ObjectKind, SavableKind } from '../../../base/records/object-types.js';
-import { HttpError, sendJson } from '../../../base/util/http-util.js';
+import { HttpError } from '../../../base/errors/http-errors.js';
+import { sendJson } from '../../http/http-util.js';
 import type { JsonValue } from '../../../base/util/json.js';
 import { parseCursor } from '../../../api/cursor.js';
 import { byCreatedAt, pageOf } from '../cursor.js';

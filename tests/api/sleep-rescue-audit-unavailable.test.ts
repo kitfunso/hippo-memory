@@ -12,6 +12,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -78,7 +79,7 @@ describe('sleep rescue audit', () => {
           l.includes('stack='),
       ),
     ).toBe(true);
-    expect(result.details).toContain(
+    expect(detailLines(result)).toContain(
       '  ⚠️ memory-value: mv_rescue audit unavailable this cycle (3 rescues not audited)',
     );
   });

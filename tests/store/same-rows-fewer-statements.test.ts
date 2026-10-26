@@ -114,9 +114,7 @@ describe('finishRecall audit rows', () => {
         targetId: `t${i}`,
       }));
       const writes: RecallWrites = { goalLog: [], audit };
-      const log = recordStatements(() =>
-        finishRecall(db, { strength: PRODUCTION_STRENGTH, clock: evalNow }, writes),
-      );
+      const log = recordStatements(() => finishRecall(db, { strength: PRODUCTION_STRENGTH, clock: evalNow }, writes));
       expect(countMatching(log.statements, 'INSERT INTO audit_log')).toBe(1);
       const rows = listAuditEvents(db, { tenantId: 'default', limit: 10 });
       expect(rows.map((r) => r.targetId)).toEqual(['t2', 't1', 't0']);

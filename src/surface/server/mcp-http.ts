@@ -9,7 +9,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '../../api/index.js';
 import { sharedStoreOf } from '../../api/types.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
-import { bodyDeadlineMs, HttpError, readBody, sendJson } from '../../base/util/http-util.js';
+import { HttpError } from '../../base/errors/http-errors.js';
+import { bodyDeadlineMs, readBody, sendJson } from '../http/http-util.js';
 import { errorFields, log } from '../../base/util/log.js';
 import { callName } from '../mcp/protocol.js';
 import { assertCallerProject } from '../../base/scope/project-identity.js';
@@ -28,7 +29,7 @@ const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 
 // MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a keepalive-only SSE stream
 // (`: ping` every DEFAULT_SSE_HEARTBEAT_MS, 60 s) in v1. Both dispatch to handleMcpRequest as stdio does. Auth matches
-// /v1/* (Bearer via `requireAuth`, loopback fallback); an SSE stream is checked at open and again before every ping.
+// /v1/* (Bearer via `requireAuth`); an SSE stream is checked at open and again before every ping.
 
 // Percent-encoded by the client, so any lowercase Unicode name fits a Latin-1 header.
 const HEADER_PIECE = /^[A-Za-z0-9\-_.!~*'()%]+$/;
@@ -118,7 +119,7 @@ export async function handleMcpPost(
   sendJson(res, 200, mcpRes);
 }
 
-// Each open stream holds a socket and a timer, so one key (or one IP when keyless) gets a bounded number.
+// Each open stream holds a socket and a timer, so one key gets a bounded number.
 const DEFAULT_MAX_STREAMS_PER_CLIENT = 8;
 
 /** The bucket a stream counts against: a hash of the bearer token, else the client IP. */

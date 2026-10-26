@@ -133,9 +133,7 @@ describe('loadContextCandidates reward factor', () => {
     });
     const got = loadContextCandidates(root, 'default', { cap: 1, now: NOW });
     const model = evalSwitches().strength;
-    const strongest = [...rows].sort(
-      (a, b) => strengthUnder(b, NOW, model) - strengthUnder(a, NOW, model),
-    )[0].id;
+    const strongest = [...rows].sort((a, b) => strengthUnder(b, NOW, model) - strengthUnder(a, NOW, model))[0].id;
     return { id: got[0].id, strongest };
   }
 

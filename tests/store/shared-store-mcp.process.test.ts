@@ -9,15 +9,12 @@ import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import { sharedStoreRefusal } from '../../src/surface/mcp/shared-gate.js';
 import { TOOLS } from '../../src/surface/mcp/tools.js';
 import { serve, type ServerHandle } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { processGit } from '../../src/infra/git-runner.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -83,7 +80,7 @@ afterEach(async () => {
 describe('MCP writes on a shared store', () => {
   it('HTTP MCP hippo_remember with no project header is refused and stores nothing', async () => {
     const store = flaggedStore();
-    handle = await serve({ hippoRoot: store, port: 0 });
+    handle = await serveKeyed({ hippoRoot: store, port: 0 }, serve);
     const body = await mcp<ToolReply>(handle, 'tools/call', {
       name: 'hippo_remember',
       arguments: { text: 'the staging database restarts at noon on sundays' },
@@ -97,7 +94,7 @@ describe('MCP writes on a shared store', () => {
 
   it('HTTP MCP hippo_remember stamps the X-Hippo-Project name', async () => {
     const store = flaggedStore();
-    handle = await serve({ hippoRoot: store, port: 0 });
+    handle = await serveKeyed({ hippoRoot: store, port: 0 }, serve);
     const body = await mcp<ToolReply>(
       handle,
       'tools/call',
@@ -122,7 +119,7 @@ describe('MCP writes on a shared store', () => {
   });
 
   it('hippo_remember takes exactly text, error, pin, tag and personal', async () => {
-    handle = await serve({ hippoRoot: flaggedStore(), port: 0 });
+    handle = await serveKeyed({ hippoRoot: flaggedStore(), port: 0 }, serve);
     const body = await mcp<{ result?: { tools: Array<{ name: string; inputSchema: { properties: object } }> } }>(
       handle,
       'tools/list',
@@ -135,7 +132,7 @@ describe('MCP writes on a shared store', () => {
 describe('the MCP tool gate on a shared store', () => {
   it('turns learn, share, resolve and peers off, opens baserate, and needs a project for every other tool', async () => {
     const store = flaggedStore();
-    handle = await serve({ hippoRoot: store, port: 0 });
+    handle = await serveKeyed({ hippoRoot: store, port: 0 }, serve);
     const headerSets: Record<string, string>[] = [{}, { 'x-hippo-project': 'acme' }];
     for (const { name } of TOOLS) {
       for (const headers of headerSets) {

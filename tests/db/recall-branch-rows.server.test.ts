@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve } from '../../src/server.js';
+import { serveKeyed } from '../_helpers/keyed-server.js';
 import type { RecallResult } from '../../src/api/index.js';
 import {
   CLEARED_ENV,
@@ -18,10 +19,6 @@ import {
   type Templates,
 } from '../_helpers/recall-golden-seed.js';
 import { recallAuditOps, recallWrites, type RecallWrites } from '../_helpers/recall-rows.js';
-
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
-});
 
 type Surface = 'http' | 'mcp';
 type Args = Record<string, string | number | boolean>;
@@ -73,7 +70,7 @@ interface Ran {
 async function runBranch(via: Surface, branch: Branch): Promise<Ran> {
   const s: Store = freshStore(templates, 'local');
   try {
-    const handle = await serve({ hippoRoot: s.root, port: 0 });
+    const handle = await serveKeyed({ hippoRoot: s.root, port: 0 }, serve);
     let reply: RecallResult | string;
     try {
       reply = await recallOver(handle.url, via, { query: branch.query, ...branch[via] });

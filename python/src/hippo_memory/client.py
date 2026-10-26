@@ -20,6 +20,8 @@ from typing import Any, Literal
 
 import httpx
 
+from hippo_memory._auth import resolve_api_key
+
 from hippo_memory.models import (
     HealthInfo,
     MemoryEnvelope,
@@ -77,8 +79,9 @@ class Hippo:
         timeout: float = 30.0,
     ):
         headers: dict[str, str] = {"content-type": "application/json"}
-        if api_key:
-            headers["authorization"] = f"Bearer {api_key}"
+        key = resolve_api_key(base_url, api_key)
+        if key:
+            headers["authorization"] = f"Bearer {key}"
         self._client = httpx.AsyncClient(
             base_url=base_url,
             headers=headers,

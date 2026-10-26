@@ -1,6 +1,8 @@
 import { DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
+import { buildDag, buildEntityProfiles, rebuildDirtySummaries } from './dag.js';
+import { extractFacts, storeExtractedFacts } from '../learn/extract.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
@@ -26,10 +28,10 @@ function sleepLlm(run: SleepRun, llm: Llm | undefined): SleepLlm | null {
   const llmError =
     (phase: string) =>
     (msg: string, failure?: LlmFailure): void => {
-      const line = `  ⚠️ ${phase}: ${msg}`;
-      if (llmErrorsSeen.has(line)) return;
-      llmErrorsSeen.add(line);
-      result.details.push(line);
+      const seen = `${phase}: ${msg}`;
+      if (llmErrorsSeen.has(seen)) return;
+      llmErrorsSeen.add(seen);
+      result.events.push({ kind: 'passFailed', phase, message: msg });
       log.warn(`consolidate ${phase}: ${msg}`, failure && llmFailureFields(failure));
     };
   return { llmError, llmOpts: { llm, model: config.extraction.model } };
@@ -77,9 +79,8 @@ export async function llmPasses(run: SleepRun, model: Llm | undefined): Promise<
 // A local model serves a few calls at once; more only queues them at the provider.
 const EXTRACTION_CONCURRENCY = 4;
 
-type Extract = typeof import('../learn/extract.js').extractFacts;
 interface Extraction {
-  facts: Awaited<ReturnType<Extract>>;
+  facts: Awaited<ReturnType<typeof extractFacts>>;
   errors: Array<[string, LlmFailure | undefined]>;
   threw?: unknown;
 }
@@ -105,8 +106,7 @@ async function pooled<T>(
 }
 
 /** Stores one source's extracted facts as semantic memories stamped at the run's instant. */
-async function keepFacts(run: SleepRun, source: MemoryEntry, facts: Extraction['facts']): Promise<MemoryEntry[]> {
-  const { storeExtractedFacts } = await import('../learn/extract.js');
+function keepFacts(run: SleepRun, source: MemoryEntry, facts: Extraction['facts']): Promise<MemoryEntry[]> {
   return storeExtractedFacts(run.store, source, facts, run.config.defaultHalfLifeDays, run.now);
 }
 
@@ -115,7 +115,6 @@ async function keepFacts(run: SleepRun, source: MemoryEntry, facts: Extraction['
  * order. True when it stopped on a failure every later call would repeat (bad key, no credit, unknown model).
  */
 async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly MemoryEntry[]): Promise<boolean> {
-  const { extractFacts } = await import('../learn/extract.js');
   const report = llm.llmError('extraction');
   let stopAt = Number.POSITIVE_INFINITY;
   const extract = async (index: number): Promise<Extraction> => {
@@ -179,7 +178,6 @@ async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Pro
   }
   if (facts < 3) return;
   try {
-    const { buildDag } = await import('./dag.js');
     const dagResult = await buildDag(run.store, extractedFacts, {
       ...llmOpts,
       onError: llmError('dag'),
@@ -189,9 +187,11 @@ async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Pro
     run.result.dagCandidateClusters = dagResult.candidateClusters;
     run.result.dagSummariesCreated = dagResult.summariesCreated;
     if (dagResult.summariesCreated > 0) {
-      run.result.details.push(
-        `  🌳 DAG: ${dagResult.summariesCreated} summaries created, ${dagResult.factsLinked} facts linked`,
-      );
+      run.result.events.push({
+        kind: 'dagSummaries',
+        created: dagResult.summariesCreated,
+        factsLinked: dagResult.factsLinked,
+      });
     }
   } catch (err) {
     llmError('dag')(errorMessage(err));
@@ -205,7 +205,6 @@ async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Pro
 async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   const { result } = run;
   try {
-    const { rebuildDirtySummaries } = await import('./dag.js');
     const rawCap = run.config.runtime?.dagRebuildCap;
     const cap = rawCap !== undefined ? Math.min(rawCap, MAX_DAG_REBUILD_CAP) : DEFAULT_DAG_REBUILD_CAP;
     const rebuildResult = await rebuildDirtySummaries(run.store, {
@@ -225,13 +224,14 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
       rebuildResult.failed > 0 ||
       rebuildResult.refused > 0
     ) {
-      const parts: string[] = [];
-      if (rebuildResult.rebuilt > 0) parts.push(`${rebuildResult.rebuilt} rebuilt`);
-      if (rebuildResult.refused > 0) parts.push(`${rebuildResult.refused} refused`);
-      if (rebuildResult.zeroChildSkipped > 0) parts.push(`${rebuildResult.zeroChildSkipped} zero-child-skipped`);
-      if (rebuildResult.failed > 0) parts.push(`${rebuildResult.failed} failed`);
-      if (rebuildResult.capped) parts.push(`CAPPED@${cap}`);
-      result.details.push(`  🌳 DAG rebuild: ${parts.join(', ')}`);
+      result.events.push({
+        kind: 'dagRebuild',
+        rebuilt: rebuildResult.rebuilt,
+        refused: rebuildResult.refused,
+        zeroChildSkipped: rebuildResult.zeroChildSkipped,
+        failed: rebuildResult.failed,
+        cappedAt: rebuildResult.capped ? cap : null,
+      });
     }
   } catch (err) {
     llmError('dag rebuild')(errorMessage(err));
@@ -255,7 +255,6 @@ async function allUnprofiledTopicSummaries(store: SleepRun['store']['consolidati
 // Reads the stored L2s, not `survivors`: phase 1.7 wrote new L2s via writeEntry without pushing them into survivors.
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
-    const { buildEntityProfiles } = await import('./dag.js');
     const l2Summaries = await allUnprofiledTopicSummaries(run.store.consolidation);
     if (l2Summaries.length >= 2) {
       const profileResult = await buildEntityProfiles(run.store, l2Summaries, {
@@ -266,9 +265,11 @@ async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm)
       });
       run.result.entityProfilesCreated = profileResult.profilesCreated;
       if (profileResult.profilesCreated > 0) {
-        run.result.details.push(
-          `  🌲 DAG L3: ${profileResult.profilesCreated} entity profiles, ${profileResult.l2sLinked} L2s linked`,
-        );
+        run.result.events.push({
+          kind: 'dagProfiles',
+          profiles: profileResult.profilesCreated,
+          l2sLinked: profileResult.l2sLinked,
+        });
       }
     }
   } catch (err) {

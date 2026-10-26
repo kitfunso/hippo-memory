@@ -1,7 +1,7 @@
 // Write path: remember stores one memory after secret vetting and, for untrusted content, the instruction check.
 
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../base/ports/store.js';
-import { detectInstruction, INSTRUCTION_LIKE_TAG } from '../instruction-detect.js';
+import { detectInstruction, INSTRUCTION_LIKE_TAG, UNTRUSTED_ORIGIN_TAG } from '../instruction-detect.js';
 import { quarantineScopeFor } from '../../domain/trust/quarantine.js';
 import {
   createMemory,
@@ -137,7 +137,7 @@ function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember 
   const vetted = vetSecrets(opts.content);
   const detection = opts.untrusted ? detectInstruction(vetted.content) : { flagged: false, reason: null };
   const flagged = memberShares(ctx, opts) && detectInstruction(vetted.content).flagged;
-  const tags = flagged ? [...(opts.tags ?? []), INSTRUCTION_LIKE_TAG] : opts.tags;
+  const tags = trustTagged(opts.tags, opts.untrusted === true, flagged);
   const local = opts.local ?? {};
   const created = createMemory(
     vetted.content,
@@ -165,6 +165,12 @@ function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember 
   const origin = opts.personal ? '' : opts.project?.name;
   const stamped = origin !== undefined ? { ...entry, originProject: origin } : entry;
   return { entry: stamped, requestedScope, detection, warnings: vetted.warnings };
+}
+
+/** `tags` plus the marks that make the row print framed: its untrusted origin, and a member row the check flagged. */
+function trustTagged(tags: string[] | undefined, untrusted: boolean, flagged: boolean): string[] | undefined {
+  const marks = [...(untrusted ? [UNTRUSTED_ORIGIN_TAG] : []), ...(flagged ? [INSTRUCTION_LIKE_TAG] : [])];
+  return marks.length > 0 ? [...(tags ?? []), ...marks] : tags;
 }
 
 /** A member key's write outside its personal scope reaches the other members' prompts, as connector text does. */

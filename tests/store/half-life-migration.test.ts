@@ -41,6 +41,7 @@ import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { saveCustomerNote, saveDecision } from '../../src/entry/testing.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
+import { detailLines } from '../_helpers/sleep-lines.js';
 
 const dirs: string[] = [];
 const local = (root: string) => sqliteStore(root);
@@ -206,7 +207,7 @@ describe('default half-life migration', () => {
   it('sleep moves a pre-1.46 store to the new default before decaying', async () => {
     const root = legacyStore([legacy('the staging deploy needs the VPN to reach the health check')]);
     const result = await consolidate(root);
-    expect(result.details.join('\n')).toMatch(/moved 1 memories from the 7-day to the 365-day half-life/);
+    expect(detailLines(result).join('\n')).toMatch(/moved 1 memories from the 7-day to the 365-day half-life/);
     // Sleep's replay pass may lengthen it further (+2 days per replay).
     expect([...byContent(root).values()][0]).toBeGreaterThanOrEqual(365);
   });
@@ -215,7 +216,7 @@ describe('default half-life migration', () => {
     const root = legacyStore([legacy('the staging deploy needs the VPN to reach the health check')]);
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 7 }));
     const result = await consolidate(root);
-    expect(result.details.join('\n')).not.toMatch(/half-life/);
+    expect(detailLines(result).join('\n')).not.toMatch(/half-life/);
     expect([...byContent(root).values()][0]).toBeLessThan(20);
   });
 
@@ -406,7 +407,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 730 }));
 
-    const details = (await consolidate(root)).details.join('\n');
+    const details = detailLines(await consolidate(root)).join('\n');
     expect(details).toMatch(/moved 1 memories from the 365-day to the 730-day half-life/);
     expect(details).toMatch(
       /moved 1 memories of decisions, incidents and other objects from the 90-day to the 730-day half-life/,
