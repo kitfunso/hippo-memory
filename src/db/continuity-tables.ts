@@ -80,7 +80,8 @@ export const CONTINUITY_INDEX_DDL = [
     `status, updated_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_session_handoffs_owner ON session_handoffs(tenant_id, owner_subject, ` +
     `origin_project, created_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_memory_quarantine_status ON memory_quarantine(tenant_id, status, quarantined_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_memory_quarantine_status ON memory_quarantine(tenant_id, status, quarantined_at ` +
+    `DESC)`,
 ] as const;
 
 // A client retry carries the same request id, so a repeat finds the earlier row instead of writing again.

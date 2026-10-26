@@ -21,8 +21,8 @@ interface SqliteImportStores {
   isBusy<E>(err: E): boolean;
 }
 
-/** The opener a CLI verb hands the sync; `opts` are the invoking root's rules, runtime and session, which every store it
- * opens takes. */
+/** The opener a CLI verb hands the sync; `opts` are the invoking root's rules, runtime and session, which every store
+ * it opens takes. */
 export function sqliteImportStores(opts: SqliteStoreOptions): SqliteImportStores {
   return {
     open: (root, { busyWaitMs }) => ({

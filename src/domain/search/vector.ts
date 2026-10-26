@@ -155,9 +155,10 @@ async function fillVectorArm(
   if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
   const vec = await embedQueryBy(options.queryEmbedDeadline ?? startQueryEmbedDeadline(options), provider, query);
   if (vec === null) {
+    const budgetMs = queryEmbedBudgetMs(options.runtime?.queryEmbedTimeoutMs);
     warnBm25Fallback(
       'query-embed-budget',
-      `the ${provider.kind} embedding provider gave no query vector within ${queryEmbedBudgetMs(options.runtime?.queryEmbedTimeoutMs)} ms`,
+      `the ${provider.kind} embedding provider gave no query vector within ${budgetMs} ms`,
     );
     return;
   }

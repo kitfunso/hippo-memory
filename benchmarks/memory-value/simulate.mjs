@@ -64,7 +64,7 @@ import { readEntryInFolder as readEntry } from '../../dist/store/sqlite/fixtures
 import { hybridSearch } from '../../dist/entry/eval-scripts.js';
 import { buildCorpus } from '../../dist/domain/search/bm25.js';
 import { markRetrieved } from '../../dist/entry/memory.js';
-import { withSharedStoreHandles } from '../../dist/db/open.js';
+import { withSharedStoreHandles } from '../../dist/db/index.js';
 import { CONFIG } from './config.mjs';
 import { rngFor, pickUniform, setFakeNow, clearFakeNow, hippoRootFor, metaPathFor, questionDir, readJson, writeJsonl, loadDataset } from './common.mjs';
 

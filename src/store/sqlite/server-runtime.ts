@@ -6,9 +6,11 @@ import { createSqliteExecutor, type ExecutorOptions } from './executor.js';
 import { workerCounts } from './executor-counts.js';
 import { isHippoDbStore } from './hippo-db-stores.js';
 import { createStoreHolder, type StoreHolder } from './held-connection.js';
-import { sqliteReach } from './store.js';
+import { inSqliteSession, sqliteReach } from './store.js';
+import { runSqliteRequest } from './request-scope.js';
 import { globalStoresFor, storeForRequest, workerSqliteStore } from './worker-store.js';
 import { StoreRuntime } from '../../db/store-runtime.js';
+import type { RequestStores } from '../../db/index.js';
 import type { RequestLimits } from '../../base/util/request-scope.js';
 
 export interface ServerRuntimeOptions extends ExecutorOptions {
@@ -25,16 +27,27 @@ export interface SqliteServerRuntime extends Omit<StoreHolder, 'release'> {
   readonly host: Host;
   /** The store is hippo.db rather than a caller's own, so its folder's config.json decides shared-ness. */
   readonly onHippoDb: boolean;
-  /** The served store as one request calls it: each call to a worker carries the request's deadline and signal. */
-  readonly storeFor: <S extends HippoStore>(store: S, limits: RequestLimits) => S;
+  /** The served store as one request calls it: each call to a worker carries the request's deadline and signal, and an
+   * in-process store opens on the request's session. */
+  readonly storeFor: <S extends HippoStore>(store: S, limits: RequestLimits, session?: RequestStores) => S;
   /** What a request's store call reaches, probed per request (`shared` is the transport's flag). */
-  readonly reachOf: (shared: boolean, limits: RequestLimits) => StoreReach;
+  readonly reachOf: (shared: boolean, limits: RequestLimits, session?: RequestStores) => StoreReach;
+  /** Runs one request on a session of the server's runtime, so its in-process opens reuse the runtime's idle
+   * handles. */
+  readonly runRequest: <T>(run: (session: RequestStores) => Promise<T>) => Promise<T>;
   /** What the store workers of this process refused, expired and replaced; /health reports them. */
   readonly workerCounts: Readonly<typeof workerCounts>;
   readonly close: () => Promise<void>;
   /** What the root's exit hook runs when the process exits before close(): the held writes and handles of the server's
    * store runtime. */
   readonly closeOnExit: () => void;
+}
+
+/** `own` as one request calls it: worker calls carry the request's limits, and an in-process store opens on its
+ * session. */
+function boundToRequest<S extends HippoStore>(own: S, limits: RequestLimits, session?: RequestStores): S {
+  const bound = storeForRequest(own, limits);
+  return session === undefined ? bound : inSqliteSession(bound, session);
 }
 
 /** hippo.db under `hippoRoot` as a server runs it: `opts.store` when given, else a worker store on `opts`' executor. */
@@ -51,9 +64,10 @@ export function sqliteServerRuntime(hippoRoot: string, opts: ServerRuntimeOption
     store,
     host,
     onHippoDb: isHippoDbStore(store),
-    storeFor: storeForRequest,
-    reachOf: (shared, limits) =>
-      sqliteReach(hippoRoot, store, shared, (root) => storeForRequest(globalStores.open(root), limits), host),
+    storeFor: boundToRequest,
+    reachOf: (shared, limits, session) =>
+      sqliteReach(hippoRoot, store, shared, (root) => boundToRequest(globalStores.open(root), limits, session), host),
+    runRequest: (run) => runSqliteRequest(run, 'server', runtime),
     workerCounts,
     hold: holder.hold,
     afterResponse: holder.afterResponse,

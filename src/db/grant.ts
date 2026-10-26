@@ -1,5 +1,5 @@
-// What one hippo.db open may use. Only the SQLite adapter mints a grant (src/store/sqlite/grant.ts); an open without one
-// is a plain connection of its own.
+// What one hippo.db open may use. Only the SQLite adapter mints a grant (src/store/sqlite/grant.ts); an open without
+// one is a plain connection of its own.
 import type { RequestStores } from './request-stores.js';
 import type { StoreRuntime } from './store-runtime.js';
 

@@ -245,7 +245,8 @@ export function sqliteDiagnosticsStore(hippoRoot: string): Pick<StoreGroups, 'di
 // Each store sqliteStore built, with how to build it again on one session's handles.
 const reopeners = new WeakMap<HippoStore, (session: RequestStores) => HippoStore & StoreGroups>();
 
-/** The built-in store on hippo.db under `hippoRoot`, scored by `opts`' rules and opened with its runtime and session. */
+/** The built-in store on hippo.db under `hippoRoot`, scored by `opts`' rules and opened with its runtime and
+ * session. */
 export function sqliteStore(hippoRoot: string, opts: SqliteStoreOptions = {}): HippoStore & StoreGroups {
   const store = asHippoDb(sqliteStoreOn(handlesOf(hippoRoot, opts)));
   reopeners.set(store, (session) => sqliteStore(hippoRoot, { ...opts, session }));

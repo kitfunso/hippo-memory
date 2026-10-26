@@ -359,7 +359,7 @@ export const HOST_ROUTES = {
 
 /** Runs `handle` when the request is `route`'s; false when it is another route. */
 export async function dispatchHostRoute(
-  { req, opts }: RouteRequest,
+  { req }: RouteRequest,
   request: { readonly method: string; readonly path: string },
   route: HostRoute,
   handle: () => Promise<void>,

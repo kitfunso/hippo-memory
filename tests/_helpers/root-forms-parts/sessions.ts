@@ -96,13 +96,12 @@ export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retri
   return onHandle(hippoRoot, (db) => indexAndStatsSql.saveIndex(db, index), openStore);
 }
 
-/** `at` as store files carries the runtime and lock wait of the caller's store; a bare root has neither. */
+/** `files` carries the runtime and lock wait of the caller's store. */
 export function updateStatsUnlessBusy(
-  at: string | StoreFiles,
+  files: StoreFiles,
   delta: Parameters<typeof indexAndStatsSql.updateStatsUnlessBusy>[2],
   committed: string,
 ): void {
-  const files = typeof at === 'string' ? storeFilesOf(at) : at;
   onHandle(
     files.hippoRoot,
     (db) => indexAndStatsSql.updateStatsUnlessBusy(db, files, delta, committed),

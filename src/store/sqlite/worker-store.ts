@@ -174,8 +174,9 @@ interface GlobalStores {
   readonly close: () => Promise<void>;
 }
 
-/** On threads of their own when `served` answers from workers; each is built at first use, since the global store can
- * appear while the server runs. Beside any other store, a global one opens on the server thread at the server's wait. */
+/** On threads of their own when `served` answers from workers; each is built at first use, since the global store
+ * can appear while the server runs. Beside any other store, a global one opens on the server thread at the server's
+ * wait. */
 export function globalStoresFor(served: HippoStore, executorOpts: ExecutorOptions = {}): GlobalStores {
   const { runtime, strength, lossAversionRatio, fakeNowMs } = executorOpts;
   const rules = { runtime, strength, lossAversionRatio, fakeNowMs };

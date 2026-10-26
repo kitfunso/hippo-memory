@@ -13,7 +13,13 @@ import { rootInfra } from '../../infra/ports.js';
 import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { issueLocalKey } from './local-key.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
-import { defaultServerRuntime, tenantOfApiKey, type ResolveOptions, type ServerRuntime } from '../open-store.js';
+import {
+  defaultServerRuntime,
+  tenantOfApiKey,
+  type ResolveOptions,
+  type ServerRuntime,
+  type StoreSession,
+} from '../open-store.js';
 import { configReader, loadConfig } from '../../host/config-file.js';
 import { auditWriteFailureCount } from '../../base/records/audit-report.js';
 import { PACKAGE_VERSION } from '../../base/util/version.js';
@@ -327,21 +333,29 @@ function acceptingServer(
     res.once('finish', runtime.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    answerRequest(req, res, (limits) => handleRequest(req, res, servedFor(served, runtime, limits), options), {
+    const answer = (limits: RequestLimits): Promise<void> =>
+      runtime.runRequest((session) =>
+        handleRequest(req, res, servedFor(served, runtime, { limits, session }), options),
+      );
+    answerRequest(req, res, answer, {
       slowWarnMs: served.slowRequestWarnMs,
       counts: options.counts,
     });
   });
 }
 
-/** `served` as one request reads it: each store call to a worker waits on the request's deadline, and its Context
- * carries the abort signal. */
-function servedFor(served: ResolvedServeOptions, runtime: ServerRuntime, limits: RequestLimits): ResolvedServeOptions {
+/** `served` as one request reads it: each store call to a worker waits on the request's deadline, an in-process store
+ * opens on the request's session, and its Context carries the abort signal. */
+function servedFor(
+  served: ResolvedServeOptions,
+  runtime: ServerRuntime,
+  { limits, session }: { readonly limits: RequestLimits; readonly session: StoreSession },
+): ResolvedServeOptions {
   return {
     ...served,
-    store: runtime.storeFor(served.store, limits),
-    reachOf: (shared) => runtime.reachOf(shared, limits),
-    storeFor: (own) => runtime.storeFor(own, limits),
+    store: runtime.storeFor(served.store, limits, session),
+    reachOf: (shared) => runtime.reachOf(shared, limits, session),
+    storeFor: (own) => runtime.storeFor(own, limits, session),
     signal: limits.signal,
   };
 }
