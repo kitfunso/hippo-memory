@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { reject } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { AuditEvent } from '../../src/entry/store-kit.js';
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../src/base/ports/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

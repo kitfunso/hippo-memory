@@ -10,7 +10,7 @@ import {
   type MemoryEntry,
   type MemoryKind,
   type TraceOutcome,
-} from '../../base/memory/memory.js';
+} from '../../base/memory/entry.js';
 import { computeSalience, type SalienceResult } from '../../base/memory/salience.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import { assertCallerProject } from '../../base/scope/project-identity.js';
@@ -139,22 +139,26 @@ function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember 
   const flagged = memberShares(ctx, opts) && detectInstruction(vetted.content).flagged;
   const tags = flagged ? [...(opts.tags ?? []), INSTRUCTION_LIKE_TAG] : opts.tags;
   const local = opts.local ?? {};
-  const created = createMemory(vetted.content, {
-    layer: local.layer,
-    pinned: local.pinned,
-    confidence: local.confidence,
-    source: local.source,
-    schemaFit: local.schemaFit,
-    traceOutcome: local.traceOutcome,
-    sourceSessionId: local.sourceSessionId,
-    kind: opts.kind ?? 'distilled',
-    scope: detection.flagged ? quarantineScopeFor(requestedScope) : requestedScope,
-    owner: opts.owner ?? null,
-    artifactRef: opts.artifactRef ?? null,
-    tags,
-    tenantId: ctx.tenantId,
-    baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
-  });
+  const created = createMemory(
+    vetted.content,
+    {
+      layer: local.layer,
+      pinned: local.pinned,
+      confidence: local.confidence,
+      source: local.source,
+      schemaFit: local.schemaFit,
+      traceOutcome: local.traceOutcome,
+      sourceSessionId: local.sourceSessionId,
+      kind: opts.kind ?? 'distilled',
+      scope: detection.flagged ? quarantineScopeFor(requestedScope) : requestedScope,
+      owner: opts.owner ?? null,
+      artifactRef: opts.artifactRef ?? null,
+      tags,
+      tenantId: ctx.tenantId,
+      baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
+    },
+    ctx.infra.clock(),
+  );
   const entry = local.weaken ? weakened(created, local.weaken) : created;
   // Aliases only widen what a reader matches; a row has one origin.
   // A personal row's '' follows its owner into every project.

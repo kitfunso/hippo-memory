@@ -19,6 +19,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether, loadEveryTenantEntries, writeEntry } from '../_helpers/root-forms.js';
 import { seedRows } from '../_helpers/seed-rows.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -85,7 +88,13 @@ describe('sleep after consolidation', () => {
       c === 'the deploy  runs on friday at noon' ? 'the deploy runs on friday at noon' : c,
     );
     expect(contentsByTenant(root)).toEqual({ default: keptDefault, acme: kept });
-    expect(result.ambient).toEqual(computeAmbientState(loadEveryTenantEntries(root).filter((e) => !e.supersededBy)));
+    expect(result.ambient).toEqual(
+      computeAmbientState(
+        loadEveryTenantEntries(root).filter((e) => !e.supersededBy),
+        evalNow(),
+        PRODUCTION_STRENGTH,
+      ),
+    );
   });
 
   it('a dry run reports what a real run would remove and removes nothing', async () => {
@@ -221,7 +230,7 @@ describe('syncGlobalToLocal', () => {
     }
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    expect(await syncGlobalToLocal(...sharingStores(localRoot, globalRoot))).toBe(3);
+    expect(await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN })).toBe(3);
 
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipped 2 rejected value'));
     const local = new Map(loadEveryTenantEntries(localRoot).map((e) => [e.id, e]));
@@ -243,7 +252,7 @@ describe('syncGlobalToLocal', () => {
     for (const n of [10, 200]) {
       const { localRoot, globalRoot } = stores(n);
       const { result, statements } = await recordStatementsAsync(() =>
-        syncGlobalToLocal(...sharingStores(localRoot, globalRoot)),
+        syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN }),
       );
       expect(result).toBe(n);
       counts.push({
@@ -257,9 +266,9 @@ describe('syncGlobalToLocal', () => {
 
   it('reads no full row of either store when every global row is already local', async () => {
     const { localRoot, globalRoot } = stores(50);
-    await syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
     const { result, statements } = await recordStatementsAsync(() =>
-      syncGlobalToLocal(...sharingStores(localRoot, globalRoot)),
+      syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN }),
     );
     expect(result).toBe(0);
     expect(countMatching(statements, FULL_ROW)).toBe(0);

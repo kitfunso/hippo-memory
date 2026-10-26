@@ -5,10 +5,8 @@ import { adminActor, remember } from '../../src/api/index.js';
 import { setMeta } from '../../src/db/index.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
-import { saveDecision } from '../../src/domain/objects/decisions.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
 import { extractGraph } from '../../src/domain/graph/extract.js';
-import { savePolicy } from '../../src/domain/objects/policies.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { hashedVector } from './hashed-embedding-server.js';
 import { FAKE_NOW, rowsOf, seedPortBranches, seedTemplates, TENANT, type Templates } from './recall-golden-seed.js';
@@ -18,6 +16,7 @@ import { objectsAt } from './objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { loadEntriesByIds } from './root-forms.js';
+import { saveDecision, savePolicy } from '../../src/entry/testing.js';
 
 export const EMBEDDING_MODEL = 'hashed-16';
 export const VECTOR_IDENTITY = embeddingIndexIdentity(`openai:${EMBEDDING_MODEL}`);

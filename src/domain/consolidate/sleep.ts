@@ -3,8 +3,9 @@
  * summaries of overlapping episodics), stats.
  */
 
-import { evalNow, strengthAblation } from '../../base/memory/ablation.js';
-import { MemoryEntry, canAutoDelete, LEGACY_TYPED_HALF_LIFE, type DecayOptions } from '../../base/memory/memory.js';
+import { MemoryEntry } from '../../base/memory/entry.js';
+import { canAutoDelete } from '../../base/memory/keep-rules.js';
+import { LEGACY_TYPED_HALF_LIFE, type DecayBasis, type StrengthModel } from '../../base/memory/strength.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { Llm } from '../../base/ports/llm.js';
 import { migrateDefaultHalfLife } from './half-life-migration.js';
@@ -39,12 +40,18 @@ export type ConsolidateOptions = {
   tenantId?: string;
 };
 
+/** The instant a sleep runs at and the strength model it scores by, which its root passes. */
+export interface SleepRules {
+  readonly now: Date;
+  readonly strength: StrengthModel;
+}
+
 /** A full consolidation pass whose store work goes through `store.consolidation`. */
 export async function runConsolidation(
   store: ConsolidationStore,
-  options: ConsolidateOptions & { config: HippoConfig; tenantId: string; pageRows?: number },
+  options: ConsolidateOptions & SleepRules & { config: HippoConfig; tenantId: string; pageRows?: number },
 ): Promise<ConsolidationResult> {
-  const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
+  const { now } = options;
   const dryRun = options.dryRun ?? false;
   const { config, tenantId } = options;
   const result = newConsolidationResult(dryRun);
@@ -65,6 +72,7 @@ export async function runConsolidation(
     dryRun,
     config,
     decayOpts: sessionDecayOptions(start, config),
+    strength: options.strength,
     result,
     rows,
     retirable,
@@ -101,14 +109,12 @@ function reportFtsDrift(fts: SleepStart['fts'], dryRun: boolean, result: Consoli
   );
 }
 
-function sessionDecayOptions(start: SleepStart, config: SleepRun['config']): DecayOptions {
+function sessionDecayOptions(start: SleepStart, config: SleepRun['config']): DecayBasis {
   const sessionCtx = sessionDecayContext(start);
   return {
     decayBasis: config.decayBasis,
     avgSessionIntervalDays: sessionCtx.avgSessionIntervalDays,
     sleepCount: sessionCtx.sleepCount,
-    ablation: strengthAblation(),
-    lossAversionRatio: config.runtime?.lossAversionRatio,
   };
 }
 
@@ -205,6 +211,7 @@ function reportExpiry(run: SleepRun, expired: number): void {
 async function logRun(run: SleepRun, decay: DecayOutcome): Promise<void> {
   const { now, result, survivors } = run;
   const detectedConflicts = await detectConflicts(survivors.rows(), now, {
+    strength: run.strength,
     decayOpts: run.decayOpts,
     rescuedIds: decay.rescuedIds,
     pagesOf: (ids) => survivors.pagesOf(ids),

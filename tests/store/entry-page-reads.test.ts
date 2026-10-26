@@ -1,7 +1,9 @@
 // Two page reads in loadAllEntries' order: the mention read's FTS hits and non-ASCII rows, read apart and joined in JS,
 // page as the one OR statement did; and a page over every tenant is one statement however many tenants there are.
 import { afterEach, describe, expect, it } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { ALL_TENANTS, type TenantId } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { listEntriesMentioning, listEntryIdsPage } from '../../src/store/sqlite/entry-reads.js';

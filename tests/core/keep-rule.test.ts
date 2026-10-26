@@ -5,13 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../../src/base/memory/agent-memory-tools.js';
-import {
-  COMPACTION_MEMORY_TAG,
-  COMPACTION_SOURCE_PREFIX,
-  KEEP_PAIRS,
-  canAutoDelete,
-  type MemoryEntry,
-} from '../../src/base/memory/memory.js';
+import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { KEEP_PAIRS, canAutoDelete } from '../../src/base/memory/keep-rules.js';
 import { AUTO_DELETABLE } from '../../src/store/sqlite/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';

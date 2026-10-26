@@ -2,7 +2,7 @@
 // code on this store), whether its list was sorted for it or for an earlier page; a later page reads the list, and a
 // commit, a new instant or the cap sorts again.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type ConfidenceLevel, type EmotionalValence, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { type ConfidenceLevel, type EmotionalValence, Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { buildMemoryPage, type MemoryQuery } from '../../src/api/dashboard/queries.js';
 import type { MemoryPage } from '../../src/api/dashboard/types.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

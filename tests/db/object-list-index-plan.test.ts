@@ -3,8 +3,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { saveDecision, loadDecisions } from '../../src/domain/objects/decisions.js';
-import type { CreateMemoryOptions, MemoryEntry } from '../../src/base/memory/memory.js';
+import { loadDecisions } from '../../src/domain/objects/decisions.js';
+import type { CreateMemoryOptions, MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { recordStatementsAsync } from '../_helpers/count-statements.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
@@ -13,6 +13,7 @@ import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
+import { saveDecision } from '../../src/entry/testing.js';
 
 const OBJECT_TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'];
 const NEW_INDEXES = [

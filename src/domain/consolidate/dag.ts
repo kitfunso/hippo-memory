@@ -1,4 +1,4 @@
-import { createMemory, DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { createMemory, DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { generateDagSummary, type DagSummaryOptions } from './dag-summary.js';
 import { overlapPartners } from './overlap-index.js';
@@ -18,7 +18,7 @@ const CLUSTER_JACCARD_MIN = 0.5;
 type DagStore = StoreWith<'consolidation'>;
 
 /** The summary options plus the config's default half-life, which new summaries start on. */
-export type DagBuildOptions = DagSummaryOptions & { baseHalfLifeDays: number };
+export type DagBuildOptions = DagSummaryOptions & { baseHalfLifeDays: number; now: Date };
 
 export interface FactCluster {
   label: string;
@@ -92,6 +92,7 @@ interface PartitionHome {
   scope: string | null;
   originProject: string | null | undefined;
   baseHalfLifeDays: number;
+  now: Date;
 }
 
 /** The L2 summary entry for one cluster, landing in the facts' own tenant and scope. */
@@ -99,15 +100,19 @@ function createClusterSummaryEntry(summary: string, cluster: FactCluster, home: 
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
   // Every cluster member shares home.tenantId (tenant partition above), so the summary lands in the facts' tenant, not
   // 'default'.
-  const summaryEntry = createMemory(summary, {
-    layer: Layer.Semantic,
-    tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-summary'],
-    confidence: 'inferred',
-    dagLevel: DAG_LEVEL.topic,
-    tenantId: home.tenantId,
-    scope: home.scope,
-    baseHalfLifeDays: home.baseHalfLifeDays,
-  });
+  const summaryEntry = createMemory(
+    summary,
+    {
+      layer: Layer.Semantic,
+      tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-summary'],
+      confidence: 'inferred',
+      dagLevel: DAG_LEVEL.topic,
+      tenantId: home.tenantId,
+      scope: home.scope,
+      baseHalfLifeDays: home.baseHalfLifeDays,
+    },
+    home.now,
+  );
   summaryEntry.originProject = home.originProject;
   // Cache descendant_count + earliest/latest_at on the summary row so DAG-aware recall can reason about scope without
   // walking the children.
@@ -155,7 +160,7 @@ async function summarizeCluster(
 
 export async function buildDag(store: DagStore, facts: MemoryEntry[], opts: DagBuildOptions): Promise<DagBuildResult> {
   const result: DagBuildResult = { candidateClusters: 0, summariesCreated: 0, factsLinked: 0, rejected: 0 };
-  const { baseHalfLifeDays } = opts;
+  const { baseHalfLifeDays, now } = opts;
 
   const unparented = facts.filter(
     (f) => f.dagLevel === DAG_LEVEL.extracted && !f.dagParentId && f.tags.includes(EXTRACTED_TAG),
@@ -167,6 +172,7 @@ export async function buildDag(store: DagStore, facts: MemoryEntry[], opts: DagB
       scope: derivationScope(tenantFacts[0].scope),
       originProject: tenantFacts[0].originProject,
       baseHalfLifeDays,
+      now,
     };
     const clusters = clusterFacts(tenantFacts);
     const eligibleClusters = clusters.filter((c) => c.members.length >= 3);
@@ -193,7 +199,7 @@ export interface DagRebuildResult {
 interface RebuildOneSummaryOptions {
   store: DagStore;
   summary: MemoryEntry;
-  opts: DagSummaryOptions;
+  opts: DagSummaryOptions & { now: Date };
   result: DagRebuildResult;
   preloaded: readonly MemoryEntry[];
   /** The new content of each summary rebuilt earlier in this drain, by id. */
@@ -209,7 +215,7 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
   });
 
   if (children.length === 0) {
-    await clearZeroChildSummary(store, summary, result);
+    await clearZeroChildSummary(store, summary, result, opts.now);
     return;
   }
 
@@ -234,6 +240,7 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
     bumpRebuildCount: true,
     zeroChildren: false,
     actor: 'sleep',
+    now: opts.now,
   });
   if (refused) {
     result.refused++;
@@ -245,7 +252,12 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
 }
 
 /** Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump. */
-async function clearZeroChildSummary(store: DagStore, summary: MemoryEntry, result: DagRebuildResult): Promise<void> {
+async function clearZeroChildSummary(
+  store: DagStore,
+  summary: MemoryEntry,
+  result: DagRebuildResult,
+  now: Date,
+): Promise<void> {
   const { changed } = await applyRebuild(store, summary, {
     content: summary.content,
     descendantCount: 0,
@@ -254,6 +266,7 @@ async function clearZeroChildSummary(store: DagStore, summary: MemoryEntry, resu
     bumpRebuildCount: false,
     zeroChildren: true,
     actor: 'sleep',
+    now,
   });
   if (changed) result.zeroChildSkipped++;
   // changed=false means race lost or row vanished: skip silently. `refused` is always false here, as only new content
@@ -273,7 +286,7 @@ function summaryLabel(summary: MemoryEntry): string {
  * counts as `refused`. */
 export async function rebuildDirtySummaries(
   store: DagStore,
-  opts: DagSummaryOptions & { cap?: number },
+  opts: DagSummaryOptions & { cap?: number; now: Date },
 ): Promise<DagRebuildResult> {
   const cap = opts.cap ?? DEFAULT_REBUILD_CAP;
   const { summaries: queue, more } = await store.consolidation.dirtySummaries(cap);
@@ -324,16 +337,20 @@ export interface EntityProfilesBuildResult {
 /** The L3 profile entry for one cluster of L2 summaries. */
 function createProfileEntry(summary: string, cluster: FactCluster, home: PartitionHome): MemoryEntry {
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
-  const nowIso = new Date().toISOString();
-  const profileEntry = createMemory(summary, {
-    layer: Layer.Semantic,
-    tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-entity-profile'],
-    confidence: 'inferred',
-    dagLevel: DAG_LEVEL.entity,
-    tenantId: home.tenantId,
-    scope: home.scope,
-    baseHalfLifeDays: home.baseHalfLifeDays,
-  });
+  const nowIso = home.now.toISOString();
+  const profileEntry = createMemory(
+    summary,
+    {
+      layer: Layer.Semantic,
+      tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-entity-profile'],
+      confidence: 'inferred',
+      dagLevel: DAG_LEVEL.entity,
+      tenantId: home.tenantId,
+      scope: home.scope,
+      baseHalfLifeDays: home.baseHalfLifeDays,
+    },
+    home.now,
+  );
   profileEntry.originProject = home.originProject;
   profileEntry.descendantCount = cluster.members.length;
   profileEntry.earliestAt = memberCreatedAts[0];
@@ -397,7 +414,7 @@ export async function buildEntityProfiles(
     failed: 0,
     rejected: 0,
   };
-  const { baseHalfLifeDays } = opts;
+  const { baseHalfLifeDays, now } = opts;
 
   // Only L2 with no L3 parent yet (avoid re-clustering already-profiled L2s).
   const unparented = l2Summaries.filter((s) => s.dagLevel === DAG_LEVEL.topic && !s.dagParentId);
@@ -408,6 +425,7 @@ export async function buildEntityProfiles(
       scope: derivationScope(tenantL2s[0].scope),
       originProject: tenantL2s[0].originProject,
       baseHalfLifeDays,
+      now,
     };
     const clusters = clusterFacts(tenantL2s);
     const eligible = clusters.filter((c) => c.members.length >= 2);

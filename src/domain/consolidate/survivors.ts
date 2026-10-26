@@ -1,5 +1,5 @@
 // Sleep holds ids, strengths and the few rows a pass changed; every other row is read back a page at a time by id.
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { chunked } from '../../base/util/chunked.js';
 import type { StoreWith } from '../../base/ports/store.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';

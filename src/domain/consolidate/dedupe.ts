@@ -7,7 +7,8 @@
 
 import { textOverlap } from '../../base/util/tokenize.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
-import { canAutoDelete, type MemoryEntry } from '../../base/memory/memory.js';
+import { canAutoDelete } from '../../base/memory/keep-rules.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { derivationPartitionKey } from '../../base/scope/recall-scope.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 import type { StoreWith } from '../../base/ports/store.js';

@@ -9,7 +9,7 @@ import * as path from 'node:path';
 import { once } from 'node:events';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { Worker } from 'node:worker_threads';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { consolidate } from '../../src/index.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';

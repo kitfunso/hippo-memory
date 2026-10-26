@@ -15,6 +15,7 @@ import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { tmpDir, seedIds, useBenchmarkCorpus } from '../_helpers/benchmark-corpus.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -31,7 +32,7 @@ interface QueryCase {
 
 function runQuery(query: string, n = 10): string[] {
   const entries = loadAllEntries(tmpDir, 'default');
-  const results = rankBm25(query, entries, { budget: 8000 });
+  const results = rankBm25(query, entries, { now: evalNow(), budget: 8000 });
   return results.slice(0, n).map((r) => r.entry.id);
 }
 

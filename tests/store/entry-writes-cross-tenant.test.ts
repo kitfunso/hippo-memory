@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 import {
   writeEntriesSkippingRejected,

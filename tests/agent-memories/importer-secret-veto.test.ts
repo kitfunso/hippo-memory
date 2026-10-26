@@ -20,10 +20,12 @@ import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.j
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { REAL_IO } from '../_helpers/real-io.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 const sync = async (root: string, home: string): Promise<Tally> =>
   totalTally(
     await importProjectMemories(root, {
+      run: TEST_RUN,
       configAt: loadConfig,
       tenantId: 'default',
       stores: sqliteImportStores({}),

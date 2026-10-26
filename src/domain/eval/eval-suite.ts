@@ -3,9 +3,8 @@
  * detection against a saved baseline.
  * Zero API calls (no LLM judge, no embeddings), deterministic (fixed timestamps, content, IDs) and fast. */
 
-import { DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { rankBm25 } from '../search/bm25-search.js';
-import { evalSwitches } from '../../base/memory/ablation.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { rankMultihop } from '../search/multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
@@ -96,14 +95,14 @@ function directRecallCases(): FeatureTestCase[] {
   ];
 }
 
-function addDirectRecall(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
-  entries.push(...directRecallEntries());
+function addDirectRecall(entries: MemoryEntry[], cases: FeatureTestCase[], now: Date): void {
+  entries.push(...directRecallEntries(now));
   cases.push(...directRecallCases());
 }
 
 /** Extraction preference: extracted facts should rank above raw source. */
-function extractionPreferenceEntries(): MemoryEntry[] {
-  return [...infrastructureMeetingEntries(), ...monitoringMeetingEntries(), ...authMeetingEntries()];
+function extractionPreferenceEntries(now: Date): MemoryEntry[] {
+  return [...infrastructureMeetingEntries(now), ...monitoringMeetingEntries(now), ...authMeetingEntries(now)];
 }
 
 function extractionPreferenceCases(): FeatureTestCase[] {
@@ -132,15 +131,16 @@ function extractionPreferenceCases(): FeatureTestCase[] {
   ];
 }
 
-function addExtractionPreference(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
-  entries.push(...extractionPreferenceEntries());
+function addExtractionPreference(entries: MemoryEntry[], cases: FeatureTestCase[], now: Date): void {
+  entries.push(...extractionPreferenceEntries(now));
   cases.push(...extractionPreferenceCases());
 }
 
 /** Dag drill-down: summary nodes should surface children. */
-function dagChildEntries(): MemoryEntry[] {
+function dagChildEntries(now: Date): MemoryEntry[] {
   return [
     mem(
+      now,
       'dag-child-1',
       'The API response time for /users endpoint degraded from 50ms to 300ms after adding the permissions check',
       {
@@ -151,6 +151,7 @@ function dagChildEntries(): MemoryEntry[] {
       },
     ),
     mem(
+      now,
       'dag-child-2',
       'The /orders endpoint latency spiked to 500ms because of a missing index on the orders.created_at column',
       {
@@ -161,6 +162,7 @@ function dagChildEntries(): MemoryEntry[] {
       },
     ),
     mem(
+      now,
       'dag-child-3',
       'Batch API endpoint /reports/generate takes 8 seconds because it runs synchronously instead of using a job queue',
       {
@@ -173,8 +175,9 @@ function dagChildEntries(): MemoryEntry[] {
   ];
 }
 
-function dagSummaryEntry(): MemoryEntry {
+function dagSummaryEntry(now: Date): MemoryEntry {
   return mem(
+    now,
     'dag-summary-1',
     'API performance issues: /users degraded to 300ms (permissions check), /orders spiked to 500ms (missing ' +
       'index), ' +
@@ -190,9 +193,9 @@ function dagSummaryEntry(): MemoryEntry {
   );
 }
 
-function dagEntries(): MemoryEntry[] {
-  const children = dagChildEntries();
-  const summary = dagSummaryEntry();
+function dagEntries(now: Date): MemoryEntry[] {
+  const children = dagChildEntries(now);
+  const summary = dagSummaryEntry(now);
   for (const child of children) child.dagParentId = summary.id;
   return [...children, summary];
 }
@@ -216,27 +219,27 @@ function dagCases(): FeatureTestCase[] {
   ];
 }
 
-function addDagDrilldown(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
-  entries.push(...dagEntries());
+function addDagDrilldown(entries: MemoryEntry[], cases: FeatureTestCase[], now: Date): void {
+  entries.push(...dagEntries(now));
   cases.push(...dagCases());
 }
 
 /** Temporal: recency/oldest cues should affect ranking. */
-function temporalEntries(): MemoryEntry[] {
+function temporalEntries(now: Date): MemoryEntry[] {
   return [
-    mem('tmp-1', 'The team decided to use TypeScript for the new service', {
+    mem(now, 'tmp-1', 'The team decided to use TypeScript for the new service', {
       created: dateOffset(-30),
       tags: ['topic:architecture'],
     }),
-    mem('tmp-2', 'The team evaluated Rust as an alternative language for the service', {
+    mem(now, 'tmp-2', 'The team evaluated Rust as an alternative language for the service', {
       created: dateOffset(-20),
       tags: ['topic:architecture'],
     }),
-    mem('tmp-3', 'The team added Go as a candidate language for the service rewrite', {
+    mem(now, 'tmp-3', 'The team added Go as a candidate language for the service rewrite', {
       created: dateOffset(-10),
       tags: ['topic:architecture'],
     }),
-    mem('tmp-4', 'The team finalized the language choice as Go for the service rewrite', {
+    mem(now, 'tmp-4', 'The team finalized the language choice as Go for the service rewrite', {
       created: dateOffset(-1),
       tags: ['topic:architecture'],
     }),
@@ -276,8 +279,8 @@ function temporalCases(): FeatureTestCase[] {
   ];
 }
 
-function addTemporal(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
-  entries.push(...temporalEntries());
+function addTemporal(entries: MemoryEntry[], cases: FeatureTestCase[], now: Date): void {
+  entries.push(...temporalEntries(now));
   cases.push(...temporalCases());
 }
 
@@ -315,13 +318,16 @@ const NOISE_TOPICS = [
   'building security hours extended',
 ];
 
-function noiseEntries(): MemoryEntry[] {
-  return NOISE_TOPICS.map((topic, i) => mem(`noise-${i}`, topic, { created: dateOffset(i), tags: ['topic:office'] }));
+function noiseEntries(now: Date): MemoryEntry[] {
+  return NOISE_TOPICS.map((topic, i) =>
+    mem(now, `noise-${i}`, topic, { created: dateOffset(i), tags: ['topic:office'] }),
+  );
 }
 
-function noiseTargetEntries(): MemoryEntry[] {
+function noiseTargetEntries(now: Date): MemoryEntry[] {
   return [
     mem(
+      now,
       'nr-1',
       'The database connection pool was exhausted because max_connections was set to 10 but the application had 25 ' +
         'concurrent requests',
@@ -330,7 +336,7 @@ function noiseTargetEntries(): MemoryEntry[] {
         tags: ['topic:database', 'topic:performance'],
       },
     ),
-    mem('nr-2', 'The S3 bucket policy was misconfigured allowing public read access to customer data uploads', {
+    mem(now, 'nr-2', 'The S3 bucket policy was misconfigured allowing public read access to customer data uploads', {
       created: dateOffset(21),
       tags: ['topic:security', 'topic:s3'],
     }),
@@ -370,8 +376,8 @@ function noiseCases(): FeatureTestCase[] {
   ];
 }
 
-function addNoiseResistance(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
-  entries.push(...noiseEntries(), ...noiseTargetEntries());
+function addNoiseResistance(entries: MemoryEntry[], cases: FeatureTestCase[], now: Date): void {
+  entries.push(...noiseEntries(now), ...noiseTargetEntries(now));
   cases.push(...noiseCases());
 }
 
@@ -394,21 +400,22 @@ function multiHopCases(): FeatureTestCase[] {
   ];
 }
 
-function addMultiHop(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
-  entries.push(...multiHopEntries());
+function addMultiHop(entries: MemoryEntry[], cases: FeatureTestCase[], now: Date): void {
+  entries.push(...multiHopEntries(now));
   cases.push(...multiHopCases());
 }
 
-export function buildSyntheticCorpus() {
+/** The synthetic corpus, every memory stamped at `now`. */
+export function buildSyntheticCorpus(now: Date) {
   const entries: MemoryEntry[] = [];
   const cases: FeatureTestCase[] = [];
 
-  addDirectRecall(entries, cases);
-  addExtractionPreference(entries, cases);
-  addDagDrilldown(entries, cases);
-  addTemporal(entries, cases);
-  addNoiseResistance(entries, cases);
-  addMultiHop(entries, cases);
+  addDirectRecall(entries, cases, now);
+  addExtractionPreference(entries, cases, now);
+  addDagDrilldown(entries, cases, now);
+  addTemporal(entries, cases, now);
+  addNoiseResistance(entries, cases, now);
+  addMultiHop(entries, cases, now);
   return { entries, cases };
 }
 
@@ -443,22 +450,19 @@ function featureAverages(
   });
 }
 
-/** Ranks the synthetic corpus under `switches`, the environment's when the caller names none. */
-export async function runFeatureEval(
-  version: string,
-  switches: EvalSwitches = evalSwitches(),
-): Promise<EvalSuiteResult> {
+/** Ranks the synthetic corpus under `switches`, built and scored at `now`. */
+export async function runFeatureEval(version: string, switches: EvalSwitches, now: Date): Promise<EvalSuiteResult> {
   const start = Date.now();
-  const { entries, cases } = buildSyntheticCorpus();
+  const { entries, cases } = buildSyntheticCorpus(now);
 
   const caseResults: ScoredFeatureCase[] = [];
 
   for (const c of cases) {
     let results;
     if (c.category === 'multi-hop') {
-      results = rankMultihop(c.query, entries, { budget: EVAL_TOKEN_BUDGET, switches });
+      results = rankMultihop(c.query, entries, { budget: EVAL_TOKEN_BUDGET, switches, now });
     } else {
-      results = rankBm25(c.query, entries, { budget: EVAL_TOKEN_BUDGET, switches });
+      results = rankBm25(c.query, entries, { budget: EVAL_TOKEN_BUDGET, switches, now });
     }
     const returnedIds = results.map((r) => r.entry.id);
 
@@ -480,7 +484,7 @@ export async function runFeatureEval(
 
   return {
     version,
-    timestamp: new Date().toISOString(),
+    timestamp: now.toISOString(),
     features,
     overall: { mrr: overallMrr, recallAt5: overallR5, ndcgAt5: overallNdcg5 },
     totalCases,

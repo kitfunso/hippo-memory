@@ -1,6 +1,6 @@
 // src/domain/search/goal-boost.ts: the goal-stack boost over goals already read; it ranks rows and touches no store.
 import { compareScoresDesc } from '../../base/rank/compare.js';
-import { DEFAULT_SCHEMA_FIT, ERROR_TAG, type MemoryEntry } from '../../base/memory/memory.js';
+import { DEFAULT_SCHEMA_FIT, ERROR_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
 import type { ActiveGoals, Goal, RetrievalPolicy } from '../../base/ports/store/types.js';
 import type { GoalRecallLogRow } from '../../base/ports/store/recall-writes.js';
@@ -14,6 +14,7 @@ export interface GoalStackBoostOptions {
   sessionId: string;
   tenantId: string;
   limit: number;
+  now: Date;
   /**
    * Side-channel: one goal-boost `RerankStep` per boosted row, keyed by `entry.id` (a map because the helper re-spreads
    * rows); only populated when passed.
@@ -66,7 +67,7 @@ function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
   opts: GoalStackBoostOptions,
 ): GoalRecallLogRow[] {
   const { sessionId, tenantId, limit } = opts;
-  const recalledAt = new Date().toISOString();
+  const recalledAt = opts.now.toISOString();
   const log: GoalRecallLogRow[] = [];
   for (const r of boosted.slice(0, limit)) {
     const matches = matchesByEntryId.get(r.entry.id);

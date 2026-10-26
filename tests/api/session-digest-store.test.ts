@@ -5,7 +5,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { adminActor, reject } from '../../src/api/index.js';
 import { consolidate } from '../../src/index.js';
 import { storeExtractedFacts } from '../../src/domain/learn/extract.js';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { autoShare, neverAutoShareTags } from '../../src/domain/sharing/share.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
@@ -14,7 +14,7 @@ import { recordSessionDigest, type SessionScan } from '../../src/surface/capture
 import { sessionDigestId } from '../../src/base/session/session-digest-row.js';
 import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../../src/base/session/session-digest-row.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -22,6 +22,7 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 pinClock();
 
@@ -183,7 +184,7 @@ describe('sharing', () => {
       createMemory('gotcha: powershell 5.1 has no pipeline chain operators', { tenantId: 'default' }),
     );
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
-    await autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS, minScore: 0, stats });
+    await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0, stats });
     expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual([
       'gotcha: powershell 5.1 has no pipeline chain operators',
     ]);
@@ -205,10 +206,11 @@ describe('sharing', () => {
         },
       ],
       DEFAULT_HALF_LIFE_DAYS,
+      new Date(),
     );
     expect(fact.tags).toContain(SESSION_DIGEST_TAG);
     expect(isSessionDigestRow(fact)).toBe(false);
-    await autoShare(...sharingStores(hippoRoot), { tenantId: ALL_TENANTS, minScore: 0 });
+    await autoShare(...sharingStores(hippoRoot), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0 });
     expect(loadAllEntries(getGlobalRoot(), 'default')).toEqual([]);
   });
 });

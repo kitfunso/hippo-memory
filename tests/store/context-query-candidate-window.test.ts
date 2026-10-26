@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../src/base/rank/search-types.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { DeliveryObserver } from '../../src/api/delivery-recorder.js';
 import { contextGet, adminActor } from '../../src/api/index.js';
 import { DEFAULT_CONTEXT_BUDGET } from '../../src/api/context.js';

@@ -1,7 +1,7 @@
 // Rejecting a conflict loser's value streams the tenant's rows instead of holding them all, and removes the same duplicates.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { conflictResolve, type ResolveMemoryConflictResult } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';

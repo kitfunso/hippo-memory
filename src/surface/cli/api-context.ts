@@ -1,3 +1,4 @@
+import { evalStoreRules } from '../../infra/eval-switches.js';
 import { adminActor } from '../../api/index.js';
 import { contextReach, type ContextReach, type ContextWith, type GlobalInReach } from '../../api/types.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
@@ -53,7 +54,7 @@ export function cliReranker(name: string | null | undefined): RerankerFn | null 
 /** The store the CLI and the stdio MCP server open; it is opened here so src/surface/mcp never names the adapter. A
  * `hippo serve` on the same store answers its nearest-row reads from the graph it holds. */
 export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
-  const store = defaultStore(hippoRoot, { lossAversionRatio: envLossAversionRatio() });
+  const store = defaultStore(hippoRoot, evalStoreRules(envLossAversionRatio()));
   return askingNearestFirst(hippoRoot, store, serverNearestAsk(hippoRoot), cliConfig(hippoRoot).vectorGraph.maxVectors);
 }
 
@@ -90,8 +91,8 @@ export function cliSyncOptions(
   machine: Machine,
   extra: Pick<SyncOptions, 'dryRun' | 'busyWaitMs'> = {},
 ): SyncOptions {
-  const stores = defaultImportStores({ lossAversionRatio: envLossAversionRatio() });
-  return { tenantId, configAt: cliConfig, machine, stores, ...extra };
+  const stores = defaultImportStores(evalStoreRules(envLossAversionRatio()));
+  return { tenantId, configAt: cliConfig, machine, stores, run: cliInfra(), ...extra };
 }
 
 /** The request scope a scoped CLI verb and the stdio MCP server run in; named here so no other surface opens one. */

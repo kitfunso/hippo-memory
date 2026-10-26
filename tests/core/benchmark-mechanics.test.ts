@@ -1,12 +1,14 @@
 // Mechanical behaviour over the benchmark corpus: decay, strengthening, error priority, outcome feedback and the token budget.
 import { describe, it, expect } from 'vitest';
-import { calculateStrength, applyOutcome, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { calculateStrength, applyOutcome } from '../../src/entry/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
-import { markRetrieved } from '../../src/base/memory/memory.js';
+import { markRetrieved } from '../../src/entry/memory.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { createMemory7, tmpDir, daysAgo, useBenchmarkCorpus } from '../_helpers/benchmark-corpus.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -124,7 +126,7 @@ describe('Outcome feedback', () => {
 describe('Token budget', () => {
   it('total returned tokens respect budget of 100', () => {
     const entries = loadAllEntries(tmpDir, 'default');
-    const results = rankBm25('production deployment rules', entries, { budget: 100 });
+    const results = rankBm25('production deployment rules', entries, { now: evalNow(), budget: 100 });
 
     const totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
     expect(totalTokens).toBeLessThanOrEqual(100);
@@ -136,7 +138,7 @@ describe('Token budget', () => {
     writeEntry(tmpDir, shortEntry);
 
     const entries = loadAllEntries(tmpDir, 'default');
-    const results = rankBm25('PowerShell', entries, { budget: 50 });
+    const results = rankBm25('PowerShell', entries, { now: evalNow(), budget: 50 });
     // The first result is always included even if it exceeds budget
     expect(results.length).toBeGreaterThanOrEqual(1);
     // Second and beyond should not push total far past budget
@@ -148,13 +150,8 @@ describe('Token budget', () => {
 
   it('minResults guarantees at least N results regardless of budget', () => {
     const entries = loadAllEntries(tmpDir, 'default');
-    const withMin = rankBm25('production deployment rules', entries, {
-      budget: 100,
-      minResults: 5,
-    });
-    const withoutMin = rankBm25('production deployment rules', entries, {
-      budget: 100,
-    });
+    const withMin = rankBm25('production deployment rules', entries, { now: evalNow(), budget: 100, minResults: 5 });
+    const withoutMin = rankBm25('production deployment rules', entries, { now: evalNow(), budget: 100 });
     expect(withMin.length).toBeGreaterThanOrEqual(Math.min(5, entries.length));
     expect(withMin.length).toBeGreaterThanOrEqual(withoutMin.length);
   });

@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import { buildCorrectionLatency } from '../../src/api/correction-latency.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';

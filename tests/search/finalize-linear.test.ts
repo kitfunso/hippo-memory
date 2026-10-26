@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { dedupeExtracted, withDagChildren } from '../../src/domain/search/finalize.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 
 const N = 3000;

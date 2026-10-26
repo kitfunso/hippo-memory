@@ -4,7 +4,7 @@ import type { Context } from '../../src/api/types.js';
 /** A caller's Context with the folder its store sits in, which these helpers reopen. */
 type RootedContext = Pick<Context, 'tenantId' | 'actor'> & { readonly hippoRoot: string };
 import { loadConfig } from '../../src/host/config-file.js';
-import { createSuccessor } from '../../src/base/memory/memory.js';
+import { createSuccessor } from '../../src/base/memory/entry.js';
 import { scopeReaderOf } from '../../src/base/scope/recall-scope.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -22,10 +22,15 @@ export async function stageSupersedeWinner(
 ): Promise<StagedWinner & { successorId: string }> {
   const [old] = loadEntriesByIds(ctx.hippoRoot, [oldId], ctx.tenantId);
   if (!old) throw new Error(`no row ${oldId} in tenant ${ctx.tenantId} to supersede`);
-  const successor = createSuccessor(old, newContent, {
-    tenantId: ctx.tenantId,
-    baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
-  });
+  const successor = createSuccessor(
+    old,
+    newContent,
+    {
+      tenantId: ctx.tenantId,
+      baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
+    },
+    new Date(),
+  );
   const scratch = mkdtempSync(join(tmpdir(), 'hippo-race-winner-'));
   initTestStore(scratch);
   writeEntry(scratch, successor);
@@ -48,10 +53,15 @@ export async function stageSupersedeWinner(
 export async function supersedeNow(ctx: RootedContext, oldId: string, newContent: string): Promise<string> {
   const [old] = loadEntriesByIds(ctx.hippoRoot, [oldId], ctx.tenantId);
   if (!old) throw new Error(`no row ${oldId} in tenant ${ctx.tenantId} to supersede`);
-  const successor = createSuccessor(old, newContent, {
-    tenantId: ctx.tenantId,
-    baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
-  });
+  const successor = createSuccessor(
+    old,
+    newContent,
+    {
+      tenantId: ctx.tenantId,
+      baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
+    },
+    new Date(),
+  );
   const write = {
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,

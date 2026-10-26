@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isDagSummary } from './boosts.js';
 import type { ScoreBreakdown } from '../../base/rank/search-types.js';
 import { DAY_MS } from '../../base/util/time.js';

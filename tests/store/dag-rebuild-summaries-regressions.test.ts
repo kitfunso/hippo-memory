@@ -2,7 +2,9 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { rebuildDirtySummaries, buildDag } from '../../src/domain/consolidate/dag.js';
 import * as dagModule from '../../src/domain/consolidate/dag.js';
 import { consolidate } from '../../src/index.js';
@@ -13,6 +15,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, applyRebuildResult, writeEntry } from '../_helpers/root-forms.js';
 import { makeOkFetcher, getRow, forceMarkDirty, rejectValue, makeSummary, makeChild } from '../_helpers/dag-rebuild.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -55,6 +58,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     // Invoke buildDag with injected fetcher
     const buildResult = await buildDag(sqliteStore(hippoRoot), [factA, factB, factC], {
+      now: evalNow(),
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
     });
@@ -85,6 +89,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     // Now run rebuildDirtySummaries — must report attempted=0
     const rebuildResult = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: evalNow(),
       llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
@@ -126,6 +131,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // (survivors filtered host-wide, no tenant slicing by the caller) —
     // buildDag itself must do the tenant separation, not its caller.
     const result = await buildDag(sqliteStore(hippoRoot), [...aFacts, ...bFacts], {
+      now: evalNow(),
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
     });
@@ -175,6 +181,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // Note: we do NOT force-mark dirty — simulate the race-loser by leaving clean
 
     const result = await applyRebuildResult(hippoRoot, summary, {
+      now: evalNow(),
       content: 'should-not-land',
       descendantCount: 5,
       earliestAt: '2026-05-25T10:00:00Z',
@@ -265,6 +272,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // the deterministic-summarization scenario the AT1 P1a fix guards.
     const fetcher = makeOkFetcher(rejectedContent);
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: evalNow(),
       llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
       cap: 20,
     });
@@ -320,6 +328,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     const fetcher = makeOkFetcher('fresh-regenerated-summary-content-T4');
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: evalNow(),
       llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
       cap: 20,
     });

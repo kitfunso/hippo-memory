@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { mrr, recallAtK, ndcgAtK, runEval, bootstrapCorpus, compareSummaries } from '../../src/domain/eval/eval.js';
+import { PRODUCTION_SWITCHES } from '../../src/base/memory/eval-switches.js';
 import type { EvalSummary } from '../../src/domain/eval/eval.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 // ---------------------------------------------------------------------------
 // Metric math — hand-computed expected values
@@ -91,7 +94,7 @@ describe('runEval', () => {
       { id: 'c2', query: 'Python dict ordering', expectedIds: [m2.id] },
     ];
 
-    const summary = await runEval(cases, entries);
+    const summary = await runEval(cases, entries, { now: evalNow(), switches: PRODUCTION_SWITCHES });
     expect(summary.cases).toHaveLength(2);
     expect(summary.meanMrr).toBe(1); // both cases hit at rank 1
     expect(summary.meanRecallAt5).toBe(1);
@@ -104,7 +107,7 @@ describe('runEval', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     });
     const cases = [{ id: 'c1', query: 'unrelated query that matches nothing', expectedIds: ['mem_nonexistent'] }];
-    const summary = await runEval(cases, [m1]);
+    const summary = await runEval(cases, [m1], { now: evalNow(), switches: PRODUCTION_SWITCHES });
     expect(summary.meanMrr).toBe(0);
     expect(summary.meanRecallAt10).toBe(0);
     expect(summary.meanNdcgAt10).toBe(0);

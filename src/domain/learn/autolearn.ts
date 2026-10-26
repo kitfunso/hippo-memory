@@ -1,7 +1,8 @@
 /** Auto-learn from errors and git history.
  *  Agents learn from failures without explicit hippo remember calls. */
 
-import { MemoryEntry, ERROR_TAG, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../base/memory/memory.js';
+import { MemoryEntry, ERROR_TAG, createMemory, Layer } from '../../base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../base/memory/strength.js';
 import { assessAutomaticMemory } from '../../base/memory/memory-quality.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -14,7 +15,13 @@ const MAX_LESSON_CHARS = 500;
 
 /** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch` stores its text and tags
  * through remember. */
-export function captureError(exitCode: number, stderr: string, command: string, tenantId?: string): MemoryEntry {
+export function captureError(
+  exitCode: number,
+  stderr: string,
+  command: string,
+  tenantId: string | undefined,
+  now: Date,
+): MemoryEntry {
   // Truncate to first 500 chars to avoid storing megabytes of build logs
   const clean = redactSecretsStrict(stderr);
   const wasTruncated = clean.length > AUTOLEARN_TEXT_CHARS;
@@ -29,14 +36,18 @@ export function captureError(exitCode: number, stderr: string, command: string, 
   const tags = [ERROR_TAG, 'autolearn'];
   if (cmdBase) tags.push(cmdBase.toLowerCase().slice(0, AUTOLEARN_TAG_CHARS));
 
-  return createMemory(content, {
-    layer: Layer.Episodic,
-    tags,
-    source: 'autolearn',
-    confidence: 'observed',
-    tenantId,
-    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-  });
+  return createMemory(
+    content,
+    {
+      layer: Layer.Episodic,
+      tags,
+      source: 'autolearn',
+      confidence: 'observed',
+      tenantId,
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+    },
+    now,
+  );
 }
 
 /** Parse git log output for actionable lessons.

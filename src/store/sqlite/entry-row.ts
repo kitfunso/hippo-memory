@@ -1,6 +1,6 @@
 import { cachedStatement } from '../../db/statement-cache.js';
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isoInstant } from '../../base/memory/created-stamp.js';
 import { type DatabaseSyncLike, ftsRowCounts, isFtsAvailable, repairFtsDrift, setFtsInSync } from '../../db/index.js';
 import { fallbackOrigin, type Host } from '../../host/host.js';

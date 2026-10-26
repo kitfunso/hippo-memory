@@ -18,7 +18,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
 import { handleExplain } from '../../src/surface/cli/explain.js';
 import { runInProcess } from '../_helpers/run-in-process.js';

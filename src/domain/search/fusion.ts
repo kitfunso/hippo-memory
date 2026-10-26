@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { rrfFuse } from './rrf.js';
 import { graphRankStream, selectGraphSeeds, type GraphRankStreamOptions } from '../graph/stream.js';
 import { DEFAULT_GRAPH_SEED_COUNT } from '../../base/rank/recall-defaults.js';

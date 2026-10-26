@@ -1,7 +1,7 @@
 // The strength aggregates bind the clock, so a call at any `now` reuses one cached statement and sums as before.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { strengthSql } from '../../src/store/sqlite/rule-sql.js';
 import { strengthTallies } from '../../src/store/sqlite/candidates.js';
@@ -9,6 +9,8 @@ import { countAmbient } from '../../src/store/sqlite/ambient.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 // SAFETY: node:sqlite has no bundled types; prepare takes SQL text and returns a statement.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -26,7 +28,7 @@ function row(content: string, daysBefore: number, extra: Partial<MemoryEntry> = 
 
 /** The sum the old text gave, with the clock written into the SQL as a literal. */
 function literalClockSum(db: DatabaseSyncLike, now: Date): number {
-  const { sql, params } = strengthSql(now, {});
+  const { sql, params } = strengthSql(now, PRODUCTION_STRENGTH);
   expect(params).toHaveLength(1);
   const julian = Number(params[0]);
   const literal = Number.isInteger(julian) ? julian.toFixed(1) : String(julian);
@@ -67,8 +69,15 @@ function prepares<T>(fn: () => T) {
 describe('the strength aggregates', () => {
   it('prepare one statement each for two clocks, and sum what the literal clock summed', () => {
     const { result, texts } = prepares(() => ({
-      tallies: [EARLY, LATE].map((now) => strengthTallies(db, {}, TENANT, now, 0.3)),
-      ambient: [EARLY, LATE].map((now) => countAmbient(db, {}, TENANT, { currentProject: [], now })),
+      tallies: [EARLY, LATE].map((now) =>
+        strengthTallies(db, { strength: PRODUCTION_STRENGTH, clock: evalNow }, TENANT, now, 0.3),
+      ),
+      ambient: [EARLY, LATE].map((now) =>
+        countAmbient(db, { strength: PRODUCTION_STRENGTH, clock: evalNow }, TENANT, {
+          currentProject: [],
+          now,
+        }),
+      ),
     }));
     expect(texts.filter((text) => text.includes('AS strengthSum'))).toHaveLength(2);
     const literal = [EARLY, LATE].map((now) => literalClockSum(db, now));

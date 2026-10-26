@@ -3,7 +3,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { blockHash, estimateTokens } from '../../src/base/util/token-text.js';
 import { DELIVERY_LEDGER_VERSION } from '../../src/base/session/delivery.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import {
   PROMPT_HOOK,
   dispose,

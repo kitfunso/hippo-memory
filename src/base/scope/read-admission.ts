@@ -1,6 +1,6 @@
 // Which rows an ambient load and a summary drill-down admit, as plain data: a store on a worker thread applies the same
 // rule the caller would, since a function cannot cross a thread.
-import { COMPACTION_MEMORY_TAG, type MemoryEntry } from '../memory/memory.js';
+import { COMPACTION_MEMORY_TAG, type MemoryEntry } from '../memory/entry.js';
 import { isWorthSurfacing } from '../memory/memory-quality.js';
 import { classifyOriginProject, projectNames, type ProjectRef } from './project-identity.js';
 import { passesScopeFilterForRecall } from './recall-scope.js';

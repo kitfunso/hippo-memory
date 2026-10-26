@@ -5,7 +5,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCliAs } from '../_helpers/run-cli-as.js';
-import { createMemory, Layer } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { consolidate } from '../../src/index.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/auth.js';
@@ -21,6 +22,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { copyToGlobal, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 pinClock();
 
@@ -215,9 +217,9 @@ describe('recall visibility and the approve/reject lifecycle', () => {
   });
 
   it('shareMemory refuses a quarantined row even with force', async () => {
-    await expect(shareMemory(...sharingStores(home), id, { tenantId: 'default', force: true })).rejects.toThrow(
-      /quarantine/i,
-    );
+    await expect(
+      shareMemory(...sharingStores(home), id, { embed: TEST_RUN, tenantId: 'default', force: true }),
+    ).rejects.toThrow(/quarantine/i);
   });
 
   it('copyToGlobal refuses a quarantined row', async () => {
@@ -236,11 +238,13 @@ describe('recall visibility and the approve/reject lifecycle', () => {
     const globalHome = makeRoot('quarantine-global', { init: false });
     vi.stubEnv('HIPPO_HOME', globalHome);
     expect(
-      (await autoShare(...sharingStores(home), { tenantId: ALL_TENANTS, minScore: 0, dryRun: true })).map((e) => e.id),
+      (
+        await autoShare(...sharingStores(home), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0, dryRun: true })
+      ).map((e) => e.id),
     ).not.toContain(id);
-    await expect(autoShare(...sharingStores(home), { tenantId: ALL_TENANTS, minScore: 0 })).resolves.toBeInstanceOf(
-      Array,
-    );
+    await expect(
+      autoShare(...sharingStores(home), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0 }),
+    ).resolves.toBeInstanceOf(Array);
   });
 });
 

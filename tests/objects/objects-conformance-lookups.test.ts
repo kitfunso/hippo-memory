@@ -1,6 +1,6 @@
 // Policy, skill and brief-receipt lookups answer.
 import { describe, expect, it, vi } from 'vitest';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { objectMirror } from '../../src/domain/objects/lifecycle.js';
 import type { BriefReceipt, ObjectFields, SavableKind } from '../../src/base/records/object-types.js';
 import type { ObjectSave } from '../../src/base/ports/store.js';
@@ -37,10 +37,16 @@ interface PutOptions {
 function put<K extends SavableKind>(kind: K, fields: ObjectFields[K], opts: PutOptions = {}) {
   const { at = T1, tenantId = TENANT_A } = opts;
   const mirror: MemoryEntry = {
-    ...objectMirror(loadConfig(fixture.dir).defaultHalfLifeDays, tenantId, kind, {
-      content: `${kind} at ${at}`,
-      tags: opts.tags ?? [],
-    }),
+    ...objectMirror(
+      loadConfig(fixture.dir).defaultHalfLifeDays,
+      tenantId,
+      kind,
+      {
+        content: `${kind} at ${at}`,
+        tags: opts.tags ?? [],
+      },
+      new Date(),
+    ),
     ...opts.mirror,
   };
   const saved: ObjectSave<K> = { mirror, fields, supersedesId: opts.supersedesId, actor: ACTOR, at };

@@ -3,7 +3,7 @@
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { addAuditWriteFailures } from '../../base/records/audit-report.js';
-import type { LossAversion } from '../../base/memory/memory.js';
+import type { StoreRules } from '../../base/ports/infra.js';
 import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../db/index.js';
 import { StoreBusyError } from '../../base/ports/store.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';
@@ -45,8 +45,8 @@ export interface CallOptions {
   readonly signal?: AbortSignal | undefined;
 }
 
-/** `lossAversionRatio` is the one the root read, which each thread's store scores strength by. */
-export interface ExecutorOptions extends LossAversion {
+/** The strength model and fake clock are the root's, which each thread's store opens with. */
+export interface ExecutorOptions extends StoreRules {
   /** Lock wait of each thread's connection; defaults to the server's. */
   readonly busyWaitMs?: number;
   /** Calls that may wait for one thread; the server passes HIPPO_STORE_QUEUE_MAX; defaults to 256. */
@@ -137,7 +137,7 @@ class WorkerPool implements SqliteExecutor {
   readonly #writeGraceMs: number;
   readonly #vectorGraphThreshold: number | undefined;
   readonly #vectorGraphMaxVectors: number | undefined;
-  readonly #lossAversionRatio: number | undefined;
+  readonly #rules: StoreRules;
   #nextId = 1;
   #closed = false;
   // 'done' once the writer has run the store's open-time setup, which a reader's connection could not write.
@@ -150,7 +150,7 @@ class WorkerPool implements SqliteExecutor {
     this.#writeGraceMs = opts.writeGraceMs ?? DEFAULT_WRITE_GRACE_MS;
     this.#vectorGraphThreshold = opts.vectorGraphThreshold;
     this.#vectorGraphMaxVectors = opts.vectorGraphMaxVectors;
-    this.#lossAversionRatio = opts.lossAversionRatio;
+    this.#rules = { strength: opts.strength, fakeNowMs: opts.fakeNowMs };
   }
 
   call<T>(op: string, args: readonly unknown[], { mode, requestId, deadlineAt, signal }: CallOptions): Promise<T> {
@@ -367,7 +367,7 @@ class WorkerPool implements SqliteExecutor {
       hippoRoot: this.#hippoRoot,
       mode: lane.mode,
       busyWaitMs: this.#busyWaitMs,
-      lossAversionRatio: this.#lossAversionRatio,
+      rules: this.#rules,
       ...(shared && { commitFlag: shared }),
       ...(lane.pinned && {
         pinned: true,

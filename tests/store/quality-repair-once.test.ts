@@ -7,7 +7,7 @@ import { PROTECTED_ROWS as protect } from '../../src/base/memory/memory-audit.js
 import { DatabaseSync } from '../../src/db/sqlite.js';
 import { getMeta } from '../../src/db/meta.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';

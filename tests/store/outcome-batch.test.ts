@@ -6,15 +6,11 @@ import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements } from '../_helpers/count-statements.js';
 import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../../src/db/index.js';
-import {
-  CHURN_STALE_TAG,
-  DAG_LEVEL,
-  DEFAULT_HALF_LIFE_DAYS,
-  Layer,
-  createMemory,
-  entryAfterOutcome,
-  type MemoryEntry,
-} from '../../src/base/memory/memory.js';
+import { CHURN_STALE_TAG, DAG_LEVEL, Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { entryAfterOutcome } from '../../src/base/memory/keep-rules.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { readerReaches, targetReader } from '../../src/base/scope/recall-scope.js';
 import { writeEntriesTogether, writeEntryDbOnly, writeEntryMirrors } from '../../src/store/sqlite/entry-writes.js';
 import { readEntriesByIds } from '../../src/store/sqlite/entry-reads.js';
@@ -23,6 +19,7 @@ import { writeOutcome, auditingRefusal } from '../../src/store/sqlite/entry-writ
 import type { OutcomeWrite } from '../../src/base/ports/store/entry-writes.js';
 import { openStore, storeFilesOf } from '../../src/store/sqlite/handles.js';
 import { flushHeldMirrors } from '../../src/store/sqlite/mirrors.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace];
@@ -48,7 +45,7 @@ function applyOutcomePerId(db: DatabaseSyncLike, root: string, outcome: OutcomeW
       for (const id of outcome.ids) {
         const entry = live.get(id);
         if (!entry || !readerReaches(targetReader(outcome), entry.scope)) continue;
-        const updated = entryAfterOutcome(entry, outcome.good);
+        const updated = entryAfterOutcome(entry, outcome.good, evalNow(), PRODUCTION_STRENGTH);
         writeEntryDbOnly(db, updated, { actor: outcome.actor });
         live.set(id, updated);
         appendAuditEvents(db, [

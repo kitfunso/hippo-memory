@@ -27,6 +27,7 @@ import {
   type RecallHistoryEntry,
   type RecallHistorySnapshot,
 } from '../../src/api/recall/finish.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 function entry(queryHash: number, topMemoryId: string | null, anchoredOn?: string): RecallHistoryEntry {
   const e: RecallHistoryEntry = { queryHash, topMemoryId, ts: '2026-05-27T00:00:00Z' };
@@ -233,7 +234,7 @@ describe('RingBuffer + helpers', () => {
   it('FIFO appends with MAX_HISTORY cap', () => {
     const ring = new RingBuffer();
     for (let i = 0; i < 15; i++) {
-      appendRecall(ring, i, `mem_${i}`);
+      appendRecall(ring, i, `mem_${i}`, evalNow());
     }
     // Cap is 10 — first 5 should be evicted.
     expect(ring.size()).toBe(10);
@@ -275,7 +276,7 @@ describe('RingBuffer + helpers', () => {
 
   it('appendRecall stores anchoredOn when provided', () => {
     const ring = new RingBuffer();
-    appendRecall(ring, 100, 'mem_a', 'mem_b');
+    appendRecall(ring, 100, 'mem_a', evalNow(), 'mem_b');
     const snap = snapshotRing(ring);
     expect(snap[0].anchoredOn).toBe('mem_b');
   });

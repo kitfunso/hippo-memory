@@ -5,7 +5,7 @@ import type { HippoStore } from '../../base/ports/store.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { logPhaseFailures, type ConsolidationResult } from '../../domain/consolidate/run.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
-import type { Context, ContextWith } from '../types.js';
+import { strengthOf, type Context, type ContextWith } from '../types.js';
 
 /**
  * Runs one auto-sleep consolidation of the folder its host was built for: the HTTP server passes one that runs it off
@@ -25,9 +25,10 @@ export async function autoSleepDue(
   store: HippoStore,
   tenantId: string,
   config: HippoConfig['autoSleep'],
+  now: Date,
 ): Promise<AutoSleepDue> {
   const { enabled, threshold } = config;
-  const count = enabled ? await store.reports.createdSinceLastSleep(tenantId, new Date()) : 0;
+  const count = enabled ? await store.reports.createdSinceLastSleep(tenantId, now) : 0;
   return { enabled, count, threshold, due: enabled && count >= threshold };
 }
 
@@ -36,7 +37,7 @@ export async function autoSleepDue(
  * tenant's writes start one, one per store at a time. Never rejects: the write it follows has landed.
  */
 export async function autoSleepAfterWrite(
-  ctx: Pick<Context, 'tenantId' | 'store' | 'config' | 'callers'>,
+  ctx: Pick<Context, 'tenantId' | 'store' | 'config' | 'callers' | 'infra'>,
 ): Promise<void> {
   const host = ctx.callers?.autoSleep;
   const { tenantId, store, config } = ctx;
@@ -46,7 +47,7 @@ export async function autoSleepAfterWrite(
   host.latch.held = true;
   let due = false;
   try {
-    due = (await autoSleepDue(store, tenantId, config.autoSleep)).due;
+    due = (await autoSleepDue(store, tenantId, config.autoSleep, ctx.infra.clock())).due;
   } catch (err) {
     log.warn(`auto-sleep: counting new memories failed, so no sleep started: ${errorMessage(err)}`, errorFields(err));
   } finally {
@@ -69,7 +70,13 @@ export async function autoSleepConsolidate(
   ctx: Pick<ContextWith<'consolidation' | 'learning'>, 'store' | 'config' | 'tenantId' | 'infra'>,
 ): Promise<ConsolidationResult> {
   const { store, config, tenantId, infra } = ctx;
-  const result = await runConsolidation(store, { config, tenantId, llm: infra.llm });
+  const result = await runConsolidation(store, {
+    config,
+    tenantId,
+    llm: infra.llm,
+    now: infra.clock(),
+    strength: strengthOf(ctx),
+  });
   logPhaseFailures(result);
   return result;
 }

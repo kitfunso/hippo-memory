@@ -13,7 +13,7 @@ import { originFromSource } from '../../src/host/project-identity.js';
 import { projectNameRepairOnce } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { saveCompaction } from '../../src/surface/capture/compaction-record.js';
-import { COMPACTION_MEMORY_TAG } from '../../src/base/memory/memory.js';
+import { COMPACTION_MEMORY_TAG } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { summaryWith } from '../_helpers/compaction-hooks.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
@@ -28,6 +28,7 @@ import {
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -120,6 +121,7 @@ describe('shared store origin stamp', () => {
       expect(promoted.source.startsWith('shared::')).toBe(true);
       expect(originFromSource(promoted.source)).toBeNull();
       const shared = await shareMemory(...sharingStores(store), entry.id, {
+        embed: TEST_RUN,
         tenantId: 'default',
         force: true,
         skipEmbed: true,
@@ -138,6 +140,7 @@ describe('shared store origin stamp', () => {
       expect(originOf(getGlobalRoot(), promoted.id)).toBe(folderStamp);
       expect(promoted.source).toBe(`promoted:${store}`);
       const shared = await shareMemory(...sharingStores(store), entry.id, {
+        embed: TEST_RUN,
         tenantId: 'default',
         force: true,
         skipEmbed: true,
@@ -152,7 +155,9 @@ describe('shared store origin stamp', () => {
     initTestStore(getGlobalRoot());
     writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), originProject: '' });
     for (const { store } of layouts(true)) {
-      await expect(syncGlobalToLocal(...sharingStores(store, getGlobalRoot()))).rejects.toThrow(BadRequestError);
+      await expect(syncGlobalToLocal(...sharingStores(store, getGlobalRoot()), { embed: TEST_RUN })).rejects.toThrow(
+        BadRequestError,
+      );
       expect(loadAllEntries(store, 'default')).toHaveLength(0);
     }
   });
@@ -161,7 +166,7 @@ describe('shared store origin stamp', () => {
     initTestStore(getGlobalRoot());
     writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), originProject: '' });
     for (const { store } of layouts(false)) {
-      expect(await syncGlobalToLocal(...sharingStores(store, getGlobalRoot()))).toBe(1);
+      expect(await syncGlobalToLocal(...sharingStores(store, getGlobalRoot()), { embed: TEST_RUN })).toBe(1);
       expect(loadAllEntries(store, 'default')).toHaveLength(1);
     }
   });

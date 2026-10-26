@@ -2,7 +2,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { remember } from '../../src/api/index.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../../src/db/index.js';
 import { resolveTenant, type RouteFallback } from '../../src/surface/connectors/tenant-route.js';

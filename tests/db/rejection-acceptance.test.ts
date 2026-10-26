@@ -21,7 +21,7 @@ import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { insertRejectedValue, readRejectedValue } from '../../src/store/sqlite/rejection.js';
@@ -42,6 +42,7 @@ import { loadEveryTenantEntries, writeEntry, readEntry, appendSessionEvent } fro
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 pinClock();
 
@@ -173,7 +174,7 @@ describe('case 3: copy-path refusal (syncGlobalToLocal)', () => {
     // history, so every assertion against errorSpy must run BEFORE it —
     // restore happens last, after the spy has served its purpose.
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN });
     expect(count).toBe(2); // siblings only — Z was skipped, not counted as copied
 
     const localContents = loadEveryTenantEntries(localRoot).map((e) => e.content);
@@ -687,7 +688,12 @@ describe('autoShare per-candidate rejection containment', () => {
 
     const stats = { secretSkipped: 0, rejectedSkipped: 0 };
     const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const shared = await autoShare(...sharingStores(localRoot), { tenantId: ALL_TENANTS, minScore: 0, stats });
+    const shared = await autoShare(...sharingStores(localRoot), {
+      embed: TEST_RUN,
+      tenantId: ALL_TENANTS,
+      minScore: 0,
+      stats,
+    });
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('skipped 1 candidate(s) refused'));
     errorSpy.mockRestore();
 

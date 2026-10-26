@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { MemoryEntry } from '../memory/memory.js';
+import type { MemoryEntry } from '../memory/entry.js';
 
 export const SESSION_DIGEST_TAG = 'session-digest';
 

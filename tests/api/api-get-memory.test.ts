@@ -4,12 +4,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { memoryGet } from '../../src/api/memories/memories.js';
 import { rawArchive } from '../../src/api/memories/promote.js';
 import { adminActor } from '../../src/api/types.js';
-import {
-  createMemory,
-  DEFAULT_HALF_LIFE_DAYS,
-  type CreateMemoryOptions,
-  type MemoryEntry,
-} from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { CreateMemoryOptions, MemoryEntry } from '../../src/base/memory/entry.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';

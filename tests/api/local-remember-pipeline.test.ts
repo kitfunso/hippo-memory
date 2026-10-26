@@ -10,7 +10,9 @@ import {
   type LocalRememberInput,
   type LocalRememberOutcome,
 } from '../../src/api/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';

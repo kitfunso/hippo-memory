@@ -18,6 +18,7 @@ import { tryParseJson } from '../../base/util/json.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { isSyntheticMessage } from '../../base/session/transcript-calls.js';
 import { readOpenTranscriptTail } from '../../infra/transcript-tail.js';
+import { evalClock } from '../../infra/eval-switches.js';
 
 /** Bounds a detached worker's memory; the final message sits at the end, so a tail read loses nothing. */
 export const READ_CAP_BYTES = 64 * 1024 * 1024;
@@ -396,6 +397,7 @@ function writeScanDigest(
       cwd: scan.cwd,
       editCount: scan.edits.length,
       repo: diskRepo(hippoRoot, scan.edits),
+      now: evalClock()(),
     },
   );
 }

@@ -6,7 +6,7 @@ import { particlesToSimulate, physicsPass } from '../../src/domain/consolidate/p
 import { newConsolidationResult, type SleepRun } from '../../src/domain/consolidate/run.js';
 import { SleepRows, Survivors } from '../../src/domain/consolidate/survivors.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
@@ -16,6 +16,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { READ_PAGE_ROWS } from '../../src/base/util/pages.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -56,6 +57,7 @@ function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
   const survivors = new Survivors(rows);
   for (const e of entries) survivors.keep(e.id, e.strength);
   return {
+    strength: PRODUCTION_STRENGTH,
     tenantId: 'default',
     store,
     now: new Date('2026-01-03T00:00:00.000Z'),

@@ -1,7 +1,7 @@
 // hippo.db's DagReads group: the reads session assembly and summary drill-down run, with a summary's descendants a page
 // at a time.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { readEntriesByIds, countSessionRawMemories, readChildrenByParent } from './entry-reads.js';
 import { TENANT_IS } from './tenant.js';
 import { chunked } from '../../base/util/chunked.js';

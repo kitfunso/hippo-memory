@@ -2,7 +2,7 @@
 
 import type { TaskSnapshot, SessionEvent } from '../base/ports/store/sessions.js';
 import type { SessionHandoff } from '../base/session/handoff.js';
-import type { MemoryEntry } from '../base/memory/memory.js';
+import type { MemoryEntry } from '../base/memory/entry.js';
 import type { DeliveryObserver } from './delivery-recorder.js';
 import type { AmbientState } from '../base/memory/ambient.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';

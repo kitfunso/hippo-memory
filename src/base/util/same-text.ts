@@ -1,6 +1,6 @@
 // One meaning of "the same text" for every path that skips, dedups or hides a memory: equal apart from spacing.
 // A digit, sign or word that differs is a different value, so nothing looser may count as a copy.
-import type { MemoryEntry } from '../memory/memory.js';
+import type { MemoryEntry } from '../memory/entry.js';
 
 type Text = Pick<MemoryEntry, 'content'> & { source?: string; pinned?: boolean };
 

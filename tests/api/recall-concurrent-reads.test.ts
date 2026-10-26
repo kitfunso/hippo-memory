@@ -10,6 +10,7 @@ import type { HippoStore } from '../../src/base/ports/store.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { waitFor } from '../_helpers/wait-for.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 type StoreName = 'local' | 'global';
 
@@ -72,6 +73,7 @@ async function run(order: readonly [StoreName, StoreName]): Promise<{ ids: strin
   const events: string[] = [];
   const gates = { local: gate(), global: gate() };
   const ctx: RankRecallCtx = {
+    now: evalNow(),
     store: held(sqliteStore(local), 'local', gates.local.opened, events),
     config: loadConfig(local),
     global: { store: held(sqliteStore(global), 'global', gates.global.opened, events), config: loadConfig(global) },

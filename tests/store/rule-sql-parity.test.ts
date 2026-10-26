@@ -2,10 +2,12 @@
 // loss-aversion ratio (tests/core/memory.test.ts holds the default ratio) and the bare text of a stored content.
 import { rmSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { calculateStrength, type EmotionalValence, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { calculateStrength } from '../../src/entry/memory.js';
+import type { EmotionalValence, MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { bareText, SPACE_CODES } from '../../src/store/rules/copies.js';
 import { bareTextSql, strengthSql } from '../../src/store/sqlite/rule-sql.js';
+import { PRODUCTION_STRENGTH, withLossAversion } from '../../src/base/memory/strength.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
@@ -46,7 +48,7 @@ describe('strengthSql parity under a loss-aversion ratio', () => {
       writeEntriesTogether(home, entries);
       const db = openHippoDb(home);
       try {
-        const rules = { lossAversionRatio: ratio };
+        const rules = withLossAversion(PRODUCTION_STRENGTH, ratio);
         const strength = strengthSql(NOW, rules);
         // SAFETY: the SELECT names exactly the columns id and s.
         const rows = db.prepare(`SELECT id, ${strength.sql} AS s FROM memories`).all(...strength.params) as Array<{
@@ -57,7 +59,9 @@ describe('strengthSql parity under a loss-aversion ratio', () => {
         for (const row of rows) {
           const entry = entries.find((e) => e.id === row.id);
           if (!entry) throw new Error(`unexpected row ${row.id}`);
-          expect(Math.abs(row.s - calculateStrength(entry, NOW, rules)), row.id).toBeLessThan(1e-9);
+          expect(Math.abs(row.s - calculateStrength(entry, NOW, { lossAversionRatio: ratio })), row.id).toBeLessThan(
+            1e-9,
+          );
         }
       } finally {
         closeHippoDb(db);

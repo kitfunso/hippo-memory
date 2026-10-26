@@ -6,7 +6,8 @@ import { forget, reject, dormantRestore, supersede } from '../../src/api/index.j
 import { importForStore } from '../../src/api/agent-memories.js';
 import type { ImportReport } from '../../src/base/memory/agent-memory-report.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
-import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { removeEntryMirrors } from '../../src/store/sqlite/mirrors.js';
 import { deleteEntryRowInTx } from '../../src/store/sqlite/entry-writes.js';
 import {
@@ -31,6 +32,7 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -53,6 +55,7 @@ afterEach(() => {
 
 const sync = (): Promise<ImportReport> =>
   importForStore(w.local, {
+    run: TEST_RUN,
     configAt: loadConfig,
     tenantId: 'default',
     stores: sqliteImportStores({}),

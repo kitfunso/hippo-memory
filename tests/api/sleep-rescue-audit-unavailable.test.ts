@@ -4,12 +4,14 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { calculateStrength, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { calculateStrength } from '../../src/entry/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -61,6 +63,7 @@ describe('sleep rescue audit', () => {
     // A handle per store call, outside the shared one of `hippo sleep` and the package's consolidate, so the audit
     // opens its own and that open can refuse.
     const result = await runConsolidation(sqliteStore(root), {
+      strength: PRODUCTION_STRENGTH,
       now: NOW,
       config: loadConfig(root),
       tenantId: 'default',

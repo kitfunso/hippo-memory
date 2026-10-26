@@ -6,12 +6,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { adminActor, CLI_LEARN, learn, MCP_LEARN, type LearnProfile } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import {
-  createMemory,
-  DEFAULT_HALF_LIFE_DAYS,
-  type CreateMemoryOptions,
-  type MemoryEntry,
-} from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { CreateMemoryOptions, MemoryEntry } from '../../src/base/memory/entry.js';
 import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import {

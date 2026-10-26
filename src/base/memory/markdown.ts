@@ -1,12 +1,6 @@
 import { DEFAULT_TENANT_ID } from '../util/tenant.js';
-import {
-  type MemoryEntry,
-  Layer,
-  FALLBACK_HALF_LIFE_DAYS,
-  DEFAULT_SCHEMA_FIT,
-  type ConfidenceLevel,
-  type MemoryKind,
-} from './memory.js';
+import { type MemoryEntry, Layer, DEFAULT_SCHEMA_FIT, type ConfidenceLevel, type MemoryKind } from './entry.js';
+import { FALLBACK_HALF_LIFE_DAYS } from './strength.js';
 import { fromWire, toWire, type MemoryWire } from './memory-wire.js';
 import { dumpFrontmatter, parseFrontmatter } from '../util/yaml.js';
 

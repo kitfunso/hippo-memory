@@ -126,6 +126,10 @@ const EVAL_KIT = [
   'loadVectorCandidateEntriesAt',
   'recordTokenUse',
   'resolveTenantId',
+  'saveCustomerNote',
+  'saveDecision',
+  'savePolicy',
+  'saveProjectBrief',
   'tokensBySession',
   'upsertEntryRow',
   'upsertEntryRowWire',
@@ -188,7 +192,7 @@ describe('package root', () => {
   it('re-exports no value from a ./store/ or ./db/ module', () => {
     const modules = rootReexports();
     // src/index.ts and its barrels, not this test, set the list; these two prove the scan reads a multi-line block and a mixed line.
-    expect(modules).toEqual(expect.arrayContaining(['./base/records/card.js', './base/memory/memory.js']));
+    expect(modules).toEqual(expect.arrayContaining(['./base/records/card.js', './base/memory/entry.js']));
     expect(modules.filter((module) => /^\.\/(store|db)\//.test(module))).toEqual([]);
   });
 
@@ -307,6 +311,7 @@ describe('published runtime exports', () => {
         initStore isWorthSurfacingWire
         loadAllEntries loadAllEntriesWire loadEmbeddingIndex loadRecallSearchEntries loadVectorCandidateEntriesAt
         recordTokenUse resolveTenantId
+        saveCustomerNote saveDecision savePolicy saveProjectBrief
         tokensBySession
         upsertEntryRow upsertEntryRowWire
         writeDeliveryEventOnHandle writeEntry writeEntryDbOnly writeEntryWire writeIndexMirror",

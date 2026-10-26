@@ -1,7 +1,9 @@
 // The eval kit's embedMemory(folder, entry) leaves the same index and outcome as embedMemory on that folder's target.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmbeddingsConfig } from '../../src/base/config/config.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { embedMemory as embedOnFolder, loadEmbeddingIndex, writeEntry } from '../../src/entry/testing.js';
 import { embedMemoryInto as embedOnTarget } from '../../src/domain/search/embed-memories.js';
 import { isJsonObject, type JsonValue } from '../../src/base/util/json.js';

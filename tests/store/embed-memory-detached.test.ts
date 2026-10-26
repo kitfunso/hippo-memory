@@ -2,12 +2,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../src/host/config-file.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { sharedLocalEmbedder } from '../../src/infra/local-embedder.js';
 import { embedMemoryDetached, type EmbedTarget } from '../../src/domain/search/embed-memories.js';
 import type { HippoStore } from '../../src/base/ports/store.js';
 import { log } from '../../src/base/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -27,7 +30,8 @@ describe('embedMemoryDetached', () => {
     const target: EmbedTarget = {
       embeddings: loadConfig(root).embeddings,
       embedderFor: resolveEmbeddingProvider,
-      strength: {},
+      strength: PRODUCTION_STRENGTH,
+      clock: evalNow,
       get store(): HippoStore {
         throw new Error('store is unreachable');
       },

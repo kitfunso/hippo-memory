@@ -3,12 +3,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  createMemory,
-  DEFAULT_HALF_LIFE_DAYS,
-  type CreateMemoryOptions,
-  type MemoryEntry,
-} from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { CreateMemoryOptions, MemoryEntry } from '../../src/base/memory/entry.js';
 import { Store, type Ran } from '../_helpers/cli-verb-store.js';
 import { replaceDetectedConflicts, writeEntry } from '../_helpers/root-forms.js';
 

@@ -8,13 +8,14 @@ import { v63 } from '../../src/db/migrations/v63.js';
 import { serializeEntry } from '../../src/base/memory/markdown.js';
 import { shareMemory } from '../../src/domain/sharing/share.js';
 import { layerDir } from '../../src/store/sqlite/mirrors.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { readEntry, replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 const CONFLICTED = 'idx_memories_conflicted';
 const TRACES_BY_TS = 'idx_recall_traces_ts';
@@ -130,6 +131,7 @@ describe('schema v63', () => {
     const held = entry('m_held', { conflictsWith: ['m_peer'] });
     writeEntriesTogether(local, [held]);
     const copy = await shareMemory(...sharingStores(local, global), held.id, {
+      embed: TEST_RUN,
       tenantId: 'default',
       force: true,
       skipEmbed: true,

@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { tallyAmbientEntries } from '../../src/base/memory/ambient.js';
-import { type MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { listEntriesMentioning, listEntryIdsPage } from '../../src/store/sqlite/entry-reads.js';
 import { listEntriesWhere } from '../../src/store/sqlite/entry-filter.js';
 import { countAmbient } from '../../src/store/sqlite/ambient.js';
@@ -18,6 +18,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { seedRows } from '../_helpers/seed-rows.js';
 import type { EntryCursor } from '../../src/base/ports/store/types.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -193,8 +195,11 @@ describe('ambient tag tallies', () => {
     const now = new Date(Date.UTC(2026, 0, 2));
     const db = openHippoDb(root);
     try {
-      const sql = countAmbient(db, {}, 'default', { currentProject: [], now });
-      const js = tallyAmbientEntries(rows, now);
+      const sql = countAmbient(db, { strength: PRODUCTION_STRENGTH, clock: evalNow }, 'default', {
+        currentProject: [],
+        now,
+      });
+      const js = tallyAmbientEntries(rows, now, PRODUCTION_STRENGTH);
       expect(Object.fromEntries(sql.tagCounts)).toEqual(Object.fromEntries(js.tagCounts));
       expect(sql.errors).toBe(js.errors);
       expect(sql.total).toBe(js.total);

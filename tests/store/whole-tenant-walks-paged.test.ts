@@ -10,7 +10,7 @@ import {
   loadAmbientCandidates,
   writeEntriesTogether,
 } from '../_helpers/root-forms.js';
-import { DAG_LEVEL, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { DAG_LEVEL, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { READ_PAGE_ROWS } from '../../src/base/util/pages.js';
 
 const ROWS = READ_PAGE_ROWS * 2 + 30;

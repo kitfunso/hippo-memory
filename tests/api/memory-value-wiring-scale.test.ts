@@ -1,7 +1,8 @@
 // LC2-E3 memory-value decay-pass wiring: scale characterization and dry-run parity.
 import { describe, it, expect } from 'vitest';
 import { consolidate } from '../../src/index.js';
-import { Layer, calculateStrength, type MemoryEntry, type DecayOptions } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { calculateStrength, type DecayOptions } from '../../src/entry/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { rescueSet } from '../../src/domain/consolidate/memory-value.js';

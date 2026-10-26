@@ -1,4 +1,5 @@
-import { MemoryEntry, EXTRACTED_TAG, Layer, calculateStrength, type DecayOptions } from '../../base/memory/memory.js';
+import { MemoryEntry, EXTRACTED_TAG, Layer } from '../../base/memory/entry.js';
+import { calculateStrength, type DecayBasis, type StrengthModel } from '../../base/memory/strength.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
 import { isPersonalScope } from '../../base/scope/recall-scope.js';
@@ -24,7 +25,8 @@ const POLARITY_WINDOW_WORDS = 40;
 type PagesOf = (ids: readonly string[]) => Iterable<readonly MemoryEntry[]> | AsyncIterable<readonly MemoryEntry[]>;
 
 export interface DetectConflictsOptions {
-  decayOpts?: DecayOptions;
+  strength: StrengthModel;
+  decayOpts?: DecayBasis;
   // Ids this cycle's decay pass rescued: the survivor filter below is recomputed independently, so without this bypass
   // rescued entries would be silently re-excluded from conflict detection.
   rescuedIds?: Set<string>;
@@ -36,9 +38,9 @@ export interface DetectConflictsOptions {
 export async function detectConflicts(
   entries: Iterable<MemoryEntry> | AsyncIterable<MemoryEntry>,
   now: Date,
-  options: DetectConflictsOptions = {},
+  options: DetectConflictsOptions,
 ): Promise<DetectedConflict[]> {
-  const { decayOpts = {}, rescuedIds = new Set<string>(), pagesOf } = options;
+  const { strength, decayOpts = {}, rescuedIds = new Set<string>(), pagesOf } = options;
   const held: MemoryEntry[] = [];
   const byTenant = new Map<string, number[]>();
   const ids: string[] = [];
@@ -47,7 +49,7 @@ export async function detectConflicts(
       entry.layer !== Layer.Semantic &&
       // An unreviewed quarantined row must not taint a visible memory as conflicted.
       !isQuarantineScope(entry.scope ?? null) &&
-      (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD);
+      (rescuedIds.has(entry.id) || calculateStrength(entry, now, strength, decayOpts) >= DECAY_THRESHOLD);
     if (!live) continue;
     const places = byTenant.get(entry.tenantId);
     if (places) places.push(ids.length);

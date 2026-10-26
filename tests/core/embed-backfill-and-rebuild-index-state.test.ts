@@ -2,7 +2,9 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { closeHippoDb, getMeta, openHippoDb, withSharedStoreHandles, withWriteScope } from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
@@ -29,6 +31,7 @@ import { loadEveryTenantEntries, resetStoredParticles, loadEmbeddingIndex } from
 import { initTestStore } from '../_helpers/store-template.js';
 import type { EmbeddingIndex } from '../../src/base/ports/store.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 oneRequestPerTest();
 
@@ -144,7 +147,7 @@ function vectorRow(entry: MemoryEntry, model: string, vector: number[]): VectorR
 const byId = (a: MemoryEntry, b: MemoryEntry): number => (a.id < b.id ? -1 : 1);
 
 function particleOf(entry: MemoryEntry, vector: number[], at: string): PhysicsParticle {
-  return { ...initializeParticle(entry, vector, {}, new Date(at)), position: vector.map(Math.fround) };
+  return { ...initializeParticle(entry, vector, PRODUCTION_STRENGTH, new Date(at)), position: vector.map(Math.fround) };
 }
 
 /** The state a rebuild under `providerId` must leave: every row in id order, each with a particle dated FAKE_NOW. */
@@ -187,7 +190,7 @@ beforeAll(async () => {
       savePhysicsState(
         db,
         loadEveryTenantEntries(indexedOld).map((e) =>
-          initializeParticle(e, fakeVector('fake-old', e), {}, new Date(SEEDED_AT)),
+          initializeParticle(e, fakeVector('fake-old', e), PRODUCTION_STRENGTH, new Date(SEEDED_AT)),
         ),
       );
     } finally {

@@ -1,6 +1,6 @@
 // The `hippo-memory/search` entry's rankers. The caller's working folder and the eval switches in the environment are
 // read here, at the entry, so the domain rankers take both as inputs.
-import type { MemoryEntry } from '../base/memory/memory.js';
+import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
 import { rankBm25, type SearchOptions } from '../domain/search/bm25-search.js';
 import { rankMultihop } from '../domain/search/multihop.js';

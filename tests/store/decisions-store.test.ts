@@ -11,14 +11,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import {
-  saveDecision,
-  loadDecisions,
-  resolveActiveDecisionIdByMemory,
-  DECISION,
-} from '../../src/domain/objects/decisions.js';
+import { loadDecisions, resolveActiveDecisionIdByMemory, DECISION } from '../../src/domain/objects/decisions.js';
 import { ConflictError } from '../../src/base/errors/api-errors.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -28,6 +25,8 @@ import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import { saveDecision } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -167,7 +166,7 @@ describe('decisions store (first-class object)', () => {
     const c = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'to-supersede',
     });
-    await closeObject(objectsAt(home), DECISION, 'default', b.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), DECISION, 'default', b.id, { actor: CLI_ACTOR, now: evalNow() });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'successor',
       supersedesDecisionId: c.id,

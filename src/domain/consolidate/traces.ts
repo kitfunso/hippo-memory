@@ -1,5 +1,4 @@
-import { isRecallBoostAblated } from '../../base/memory/ablation.js';
-import { MemoryEntry, Layer, clockBasisOf, createMemory, markRetrieved } from '../../base/memory/memory.js';
+import { MemoryEntry, Layer, createMemory, markRetrieved } from '../../base/memory/entry.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import type { SessionEvent } from '../../base/ports/store/sessions.js';
 import type { SleepBegin } from '../../base/ports/store/consolidation.js';
@@ -82,17 +81,21 @@ async function sessionTrace(
     .filter((e) => e.eventType !== 'session_complete')
     .map((e) => ({ action: e.content, observation: '' }));
 
-  const trace = createMemory(renderTraceContent({ task: summary, steps, outcome }), {
-    layer: Layer.Trace,
-    traceOutcome: outcome,
-    sourceSessionId: sessionId,
-    tags: ['auto-promoted'],
-    source: 'auto-promote',
-    scope: sessionScope.scope,
-    // Same tenant as the window's no-trace check, or a non-default tenant's trace regenerates every sleep.
-    tenantId: consolidationTenant,
-    baseHalfLifeDays: run.config.defaultHalfLifeDays,
-  });
+  const trace = createMemory(
+    renderTraceContent({ task: summary, steps, outcome }),
+    {
+      layer: Layer.Trace,
+      traceOutcome: outcome,
+      sourceSessionId: sessionId,
+      tags: ['auto-promoted'],
+      source: 'auto-promote',
+      scope: sessionScope.scope,
+      // Same tenant as the window's no-trace check, or a non-default tenant's trace regenerates every sleep.
+      tenantId: consolidationTenant,
+      baseHalfLifeDays: run.config.defaultHalfLifeDays,
+    },
+    run.now,
+  );
   return { trace, outcome };
 }
 
@@ -140,11 +143,11 @@ export async function replayPass(run: SleepRun): Promise<void> {
   const replayCount = run.config.replay?.count ?? REPLAY_COUNT_DEFAULT;
   // EVAL-ONLY ablation (see ablation.ts): replay rehearsal is recall strengthening, so the strengthen-off arm silences
   // the whole pass; persisting unmutated entries anyway would still refresh updated_at and mirrors.
-  if (!(replayCount > 0 && survivors.size > 0 && !isRecallBoostAblated())) return;
+  if (!(replayCount > 0 && survivors.size > 0 && run.strength.recallStrengthens)) return;
   const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
-  const picked = await survivors.get(await sampleForReplay(survivors.rows(), replayCount, now, seed));
+  const picked = await survivors.get(await sampleForReplay(survivors.rows(), replayCount, now, seed, run.strength));
   if (picked.length === 0) return;
-  const rehearsed = markRetrieved(picked, now, clockBasisOf(run.decayOpts));
+  const rehearsed = markRetrieved(picked, now, run.strength);
   // Update survivors in place so downstream passes see rehearsed state.
   await survivors.set(rehearsed);
   run.result.replayed = rehearsed.length;

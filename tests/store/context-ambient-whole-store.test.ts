@@ -4,7 +4,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { Layer, strengthOptionsOf, type EmotionalValence, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type EmotionalValence, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { withLossAversion } from '../../src/base/memory/strength.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { contextGet, adminActor } from '../../src/api/index.js';
 import {
@@ -20,6 +21,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, writeEntriesTogether, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { evalSwitches } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -136,9 +138,9 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
 
     // Both sides score by the ratio the CLI root reads from the environment.
     const sql = await cliStore(store).contextReads.ambientTallies('default', { currentProject: [], now: NOW });
-    const js = tallyAmbientEntries([], NOW);
+    const js = tallyAmbientEntries([], NOW, evalSwitches().strength);
     const live = loadAllEntries(store, 'default').filter((e) => !e.supersededBy);
-    foldAmbientRows(js, live, NOW, strengthOptionsOf(envRuntimeSettings()));
+    foldAmbientRows(js, live, NOW, withLossAversion(evalSwitches().strength, envRuntimeSettings().lossAversionRatio));
 
     expect({ ...sql, strengthSum: 0 }).toEqual({ ...js, strengthSum: 0 });
     expect(sql.strengthSum).toBeCloseTo(js.strengthSum, 9);

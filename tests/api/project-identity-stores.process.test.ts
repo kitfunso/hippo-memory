@@ -11,7 +11,8 @@ import { saveItems } from '../../src/store/sqlite/compactions-record.js';
 import { listDormantSnapshots } from '../_helpers/dormant-snapshots.js';
 import { runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies } from '../_helpers/cli-stores.js';
-import { createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { projectNameRepair, projectNameRepairOnce } from '../../src/api/objects/projects.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { resolveProjectIdentity } from '../../src/host/project-identity.js';
@@ -28,11 +29,12 @@ import {
   type World,
 } from '../_helpers/agent-memories-world.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -88,6 +90,7 @@ function compaction(id: string, origin: string, cwd: string): void {
 const texts = (r: Awaited<ReturnType<typeof contextGet>>): string[] => r.entries.map((e) => e.entry.content);
 const sync = (cwd: string) =>
   importAtSessionEnd(cwd, undefined, {
+    run: TEST_RUN,
     configAt: loadConfig,
     tenantId: 'default',
     stores: sqliteImportStores({}),
@@ -106,6 +109,7 @@ async function nextProcess() {
   return {
     sync: (cwd: string) =>
       syncMod.importAtSessionEnd(cwd, undefined, {
+        run: TEST_RUN,
         configAt: config.loadConfig,
         tenantId: 'default',
         stores: importStores.sqliteImportStores({}),

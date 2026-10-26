@@ -7,6 +7,8 @@ import type { GlobalTargetGroup, OptionalGroup, SleepGroup, StoreWith } from '..
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
 import type { InfraPorts } from '../base/ports/infra.js';
+import { strengthModelFor } from '../base/memory/eval-switches.js';
+import type { StrengthModel } from '../base/memory/strength.js';
 import type { EmbedderFor } from '../base/ports/embedder.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
@@ -61,6 +63,11 @@ export interface Context {
   readonly clientKey?: string;
   /** The machine, model, embedder and rerankers this context reaches past the store, set by its composition root. */
   readonly infra: InfraPorts;
+}
+
+/** The strength model `ctx` scores by: its root's eval switches with its config's loss-aversion ratio. */
+export function strengthOf(ctx: Pick<Context, 'infra' | 'config'>): StrengthModel {
+  return strengthModelFor(ctx.infra.evalSwitches, ctx.config.runtime);
 }
 
 /** A Context as a published entry takes it: without `infra`, the entry fills in the real ports. */

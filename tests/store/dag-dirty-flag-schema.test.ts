@@ -11,7 +11,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { markSummaryDirtyInTx } from '../../src/store/sqlite/summary-dirty.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, writeEntry } from '../_helpers/root-forms.js';

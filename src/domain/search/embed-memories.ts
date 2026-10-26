@@ -1,8 +1,9 @@
 // Embeds memories into the vector index: asks the target's embedder for the configured provider, computes each vector
 // and hands it to the store, which only keeps it (src/base/ports/store.ts VectorWrites).
 
-import type { MemoryEntry, StrengthOptions } from '../../base/memory/memory.js';
-import type { EvalSwitches } from '../../base/memory/eval-switches.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
+import type { StrengthModel } from '../../base/memory/strength.js';
+import type { Clock, InfraPorts } from '../../base/ports/infra.js';
 import { rankStrength } from './boosts.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { initializeParticle } from '../../base/rank/physics.js';
@@ -182,14 +183,18 @@ async function writeVectorPage(
   write: Pick<VectorWrite, 'model' | 'replaceIndex'>,
   page: readonly MemoryEntry[],
   vectors: readonly number[][],
-  particles: StrengthOptions | undefined,
+  particles: ParticleScoring | undefined,
 ): Promise<VectorWriteResult> {
   const byTenant = new Map<string, VectorRowWrite[]>();
   page.forEach((entry, i) => {
     const vector = vectors[i];
     if (!vector || vector.length === 0) return noteSkippedEmbedding(entry.id);
     const row: VectorRowWrite = particles
-      ? { memoryId: entry.id, vector, particle: initializeParticle(entry, vector, particles) }
+      ? {
+          memoryId: entry.id,
+          vector,
+          particle: initializeParticle(entry, vector, particles.strength, particles.clock()),
+        }
       : { memoryId: entry.id, vector };
     byTenant.set(entry.tenantId, [...(byTenant.get(entry.tenantId) ?? []), row]);
   });
@@ -211,7 +216,7 @@ async function backfillInStore(
   provider: EmbeddingProvider,
   model: string,
   rebuild: boolean,
-  strength: StrengthOptions,
+  particles: ParticleScoring,
 ): Promise<number> {
   let count = 0;
   let afterId: string | undefined;
@@ -228,7 +233,7 @@ async function backfillInStore(
       { model, replaceIndex: rebuild },
       page,
       vectors,
-      rebuild ? strength : undefined,
+      rebuild ? particles : undefined,
     );
     // Another process rebuilt the index mid-run; every later page would be refused too, after paying the provider for
     // it.
@@ -241,21 +246,22 @@ async function backfillInStore(
 async function embedAllInStore(
   store: HippoStore,
   provider: EmbeddingProvider,
-  strength: StrengthOptions,
+  particles: ParticleScoring,
 ): Promise<number> {
   const { vectors: reads, vectorWrites: writes } = store;
   const rebuild = indexNeedsRebuild(indexedModel(await reads.embeddingIndexState()), provider.id);
-  return backfillInStore(writes, provider, embeddingIndexIdentity(provider.id), rebuild, strength);
+  return backfillInStore(writes, provider, embeddingIndexIdentity(provider.id), rebuild, particles);
 }
 
 /** embedMemory on a store; like the hippo.db path it resolves whatever fails. Unlike it, it leaves a model change to
  * embedAll, so a stale read here never drops another process's rebuild; the read only saves a paid embed call, as the
  * write refuses another model itself. */
 function embedMemoryInStore(
-  { store, strength }: StoreEmbedTarget,
+  target: StoreEmbedTarget,
   provider: EmbeddingProvider,
   entry: MemoryEntry,
 ): Promise<EmbedOutcome> {
+  const { store } = target;
   return embedTurns
     .run(store, async () => {
       const { vectors: reads, vectorWrites: writes } = store;
@@ -269,7 +275,7 @@ function embedMemoryInStore(
               { model, replaceIndex: false },
               [entry],
               await provider.embed([embeddingInputText(entry)], 'passage'),
-              strength,
+              target,
             )
           ).modelMismatch;
         if (refused) warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
@@ -318,16 +324,24 @@ export interface IndexEmbedTarget extends EmbedWith {
   readonly rows: IndexRows;
 }
 
-/** A store's vector groups, with the strength rules the particles a vector write seeds are scored by. */
-export interface StoreEmbedTarget extends EmbedWith {
-  readonly store: HippoStore;
-  readonly strength: StrengthOptions;
+/** How the particle a vector write seeds is scored: the strength model, at the time the clock gives. */
+interface ParticleScoring {
+  readonly strength: StrengthModel;
+  readonly clock: Clock;
 }
 
-/** The store's own index when it keeps one, else its vector groups, whose seeded particles score under `switches`. */
+/** A store's vector groups, with how the particles a vector write seeds are scored. */
+export interface StoreEmbedTarget extends EmbedWith, ParticleScoring {
+  readonly store: HippoStore;
+}
+
+/** The root's eval switches and clock, which score the particles a vector write seeds. */
+export type EmbedRun = Pick<InfraPorts, 'evalSwitches' | 'clock'>;
+
+/** The store's own index when it keeps one, else its vector groups, whose seeded particles score under `run`. */
 export function folderEmbedTarget(
   { store, config, embedderFor }: ConfiguredFolder<HippoStore>,
-  switches: EvalSwitches | undefined,
+  { evalSwitches: switches, clock }: EmbedRun,
 ): EmbedTarget {
   const { embeddingIndex } = store;
   const { embeddings } = config;
@@ -335,7 +349,7 @@ export function folderEmbedTarget(
     const rows: IndexRows = { entriesByIds: (ids, tenantId) => store.entriesByIds(ids, tenantId) };
     return { embeddingIndex, rows, embeddings, embedderFor };
   }
-  return { store, embeddings, embedderFor, strength: rankStrength({ switches, runtime: config.runtime }) };
+  return { store, embeddings, embedderFor, strength: rankStrength({ switches, runtime: config.runtime }), clock };
 }
 
 /** Embed a single memory entry and cache the result in the embedding index; with a store, through its vectorWrites.
@@ -508,7 +522,7 @@ export async function embedAll(on: EmbedTarget, model?: string, givenProvider?: 
     throwIfProviderKeyMissing(cfg, provider);
     return 0;
   }
-  if ('store' in on) return embedTurns.run(on.store, () => embedAllInStore(on.store, provider, on.strength));
+  if ('store' in on) return embedTurns.run(on.store, () => embedAllInStore(on.store, provider, on));
   return withEmbedLock(on, async (turn) => {
     const identity = provider.id;
     if (await turn.step({ kind: 'reindex', providerId: identity })) return rebuildIndexForProvider(turn, provider);

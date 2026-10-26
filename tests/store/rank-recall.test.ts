@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -13,6 +13,7 @@ import type { RerankerFn } from '../../src/base/ports/reranker.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -63,6 +64,7 @@ function goalLogCount(): number {
 
 const ids = (results: { entry: MemoryEntry }[]): string[] => results.map((r) => r.entry.id);
 const ctx = (): RankRecallCtx => ({
+  now: evalNow(),
   store: sqliteStore(hippoRoot),
   config: loadConfig(hippoRoot),
   tenantId: 'default',

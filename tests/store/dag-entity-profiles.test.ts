@@ -13,7 +13,9 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { buildEntityProfiles, rebuildDirtySummaries } from '../../src/domain/consolidate/dag.js';
 import { drillDown, type DrillDownOutcome, type DrillDownResult } from '../../src/api/index.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
@@ -23,6 +25,7 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -102,6 +105,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
 
     const fetcher = makeOkFetcher('synthetic-alice-entity-profile-content-zzz');
     const result = await buildEntityProfiles(sqliteStore(hippoRoot), [l2a, l2b, l2c], {
+      now: evalNow(),
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
     });
@@ -151,6 +155,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     const l2 = makeL2Summary('alone fact content', 'alice');
     writeEntry(hippoRoot, l2);
     const result = await buildEntityProfiles(sqliteStore(hippoRoot), [l2], {
+      now: evalNow(),
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher() }),
     });
@@ -167,6 +172,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     [parented, unparented1, unparented2].forEach((e) => writeEntry(hippoRoot, e));
 
     const result = await buildEntityProfiles(sqliteStore(hippoRoot), [parented, unparented1, unparented2], {
+      now: evalNow(),
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher() }),
     });
@@ -194,6 +200,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     writeEntry(hippoRoot, l2b);
 
     await buildEntityProfiles(sqliteStore(hippoRoot), [l2a, l2b], {
+      now: evalNow(),
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher('alice-clean-profile-content-zzz') }),
     });
@@ -281,6 +288,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     });
 
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
+      now: evalNow(),
       llm: anthropicLlm({ apiKey: 'k', fetcher }),
       cap: 20,
     });
@@ -462,6 +470,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     [...tenantAL2s, ...tenantBL2s].forEach((e) => writeEntry(hippoRoot, e));
 
     const result = await buildEntityProfiles(sqliteStore(hippoRoot), [...tenantAL2s, ...tenantBL2s], {
+      now: evalNow(),
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher('synthetic-multi-tenant-profile-content-xyz') }),
     });

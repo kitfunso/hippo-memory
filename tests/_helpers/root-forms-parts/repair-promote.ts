@@ -2,7 +2,7 @@
 
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { ALL_TENANTS } from '../../../src/base/util/tenant.js';
-import type { MemoryEntry } from '../../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import { promote } from '../../../src/api/memories/promote.js';
 import { sqliteStore } from '../../../src/store/sqlite/store.js';
 import { apiCtx } from '../api-ctx.js';

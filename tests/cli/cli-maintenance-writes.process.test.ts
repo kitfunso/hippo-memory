@@ -6,13 +6,14 @@ import { join } from 'node:path';
 import { adminActor, reject } from '../../src/api/index.js';
 import { refineStore, type RefineOptions } from '../../src/surface/cli/refine-llm.js';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { captureError } from '../../src/domain/learn/autolearn.js';
 import { recordTokenUse } from '../../src/store/sqlite/token-ledger.js';
 import type { TokenSurface } from '../../src/base/ports/store/ledger.js';
 import { PATH_TAGS, query, Store, type Ran } from '../_helpers/cli-verb-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 const NO_STORE =
@@ -70,7 +71,7 @@ describe('hippo watch (built CLI, no server)', () => {
   it('a failure that matches a rejected value is not stored', async () => {
     const s = new Store();
     scripts(s);
-    const value = captureError(3, STDERR, 'node fail.js').content;
+    const value = captureError(3, STDERR, 'node fail.js', undefined, evalNow()).content;
     await reject(apiCtx(s.root, 'default', adminActor('cli')), { value, reason: 'wrong' });
     s.settle();
     expect(await s.run('watch', 'node', 'fail.js')).toEqual({

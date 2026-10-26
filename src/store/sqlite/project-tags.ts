@@ -2,7 +2,8 @@
 // backed up first.
 import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { withBackup } from '../../db/backup.js';
-import { calculateStrength, type MemoryEntry } from '../../base/memory/memory.js';
+import { calculateStrength } from '../../base/memory/strength.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, isImport, noteKey, toolTag } from '../../base/memory/agent-memory-tools.js';
 import { READ_PAGE_ROWS, rowsInPages } from '../../base/util/pages.js';
 import { appendAuditEvents } from './audit.js';
@@ -143,7 +144,7 @@ function userGlobalMerges(db: DatabaseSyncLike, tenantId: string, ids: readonly 
 function retire(db: DatabaseSyncLike, files: StoreFiles, row: MemoryEntry, actor: string, now: Date): void {
   insertDormantRow(db, {
     entry: row,
-    strength: calculateStrength(row, now, files),
+    strength: calculateStrength(row, now, files.strength),
     reason: 'project-repair',
     dormantAt: now.toISOString(),
   });

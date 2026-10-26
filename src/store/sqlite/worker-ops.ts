@@ -2,6 +2,7 @@
 import type { BaseMethods, HippoStore, StoreGroups } from '../../base/ports/store.js';
 import type { WireError } from './error-codec.js';
 import type { TenantMark } from './tenant-wire.js';
+import type { StoreRules } from '../../base/ports/infra.js';
 
 /** 'write' runs on the one writer thread; 'read' on a reader, whose connection refuses every write. */
 export type OpMode = 'read' | 'write';
@@ -294,8 +295,8 @@ export interface WorkerInit {
   /** One shared integer the writer sets to a job's id before that job may commit; the server thread reads it when the
    * job passes its deadline. */
   readonly commitFlag?: SharedArrayBuffer;
-  /** The ratio the parent's root read, which the thread's store scores strength by. */
-  readonly lossAversionRatio?: number;
+  /** The strength model and fake clock the parent's root opened with, which the thread's store opens with. */
+  readonly rules: StoreRules;
 }
 
 export interface Job {

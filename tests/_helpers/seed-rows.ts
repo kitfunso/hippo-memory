@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from './default-half-life-memory.js';
 import { writeEntry } from './root-forms.js';
 

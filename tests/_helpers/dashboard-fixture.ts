@@ -8,7 +8,7 @@ import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from './default-half-life-memory.js';
 import { serveDashboard } from '../../src/surface/server/dashboard-listener.js';
 import { createSnapshotClock, type SnapshotClock } from '../../src/api/dashboard/snapshot-clock.js';

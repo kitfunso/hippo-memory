@@ -8,7 +8,7 @@ import {
   detectRegressions,
   resultToBaseline,
   formatResult,
-} from '../../src/domain/eval/eval-suite.js';
+} from '../../src/entry/eval.js';
 import { handleEval } from '../../src/surface/cli/eval.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 

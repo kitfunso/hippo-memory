@@ -2,13 +2,12 @@
 
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../../base/memory/agent-memory-tools.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { classifyOriginProject, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
-import { embedAll, folderEmbedTarget } from '../search/embed-memories.js';
-import { evalSwitches } from '../../base/memory/ablation.js';
+import { embedAll, folderEmbedTarget, type EmbedRun } from '../search/embed-memories.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { log } from '../../base/util/log.js';
 import type { EntryTextKey, Sharing } from '../../base/ports/store.js';
@@ -22,7 +21,7 @@ import { textKeyPages, type SharingStore } from './text-keys.js';
 export async function syncGlobalToLocal(
   into: ConfiguredFolder<SharingStore>,
   global: { readonly store: SharingStore },
-  opts: { includeCrossProject?: boolean } = {},
+  opts: { includeCrossProject?: boolean; embed: EmbedRun },
 ): Promise<number> {
   const home = await into.store.folderFiles.home();
   if (home.shared) {
@@ -33,7 +32,8 @@ export async function syncGlobalToLocal(
   }
   if (!(await global.store.folderFiles.home()).exists) return 0;
 
-  return copyMissingRows(into, global.store, { project: home.project, includeCrossProject: opts.includeCrossProject });
+  const rules = { project: home.project, includeCrossProject: opts.includeCrossProject };
+  return copyMissingRows(into, global.store, rules, opts.embed);
 }
 
 const textKey = (e: { tenantId: string; content: string }): string => `${e.tenantId}\n${e.content}`;
@@ -112,7 +112,12 @@ async function refusedTexts(store: SharingStore, { copies, twins }: Copies): Pro
 
 /** One transaction: id, tenant and text decide which rows to read whole, and the copies commit together; each copy
  * keeps its own tenant. */
-async function copyMissingRows(into: ConfiguredFolder<SharingStore>, from: SharingStore, rules: CopyRules) {
+async function copyMissingRows(
+  into: ConfiguredFolder<SharingStore>,
+  from: SharingStore,
+  rules: CopyRules,
+  embed: EmbedRun,
+) {
   const candidates = await missingRows(into.store.sharing, from.sharing);
   if (candidates.length === 0) return 0;
   const byId = new Map<string, MemoryEntry>();
@@ -126,11 +131,11 @@ async function copyMissingRows(into: ConfiguredFolder<SharingStore>, from: Shari
     first.twins.size === 0 ? first : copiesOf(candidates, byId, rules, await refusedTexts(into.store, first));
   // A locally rejected value must not come back through sync down: skipped per item, printed as one line.
   const written = copies.length === 0 ? [] : await into.store.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR);
-  finishSyncDown(into, written.length, copies.length - written.length);
+  finishSyncDown(into, written.length, copies.length - written.length, embed);
   return written.length;
 }
 
-function finishSyncDown(into: ConfiguredFolder<SharingStore>, count: number, rejected: number): void {
+function finishSyncDown(into: ConfiguredFolder<SharingStore>, count: number, rejected: number, embed: EmbedRun): void {
   if (rejected > 0) {
     log.warn(
       `syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`,
@@ -140,6 +145,6 @@ function finishSyncDown(into: ConfiguredFolder<SharingStore>, count: number, rej
   // Batch producer: one embedAll() on the destination rather than an embedMemory() per copied row (same batching
   // invariant as autoShare).
   if (count > 0) {
-    void embedAll(folderEmbedTarget(into, evalSwitches())).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
+    void embedAll(folderEmbedTarget(into, embed)).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
   }
 }

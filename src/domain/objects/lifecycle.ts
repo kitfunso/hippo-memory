@@ -5,7 +5,7 @@
 
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
-import { createMemory, Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import {
   isObjectRefusal,
   type ObjectByKind,
@@ -55,9 +55,14 @@ export async function objectById<K extends ObjectKind>(
   return objects.objectById(tenantId, d.kind, id);
 }
 
-function closing<K extends ObjectKind>(d: ObjectDescriptor<K>, tenantId: string, actor: string): ObjectClose<K> {
+function closing<K extends ObjectKind>(
+  d: ObjectDescriptor<K>,
+  tenantId: string,
+  actor: string,
+  now: Date,
+): ObjectClose<K> {
   assertTenantId('closeObject', tenantId);
-  return { from: d.closableFrom, actor, at: new Date().toISOString() };
+  return { from: d.closableFrom, actor, at: now.toISOString() };
 }
 
 function closed<K extends ObjectKind>(
@@ -83,9 +88,9 @@ export async function closeObject<K extends ObjectKind>(
   d: ObjectDescriptor<K>,
   tenantId: string,
   id: number,
-  actor: string,
+  by: ActedBy,
 ): Promise<ObjectByKind[K]> {
-  const close = closing(d, tenantId, actor);
+  const close = closing(d, tenantId, by.actor, by.now);
   return closed(d, tenantId, id, await objects.closeObject(tenantId, d.kind, id, close));
 }
 
@@ -95,26 +100,39 @@ export function objectMirror(
   tenantId: string,
   source: ObjectKind,
   text: { readonly content: string; readonly tags: readonly string[] },
+  now: Date,
 ): MemoryEntry {
-  return createMemory(text.content, {
-    tags: [source, ...text.tags],
-    layer: Layer.Semantic,
-    confidence: 'verified',
-    source,
-    baseHalfLifeDays,
-    tenantId,
-  });
+  return createMemory(
+    text.content,
+    {
+      tags: [source, ...text.tags],
+      layer: Layer.Semantic,
+      confidence: 'verified',
+      source,
+      baseHalfLifeDays,
+      tenantId,
+    },
+    now,
+  );
 }
 
 /** Where a save lands and who makes it; `baseHalfLifeDays` is the config default a new mirror starts on. */
+/** Who closes or opens an object, and the instant the row is stamped with. */
+export interface ActedBy {
+  readonly actor: string;
+  readonly now: Date;
+}
+
 export interface ObjectSaveSite {
   readonly baseHalfLifeDays: number;
   readonly tenantId: string;
   readonly actor: string;
+  /** The instant the object and its mirror are stamped with. */
+  readonly now: Date;
 }
 
 function objectSave<K extends SavableKind>(site: ObjectSaveSite, kind: K, draft: ObjectDraft<K>): ObjectSave<K> {
-  const mirror = objectMirror(site.baseHalfLifeDays, site.tenantId, kind, draft);
+  const mirror = objectMirror(site.baseHalfLifeDays, site.tenantId, kind, draft, site.now);
   return {
     mirror,
     fields: draft.fields,
@@ -154,7 +172,7 @@ export async function saveObject<K extends SavableKind, W>(
   opts: W,
 ): Promise<ObjectByKind[K]> {
   assertTenantId('saveObject', site.tenantId);
-  const draft = d.draft(opts);
+  const draft = d.draft(opts, site.now);
   return saved(
     d,
     site.tenantId,

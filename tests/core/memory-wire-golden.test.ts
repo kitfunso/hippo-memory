@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { runCli } from '../../src/cli.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';
 import { deserializeEntry } from '../../src/base/memory/markdown.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';

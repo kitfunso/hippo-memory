@@ -1,5 +1,5 @@
 // Memory reads for the CLI verbs: one row by id, the tenant's rows, or with a host admin every tenant's.
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { NotFoundError } from '../../base/errors/api-errors.js';
 import { canReadScope } from '../../base/scope/recall-scope.js';
 import type { HippoStore } from '../../base/ports/store.js';

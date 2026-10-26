@@ -1,17 +1,15 @@
+import type { StoreModel } from './open.js';
+import { type MemoryEntry, ERROR_TAG, Layer, schemaFitFrom } from '../../base/memory/entry.js';
 import {
-  type MemoryEntry,
-  ERROR_TAG,
   FALLBACK_HALF_LIFE_DAYS,
-  Layer,
-  schemaFitFrom,
-  type LossAversion,
+  PRODUCTION_STRENGTH,
   calculateStrength,
   confidenceFacets,
   type ConfidenceInputs,
   type StrengthInputs,
-} from '../../base/memory/memory.js';
+  type StrengthModel,
+} from '../../base/memory/strength.js';
 import { strengthSql, originInSql, rewardFactorSql, scopeAdmitSql } from './rule-sql.js';
-import { isOutcomeSlowAblated } from '../../base/memory/ablation.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../../db/decay-key.js';
 import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { sortableStamp } from '../../base/memory/created-stamp.js';
@@ -49,13 +47,13 @@ function tallyStatus(
   rows: Iterable<StatusInputs>,
   now: Date,
   atRiskBelow: number,
-  rules: LossAversion,
+  rules: StoreModel,
 ): Omit<StatusCounts, 'openConflicts' | 'embedded'> {
   const byLayer = { [Layer.Buffer]: 0, [Layer.Episodic]: 0, [Layer.Semantic]: 0, [Layer.Trace]: 0 };
   const byConfidence = { verified: 0, observed: 0, inferred: 0, stale: 0 };
   const sums = { total: 0, strength: 0, pinned: 0, atRisk: 0, agedOut: 0 };
   for (const row of rows) {
-    const strength = calculateStrength(row, now, rules);
+    const strength = calculateStrength(row, now, rules.strength);
     const facets = confidenceFacets(row, now);
     sums.total++;
     sums.strength += strength;
@@ -264,13 +262,13 @@ export function listAmbientCandidates(
   return { entries, recall: recallEntries, refused };
 }
 
-// calculateStrength's decay exponent with its reward factor: the strongest rows, without scoring each one in JS. A
-// function, not a constant, so the outcome-slow ablation is read per query as strengthSql reads it.
-const decayExponentSql = (): string => `CASE WHEN half_life_days > 0 THEN (julianday(?) - julianday(last_retrieved))
-    / (half_life_days * ${rewardFactorSql()}) END`;
+// calculateStrength's decay exponent with its reward factor under `model`: the strongest rows, without scoring each
+// one in JS.
+const decayExponentSql = (model: StrengthModel): string => `CASE WHEN half_life_days > 0 THEN (julianday(?) -
+    julianday(last_retrieved)) / (half_life_days * ${rewardFactorSql(model)}) END`;
 
-const decayRankSql = (): string => `pinned DESC,
-  ${decayExponentSql()} ASC NULLS LAST,
+const decayRankSql = (model: StrengthModel): string => `pinned DESC,
+  ${decayExponentSql(model)} ASC NULLS LAST,
   id ASC`;
 
 /** The shared WHERE of a context read: live tenant rows, then `extra` predicates, then the scope and origin rules. */
@@ -304,7 +302,7 @@ function decayKeySubsetSql(whereSql: string): string {
   const arm = (extra: string): string => `SELECT ${RANK_COLUMNS} FROM memories WHERE ${whereSql} AND ${extra}`;
   // pinned is 0 or 1 (entry-row.ts), so the two arms hold every pinned row and every unpinned row with a key.
   return `WITH top AS MATERIALIZED (
-      SELECT id, pinned, ${decayExponentSql()} AS d FROM (
+      SELECT id, pinned, ${decayExponentSql(PRODUCTION_STRENGTH)} AS d FROM (
         ${arm(`pinned = 1 AND ${DECAY_KEY_WHERE}`)}
         UNION ALL
         ${arm(`pinned = 0 AND half_life_days > 0 AND ${DECAY_KEY_WHERE} AND ${DECAY_KEY_SQL} >= julianday(?) - ?`)}
@@ -325,6 +323,7 @@ function decayKeySubsetRows(db: DatabaseSyncLike, rows: SqlFragment, cap: number
 /** Live tenant rows passing `filter`, at most `filter.cap`, in loadAllEntries' order; below the cap, every such row. */
 export function listContextCandidates(
   db: DatabaseSyncLike,
+  model: StrengthModel,
   tenantId: string,
   filter: ContextCandidateFilter,
 ): MemoryEntry[] {
@@ -343,14 +342,15 @@ export function listContextCandidates(
   ).n;
   // Under the cap every match is returned, so the per-row decay math and the sort are skipped.
   const ranked = matched > cap;
-  // The key holds the unablated reward factor, so an ablated rank skips it. An empty answer means the subset could not
-  // prove itself, and the scan below ranks the tenant.
-  const bySubset = ranked && cap > 0 && !isOutcomeSlowAblated() ? decayKeySubsetRows(db, rowsWhere, cap, now) : [];
+  // The key holds the production reward factor, so a rank at another slope skips it. An empty answer means the subset
+  // could not prove itself, and the scan below ranks the tenant.
+  const keyed = model.rewardSlope === PRODUCTION_STRENGTH.rewardSlope;
+  const bySubset = ranked && cap > 0 && keyed ? decayKeySubsetRows(db, rowsWhere, cap, now) : [];
   if (bySubset.length > 0) return bySubset.map(rowToEntry);
   // No index orders rows past the key's window by decay, so this scan stays; its LIMIT keeps the sort to the cap.
   const sql = ranked
     ? `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (
-    SELECT id FROM memories WHERE ${whereSql} ORDER BY ${decayRankSql()} LIMIT ?
+    SELECT id FROM memories WHERE ${whereSql} ORDER BY ${decayRankSql(model)} LIMIT ?
   ) ORDER BY created ASC, id ASC`
     : `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${whereSql} ORDER BY created ASC, id ASC`;
   const rows = cachedStatement(db, sql).all(...params, ...(ranked ? [now, cap] : [])) as MemoryRow[];
@@ -433,13 +433,13 @@ export const jsonList = (column: string): string =>
  * it can share a snapshot with other reads. */
 export function strengthTallies(
   db: DatabaseSyncLike,
-  rules: LossAversion,
+  rules: StoreModel,
   tenantId: string,
   now: Date,
   atRiskBelow: number,
 ): StrengthTallies {
   // An unparseable date scores NULL in SQL and 0 in calculateStrength.
-  const bound = strengthSql(now, rules);
+  const bound = strengthSql(now, rules.strength);
   const strength = `COALESCE(${bound.sql}, 0)`;
   const params = [ERROR_TAG, ...bound.params, ...bound.params, atRiskBelow, tenantId];
   // SAFETY: an aggregate with no GROUP BY always answers one row.
@@ -512,7 +512,7 @@ function* statusInputs(rows: Iterable<StatusRow>): Iterable<StatusInputs> {
 /**
  * The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is built.
  */
-export function statusCounts(db: DatabaseSyncLike, rules: LossAversion, now: Date, atRiskBelow: number): StatusCounts {
+export function statusCounts(db: DatabaseSyncLike, rules: StoreModel, now: Date, atRiskBelow: number): StatusCounts {
   // One read transaction, so the row tallies and the two counts describe the same store.
   return withReadSnapshot(db, () => {
     // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.

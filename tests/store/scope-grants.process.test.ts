@@ -7,7 +7,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey, readApiKeyRecord, revokeApiKey } from '../../src/store/sqlite/auth.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { refreshedBrief } from '../../src/domain/objects/project-briefs.js';
@@ -28,6 +28,7 @@ import type {
   ScopeGrantChange,
   SelfKeyMint,
 } from '../../src/base/ports/store/keys.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
@@ -399,7 +400,7 @@ describe('graph view carries no private receipt text', () => {
 
     await refreshedBrief(
       objectsAt(home),
-      { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
+      { now: evalNow(), baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
       'testrepo',
     );
     await extractGraph(sqliteStore(home), 'default');

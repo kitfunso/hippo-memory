@@ -283,6 +283,7 @@ function declaredNames(dtsPath: string): string[] {
       if (name) names.push(name);
     }
   }
+  for (const decl of text.matchAll(/^export declare (?:function|const|class) (\w+)/gm)) names.push(decl[1]!);
   return names;
 }
 

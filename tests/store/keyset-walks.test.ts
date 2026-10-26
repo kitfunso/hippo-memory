@@ -2,7 +2,9 @@
 // row once, in the pages the one sorted query over every row gives. Real store.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import { DEFAULT_HALF_LIFE_DAYS, createMemory, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { createMemory } from '../../src/entry/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import {
   listEntriesMentioning,
   listEntriesWithSignals,
@@ -19,6 +21,8 @@ import { recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import type { EntryCursor } from '../../src/base/ports/store/types.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 const CREATED = ['2026-01-01T00:00:00.000Z', '2026-01-01T00:00:01.000Z', '2026-01-02T00:00:00.000Z'];
 const SORT_OF_ORDER = 'USE TEMP B-TREE FOR ORDER BY';
@@ -97,7 +101,9 @@ function walks(db: DatabaseSyncLike, tenantId: TenantId) {
       ),
     idOrder: () => pagesOf((afterId?: string) => listEveryTenantEntryIds(db, { limit: 3, afterId })),
     pendingVectors: () => pagesOf((afterId?: string) => pendingVectorIds(db, { limit: 3, afterId })),
-    particleReset: () => [[String(resetStoredParticles(db, {}))]],
+    particleReset: () => [
+      [String(resetStoredParticles(db, { strength: PRODUCTION_STRENGTH, clock: evalNow }))],
+    ],
   };
 }
 

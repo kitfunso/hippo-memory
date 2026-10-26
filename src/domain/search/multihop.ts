@@ -1,8 +1,8 @@
 import { compareScoresDesc } from '../../base/rank/compare.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { fitBudget } from './finalize.js';
 import { rankBm25, type SearchOptions } from './bm25-search.js';
-import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../../base/rank/search-types.js';
+import { DEFAULT_RECALL_BUDGET, type RankTime, type SearchResult } from '../../base/rank/search-types.js';
 
 const PASS1_TOP_K = 10;
 
@@ -20,7 +20,7 @@ function newEntitiesOf(topK: SearchResult[], query: string): string[] {
   return [...entityTags].map((t) => t.split(':')[1]).filter((e) => !queryLower.includes(e.toLowerCase()));
 }
 
-export function rankMultihop(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {
+export function rankMultihop(query: string, entries: MemoryEntry[], options: SearchOptions & RankTime): SearchResult[] {
   const budget = options.budget ?? DEFAULT_RECALL_BUDGET;
   // Pass 1 searches wide to find entities, so each return fits the caller's budget, as search() does.
   const fit = (ordered: SearchResult[]): SearchResult[] =>

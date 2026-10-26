@@ -8,6 +8,8 @@ import { HOLDS_TEXT, holdsTextBinds, useDashboardFunctions } from '../../src/sto
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { DAY, dashboardOf, makeStore, NOW, type TmpStore } from '../_helpers/dashboard-fixture.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 const ROWS = 320;
 // Pieces that sit on an edge: the two letters JavaScript lower-cases into ASCII, case past ASCII, JSON's escapes and
@@ -141,7 +143,7 @@ describe('dashboard list filters', () => {
     expect(letters.length).toBeGreaterThan(0);
     const db = openHippoDb(store.hippoRoot);
     try {
-      useDashboardFunctions(db, {});
+      useDashboardFunctions(db, { strength: PRODUCTION_STRENGTH, clock: evalNow });
       db.exec('CREATE TEMP TABLE letters (id TEXT, content TEXT, tags_json TEXT)');
       const insert = db.prepare('INSERT INTO temp.letters VALUES (?, ?, ?)');
       for (const [i, letter] of letters.entries()) insert.run(`l${i}`, `x${letter}y`, JSON.stringify([`x${letter}y`]));
@@ -163,7 +165,7 @@ describe('dashboard list filters', () => {
   it('keeps the rows hippo_holds_text keeps, for every needle', () => {
     const db = openHippoDb(store.hippoRoot);
     try {
-      useDashboardFunctions(db, {});
+      useDashboardFunctions(db, { strength: PRODUCTION_STRENGTH, clock: evalNow });
       const ids = (sql: string, binds: Record<string, SqlValue>): string[] =>
         (db.prepare(`SELECT id FROM memories WHERE ${sql} ORDER BY id`).all(binds) as Array<{ id: string }>).map(
           (r) => r.id,
@@ -191,7 +193,7 @@ describe('dashboard list filters', () => {
       );
       const db = openHippoDb(plain.hippoRoot);
       try {
-        useDashboardFunctions(db, {});
+        useDashboardFunctions(db, { strength: PRODUCTION_STRENGTH, clock: evalNow });
         let calls = 0;
         // Four parameters, so it takes the place of the four-argument function the store registered.
         db.function('hippo_holds_text', { deterministic: true }, (_id, _content, _tags, _text) => {

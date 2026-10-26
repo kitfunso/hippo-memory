@@ -1,7 +1,7 @@
 // The seams a server uses to save another machine's compaction: pre-compact, compact-resume and the store calls under them.
 import { describe, expect, it, vi } from 'vitest';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { PRE_COMPACT_INSTRUCTION } from '../../src/surface/capture/compaction-record.js';
 import {
   markSnapshotSaved,

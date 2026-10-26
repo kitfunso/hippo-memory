@@ -2,7 +2,7 @@
 // summary must never stand in for its children in recall overflow or assemble.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
 import { assemble, retrieve, supersede } from '../../src/api/index.js';

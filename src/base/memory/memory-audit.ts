@@ -1,5 +1,6 @@
 // The memory-quality audit rules: pure functions of a row, so any store can be audited by them.
-import { canAutoDelete, isKeptForGood, type MemoryEntry } from './memory.js';
+import { canAutoDelete, isKeptForGood } from './keep-rules.js';
+import type { MemoryEntry } from './entry.js';
 import {
   assessAutomaticMemory,
   automaticDefect,

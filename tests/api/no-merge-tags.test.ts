@@ -1,7 +1,7 @@
 // Sleep keeps a row tagged with a NO_MERGE_TAGS member as written: the merge pass and LLM extraction both read the set.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { consolidate } from '../../src/index.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { NO_MERGE_TAGS } from '../../src/domain/sharing/share.js';
 import { makeStore } from '../_helpers/make-root.js';

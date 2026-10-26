@@ -15,11 +15,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
 import {
-  saveProjectBrief,
   loadProjectBriefs,
   briefFromReceipts,
   refreshedBrief,
@@ -34,6 +33,8 @@ import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-p
 oneRequestPerTest();
 import { closeObject, objectById } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import { saveProjectBrief } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 // The module's own summary and headline caps, pinned here so a change to either shows up as a test edit.
 const MAX_BRIEF_SUMMARY_LEN = 8192;
@@ -143,7 +144,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
       summary: 'x2',
       supersedesBriefId: b.id,
     });
-    await closeObject(objectsAt(home), PROJECT_BRIEF, 'default', c.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), PROJECT_BRIEF, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
     expect((await activeBrief(home, 'default', 'alpha'))!.id).toBe(a.id);
     expect(await activeBrief(home, 'default', 'gamma')).toBeNull(); // closed
     expect((await loadProjectBriefs(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([
@@ -260,7 +261,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     // first refresh creates v1
     const v1 = await refreshedBrief(
       objectsAt(home),
-      { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
+      { now: evalNow(), baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
       'hippo',
     );
     expect(v1.version).toBe(1);
@@ -307,7 +308,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     addReceipt(home, 'default', 'hippo', 'receipt two');
     const v2 = await refreshedBrief(
       objectsAt(home),
-      { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
+      { now: evalNow(), baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
       'hippo',
     );
     expect(v2.version).toBe(2);
@@ -352,7 +353,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     // refresh must SUCCEED (not throw) and store a valid brief under the cap
     const b = await refreshedBrief(
       objectsAt(home),
-      { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
+      { now: evalNow(), baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' },
       'big',
     );
     expect(b.version).toBe(1);

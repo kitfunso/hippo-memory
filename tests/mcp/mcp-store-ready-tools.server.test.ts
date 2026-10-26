@@ -18,6 +18,7 @@ import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_h
 import { writeEntry } from '../_helpers/root-forms.js';
 import { portOnlySide } from '../_helpers/port-only-store.js';
 import { testInfra } from '../_helpers/infra.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 let root: string;
 
@@ -152,7 +153,7 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
     const claim = { classTag: 'cutover', claimText: 'the cutover takes two days', estimateValue: 2 };
     const saved = await side.store.objects.saveObject(TENANT_A, 'prediction', {
       ...claim,
-      mirror: predictionMirror(TENANT_A, claim, 30),
+      mirror: predictionMirror(TENANT_A, claim, 30, evalNow()),
       actor: 'seed',
     });
     await side.store.objects.closeObject(TENANT_A, 'prediction', saved.id, {

@@ -26,6 +26,7 @@ import { writeEntry, saveActiveTaskSnapshot, appendSessionEvent, saveSessionHand
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { testInfra } from '../_helpers/infra.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -43,7 +44,13 @@ const setting = (activeScope: string | null, primaryIsGlobal = false): RecallSto
 async function rankDeploy() {
   const config = loadConfig(hippoRoot);
   return rankRecall(
-    { store: sqliteStore(hippoRoot), config, tenantId: 'default', embedderFor: resolveEmbeddingProvider },
+    {
+      now: evalNow(),
+      store: sqliteStore(hippoRoot),
+      config,
+      tenantId: 'default',
+      embedderFor: resolveEmbeddingProvider,
+    },
     {
       query: 'deploy',
       budget: 4000,
@@ -182,7 +189,14 @@ describe('recallStoreSetting and recallRowOrigin', () => {
     const config = loadConfig(hippoRoot);
     const global = { store: sqliteStore(globalRoot), config: loadConfig(globalRoot) };
     const ranked = await rankRecall(
-      { store: sqliteStore(hippoRoot), config, global, tenantId: 'default', embedderFor: resolveEmbeddingProvider },
+      {
+        now: evalNow(),
+        store: sqliteStore(hippoRoot),
+        config,
+        global,
+        tenantId: 'default',
+        embedderFor: resolveEmbeddingProvider,
+      },
       {
         query: 'deploy',
         budget: 4000,
@@ -238,8 +252,8 @@ describe('loadScopedContinuity', () => {
 describe('recallJsonRow and recallRerankerPick', () => {
   it('adds the --why keys, source included, only when asked', async () => {
     const top = (await rankDeploy()).results[0]!;
-    expect(recallJsonRow(top, 'deploy', false, false)).not.toHaveProperty('source');
-    const why = recallJsonRow(top, 'deploy', true, true);
+    expect(recallJsonRow(top, 'deploy', false, false, evalNow())).not.toHaveProperty('source');
+    const why = recallJsonRow(top, 'deploy', true, true, evalNow());
     expect(why.source).toBe('global');
     expect(why.reason).toBe('BM25: matched terms [deploy]');
   });

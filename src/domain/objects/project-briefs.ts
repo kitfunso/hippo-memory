@@ -12,7 +12,6 @@ import { capText, requireLine, requireText } from './fields.js';
 import { listObjects, type ObjectSaveSite, saveObject } from './lifecycle.js';
 import type { BriefReceipt, BriefStatus, ProjectBrief } from '../../base/records/object-types.js';
 import type { ObjectListQuery, Objects } from '../../base/ports/store.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export type { BriefStatus, ProjectBrief } from '../../base/records/object-types.js';
 
@@ -57,7 +56,7 @@ export const PROJECT_BRIEF: SavableDescriptor<'project_brief', SaveProjectBriefO
   plural: 'briefs',
   states: VALID_BRIEF_STATES,
   closableFrom: ['active'],
-  draft(opts) {
+  draft(opts, now) {
     // The repo becomes a path tag on the refresh match and a heading in the digest, so it must be one line.
     const repo = requireLine(opts.repo, MAX_REPO_LEN, 'repo');
     const summary = requireText(opts.summary, MAX_BRIEF_SUMMARY_LEN, 'summary');
@@ -68,7 +67,7 @@ export const PROJECT_BRIEF: SavableDescriptor<'project_brief', SaveProjectBriefO
       tags: opts.extraTags ?? [],
       supersedesId: opts.supersedesBriefId,
       changeSummary: opts.changeSummary,
-      at: new Date().toISOString(),
+      at: now.toISOString(),
     };
   },
 };
@@ -77,18 +76,6 @@ export const PROJECT_BRIEF: SavableDescriptor<'project_brief', SaveProjectBriefO
  *  surface is deterministic + unit-testable. */
 function buildBriefContent(repo: string, summary: string): string {
   return `${repo}\n\n${summary}`;
-}
-
-/** Create a project_brief, or a new version superseding an existing one, in the `objects` store group's one
- *  transaction. */
-export function saveProjectBrief(
-  objects: Objects,
-  baseHalfLifeDays: number,
-  tenantId: string,
-  opts: SaveProjectBriefOptions,
-  actor: string = CLI_ACTOR,
-): Promise<ProjectBrief> {
-  return saveObject(objects, PROJECT_BRIEF, { baseHalfLifeDays, tenantId, actor }, opts);
 }
 
 export function loadProjectBriefs(

@@ -1,6 +1,6 @@
 // hippo dedupe reads only the rows that can be a copy, and pairs them as a read of every row does.
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

@@ -2,9 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { estimateTokens } from '../../src/base/util/token-text.js';
 import { textOverlap } from '../../src/base/util/tokenize.js';
-import { markRetrieved } from '../../src/base/memory/memory.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { markRetrieved } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 function makeEntries() {
   return [
@@ -31,7 +32,7 @@ describe('BM25 search', () => {
     const entries = makeEntries();
     const [fredCache, tipsModel, cacheCheck] = entries;
     // Only fredCache holds FRED, cache and TIPS; tipsModel shares TIPS and cacheCheck shares cache.
-    const results = rankBm25('FRED cache TIPS', entries, { budget: 10000 });
+    const results = rankBm25('FRED cache TIPS', entries, { now: evalNow(), budget: 10000 });
 
     expect(results[0]!.entry.id).toBe(fredCache!.id);
     expect(results.map((r) => r.entry.id)).toEqual(expect.arrayContaining([tipsModel!.id, cacheCheck!.id]));
@@ -39,13 +40,13 @@ describe('BM25 search', () => {
 
   it('returns empty results for a query with no matching tokens', () => {
     const entries = makeEntries();
-    const results = rankBm25('xyzzy qwerty foobar', entries);
+    const results = rankBm25('xyzzy qwerty foobar', entries, { now: evalNow() });
     expect(results.length).toBe(0);
   });
 
   it('sorts results by composite score descending', () => {
     const entries = makeEntries();
-    const results = rankBm25('error cache refresh', entries, { budget: 10000 });
+    const results = rankBm25('error cache refresh', entries, { now: evalNow(), budget: 10000 });
     for (let i = 1; i < results.length; i++) {
       expect(results[i - 1].score).toBeGreaterThanOrEqual(results[i].score);
     }
@@ -57,7 +58,7 @@ describe('BM25 search', () => {
       createMemory('cache error in data pipeline refresh ' + 'x'.repeat(200) + ` entry${i}`),
     );
 
-    const results = rankBm25('cache error', bigEntries, { budget: 300 });
+    const results = rankBm25('cache error', bigEntries, { now: evalNow(), budget: 300 });
     const totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
     expect(totalTokens).toBeLessThanOrEqual(300);
   });
@@ -73,7 +74,7 @@ describe('BM25 search', () => {
     const e1 = { ...strong, lastRetrieved: recentDate, retrievalCount: 10 };
     const e2 = { ...weak, lastRetrieved: oldDate, retrievalCount: 0 };
 
-    const results = rankBm25('cache refresh', [e1, e2], { budget: 10000 });
+    const results = rankBm25('cache refresh', [e1, e2], { now: evalNow(), budget: 10000 });
     expect(results.length).toBe(2);
     // Strong entry should rank higher
     expect(results[0].entry.id).toBe(e1.id);
@@ -121,7 +122,7 @@ describe('decision recall boost', () => {
       tags: ['database'],
     });
 
-    const results = rankBm25('PostgreSQL database', [decision, normal], { budget: 4000 });
+    const results = rankBm25('PostgreSQL database', [decision, normal], { now: evalNow(), budget: 4000 });
 
     expect(results.length).toBe(2);
     expect(results[0].entry.tags).toContain('decision');
@@ -137,7 +138,7 @@ describe('decision recall boost', () => {
     });
 
     // Query only on content terms, not on tag terms
-    const results = rankBm25('cache refresh', [withDecision, without], { budget: 4000 });
+    const results = rankBm25('cache refresh', [withDecision, without], { now: evalNow(), budget: 4000 });
 
     expect(results.length).toBe(2);
     const decisionResult = results.find((r) => r.entry.tags.includes('decision'))!;

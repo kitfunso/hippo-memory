@@ -58,12 +58,12 @@
  */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { applyOutcome } from '../../dist/base/memory/memory.js';
+import { applyOutcome } from '../../dist/entry/memory.js';
 import { writeEntry, loadAllEntries } from '../../dist/entry/testing.js';
 import { readEntryInFolder as readEntry } from '../../dist/store/sqlite/fixtures.js';
 import { hybridSearch } from '../../dist/entry/eval-scripts.js';
 import { buildCorpus } from '../../dist/domain/search/bm25.js';
-import { markRetrieved } from '../../dist/base/memory/memory.js';
+import { markRetrieved } from '../../dist/entry/memory.js';
 import { withSharedStoreHandles } from '../../dist/db/open.js';
 import { CONFIG } from './config.mjs';
 import { rngFor, pickUniform, setFakeNow, clearFakeNow, hippoRootFor, metaPathFor, questionDir, readJson, writeJsonl, loadDataset } from './common.mjs';

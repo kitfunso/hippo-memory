@@ -2,7 +2,7 @@
 
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import * as testing from '../../src/entry/testing.js';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { TenantId } from '../../src/base/util/tenant.js';
 
 describe('hippo-memory/testing entry types', () => {
@@ -34,9 +34,13 @@ describe('hippo-memory/testing entry types', () => {
     expectTypeOf(testing.createMemoryWire).returns.toEqualTypeOf<testing.MemoryWire>();
   });
 
-  it('the entry exports the eval kit, its ten snake_case forms and nine handle helpers', () => {
+  it('the entry exports the eval kit with its typed-object saves, its ten snake_case forms and nine handle helpers', () => {
     expectTypeOf<keyof typeof testing>().toEqualTypeOf<
       | 'ambientSecretAdmit'
+      | 'saveCustomerNote'
+      | 'saveDecision'
+      | 'savePolicy'
+      | 'saveProjectBrief'
       | 'initStore'
       | 'embedMemory'
       | 'loadAllEntries'
@@ -63,6 +67,6 @@ describe('hippo-memory/testing entry types', () => {
       | 'recordTokenUse'
       | 'tokensBySession'
     >();
-    expect(Object.keys(testing)).toHaveLength(26);
+    expect(Object.keys(testing)).toHaveLength(30);
   });
 });

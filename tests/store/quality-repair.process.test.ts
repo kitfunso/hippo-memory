@@ -10,7 +10,7 @@ import { readDormantSnapshot } from '../../src/store/sqlite/dormant-rows.js';
 import { readRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { memoryQualityRepair, dormantRestore } from '../../src/api/index.js';
@@ -25,6 +25,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, repairAutomaticMemories, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 const HIPPO_JS = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const HEADER = '[Consolidated from 2 related memories, newest first]';
@@ -356,6 +357,7 @@ describe('recoverable automatic memory quality repair', () => {
       expect((await repairAutomaticMemories(storeFilesOf(world.local), repair)).appliedIds).toEqual([bad.id]);
       note(projectNotes(world), 'result.md', bad.content);
       await importForStore(world.local, {
+        run: TEST_RUN,
         configAt: loadConfig,
         tenantId: 'default',
         stores: sqliteImportStores({}),

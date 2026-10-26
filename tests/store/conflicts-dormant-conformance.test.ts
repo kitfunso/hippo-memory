@@ -2,7 +2,8 @@
 // their audit rows, and dormant rows listed, restored and forgotten within reach of the caller's own scope.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { DEFAULT_HALF_LIFE_DAYS, strengthOptionsOf, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { ConflictResolution, ConflictRowPage, ConflictSide } from '../../src/base/ports/store/conflicts.js';
@@ -196,7 +197,7 @@ describe('Conflicts', () => {
 });
 
 describe('Dormant', () => {
-  const revival = { halfLifeDays: DEFAULT_HALF_LIFE_DAYS, strength: strengthOptionsOf(undefined) };
+  const revival = { halfLifeDays: DEFAULT_HALF_LIFE_DAYS, strength: PRODUCTION_STRENGTH };
   const restore =
     (name: string, ownScope: string | null = null): GroupCall<'dormant', unknown> =>
     (g) =>

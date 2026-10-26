@@ -6,10 +6,9 @@ import { strengthenRetrieved, strengthenRetrievedInOwnTx, writeOutcome } from '.
 import { localGoalRecallRows, writeGoalRecallLog } from './goals.js';
 import { saveIndex } from './index-and-stats.js';
 import { readLastRecall } from './mirrors.js';
-import type { Handles, StoreFiles } from './open.js';
+import type { Handles, StoreFiles, StoreModel } from './open.js';
 import type { EntryTarget } from '../../base/ports/store/entry-writes.js';
 import { answered, bound } from './bound.js';
-import type { LossAversion } from '../../base/memory/memory.js';
 import { openStore } from './handles.js';
 import type { LastRecall, RecallWrites } from '../../base/ports/store.js';
 import { writeRecallTrace } from './recall-trace.js';
@@ -22,7 +21,7 @@ interface RecallFinish {
 }
 
 /** sqliteStore's finishRecall, for the synchronous recall that cannot await the port. */
-export function finishRecall(db: DatabaseSyncLike, rules: LossAversion, writes: RecallWrites): RecallFinish {
+export function finishRecall(db: DatabaseSyncLike, rules: StoreModel, writes: RecallWrites): RecallFinish {
   const traceAndStrengthen = (): RecallFinish => ({
     traceId: writes.trace ? writeRecallTrace(db, writes.trace) : null,
     strengthened: writes.strengthen

@@ -3,7 +3,7 @@ import type { InfraPorts } from '../base/ports/infra.js';
 import type { Llm } from '../base/ports/llm.js';
 import type { RerankerLookup } from '../base/ports/reranker.js';
 import { envAnthropicApiKey } from '../base/util/env.js';
-import { evalSwitches } from '../base/memory/ablation.js';
+import { evalClock, evalSwitches } from './eval-switches.js';
 import { anthropicLlm } from './anthropic-llm.js';
 import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { createHost, type Host } from '../host/host.js';
@@ -17,8 +17,8 @@ export function anthropicLlmFromEnv(fetcher?: typeof fetch): Llm | undefined {
   return apiKey ? anthropicLlm({ apiKey, fetcher }) : undefined;
 }
 
-/** The real ports over `reranker`; the machine, the model and the eval switches read the environment as each Context
- * is built, and the machine walks projects through the root's `host`. */
+/** The real ports over `reranker`; the machine, the model, the eval switches and the clock read the environment as each
+ * Context is built, and the machine walks projects through the root's `host`. */
 export function realInfra(reranker: RerankerLookup, host: Host): InfraPorts {
   return {
     machine: currentMachine(host),
@@ -27,6 +27,7 @@ export function realInfra(reranker: RerankerLookup, host: Host): InfraPorts {
     reranker,
     transcriptCalls: readApiCalls,
     evalSwitches: evalSwitches(),
+    clock: evalClock(),
   };
 }
 

@@ -6,7 +6,8 @@ import crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { syncBuiltinESMExports } from 'node:module';
-import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/entry.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
@@ -22,6 +23,7 @@ import { WRITE_BUDGET } from '../../src/base/util/write-budget.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { appendSessionEvent, replaceDetectedConflicts } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 oneRequestPerTest();
 
@@ -244,6 +246,7 @@ async function sleepOnce(root: string, opts: { dryRun?: boolean; pageRows?: numb
   const local = sqliteStore(root);
   const result = await withCountedIds(() =>
     runConsolidation(local, {
+      strength: PRODUCTION_STRENGTH,
       ...opts,
       now: NOW,
       config: loadConfig(root),

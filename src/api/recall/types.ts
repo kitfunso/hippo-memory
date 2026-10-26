@@ -1,7 +1,7 @@
 // Option and result shapes for recall and retrieve.
 
 import type { ContinuityBlock } from '../../base/ports/store.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { RerankStep, SearchResult } from '../../base/rank/search-types.js';
 import type {
   PlanningFallacyHint,

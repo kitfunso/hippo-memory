@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 describe('DAG drill-down search', () => {
   let hippoRoot: string;
@@ -35,7 +36,7 @@ describe('DAG drill-down search', () => {
     writeEntry(hippoRoot, f2);
 
     const entries = loadAllEntries(hippoRoot, 'default');
-    const results = rankBm25('John basketball career goals', entries, { budget: 4000 });
+    const results = rankBm25('John basketball career goals', entries, { now: evalNow(), budget: 4000 });
 
     const ids = results.map((r) => r.entry.id);
     expect(ids).toContain(f1.id);
@@ -51,7 +52,7 @@ describe('DAG drill-down search', () => {
     writeEntry(hippoRoot, fact);
 
     const entries = loadAllEntries(hippoRoot, 'default');
-    const results = rankBm25('Tim reading', entries, { budget: 4000 });
+    const results = rankBm25('Tim reading', entries, { now: evalNow(), budget: 4000 });
 
     expect(results.some((r) => r.entry.id === fact.id)).toBe(true);
   });

@@ -1,5 +1,6 @@
 // Entry of the dashboard's reader thread; dashboard-reader.ts starts it and nothing imports it. It owns the snapshot
 // clock and answers each read through the api's dashboard functions.
+import { evalStoreRules } from '../../infra/eval-switches.js';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import { adminActor } from '../../api/index.js';
 import { dashboardDetailAfterWrite, dashboardMemoryDetail } from '../../api/dashboard/detail.js';
@@ -18,11 +19,11 @@ import { rootInfra } from '../../infra/ports.js';
 // The audit log's actor for every dashboard write.
 const DASHBOARD_ACTOR = 'dashboard';
 
-/** The thread is its own root, so it reads the ratio its store and dashboard reads score strength by. */
+/** The thread is its own root, so it reads the strength model and clock its store and dashboard reads open with. */
 function readerStore(hippoRoot: string, clock: { readonly nowMs: number; readonly wallMs: number }) {
-  const lossAversion = { lossAversionRatio: envLossAversionRatio() };
-  const store = defaultStore(hippoRoot, lossAversion);
-  const reads = defaultDashboardReads(hippoRoot, lossAversion);
+  const rules = evalStoreRules(envLossAversionRatio());
+  const store = defaultStore(hippoRoot, rules);
+  const reads = defaultDashboardReads(hippoRoot, rules);
   const stamps = createSnapshotClock(
     reads,
     () => clock.nowMs,

@@ -1,7 +1,7 @@
 // The sharing and agent-import copy reads: one statement per chunk of texts, only copies back, and the same copies a
 // whole scan finds, with the full-text index in sync and out of sync.
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../../src/base/memory/agent-memory-tools.js';
 import { chunked } from '../../src/base/util/chunked.js';
 import { duplicateKey, heldTextKeys, mergedText } from '../../src/base/util/same-text.js';

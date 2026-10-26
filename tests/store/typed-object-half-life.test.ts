@@ -4,14 +4,11 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { HippoConfig } from '../../src/base/config/config.js';
-import { deriveHalfLife, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { saveDecision } from '../../src/domain/objects/decisions.js';
+import { deriveHalfLife } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { openIncident } from '../../src/domain/objects/incidents.js';
 import { PROCESS } from '../../src/domain/objects/processes.js';
-import { savePolicy } from '../../src/domain/objects/policies.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
-import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
-import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -22,6 +19,8 @@ import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-p
 
 oneRequestPerTest();
 import { cliSave } from '../_helpers/cli-save-site.js';
+import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -51,7 +50,7 @@ const writers: [string, (root: string) => Promise<{ memoryId: string | null }>][
         loadConfig(root).defaultHalfLifeDays,
         'default',
         { incidentText: 'the billing cron charged twice on the 1st' },
-        'cli',
+        { actor: 'cli', now: evalNow() },
       ),
   ],
   [

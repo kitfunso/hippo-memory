@@ -8,7 +8,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Layer, calculateStrength } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
+import { calculateStrength } from '../../src/entry/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -19,6 +20,7 @@ import { initializeParticle } from '../../src/base/rank/physics.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 pinClock();
 
@@ -102,7 +104,7 @@ describe('Trace layer inherits core memory mechanics', () => {
     const db = openHippoDb(tmpDir);
     try {
       // At its own last_retrieved an unretrieved neutral trace has strength 1, so its mass is 1.
-      const particle = initializeParticle(trace, fakeEmbedding, {}, new Date(trace.lastRetrieved));
+      const particle = initializeParticle(trace, fakeEmbedding, PRODUCTION_STRENGTH, new Date(trace.lastRetrieved));
       savePhysicsState(db, [particle]);
       const map = loadPhysicsState(db, [trace.id]);
       expect(map.has(trace.id)).toBe(true);

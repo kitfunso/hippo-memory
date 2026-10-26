@@ -3,7 +3,7 @@
  * idempotent via the `llm-refined` tag.
  * Calls the model through the Llm port; on any failure the original memory is untouched. */
 
-import { MemoryEntry, Layer } from '../../base/memory/memory.js';
+import { MemoryEntry, Layer } from '../../base/memory/entry.js';
 import { REFINED_TAG, storeRefinement } from '../../api/index.js';
 import { memoryList, memoryListByIds, type TenantReach } from '../../api/memories/memories.js';
 import { cliApiContext, type CliContext } from './api-context.js';

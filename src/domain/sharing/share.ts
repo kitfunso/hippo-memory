@@ -2,20 +2,13 @@
 
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import * as path from 'path';
-import {
-  MemoryEntry,
-  generateId,
-  COMPACTION_MEMORY_TAG,
-  ERROR_TAG,
-  EXTRACTED_TAG,
-  strengthOptionsOf,
-} from '../../base/memory/memory.js';
-import { evalSwitches } from '../../base/memory/ablation.js';
+import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG, ERROR_TAG, EXTRACTED_TAG } from '../../base/memory/entry.js';
+import { strengthModelFor } from '../../base/memory/eval-switches.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../../base/memory/agent-memory-tools.js';
 import { isPersonalScope, isQuarantineScope } from '../../base/scope/recall-scope.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
-import { embedMemoryDetached, embedAll, folderEmbedTarget } from '../search/embed-memories.js';
+import { embedMemoryDetached, embedAll, folderEmbedTarget, type EmbedRun } from '../search/embed-memories.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
 import { chunked } from '../../base/util/chunked.js';
@@ -140,13 +133,18 @@ export async function shareMemory(
   local: { readonly store: StoreWith<'folderFiles'> },
   global: ConfiguredFolder<SharingStore>,
   id: string,
-  options: { force?: boolean; tenantId: string; skipEmbed?: boolean },
+  options: { force?: boolean; tenantId: string; skipEmbed?: boolean; embed: EmbedRun },
 ): Promise<MemoryEntry | null> {
   // Tenant A cannot share tenant B's memory to global: the read finds no row of another tenant.
   const [entry] = await local.store.entriesByIds([id], options.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
-  const globalEntry = toGlobalEntry(await local.store.folderFiles.home(), entry, options.force === true);
+  const globalEntry = toGlobalEntry(
+    await local.store.folderFiles.home(),
+    entry,
+    options.force === true,
+    options.embed.clock(),
+  );
   if (!globalEntry) return null;
 
   await global.store.entryWrites.writeEntry({ entry: globalEntry, actor: CLI_ACTOR });
@@ -158,7 +156,8 @@ export async function shareMemory(
       store: global.store,
       embeddings: global.config.embeddings,
       embedderFor: global.embedderFor,
-      strength: strengthOptionsOf(global.config.runtime),
+      strength: strengthModelFor(options.embed.evalSwitches, global.config.runtime),
+      clock: options.embed.clock,
     };
     embedMemoryDetached(target, globalEntry);
   }
@@ -168,7 +167,7 @@ export async function shareMemory(
 
 /** The global copy of a local row, or null when its transfer score is too low and `force` is off; throws when the row
  * may not be shared. */
-function toGlobalEntry(local: StoreHome, entry: MemoryEntry, force: boolean): MemoryEntry | null {
+function toGlobalEntry(local: StoreHome, entry: MemoryEntry, force: boolean, now: Date): MemoryEntry | null {
   assertShareable(entry, entry.id);
 
   const score = transferScore(entry);
@@ -182,7 +181,7 @@ function toGlobalEntry(local: StoreHome, entry: MemoryEntry, force: boolean): Me
   return {
     ...entry,
     id: generateId('g'),
-    source: `shared:${label}:${new Date().toISOString()}`,
+    source: `shared:${label}:${now.toISOString()}`,
     originProject: originName,
   };
 }
@@ -323,8 +322,8 @@ async function pageCandidates(
 }
 
 /** Writes one page of candidates in one transaction; returns the copies written and how many a tombstone refused. */
-async function sharePage(local: StoreHome, to: SharingStore, page: readonly MemoryEntry[]) {
-  const copies = page.flatMap((entry) => toGlobalEntry(local, entry, true) ?? []);
+async function sharePage(local: StoreHome, to: SharingStore, page: readonly MemoryEntry[], now: Date) {
+  const copies = page.flatMap((entry) => toGlobalEntry(local, entry, true, now) ?? []);
   const written = new Set(await to.lessonWrites.writeSkippingRejected(copies, CLI_ACTOR));
   const shared = copies.filter((copy) => written.has(copy.id));
   return { shared, refused: copies.length - shared.length };
@@ -337,11 +336,12 @@ async function shareCandidates(
   to: SharingStore,
   candidates: readonly MemoryEntry[],
   stats: AutoShareStats | undefined,
+  now: Date,
 ): Promise<MemoryEntry[]> {
   const shared: MemoryEntry[] = [];
   let rejectedSkipped = 0;
   for (const page of chunked(candidates, READ_PAGE_ROWS)) {
-    const written = await sharePage(local, to, page);
+    const written = await sharePage(local, to, page, now);
     shared.push(...written.shared);
     rejectedSkipped += written.refused;
   }
@@ -366,6 +366,7 @@ export async function autoShare(
     /** ALL_TENANTS for sleep, which shares every tenant's rows. */
     tenantId: TenantId;
     stats?: AutoShareStats;
+    embed: EmbedRun;
   },
 ): Promise<MemoryEntry[]> {
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
@@ -379,10 +380,16 @@ export async function autoShare(
 
   if (dryRun) return candidates;
 
-  const shared = await shareCandidates(await from.store.folderFiles.home(), to, candidates, options.stats);
+  const shared = await shareCandidates(
+    await from.store.folderFiles.home(),
+    to,
+    candidates,
+    options.stats,
+    options.embed.clock(),
+  );
 
   if (shared.length > 0) {
-    void embedAll(folderEmbedTarget(global, evalSwitches())).catch((err) => logEmbedAllFailure('autoShare', err));
+    void embedAll(folderEmbedTarget(global, options.embed)).catch((err) => logEmbedAllFailure('autoShare', err));
   }
 
   return shared;

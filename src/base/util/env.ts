@@ -115,7 +115,7 @@ export function envByName(name: string): string | undefined {
   return raw(name);
 }
 
-// Eval-only lifecycle switches; ablation.ts reads them at call time.
+// Eval-only lifecycle switches; src/infra/eval-switches.ts reads them at call time.
 export const envAblateDecay = bool('HIPPO_ABLATE_DECAY');
 export const envAblateRecallBoost = bool('HIPPO_ABLATE_RECALL_BOOST');
 export const envAblateOutcome = bool('HIPPO_ABLATE_OUTCOME');

@@ -5,10 +5,10 @@ import {
   type ConfidenceLevel,
   type MemoryKind,
   DEFAULT_SCHEMA_FIT,
-  FALLBACK_HALF_LIFE_DAYS,
   type EmotionalValence,
   type TraceOutcome,
-} from '../../base/memory/memory.js';
+} from '../../base/memory/entry.js';
+import { FALLBACK_HALF_LIFE_DAYS } from '../../base/memory/strength.js';
 import { log } from '../../base/util/log.js';
 import { type JsonValue, tryParseJson } from '../../base/util/json.js';
 import { parseStoredObject, warnDamagedColumn, type StoredJsonSite } from '../../base/util/stored-json.js';

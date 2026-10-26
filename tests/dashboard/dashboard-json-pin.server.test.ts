@@ -1,7 +1,7 @@
 // Pins the dashboard reads the golden leaves out, recorded on the snapshot build before bounded reads replaced it:
 // every sort, brushes, case folding past ASCII, tag hits, first-seen project order, strength cut points, a past-cap grid.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
 import {

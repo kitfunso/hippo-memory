@@ -14,9 +14,8 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
-import { DECISION, saveDecision } from '../../src/domain/objects/decisions.js';
-import { savePolicy } from '../../src/domain/objects/policies.js';
-import { saveProjectBrief, refreshedBrief } from '../../src/domain/objects/project-briefs.js';
+import { DECISION } from '../../src/domain/objects/decisions.js';
+import { refreshedBrief } from '../../src/domain/objects/project-briefs.js';
 import { loadExtractionQueue } from '../_helpers/graph-queue.js';
 import {
   extractGraph as realExtractGraph,
@@ -41,6 +40,8 @@ import {
   loadRelations,
 } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -124,14 +125,14 @@ describe('sleep enqueue-hook', () => {
     const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
       decisionText: 'to be closed',
     });
-    await closeObject(objectsAt(tc.hippoRoot), DECISION, T, d.id, CLI_ACTOR);
+    await closeObject(objectsAt(tc.hippoRoot), DECISION, T, d.id, { actor: CLI_ACTOR, now: evalNow() });
     await saveProjectBrief(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
       repo: 'myrepo',
       summary: 'first',
     });
     await refreshedBrief(
       objectsAt(tc.hippoRoot),
-      { baseHalfLifeDays: loadConfig(tc.hippoRoot).defaultHalfLifeDays, tenantId: T, actor: 'cli' },
+      { now: evalNow(), baseHalfLifeDays: loadConfig(tc.hippoRoot).defaultHalfLifeDays, tenantId: T, actor: 'cli' },
       'myrepo',
     ); // delegates to saveProjectBrief
     // save(d) + close(d) + saveBrief + refresh(->saveBrief) = 4 enqueues

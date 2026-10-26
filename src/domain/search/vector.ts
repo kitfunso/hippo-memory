@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { cosineOf } from '../../base/rank/cosine.js';
 import { indexedModel, indexNeedsRebuild } from '../../base/embeddings/index-identity.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';

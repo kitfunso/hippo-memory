@@ -2,8 +2,9 @@
 // because error memories decay slowly and would crowd out real lessons; what is stored stays `observed` until outcome
 // feedback confirms it. Every failure, stored or not, goes to the failure log.
 import type { Context } from '../../api/types.js';
+import type { InfraPorts } from '../../base/ports/infra.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
-import { createMemory, ERROR_TAG } from '../../base/memory/memory.js';
+import { createMemory, ERROR_TAG } from '../../base/memory/entry.js';
 import {
   failureHash,
   failureSignature,
@@ -15,7 +16,9 @@ import type { JsonValue } from '../../base/util/json.js';
 import type { CaptureErrorOutcome, FailureOutcome } from '../../base/ports/store/rejections.js';
 
 /** The store a failure is logged and its lesson kept in, with that store's config. */
-export type FailureTarget = Pick<Context, 'tenantId' | 'store' | 'config'>;
+export type FailureTarget = Pick<Context, 'tenantId' | 'store' | 'config'> & {
+  readonly infra: Pick<InfraPorts, 'clock'>;
+};
 
 /**
  * Store a failure as an error memory unless it is routine or a repeat, and log it either way, even when storing throws.
@@ -79,20 +82,24 @@ export interface LessonCaller {
 }
 
 export async function storeLesson(
-  { tenantId, store, config }: FailureTarget,
+  { tenantId, store, config, infra }: FailureTarget,
   text: string,
   caller?: LessonCaller,
 ): Promise<'stored' | 'duplicate'> {
   const sig = failureSignature(text);
   const held = await store.lessonWrites.contentsWithTag(tenantId, 'auto-captured', caller?.origins);
   if (held.some((content) => failureSignature(content) === sig)) return 'duplicate';
-  const entry = createMemory(text, {
-    tags: [ERROR_TAG, 'auto-captured'],
-    source: 'tool-failure',
-    confidence: 'observed',
-    tenantId,
-    baseHalfLifeDays: config.defaultHalfLifeDays,
-  });
+  const entry = createMemory(
+    text,
+    {
+      tags: [ERROR_TAG, 'auto-captured'],
+      source: 'tool-failure',
+      confidence: 'observed',
+      tenantId,
+      baseHalfLifeDays: config.defaultHalfLifeDays,
+    },
+    infra.clock(),
+  );
   // A caller's project is its checked one; the store's own folder would name the server.
   const write =
     caller === undefined

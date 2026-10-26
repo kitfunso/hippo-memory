@@ -17,7 +17,8 @@ import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { createMemory, Layer } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import {
   logPhaseFailures,

@@ -4,19 +4,16 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  createMemory,
-  createSuccessor,
-  DEFAULT_HALF_LIFE_DAYS,
-  Layer,
-  type MemoryEntry,
-} from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { createSuccessor, Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -118,7 +115,12 @@ describe('createSuccessor', () => {
   it('keeps source, scope, session and origin, and defaults layer, tags and pin to the old row', () => {
     const old = oldRow();
 
-    const next = createSuccessor(old, 'the deploy pipeline signs and scans every artifact before upload', opts);
+    const next = createSuccessor(
+      old,
+      'the deploy pipeline signs and scans every artifact before upload',
+      opts,
+      new Date(),
+    );
 
     expect(next.id).not.toBe(old.id);
     expect(next.content).toBe('the deploy pipeline signs and scans every artifact before upload');
@@ -136,26 +138,34 @@ describe('createSuccessor', () => {
 
   it('keeps a user-global origin', () => {
     expect(
-      createSuccessor(oldRow({ originProject: '' }), 'the deploy pipeline now signs twice', opts).originProject,
+      createSuccessor(oldRow({ originProject: '' }), 'the deploy pipeline now signs twice', opts, evalNow())
+        .originProject,
     ).toBe('');
   });
 
   it('leaves a legacy null or unset origin unset so the store stamps it', () => {
     expect(
-      createSuccessor(oldRow({ originProject: null }), 'the deploy pipeline now signs twice', opts).originProject,
+      createSuccessor(oldRow({ originProject: null }), 'the deploy pipeline now signs twice', opts, evalNow())
+        .originProject,
     ).toBeUndefined();
     expect(
-      createSuccessor(oldRow({ originProject: undefined }), 'the deploy pipeline now signs twice', opts).originProject,
+      createSuccessor(oldRow({ originProject: undefined }), 'the deploy pipeline now signs twice', opts, evalNow())
+        .originProject,
     ).toBeUndefined();
   });
 
   it('lets layer, tags and pinned overrides win, including an empty tag list and pinned false', () => {
-    const next = createSuccessor(oldRow(), 'the deploy pipeline now signs twice', {
-      ...opts,
-      layer: Layer.Episodic,
-      tags: [],
-      pinned: false,
-    });
+    const next = createSuccessor(
+      oldRow(),
+      'the deploy pipeline now signs twice',
+      {
+        ...opts,
+        layer: Layer.Episodic,
+        tags: [],
+        pinned: false,
+      },
+      new Date(),
+    );
 
     expect(next.layer).toBe(Layer.Episodic);
     expect(next.tags).toEqual([]);
@@ -166,7 +176,8 @@ describe('createSuccessor', () => {
 
   it('takes the tenant from the options', () => {
     expect(
-      createSuccessor(oldRow(), 'the deploy pipeline now signs twice', { ...opts, tenantId: 'tenant-b' }).tenantId,
+      createSuccessor(oldRow(), 'the deploy pipeline now signs twice', { ...opts, tenantId: 'tenant-b' }, evalNow())
+        .tenantId,
     ).toBe('tenant-b');
   });
 });

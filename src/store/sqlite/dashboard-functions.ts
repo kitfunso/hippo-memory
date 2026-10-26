@@ -2,15 +2,14 @@
 // and a row the dashboard lists judge one memory the same way. Aggregate state is a fixed Float64Array, never a
 // row list.
 import type { DatabaseSyncLike, SqlValue } from '../../db/index.js';
+import type { StoreModel } from './open.js';
 import {
   calculateStrength,
   FALLBACK_HALF_LIFE_DAYS,
   type ConfidenceInputs,
-  type Layer,
-  type LossAversion,
-  type MemoryEntry,
   type StrengthInputs,
-} from '../../base/memory/memory.js';
+} from '../../base/memory/strength.js';
+import type { Layer, MemoryEntry } from '../../base/memory/entry.js';
 import {
   BAND_AT_RISK,
   bandAt,
@@ -176,10 +175,10 @@ function newProjectTally(): Float64Array {
   return t;
 }
 
-function addProjectRow(t: Float64Array, v: readonly SqlValue[], rules: LossAversion): Float64Array {
+function addProjectRow(t: Float64Array, v: readonly SqlValue[], rules: StoreModel): Float64Array {
   const row = factsOf(v);
   const nowMs = Number(v[FACT_ARGS + 1]);
-  const f = memoryFacts(row, nowMs, rules);
+  const f = memoryFacts(row, nowMs, rules.strength);
   const created = Date.parse(row.created);
   t[P_LIVE]++;
   t[P_BANDS + f.band]++;
@@ -204,9 +203,9 @@ const F_7D = 7;
 const F_30D = 10;
 const F_SIZE = 13;
 
-function addFilteredRow(t: Float64Array, v: readonly SqlValue[], rules: LossAversion): Float64Array {
+function addFilteredRow(t: Float64Array, v: readonly SqlValue[], rules: StoreModel): Float64Array {
   const row = factsOf(v);
-  const f = memoryFacts(row, Number(v[FACT_ARGS + 1]), rules);
+  const f = memoryFacts(row, Number(v[FACT_ARGS + 1]), rules.strength);
   t[F_ALL]++;
   t[F_NOW + strengthBucket(f.strength)]++;
   t[F_7D + strengthBucket(f.strength7d)]++;
@@ -219,21 +218,21 @@ function addFilteredRow(t: Float64Array, v: readonly SqlValue[], rules: LossAver
 
 const GRID_CELLS = SCATTER_COLS * SCATTER_ROWS;
 
-function addGridRow(t: Float64Array, v: readonly SqlValue[], rules: LossAversion): Float64Array {
+function addGridRow(t: Float64Array, v: readonly SqlValue[], rules: StoreModel): Float64Array {
   const row = factsOf(v);
   const nowMs = Number(v[FACT_ARGS]);
   const maxLog = Number(v[FACT_ARGS + 1]);
   const age = daysBetween(row.created, nowMs);
-  const strength = calculateStrength(row, new Date(nowMs), rules);
+  const strength = calculateStrength(row, new Date(nowMs), rules.strength);
   const col = Math.min(SCATTER_COLS - 1, Math.floor((Math.log10(age + 1) / maxLog) * SCATTER_COLS));
   const cell = Math.min(SCATTER_ROWS - 1, Math.floor(strength * SCATTER_ROWS));
   t[layerIndex(row.layer) * GRID_CELLS + cell * SCATTER_COLS + col]++;
   return t;
 }
 
-type Step = (t: Float64Array, v: readonly SqlValue[], rules: LossAversion) => Float64Array;
+type Step = (t: Float64Array, v: readonly SqlValue[], rules: StoreModel) => Float64Array;
 
-function tally(db: DatabaseSyncLike, name: string, start: () => Float64Array, step: Step, rules: LossAversion): void {
+function tally(db: DatabaseSyncLike, name: string, start: () => Float64Array, step: Step, rules: StoreModel): void {
   db.aggregate<Float64Array>(name, {
     start,
     step: (t, ...v) => step(t, v, rules),
@@ -244,11 +243,13 @@ function tally(db: DatabaseSyncLike, name: string, start: () => Float64Array, st
 }
 
 /** Registers the dashboard's functions on `db`, each scoring strength by `rules`. */
-export function useDashboardFunctions(db: DatabaseSyncLike, rules: LossAversion): void {
+export function useDashboardFunctions(db: DatabaseSyncLike, rules: StoreModel): void {
   const fixed = { deterministic: true };
   const many = { deterministic: true, varargs: true };
-  db.function('hippo_strength', many, (...v) => calculateStrength(factsOf(v), new Date(Number(v[FACT_ARGS])), rules));
-  db.function('hippo_band', many, (...v) => bandAt(factsOf(v), Number(v[FACT_ARGS]), rules));
+  db.function('hippo_strength', many, (...v) =>
+    calculateStrength(factsOf(v), new Date(Number(v[FACT_ARGS])), rules.strength),
+  );
+  db.function('hippo_band', many, (...v) => bandAt(factsOf(v), Number(v[FACT_ARGS]), rules.strength));
   db.function('hippo_days', fixed, (iso: SqlValue, nowMs: SqlValue) => daysBetween(text(iso), Number(nowMs)));
   db.function('hippo_holds_text', fixed, holdsText);
   db.function('hippo_head_key', fixed, (content: SqlValue) => utf16Key(listHead(text(content)).head.toLowerCase()));

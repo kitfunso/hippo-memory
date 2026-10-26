@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { churnStaleFactor } from './boosts.js';

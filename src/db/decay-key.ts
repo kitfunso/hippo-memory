@@ -1,14 +1,17 @@
-import { REWARD_SLOPE } from '../base/memory/memory.js';
+import { PRODUCTION_STRENGTH } from '../base/memory/strength.js';
 
 export const DECAY_KEY_INDEX = 'idx_memories_decay_key';
 
 const POS = 'COALESCE(outcome_positive, 0)';
 const NEG = 'COALESCE(outcome_negative, 0)';
 
-/** Unablated, in the db layer so the index and rule-sql's rewardFactorSql share one slope. */
-export const REWARD_FACTOR_SQL =
-  `(CASE WHEN ${POS} = 0 AND ${NEG} = 0 THEN 1.0 ELSE 1.0 + ${REWARD_SLOPE} * (${POS} - ${NEG}) / (${POS} + ` +
-  `${NEG} + 1.0) END)`;
+/** calculateRewardFactor at `slope` as SQL over `memories` columns; here so the index and rule-sql share it. */
+export const rewardFactorAt = (slope: number): string =>
+  `(CASE WHEN ${POS} = 0 AND ${NEG} = 0 THEN 1.0 ` +
+  `ELSE 1.0 + ${slope} * (${POS} - ${NEG}) / (${POS} + ${NEG} + 1.0) END)`;
+
+/** The production slope's reward factor, which the decay-key index is built on. */
+export const REWARD_FACTOR_SQL = rewardFactorAt(PRODUCTION_STRENGTH.rewardSlope);
 
 /** Half-lives of decay the index key measures to: a narrower window reads fewer rows of a large tenant, and a tenant
  * with fewer rows inside it than the cap is small enough to scan. */

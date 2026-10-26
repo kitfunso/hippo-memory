@@ -1,18 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import {
-  calculateStrength,
-  calculateRewardFactor,
-  applyOutcome,
-  Layer,
-  type MemoryEntry,
-  type TraceOutcome,
-} from '../../src/base/memory/memory.js';
+import { calculateStrength, applyOutcome } from '../../src/entry/memory.js';
+import { calculateRewardFactor } from '../../src/base/memory/strength.js';
+import { Layer, type MemoryEntry, type TraceOutcome } from '../../src/base/memory/entry.js';
 import { strengthSql } from '../../src/store/sqlite/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
@@ -145,13 +141,13 @@ describe('applyOutcome', () => {
 describe('calculateRewardFactor', () => {
   it('returns 1.0 with no outcomes', () => {
     const entry = createMemory7('neutral');
-    expect(calculateRewardFactor(entry)).toBe(1.0);
+    expect(calculateRewardFactor(entry, PRODUCTION_STRENGTH)).toBe(1.0);
   });
 
   it('returns > 1.0 with net positive outcomes', () => {
     const entry = createMemory7('good');
     const updated = { ...entry, outcomePositive: 5, outcomeNegative: 0 };
-    const rf = calculateRewardFactor(updated);
+    const rf = calculateRewardFactor(updated, PRODUCTION_STRENGTH);
     expect(rf).toBeGreaterThan(1.0);
     // 1 + 0.5 * (5 / 6) ≈ 1.417
     expect(rf).toBeCloseTo(1.417, 2);
@@ -160,7 +156,7 @@ describe('calculateRewardFactor', () => {
   it('returns < 1.0 with net negative outcomes', () => {
     const entry = createMemory7('bad');
     const updated = { ...entry, outcomePositive: 0, outcomeNegative: 3 };
-    const rf = calculateRewardFactor(updated);
+    const rf = calculateRewardFactor(updated, PRODUCTION_STRENGTH);
     expect(rf).toBeLessThan(1.0);
     // 1 + 0.5 * (-3 / 4) = 0.625
     expect(rf).toBeCloseTo(0.625, 2);
@@ -169,7 +165,7 @@ describe('calculateRewardFactor', () => {
   it('converges toward 1.0 with mixed outcomes', () => {
     const entry = createMemory7('mixed');
     const updated = { ...entry, outcomePositive: 3, outcomeNegative: 3 };
-    const rf = calculateRewardFactor(updated);
+    const rf = calculateRewardFactor(updated, PRODUCTION_STRENGTH);
     // 1 + 0.5 * (0 / 7) = 1.0
     expect(rf).toBe(1.0);
   });
@@ -178,8 +174,8 @@ describe('calculateRewardFactor', () => {
     const entry = createMemory7('extreme');
     const allGood = { ...entry, outcomePositive: 1000, outcomeNegative: 0 };
     const allBad = { ...entry, outcomePositive: 0, outcomeNegative: 1000 };
-    expect(calculateRewardFactor(allGood)).toBeLessThanOrEqual(1.5);
-    expect(calculateRewardFactor(allBad)).toBeGreaterThanOrEqual(0.5);
+    expect(calculateRewardFactor(allGood, PRODUCTION_STRENGTH)).toBeLessThanOrEqual(1.5);
+    expect(calculateRewardFactor(allBad, PRODUCTION_STRENGTH)).toBeGreaterThanOrEqual(0.5);
   });
 });
 
@@ -335,7 +331,7 @@ describe('strengthSql parity', () => {
       writeEntriesTogether(home, entries);
       const db = openHippoDb(home);
       try {
-        const strength = strengthSql(now, {});
+        const strength = strengthSql(now, PRODUCTION_STRENGTH);
         // SAFETY: the SELECT names exactly the columns id and s.
         const rows = db.prepare(`SELECT id, ${strength.sql} AS s FROM memories`).all(...strength.params) as Array<{
           id: string;

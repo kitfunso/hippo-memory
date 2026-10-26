@@ -4,12 +4,11 @@ import {
   calculateStrength,
   confidenceFacets,
   netWrong,
-  Layer,
   type ConfidenceInputs,
-  type LossAversion,
-  type MemoryEntry,
   type StrengthInputs,
-} from './memory.js';
+  type StrengthModel,
+} from './strength.js';
+import { Layer, type MemoryEntry } from './entry.js';
 import { AT_RISK_BELOW, STRONG_FROM } from './strength-bands.js';
 import { DAY_MS } from '../util/time.js';
 
@@ -72,9 +71,9 @@ function bandOf(pinned: boolean, strength: number, strength30d: number): number 
 }
 
 /** The band of `entry` at `nowMs`, as memoryFacts judges it. */
-export function bandAt(entry: StrengthInputs, nowMs: number, lossAversion: LossAversion): number {
-  const strength = calculateStrength(entry, new Date(nowMs), lossAversion);
-  return bandOf(entry.pinned, strength, calculateStrength(entry, new Date(nowMs + AHEAD_30D_MS), lossAversion));
+export function bandAt(entry: StrengthInputs, nowMs: number, model: StrengthModel): number {
+  const strength = calculateStrength(entry, new Date(nowMs), model);
+  return bandOf(entry.pinned, strength, calculateStrength(entry, new Date(nowMs + AHEAD_30D_MS), model));
 }
 
 /** A list shows this many UTF-16 units of content; the store reads one character more, so the cut shows. */
@@ -109,12 +108,12 @@ export function seriesDay(timeMs: number, nowMs: number): number {
 export function memoryFacts(
   entry: StrengthInputs & ConfidenceInputs & Pick<MemoryEntry, 'layer'>,
   nowMs: number,
-  lossAversion: LossAversion,
+  model: StrengthModel,
 ): MemoryFacts {
   const now = new Date(nowMs);
-  const strength = calculateStrength(entry, now, lossAversion);
-  const strength7d = calculateStrength(entry, new Date(nowMs + AHEAD_7D_MS), lossAversion);
-  const strength30d = calculateStrength(entry, new Date(nowMs + AHEAD_30D_MS), lossAversion);
+  const strength = calculateStrength(entry, now, model);
+  const strength7d = calculateStrength(entry, new Date(nowMs + AHEAD_7D_MS), model);
+  const strength30d = calculateStrength(entry, new Date(nowMs + AHEAD_30D_MS), model);
   const facets = confidenceFacets(entry, now);
   return {
     strength,
@@ -126,6 +125,6 @@ export function memoryFacts(
     lastRetrievedDays: daysBetween(entry.lastRetrieved, nowMs),
     confidence: facets.tier,
     agedOut: facets.agedOut,
-    wrong: netWrong(entry) > 0,
+    wrong: netWrong(entry, model) > 0,
   };
 }

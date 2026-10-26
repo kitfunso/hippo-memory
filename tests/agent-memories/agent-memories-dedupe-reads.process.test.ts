@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { importForStore } from '../../src/api/agent-memories.js';
 import type { ImportReport } from '../../src/base/memory/agent-memory-report.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { setFtsInSync } from '../../src/db/index.js';
 import { sqliteImportStores } from '../../src/store/sqlite/agent-import-stores.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
@@ -22,6 +22,7 @@ import {
   type World,
 } from '../_helpers/agent-memories-world.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -68,6 +69,7 @@ function seed(): void {
 
 const sync = (dryRun: boolean): Promise<ImportReport> =>
   importForStore(w.local, {
+    run: TEST_RUN,
     configAt: loadConfig,
     tenantId: 'default',
     stores: sqliteImportStores({}),

@@ -24,6 +24,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -134,7 +135,7 @@ describe('processes store (first-class object)', () => {
       steps: ['b', 'b2'],
       supersedesProcessId: b.id,
     });
-    await closeObject(objectsAt(home), PROCESS, 'default', c.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), PROCESS, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
 
     const active = await listObjects(objectsAt(home), PROCESS, 'default', { status: 'active' });
     expect(active.every((x) => x.status === 'active')).toBe(true);

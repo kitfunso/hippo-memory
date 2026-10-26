@@ -2,7 +2,8 @@
 // dirty summary, the flush and dormant expiry, and the run record.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { DAG_LEVEL, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { DAG_LEVEL, Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

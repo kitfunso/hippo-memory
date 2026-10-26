@@ -10,21 +10,16 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/rules/half-life.js';
-import {
-  createMemory,
-  deriveHalfLife,
-  DEFAULT_HALF_LIFE_DAYS,
-  LEGACY_TYPED_HALF_LIFE,
-  type CreateMemoryOptions,
-} from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { deriveHalfLife, type CreateMemoryOptions } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS, LEGACY_TYPED_HALF_LIFE } from '../../src/base/memory/strength.js';
 import { migrateDefaultHalfLife } from '../../src/domain/consolidate/half-life-migration.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { consolidate } from '../../src/index.js';
-import { saveDecision, DECISION } from '../../src/domain/objects/decisions.js';
+import { DECISION } from '../../src/domain/objects/decisions.js';
 import { openIncident, resolveOpenIncident } from '../../src/domain/objects/incidents.js';
-import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { supersede, adminActor } from '../../src/api/index.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/sqlite/rows.js';
 import { recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
@@ -44,6 +39,8 @@ import {
 import { initStore } from '../../src/store/sqlite/handles.js';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
+import { saveCustomerNote, saveDecision } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 const dirs: string[] = [];
 const local = (root: string) => sqliteStore(root);
@@ -373,15 +370,18 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     const closed = await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', {
       decisionText: 'freeze deploys on Fridays',
     });
-    await closeObject(objectsAt(root), DECISION, 'default', closed.id, CLI_ACTOR);
+    await closeObject(objectsAt(root), DECISION, 'default', closed.id, { actor: CLI_ACTOR, now: evalNow() });
     const incident = await openIncident(
       objectsAt(root),
       loadConfig(root).defaultHalfLifeDays,
       'default',
       { incidentText: 'the billing cron charged twice on the 1st' },
-      'cli',
+      { actor: 'cli', now: evalNow() },
     );
-    await resolveOpenIncident(objectsAt(root), 'default', incident.id, 'made the charge idempotent', 'cli');
+    await resolveOpenIncident(objectsAt(root), 'default', incident.id, 'made the charge idempotent', {
+      actor: 'cli',
+      now: evalNow(),
+    });
     for (const id of [old.memoryId!, closed.memoryId!, incident.memoryId!]) pinTo90(root, id);
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
 

@@ -1,6 +1,8 @@
 // The typed-object routes answer from store workers as they do on the in-process store, and fail when a handler opens hippo.db on the server thread.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';

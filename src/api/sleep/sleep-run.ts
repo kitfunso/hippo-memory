@@ -5,11 +5,10 @@ import { AUTO_SHARE_MIN_SCORE, autoShare } from '../../domain/sharing/share.js';
 import { runConsolidation } from '../../domain/consolidate/sleep.js';
 import { deduplicateStore } from '../../domain/consolidate/dedupe.js';
 import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
-import { evalNow } from '../../base/memory/ablation.js';
 import { ambientStateFromTallies, foldAmbientRows, tallyAmbientEntries } from '../../base/memory/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../domain/graph/extract.js';
-import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
-import type { Context, SleepContext } from '../types.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
+import { strengthOf, type Context, type SleepContext } from '../types.js';
 import { auditRemoveErrors } from '../auth/audit.js';
 import { globalTargetOf } from '../infra.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
@@ -101,6 +100,8 @@ async function runSleepPhases(
     config: ctx.config,
     tenantId: ctx.tenantId,
     llm: ctx.infra.llm,
+    now: ctx.infra.clock(),
+    strength: strengthOf(ctx),
   });
   counts.consolidation = consolidateResult.semanticCreated + consolidateResult.merged;
   const result = sleepResultFrom(consolidateResult, dryRun);
@@ -240,6 +241,7 @@ async function shareOnSleep(ctx: SleepContext, phases: SleepPhases, result: Slee
     tenantId: ALL_TENANTS,
     minScore: AUTO_SHARE_MIN_SCORE,
     stats: autoShareStats,
+    embed: ctx.infra,
   });
   if (shared.length > 0) {
     result.shared = shared.length;
@@ -261,9 +263,9 @@ async function summarizeAmbient(
 ): Promise<number> {
   if (!ctx.config.ambient.enabled) return 0;
   // One running tally at one `now`, so the float sums match one whole read row for row.
-  const now = evalNow();
-  const tallies = tallyAmbientEntries([], now);
-  const rules = strengthOptionsOf(ctx.config.runtime);
+  const now = ctx.infra.clock();
+  const rules = strengthOf(ctx);
+  const tallies = tallyAmbientEntries([], now, rules);
   for await (const page of pages()) {
     foldAmbientRows(
       tallies,

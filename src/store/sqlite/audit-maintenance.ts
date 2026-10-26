@@ -8,7 +8,8 @@ import { getMeta, pragmaUserVersion, setMeta } from '../../db/meta.js';
 import { tableColumns } from '../../db/tables.js';
 import { assertBinaryCompatible } from '../../db/migrate.js';
 import { dormantSnapshotsByIds, insertDormantRow } from './dormant-rows.js';
-import { calculateStrength, type LossAversion, type MemoryEntry } from '../../base/memory/memory.js';
+import { calculateStrength } from '../../base/memory/strength.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isRepairCandidate, previewDefect, repairDefect, repairKeeps } from '../../base/memory/memory-audit.js';
 import {
   deleteEntryCore,
@@ -21,7 +22,7 @@ import { listEntriesWhere } from './entry-filter.js';
 import { ftsRowExists } from './entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
-import type { StoreFiles, Handles } from './open.js';
+import type { StoreFiles, Handles, StoreModel } from './open.js';
 import type { QualityRepairResult, QualityRepairIssue, RepairProtection } from '../../base/ports/store/audit.js';
 import { openStore } from './handles.js';
 import { answered, bound, skipEmpty } from './bound.js';
@@ -189,7 +190,7 @@ function plannedResult(db: DatabaseSyncLike, root: string, run: RepairRun): Qual
 interface RepairMove {
   readonly now: Date;
   readonly backup: string;
-  readonly rules: LossAversion;
+  readonly rules: StoreModel;
 }
 
 function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string, move: RepairMove): boolean {
@@ -199,7 +200,7 @@ function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string,
   if (removed === null) return false;
   insertDormantRow(db, {
     entry,
-    strength: calculateStrength(entry, now, move.rules),
+    strength: calculateStrength(entry, now, move.rules.strength),
     reason: 'quality-repair',
     dormantAt: now.toISOString(),
   });
@@ -238,12 +239,12 @@ function applyPlan(
   run: RepairRun,
   plan: QualityRepairResult,
   backup: string,
-  rules: LossAversion,
+  rules: StoreModel,
 ): QualityRepairResult {
   return withWriteScope(db, 'quality_repair_apply', () => {
     const blockers = capabilityBlockers(db);
     if (blockers.length > 0) throw new Error(`Quality repair capability changed: ${blockers.join('; ')}`);
-    const move: RepairMove = { now: new Date(), backup, rules };
+    const move: RepairMove = { now: rules.clock(), backup, rules };
     const { ids, rows, issues: current } = rejudgeSetAsides(db, run, plan);
     const issues = plan.issues.flatMap((issue) => (ids.has(issue.id) ? (current.get(issue.id) ?? []) : [issue]));
     const appliedIds: string[] = [];

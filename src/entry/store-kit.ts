@@ -1,3 +1,8 @@
+import type { MemoryEntry } from '../base/memory/entry.js';
+import { entryAfterOutcome as outcomeAt } from '../base/memory/keep-rules.js';
+import { PRODUCTION_STRENGTH, withLossAversion } from '../base/memory/strength.js';
+import { tallyAmbientEntries as tallyAmbientAt, type AmbientTallies } from '../base/memory/ambient.js';
+import { evalNow, evalSwitches } from '../infra/eval-switches.js';
 export type { ApiKeyListItem, ApiKeyListRow, ListApiKeysOpts, NewApiKey } from '../base/ports/store/keys.js';
 export type {
   ApiKeyRecord,
@@ -106,7 +111,13 @@ export {
   type WorkingMemoryPush,
 } from '../base/ports/store-index.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
-export { entryAfterOutcome } from '../base/memory/memory.js';
+export function entryAfterOutcome(
+  entry: MemoryEntry,
+  good: boolean,
+  rules: { lossAversionRatio?: number } = {},
+): MemoryEntry {
+  return outcomeAt(entry, good, evalNow(), withLossAversion(PRODUCTION_STRENGTH, rules.lossAversionRatio));
+}
 export { normalizeValueForRejection, rejectionDigest } from '../base/records/rejection-digest.js';
 // An add-on's rejections find the texts a sleep-merged row holds with hippo.db's rule.
 export { heldTexts } from '../base/util/same-text.js';
@@ -127,7 +138,7 @@ export {
 export type { KeysetPosition } from '../base/util/keyset.js';
 // The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.
 export type { ContinuityBlock } from '../api/recall/types.js';
-export type { MemoryEntry } from '../base/memory/memory.js';
+export type { MemoryEntry } from '../base/memory/entry.js';
 export type {
   SessionEvent,
   TaskSnapshot,
@@ -185,7 +196,10 @@ export {
   type DescendantAdmission,
 } from '../base/scope/read-admission.js';
 export { SECRET_TAGS } from '../base/util/secret-detect.js';
-export { tallyAmbientEntries } from '../base/memory/ambient.js';
+/** An add-on's ambient tallies, scored as hippo.db's are under the environment's eval switches. */
+export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
+  return tallyAmbientAt(entries, now ?? evalNow(), evalSwitches().strength);
+}
 // An add-on's graphReads.graphDelta plans the rebuild's ops from its stored rows by hippo.db's rule.
 export { diffGraph, type StoredGraph } from '../store/rules/graph-delta.js';
 export { ftsTermParts, rarestFtsQuery } from '../base/rank/prompt-recall.js';

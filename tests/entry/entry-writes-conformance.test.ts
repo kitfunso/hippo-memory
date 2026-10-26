@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import { reject } from '../../src/api/index.js';
 import { RawAppendOnlyError } from '../../src/base/errors/raw-append-only.js';
-import { CHURN_STALE_TAG, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { CHURN_STALE_TAG, type MemoryEntry } from '../../src/base/memory/entry.js';
 import type { AuditEvent, ScopeReader } from '../../src/entry/store-kit.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {

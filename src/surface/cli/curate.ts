@@ -1,7 +1,7 @@
 // Verbs that weaken, suppress or retire memories: outcome, forget, conflicts, reject, dormant, quarantine, invalidate.
 
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import * as path from 'path';
 import { RejectedValueError } from '../../base/errors/api-errors.js';

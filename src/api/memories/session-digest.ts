@@ -1,7 +1,7 @@
 // The session digest's write: which sessions earn one, the text the echo filters leave, and one row per session.
 import type { HippoConfig } from '../../base/config/config.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
-import { createMemory, Layer, type MemoryEntry } from '../../base/memory/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import { SESSION_DIGEST_TAG, sessionDigestId } from '../../base/session/session-digest-row.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../../base/session/session-snapshot.js';
 import { buildSessionDigest } from '../../domain/learn/session-digest.js';
@@ -39,6 +39,8 @@ export interface SessionDigestRequest {
   readonly cwd: string | null;
   readonly editCount: number;
   readonly repo: DigestRepo;
+  /** The instant the digest is stamped with. */
+  readonly now: Date;
 }
 
 export interface DigestOutcome {
@@ -100,15 +102,19 @@ export async function writeSessionDigest(ctx: DigestContext, req: SessionDigestR
   });
   if (!draft) return skipped('nothing left after the filters');
   const entry: MemoryEntry = {
-    ...createMemory(draft.content, {
-      layer: Layer.Episodic,
-      tags: [SESSION_DIGEST_TAG],
-      source: SESSION_DIGEST_TAG,
-      confidence: 'observed',
-      sourceSessionId: req.key,
-      tenantId: ctx.tenantId,
-      baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
-    }),
+    ...createMemory(
+      draft.content,
+      {
+        layer: Layer.Episodic,
+        tags: [SESSION_DIGEST_TAG],
+        source: SESSION_DIGEST_TAG,
+        confidence: 'observed',
+        sourceSessionId: req.key,
+        tenantId: ctx.tenantId,
+        baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
+      },
+      req.now,
+    ),
     id: sessionDigestId(ctx.tenantId, req.key),
   };
   try {

@@ -2,7 +2,7 @@
 
 import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
 import { rawRemovalRefusal } from '../../base/errors/raw-append-only.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import {
   listRejectionsForTenant,
   rejectValue,

@@ -2,7 +2,7 @@
  *  Imports memories from ChatGPT, Claude, Cursor, generic files, and structured markdown. */
 
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
-import { createMemory, Layer, MemoryEntry } from '../../base/memory/memory.js';
+import { createMemory, Layer, MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
 import { getGlobalRoot } from '../../host/global-store.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
@@ -13,6 +13,7 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { EntryWrites } from '../../base/ports/store/entry-writes.js';
 import type { Rejections } from '../../base/ports/store/rejections.js';
 import type { Sharing } from '../../base/ports/store/sharing.js';
+import type { Clock } from '../../base/ports/infra.js';
 
 /** Below this length a chunk holds nothing worth recalling. */
 const MIN_IMPORT_CHARS = 10;
@@ -75,6 +76,8 @@ export interface ImportTarget {
   readonly files: ImportFiles;
   /** Runs the import's writes as one batch on the store, which for hippo.db opens it once. */
   readonly batch: <T>(run: () => T) => T;
+  /** The root's clock, which stamps each imported memory. */
+  readonly clock: Clock;
 }
 
 /** `ImportOptions` with the store the import writes to. */
@@ -178,21 +181,25 @@ function createImportEntry(
   chunk: string,
   source: string,
   allTags: string[],
-  options: ImportOptions,
+  options: TargetedImport,
   baseHalfLifeDays: number,
 ): MemoryEntry {
   // kind defaults to 'distilled': these exports are curated user pastes, not raw transcripts from a system of record
   // (see MEMORY_ENVELOPE.md).
   // The write must use the same tenant as the scoped dedup read above: global=true writes host-wide, global=false
   // writes to options.tenantId.
-  return createMemory(chunk, {
-    layer: Layer.Episodic,
-    tags: allTags,
-    source,
-    confidence: 'observed',
-    tenantId: options.global ? undefined : options.tenantId,
-    baseHalfLifeDays,
-  });
+  return createMemory(
+    chunk,
+    {
+      layer: Layer.Episodic,
+      tags: allTags,
+      source,
+      confidence: 'observed',
+      tenantId: options.global ? undefined : options.tenantId,
+      baseHalfLifeDays,
+    },
+    options.target.clock(),
+  );
 }
 
 /** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */

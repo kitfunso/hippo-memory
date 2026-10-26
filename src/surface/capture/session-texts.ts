@@ -67,7 +67,7 @@ export async function captureSessionTexts(
   );
   const { store, config } = ctx;
   const tally = await captureExtractedItems(
-    { store, config, embed: detachedEmbedder({ store, config, embedderFor: ctx.infra.embedderFor }) },
+    { store, config, embed: detachedEmbedder({ store, config, embedderFor: ctx.infra.embedderFor }, ctx.infra) },
     {
       tenantId: ctx.tenantId,
       originProject: req.project,
@@ -75,6 +75,7 @@ export async function captureSessionTexts(
       actor: ctx.actor.subject,
       lean: true,
       dedup,
+      now: ctx.infra.clock(),
     },
     items,
     storedTextKeys(held),

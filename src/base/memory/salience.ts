@@ -2,7 +2,7 @@
  * Salience gate: decides at memory creation whether content is stored at full strength, starts weakened, or is skipped.
  */
 
-import type { MemoryEntry } from './memory.js';
+import type { MemoryEntry } from './entry.js';
 import { isErrorTagged } from './ambient.js';
 import { textOverlap } from '../util/tokenize.js';
 import { duplicateKey, heldTextKeys } from '../util/same-text.js';

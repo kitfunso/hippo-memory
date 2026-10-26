@@ -3,7 +3,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { DEFAULT_HALF_LIFE_DAYS, type LossAversion, type MemoryEntry, Layer } from '../../base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS, type StrengthModel } from '../../base/memory/strength.js';
+import type { Clock } from '../../base/ports/infra.js';
+import { type MemoryEntry, Layer } from '../../base/memory/entry.js';
 import {
   type DatabaseSyncLike,
   openHippoDb,
@@ -25,9 +27,15 @@ import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { createHost, type Host } from '../../host/host.js';
 import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../rules/half-life.js';
 
-/** The folder a store keeps its mirror files in, beside hippo.db, with the ratio its root built it with; an adapter
+/** The strength model a store scores by and the clock its writes stamp by, both fixed when it opens. */
+export interface StoreModel {
+  readonly strength: StrengthModel;
+  readonly clock: Clock;
+}
+
+/** The folder a store keeps its mirror files in, beside hippo.db, with the model its root opened it with; an adapter
  * hands it on and never reads it. `host` keeps the folder's project walk and shared flag for the store's life. */
-export interface StoreFiles extends LossAversion {
+export interface StoreFiles extends StoreModel {
   readonly hippoRoot: string;
   readonly host: Host;
 }

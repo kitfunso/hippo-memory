@@ -7,9 +7,8 @@ import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import type { Objects } from '../../base/ports/store.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { capText, requireLine, requireText } from './fields.js';
-import { listObjects, saveObject } from './lifecycle.js';
+import { listObjects } from './lifecycle.js';
 import type { CustomerNote, NoteStatus } from '../../base/records/object-types.js';
-import { CLI_ACTOR } from '../../base/scope/actor.js';
 
 export type { CustomerNote, NoteStatus } from '../../base/records/object-types.js';
 
@@ -52,7 +51,7 @@ export const CUSTOMER_NOTE: SavableDescriptor<'customer_note', SaveCustomerNoteO
   plural: 'notes',
   states: VALID_NOTE_STATES,
   closableFrom: ['active'],
-  draft(opts) {
+  draft(opts, now) {
     // The customer becomes a `customer:<lc>` recall tag and an identifier, so it must be one line.
     const customer = requireLine(opts.customer, MAX_CUSTOMER_LEN, 'customer');
     const note = requireText(opts.note, MAX_NOTE_LEN, 'note');
@@ -63,22 +62,10 @@ export const CUSTOMER_NOTE: SavableDescriptor<'customer_note', SaveCustomerNoteO
       tags: [`customer:${customer.toLowerCase()}`, ...(opts.extraTags ?? [])],
       supersedesId: opts.supersedesNoteId,
       changeSummary: opts.changeSummary,
-      at: new Date().toISOString(),
+      at: now.toISOString(),
     };
   },
 };
-
-/** Create a customer_note, or a new version superseding an existing one, in the `objects` store group's one
- *  transaction. The mirror carries a `customer:<lc>` tag so scope-aware recall treats the note as entity-local. */
-export function saveCustomerNote(
-  objects: Objects,
-  baseHalfLifeDays: number,
-  tenantId: string,
-  opts: SaveCustomerNoteOptions,
-  actor: string = CLI_ACTOR,
-): Promise<CustomerNote> {
-  return saveObject(objects, CUSTOMER_NOTE, { baseHalfLifeDays, tenantId, actor }, opts);
-}
 
 export function loadCustomerNotes(
   objects: Objects,

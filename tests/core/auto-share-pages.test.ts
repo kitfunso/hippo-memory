@@ -1,7 +1,7 @@
 // autoShare over a store larger than one page: the same picks, skips and writes as one whole read gave.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { autoShare } from '../../src/domain/sharing/share.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
@@ -13,6 +13,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
 
 oneRequestPerTest();
 
@@ -93,7 +94,12 @@ describe('autoShare across pages', () => {
     seedGlobal();
     const stats: AutoShareStats = { secretSkipped: 0 };
 
-    const picked = await autoShare(...sharingStores(root), { dryRun: true, tenantId: 'default', stats });
+    const picked = await autoShare(...sharingStores(root), {
+      embed: TEST_RUN,
+      dryRun: true,
+      tenantId: 'default',
+      stats,
+    });
 
     expect(picked.map((e) => e.id)).toEqual(at(ids, 3, 500, 1050));
     expect(stats).toEqual({ secretSkipped: 1, neverAutoShareSkipped: 1 });
@@ -104,7 +110,12 @@ describe('autoShare across pages', () => {
     seedGlobal();
     const skipped = new Set(at(ids, 499, 501, 750, 900));
 
-    const picked = await autoShare(...sharingStores(root), { minScore: 0.3, dryRun: true, tenantId: 'default' });
+    const picked = await autoShare(...sharingStores(root), {
+      embed: TEST_RUN,
+      minScore: 0.3,
+      dryRun: true,
+      tenantId: 'default',
+    });
 
     expect(picked.map((e) => e.id)).toEqual(ids.filter((id) => !skipped.has(id)));
   });
@@ -114,12 +125,12 @@ describe('autoShare across pages', () => {
     seedGlobal();
     const stores = sharingStores(root);
 
-    const shared = await autoShare(...stores, { tenantId: 'default' });
+    const shared = await autoShare(...stores, { embed: TEST_RUN, tenantId: 'default' });
 
     const local = new Map(loadAllEntries(root, 'default').map((e) => [e.id, e.content]));
     expect(shared.map((e) => e.content)).toEqual(at(ids, 3, 500, 1050).map((id) => local.get(id)));
     const global = loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content);
     expect(global).toEqual(expect.arrayContaining(shared.map((e) => e.content)));
-    expect(await autoShare(...stores, { tenantId: 'default' })).toEqual([]);
+    expect(await autoShare(...stores, { embed: TEST_RUN, tenantId: 'default' })).toEqual([]);
   });
 });

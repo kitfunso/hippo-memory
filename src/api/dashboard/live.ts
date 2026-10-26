@@ -1,5 +1,5 @@
 // What the dashboard shows: live memories by origin project, under the wire's layer and band names.
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isQuarantineScope } from '../../domain/trust/quarantine.js';
 import type { DashboardChip, Origin } from '../../base/ports/store/dashboard-reads.js';
 import type { Band, Layer, ProjectKind } from './types.js';

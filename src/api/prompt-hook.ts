@@ -3,7 +3,8 @@
 // (surface/cli/context.ts); only the CLI parity case in tests/store/prompt-hook-context.process.test.ts ties the two.
 import type { Context, ContextResult, ContextResultEntry } from './index.js';
 import { assembleContext } from './context.js';
-import { sharedStoreOf } from './types.js';
+import { sharedStoreOf, strengthOf } from './types.js';
+import type { StrengthModel } from '../base/memory/strength.js';
 import { BadRequestError } from '../base/errors/api-errors.js';
 import type { HippoConfig } from '../base/config/config.js';
 import {
@@ -28,7 +29,7 @@ import {
   ledgerReachOf,
   type LedgerReach,
 } from './ledger-db.js';
-import type { MemoryEntry } from '../base/memory/memory.js';
+import type { MemoryEntry } from '../base/memory/entry.js';
 import { sessionPilotArm } from './pilot-arm.js';
 import type { PilotArm } from '../base/session/pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../base/scope/project-identity.js';
@@ -68,6 +69,7 @@ export async function startDeliveryRecorder(ctx: Context, start: DeliveryStart):
       runtime: start.runtime === 'copilot' ? 'copilot' : undefined,
       eventType: start.eventType,
       fault: start.fault,
+      now: ctx.infra.clock(),
     });
   } catch (error) {
     log.warn(`delivery ledger skipped: ${errorMessage(error)}`, errorFields(error));
@@ -122,6 +124,9 @@ export interface ContextView {
   readonly printedHash?: string | null;
   /** The reply's JSON wrapper; absent means Claude Code's UserPromptSubmit. */
   readonly envelope?: HookEnvelope;
+  /** The instant each confidence label is read at, and the model a printed strength scores by. */
+  readonly now: Date;
+  readonly strength: StrengthModel;
 }
 
 /** `copilot-session-start` is the Copilot harness's top-level reply, `vscode-session-start` the nested one VS Code
@@ -181,16 +186,20 @@ function renderStaticBlock(
       ...(result.sessionHandoff ? [handoffText(result.sessionHandoff)] : []),
       ...(result.recentEvents && result.recentEvents.length > 0 ? [sessionTrailText(result.recentEvents)] : []),
       // No live strength percentage, so an unchanged set of memories renders byte-identically turn after turn.
-      ...(staticItems.length > 0 ? contextBlockLines(staticItems, t, framing, { showStrength: false }) : []),
+      ...(staticItems.length > 0
+        ? contextBlockLines(staticItems, t, framing, { now: view.now, showStrength: false })
+        : []),
       ...crossProjectLines(staticCrossEntries),
     ].join('\n'),
   );
 }
 
-function renderRecallBlock(recallItems: RenderItem[], framing: ContextView['framing']): string {
+function renderRecallBlock(recallItems: RenderItem[], framing: ContextView['framing'], now: Date): string {
   if (recallItems.length === 0) return '';
   return settleTokens((t) =>
-    contextBlockLines(recallItems, t, framing, { showStrength: false, heading: 'Prompt-Relevant Memory' }).join('\n'),
+    contextBlockLines(recallItems, t, framing, { now, showStrength: false, heading: 'Prompt-Relevant Memory' }).join(
+      '\n',
+    ),
   );
 }
 
@@ -202,7 +211,7 @@ async function renderAdditionalContext(view: ContextView): Promise<RenderedConte
   const recallItems = toRenderItems(result.entries.filter((r) => r.promptRecall));
 
   const staticBlock = renderStaticBlock(view, staticItems, staticCrossEntries);
-  const recallBlock = renderRecallBlock(recallItems, framing);
+  const recallBlock = renderRecallBlock(recallItems, framing, view.now);
   if (!staticBlock.trim() && !recallBlock.trim()) {
     rec?.delivered({ state: 'empty' });
     return NOTHING_RENDERED;
@@ -390,6 +399,7 @@ export async function buildPromptHookContext(
   const arm = await sessionPilotArm(ctx.tenantId, sessionId, !subagent, armOpts);
   if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
   const prompt = payload?.prompt;
+  const now = ctx.infra.clock();
   const result = await assembleContext(ctx, {
     budget: HOOK_BUDGET,
     pinnedOnly: true,
@@ -398,7 +408,7 @@ export async function buildPromptHookContext(
     currentProject: req.project,
     currentSessionId: sessionId,
     prompt: isJsonString(prompt) ? prompt : undefined,
-    cost: contextCost('additional-context', HOOK_FRAMING),
+    cost: contextCost('additional-context', HOOK_FRAMING, now),
     sharedStore,
   });
   const rendered = hasContextData(result)
@@ -413,6 +423,8 @@ export async function buildPromptHookContext(
         result,
         reach,
         printedHash: req.printedHash ?? null,
+        now,
+        strength: strengthOf(ctx),
       })
     : NOTHING_RENDERED;
   // A sub-agent's output is not the session's, so its caller must not record it as printed.

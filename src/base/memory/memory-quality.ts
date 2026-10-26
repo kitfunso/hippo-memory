@@ -1,4 +1,4 @@
-import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, DAG_LEVEL, type MemoryEntry } from './memory.js';
+import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, DAG_LEVEL, type MemoryEntry } from './entry.js';
 import { heldTexts } from '../util/same-text.js';
 import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
 

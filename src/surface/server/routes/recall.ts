@@ -115,7 +115,8 @@ export async function handleGetContext({ res, ctx, query, opts }: AuthedRouteReq
   const result = await contextGet(ctx, {
     ...parsed,
     currentProject: contextReader(ctx, opts.hippoRoot, query),
-    cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
+    // Clients render; the budget prices the block `hippo context` would print.
+    cost: contextCost('markdown', 'observe', ctx.infra.clock()),
   });
   await recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });
   sendJson(res, 200, {

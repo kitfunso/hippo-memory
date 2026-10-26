@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { detectConflicts } from '../../src/domain/consolidate/conflicts.js';
@@ -12,10 +12,12 @@ import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
 import { buildDag, buildEntityProfiles } from '../../src/domain/consolidate/dag.js';
 import { storeExtractedFacts } from '../../src/domain/learn/extract.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -99,9 +101,15 @@ describe('sleep partitions by origin project', () => {
     });
     const always = rule('always alpha beta gamma', 'proj-b', 'b');
     const never = rule('never alpha beta gamma zeta', 'proj-c', 'c');
-    expect(await detectConflicts([always, never], now)).toEqual([]);
-    expect(await detectConflicts([always, { ...never, originProject: '' }], now)).toHaveLength(1);
-    expect(await detectConflicts([always, { ...never, originProject: 'proj-b', tenantId: 'other' }], now)).toEqual([]);
+    expect(await detectConflicts([always, never], now, { strength: PRODUCTION_STRENGTH })).toEqual([]);
+    expect(
+      await detectConflicts([always, { ...never, originProject: '' }], now, { strength: PRODUCTION_STRENGTH }),
+    ).toHaveLength(1);
+    expect(
+      await detectConflicts([always, { ...never, originProject: 'proj-b', tenantId: 'other' }], now, {
+        strength: PRODUCTION_STRENGTH,
+      }),
+    ).toEqual([]);
   });
 
   it('facts extracted from a project row stay in that project; from an unknown row they stay unknown', async () => {
@@ -113,6 +121,7 @@ describe('sleep partitions by origin project', () => {
         source,
         [{ content: `alice prefers dark mode (${origin})`, tags: [], valence: 'neutral' }],
         DEFAULT_HALF_LIFE_DAYS,
+        new Date(),
       );
       expect(live().find((e) => e.id === fact!.id)!.originProject).toBe(origin);
     }
@@ -136,6 +145,7 @@ describe('sleep partitions by origin project', () => {
     expect(
       (
         await buildDag(sqliteStore(home), facts, {
+          now: evalNow(),
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
           llm: anthropicLlm({ apiKey: 'k', fetcher: fetcher('alice files, notes and closes tickets') }),
         })
@@ -160,6 +170,7 @@ describe('sleep partitions by origin project', () => {
     expect(
       (
         await buildEntityProfiles(sqliteStore(home), [...l2s, ...more], {
+          now: evalNow(),
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
           llm: anthropicLlm({ apiKey: 'k', fetcher: fetcher('alice is the typed-python API owner') }),
         })
@@ -188,15 +199,20 @@ describe('conflicts never pair across a personal scope', () => {
   it('a personal row against a team row gives no pair, while two team rows do', async () => {
     const always = rule('always alpha beta gamma', 'a', null);
     const never = rule('never alpha beta gamma zeta', 'b', null);
-    expect(await detectConflicts([always, never], now)).toHaveLength(1);
-    expect(await detectConflicts([{ ...always, scope: ALICE }, never], now)).toEqual([]);
-    expect(await detectConflicts([always, { ...never, scope: ALICE }], now)).toEqual([]);
+    expect(await detectConflicts([always, never], now, { strength: PRODUCTION_STRENGTH })).toHaveLength(1);
+    expect(await detectConflicts([{ ...always, scope: ALICE }, never], now, { strength: PRODUCTION_STRENGTH })).toEqual(
+      [],
+    );
+    expect(await detectConflicts([always, { ...never, scope: ALICE }], now, { strength: PRODUCTION_STRENGTH })).toEqual(
+      [],
+    );
   });
 
   it('two rows in one personal scope still pair', async () => {
     const pair = await detectConflicts(
       [rule('always alpha beta gamma', 'a', ALICE), rule('never alpha beta gamma zeta', 'b', ALICE)],
       now,
+      { strength: PRODUCTION_STRENGTH },
     );
     expect(pair.map((p) => [p.memory_a_id, p.memory_b_id])).toEqual([['a', 'b']]);
   });
@@ -204,10 +220,14 @@ describe('conflicts never pair across a personal scope', () => {
   it('two owners, or a case variant of one owner, never pair', async () => {
     const mine = rule('always alpha beta gamma', 'a', ALICE);
     expect(
-      await detectConflicts([mine, rule('never alpha beta gamma zeta', 'b', 'personal:private:bob')], now),
+      await detectConflicts([mine, rule('never alpha beta gamma zeta', 'b', 'personal:private:bob')], now, {
+        strength: PRODUCTION_STRENGTH,
+      }),
     ).toEqual([]);
     expect(
-      await detectConflicts([mine, rule('never alpha beta gamma zeta', 'b', 'Personal:private:alice')], now),
+      await detectConflicts([mine, rule('never alpha beta gamma zeta', 'b', 'Personal:private:alice')], now, {
+        strength: PRODUCTION_STRENGTH,
+      }),
     ).toEqual([]);
   });
 });

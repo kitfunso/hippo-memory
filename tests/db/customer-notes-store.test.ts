@@ -13,11 +13,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { CUSTOMER_NOTE, saveCustomerNote, loadCustomerNotes } from '../../src/domain/objects/customer-notes.js';
+import { CUSTOMER_NOTE, loadCustomerNotes } from '../../src/domain/objects/customer-notes.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { saveCustomerNote } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -117,7 +119,7 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
       customer: 'Beta',
       note: 'b note',
     });
-    await closeObject(objectsAt(home), CUSTOMER_NOTE, 'default', b1.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), CUSTOMER_NOTE, 'default', b1.id, { actor: CLI_ACTOR, now: evalNow() });
     const acmeActive = await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Acme', status: 'active' });
     expect(acmeActive.map((x) => x.id).sort()).toEqual([a1.id, a2.id].sort());
     expect(acmeActive.length).toBe(2); // MANY-per-customer

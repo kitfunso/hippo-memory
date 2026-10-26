@@ -5,8 +5,7 @@ import { freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../base/sessio
 import type { SessionEvent, TaskSnapshot } from '../base/ports/store/sessions.js';
 import type { SessionHandoff } from '../base/session/handoff.js';
 import { estimateTokens, tokenPurse } from '../base/util/token-text.js';
-import { markRetrieved, strengthOptionsOf, type MemoryEntry } from '../base/memory/memory.js';
-import { evalNow } from '../base/memory/ablation.js';
+import { markRetrieved, type MemoryEntry } from '../base/memory/entry.js';
 import { dropHeldCopies } from '../base/util/same-text.js';
 import { BadRequestError } from '../base/errors/api-errors.js';
 import { rethrowIfStoreBlocked } from '../base/util/store-blocked.js';
@@ -37,7 +36,7 @@ import {
 import type { ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from './recall/finish.js';
 import { keepShownIds } from './recall/last-recalled.js';
-import { type Context, type ContextReach, ownerOrSubject } from './types.js';
+import { type Context, type ContextReach, ownerOrSubject, strengthOf } from './types.js';
 import type {
   ContextCandidateFilter,
   AmbientRecallRequest,
@@ -317,6 +316,8 @@ function planContext(ctx: Context, opts: ContextOptions, local: ContextSource): 
     cost,
     price,
     obs: opts.deliveryObserver,
+    now: ctx.infra.clock(),
+    strength: strengthOf(ctx),
   };
 }
 
@@ -480,7 +481,7 @@ async function loadPools(
         ownScope,
         project: plan.originProject,
         cap: contextCandidatePage(left, plan.limit),
-        now: evalNow(),
+        now: plan.now,
       };
   // Tenant-scoped loads: never resolveTenantId({}) here.
   const read = {
@@ -591,7 +592,7 @@ async function recordRetrieval(
   activeSnapshot: TaskSnapshot | null,
 ): Promise<RecordedRetrieval> {
   const toUpdate = selected.map((s) => s.entry);
-  const updatedEntries = markRetrieved(toUpdate, undefined, strengthOptionsOf(ctx.config.runtime));
+  const updatedEntries = markRetrieved(toUpdate, plan.now, plan.strength);
   const retrievedIds = updatedEntries.map((u) => u.id);
   const trace: RecallTraceInput = {
     tenantId: ctx.tenantId,
@@ -630,7 +631,7 @@ async function readAmbientState(ctx: Context, plan: ContextPlan): Promise<Ambien
     ownScope: plan.ownScope,
     project: plan.originProject,
     currentProject: projectNames(plan.currentProject),
-    now: evalNow(),
+    now: plan.now,
   };
   const sources = [
     ...(plan.hasLocal ? [plan.local.reads] : []),

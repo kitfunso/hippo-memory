@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { refineStore } from '../../src/surface/cli/refine-llm.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';

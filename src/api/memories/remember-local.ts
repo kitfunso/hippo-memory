@@ -3,7 +3,7 @@
 // is a second step, which the caller runs after it has reported the write. Nothing here prints; the caller reports from
 // what comes back.
 
-import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../base/memory/memory.js';
+import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../base/memory/entry.js';
 import { embedMemoryInto, folderEmbedTarget, type EmbedOutcome } from '../../domain/search/embed-memories.js';
 import { captureError } from '../../domain/learn/autolearn.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -67,7 +67,7 @@ async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
  * is logged. */
 function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutcome> {
   const folder = { store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor };
-  const target = folderEmbedTarget(folder, ctx.infra.evalSwitches);
+  const target = folderEmbedTarget(folder, ctx.infra);
   return embedMemoryInto(target, entry).then((outcome) => {
     if (outcome === 'failed') {
       log.warn(
@@ -145,7 +145,7 @@ export async function extractRememberedFacts(
       },
     });
     if (found.length > 0) {
-      await storeExtractedFacts(ctx.store, entry, found, defaultHalfLifeDays);
+      await storeExtractedFacts(ctx.store, entry, found, defaultHalfLifeDays, ctx.infra.clock());
       facts = found.length;
     }
   } catch (cause) {
@@ -166,6 +166,7 @@ export async function rememberFailedCommand(
     failed.stderr,
     failed.command,
     ctx.tenantId,
+    ctx.infra.clock(),
   );
   return rememberLocally(ctx, { content, tags, layer, source, confidence, force: true });
 }

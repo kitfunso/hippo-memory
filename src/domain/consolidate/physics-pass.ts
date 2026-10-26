@@ -1,6 +1,6 @@
 import { refreshParticleProperties } from '../../base/rank/particle-refresh.js';
 import { simulate, type ForceContext } from '../../base/rank/physics.js';
-import { clockBasisOf, type MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { recordPhaseFailure, type SleepRun } from './run.js';
 
 const STATS_DECIMALS = 4;
@@ -32,9 +32,11 @@ async function simulateStoredParticles(run: SleepRun, maxParticles: number): Pro
   const particles = ids.flatMap((id) => stored.get(id) ?? []);
   // Only the simulated particles' rows: the refresh and every force lookup read no other id.
   const entryMap = new Map((await survivors.get(particles.map((p) => p.memoryId))).map((e) => [e.id, e]));
-  refreshParticleProperties(particles, entryMap, run.now, clockBasisOf(run.decayOpts));
+  refreshParticleProperties(particles, entryMap, run.now, run.strength);
 
   const stats = simulate(particles, survivorForces(run, entryMap));
+  const simulatedAt = run.now.toISOString();
+  for (const p of particles) p.lastSimulation = simulatedAt;
   await consolidation.saveParticles(particles);
 
   result.physicsSimulated = stats.particleCount;

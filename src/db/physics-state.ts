@@ -3,10 +3,10 @@
  * columns for 384-dim vectors.
  */
 
-import { evalNow } from '../base/memory/ablation.js';
 import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
-import { strengthOptionsOf, type MemoryEntry, type StrengthOptions } from '../base/memory/memory.js';
+import { PRODUCTION_STRENGTH, type StrengthModel } from '../base/memory/strength.js';
+import type { MemoryEntry } from '../base/memory/entry.js';
 import type { PhysicsParticle } from '../base/rank/physics.js';
 import { initializeParticle } from '../base/rank/physics.js';
 import { norm } from '../base/rank/cosine.js';
@@ -147,10 +147,11 @@ export function resetAllPhysicsState(
   db: DatabaseSyncLike,
   entries: Iterable<MemoryEntry>,
   embeddingIndex: Record<string, number[]>,
-  now: Date = evalNow(),
-  rules: StrengthOptions = strengthOptionsOf(undefined),
+  // A raw handle has no opener clock, so the wall clock stands in, as for a store opened with none.
+  now: Date = new Date(),
+  model: StrengthModel = PRODUCTION_STRENGTH,
 ): number {
-  return resetPhysicsFromSeeds(db, seedsOf(entries, embeddingIndex), rules, now);
+  return resetPhysicsFromSeeds(db, seedsOf(entries, embeddingIndex), model, now);
 }
 
 function* seedsOf(entries: Iterable<MemoryEntry>, embeddingIndex: Record<string, number[]>): Generator<ParticleSeed> {
@@ -167,8 +168,8 @@ export type ParticleSeed = readonly [MemoryEntry, number[]];
 export function resetPhysicsFromSeeds(
   db: DatabaseSyncLike,
   seeds: Iterable<ParticleSeed>,
-  rules: StrengthOptions,
-  now = evalNow(),
+  model: StrengthModel,
+  now: Date,
 ): number {
   db.exec('DELETE FROM memory_physics');
 
@@ -183,7 +184,7 @@ export function resetPhysicsFromSeeds(
     };
     for (const [entry, embedding] of seeds) {
       if (embedding.length === 0) continue;
-      if (batch.push(initializeParticle(entry, embedding, rules, now)) === RESET_BATCH) flush();
+      if (batch.push(initializeParticle(entry, embedding, model, now)) === RESET_BATCH) flush();
     }
     flush();
     return count;

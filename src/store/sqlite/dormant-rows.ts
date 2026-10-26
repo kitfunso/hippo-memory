@@ -1,6 +1,6 @@
 // The dormant_memories rows: the snapshot sleep keeps of a faded memory, read and written on the caller's handle.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { fromWire, toWire, type MemoryWire } from '../../base/memory/memory-wire.js';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import type { JsonValue } from '../../base/util/json.js';

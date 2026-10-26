@@ -231,7 +231,12 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
   // Each line starts the log afresh, as a sleep does.
   const prefix = `turn close, session ${w.sessionId}`;
   try {
-    const { enabled, count, threshold, due } = await autoSleepDue(ctx.store, ctx.tenantId, ctx.config.autoSleep);
+    const { enabled, count, threshold, due } = await autoSleepDue(
+      ctx.store,
+      ctx.tenantId,
+      ctx.config.autoSleep,
+      ctx.infra.clock(),
+    );
     if (!due) {
       const why = enabled ? `${count} new memories, threshold ${threshold}` : 'auto-sleep is off';
       w.log(`${prefix}: skip sleep, ${why}`, { startFresh: true });

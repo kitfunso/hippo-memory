@@ -59,7 +59,8 @@ export function objectsOf(ctx: Context): Objects {
 
 /** The caller a save of this request records, under the store root's half-life. */
 export function saveSiteOf(ctx: Context): ObjectSaveSite {
-  return { baseHalfLifeDays: ctx.config.defaultHalfLifeDays, tenantId: ctx.tenantId, actor: ctx.actor.subject };
+  const { defaultHalfLifeDays: baseHalfLifeDays } = ctx.config;
+  return { baseHalfLifeDays, tenantId: ctx.tenantId, actor: ctx.actor.subject, now: ctx.infra.clock() };
 }
 
 /** The write with the tags its origin adds; a write with no origin keeps its own. */
@@ -88,7 +89,10 @@ export function objectGet<K extends ObjectKind>(ctx: Context, kind: K, id: numbe
 
 /** Retires one object as the caller; its mirror memory stays as saved. */
 export function objectClose<K extends ObjectKind>(ctx: Context, kind: K, id: number): Promise<ObjectByKind[K]> {
-  return closeObject(objectsOf(ctx), DESCRIPTORS[kind], ctx.tenantId, id, ctx.actor.subject);
+  return closeObject(objectsOf(ctx), DESCRIPTORS[kind], ctx.tenantId, id, {
+    actor: ctx.actor.subject,
+    now: ctx.infra.clock(),
+  });
 }
 
 /** Creates an object, or the version that replaces the one its write names, with its mirror memory in one write. */

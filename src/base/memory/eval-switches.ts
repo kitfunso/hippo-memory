@@ -1,19 +1,7 @@
-// The EVAL-ONLY switches (HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS, HIPPO_FAKE_NOW) as plain values. ablation.ts reads
-// them from the environment; ranking takes them as input, so production code paths never read an env var to rank.
-
-/** The three switches strength scoring honours. */
-export interface StrengthAblation {
-  readonly decay: boolean;
-  readonly recallBoost: boolean;
-  readonly outcomeSlow: boolean;
-}
-
-/** Production scoring: nothing ablated. */
-export const NO_STRENGTH_ABLATION: StrengthAblation = Object.freeze({
-  decay: false,
-  recallBoost: false,
-  outcomeSlow: false,
-});
+// What a ranking runs under as plain values: the strength model and the rank switches. A root reads them
+// (src/infra/eval-switches.ts) and hands them down, so production code paths never read an env var to rank.
+import type { RuntimeSettings } from '../config/config.js';
+import { PRODUCTION_STRENGTH, withLossAversion, type StrengthModel } from './strength.js';
 
 /** The switches recall's rank boosts honour. */
 export interface RankAblation {
@@ -26,17 +14,22 @@ export interface RankAblation {
 /** Production ranking: every rank boost on, at the 30-day recency scale. */
 export const NO_RANK_ABLATION: RankAblation = Object.freeze({ recency: false, recencyDays: null, outcomeFast: false });
 
-/** Every switch a ranking runs under, and the clock it reads. */
+/** The strength model and rank switches a ranking runs under. */
 export interface EvalSwitches {
-  readonly strength: StrengthAblation;
+  readonly strength: StrengthModel;
   readonly rank: RankAblation;
-  /** HIPPO_FAKE_NOW as epoch milliseconds, or null for the real clock. */
-  readonly fakeNowMs: number | null;
 }
 
-/** The ranking's clock: an explicit `now` wins, then the fake clock, then the real one. */
-export function switchedNow(now: Date | undefined, switches: EvalSwitches | undefined): Date {
-  if (now !== undefined) return now;
-  const fake = switches?.fakeNowMs ?? null;
-  return fake === null ? new Date() : new Date(fake);
+/** Production: the production strength model and every rank boost on. */
+export const PRODUCTION_SWITCHES: EvalSwitches = Object.freeze({
+  strength: PRODUCTION_STRENGTH,
+  rank: NO_RANK_ABLATION,
+});
+
+/** The model a ranking scores strength by: the switches' model with the root's HIPPO_LOSS_AVERSION_RATIO. */
+export function strengthModelFor(
+  switches: EvalSwitches | undefined,
+  runtime: Pick<RuntimeSettings, 'lossAversionRatio'> | undefined,
+): StrengthModel {
+  return withLossAversion(switches?.strength ?? PRODUCTION_STRENGTH, runtime?.lossAversionRatio);
 }

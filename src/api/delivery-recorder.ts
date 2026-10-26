@@ -1,8 +1,7 @@
 // In-memory observer for one call (a context call, a compaction boundary or a session end): what was considered, why
 // each was rejected, what reached stdout. No DB access (the caller hands build()'s output to
 // src/store/sqlite/recall-trace.ts); hashes, ids, counts and enums only, never text.
-import type { MemoryEntry } from '../base/memory/memory.js';
-import { evalNow } from '../base/memory/ablation.js';
+import type { MemoryEntry } from '../base/memory/entry.js';
 import { scoreOverlap, type PromptRecallGate } from '../base/rank/prompt-recall.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.js';
 import { blockHash, estimateTokens } from '../base/util/token-text.js';
@@ -123,6 +122,8 @@ export interface DeliveryRecorderInit {
   eventType?: DeliveryEventType;
   /** Makes this recorder throw at one stage; only tests set it, and no CLI flag or environment variable reaches it. */
   fault?: DeliveryFault;
+  /** The instant the event is stamped with. */
+  now: Date;
 }
 
 interface Candidate {
@@ -515,7 +516,7 @@ function stateMethods(state: RecorderState, guard: Guard): StateMethods {
 /** A recorder for one call; every observer method is guarded, and a throw marks it broken instead of escaping. */
 export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryRecorder {
   const startedMs = Date.now();
-  const ts = evalNow().toISOString();
+  const ts = init.now.toISOString();
   const fault = init.fault ?? null;
   const payload = readPayload(init);
   const state = newRecorderState();

@@ -7,13 +7,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import {
-  createMemory,
-  deriveHalfLife,
-  DEFAULT_HALF_LIFE_DAYS,
-  Layer,
-  type MemoryEntry,
-} from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { deriveHalfLife, Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import * as api from '../../src/api/index.js';
 import { consolidate } from '../../src/index.js';
 import { buildDag, buildEntityProfiles } from '../../src/domain/consolidate/dag.js';
@@ -32,6 +28,8 @@ import { writeEntry, loadAllEntries, readEntry, appendSessionEvent } from '../_h
 import { initTestStore } from '../_helpers/store-template.js';
 import { REAL_IO } from '../_helpers/real-io.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 pinClock();
 
@@ -176,6 +174,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
       );
       return added(root, () =>
         importProjectMemories(root, {
+          run: TEST_RUN,
           configAt: loadConfig,
           tenantId: 'default',
           stores: sqliteImportStores({}),
@@ -228,6 +227,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
           source,
           [{ content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' }],
           loadConfig(root).defaultHalfLifeDays,
+          new Date(),
         ),
       );
     },
@@ -268,6 +268,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
       );
       return added(root, () =>
         buildDag(sqliteStore(root), facts, {
+          now: evalNow(),
           baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
           llm: anthropicLlm({ apiKey: 'test-key', fetcher: fetcher('alice files, notes and closes tickets') }),
         }),
@@ -287,6 +288,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
       );
       return added(root, () =>
         buildEntityProfiles(sqliteStore(root), l2s, {
+          now: evalNow(),
           baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays,
           llm: anthropicLlm({ apiKey: 'test-key', fetcher: fetcher('alice is the typed-python API owner') }),
         }),

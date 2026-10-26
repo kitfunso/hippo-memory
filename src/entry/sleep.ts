@@ -2,7 +2,10 @@
 // caller's Context or options leave out.
 import { defaultStore, withSharedStoreHandles } from '../surface/open-store.js';
 import type { SleepStore } from '../base/ports/store.js';
-import { runConsolidation, type ConsolidateOptions } from '../domain/consolidate/sleep.js';
+import { runConsolidation, type ConsolidateOptions, type SleepRules } from '../domain/consolidate/sleep.js';
+import { evalNow, evalSwitches } from '../infra/eval-switches.js';
+import { strengthModelFor } from '../base/memory/eval-switches.js';
+import type { HippoConfig } from '../base/config/config.js';
 import { anthropicLlmFromEnv } from '../infra/ports.js';
 import { loadConfig } from '../host/config-file.js';
 import { DEFAULT_TENANT_ID } from '../base/util/tenant.js';
@@ -38,7 +41,9 @@ export async function consolidate(
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   const llm = anthropicLlmFromEnv(fetcher);
   // One handle per store, for the reason `sleep` gives.
-  return withSharedStoreHandles(() => runConsolidation(store, { ...rest, config, tenantId, llm }));
+  return withSharedStoreHandles(() =>
+    runConsolidation(store, { ...rest, config, tenantId, llm, ...sleepRules(rest.now, config) }),
+  );
 }
 
 function isFolder(target: string | SleepStore): target is string {
@@ -47,3 +52,9 @@ function isFolder(target: string | SleepStore): target is string {
 
 // The one dedupe.js export that is public; the rest of dedupe.js stays internal.
 export { strengthTieKey as strengthBucket } from '../domain/consolidate/dedupe.js';
+
+/** The entry's sleep clock and model: the caller's `now`, else HIPPO_FAKE_NOW or the wall clock; the eval switches'
+ * model at the config's loss-aversion ratio. */
+function sleepRules(now: Date | undefined, config: HippoConfig): SleepRules {
+  return { now: now ?? evalNow(), strength: strengthModelFor(evalSwitches(), config.runtime) };
+}

@@ -1,7 +1,7 @@
 // hippo.db's Rejections group: reject, unreject and list rejected values, each on one handle of its own.
 // A file apart from rejection.ts: sqlite/open.ts imports that one, so an open there would be an import cycle.
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { heldTexts } from '../../base/util/same-text.js';
 import { audit } from './audit-event.js';
 import { deleteEntryCore } from './delete-and-batch.js';

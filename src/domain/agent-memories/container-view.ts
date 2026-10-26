@@ -1,6 +1,7 @@
 // A container's live rows as they will stand once its moves run: the legacy adoptions and the moves from the project's
 // earlier names are planned as steps, and applied to the rows read, as the store will apply them.
-import type { MemoryEntry, StrengthOptions } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
+import type { StrengthModel } from '../../base/memory/strength.js';
 import type { AgentMemoryTool } from '../../base/memory/agent-memory-tools.js';
 import type { ImportStep, PlannedRow } from '../../base/ports/store/agent-import.js';
 import type { DormantSnapshot, EntryCursor } from '../../base/ports/store/types.js';
@@ -12,8 +13,9 @@ export interface StoreSession {
   readonly store: ImportStore;
   readonly tenantId: string;
   readonly baseHalfLifeDays: number;
-  /** How a revived row is scored: the eval switches and the root's loss-aversion ratio. */
-  readonly strength: StrengthOptions;
+  /** How a revived row is scored, and the instant every row of the session is stamped at. */
+  readonly strength: StrengthModel;
+  readonly now: Date;
   /** Stamped on written rows; undefined lets the store stamp its own project. */
   readonly originProject: string | undefined;
   /** Design 6: in the global store only rows visible where the new row goes count as duplicates; null counts all. */

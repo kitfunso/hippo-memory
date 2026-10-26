@@ -2,7 +2,7 @@
 // so on the server thread it would hold every other request.
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { MemoryQuery } from '../../api/dashboard/queries.js';
 import type { MemoryDetail, MemoryPage, Overview, ProjectDetail, SearchResult } from '../../api/dashboard/types.js';
 import { StoreBusyError } from '../../base/ports/store.js';

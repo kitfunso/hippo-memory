@@ -2,9 +2,10 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { memoryList } from '../../api/memories/memories.js';
-import { cliConfig, cliApiContext, cliFolder } from './api-context.js';
+import { cliConfig, cliApiContext, cliFolder, cliInfra } from './api-context.js';
+import { PRODUCTION_SWITCHES } from '../../base/memory/eval-switches.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { folderVectorSource } from '../../entry/folder-search.js';
@@ -89,6 +90,7 @@ async function runCorpusEval(
     ? 1.0
     : (numberFlag(flags, 'local-bump') ?? cliConfig(hippoRoot).search.localBump);
 
+  const infra = cliInfra();
   return runEval(cases, entries, {
     stores: isInitialized(globalRoot)
       ? { local: cliFolder(hippoRoot), global: cliFolder(globalRoot), embedderFor: resolveEmbeddingProvider }
@@ -100,6 +102,8 @@ async function runCorpusEval(
     localBump,
     runtime: cliConfig(hippoRoot).runtime,
     cwd: process.cwd(),
+    switches: infra.evalSwitches ?? PRODUCTION_SWITCHES,
+    now: infra.clock(),
   });
 }
 
@@ -164,7 +168,8 @@ async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean,
       fail(`Eval baseline ${baselinePath} is not a baseline file (version, timestamp, features, overall).`);
   }
 
-  const result = await runFeatureEval(PACKAGE_VERSION);
+  const infra = cliInfra();
+  const result = await runFeatureEval(PACKAGE_VERSION, infra.evalSwitches ?? PRODUCTION_SWITCHES, infra.clock());
 
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));

@@ -1,7 +1,7 @@
 // Copying memories between a folder's store and the operator's global store: share one or the best by transfer score,
 // list the projects that shared, and sync the global rows down. The caller's tenant scopes each read of its own store.
 
-import type { MemoryEntry } from '../base/memory/memory.js';
+import type { MemoryEntry } from '../base/memory/entry.js';
 import { ALL_TENANTS } from '../base/util/tenant.js';
 import { syncGlobalToLocal } from '../domain/sharing/global-sync.js';
 import { autoShare, listPeers, shareMemory } from '../domain/sharing/share.js';
@@ -31,7 +31,8 @@ export async function shareToGlobal(
   id: string,
   opts: { readonly force: boolean },
 ): Promise<MemoryEntry | null> {
-  return shareMemory(ctx, requireGlobalTarget(ctx, 'share'), id, { force: opts.force, tenantId: ctx.tenantId });
+  const options = { force: opts.force, tenantId: ctx.tenantId, embed: ctx.infra };
+  return shareMemory(ctx, requireGlobalTarget(ctx, 'share'), id, options);
 }
 
 /** The caller's memories whose transfer score reaches `minScore`, copied to the global store unless `dryRun`. */
@@ -39,7 +40,7 @@ export async function autoShareToGlobal(
   ctx: ContextWith<'sharing' | 'folderFiles'>,
   opts: { readonly minScore: number; readonly dryRun: boolean },
 ): Promise<MemoryEntry[]> {
-  return autoShare(ctx, requireGlobalTarget(ctx, 'auto-share'), { ...opts, tenantId: ctx.tenantId });
+  return autoShare(ctx, requireGlobalTarget(ctx, 'auto-share'), { ...opts, tenantId: ctx.tenantId, embed: ctx.infra });
 }
 
 /** The projects that shared into the global store: the caller's tenant, or every tenant for the host's operator. */
@@ -54,5 +55,5 @@ export async function syncFromGlobal(
   opts: { readonly includeCrossProject: boolean },
 ): Promise<number> {
   const local = { store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor };
-  return syncGlobalToLocal(local, requireGlobalTarget(ctx, 'sync'), opts);
+  return syncGlobalToLocal(local, requireGlobalTarget(ctx, 'sync'), { ...opts, embed: ctx.infra });
 }

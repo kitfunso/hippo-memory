@@ -1,7 +1,7 @@
 // Each dashboard read hands JavaScript the same rows on a tenant five times larger: counts come from SQL aggregates, a
 // page from one sorted LIMIT, the scatter from a fixed grid past its point cap.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { buildOverview, buildProjectDetail } from '../../src/api/dashboard/overview.js';
 import { buildMemoryPage, buildSearch, type MemoryQuery } from '../../src/api/dashboard/queries.js';

@@ -1,5 +1,5 @@
 // hippo.db's Cards group: the agent work board.
-import { generateId } from '../../base/memory/memory.js';
+import { generateId } from '../../base/memory/entry.js';
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { SessionHandoff, rowToSessionHandoff, HandoffOutcome, isHandoffOutcome } from '../../base/session/handoff.js';
 import {

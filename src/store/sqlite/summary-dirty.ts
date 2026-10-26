@@ -2,7 +2,7 @@
 import { appendAuditEvents } from './audit.js';
 import { reportAuditWriteFailure } from '../../base/records/audit-report.js';
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { DAG_LEVEL } from '../../base/memory/memory.js';
+import { DAG_LEVEL } from '../../base/memory/entry.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { summaryDirtyAudit } from '../rules/audit-rows.js';
 

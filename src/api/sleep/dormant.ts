@@ -2,9 +2,9 @@
 
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import type { DormantMemory, ListDormantOpts } from '../../base/ports/store/dormant.js';
-import { strengthOptionsOf, type MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';
-import type { Context } from '../types.js';
+import { strengthOf, type Context } from '../types.js';
 
 /**
  * A tenant's dormant memories (sqlite/dormant.ts): what sleep moved out of active memory when `dormant.enabled` is
@@ -24,7 +24,7 @@ export async function dormantRestore(ctx: Context, id: string): Promise<MemoryEn
     id,
     actor: ctx.actor.subject,
     ownScope: personalScopeOf(ctx.actor),
-    revival: { halfLifeDays: ctx.config.defaultHalfLifeDays, strength: strengthOptionsOf(ctx.config.runtime) },
+    revival: { halfLifeDays: ctx.config.defaultHalfLifeDays, strength: strengthOf(ctx) },
   });
   if (outcome.status === 'missing') throw new NotFoundError(`dormant memory not found: ${id}`);
   if (outcome.status === 'active') {

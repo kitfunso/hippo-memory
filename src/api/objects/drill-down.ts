@@ -2,7 +2,7 @@
 
 import type { SummaryDescendants } from '../../base/ports/store.js';
 import { estimateTokens } from '../../base/util/token-text.js';
-import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/memory.js';
+import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';
 import { descendantAdmits, type DescendantAdmission } from '../../base/scope/read-admission.js';
 import type { CallerProject } from '../prompt-hook.js';

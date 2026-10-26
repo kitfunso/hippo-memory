@@ -16,17 +16,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
-import {
-  savePolicy,
-  POLICY,
-  loadPolicies,
-  policiesAsOf,
-  normalizePolicyDate,
-} from '../../src/domain/objects/policies.js';
+import { POLICY, loadPolicies, policiesAsOf, normalizePolicyDate } from '../../src/domain/objects/policies.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { savePolicy } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -141,7 +137,7 @@ describe('policies store (bi-temporal first-class object)', () => {
       policyText: 'x2',
       supersedesPolicyId: b.id,
     });
-    await closeObject(objectsAt(home), POLICY, 'default', c.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), POLICY, 'default', c.id, { actor: CLI_ACTOR, now: evalNow() });
     const active = await loadPolicies(objectsAt(home), 'default', { status: 'active' });
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
@@ -271,7 +267,7 @@ describe('policies store (bi-temporal first-class object)', () => {
       policyText: 'x',
       validFrom: '2026-01-01',
     });
-    await closeObject(objectsAt(home), POLICY, 'default', p.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), POLICY, 'default', p.id, { actor: CLI_ACTOR, now: evalNow() });
     expect((await policiesAsOf(objectsAt(home), 'default', '2026-06-01', { name: 'Cl' })).length).toBe(0);
   });
 

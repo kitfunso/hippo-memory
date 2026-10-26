@@ -1,7 +1,7 @@
 // The ranking and budget policy of a context block, on plain rows: the api reads the stores, prices the rows and asks
 // these functions who gets in.
 
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isWorthSurfacing } from '../../base/memory/memory-quality.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import type { PromptRecallGate, PromptRecallMetric } from '../../base/rank/prompt-recall.js';

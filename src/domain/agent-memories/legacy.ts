@@ -1,6 +1,6 @@
 // Rows the old Claude import wrote (`claude-memory:<file>`), taken over by the notes they came from.
 import path from 'node:path';
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey } from '../../base/util/same-text.js';
 import { maskEmails } from '../../base/util/secret-detect.js';
 import { liveUnder } from './container-view.js';

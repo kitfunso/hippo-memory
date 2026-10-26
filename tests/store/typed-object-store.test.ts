@@ -1,6 +1,6 @@
 // Store rules every typed object shares, one table row per kind; a rule only one kind has stays in its <kind>-store test.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type {
   CustomerNote,
@@ -10,12 +10,12 @@ import type {
   ProjectBrief,
   Skill,
 } from '../../src/base/records/object-types.js';
-import { saveCustomerNote, loadCustomerNotes, CUSTOMER_NOTE } from '../../src/domain/objects/customer-notes.js';
+import { loadCustomerNotes, CUSTOMER_NOTE } from '../../src/domain/objects/customer-notes.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
-import { savePolicy, loadPolicies, POLICY } from '../../src/domain/objects/policies.js';
-import { saveProjectBrief, loadProjectBriefs, PROJECT_BRIEF } from '../../src/domain/objects/project-briefs.js';
+import { loadPolicies, POLICY } from '../../src/domain/objects/policies.js';
+import { loadProjectBriefs, PROJECT_BRIEF } from '../../src/domain/objects/project-briefs.js';
 import { PROCESS } from '../../src/domain/objects/processes.js';
-import { saveDecision, loadDecisions, DECISION } from '../../src/domain/objects/decisions.js';
+import { loadDecisions, DECISION } from '../../src/domain/objects/decisions.js';
 import { openIncident, INCIDENT } from '../../src/domain/objects/incidents.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntryThenFail } from '../_helpers/failing-write.js';
@@ -29,6 +29,8 @@ oneRequestPerTest();
 import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
+import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 let home: string;
 beforeEach(() => {
@@ -205,7 +207,8 @@ const LINEAGES: readonly Lineage[] = [
           supersedesNoteId: rev.supersedes,
         }),
       ),
-    close: async (id) => note(await closeObject(objectsAt(home), CUSTOMER_NOTE, 'default', id, CLI_ACTOR)),
+    close: async (id) =>
+      note(await closeObject(objectsAt(home), CUSTOMER_NOTE, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), CUSTOMER_NOTE, 'default', id);
       return r && note(r);
@@ -226,7 +229,8 @@ const LINEAGES: readonly Lineage[] = [
           supersedesSkillId: rev.supersedes,
         }),
       ),
-    close: async (id) => skill(await closeObject(objectsAt(home), SKILL, 'default', id, CLI_ACTOR)),
+    close: async (id) =>
+      skill(await closeObject(objectsAt(home), SKILL, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), SKILL, 'default', id);
       return r && skill(r);
@@ -246,7 +250,8 @@ const LINEAGES: readonly Lineage[] = [
           supersedesPolicyId: rev.supersedes,
         }),
       ),
-    close: async (id) => policy(await closeObject(objectsAt(home), POLICY, 'default', id, CLI_ACTOR)),
+    close: async (id) =>
+      policy(await closeObject(objectsAt(home), POLICY, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), POLICY, 'default', id);
       return r && policy(r);
@@ -266,7 +271,8 @@ const LINEAGES: readonly Lineage[] = [
           supersedesBriefId: rev.supersedes,
         }),
       ),
-    close: async (id) => brief(await closeObject(objectsAt(home), PROJECT_BRIEF, 'default', id, CLI_ACTOR)),
+    close: async (id) =>
+      brief(await closeObject(objectsAt(home), PROJECT_BRIEF, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), PROJECT_BRIEF, 'default', id);
       return r && brief(r);
@@ -286,7 +292,8 @@ const LINEAGES: readonly Lineage[] = [
           supersedesProcessId: rev.supersedes,
         }),
       ),
-    close: async (id) => proc(await closeObject(objectsAt(home), PROCESS, 'default', id, CLI_ACTOR)),
+    close: async (id) =>
+      proc(await closeObject(objectsAt(home), PROCESS, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), PROCESS, 'default', id);
       return r && proc(r);
@@ -304,7 +311,8 @@ const LINEAGES: readonly Lineage[] = [
           supersedesDecisionId: rev.supersedes,
         }),
       ),
-    close: async (id) => decision(await closeObject(objectsAt(home), DECISION, 'default', id, CLI_ACTOR)),
+    close: async (id) =>
+      decision(await closeObject(objectsAt(home), DECISION, 'default', id, { actor: CLI_ACTOR, now: evalNow() })),
     byId: async (id) => {
       const r = await objectById(objectsAt(home), DECISION, 'default', id);
       return r && decision(r);
@@ -495,7 +503,15 @@ const LISTINGS: readonly Listing[] = [
     states: INCIDENT.states,
     expected: ['open', 'resolved', 'closed'],
     save: async (t, body) =>
-      (await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, { incidentText: body }, 'cli')).id,
+      (
+        await openIncident(
+          objectsAt(home),
+          loadConfig(home).defaultHalfLifeDays,
+          t,
+          { incidentText: body },
+          { actor: 'cli', now: evalNow() },
+        )
+      ).id,
     list: async (t, s) =>
       ids(await listObjects(objectsAt(home), INCIDENT, t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await objectById(objectsAt(home), INCIDENT, t, id)) !== null,

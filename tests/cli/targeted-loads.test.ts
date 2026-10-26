@@ -20,6 +20,8 @@ import {
   writeEntry,
 } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -133,7 +135,12 @@ describe('strengthenRetrieved', () => {
   it('writes every returned row in one statement with the same values as a single-row write', async () => {
     const ids = await seed(4);
     const { result, statements } = recordStatements(() =>
-      strengthenRetrieved(root, ids, { tenantId: 'default', recallBoostAblated: false }, {}),
+      strengthenRetrieved(
+        root,
+        ids,
+        { tenantId: 'default', recallBoostAblated: false },
+        { strength: PRODUCTION_STRENGTH, clock: evalNow },
+      ),
     );
     expect([...result].sort()).toEqual([...ids].sort());
     expect(countMatching(statements, /UPDATE memories SET retrieval_count/)).toBe(1);

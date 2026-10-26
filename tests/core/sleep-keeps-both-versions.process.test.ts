@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { consolidate } from '../../src/index.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
@@ -40,6 +40,8 @@ import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { REAL_IO } from '../_helpers/real-io.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
 import { testInfra } from '../_helpers/infra.js';
+import { TEST_RUN } from '../_helpers/test-run.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 pinClock();
 
@@ -698,6 +700,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     const imported = async (): Promise<number> =>
       totalTally(
         await importProjectMemories(root, {
+          run: TEST_RUN,
           configAt: loadConfig,
           tenantId: 'default',
           stores: sqliteImportStores({}),
@@ -744,9 +747,9 @@ describe('a new value is never skipped as a copy of an old one', () => {
     write(root, LONG_OLD.replace(' ', '  '));
 
     expect(
-      (await autoShare(...sharingStores(root), { tenantId: ALL_TENANTS, minScore: 0, dryRun: true })).map(
-        (e) => e.content,
-      ),
+      (
+        await autoShare(...sharingStores(root), { embed: TEST_RUN, tenantId: ALL_TENANTS, minScore: 0, dryRun: true })
+      ).map((e) => e.content),
     ).toEqual([LONG_NEW]);
   });
 
@@ -761,6 +764,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     expect(
       contents(
         await searchBothHybrid('dev server port', ...sharingStores(root, getGlobalRoot()), {
+          now: evalNow(),
           tenantId: ALL_TENANTS,
           embedderFor: resolveEmbeddingProvider,
         }),

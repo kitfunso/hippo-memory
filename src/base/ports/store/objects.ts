@@ -11,7 +11,7 @@ import type {
   Skill,
 } from '../../records/object-types.js';
 import type { KeysetPosition } from '../../util/keyset.js';
-import type { MemoryEntry } from '../../memory/memory.js';
+import type { MemoryEntry } from '../../memory/entry.js';
 import type { ClosureState } from '../../records/prediction.js';
 import type { PredictionBaserate } from './types.js';
 

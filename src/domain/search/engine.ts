@@ -1,9 +1,9 @@
 // The one search-engine choice every ranker over a candidate pool makes: recall's band, MCP's wide list, the CLI core
 // and context.
 
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { PhysicsConfig } from '../../base/rank/physics-config.js';
-import type { SearchResult } from '../../base/rank/search-types.js';
+import type { RankTime, SearchResult } from '../../base/rank/search-types.js';
 import { hybridSearch, type HybridSearchOptions } from './hybrid.js';
 import { rankPhysics } from './physics-search.js';
 import type { VectorSource } from './vector.js';
@@ -17,7 +17,7 @@ export function searchByEngine(
   query: string,
   pool: MemoryEntry[],
   physics: PhysicsConfig | null,
-  options: Omit<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings' | 'source'>,
+  options: Omit<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings' | 'source'> & RankTime,
 ): Promise<SearchResult[]> {
   return physics
     ? rankPhysics(query, pool, { ...options, physicsConfig: physics, source })

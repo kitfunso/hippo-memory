@@ -7,7 +7,8 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { blockHash } from '../../src/base/util/token-text.js';
 import { seed, verdictOf } from '../_helpers/host-transcript.js';
 import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { deleteEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import {

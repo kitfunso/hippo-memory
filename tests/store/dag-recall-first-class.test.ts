@@ -15,7 +15,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 import type { RerankerOptions, RerankResult } from '../../src/base/ports/reranker.js';
@@ -28,6 +30,7 @@ import { writeEntry } from '../_helpers/root-forms.js';
 import { envRuntimeSettings } from '../../src/base/util/env.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -292,6 +295,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     const globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-e4-global-empty-'));
     try {
       const results = await searchBothHybrid('shared-test', ...sharingStores(hippoRoot, globalRoot), {
+        now: evalNow(),
         tenantId: ALL_TENANTS,
         embedderFor: resolveEmbeddingProvider,
         explain: true,

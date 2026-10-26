@@ -5,7 +5,7 @@ import { DAY_MS, HOUR_MS } from '../base/util/time.js';
 // callers.
 
 /** A minimal age reference: a memory id plus its ISO-8601 creation timestamp (MemoryEntry.created, canonical ISO per
- *  the src/base/memory/memory.ts invariant). */
+ *  the src/base/memory/entry.ts invariant). */
 export interface AgeRef {
   id: string;
   created: string;

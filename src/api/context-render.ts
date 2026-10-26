@@ -4,11 +4,10 @@ import {
   calculateStrength,
   confidenceFacets,
   confidenceLabel,
-  strengthOptionsOf,
-  type MemoryEntry,
-  type StrengthOptions,
-} from '../base/memory/memory.js';
-import { evalNow } from '../base/memory/ablation.js';
+  PRODUCTION_STRENGTH,
+  type StrengthModel,
+} from '../base/memory/strength.js';
+import type { MemoryEntry } from '../base/memory/entry.js';
 import { estimateTokens } from '../base/util/token-text.js';
 import { renderAmbientSummary, type AmbientState } from '../base/memory/ambient.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../base/session/handoff.js';
@@ -142,21 +141,15 @@ export function contextBlockLines(
   items: ReadonlyArray<{ entry: MemoryEntry; isGlobal: boolean }>,
   totalTokens: number,
   framing: string,
-  opts: { showStrength?: boolean; heading?: string; strength?: StrengthOptions } = {},
+  opts: { now: Date; showStrength?: boolean; heading?: string; strength?: StrengthModel },
 ): string[] {
-  const now = evalNow();
+  const { now } = opts;
   const showStrength = opts.showStrength !== false;
-  const strength = opts.strength ?? strengthOptionsOf(undefined);
+  const strength = opts.strength ?? PRODUCTION_STRENGTH;
   return [
     contextHeading(opts.heading ?? 'Project Memory', items.length, totalTokens),
     ...items.map((item) =>
-      contextLine(
-        item,
-        framing,
-        showStrength,
-        now,
-        Math.round(calculateStrength(item.entry, undefined, strength) * 100),
-      ),
+      contextLine(item, framing, showStrength, now, Math.round(calculateStrength(item.entry, now, strength) * 100)),
     ),
   ];
 }
@@ -269,7 +262,7 @@ export const drillCost: DrillDownCost = {
 };
 
 // Headers and footer are reserved at their widest (counts at the budget itself, strength at 100%) before any entry.
-export function contextCost(format: 'markdown' | 'additional-context', framing: string): ContextCost {
+export function contextCost(format: 'markdown' | 'additional-context', framing: string, now: Date): ContextCost {
   const hook = format === 'additional-context';
   const price = printedTokens;
   return {
@@ -277,7 +270,7 @@ export function contextCost(format: 'markdown' | 'additional-context', framing: 
       price(
         item.category === 'cross-project' && !(hook && item.promptRecall)
           ? crossProjectLine(item)
-          : contextLine({ entry: item.entry, isGlobal: item.isGlobal ?? false }, framing, !hook, evalNow(), 100),
+          : contextLine({ entry: item.entry, isGlobal: item.isGlobal ?? false }, framing, !hook, now, 100),
       ),
     fixed: (budget, can) =>
       price(contextHeading('Project Memory', budget, budget)) +

@@ -4,7 +4,8 @@ import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vites
 import { createRequire } from 'node:module';
 import { realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { serve, type AddonRoute, type ServerHandle } from '../../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';

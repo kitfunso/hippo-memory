@@ -1,6 +1,6 @@
 // Design 2's handover: rows the store-less hook path left in the global store, under this project's origin, for
 // containers its store now syncs.
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { projectNames } from '../../base/scope/project-identity.js';
 import type { ContainerApply, ImportStep, MirrorFailure } from '../../base/ports/store/agent-import.js';

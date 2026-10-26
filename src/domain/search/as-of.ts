@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 
 export interface CurrentnessOptions {
   /** Keep only rows current at this ISO date string. */

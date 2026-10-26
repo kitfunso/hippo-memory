@@ -1,8 +1,9 @@
 // Root-keyed entries forms tests call; production code goes through the port or the handle-first forms.
 
-import type { MemoryEntry } from '../../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import type { WriteBudget } from '../../../src/base/util/write-budget.js';
 import * as candidatesSql from '../../../src/store/sqlite/candidates.js';
+import { evalSwitches } from '../../../src/infra/eval-switches.js';
 import { deleteEntriesInBatches } from '../../../src/store/sqlite/delete-and-batch.js';
 import * as deleteAndBatchSql from '../../../src/store/sqlite/delete-and-batch.js';
 import type { DormantMemory, ListDormantOpts } from '../../../src/base/ports/store/dormant.js';
@@ -65,7 +66,11 @@ export function loadContextCandidates(
   tenantId: string,
   filter: ContextCandidateFilter,
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => candidatesSql.listContextCandidates(db, tenantId, filter), openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => candidatesSql.listContextCandidates(db, evalSwitches().strength, tenantId, filter),
+    openStore,
+  );
 }
 
 export function loadTextsHolding(

@@ -14,7 +14,7 @@ import * as api from '../../api/index.js';
 import { DEFAULT_CONTEXT_BUDGET, NO_QUERY } from '../../api/context.js';
 import { cliApiContext, cliHookRequest } from './api-context.js';
 import { renderAmbientSummary } from '../../base/memory/ambient.js';
-import { strengthOptionsOf } from '../../base/memory/memory.js';
+import { strengthOf } from '../../api/types.js';
 import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../../api/context-render.js';
 import {
   additionalContextOutput,
@@ -143,7 +143,8 @@ async function renderContext(options: RenderContextOptions): Promise<void> {
   const ctx = cliApiContext(hippoRoot, resolvedTenant);
   const format = stringFlagOrExit(flags, 'format') ?? 'markdown';
   const framing = stringFlagOrExit(flags, 'framing') ?? 'observe';
-  const opts = buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec });
+  const now = ctx.infra.clock();
+  const opts = buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec, now });
 
   const result = await api.contextGet(ctx, opts);
   if (!hasContextData(result)) {
@@ -163,6 +164,8 @@ async function renderContext(options: RenderContextOptions): Promise<void> {
     result,
     reach: ledgerReachOf(ctx),
     envelope,
+    now,
+    strength: strengthOf(ctx),
   };
   await renderContextView(view, format, query);
 }
@@ -211,6 +214,7 @@ interface ContextOptsInput {
   readonly framing: string;
   readonly session: ContextSession;
   readonly rec: DeliveryRecorder | null;
+  readonly now: Date;
 }
 
 function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.ContextOptions {
@@ -234,6 +238,7 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
     cost: contextCost(
       input.format === 'additional-context' || input.format === 'copilot' ? 'additional-context' : 'markdown',
       input.framing,
+      input.now,
     ),
     deliveryObserver: input.rec ?? undefined,
   };
@@ -289,7 +294,7 @@ async function renderContextMarkdown(view: ContextView): Promise<void> {
   const text = settleTokens((t) => {
     const lines = continuityTexts(result.activeSnapshot, result.sessionHandoff, result.recentEvents);
     if (renderItems.length > 0) {
-      lines.push(...contextBlockLines(renderItems, t, framing, { strength: strengthOptionsOf(view.config.runtime) }));
+      lines.push(...contextBlockLines(renderItems, t, framing, { now: view.now, strength: view.strength }));
     }
     lines.push(...crossProjectLines(crossEntries));
     if (result.ambientState) lines.push(`\n${renderAmbientSummary(result.ambientState)}`);

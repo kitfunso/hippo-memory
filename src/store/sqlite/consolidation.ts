@@ -1,5 +1,5 @@
 // hippo.db's Consolidation group: sleep's reads and writes, each a body on one short-lived handle.
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import { type DatabaseSyncLike, withWriteScope, getMeta, setMeta, SLEEP_DB_WAIT_MS } from '../../db/index.js';
 import { rejectedValues } from './rejection.js';
 import { ftsDrift } from './entry-row.js';

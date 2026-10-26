@@ -5,7 +5,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { contextGet } from '../../src/api/index.js';
 import { computeAmbientState, renderAmbientSummary } from '../../src/base/memory/ambient.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -16,6 +17,8 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -100,7 +103,7 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
 
     expect(result.ambientState?.totalMemories).toBe(1);
 
-    const expectedState = computeAmbientState([admitted]);
+    const expectedState = computeAmbientState([admitted], evalNow(), PRODUCTION_STRENGTH);
     expect(result.ambientState).toEqual(expectedState);
     expect(renderAmbientSummary(result.ambientState!)).toBe(renderAmbientSummary(expectedState));
   });
@@ -117,7 +120,6 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     const projA = path.join(tmpRoot, 'proj-a', '.hippo');
     fs.mkdirSync(projA, { recursive: true });
     initTestStore(projA);
-    const ctx: FullContext = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
 
     // Half-life 7 days, aged ~8 months before the call below: pre-retrieval
     // strength decays to near zero.
@@ -128,6 +130,8 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     writeEntry(projA, aged);
 
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
+    // A root reads the fake clock as it opens the store, so the context comes after the stub.
+    const ctx: FullContext = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
 
     const result = await contextGet(ctx, { currentProject: 'proj-a', budget: 5000 });
 
@@ -135,10 +139,14 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     expect(result.ambientState?.totalMemories).toBe(1);
 
     // What the pre-fix code computed: the admitted entry BEFORE markRetrieved ran.
-    const preRetrievalState = computeAmbientState([aged], new Date(FAKE_NOW));
+    const preRetrievalState = computeAmbientState([aged], new Date(FAKE_NOW), PRODUCTION_STRENGTH);
     // What the post-fix code should compute: overlaid with the returned,
     // now-strengthened entry.
-    const postRetrievalState = computeAmbientState(result.entries.map((e) => e.entry));
+    const postRetrievalState = computeAmbientState(
+      result.entries.map((e) => e.entry),
+      evalNow(),
+      PRODUCTION_STRENGTH,
+    );
 
     expect(result.ambientState!.avgStrength).not.toBeCloseTo(preRetrievalState.avgStrength, 3);
     expect(result.ambientState!.avgStrength).toBeCloseTo(postRetrievalState.avgStrength, 10);

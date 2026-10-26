@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -32,7 +33,7 @@ describe('extraction-aware search preference', () => {
     writeEntry(hippoDir, fact);
 
     const entries = loadAllEntries(hippoDir, 'default');
-    const results = rankBm25('LeBron basketball points', entries, { budget: 10000 });
+    const results = rankBm25('LeBron basketball points', entries, { now: evalNow(), budget: 10000 });
 
     expect(results.length).toBeGreaterThanOrEqual(1);
 
@@ -61,7 +62,7 @@ describe('extraction-aware search preference', () => {
     writeEntry(hippoDir, mem2);
 
     const entries = loadAllEntries(hippoDir, 'default');
-    const results = rankBm25('Python TypeScript programming', entries, { budget: 10000 });
+    const results = rankBm25('Python TypeScript programming', entries, { now: evalNow(), budget: 10000 });
 
     const ids = results.map((r) => r.entry.id);
     expect(ids).toContain(mem1.id);
@@ -83,7 +84,7 @@ describe('extraction-aware search preference', () => {
     writeEntry(hippoDir, untagged);
 
     const entries = loadAllEntries(hippoDir, 'default');
-    const results = rankBm25('gold inflation futures', entries, { budget: 10000 });
+    const results = rankBm25('gold inflation futures', entries, { now: evalNow(), budget: 10000 });
 
     expect(results.length).toBe(2);
     const taggedResult = results.find((r) => r.entry.id === tagged.id)!;
@@ -110,7 +111,7 @@ describe('extraction-aware search preference', () => {
     writeEntry(hippoDir, fact);
 
     const entries = loadAllEntries(hippoDir, 'default');
-    const results = rankBm25('FRED CPI data stale refresh', entries, { budget: 10000 });
+    const results = rankBm25('FRED CPI data stale refresh', entries, { now: evalNow(), budget: 10000 });
 
     const ids = results.map((r) => r.entry.id);
     expect(ids).toContain(fact.id);

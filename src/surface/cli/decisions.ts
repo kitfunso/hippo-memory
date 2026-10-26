@@ -1,6 +1,6 @@
 // First-class object verbs for decisions: record one (optionally superseding an older one's memory), list, get, close.
 
-import { MemoryEntry } from '../../base/memory/memory.js';
+import { MemoryEntry } from '../../base/memory/entry.js';
 import type { Decision } from '../../base/records/object-types.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import { decisionIdByMemory, decisionMemoryWeaken } from '../../api/objects/object-kinds.js';

@@ -1,12 +1,9 @@
 // The vector arm of hybrid recall applies tenant, scope and superseded rules before its top-k cut.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { recallScopeFilter } from '../../src/base/scope/recall-scope.js';
-import {
-  createMemory,
-  DEFAULT_HALF_LIFE_DAYS,
-  type MemoryEntry,
-  type CreateMemoryOptions,
-} from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { MemoryEntry, CreateMemoryOptions } from '../../src/base/memory/entry.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex, loadVectorCandidateEntries, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';

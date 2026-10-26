@@ -3,7 +3,7 @@
  */
 
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from '../rank/physics-config.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../memory/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../memory/strength.js';
 import { SALIENCE_DEFAULTS } from '../memory/salience.js';
 import type { PromptRecallMetric } from '../rank/prompt-recall.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_MMR_LAMBDA, DEFAULT_RECALL_BUDGET } from '../rank/search-types.js';

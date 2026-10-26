@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { closeHippoDb } from '../../src/db/index.js';
-import { Layer } from '../../src/base/memory/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
 import { outcome } from '../../src/api/memories/outcome.js';
 import { quarantineList } from '../../src/api/auth/quarantine.js';
 import { drillDown } from '../../src/api/objects/drill-down.js';
@@ -28,6 +28,8 @@ import {
   useQueryCountRoots,
 } from '../_helpers/query-count-seeds.js';
 import { testInfra } from '../_helpers/infra.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 useQueryCountRoots();
 
@@ -164,7 +166,7 @@ describe('strengthenRetrieved', () => {
           root,
           entries.map((e) => e.id),
           { tenantId: 'default', recallBoostAblated: false },
-          {},
+          { strength: PRODUCTION_STRENGTH, clock: evalNow },
         ),
       );
       expect(result.size).toBe(n);
@@ -177,7 +179,12 @@ describe('strengthenRetrieved', () => {
     const [entry] = rows(1, 'repeat');
     seed(ctxFor(root), [entry]);
     expect([
-      ...strengthenRetrieved(root, [entry.id, entry.id], { tenantId: 'default', recallBoostAblated: false }, {}),
+      ...strengthenRetrieved(
+        root,
+        [entry.id, entry.id],
+        { tenantId: 'default', recallBoostAblated: false },
+        { strength: PRODUCTION_STRENGTH, clock: evalNow },
+      ),
     ]).toEqual([entry.id]);
     const after = readEntry(root, entry.id);
     expect(after?.retrievalCount).toBe(entry.retrievalCount + 1);

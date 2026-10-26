@@ -8,9 +8,6 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { saveDecision } from '../../src/domain/objects/decisions.js';
-import { savePolicy } from '../../src/domain/objects/policies.js';
-import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { extractGraph } from '../../src/domain/graph/extract.js';
 import { buildGraphModel, layoutGraph, type GraphModel } from '../../src/domain/graph/view.js';
 import { renderGraphHtml, renderGraphCanvas } from '../../src/surface/cli/graph-page.js';
@@ -19,6 +16,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
+import { saveCustomerNote, saveDecision, savePolicy } from '../../src/entry/testing.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

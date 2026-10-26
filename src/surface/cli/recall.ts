@@ -2,7 +2,7 @@
 
 import { envActiveScope, envHippoSessionId } from '../../base/util/env.js';
 import type { CallerState } from '../../api/callers.js';
-import { Layer } from '../../base/memory/memory.js';
+import { Layer } from '../../base/memory/entry.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../../base/rank/search-types.js';
 import { estimateTokens, tokenPurse } from '../../base/util/token-text.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
@@ -286,7 +286,8 @@ export interface PricedEntries extends RecallRowOrigin {
 function priceRecallEntries(ctx: api.Context, query: string, parsed: ParsedRecallFlags): PricedEntries {
   const origin = recallRowOrigin(ctx, parsed.setting);
   const isGlobal = origin.isGlobal;
-  const entryText = (r: SearchResult): string => recallEntryText(r, query, parsed.showWhy, isGlobal(r));
+  const now = ctx.infra.clock();
+  const entryText = (r: SearchResult): string => recallEntryText(r, query, parsed.showWhy, isGlobal(r), now);
   const printCost = (r: SearchResult): number => printedTokens(entryText(r));
   return { globalOn: origin.globalOn, isGlobal, entryText, printCost };
 }
@@ -513,7 +514,7 @@ async function presentRecall(
   const loaded = await loadScopedContinuity(ctx, parsed.setting, parsed.includeContinuity);
   const fit = fitRecallBlock({ ctx, query, parsed, ranked, loaded, planning });
   const { results, hints } = fit;
-  const text = recallOutput(query, parsed, fit, ranked.isGlobal);
+  const text = recallOutput(query, parsed, fit, ranked.isGlobal, ctx.infra.clock());
   const audit = shownRecallRows(
     ctx.config,
     { tenantId: parsed.tenantId, actor: CLI_ACTOR },
@@ -541,6 +542,7 @@ function recallOutput(
   parsed: ParsedRecallFlags,
   fit: FittedRecall,
   isGlobal: (r: SearchResult) => boolean,
+  now: Date,
 ): string {
   const { asJson, includeContinuity } = parsed;
   const { results, recallText } = fit;
@@ -551,7 +553,7 @@ function recallOutput(
       : recallText;
   }
   if (!asJson) return recallText;
-  const output = results.map((r) => recallJsonRow(r, query, parsed.showWhy, isGlobal(r)));
+  const output = results.map((r) => recallJsonRow(r, query, parsed.showWhy, isGlobal(r), now));
   return JSON.stringify({
     query,
     budget: parsed.budget,

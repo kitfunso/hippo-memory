@@ -34,7 +34,7 @@ export interface ObjectDraft<K extends SavableKind> {
 /** A kind the shared save writes: active rows, replaced by supersede. `W` is the options its module's save takes. */
 export interface SavableDescriptor<K extends SavableKind, W> extends ObjectDescriptor<K> {
   /** Throws BadRequestError for options the kind refuses. */
-  readonly draft: (opts: W) => ObjectDraft<K>;
+  readonly draft: (opts: W, now: Date) => ObjectDraft<K>;
 }
 
 export interface ObjectListOptions<K extends ObjectKind> {

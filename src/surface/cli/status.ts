@@ -1,17 +1,12 @@
 // Read-only report verbs: status, inspect, tokens, failures, provenance, correction latency, doctor and support bundle.
 
 import { envHomeDir } from '../../base/util/env.js';
-import { evalNow } from '../../base/memory/ablation.js';
+import { strengthOf } from '../../api/types.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import {
-  calculateStrength,
-  calculateRewardFactor,
-  resolveConfidence,
-  Layer,
-  strengthOptionsOf,
-} from '../../base/memory/memory.js';
+import { calculateStrength, calculateRewardFactor, resolveConfidence } from '../../base/memory/strength.js';
+import { Layer } from '../../base/memory/entry.js';
 import { resolveEmbeddingProvider } from '../../infra/embedding-provider.js';
 import { computeSystemEnergy } from '../../base/rank/physics.js';
 import { runDoctor, formatDoctor, type DoctorStore } from './doctor.js';
@@ -50,7 +45,7 @@ export async function handleStatus({ hippoRoot, tenantId }: CommandContext): Pro
   requireInit(hippoRoot);
 
   const ctx = cliApiContext(hippoRoot, tenantId);
-  const { stats, counts } = await storeStatus(ctx, evalNow(), AT_RISK_BELOW);
+  const { stats, counts } = await storeStatus(ctx, ctx.infra.clock(), AT_RISK_BELOW);
   const { byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength } = counts;
 
   console.log('Hippo Status');
@@ -163,8 +158,8 @@ async function inspectMemory(hippoRoot: string, tenantId: string, id: string): P
     fail(`Memory not found: ${id}`);
   }
 
-  const now = evalNow();
-  const rules = strengthOptionsOf(ctx.config.runtime);
+  const now = ctx.infra.clock();
+  const rules = strengthOf(ctx);
   const currentStrength = calculateStrength(entry, now, rules);
   const lastRetrieved = new Date(entry.lastRetrieved);
   const created = new Date(entry.created);
@@ -187,7 +182,7 @@ async function inspectMemory(hippoRoot: string, tenantId: string, id: string): P
   console.log(`Schema fit:       ${entry.schemaFit}`);
   console.log(`Pinned:           ${entry.pinned}`);
   console.log(`Tags:             ${entry.tags.join(', ') || 'none'}`);
-  const rewardFactor = calculateRewardFactor(entry, rules.ablation);
+  const rewardFactor = calculateRewardFactor(entry, rules);
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
   const outcomeLabel = pos === 0 && neg === 0 ? 'none' : `+${pos} / -${neg} (reward factor: ${fmt(rewardFactor)})`;

@@ -1,5 +1,6 @@
 // A container plan as the store's steps, the rows each writes built here, and the tally read back from the outcomes.
-import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../../base/memory/memory.js';
+import { Layer, createMemory, type MemoryEntry } from '../../base/memory/entry.js';
+import { calculateStrength } from '../../base/memory/strength.js';
 import type { ImportStep, StepOutcome } from '../../base/ports/store/agent-import.js';
 import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import type { ContainerWork, StoreSession } from './container-view.js';
@@ -46,15 +47,19 @@ function found<T>(value: T | undefined, missing: string): T {
 }
 
 function newRow(s: StoreSession, w: ContainerWork, item: MemoryItem): MemoryEntry {
-  const base = createMemory(storedText(item.text), {
-    layer: Layer.Episodic,
-    tags: [w.tool.tag],
-    source: itemSource(w.prefix, item.key, item.text),
-    confidence: 'observed',
-    kind: 'distilled',
-    tenantId: s.tenantId,
-    baseHalfLifeDays: s.baseHalfLifeDays,
-  });
+  const base = createMemory(
+    storedText(item.text),
+    {
+      layer: Layer.Episodic,
+      tags: [w.tool.tag],
+      source: itemSource(w.prefix, item.key, item.text),
+      confidence: 'observed',
+      kind: 'distilled',
+      tenantId: s.tenantId,
+      baseHalfLifeDays: s.baseHalfLifeDays,
+    },
+    s.now,
+  );
   // The note's own time when it is earlier than now; the loader reads any form but toISOString as drift.
   const created = Number.isFinite(item.updatedAt)
     ? new Date(Math.min(item.updatedAt, Date.parse(base.created))).toISOString()
@@ -65,10 +70,10 @@ function newRow(s: StoreSession, w: ContainerWork, item: MemoryItem): MemoryEntr
 
 /** The snapshot's row as if just recalled, carrying the tool's tag once. */
 function revived(s: StoreSession, w: ContainerWork, snap: DormantSnapshot): MemoryEntry {
-  const now = new Date();
+  const { now } = s;
   const tags = Array.isArray(snap.entry.tags) ? snap.entry.tags.filter((t) => t !== w.tool.tag) : [];
   const row: MemoryEntry = {
-    ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: s.baseHalfLifeDays }),
+    ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: s.baseHalfLifeDays }, now),
     ...snap.entry,
     tags: [...tags, w.tool.tag],
     lastRetrieved: now.toISOString(),

@@ -14,7 +14,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { sqliteDagReads } from '../../src/store/sqlite/dag-reads.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadEntriesByIds, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';

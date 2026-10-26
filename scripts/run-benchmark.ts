@@ -13,7 +13,8 @@ import * as path from 'path';
 import * as os from 'os';
 import { fileURLToPath } from 'url';
 
-import { createMemory, type MemoryEntry } from '../src/base/memory/memory.js';
+import { createMemory } from '../src/entry/memory.js';
+import type { MemoryEntry } from '../src/base/memory/entry.js';
 import { initStore, writeEntry, loadAllEntries } from '../src/entry/testing.js';
 import { search } from '../src/domain/search/bm25-search.js';
 

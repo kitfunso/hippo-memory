@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { markRetrieved } from '../../src/base/memory/memory.js';
+import { markRetrieved } from '../../src/entry/memory.js';
 import { invalidateMatching } from '../../src/domain/learn/invalidation.js';
 import { remember, contextGet } from '../../src/api/index.js';
 import { apiCtx, cwdProject } from '../_helpers/api-ctx.js';

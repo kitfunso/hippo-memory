@@ -11,13 +11,13 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { recordQuarantine } from '../../src/store/sqlite/quarantine.js';
 import * as api from '../../src/api/index.js';
-import { loadDecisions, saveDecision } from '../../src/domain/objects/decisions.js';
+import { loadDecisions } from '../../src/domain/objects/decisions.js';
 import { INCIDENT, openIncident } from '../../src/domain/objects/incidents.js';
 import { PROCESS } from '../../src/domain/objects/processes.js';
-import { loadPolicies, savePolicy } from '../../src/domain/objects/policies.js';
+import { loadPolicies } from '../../src/domain/objects/policies.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
-import { loadProjectBriefs, saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
-import { loadCustomerNotes, saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
+import { loadProjectBriefs } from '../../src/domain/objects/project-briefs.js';
+import { loadCustomerNotes } from '../../src/domain/objects/customer-notes.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../../src/base/util/json.js';
@@ -27,6 +27,8 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { listApiKeys, loadAllPredictions } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
+import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 const ROWS = 7;
 const PAGE = 3;
@@ -66,7 +68,7 @@ async function seedTenant(tenantId: string, count: number): Promise<void> {
       loadConfig(home).defaultHalfLifeDays,
       tenantId,
       { incidentText: `${tenantId} incident ${i}` },
-      'cli',
+      { actor: 'cli', now: evalNow() },
     );
     await cliSave(home, tenantId, PROCESS, {
       processName: `${tenantId} process ${i}`,

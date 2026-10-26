@@ -7,7 +7,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { recordStatements, recordStatementsAsync, countMatching } from '../_helpers/count-statements.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
@@ -26,6 +28,8 @@ import {
 } from '../_helpers/root-forms.js';
 import { handlesOf } from '../../src/store/sqlite/handles.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -96,13 +100,20 @@ describe('rankRecall with a global store', () => {
       memory('local note 0 on the zephyrine cache eviction'),
     ]);
     const at = (root: string) => ({ store: sqliteStore(root), config: loadConfig(root) });
-    const ctx = { ...at(local), global: at(global), tenantId: 'default', embedderFor: resolveEmbeddingProvider };
+    const ctx = {
+      ...at(local),
+      global: at(global),
+      tenantId: 'default',
+      embedderFor: resolveEmbeddingProvider,
+      now: evalNow(),
+    };
     // Recency reads the clock, so both rankings see one instant.
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
     const { result, statements } = await recordStatementsAsync(() => rankRecall(ctx, recallOpts(local), BUDGET_RANKED));
     expect(countMatching(statements, /memories_fts MATCH|LOWER\(content\) LIKE/)).toBe(2);
 
     const reloaded = await searchBothHybrid('zephyrine cache', ...sharingStores(local, global), {
+      now: evalNow(),
       embedderFor: resolveEmbeddingProvider,
       budget: 4000,
       cost: (r) => r.tokens,
@@ -201,7 +212,7 @@ describe('finishRecall', () => {
       handlesOf(root).on((db) =>
         finishRecall(
           db,
-          {},
+          { strength: PRODUCTION_STRENGTH, clock: evalNow },
           {
             goalLog: [],
             audit: [{ tenantId: 'default', actor: 'cli', op: 'recall' }],

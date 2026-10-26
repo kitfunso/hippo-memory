@@ -1,6 +1,6 @@
 // What only one typed-object kind does: an incident's open and resolve, the policies in force at a date, the skills
 // export, a brief built from its repo's receipts, and the memory a new decision replaces.
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { Incident, Policy, ProjectBrief } from '../../base/records/object-types.js';
 import { MAX_CUSTOMER_LEN, MAX_NOTE_LEN } from '../../domain/objects/customer-notes.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
@@ -46,12 +46,18 @@ export const OBJECT_CAPS = {
 export function incidentOpen(ctx: Context, write: SaveIncidentOptions, origin?: WriteOrigin): Promise<Incident> {
   const { defaultHalfLifeDays } = ctx.config;
   const tagged = taggedFrom(write, origin);
-  return openIncident(objectsOf(ctx), defaultHalfLifeDays, ctx.tenantId, tagged, ctx.actor.subject);
+  return openIncident(objectsOf(ctx), defaultHalfLifeDays, ctx.tenantId, tagged, {
+    actor: ctx.actor.subject,
+    now: ctx.infra.clock(),
+  });
 }
 
 /** Moves an open incident to resolved as the caller. */
 export function incidentResolve(ctx: Context, id: number, resolutionText: string): Promise<Incident> {
-  return resolveOpenIncident(objectsOf(ctx), ctx.tenantId, id, resolutionText, ctx.actor.subject);
+  return resolveOpenIncident(objectsOf(ctx), ctx.tenantId, id, resolutionText, {
+    actor: ctx.actor.subject,
+    now: ctx.infra.clock(),
+  });
 }
 
 /** The caller's policies in force at `date`, optionally one policy's versions only. */

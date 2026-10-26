@@ -13,9 +13,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/memory.js';
-import { DECISION, saveDecision } from '../../src/domain/objects/decisions.js';
-import { savePolicy } from '../../src/domain/objects/policies.js';
+import { createMemory } from '../../src/entry/memory.js';
+import { Layer } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
+import { DECISION } from '../../src/domain/objects/decisions.js';
 import { extractGraph } from '../../src/domain/graph/extract.js';
 import { insertEntityAt } from '../_helpers/graph-seed.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -25,6 +26,8 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { deleteEntry, writeEntry, loadEntities } from '../_helpers/root-forms.js';
 import { oneRequestPerTest, removeAfterRequest } from '../_helpers/one-request-per-test.js';
+import { saveDecision, savePolicy } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 oneRequestPerTest();
 
@@ -192,7 +195,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     const gone = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       decisionText: 'Retire this one',
     });
-    await closeObject(objectsAt(home), DECISION, T, gone.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), DECISION, T, gone.id, { actor: CLI_ACTOR, now: evalNow() });
 
     await extractGraph(sqliteStore(home), T);
     const ents = entityRows(home);
@@ -462,7 +465,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
 
     // Close the mirrorless decision. close* cannot enqueue a rebuild (no mirror to key the
     // queue), so it must drop the decision's graph rows DIRECTLY. NO extractGraph after close.
-    await closeObject(objectsAt(home), DECISION, T, decision.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), DECISION, T, decision.id, { actor: CLI_ACTOR, now: evalNow() });
 
     expect(
       entityRows(home).some((e) => e.source_object_type === 'decision' && e.source_object_id === decision.id),
@@ -488,7 +491,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     expect(entityRows(home).length).toBe(1); // entity created with a live mirror + object (active)
 
     // Close removes the object's graph rows DIRECTLY (deterministic), so it never lingers.
-    await closeObject(objectsAt(home), DECISION, T, decision.id, CLI_ACTOR);
+    await closeObject(objectsAt(home), DECISION, T, decision.id, { actor: CLI_ACTOR, now: evalNow() });
     expect(entityRows(home).length).toBe(0); // gone immediately, not lingering until a rebuild
 
     // Forgetting the now-orphaned mirror afterwards must not throw - and with the object-status

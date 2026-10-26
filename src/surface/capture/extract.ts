@@ -1,6 +1,6 @@
 import { duplicateKey } from '../../base/util/same-text.js';
 import { assessAutomaticMemory } from '../../base/memory/memory-quality.js';
-import { ERROR_TAG } from '../../base/memory/memory.js';
+import { ERROR_TAG } from '../../base/memory/entry.js';
 
 export interface ExtractedItem {
   content: string;

@@ -1,6 +1,6 @@
 // The reads of the port groups that were hippo.db's local files, as the reader-thread parity test runs them, and the rows they need.
 import { inspect } from 'node:util';
-import type { MemoryEntry } from '../../src/base/memory/memory.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import type { HippoStore, StoreGroups } from '../../src/base/ports/store-index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';

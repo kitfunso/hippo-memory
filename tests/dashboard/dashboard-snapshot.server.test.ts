@@ -2,7 +2,7 @@
 // that one population.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Layer, type MemoryEntry } from '../../src/base/memory/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { memoryFacts, seriesDay } from '../../src/base/memory/memory-facts.js';
 import { AT_RISK_BELOW } from '../../src/base/memory/strength-bands.js';
 import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
@@ -20,6 +20,7 @@ import {
   resolveConflictKeeping,
   loadAllEntries,
 } from '../_helpers/root-forms.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 let store: TmpStore;
 
@@ -73,7 +74,7 @@ function foldOf(entries: readonly MemoryEntry[], vectors: ReadonlySet<string>): 
   const ordered = [...entries].sort((a, b) => (a.created + '\u0001' + a.id < b.created + '\u0001' + b.id ? -1 : 1));
   for (const e of ordered) byOrigin.set(e.originProject ?? null, [...(byOrigin.get(e.originProject ?? null) ?? []), e]);
   return [...byOrigin].map(([origin, rows]) => {
-    const facts = rows.map((e) => memoryFacts(e, NOW, {}));
+    const facts = rows.map((e) => memoryFacts(e, NOW, PRODUCTION_STRENGTH));
     const count = (pick: (i: number) => boolean): number => rows.filter((_, i) => pick(i)).length;
     const createdDays = Array.from({ length: 91 }, () => 0);
     for (const e of rows) {

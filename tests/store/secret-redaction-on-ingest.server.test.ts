@@ -289,6 +289,8 @@ describe('machine-captured lessons', () => {
       1,
       `curl: (22) 401 for token ${GHP}`,
       `curl -H "Authorization: Bearer ${GHP}" https://api.example.com`,
+      undefined,
+      new Date(),
     );
     expect(entry.content).not.toContain(GHP);
     expect(entry.content).toContain('[REDACTED]');

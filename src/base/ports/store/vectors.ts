@@ -1,5 +1,5 @@
 // The vector groups: recall's vector arm, the stored vectors and particles, their writes and a store's own index.
-import type { MemoryEntry } from '../../memory/memory.js';
+import type { MemoryEntry } from '../../memory/entry.js';
 import type { PhysicsParticle } from '../../rank/physics.js';
 import type { RecallScopeFilter } from '../../scope/recall-scope.js';
 import type { EmbeddingIndexState } from '../../embeddings/index-identity.js';

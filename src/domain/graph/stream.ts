@@ -6,7 +6,7 @@
  * The score scale only sets the order inside this stream (RRF re-ranks by 1/(k + graphRank)), so do not tune it for a
  * fused-score effect.
  */
-import type { MemoryEntry } from '../../base/memory/memory.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { Relation } from '../../base/ports/store/graph.js';
 import type { HippoStore } from '../../base/ports/store-index.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './recall.js';

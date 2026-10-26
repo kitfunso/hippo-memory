@@ -1,5 +1,4 @@
 // hippo.db's Reports group: the tenant reports, listings and usage reports the status verbs print.
-import type { LossAversion } from '../../base/memory/memory.js';
 import { type DatabaseSyncLike, withReadSnapshot } from '../../db/index.js';
 import { cachedStatement } from '../../db/statement-cache.js';
 import { summarizeTokenUse } from './token-ledger.js';
@@ -19,7 +18,7 @@ import { countAllEntries } from './entry-reads.js';
 import { listEntriesWhere } from './entry-filter.js';
 import { createdSinceLastSleep } from './index-and-stats.js';
 import { buildStatsFromDb } from './mirrors.js';
-import type { Handles, StoreFiles } from './open.js';
+import type { Handles, StoreFiles, StoreModel } from './open.js';
 import { openStore } from './handles.js';
 import { bound, type Bodies } from './bound.js';
 
@@ -98,7 +97,7 @@ function rawProvenance(db: DatabaseSyncLike, page: ReportPage): RawProvenancePag
 /** Strength tallies and the open-conflict count on one snapshot, so they never straddle another process's write. */
 function memoryStatus(
   db: DatabaseSyncLike,
-  rules: LossAversion,
+  rules: StoreModel,
   tenantId: string,
   now: Date,
   atRiskBelow: number,

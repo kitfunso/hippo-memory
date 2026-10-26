@@ -67,6 +67,8 @@ import {
 import type { AppendAuditOpts } from '../../src/base/ports/store/types.js';
 import { handlesOf, onHandle, openStore } from '../../src/store/sqlite/handles.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -584,7 +586,7 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
               { entry: globalRow, score: 0.7 },
             ],
             active,
-            { sessionId: SESSION, tenantId: TENANT, limit: 10 },
+            { now: evalNow(), sessionId: SESSION, tenantId: TENANT, limit: 10 },
           );
           writeGoalRecallLog(db, localGoalRecallRows(db, boost.log));
           for (const event of events) appendAuditEvents(db, [event]);
@@ -592,7 +594,10 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
         } finally {
           closeHippoDb(db);
         }
-        strengthenRetrieved(s.root, strengthen.ids, strengthen.opts, {});
+        strengthenRetrieved(s.root, strengthen.ids, strengthen.opts, {
+          strength: PRODUCTION_STRENGTH,
+          clock: evalNow,
+        });
       },
       (store) => store.finishRecall(finishWrites()),
     );

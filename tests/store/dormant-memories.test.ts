@@ -10,26 +10,18 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
 import { MEMORY_BACKED_TABLES } from '../../src/store/sqlite/delete-and-batch.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { saveDecision } from '../../src/domain/objects/decisions.js';
 import { openIncident } from '../../src/domain/objects/incidents.js';
 import { PROCESS } from '../../src/domain/objects/processes.js';
-import { savePolicy } from '../../src/domain/objects/policies.js';
 import { SKILL } from '../../src/domain/objects/skills.js';
-import { saveProjectBrief } from '../../src/domain/objects/project-briefs.js';
-import { saveCustomerNote } from '../../src/domain/objects/customer-notes.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit.js';
 import { consolidate } from '../../src/index.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant-rows.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import {
-  createMemory,
-  Layer,
-  calculateStrength,
-  DEFAULT_HALF_LIFE_DAYS,
-  type MemoryEntry,
-} from '../../src/base/memory/memory.js';
+import { createMemory, calculateStrength } from '../../src/entry/memory.js';
+import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { insertRejectedValue } from '../../src/store/sqlite/rejection.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
@@ -44,6 +36,8 @@ import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { cliSave } from '../_helpers/cli-save-site.js';
 import { oneRequestPerTest } from '../_helpers/one-request-per-test.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
+import { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from '../../src/entry/testing.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 
 pinClock();
 oneRequestPerTest();
@@ -622,7 +616,7 @@ const objectSavers: [string, string, (home: string) => Promise<{ memoryId: strin
         loadConfig(home).defaultHalfLifeDays,
         'default',
         { incidentText: 'the billing cron charged twice on the 1st' },
-        'cli',
+        { actor: 'cli', now: evalNow() },
       ),
   ],
   [

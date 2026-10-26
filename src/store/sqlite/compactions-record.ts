@@ -13,7 +13,7 @@ import {
   createMemory,
   generateId,
   type MemoryEntry,
-} from '../../base/memory/memory.js';
+} from '../../base/memory/entry.js';
 import { projectId, projectNames, type ProjectRef } from '../../base/scope/project-identity.js';
 import { fallbackOrigin } from '../../host/host.js';
 import { isGlobalStoreRoot } from '../../host/project-identity.js';
@@ -31,7 +31,6 @@ import {
   type CompactionStatus,
 } from './compaction-rows.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './entry-writes.js';
-import { isRecallBoostAblated } from '../../base/memory/ablation.js';
 import { updateStats } from './index-and-stats.js';
 import type { StoreFiles } from './open.js';
 import { errorFields, errorMessage, log as hippoLog } from '../../base/util/log.js';
@@ -284,18 +283,28 @@ interface ItemWrites {
   restated: string[];
 }
 
-function compactionEntry(text: string, ctx: ItemContext, origin: string | null, baseHalfLifeDays: number): MemoryEntry {
+function compactionEntry(
+  text: string,
+  ctx: ItemContext,
+  origin: string | null,
+  baseHalfLifeDays: number,
+  now: Date,
+): MemoryEntry {
   return {
-    ...createMemory(text, {
-      layer: Layer.Episodic,
-      tags: [COMPACTION_MEMORY_TAG],
-      source: `${COMPACTION_SOURCE_PREFIX}${ctx.sessionId}`,
-      confidence: 'observed',
-      kind: 'distilled',
-      sourceSessionId: ctx.sessionId,
-      tenantId: ctx.tenantId,
-      baseHalfLifeDays,
-    }),
+    ...createMemory(
+      text,
+      {
+        layer: Layer.Episodic,
+        tags: [COMPACTION_MEMORY_TAG],
+        source: `${COMPACTION_SOURCE_PREFIX}${ctx.sessionId}`,
+        confidence: 'observed',
+        kind: 'distilled',
+        sourceSessionId: ctx.sessionId,
+        tenantId: ctx.tenantId,
+        baseHalfLifeDays,
+      },
+      now,
+    ),
     originProject: origin,
   };
 }
@@ -325,7 +334,7 @@ function writeItemRows(
       out.refused++;
       continue;
     }
-    const entry = compactionEntry(text, ctx, origin, baseHalfLifeDays);
+    const entry = compactionEntry(text, ctx, origin, baseHalfLifeDays, files.clock());
     if (gatedWrite(db, files, entry, { actor: ctx.caller?.actor ?? 'post-compact' }) === 'written') {
       out.written.push(entry);
       held.push({ id: null, sessionId: ctx.sessionId, words: textWords });
@@ -375,7 +384,7 @@ export function saveItems(
     }
     const written = writeItemRows(db, files, ctx, rows, baseHalfLifeDays);
     // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
-    const strengthen = { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() };
+    const strengthen = { tenantId: ctx.tenantId, recallBoostAblated: !files.strength.recallStrengthens };
     strengthenRetrievedOn(db, written.restated, strengthen, files);
     if (ctx.recordId !== null) {
       markCompactionDone(db, ctx.tenantId, ctx.recordId, written.written.length);
