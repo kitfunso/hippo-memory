@@ -20,12 +20,11 @@ import { join } from 'node:path';
 import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
-import { withSharedStoreHandles } from '../../src/db/index.js';
 import { handleExplain } from '../../src/surface/cli/explain.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { runCli } from '../../src/cli.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { writeEntry } from '../_helpers/root-forms.js';
+import { writeEntriesTogether, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 const CLEAN = 'clean deploykey fact for everyone';
@@ -151,22 +150,16 @@ describe('cli recall scope default-deny', () => {
     // it, so the one admitted row never surfaced. The SQL pre-window
     // NOT LIKE '%:private:%' exclusion keeps the window for admitted rows.
     const hippoDir = join(home, '.hippo');
-    // One connection for all 221 writes: a close per write checkpoints the WAL, which timed this out on Windows CI.
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 220; i++) {
-        writeEntry(
-          hippoDir,
-          createMemory(`windowstarve private filler row number ${i}`, {
-            baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-            scope: 'slack:private:Cbulk',
-          }),
-        );
-      }
-      writeEntry(
-        hippoDir,
-        createMemory('windowstarve admitted public row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-      );
-    });
+    const filler = Array.from({ length: 220 }, (_, i) =>
+      createMemory(`windowstarve private filler row number ${i}`, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        scope: 'slack:private:Cbulk',
+      }),
+    );
+    writeEntriesTogether(hippoDir, [
+      ...filler,
+      createMemory('windowstarve admitted public row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+    ]);
 
     const entries = listRecallEntriesInFolder(hippoDir, 'windowstarve', { tenantId: 'default' });
     const contents = entries.map((e) => e.content);

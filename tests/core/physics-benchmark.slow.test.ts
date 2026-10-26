@@ -12,7 +12,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadAllPhysicsState, resetAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { computeSystemEnergy, simulate, type ForceContext } from '../../src/base/rank/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
@@ -322,7 +322,7 @@ function seedCorpus(): void {
   }
 }
 
-beforeAll(() => withSharedStoreHandles(seedCorpus));
+beforeAll(() => seedCorpus());
 
 // ---------------------------------------------------------------------------
 // Metric helpers
@@ -522,10 +522,10 @@ describe('Physics vs Classic A/B Benchmark', () => {
   let standard: QueryScore[] = [];
   let cluster: QueryScore[] = [];
   beforeAll(() =>
-    withSharedStoreHandles(async () => {
+    (async () => {
       standard = await scoreQueries(STANDARD_QUERIES);
       cluster = await scoreQueries(CLUSTER_QUERIES);
-    }),
+    })(),
   );
 
   describe('Standard queries', () => {

@@ -15,7 +15,6 @@ import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
 import { buildProvenanceCoverage } from '../../src/api/provenance-coverage.js';
 import type { ChannelMeta } from '../../src/surface/connectors/slack/scope.js';
 import type { SlackMessageEvent } from '../../src/surface/connectors/slack/types.js';
-import { withSharedStoreHandles } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
@@ -49,17 +48,16 @@ describe('Slack connector — provenance coverage parity', () => {
 
   it('every ingested user message carries owner + artifact_ref (coverage = 1.0)', async () => {
     const ctx = ctxFor(root);
-    await withSharedStoreHandles(async () => {
-      for (let i = 0; i < 25; i++) {
-        const msg = makeMessage(i);
-        await ingestMessage(ctx, {
-          teamId: TEAM_ID,
-          channel: PUBLIC_CHANNEL,
-          message: msg,
-          eventId: `Ev${i}`,
-        });
-      }
-    });
+    for (let i = 0; i < 25; i++) {
+      const msg = makeMessage(i);
+      await ingestMessage(ctx, {
+        teamId: TEAM_ID,
+        channel: PUBLIC_CHANNEL,
+        message: msg,
+        eventId: `Ev${i}`,
+      });
+    }
+
     const coverage = buildProvenanceCoverage(await rawProvenanceAt(root));
     expect(coverage.gaps).toHaveLength(0);
     expect(coverage.coverage).toBe(1);

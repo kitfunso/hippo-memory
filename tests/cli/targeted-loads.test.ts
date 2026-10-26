@@ -7,7 +7,7 @@ import { cliApiContext } from '../../src/surface/cli/api-context.js';
 import { memoryList } from '../../src/api/memories/memories.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
-import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { storedTextKeys } from '../../src/base/util/same-text.js';
 import { makeStore } from '../_helpers/make-root.js';
 import {
@@ -91,14 +91,13 @@ describe('memoryList paging', () => {
   it('pages past ties on created, and an empty store gives no rows', async () => {
     const ctx = cliApiContext(root, 'default');
     expect(await memoryList(ctx, {}, { pageSize: 2 })).toEqual([]);
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 5; i++) {
-        writeEntry(root, {
-          ...createMemory(`tied row ${i}`, { tenantId: 'default' }),
-          created: '2026-02-02T00:00:00.000Z',
-        });
-      }
-    });
+    for (let i = 0; i < 5; i++) {
+      writeEntry(root, {
+        ...createMemory(`tied row ${i}`, { tenantId: 'default' }),
+        created: '2026-02-02T00:00:00.000Z',
+      });
+    }
+
     expect((await memoryList(ctx, {}, { pageSize: 2 })).map((e) => e.id)).toEqual(
       loadAllEntries(root, 'default').map((e) => e.id),
     );

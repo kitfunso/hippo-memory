@@ -14,7 +14,7 @@ import { consolidate } from '../../src/index.js';
 import { runConsolidation } from '../../src/domain/consolidate/sleep.js';
 import { runSleep } from '../../src/api/sleep/sleep-run.js';
 import { upsertEntryRow } from '../../src/store/sqlite/entry-row.js';
-import { inSqliteSession, sqliteStore } from '../../src/store/sqlite/store.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';
 import { mergedText } from '../../src/base/util/same-text.js';
@@ -30,7 +30,7 @@ import {
 } from '../../src/db/index.js';
 import { WRITE_BUDGET, type WriteBudget } from '../../src/base/util/write-budget.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, onSession } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { copyTree } from '../_helpers/copy-tree.js';
 import { DAY_MS } from '../../src/base/util/time.js';
@@ -404,11 +404,7 @@ describe('chunked consolidation flush', () => {
     const timeout = await withSharedStoreHandles(
       async (session) => {
         const ctx = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
-        await runSleep(
-          { ...ctx, store: inSqliteSession(ctx.store, session) },
-          { noShare: true },
-          { consolidate: atNow },
-        );
+        await runSleep(onSession(ctx, session), { noShare: true }, { consolidate: atNow });
         // SAFETY: PRAGMA busy_timeout returns one row with one integer column named timeout.
         return (session.get(fx.root).prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout;
       },

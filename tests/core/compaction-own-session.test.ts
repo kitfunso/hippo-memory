@@ -13,7 +13,6 @@ import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { withSharedStoreHandles } from '../../src/db/index.js';
 
 const PROJECT = 'proj-a';
 const OWN = 'sess-own';
@@ -127,18 +126,16 @@ describe('own-session compaction items in recent context', () => {
       .map((e) => e.id)
       .sort();
 
-    await withSharedStoreHandles(async () => {
-      for (const currentSessionId of [OTHER, '', null, undefined]) {
-        const result = await contextGet(ctx, {
-          pinnedOnly: true,
-          includeRecent: 5,
-          budget: 2000,
-          currentProject: PROJECT,
-          currentSessionId,
-        });
-        expect(ids(result).sort()).toEqual(newestItems);
-      }
-    });
+    for (const currentSessionId of [OTHER, '', null, undefined]) {
+      const result = await contextGet(ctx, {
+        pinnedOnly: true,
+        includeRecent: 5,
+        budget: 2000,
+        currentProject: PROJECT,
+        currentSessionId,
+      });
+      expect(ids(result).sort()).toEqual(newestItems);
+    }
   });
 
   it('keeps them out of the strength-ranked context too', async () => {

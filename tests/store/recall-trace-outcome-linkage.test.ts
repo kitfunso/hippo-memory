@@ -25,7 +25,7 @@ import {
 } from '../../src/db/index.js';
 import { remember, retrieve, outcome, outcomeForLastRecall } from '../../src/api/index.js';
 import { scopeReaderOf } from '../../src/base/scope/recall-scope.js';
-import { apiCtx } from '../_helpers/api-ctx.js';
+import { apiCtx, onSession } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -211,9 +211,10 @@ describe('storage overhead smoke (success criterion 3)', () => {
 
       const before = dbSizeBytes();
       // One handle for the 100 recalls: each fresh open repeats the pragmas and migration check, which is not what this measures.
-      await withSharedStoreHandles(async () => {
+      await withSharedStoreHandles(async (session) => {
+        const shared = onSession(ctx, session);
         for (let i = 0; i < 100; i++) {
-          await retrieve(ctx, { query: 'storage-smoke-target', window: { limit: 10 } });
+          await retrieve(shared, { query: 'storage-smoke-target', window: { limit: 10 } });
         }
       });
       const after = dbSizeBytes();

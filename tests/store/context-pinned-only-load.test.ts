@@ -10,10 +10,9 @@ import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { isContentWorthStoring } from '../../src/base/memory/memory-quality.js';
 import { contextGet } from '../../src/api/index.js';
-import { withSharedStoreHandles } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { loadAmbientCandidates, writeEntry } from '../_helpers/root-forms.js';
+import { loadAmbientCandidates, writeEntriesTogether, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 afterEach(() => {
@@ -27,12 +26,12 @@ let local: string;
 let globalRoot: string;
 let ctx: FullContext;
 
-function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}) {
-  const entry = {
-    ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    originProject: PROJECT,
-    ...extra,
-  };
+function entryFor(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
+  return { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), originProject: PROJECT, ...extra };
+}
+
+function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
+  const entry = entryFor(content, extra);
   writeEntry(root, entry);
   return entry;
 }
@@ -55,14 +54,13 @@ beforeEach(() => {
 
 describe('pinned-only context loads a slice, not the corpus', () => {
   it('returns a pin that sits far outside the recent window', async () => {
-    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 60; i++) {
-        seed(local, `filler row number ${i} with enough words to be worth storing`, {
-          created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
-        });
-      }
-    });
+    const filler = Array.from({ length: 60 }, (_, i) =>
+      entryFor(`filler row number ${i} with enough words to be worth storing`, {
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      }),
+    );
+    writeEntriesTogether(local, filler);
+
     const oldPin = seed(local, 'the pinned decision that predates every filler row', {
       pinned: true,
       created: '2020-01-01T00:00:00.000Z',
@@ -74,12 +72,10 @@ describe('pinned-only context loads a slice, not the corpus', () => {
   });
 
   it('returns the newest admissible rows for the recent-N backfill', async () => {
-    const rows = await withSharedStoreHandles(() =>
-      Array.from({ length: 40 }, (_, i) =>
-        seed(local, `recent candidate row ${i} with enough words to be worth storing`, {
-          created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
-        }),
-      ),
+    const rows = await Array.from({ length: 40 }, (_, i) =>
+      seed(local, `recent candidate row ${i} with enough words to be worth storing`, {
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      }),
     );
 
     const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 3, currentProject: PROJECT });
@@ -89,14 +85,13 @@ describe('pinned-only context loads a slice, not the corpus', () => {
   });
 
   it('falls back to the whole store when the window is all cross-project', async () => {
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 50; i++) {
-        seed(local, `another project's newest row ${i} with enough words to be worth storing`, {
-          originProject: 'proj-b',
-          created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
-        });
-      }
-    });
+    for (let i = 0; i < 50; i++) {
+      seed(local, `another project's newest row ${i} with enough words to be worth storing`, {
+        originProject: 'proj-b',
+        created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
+      });
+    }
+
     const buried = seed(local, 'the only row this project owns, far behind the window', {
       created: '2026-01-01T00:00:00.000Z',
     });
@@ -131,13 +126,12 @@ describe('pinned-only context loads a slice, not the corpus', () => {
   });
 
   it('keeps the pinned budget reserve, so a pin is not displaced by recents', async () => {
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 20; i++) {
-        seed(local, `a long recent row ${i} ${'padding words '.repeat(30)}`, {
-          created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
-        });
-      }
-    });
+    for (let i = 0; i < 20; i++) {
+      seed(local, `a long recent row ${i} ${'padding words '.repeat(30)}`, {
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      });
+    }
+
     const pin = seed(local, 'the pin that a greedy recent loop would starve', {
       pinned: true,
       created: '2020-01-01T00:00:00.000Z',
@@ -159,7 +153,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
     const JUNK = 'need to check the cache thing';
     expect(isContentWorthStoring(JUNK)).toBe(false);
 
-    const older = await withSharedStoreHandles(() => {
+    const older = await (() => {
       const rows = Array.from({ length: 10 }, (_, i) =>
         seed(local, `an older row ${i} that carries enough words to clear the quality floor`, {
           created: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
@@ -169,7 +163,7 @@ describe('pinned-only context loads a slice, not the corpus', () => {
         seed(local, JUNK, { created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString() });
       }
       return rows;
-    });
+    })();
 
     const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
@@ -204,11 +198,9 @@ describe('pinned-only context loads a slice, not the corpus', () => {
         created: new Date(Date.UTC(2026, 4, 1, 0, i)).toISOString(),
       }),
     );
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 30; i++) {
-        seed(local, JUNK, { created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString() });
-      }
-    });
+    for (let i = 0; i < 30; i++) {
+      seed(local, JUNK, { created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString() });
+    }
 
     const result = await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
@@ -294,15 +286,13 @@ describe('loadAmbientCandidates', () => {
 
   it('breaks a same-created tie on id descending, matching the caller comparator', async () => {
     const created = '2026-05-05T05:05:05.000Z';
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 40; i++) {
-        writeEntry(local, {
-          ...createMemory(`tied row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-          created,
-          id: `id-${String(i).padStart(3, '0')}`,
-        });
-      }
-    });
+    for (let i = 0; i < 40; i++) {
+      writeEntry(local, {
+        ...createMemory(`tied row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+        created,
+        id: `id-${String(i).padStart(3, '0')}`,
+      });
+    }
 
     const { entries: got } = loadAmbientCandidates(local, 'default', 3, () => true);
     const newestThree = got
@@ -314,15 +304,13 @@ describe('loadAmbientCandidates', () => {
   });
 
   it('returns rows in loadAllEntries order so a stable sort downstream sees the same input', async () => {
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 10; i++) {
-        writeEntry(local, {
-          ...createMemory(`ordered row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-          pinned: true,
-          created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
-        });
-      }
-    });
+    for (let i = 0; i < 10; i++) {
+      writeEntry(local, {
+        ...createMemory(`ordered row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+        pinned: true,
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      });
+    }
 
     const { entries: got } = loadAmbientCandidates(local, 'default', 5, () => true);
     const sorted = [...got].sort((a, b) => a.created.localeCompare(b.created) || a.id.localeCompare(b.id));
@@ -349,16 +337,15 @@ describe('loadAmbientCandidates', () => {
   // Legacy markdown keeps offset timestamps, and SQL orders text:
   // '...T09:00:00-04:00' bytes below '...T12:00:00.000Z' while being newer.
   it('does not lose a chronologically newer row written with a UTC offset', async () => {
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 32; i++) {
-        writeEntry(local, {
-          ...createMemory(`canonical filler row ${i} with enough words to be worth storing`, {
-            baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-          }),
-          created: new Date(Date.UTC(2026, 5, 1, 12, i)).toISOString(),
-        });
-      }
-    });
+    for (let i = 0; i < 32; i++) {
+      writeEntry(local, {
+        ...createMemory(`canonical filler row ${i} with enough words to be worth storing`, {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        }),
+        created: new Date(Date.UTC(2026, 5, 1, 12, i)).toISOString(),
+      });
+    }
+
     const drifted = {
       ...createMemory('a legacy row whose frontmatter recorded a local offset', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -378,16 +365,15 @@ describe('loadAmbientCandidates', () => {
       originProject: PROJECT,
       created: new Date(Date.UTC(2026, 5, 1, i)).toISOString(),
     }));
-    await withSharedStoreHandles(() => {
-      for (const entry of mine) writeEntry(local, entry);
-      for (let i = 0; i < 100; i++) {
-        writeEntry(local, {
-          ...createMemory(`a newer row of another project ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-          originProject: 'proj-b',
-          created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
-        });
-      }
-    });
+    for (const entry of mine) writeEntry(local, entry);
+    for (let i = 0; i < 100; i++) {
+      writeEntry(local, {
+        ...createMemory(`a newer row of another project ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+        originProject: 'proj-b',
+        created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
+      });
+    }
+
     let admitted = 0;
     const admit = (e: { originProject?: string | null }): boolean => {
       admitted++;
@@ -406,16 +392,14 @@ describe('loadAmbientCandidates', () => {
   // include_recent is any non-negative finite number at the HTTP edge, and the
   // Array.slice this replaced truncated it. A SQL LIMIT cannot.
   it('truncates a fractional recent count the way the slice it replaced did', async () => {
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 40; i++) {
-        writeEntry(local, {
-          ...createMemory(`fractional filler row ${i} with enough words to be worth storing`, {
-            baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-          }),
-          created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
-        });
-      }
-    });
+    for (let i = 0; i < 40; i++) {
+      writeEntry(local, {
+        ...createMemory(`fractional filler row ${i} with enough words to be worth storing`, {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+        }),
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      });
+    }
 
     const { entries: whole } = loadAmbientCandidates(local, 'default', 8, () => true);
     const { entries: fractional } = loadAmbientCandidates(local, 'default', 8.1, () => true);

@@ -7,7 +7,6 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { mergedText } from '../../src/base/util/same-text.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
-import { withSharedStoreHandles } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { testReach } from '../_helpers/api-ctx.js';
@@ -145,11 +144,10 @@ describe('request-path output on a fixed store', () => {
     vi.stubEnv('HIPPO_FAKE_NOW', NOW);
     initTestStore(localRoot);
     initTestStore(globalRoot);
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 80; i++) writeEntry(localRoot, localRow(i));
-      writeEntry(localRoot, merged());
-      for (let j = 0; j < 40; j++) writeEntry(globalRoot, globalRow(j));
-    });
+    for (let i = 0; i < 80; i++) writeEntry(localRoot, localRow(i));
+    writeEntry(localRoot, merged());
+    for (let j = 0; j < 40; j++) writeEntry(globalRoot, globalRow(j));
+
     cwd = process.cwd();
     process.chdir(tmp); // outside git, so hippo_context's auto query is empty
   });

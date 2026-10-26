@@ -2,7 +2,6 @@
 // superseded and raw rows, open and resolved conflicts, and a vector whose memory is gone.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { withSharedStoreHandles } from '../../src/db/index.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { listMemoryConflicts, writeEntry, updateStats } from '../_helpers/root-forms.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -77,10 +76,10 @@ async function conforms<R>(calls: readonly GroupCall<'reports', R>[]) {
 }
 
 beforeAll(() =>
-  withSharedStoreHandles(async () => {
+  (async () => {
     fixture = seedTwoTenants();
     await seed(fixture.dir);
-  }),
+  })(),
 );
 
 afterAll(() => rmSync(fixture.dir, { recursive: true, force: true }));

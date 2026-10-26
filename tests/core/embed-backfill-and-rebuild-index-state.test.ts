@@ -7,7 +7,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { PhysicsParticle } from '../../src/base/rank/physics.js';
-import { closeHippoDb, getMeta, openHippoDb, withSharedStoreHandles, withWriteScope } from '../../src/db/index.js';
+import { closeHippoDb, getMeta, openHippoDb, withWriteScope } from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entry-writes.js';
 import { loadAllPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
 import { initializeParticle } from '../../src/base/rank/physics.js';
@@ -167,34 +167,29 @@ beforeAll(async () => {
   partly = join(home, 'partly');
   initTestStore(partly);
   const rows = Array.from({ length: ROWS }, (_, i) => row(i));
-  // Each request ends before its store is copied, so the copy carries no write-ahead log.
-  await withSharedStoreHandles(async () => {
-    writeRows(
-      partly,
-      rows.filter((_, i) => !isLate(i)),
-    );
-    await embedAll(localIndex(partly), undefined, fake('fake-old'));
-    writeRows(
-      partly,
-      rows.filter((_, i) => isLate(i)),
-    );
-  });
+  writeRows(
+    partly,
+    rows.filter((_, i) => !isLate(i)),
+  );
+  await embedAll(localIndex(partly), undefined, fake('fake-old'));
+  writeRows(
+    partly,
+    rows.filter((_, i) => isLate(i)),
+  );
 
   indexedOld = copyOf(partly);
-  await withSharedStoreHandles(async () => {
-    await embedAll(localIndex(indexedOld), undefined, fake('fake-old'));
-    const db = openHippoDb(indexedOld);
-    try {
-      savePhysicsState(
-        db,
-        loadEveryTenantEntries(indexedOld).map((e) =>
-          initializeParticle(e, fakeVector('fake-old', e), PRODUCTION_STRENGTH, new Date(SEEDED_AT)),
-        ),
-      );
-    } finally {
-      closeHippoDb(db);
-    }
-  });
+  await embedAll(localIndex(indexedOld), undefined, fake('fake-old'));
+  const db = openHippoDb(indexedOld);
+  try {
+    savePhysicsState(
+      db,
+      loadEveryTenantEntries(indexedOld).map((e) =>
+        initializeParticle(e, fakeVector('fake-old', e), PRODUCTION_STRENGTH, new Date(SEEDED_AT)),
+      ),
+    );
+  } finally {
+    closeHippoDb(db);
+  }
 });
 
 afterAll(async () => {

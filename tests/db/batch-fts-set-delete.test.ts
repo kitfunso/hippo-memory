@@ -2,7 +2,7 @@
 // and never indexes an id twice, even when the index refuses the delete.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { DatabaseSync } from '../../src/db/sqlite.js';
-import { getHippoDbPath, withSharedStoreHandles } from '../../src/db/index.js';
+import { getHippoDbPath } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -103,9 +103,7 @@ describe('batchWriteAndDelete full-text upkeep', () => {
     const rows = seedRows(3, 'before');
     const inserts = [createMemory('a brand new row one'), createMemory('a brand new row two')];
 
-    await withSharedStoreHandles(() => {
-      batchWriteAndDeleteInFolder(root, [...rows.map(edited), ...inserts], []);
-    });
+    batchWriteAndDeleteInFolder(root, [...rows.map(edited), ...inserts], []);
 
     const fts = idsOf('SELECT id FROM memories_fts');
     expect(new Set(fts).size).toBe(fts.length);

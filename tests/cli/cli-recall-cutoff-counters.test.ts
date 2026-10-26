@@ -39,7 +39,6 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
-import { withSharedStoreHandles } from '../../src/db/index.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 
@@ -66,11 +65,9 @@ function ctxFor(root: string): FullContext {
 /** Seed `count` distinct memories that all match `keyword`. */
 async function seedMatchingMemories(env: TestEnv, keyword: string, count: number): Promise<void> {
   const ctx = ctxFor(env.hippoRoot);
-  await withSharedStoreHandles(async () => {
-    for (let i = 0; i < count; i++) {
-      await remember(ctx, { content: `${keyword} candidate number ${i} carries unique detail ${i}` });
-    }
-  });
+  for (let i = 0; i < count; i++) {
+    await remember(ctx, { content: `${keyword} candidate number ${i} carries unique detail ${i}` });
+  }
 }
 
 interface SuppressionSummary {

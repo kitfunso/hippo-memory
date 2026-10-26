@@ -26,13 +26,13 @@ import {
   TENANT_READ,
   ageMirrors,
   ctxFor,
-  ctxOn,
   freshRoot,
   memory,
   rows,
   seed,
   useQueryCountRoots,
 } from '../_helpers/query-count-seeds.js';
+import { onSession } from '../_helpers/api-ctx.js';
 import { processGit } from '../../src/infra/git-runner.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
@@ -231,7 +231,7 @@ describe('learn', () => {
     ]);
     const opts = { repoPath: repo, days: 7, profile: CLI_LEARN, pageRows, git: processGit };
     const { result, statements } = await recordStatementsAsync(() =>
-      withSharedStoreHandles((session) => learn(ctxOn(root, session), opts)),
+      withSharedStoreHandles((session) => learn(onSession(ctxFor(root), session), opts)),
     );
     return {
       root,

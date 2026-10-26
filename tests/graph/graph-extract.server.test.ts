@@ -369,17 +369,18 @@ describe('graph extraction (deterministic, from consolidated first-class objects
       policyText: 'retry 3x',
     });
     let prev: number | undefined;
-    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
-    await withSharedStoreHandles(async () => {
+    await withSharedStoreHandles(async (session) => {
+      const objects = objectsAt(home, session);
       for (let i = 0; i < 40; i++) {
         prev = (
-          await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
+          await saveDecision(objects, loadConfig(home).defaultHalfLifeDays, 'default', {
             decisionText: `Call ${i} adopts RetryPolicy`,
             supersedesDecisionId: i % 10 === 9 ? prev : undefined,
           })
         ).id;
       }
     });
+
     const copy = `${home}-copy`;
     copyTree(home, copy);
     try {

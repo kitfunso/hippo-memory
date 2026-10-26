@@ -9,8 +9,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { adminActor } from '../../src/api/types.js';
-import { closeHippoDb, type RequestStores } from '../../src/db/index.js';
-import { inSqliteSession } from '../../src/store/sqlite/store.js';
+import { closeHippoDb } from '../../src/db/index.js';
 import { writeEntriesTogether } from './root-forms.js';
 import { openStore } from '../../src/store/sqlite/handles.js';
 import { removeDir } from './remove-dir.js';
@@ -37,12 +36,6 @@ export function freshRoot(label: string): string {
 
 export function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', adminActor('test:query-count'));
-}
-
-/** ctxFor with its store on `session`, so one request's calls share a handle, as a CLI command's do. */
-export function ctxOn(root: string, session: RequestStores): FullContext {
-  const ctx = ctxFor(root);
-  return { ...ctx, store: inSqliteSession(ctx.store, session) };
 }
 
 export function memory(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {

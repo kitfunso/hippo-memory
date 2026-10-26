@@ -12,8 +12,9 @@ describe('slack 1000-event smoke (CI subset)', () => {
   });
 
   it('100 events, replayed twice, produces exactly 100 raw memories with zero outbound HTTP', async () => {
-    // One connection for the run: a close per call checkpoints the WAL, which is slow on Windows; the benchmark CLI keeps per-call opens.
-    const result = await withSharedStoreHandles(() => runSlackSmoke({ hippoRoot: root, count: 100, replay: 2 }));
+    const result = await withSharedStoreHandles((session) =>
+      runSlackSmoke({ hippoRoot: root, count: 100, replay: 2, session }),
+    );
     expect(result.uniqueMemories).toBe(100);
     expect(result.outboundHttp).toBe(0);
     expect(result.totalIngestCalls).toBe(200);

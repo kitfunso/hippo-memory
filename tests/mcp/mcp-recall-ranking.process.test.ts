@@ -9,7 +9,7 @@ import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/bas
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { saveStoredEmbeddingModel } from '../../src/store/sqlite/vector-index.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -17,6 +17,7 @@ import {
   pushGoal,
   saveEmbeddingIndex,
   writeEntry,
+  writeEntriesTogether,
   saveActiveTaskSnapshot,
   appendSessionEvent,
 } from '../_helpers/root-forms.js';
@@ -54,12 +55,18 @@ function makeHome(config?: StoreConfig): string {
   return home;
 }
 
-function add(s: Seeded, label: string, content: string, opts: Partial<CreateMemoryOptions> = {}): MemoryEntry {
+/** A row under `label`, recorded on `s` but not yet written. */
+function labelled(s: Seeded, label: string, content: string, opts: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   const entry = createMemory(content, { baseHalfLifeDays: 7, tenantId: TENANT, ...opts });
-  writeEntry(s.home, entry);
   s.labelById.set(entry.id, label);
   s.idByLabel.set(label, entry.id);
   s.contentByLabel.set(label, content);
+  return entry;
+}
+
+function add(s: Seeded, label: string, content: string, opts: Partial<CreateMemoryOptions> = {}): MemoryEntry {
+  const entry = labelled(s, label, content, opts);
+  writeEntry(s.home, entry);
   return entry;
 }
 
@@ -274,21 +281,24 @@ describe('MCP hippo_recall ranking', () => {
   it('a strong match outside the 200-row lexical window still ranks', async () => {
     const s = track(seed());
     add(s, 'W1', 'alpha important decision record', { tags: ['decision', 'extracted'] });
-    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 210; i++) add(s, `F${i}`, `alpha note ${i}`);
-    });
+    writeEntriesTogether(
+      s.home,
+      Array.from({ length: 210 }, (_, i) => labelled(s, `F${i}`, `alpha note ${i}`)),
+    );
+
     expect(observe(s, textOf(await call(s.home, { query: 'alpha', budget: 300 })))).toEqual(EXPECTED.windowEdge);
   });
 
   it('overflowed children of a level-2 summary bring the summary into the tail', async () => {
     const s = track(seed());
     const parent = add(s, 'SUM', 'rollup summary of the child notes', { dagLevel: 2, tags: ['dag-summary'] });
-    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
-    await withSharedStoreHandles(() => {
-      for (let i = 0; i < 3; i++) add(s, `K${i}`, `beta zz child ${i}`, { dagLevel: 0, dagParentId: parent.id });
-      for (let i = 0; i < 60; i++) add(s, `B${i}`, `beta row ${i}`);
-    });
+    writeEntriesTogether(s.home, [
+      ...Array.from({ length: 3 }, (_, i) =>
+        labelled(s, `K${i}`, `beta zz child ${i}`, { dagLevel: 0, dagParentId: parent.id }),
+      ),
+      ...Array.from({ length: 60 }, (_, i) => labelled(s, `B${i}`, `beta row ${i}`)),
+    ]);
+
     expect(observe(s, textOf(await call(s.home, { query: 'beta', budget: 200 })))).toEqual(EXPECTED.dagOverflow);
   });
 
